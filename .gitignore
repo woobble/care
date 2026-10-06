@@ -380,4 +380,20 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+# Custom
+.vscode/
+.turbo/
+.agents/
+.codex/
+graphify-out/
+.graphifyignore
+AGENTS.md
+skills-lock.json
+
 # End of https://www.toptal.com/developers/gitignore/api/web,jetbrains+all,visualstudiocode,node,nextjs,react,linux,macos,windows
+
+# Required application assets ignored by the template's broad web patterns
+!apps/web/src/app/globals.css
+!apps/web/public/sw.js
+apps/web/test-results/
+apps/web/playwright-report/

@@ -1,0 +1,23 @@
+{
+  "name": "@care/testing",
+  "private": true,
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target bun --packages external",
+    "lint": "oxlint src",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "typecheck": "tsc --noEmit --pretty false -p tsconfig.json",
+    "test:integration": "bun test ./src/database.integration.test.ts"
+  },
+  "dependencies": {
+    "@care/database": "workspace:*",
+    "@testcontainers/postgresql": "^12.2.0",
+    "pg": "^8.23.1",
+    "testcontainers": "^12.2.0"
+  }
+}

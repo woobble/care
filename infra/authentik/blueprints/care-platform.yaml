@@ -1,0 +1,52 @@
+version: 1
+metadata:
+  name: Care Platform OIDC
+  labels:
+    blueprints.goauthentik.io/description: Local OIDC provider for the Care Platform web app
+entries:
+  - model: authentik_providers_oauth2.oauth2provider
+    id: care-platform-provider
+    identifiers:
+      name: Care Platform
+    attrs:
+      client_id: care-platform
+      client_secret: !Env OIDC_CLIENT_SECRET
+      client_type: confidential
+      grant_types:
+        - authorization_code
+        - refresh_token
+      authorization_flow:
+        !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      signing_key:
+        !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      property_mappings:
+        - !Find [
+            authentik_providers_oauth2.scopemapping,
+            [name, "authentik default OAuth Mapping: OpenID 'openid'"],
+          ]
+        - !Find [
+            authentik_providers_oauth2.scopemapping,
+            [name, "authentik default OAuth Mapping: OpenID 'profile'"],
+          ]
+        - !Find [
+            authentik_providers_oauth2.scopemapping,
+            [name, "authentik default OAuth Mapping: OpenID 'email'"],
+          ]
+        - !Find [
+            authentik_providers_oauth2.scopemapping,
+            [name, "authentik default OAuth Mapping: OpenID 'offline_access'"],
+          ]
+      sub_mode: user_uuid
+      jwt_algorithm: RS256
+      include_claims_in_id_token: true
+      redirect_uris:
+        - matching_mode: strict
+          url: http://localhost:3000/api/auth/callback/authentik
+  - model: authentik_core.application
+    identifiers:
+      slug: care-platform
+    attrs:
+      name: Care Platform
+      provider: !KeyOf care-platform-provider
+      meta_launch_url: http://localhost:3000

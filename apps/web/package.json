@@ -1,0 +1,32 @@
+{
+  "name": "@care/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0",
+    "lint": "oxlint src next.config.ts",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "typecheck": "tsc --noEmit --pretty false -p tsconfig.json",
+    "test:e2e": "playwright test --config=playwright.config.ts"
+  },
+  "dependencies": {
+    "@care/api-client": "workspace:*",
+    "@care/config": "workspace:*",
+    "@care/database": "workspace:*",
+    "@care/identity": "workspace:*",
+    "@care/ui": "workspace:*",
+    "better-auth": "^1.7.7",
+    "next": "^16.3.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "pg": "^8.16.3",
+    "tailwindcss": "^4.3.3"
+  }
+}

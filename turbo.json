@@ -1,0 +1,58 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [".env", ".env.*"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "openapi": {
+      "dependsOn": ["^build"],
+      "outputs": ["openapi.json"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "env": [
+        "NODE_ENV",
+        "DATABASE_URL",
+        "WORKER_DATABASE_URL",
+        "OIDC_ISSUER",
+        "OIDC_CLIENT_ID",
+        "OIDC_CLIENT_SECRET",
+        "AUTH_SECRET",
+        "API_INTERNAL_URL",
+        "WEB_ORIGIN",
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "PORT",
+        "WORKER_POLL_INTERVAL_MS"
+      ]
+    },
+    "@care/web#dev": {
+      "with": ["@care/api#dev"]
+    },
+    "lint": { "dependsOn": ["^lint"] },
+    "typecheck": { "dependsOn": ["^typecheck"] },
+    "test": { "dependsOn": ["^build"] },
+    "test:integration": { "dependsOn": ["^build"], "cache": false },
+    "test:e2e": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "env": [
+        "NODE_ENV",
+        "DATABASE_URL",
+        "MIGRATION_DATABASE_URL",
+        "OIDC_ISSUER",
+        "OIDC_CLIENT_ID",
+        "OIDC_CLIENT_SECRET",
+        "AUTH_SECRET",
+        "AUTHENTIK_E2E_API_TOKEN",
+        "API_INTERNAL_URL",
+        "WEB_ORIGIN",
+        "DEV_SEED_OIDC_SUB",
+        "PLAYWRIGHT_BASE_URL",
+        "PLAYWRIGHT_BROWSERS_PATH"
+      ]
+    }
+  }
+}

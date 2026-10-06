@@ -1,0 +1,22 @@
+{
+  "name": "@care/organizations",
+  "private": true,
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target bun --packages external",
+    "lint": "oxlint src",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "typecheck": "tsc --noEmit --pretty false -p tsconfig.json"
+  },
+  "dependencies": {
+    "@care/contracts": "workspace:*",
+    "@care/database": "workspace:*",
+    "drizzle-orm": "^0.45.3",
+    "uuid": "^14.0.2"
+  }
+}

@@ -1,0 +1,16 @@
+version: 1
+
+metadata:
+  name: Care Platform E2E API token
+  labels:
+    blueprints.goauthentik.io/description: Local-only API token for Playwright E2E
+
+entries:
+  - model: authentik_core.token
+    id: care-platform-e2e-token
+    identifiers:
+      identifier: care-platform-e2e
+    attrs:
+      key: !Env AUTHENTIK_E2E_API_TOKEN
+      user: !Find [authentik_core.user, [username, akadmin]]
+      intent: api

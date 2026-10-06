@@ -1,0 +1,26 @@
+{
+  "name": "@care/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "build": "bun build src/main.ts --outdir dist --target bun --packages external",
+    "test:integration": "bun test ./integration",
+    "lint": "oxlint src",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "typecheck": "tsc --noEmit --pretty false -p tsconfig.json"
+  },
+  "dependencies": {
+    "@care/config": "workspace:*",
+    "@care/database": "workspace:*",
+    "@care/events": "workspace:*",
+    "@care/logging": "workspace:*",
+    "@care/observability": "workspace:*",
+    "@care/platform": "workspace:*"
+  },
+  "devDependencies": {
+    "@care/testing": "workspace:*",
+    "pg": "^8.16.3"
+  }
+}
