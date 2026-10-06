@@ -21,7 +21,8 @@
     "seed": "bun run --filter @care/api seed",
     "seed:identity": "bun run --filter @care/api seed:identity",
     "infra:up": "docker compose up -d --wait",
-    "infra:down": "docker compose down"
+    "infra:down": "docker compose down",
+    "reset": "bash scripts/reset.sh"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",

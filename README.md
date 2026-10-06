@@ -17,6 +17,8 @@ bun run dev
 
 `bun run infra:up` waits for healthy infrastructure. The first database start creates `care_app`, `care_worker`, and Authentik's separate database. PostgreSQL init scripts run only when its volume is empty. If you change a database password later, update the database role and matching URL variables together. Removing the database volume deletes all local database data.
 
+To reset local Docker-backed data, stop `bun run dev` and run `bun run reset` from a terminal. It asks you to type `RESET`, removes the current Compose project's containers and volumes, starts the infrastructure again, then runs migrations and the demo seed. This deletes PostgreSQL data (including Authentik users), Redis data, SeaweedFS files, Prometheus metrics, and Grafana state. Source files, `.env`, dependencies, and Docker images are kept. After creating a new Authentik user, run `DEV_SEED_OIDC_SUB=<new-authentik-user-uuid> bun run seed:identity` to restore tenant access.
+
 Authentik runs at <http://localhost:9000>. Sign in as `akadmin` with the bootstrap password from `.env`. Its blueprint creates the Care Platform OIDC provider and registers `http://localhost:3000/api/auth/callback/authentik`; no provider setup in the UI is needed.
 
 Create a local Authentik user. The provider uses the Authentik user UUID as the OIDC subject. Set that UUID as `DEV_SEED_OIDC_SUB`, then grant the demo tenant's Administrator role:
@@ -45,6 +47,7 @@ Mailpit is at <http://localhost:8025> and accepts local SMTP on port `1026`. Pro
 | `bun run seed`             | Create demo tenant, organization, facility, and roles                    |
 | `bun run seed:identity`    | Grant a configured Authentik subject demo tenant access                  |
 | `bun run infra:down`       | Stop local services; keeps named volumes                                 |
+| `bun run reset`            | Confirm and reset Compose data; reruns migrations and demo seed          |
 
 The same module-owned SQL migrations run in development and integration tests. Once applied, a migration's checksum is immutable; add a new numbered migration for schema changes. The identity module has an additional migration for membership and role RLS policies.
 
