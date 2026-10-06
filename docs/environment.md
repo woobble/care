@@ -38,3 +38,7 @@ Copy `.env.example` to `.env` for local development. Compose reads it for infras
 Local service endpoints: Authentik `9000`, SeaweedFS S3 `9002`, SeaweedFS filer `9004`, Mailpit SMTP/UI `1026`/`8025`, OTLP `4317`/`4318`, Prometheus `9090`, and Grafana `3002`.
 
 `REDIS_URL` is not required by the app worker. Redis remains in Compose for Authentik and future queue-backed jobs.
+
+Both seed commands are development-only and refuse any `NODE_ENV` other than `development`. The general seed creates the Demo Care tenant, organization, two facilities, and Administrator/Office/Caregiver system roles, but grants no user membership. `DEV_SEED_OIDC_SUB` is only used by `bun run seed:identity` to establish the first local administrator. After that bootstrap, tenant access is managed through Administration in the application.
+
+Before `bun run test:e2e`, install the Playwright browser with `bunx playwright install chromium`. On Linux, use `bunx playwright install --with-deps chromium` when system browser libraries are absent. The E2E API token and all bootstrap credentials are for local development only.

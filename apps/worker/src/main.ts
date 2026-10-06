@@ -1,3 +1,4 @@
+// oxlint-disable-next-line import/no-unassigned-import -- load dotenv before reading worker configuration
 import '@care/config/load-env';
 import { hostname } from 'node:os';
 import { EventDispatcher } from '@care/events';
@@ -23,6 +24,16 @@ async function main(): Promise<void> {
     'client.updated',
     'client.activated',
     'client.archived',
+    'tenant.invitation.created',
+    'tenant.invitation.accepted',
+    'tenant.invitation.expired',
+    'tenant.invitation.revoked',
+    'tenant.member.invited',
+    'tenant.member.activated',
+    'tenant.member.deactivated',
+    'tenant.member.revoked',
+    'tenant.member.role_changed',
+    'tenant.member.scope_changed',
   ] as const) {
     dispatcher.subscribe(eventType, async () => {
       logger.info({ eventType }, 'Domain event dispatched');
@@ -32,9 +43,14 @@ async function main(): Promise<void> {
   let stopping = false;
 
   const relay = async (): Promise<void> => {
-    while (!stopping) {
+    while (true) {
+      if (stopping) break;
       try {
+        // Start each batch after the previous one settles to keep polling bounded.
+        // oxlint-disable-next-line no-await-in-loop
         const ids = await outbox.pendingIds(new Date(), leaseMs, batchSize);
+        // Claim and dispatch in order to preserve the outbox's delivery sequence.
+        // oxlint-disable no-await-in-loop
         for (const id of ids) {
           const message = await outbox.claim(id, workerId, { leaseMs, maxAttempts });
           if (!message) continue;
@@ -53,12 +69,16 @@ async function main(): Promise<void> {
             }
           }
         }
+        // oxlint-enable no-await-in-loop
       } catch (error) {
         logger.error({ err: error }, 'Outbox polling failed');
       }
 
-      if (!stopping)
+      if (!stopping) {
+        // Wait between completed batches instead of scheduling overlapping polls.
+        // oxlint-disable-next-line no-await-in-loop
         await new Promise((resolve) => setTimeout(resolve, config.WORKER_POLL_INTERVAL_MS));
+      }
     }
   };
 

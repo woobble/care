@@ -10,11 +10,11 @@ export interface MigrationFile {
 }
 
 const migrations = {
-  organizations: ['0001_initial.sql'],
-  identity: ['0001_initial.sql'],
-  employees: ['0001_initial.sql'],
+  organizations: ['0001_initial.sql', '0002_tenant_integrity.sql'],
+  identity: ['0001_initial.sql', '0002_tenant_access.sql', '0003_membership_pending_default.sql'],
+  employees: ['0001_initial.sql', '0002_user_link_integrity.sql'],
   clients: ['0001_initial.sql'],
-  audit: ['0001_initial.sql'],
+  audit: ['0001_initial.sql', '0002_query_indexes.sql'],
   platform: ['0001_initial.sql'],
 } as const;
 const migrationsRoot = resolve(import.meta.dirname, '../../../modules');
@@ -40,6 +40,8 @@ export async function applyMigrations(client: Client): Promise<void> {
     )
   `);
 
+  // Run in declaration order because later migrations depend on earlier schemas.
+  // oxlint-disable no-await-in-loop
   for (const migration of migrationFiles) {
     const source = await readFile(migration.path, 'utf8');
     const checksum = createHash('sha256').update(source).digest('hex');
@@ -68,4 +70,5 @@ export async function applyMigrations(client: Client): Promise<void> {
       throw error;
     }
   }
+  // oxlint-enable no-await-in-loop
 }

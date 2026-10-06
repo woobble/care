@@ -1,0 +1,240 @@
+import Link from 'next/link';
+import { Button, Label, StatusBadge } from '@care/ui';
+import { getApiClient, getTenantHeader } from '../../../../lib/api';
+import { inviteUserAction, revokeInvitationAction } from '../actions';
+import { ConfirmSubmitButton } from '../confirm-submit-button';
+
+type SearchParams = Promise<{
+  status?: string;
+  error?: string;
+  invited?: string;
+  updated?: string;
+}>;
+
+export default async function UsersAccessPage({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
+  const params = await searchParams;
+  const status = ['pending', 'active', 'inactive', 'revoked'].includes(params.status ?? '')
+    ? (params.status as 'pending' | 'active' | 'inactive' | 'revoked')
+    : undefined;
+  const api = await getApiClient();
+  const get = api.GET;
+  const [membersResult, invitationsResult] = await Promise.all([
+    get('/api/v1/admin/members', {
+      params: {
+        query: { page: 1, pageSize: 100, ...(status ? { status } : {}) },
+        header: await getTenantHeader(),
+      },
+    }),
+    get('/api/v1/admin/invitations', { params: { header: await getTenantHeader() } }),
+  ]);
+
+  return (
+    <div className="grid gap-8">
+      <header className="grid gap-1">
+        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
+          <Link href="/administration">Administration</Link>
+        </p>
+        <h1 className="text-3xl font-semibold">Users &amp; Access</h1>
+        <p className="text-slate-700">Manage tenant membership, roles, and access scopes.</p>
+      </header>
+
+      {params.error ? <ErrorNotice code={params.error} /> : null}
+      {params.invited ? (
+        <p
+          role="status"
+          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+        >
+          Invitation created. The user must sign in through Authentik before the membership can be
+          activated.
+        </p>
+      ) : null}
+      {params.updated ? (
+        <p
+          role="status"
+          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+        >
+          Access record updated.
+        </p>
+      ) : null}
+
+      <section aria-labelledby="invite-title" className="grid gap-4 rounded-lg border bg-white p-5">
+        <div>
+          <h2 id="invite-title" className="text-xl font-semibold">
+            Invite a user
+          </h2>
+          <p className="text-sm text-slate-600">
+            The address must be verified by Authentik. No password or local account is created.
+          </p>
+        </div>
+        <form action={inviteUserAction} className="flex flex-wrap items-end gap-3">
+          <div className="grid gap-2">
+            <Label htmlFor="invite-email">Email</Label>
+            <input
+              id="invite-email"
+              className="h-10 rounded-md border px-3"
+              type="email"
+              name="email"
+              autoComplete="email"
+              maxLength={254}
+              required
+            />
+          </div>
+          <Button type="submit">Create invitation</Button>
+        </form>
+      </section>
+
+      <section aria-labelledby="members-title" className="grid gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 id="members-title" className="text-xl font-semibold">
+            Tenant members
+          </h2>
+          <form method="get" className="flex items-end gap-2">
+            <label className="grid gap-1 text-sm" htmlFor="member-status">
+              Status
+              <select
+                id="member-status"
+                name="status"
+                defaultValue={status ?? ''}
+                className="h-10 rounded-md border bg-white px-3"
+              >
+                <option value="">All statuses</option>
+                <option value="pending">Pending</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="revoked">Revoked</option>
+              </select>
+            </label>
+            <Button variant="secondary" type="submit">
+              Filter
+            </Button>
+          </form>
+        </div>
+        {membersResult.error ? (
+          <ErrorNotice code={membersResult.error.code} />
+        ) : membersResult.data?.items.length ? (
+          <div className="overflow-x-auto rounded-lg border bg-white">
+            <table className="w-full border-collapse text-left text-sm">
+              <caption className="sr-only">Tenant members and their assigned access</caption>
+              <thead className="border-b bg-slate-100 text-slate-700">
+                <tr>
+                  <th scope="col" className="px-4 py-3">
+                    Name
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Email
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Status
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Roles
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Scope
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {membersResult.data.items.map((member) => (
+                  <tr key={member.id} className="border-b last:border-0">
+                    <td className="px-4 py-3">
+                      <Link
+                        className="font-medium text-blue-900 underline-offset-4 hover:underline"
+                        href={`/administration/users/${member.id}`}
+                      >
+                        {member.displayName || member.email || member.userId}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">{member.email || '—'}</td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={member.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {member.roles.map((role) => role.name).join(', ') || '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {member.scopes.map(scopeLabel).join(', ') || 'No scope'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="rounded-lg border bg-white p-5 text-slate-700">
+            No members match this filter.
+          </p>
+        )}
+      </section>
+
+      <section aria-labelledby="invitations-title" className="grid gap-4">
+        <h2 id="invitations-title" className="text-xl font-semibold">
+          Invitations
+        </h2>
+        {invitationsResult.error ? (
+          <ErrorNotice code={invitationsResult.error.code} />
+        ) : invitationsResult.data?.length ? (
+          <div className="overflow-x-auto rounded-lg border bg-white">
+            <table className="w-full border-collapse text-left text-sm">
+              <caption className="sr-only">Tenant invitations</caption>
+              <thead className="border-b bg-slate-100 text-slate-700">
+                <tr>
+                  <th scope="col" className="px-4 py-3">
+                    Email
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Status
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Expires
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {invitationsResult.data.map((invitation) => (
+                  <tr key={invitation.id} className="border-b last:border-0">
+                    <td className="px-4 py-3">{invitation.email}</td>
+                    <td className="px-4 py-3">{invitation.status}</td>
+                    <td className="px-4 py-3">
+                      {new Date(invitation.expiresAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {invitation.status === 'pending' ? (
+                        <form action={revokeInvitationAction}>
+                          <input type="hidden" name="invitationId" value={invitation.id} />
+                          <ConfirmSubmitButton confirmation="Revoke this invitation?">
+                            Revoke invitation
+                          </ConfirmSubmitButton>
+                        </form>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="rounded-lg border bg-white p-5 text-slate-700">No invitations.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ErrorNotice({ code }: Readonly<{ code: string }>) {
+  return (
+    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+      The request could not be completed ({code}).
+    </p>
+  );
+}
+
+function scopeLabel(scope: { scopeType: string; name: string | null; scopeId: string }): string {
+  if (scope.scopeType === 'tenant') return 'Entire tenant';
+  return `${scope.name || scope.scopeId} (${scope.scopeType})`;
+}

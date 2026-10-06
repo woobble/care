@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+// oxlint-disable-next-line import/no-unassigned-import -- Next.js loads global CSS through side-effect imports
 import './globals.css';
 import { ServiceWorkerRegistration } from './service-worker-registration';
 

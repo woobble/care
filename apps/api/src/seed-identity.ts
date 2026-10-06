@@ -1,3 +1,4 @@
+// oxlint-disable-next-line import/no-unassigned-import -- load dotenv before reading seed configuration
 import '@care/config/load-env';
 import { and, eq, sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
@@ -12,8 +13,11 @@ import { organizationsSchema } from '@care/organizations';
 import { platformSchema } from '@care/platform';
 
 const { NODE_ENV, MIGRATION_DATABASE_URL } = loadMigrationConfig();
-if (NODE_ENV === 'production')
-  throw new Error('Development identity seed is disabled in production');
+if (NODE_ENV !== 'development') {
+  throw new Error(
+    'Development identity seed only runs with NODE_ENV=development; no data was changed',
+  );
+}
 const { OIDC_ISSUER } = loadApiConfig();
 const subject = process.env.DEV_SEED_OIDC_SUB?.trim();
 if (!subject)
@@ -64,17 +68,31 @@ try {
       });
     }
 
-    const [membership] = await transaction
+    await transaction
       .insert(identitySchema.tenantMemberships)
       .values({ id: uuidv7(), userId, tenantId: tenant.id, status: 'active' })
-      .onConflictDoUpdate({
+      .onConflictDoNothing({
         target: [
           identitySchema.tenantMemberships.userId,
           identitySchema.tenantMemberships.tenantId,
         ],
-        set: { status: 'active' },
+      });
+    const [membership] = await transaction
+      .select({
+        id: identitySchema.tenantMemberships.id,
+        status: identitySchema.tenantMemberships.status,
       })
-      .returning({ id: identitySchema.tenantMemberships.id });
+      .from(identitySchema.tenantMemberships)
+      .where(
+        and(
+          eq(identitySchema.tenantMemberships.userId, userId),
+          eq(identitySchema.tenantMemberships.tenantId, tenant.id),
+        ),
+      )
+      .limit(1);
+    if (!membership || membership.status === 'revoked') {
+      throw new Error('This membership was revoked and cannot be restored by seeding');
+    }
     const [admin] = await transaction
       .select({ id: identitySchema.roles.id })
       .from(identitySchema.roles)
@@ -90,11 +108,16 @@ try {
 
     await transaction
       .insert(identitySchema.membershipRoles)
-      .values({ membershipId: membership.id, roleId: admin.id })
+      .values({ membershipId: membership.id, tenantId: tenant.id, roleId: admin.id })
       .onConflictDoNothing();
     await transaction
       .insert(identitySchema.membershipScopes)
-      .values({ membershipId: membership.id, scopeType: 'tenant', scopeId: tenant.id })
+      .values({
+        membershipId: membership.id,
+        tenantId: tenant.id,
+        scopeType: 'tenant',
+        scopeId: tenant.id,
+      })
       .onConflictDoNothing();
   });
 

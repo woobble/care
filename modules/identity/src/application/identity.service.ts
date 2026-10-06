@@ -3,30 +3,28 @@ import { sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { v7 as uuidv7 } from 'uuid';
 import type { VerifiedIdentity } from '@care/auth';
-import type { AuthorizationPrincipal, Permission, ScopeType } from '@care/permissions';
-import { PERMISSIONS } from '@care/permissions';
-import {
-  externalIdentities,
-  membershipRoles,
-  membershipScopes,
-  rolePermissions,
-  roles,
-  tenantMemberships,
-  users,
-} from '../schema';
+import type { AuthorizationPrincipal } from '@care/permissions';
+import { externalIdentities, tenantMemberships, users } from '../schema';
 import { tenants } from '@care/organizations';
+import { loadTenantAuthorizationPrincipal } from './authorization-principal';
 
 export interface TenantSummary {
   id: string;
   name: string;
 }
 
+export interface LocalUser {
+  id: string;
+  status: 'active' | 'disabled';
+  displayName: string | null;
+  email: string | null;
+}
+
 export class IdentityService {
   constructor(private readonly db: NodePgDatabase<Record<string, unknown>>) {}
 
-  async resolveOrProvision(
-    identity: VerifiedIdentity,
-  ): Promise<{ id: string; status: 'active' | 'disabled' }> {
+  async resolveOrProvision(identity: VerifiedIdentity): Promise<LocalUser> {
+    const profile = verifiedProfile(identity);
     return this.db.transaction(async (transaction) => {
       await transaction.execute(
         sql`select pg_advisory_xact_lock(hashtext(${identity.issuer}), hashtext(${identity.subject}))`,
@@ -42,17 +40,22 @@ export class IdentityService {
         )
         .limit(1);
 
-      if (external) return this.getUser(transaction, external.userId);
+      if (external) {
+        if (profile.email !== undefined || profile.displayName !== undefined) {
+          await transaction.update(users).set(profile).where(eq(users.id, external.userId));
+        }
+        return this.getUser(transaction, external.userId);
+      }
 
       const userId = uuidv7();
-      await transaction.insert(users).values({ id: userId, status: 'active' });
+      await transaction.insert(users).values({ id: userId, status: 'active', ...profile });
       await transaction.insert(externalIdentities).values({
         id: uuidv7(),
         userId,
         issuer: identity.issuer,
         subject: identity.subject,
       });
-      return { id: userId, status: 'active' };
+      return this.getUser(transaction, userId);
     });
   }
 
@@ -76,63 +79,31 @@ export class IdentityService {
   }
 
   async getCurrentUser(userId: string): Promise<{ id: string; status: 'active' | 'disabled' }> {
-    return this.requireActiveUser(userId);
+    const user = await this.requireActiveUser(userId);
+    return { id: user.id, status: user.status };
   }
 
   async loadTenantPrincipal(userId: string, tenantId: string): Promise<AuthorizationPrincipal> {
     await this.requireActiveUser(userId);
     return this.db.transaction(async (transaction) => {
       await transaction.execute(sql`select set_config('app.user_id', ${userId}, true)`);
-      const [membership] = await transaction
-        .select({ id: tenantMemberships.id })
-        .from(tenantMemberships)
-        .innerJoin(tenants, eq(tenantMemberships.tenantId, tenants.id))
-        .where(
-          and(
-            eq(tenantMemberships.userId, userId),
-            eq(tenantMemberships.tenantId, tenantId),
-            eq(tenantMemberships.status, 'active'),
-            eq(tenants.active, true),
-          ),
-        )
-        .limit(1);
-      if (!membership) throw new TenantAccessDeniedError();
-
-      await transaction.execute(sql`select set_config('app.tenant_id', ${tenantId}, true)`);
-      const rows = await transaction
-        .select({
-          roleName: roles.name,
-          permission: rolePermissions.permission,
-          scopeType: membershipScopes.scopeType,
-          scopeId: membershipScopes.scopeId,
-        })
-        .from(membershipRoles)
-        .innerJoin(roles, and(eq(membershipRoles.roleId, roles.id), eq(roles.tenantId, tenantId)))
-        .innerJoin(rolePermissions, eq(rolePermissions.roleId, roles.id))
-        .innerJoin(membershipScopes, eq(membershipScopes.membershipId, membership.id))
-        .where(eq(membershipRoles.membershipId, membership.id));
-
-      const rolesForUser = [...new Set(rows.map((row) => row.roleName))];
-      const grants = rows.map((row) => {
-        if (!isPermission(row.permission) || !isScopeType(row.scopeType)) {
-          throw new InvalidAuthorizationConfigurationError();
-        }
-        return { permission: row.permission, scopeType: row.scopeType, scopeId: row.scopeId };
-      });
-      return { userId, tenantId, roles: rolesForUser, grants };
+      return loadTenantAuthorizationPrincipal(transaction, userId, tenantId);
     });
   }
 
-  private async requireActiveUser(
-    userId: string,
-  ): Promise<{ id: string; status: 'active' | 'disabled' }> {
+  private async requireActiveUser(userId: string): Promise<LocalUser> {
     const [user] = await this.db
-      .select({ status: users.status })
+      .select({
+        id: users.id,
+        status: users.status,
+        displayName: users.displayName,
+        email: users.email,
+      })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
     if (!user || user.status !== 'active') throw new DisabledUserError();
-    return { id: userId, status: user.status };
+    return user;
   }
 
   private async getUser(
@@ -140,9 +111,14 @@ export class IdentityService {
       Parameters<NodePgDatabase<Record<string, unknown>>['transaction']>[0]
     >[0],
     userId: string,
-  ): Promise<{ id: string; status: 'active' | 'disabled' }> {
+  ): Promise<LocalUser> {
     const [user] = await transaction
-      .select({ id: users.id, status: users.status })
+      .select({
+        id: users.id,
+        status: users.status,
+        displayName: users.displayName,
+        email: users.email,
+      })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
@@ -151,12 +127,26 @@ export class IdentityService {
   }
 }
 
-function isPermission(value: string): value is Permission {
-  return (PERMISSIONS as readonly string[]).includes(value);
-}
-
-function isScopeType(value: string): value is ScopeType {
-  return ['assigned_clients', 'team', 'facility', 'organization', 'tenant'].includes(value);
+function verifiedProfile(identity: VerifiedIdentity): {
+  email?: string;
+  displayName?: string;
+} {
+  const profile: { email?: string; displayName?: string } = {};
+  const email = identity.claims.email;
+  if (
+    identity.claims.email_verified === true &&
+    typeof email === 'string' &&
+    email.length <= 254 &&
+    !/\s/.test(email) &&
+    email.includes('@')
+  ) {
+    profile.email = email.trim().toLowerCase();
+  }
+  const displayName = identity.claims.name;
+  if (typeof displayName === 'string' && displayName.trim().length > 0) {
+    profile.displayName = displayName.trim().slice(0, 200);
+  }
+  return profile;
 }
 
 export class DisabledUserError extends Error {

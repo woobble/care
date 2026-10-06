@@ -45,7 +45,8 @@ export default async function TenantSelectionPage({
     );
   }
   const api = await getApiClient(false);
-  const { data: tenants, error } = await api.GET('/api/v1/me/tenants');
+  const get = api.GET;
+  const { data: tenants, error } = await get('/api/v1/me/tenants');
 
   return (
     <main className="mx-auto grid min-h-screen w-full max-w-xl content-center gap-6 px-4 py-10">

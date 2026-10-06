@@ -4,7 +4,8 @@ import { getApiClient, getTenantHeader } from '../../../lib/api';
 
 export default async function ClientsPage() {
   const api = await getApiClient();
-  const { data, error } = await api.GET('/api/v1/clients', {
+  const get = api.GET;
+  const { data, error } = await get('/api/v1/clients', {
     params: { query: { page: 1, pageSize: 50 }, header: await getTenantHeader() },
   });
 

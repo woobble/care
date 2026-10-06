@@ -1,4 +1,6 @@
+// oxlint-disable-next-line import/no-unassigned-import -- load dotenv before reading API configuration
 import '@care/config/load-env';
+// oxlint-disable-next-line import/no-unassigned-import -- required by NestJS decorator metadata
 import 'reflect-metadata';
 import { writeFile } from 'node:fs/promises';
 import { NestFactory } from '@nestjs/core';

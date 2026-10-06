@@ -35,23 +35,41 @@ Mailpit is at <http://localhost:8025> and accepts local SMTP on port `1026`. Pro
 
 ## Commands
 
-| Command                    | Purpose                                                                  |
-| -------------------------- | ------------------------------------------------------------------------ |
-| `bun install`              | Install root and workspace dependencies from `bun.lock`                  |
-| `bun run build`            | Generate OpenAPI types and build all workspaces                          |
-| `bun run typecheck`        | Typecheck every workspace                                                |
-| `bun run test`             | Run unit tests                                                           |
-| `bun run test:integration` | Run PostgreSQL Testcontainers and API integration tests; Docker required |
-| `bun run test:e2e`         | Start Compose, migrate and seed, then run Authentik client lifecycle E2E |
-| `bun run migrate`          | Apply checked, transactional SQL migrations                              |
-| `bun run seed`             | Create demo tenant, organization, facility, and roles                    |
-| `bun run seed:identity`    | Grant a configured Authentik subject demo tenant access                  |
-| `bun run infra:down`       | Stop local services; keeps named volumes                                 |
-| `bun run reset`            | Confirm and reset Compose data; reruns migrations and demo seed          |
+| Command                    | Purpose                                                                   |
+| -------------------------- | ------------------------------------------------------------------------- |
+| `bun install`              | Install root and workspace dependencies from `bun.lock`                   |
+| `bun run build`            | Generate OpenAPI types and build all workspaces                           |
+| `bun run typecheck`        | Typecheck every workspace                                                 |
+| `bun run test`             | Run unit tests                                                            |
+| `bun run test:integration` | Run PostgreSQL Testcontainers and API integration tests; Docker required  |
+| `bun run test:e2e`         | Start Compose, migrate and seed, then run Authentik access and client E2E |
+| `bun run migrate`          | Apply checked, transactional SQL migrations                               |
+| `bun run seed`             | Create demo tenant, organization, facility, and roles                     |
+| `bun run seed:identity`    | Grant a configured Authentik subject demo tenant access                   |
+| `bun run infra:down`       | Stop local services; keeps named volumes                                  |
+| `bun run reset`            | Confirm and reset Compose data; reruns migrations and demo seed           |
 
 The same module-owned SQL migrations run in development and integration tests. Once applied, a migration's checksum is immutable; add a new numbered migration for schema changes. The identity module has an additional migration for membership and role RLS policies.
 
-The Playwright flow uses the local `AUTHENTIK_E2E_API_TOKEN` to create a temporary user, verifies first-login provisioning grants no tenant membership, grants only client permissions, exercises create/view/activate/archive, then removes its records. Do not use this local token in deployed environments. See [Authentik setup](infra/authentik/README.md) and [environment variables](docs/environment.md).
+The Playwright flow uses the local `AUTHENTIK_E2E_API_TOKEN` to create temporary Authentik identities, bootstraps one test administrator, invites a second identity, assigns Office access to Facility West, checks the audit UI and tenant scope, then removes its records. The local OIDC email mapping only emits `email_verified: true` when an Authentik administrator sets `care_email_verified: true`; the test does this only for its invitee. Do not use this local token in deployed environments. See [Authentik setup](infra/authentik/README.md) and [environment variables](docs/environment.md).
+
+## Tenant access administration
+
+Tenant administrators manage membership under **Administration → Users & Access**. They can invite an email address, review members and invitations, assign the seeded Administrator, Office, or Caregiver role, choose tenant, organization, or facility scopes, activate or deactivate access, and revoke access permanently. Sign-in alone never grants access. An invited identity must sign in through Authentik with that verified email before it appears as a pending member; an administrator then assigns access and activates it. Invitations are recorded in the platform, but this slice does not send email.
+
+**Administration → Organizations** shows the tenant's readable organization and facility structure. **Administration → Audit Log** shows access and domain changes permitted by `audit.read`. The API remains authoritative for permission checks, tenant boundaries, scope validation, and audit/outbox writes. Client records currently have tenant ownership only, so facility and organization scopes apply to organization/facility reads but are not inferred for clients.
+
+The general `bun run seed` command creates Demo Care, Demo Pflegedienst, Main Office, Facility West, and the three system roles. It does not grant a user access. `bun run seed:identity` grants the configured local Authentik subject the Demo Care Administrator role. Both seed commands refuse to run unless `NODE_ENV=development`; use them only to create the initial local administrator, then manage memberships in the application.
+
+Install the Playwright Chromium browser once before running the browser suite:
+
+```sh
+bunx playwright install chromium
+```
+
+On Linux hosts missing browser libraries, install them through Playwright with `bunx playwright install --with-deps chromium`. The browser suite uses the local Authentik blueprint and API token; see [Authentik setup](infra/authentik/README.md).
+
+`openapi-typescript` requires TypeScript 5.x and currently fails against the workspace's TypeScript 7 AST API. The API client package therefore pins TypeScript 5.9.3 for schema generation; application workspaces use TypeScript 7.0.2. Keep the split until the generator supports the workspace compiler version.
 
 ## Deployment images
 

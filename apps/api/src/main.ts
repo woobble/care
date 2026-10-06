@@ -1,4 +1,6 @@
+// oxlint-disable-next-line import/no-unassigned-import -- load dotenv before reading API configuration
 import '@care/config/load-env';
+// oxlint-disable-next-line import/no-unassigned-import -- required by NestJS decorator metadata
 import 'reflect-metadata';
 import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
@@ -25,7 +27,7 @@ async function bootstrap(): Promise<void> {
   app.use(helmet());
   app.enableCors({
     origin: config.WEB_ORIGIN,
-    methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'OPTIONS'],
     allowedHeaders: [
       'Authorization',
       'Content-Type',

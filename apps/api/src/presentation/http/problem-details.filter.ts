@@ -11,7 +11,16 @@ import {
   InvalidClientTransitionError,
   InvalidPaginationError,
 } from '@care/clients';
-import { DisabledUserError, TenantAccessDeniedError } from '@care/identity';
+import {
+  DisabledUserError,
+  InvitationNotPendingError,
+  InvalidMembershipTransitionError,
+  MembershipAlreadyActiveError,
+  MembershipRevokedError,
+  TenantAccessDeniedError,
+  TenantAccessError,
+} from '@care/identity';
+import { FacilityNotFoundError, OrganizationNotFoundError } from '@care/organizations';
 import type { ApiRequest } from '../../http/request';
 
 @Injectable()
@@ -50,6 +59,23 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     code = exception.code;
   } else if (exception instanceof AuthorizationDeniedError) {
     status = 403;
+    code = exception.code;
+  } else if (exception instanceof TenantAccessError) {
+    status = exception.status;
+    code = exception.code;
+  } else if (
+    exception instanceof MembershipAlreadyActiveError ||
+    exception instanceof MembershipRevokedError ||
+    exception instanceof InvalidMembershipTransitionError ||
+    exception instanceof InvitationNotPendingError
+  ) {
+    status = 409;
+    code = exception.code;
+  } else if (
+    exception instanceof OrganizationNotFoundError ||
+    exception instanceof FacilityNotFoundError
+  ) {
+    status = 404;
     code = exception.code;
   } else if (
     exception instanceof DisabledUserError ||

@@ -4,6 +4,19 @@ metadata:
   labels:
     blueprints.goauthentik.io/description: Local OIDC provider for the Care Platform web app
 entries:
+  - model: authentik_providers_oauth2.scopemapping
+    id: care-platform-email
+    identifiers:
+      name: Care Platform OpenID email
+    attrs:
+      name: Care Platform OpenID email
+      scope_name: email
+      description: Email address and administrator-verified status
+      expression: |
+        return {
+            "email": request.user.email,
+            "email_verified": request.user.attributes.get("care_email_verified", False) is True,
+        }
   - model: authentik_providers_oauth2.oauth2provider
     id: care-platform-provider
     identifiers:
@@ -29,10 +42,7 @@ entries:
             authentik_providers_oauth2.scopemapping,
             [name, "authentik default OAuth Mapping: OpenID 'profile'"],
           ]
-        - !Find [
-            authentik_providers_oauth2.scopemapping,
-            [name, "authentik default OAuth Mapping: OpenID 'email'"],
-          ]
+        - !KeyOf care-platform-email
         - !Find [
             authentik_providers_oauth2.scopemapping,
             [name, "authentik default OAuth Mapping: OpenID 'offline_access'"],

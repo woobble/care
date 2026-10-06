@@ -8,5 +8,9 @@
     "perf": "warn",
     "style": "off"
   },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "typescript/no-extraneous-class": ["warn", { "allowWithDecorator": true }]
+  },
   "ignorePatterns": ["**/dist/**", "**/.next/**", "**/src/generated/**"]
 }

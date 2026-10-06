@@ -1,3 +1,4 @@
+// oxlint-disable-next-line import/no-unassigned-import -- load dotenv before creating the auth provider
 import '@care/config/load-env';
 import { loadWebConfig } from '@care/config';
 import { createDatabase } from '@care/database';

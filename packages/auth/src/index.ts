@@ -39,16 +39,57 @@ export async function createAccessTokenVerifier(config: OidcVerifierConfig) {
       throw new Error('OIDC subject is missing');
     }
     if (typeof payload.iss !== 'string') throw new Error('OIDC issuer is missing');
-    return { issuer: payload.iss, subject: payload.sub, claims: payload };
+    const claims = await addVerifiedUserInfoClaims(payload, token, metadata.userinfo_endpoint);
+    return { issuer: payload.iss, subject: payload.sub, claims };
   };
 }
 
-function isDiscoveryDocument(value: unknown): value is { issuer: string; jwks_uri: string } {
+async function addVerifiedUserInfoClaims(
+  payload: JWTPayload,
+  token: string,
+  endpoint: string | undefined,
+): Promise<JWTPayload> {
+  if (!endpoint || (typeof payload.email === 'string' && payload.email_verified === true)) {
+    return payload;
+  }
+  try {
+    const response = await fetch(endpoint, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!response.ok) return payload;
+    const info: unknown = await response.json();
+    if (!isUserInfo(info) || info.sub !== payload.sub) return payload;
+    return {
+      ...payload,
+      ...(typeof info.email === 'string' ? { email: info.email } : {}),
+      ...(typeof info.email_verified === 'boolean' ? { email_verified: info.email_verified } : {}),
+      ...(typeof info.name === 'string' ? { name: info.name } : {}),
+    };
+  } catch {
+    return payload;
+  }
+}
+
+function isUserInfo(value: unknown): value is {
+  sub: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+} {
+  if (typeof value !== 'object' || value === null) return false;
+  return 'sub' in value && typeof value.sub === 'string';
+}
+
+function isDiscoveryDocument(
+  value: unknown,
+): value is { issuer: string; jwks_uri: string; userinfo_endpoint?: string } {
   if (typeof value !== 'object' || value === null) return false;
   return (
     'issuer' in value &&
     typeof value.issuer === 'string' &&
     'jwks_uri' in value &&
-    typeof value.jwks_uri === 'string'
+    typeof value.jwks_uri === 'string' &&
+    (!('userinfo_endpoint' in value) || typeof value.userinfo_endpoint === 'string')
   );
 }

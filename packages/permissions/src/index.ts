@@ -1,4 +1,8 @@
 export const PERMISSIONS = [
+  'tenant.members.read',
+  'tenant.members.manage',
+  'tenant.roles.read',
+  'tenant.roles.assign',
   'client.read',
   'client.create',
   'client.update',
@@ -7,6 +11,7 @@ export const PERMISSIONS = [
   'employee.manage',
   'organization.read',
   'organization.manage',
+  'facility.read',
   'audit.read',
 ] as const;
 
@@ -50,6 +55,17 @@ export function can(principal: AuthorizationPrincipal, request: AuthorizationReq
   );
 }
 
+export function canGrantPermissions(
+  principal: AuthorizationPrincipal,
+  permissions: readonly Permission[],
+  resource: ResourceContext,
+): boolean {
+  return (
+    can(principal, { action: 'tenant.roles.assign', resource }) &&
+    permissions.every((permission) => can(principal, { action: permission, resource }))
+  );
+}
+
 export function assertCan(principal: AuthorizationPrincipal, request: AuthorizationRequest): void {
   if (!can(principal, request)) throw new AuthorizationDeniedError(request.action);
 }
@@ -74,7 +90,7 @@ function scopeMatches(grant: PermissionGrant, resource: ResourceContext, userId:
 }
 
 export class AuthorizationDeniedError extends Error {
-  readonly code = 'FORBIDDEN';
+  readonly code = 'INSUFFICIENT_PERMISSION';
 
   constructor(readonly action: Permission) {
     super('The requested action is not allowed');

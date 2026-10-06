@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { DatabaseModule } from './database/database.module';
 import { AuditModule } from './modules/audit.module';
+import { AuditQueryModule } from './modules/audit-query.module';
 import { ClientsModule } from './modules/clients.module';
 import { EmployeesModule } from './modules/employees.module';
 import { IdentityModule } from './modules/identity.module';
@@ -18,6 +19,7 @@ import { ProblemDetailsFilter } from './presentation/http/problem-details.filter
     OrganizationsModule,
     EmployeesModule,
     AuditModule,
+    AuditQueryModule,
     PlatformModule,
     ClientsModule,
     MeModule,

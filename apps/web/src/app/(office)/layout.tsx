@@ -7,7 +7,8 @@ import { signOutAction } from '../actions/auth';
 
 export default async function OfficeLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const api = await getApiClient(false);
-  const { data: tenants, error } = await api.GET('/api/v1/me/tenants');
+  const get = api.GET;
+  const { data: tenants, error } = await get('/api/v1/me/tenants');
   const tenantId = (await cookies()).get('care-tenant')?.value;
   if (error || !tenantId || !tenants?.some((tenant) => tenant.id === tenantId)) redirect('/');
 
@@ -22,6 +23,9 @@ export default async function OfficeLayout({ children }: Readonly<{ children: Re
             Care Platform
           </Link>
           <div className="flex items-center gap-2">
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/administration/users">Administration</Link>
+            </Button>
             <Button asChild variant="secondary" size="sm">
               <Link href="/">Mandant wechseln</Link>
             </Button>

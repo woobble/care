@@ -5,6 +5,24 @@ export interface EventPayloadMap {
   'client.updated': { clientId: string; changedFields: string[] };
   'client.activated': { clientId: string };
   'client.archived': { clientId: string };
+  'tenant.invitation.created': { invitationId: string };
+  'tenant.invitation.accepted': { invitationId: string; membershipId: string };
+  'tenant.invitation.expired': { invitationId: string };
+  'tenant.invitation.revoked': { invitationId: string };
+  'tenant.member.invited': { membershipId: string; invitationId: string };
+  'tenant.member.activated': { membershipId: string };
+  'tenant.member.deactivated': { membershipId: string };
+  'tenant.member.revoked': { membershipId: string };
+  'tenant.member.role_changed': {
+    membershipId: string;
+    addedRoleIds: string[];
+    removedRoleIds: string[];
+  };
+  'tenant.member.scope_changed': {
+    membershipId: string;
+    addedScopes: Array<{ scopeType: string; scopeId: string }>;
+    removedScopes: Array<{ scopeType: string; scopeId: string }>;
+  };
 }
 
 export type EventName = keyof EventPayloadMap;
@@ -14,7 +32,7 @@ export interface DomainEvent<T extends EventName = EventName> {
   type: T;
   version: 1;
   tenantId: string;
-  aggregateType: 'client';
+  aggregateType: 'client' | 'tenant_membership' | 'tenant_invitation';
   aggregateId: string;
   occurredAt: string;
   actor: { type: 'user' | 'system'; id?: string };
@@ -52,6 +70,8 @@ export class EventDispatcher {
     if (event.version !== 1) throw new UnsupportedEventVersionError(event.type, event.version);
     const handlers = this.handlers.get(event.type) ?? [];
     if (handlers.length === 0) throw new MissingEventHandlerError(event.type);
+    // Preserve subscription order; handlers may rely on earlier side effects.
+    // oxlint-disable-next-line no-await-in-loop
     for (const handler of handlers) await handler(event);
   }
 }

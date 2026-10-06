@@ -23,7 +23,7 @@ export default defineConfig({
   webServer: {
     command: 'bunx turbo run dev --filter=@care/web',
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

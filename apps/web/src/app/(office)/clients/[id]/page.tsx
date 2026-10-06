@@ -13,7 +13,8 @@ export default async function ClientDetailPage({
   const { id } = await params;
   const query = await searchParams;
   const api = await getApiClient();
-  const { data: client, error } = await api.GET('/api/v1/clients/{id}', {
+  const get = api.GET;
+  const { data: client, error } = await get('/api/v1/clients/{id}', {
     params: { path: { id }, header: await getTenantHeader() },
   });
   if (error?.code === 'CLIENT_NOT_FOUND') notFound();
