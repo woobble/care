@@ -7,13 +7,19 @@ export default async function CareTodayPage() {
   const range = todayRange();
   const api = await getApiClient();
   const get = api.GET;
-  const { data, error } = await get('/api/v1/me/visits', {
-    params: {
-      query: { from: range.from, until: range.until },
-      header: await getTenantHeader(),
-    },
-  });
+  const [visitsResult, documentationResult] = await Promise.all([
+    get('/api/v1/me/visits', {
+      params: { query: { from: range.from, until: range.until }, header: await getTenantHeader() },
+    }),
+    get('/api/v1/me/documentation', {
+      params: { query: { from: range.from, until: range.until }, header: await getTenantHeader() },
+    }),
+  ]);
+  const { data, error } = visitsResult;
   const visits = data ?? [];
+  const documentationByVisit = new Map(
+    (documentationResult.data?.items ?? []).map((item) => [item.visitId, item]),
+  );
 
   return (
     <div className="grid gap-5">
@@ -51,6 +57,15 @@ export default async function CareTodayPage() {
                     {visit.services.map((service) => service.name).join(' · ') ||
                       'Keine geplanten Leistungen'}
                   </span>
+                  {visit.executionStatus === 'completed' ? (
+                    <span className="text-sm font-medium">
+                      {documentationByVisit.get(visit.id)?.documentationStatus === 'finalized'
+                        ? '✓ Dokumentation finalisiert'
+                        : documentationByVisit.get(visit.id)?.documentationStatus === 'draft'
+                          ? '⚠ Dokumentation unvollständig'
+                          : '⚠ Dokumentation fehlt'}
+                    </span>
+                  ) : null}
                 </span>
                 <span
                   className={

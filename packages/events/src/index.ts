@@ -149,9 +149,72 @@ export interface EventPayloadMap {
     changedFields: string[];
     version: number;
   };
-  'visit_execution.note_updated': {
-    executionId: string;
+  'care_documentation.created': {
+    documentationId: string;
     visitId: string;
+    executionId: string;
+    clientId: string;
+    version: number;
+  };
+  'care_documentation.entry_added': {
+    documentationId: string;
+    visitId: string;
+    clientId: string;
+    entryId: string;
+    entryType: string;
+    version: number;
+  };
+  'care_documentation.entry_updated': {
+    documentationId: string;
+    visitId: string;
+    clientId: string;
+    entryId: string;
+    changedFields: string[];
+    version: number;
+  };
+  'care_documentation.entry_removed': {
+    documentationId: string;
+    visitId: string;
+    clientId: string;
+    entryId: string;
+    entryType: string;
+    version: number;
+  };
+  'care_documentation.finalized': {
+    documentationId: string;
+    visitId: string;
+    executionId: string;
+    clientId: string;
+    version: number;
+  };
+  'care_documentation.amended': {
+    documentationId: string;
+    visitId: string;
+    clientId: string;
+    amendmentId: string;
+  };
+  'service_evidence.recorded': {
+    documentationId: string;
+    visitId: string;
+    clientId: string;
+    evidenceId: string;
+    performedServiceId: string;
+    version: number;
+  };
+  'service_evidence.updated': {
+    documentationId: string;
+    visitId: string;
+    clientId: string;
+    evidenceId: string;
+    performedServiceId: string;
+    version: number;
+  };
+  'incident.recorded': {
+    documentationId: string;
+    visitId: string;
+    clientId: string;
+    incidentId: string;
+    severity: 'low' | 'moderate' | 'high' | 'critical';
     version: number;
   };
   'performed_service.recorded': {
@@ -230,6 +293,7 @@ export interface DomainEvent<T extends EventName = EventName> {
     | 'service_agreement'
     | 'visit'
     | 'visit_execution'
+    | 'care_documentation'
     | 'schedule_generation'
     | 'employee_availability'
     | 'tenant_membership'

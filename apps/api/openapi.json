@@ -2064,72 +2064,6 @@
         ]
       }
     },
-    "/api/v1/visits/{visitId}/execution/note": {
-      "put": {
-        "operationId": "VisitExecutionController_updateNote",
-        "parameters": [
-          {
-            "name": "X-Tenant-Id",
-            "in": "header",
-            "description": "Tenant selected for this request",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "visitId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateExecutionNoteRequestDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExecutionNoteResponseDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Problem Details response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetailsDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Update the short operational execution note",
-        "tags": [
-          "visit execution"
-        ]
-      }
-    },
     "/api/v1/visits/{visitId}/execution/complete": {
       "post": {
         "operationId": "VisitExecutionController_complete",
@@ -8135,6 +8069,805 @@
         ]
       }
     },
+    "/api/v1/visits/{visitId}/documentation": {
+      "get": {
+        "operationId": "CareDocumentationController_getForVisit",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareDocumentationDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read documentation, evidence, history, and completeness for a visit",
+        "tags": [
+          "care documentation"
+        ]
+      },
+      "post": {
+        "operationId": "CareDocumentationController_createForVisit",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareDocumentationDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create an idempotent documentation draft for an executed visit",
+        "tags": [
+          "care documentation"
+        ]
+      }
+    },
+    "/api/v1/care-documentation": {
+      "get": {
+        "operationId": "CareDocumentationController_worklist",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "incomplete",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "draft",
+                "finalized",
+                "missing"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "employeeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "clientQuery",
+            "required": false,
+            "in": "query",
+            "description": "Client name metadata filter",
+            "schema": {}
+          },
+          {
+            "name": "until",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentationWorklistDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List scoped visit documentation and incomplete evidence",
+        "tags": [
+          "care documentation"
+        ]
+      }
+    },
+    "/api/v1/me/documentation": {
+      "get": {
+        "operationId": "CareDocumentationController_myWorklist",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "until",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentationWorklistDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List documentation status for visits related to the current caregiver",
+        "tags": [
+          "care documentation",
+          "caregiver"
+        ]
+      }
+    },
+    "/api/v1/care-documentation/{id}": {
+      "get": {
+        "operationId": "CareDocumentationController_getById",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareDocumentationDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read documentation by ID",
+        "tags": [
+          "care documentation"
+        ]
+      }
+    },
+    "/api/v1/care-documentation/{id}/entries": {
+      "post": {
+        "operationId": "CareDocumentationController_addEntry",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDocumentationEntryRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareDocumentationDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add a note, observation, deviation, or incident entry",
+        "tags": [
+          "care documentation"
+        ]
+      }
+    },
+    "/api/v1/care-documentation/{id}/entries/{entryId}": {
+      "patch": {
+        "operationId": "CareDocumentationController_updateEntry",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDocumentationEntryRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareDocumentationDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a draft documentation entry",
+        "tags": [
+          "care documentation"
+        ]
+      },
+      "delete": {
+        "operationId": "CareDocumentationController_removeEntry",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareDocumentationDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove a draft documentation entry",
+        "tags": [
+          "care documentation"
+        ]
+      }
+    },
+    "/api/v1/care-documentation/{id}/evidence/{performedServiceId}": {
+      "put": {
+        "operationId": "CareDocumentationController_recordEvidence",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "performedServiceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordServiceEvidenceRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareDocumentationDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Record or update evidence for a performed service",
+        "tags": [
+          "care documentation"
+        ]
+      }
+    },
+    "/api/v1/care-documentation/{id}/finalize": {
+      "post": {
+        "operationId": "CareDocumentationController_finalize",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinalizeDocumentationRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareDocumentationDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Finalize complete documentation for a completed execution",
+        "tags": [
+          "care documentation"
+        ]
+      }
+    },
+    "/api/v1/care-documentation/{id}/amendments": {
+      "post": {
+        "operationId": "CareDocumentationController_amend",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDocumentationAmendmentRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareDocumentationDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Append an explicit correction to finalized documentation",
+        "tags": [
+          "care documentation"
+        ]
+      }
+    },
     "/api/v1/me": {
       "get": {
         "operationId": "MeController_me",
@@ -9190,10 +9923,6 @@
             "format": "date-time",
             "nullable": true
           },
-          "operationalNote": {
-            "type": "string",
-            "nullable": true
-          },
           "startedByEmployeeId": {
             "type": "string",
             "format": "uuid",
@@ -9280,10 +10009,6 @@
               "provider_decision",
               "other"
             ]
-          },
-          "note": {
-            "type": "string",
-            "nullable": true
           },
           "performedByEmployeeId": {
             "type": "string",
@@ -9398,10 +10123,6 @@
               "other"
             ],
             "nullable": true
-          },
-          "note": {
-            "type": "string",
-            "nullable": true
           }
         },
         "required": [
@@ -9423,40 +10144,6 @@
         },
         "required": [
           "service",
-          "version"
-        ]
-      },
-      "UpdateExecutionNoteRequestDto": {
-        "type": "object",
-        "properties": {
-          "expectedVersion": {
-            "type": "number",
-            "minimum": 1
-          },
-          "note": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 1000
-          }
-        },
-        "required": [
-          "expectedVersion",
-          "note"
-        ]
-      },
-      "ExecutionNoteResponseDto": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "number",
-            "minimum": 1
-          },
-          "operationalNote": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
           "version"
         ]
       },
@@ -13677,6 +14364,722 @@
           "endsAt"
         ]
       },
+      "DocumentationVisitDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientDisplayName": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "confirmed",
+              "cancelled"
+            ]
+          },
+          "plannedStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "plannedEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "clientDisplayName",
+          "organizationId",
+          "facilityId",
+          "status",
+          "plannedStart",
+          "plannedEnd",
+          "timezone"
+        ]
+      },
+      "DocumentationExecutionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_started",
+              "in_progress",
+              "completed"
+            ]
+          },
+          "actualStart": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "actualEnd": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "CareDocumentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "finalized"
+            ]
+          },
+          "createdByEmployeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdByEmployeeName": {
+            "type": "string",
+            "nullable": true
+          },
+          "finalizedByEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "finalizedByEmployeeName": {
+            "type": "string",
+            "nullable": true
+          },
+          "finalizedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "createdByEmployeeId",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ServiceEvidenceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "documented",
+              "not_required"
+            ]
+          },
+          "documentedByEmployeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "documentedByEmployeeName": {
+            "type": "string",
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "documentedByEmployeeId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "DocumentationServiceDto": {
+        "type": "object",
+        "properties": {
+          "performedServiceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "serviceCode": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "performed",
+              "partially_performed",
+              "not_performed"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "actualQuantity": {
+            "type": "string",
+            "nullable": true
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "occurrence",
+              "minute",
+              "hour",
+              "day"
+            ]
+          },
+          "evidence": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ServiceEvidenceDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "performedServiceId",
+          "serviceName",
+          "serviceCode",
+          "status",
+          "unit"
+        ]
+      },
+      "DocumentationEntryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "care_note",
+              "observation",
+              "deviation",
+              "incident"
+            ]
+          },
+          "authorEmployeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "authorEmployeeName": {
+            "type": "string",
+            "nullable": true
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "low",
+              "moderate",
+              "high",
+              "critical"
+            ],
+            "nullable": true
+          },
+          "content": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "authorEmployeeId",
+          "content",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "DocumentationAmendmentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "authorUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "correction": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "authorUserId",
+          "reason",
+          "correction",
+          "createdAt"
+        ]
+      },
+      "DocumentationHistoryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actorUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actorEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "action": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "actorUserId",
+          "action",
+          "metadata",
+          "occurredAt"
+        ]
+      },
+      "DocumentationMissingRequirementDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "DOCUMENTATION_REQUIRED",
+              "VISIT_EXECUTION_REQUIRED",
+              "SERVICE_EVIDENCE_REQUIRED",
+              "NOT_PERFORMED_REASON_REQUIRED",
+              "PARTIAL_SERVICE_EXPLANATION_REQUIRED"
+            ]
+          },
+          "performedServiceId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "DocumentationCompletenessDto": {
+        "type": "object",
+        "properties": {
+          "isComplete": {
+            "type": "boolean"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentationMissingRequirementDto"
+            }
+          }
+        },
+        "required": [
+          "isComplete",
+          "missing"
+        ]
+      },
+      "CareDocumentationDetailDto": {
+        "type": "object",
+        "properties": {
+          "visit": {
+            "$ref": "#/components/schemas/DocumentationVisitDto"
+          },
+          "execution": {
+            "$ref": "#/components/schemas/DocumentationExecutionDto"
+          },
+          "documentation": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CareDocumentDto"
+              }
+            ]
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentationServiceDto"
+            }
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentationEntryDto"
+            }
+          },
+          "amendments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentationAmendmentDto"
+            }
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentationHistoryDto"
+            }
+          },
+          "completeness": {
+            "$ref": "#/components/schemas/DocumentationCompletenessDto"
+          }
+        },
+        "required": [
+          "visit",
+          "execution",
+          "services",
+          "entries",
+          "amendments",
+          "history",
+          "completeness"
+        ]
+      },
+      "DocumentationWorklistItemDto": {
+        "type": "object",
+        "properties": {
+          "visitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientDisplayName": {
+            "type": "string"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "plannedStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "executionStatus": {
+            "type": "string",
+            "enum": [
+              "in_progress",
+              "completed"
+            ]
+          },
+          "documentationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "documentationStatus": {
+            "type": "string",
+            "enum": [
+              "missing",
+              "draft",
+              "finalized"
+            ]
+          },
+          "documentationVersion": {
+            "type": "number",
+            "nullable": true
+          },
+          "employeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "employeeName": {
+            "type": "string",
+            "nullable": true
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentationMissingRequirementDto"
+            }
+          }
+        },
+        "required": [
+          "visitId",
+          "clientId",
+          "clientDisplayName",
+          "facilityId",
+          "organizationId",
+          "plannedStart",
+          "timezone",
+          "executionStatus",
+          "documentationStatus",
+          "employeeId",
+          "missing"
+        ]
+      },
+      "DocumentationWorklistDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentationWorklistItemDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "AddDocumentationEntryRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "care_note",
+              "observation",
+              "deviation",
+              "incident"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "low",
+              "moderate",
+              "high",
+              "critical"
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "type",
+          "content"
+        ]
+      },
+      "UpdateDocumentationEntryRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "care_note",
+              "observation",
+              "deviation",
+              "incident"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "low",
+              "moderate",
+              "high",
+              "critical"
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ]
+      },
+      "RecordServiceEvidenceRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "documented",
+              "not_required"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "status"
+        ]
+      },
+      "FinalizeDocumentationRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ]
+      },
+      "AddDocumentationAmendmentRequestDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "correction": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "reason",
+          "correction"
+        ]
+      },
       "MeResponseDto": {
         "type": "object",
         "properties": {
@@ -13752,6 +15155,12 @@
               "visit_execution.record_services",
               "visit_execution.complete",
               "visit_execution.correct",
+              "care_documentation.read",
+              "care_documentation.create",
+              "care_documentation.update",
+              "care_documentation.finalize",
+              "care_documentation.amend",
+              "care_documentation.review",
               "employee.read",
               "employee.create",
               "employee.update",

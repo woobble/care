@@ -387,6 +387,7 @@ export class ClientMasterDataRepository {
     tenantId: string,
     clientId: string,
     limit: number,
+    allowedActions: string[],
   ): Promise<ClientTimelineRecord[]> {
     return transaction
       .select({
@@ -400,6 +401,7 @@ export class ClientMasterDataRepository {
       .where(
         and(
           eq(auditEntries.tenantId, tenantId),
+          inArray(auditEntries.action, allowedActions),
           or(
             and(eq(auditEntries.resourceType, 'client'), eq(auditEntries.resourceId, clientId)),
             and(

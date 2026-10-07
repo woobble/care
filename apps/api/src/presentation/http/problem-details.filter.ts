@@ -115,7 +115,6 @@ import {
 import {
   EmployeeLinkRequiredError,
   ExecutionCorrectionReasonRequiredError,
-  InvalidExecutionNoteError,
   InvalidPerformedServiceQuantityError,
   InvalidPerformedServiceStatusError,
   InvalidVisitExecutionQueryError,
@@ -130,6 +129,24 @@ import {
   VisitExecutionVisitCancelledError,
   VisitNotAssignedToEmployeeError,
 } from '@care/visit-execution';
+import {
+  AmendmentReasonRequiredError,
+  CareDocumentationAlreadyFinalizedError,
+  CareDocumentationEmployeeLinkRequiredError,
+  CareDocumentationIncompleteError,
+  CareDocumentationInvalidStateError,
+  CareDocumentationNotFinalizedError,
+  CareDocumentationNotFoundError,
+  CareDocumentationVersionConflictError,
+  CareDocumentationVisitRelationshipRequiredError,
+  DocumentationEntryNotFoundError,
+  InvalidDocumentationWorklistQueryError,
+  InvalidDocumentationEntryError,
+  InvalidServiceEvidenceError,
+  ServiceEvidenceNotFoundError,
+  VisitExecutionNotCompletedError,
+  VisitExecutionRequiredError,
+} from '@care/care-documentation';
 import type { ApiRequest } from '../../http/request';
 
 @Injectable()
@@ -280,7 +297,10 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     code = exception.code;
   } else if (
     exception instanceof VisitExecutionNotFoundError ||
-    exception instanceof PerformedServiceNotFoundError
+    exception instanceof PerformedServiceNotFoundError ||
+    exception instanceof CareDocumentationNotFoundError ||
+    exception instanceof DocumentationEntryNotFoundError ||
+    exception instanceof ServiceEvidenceNotFoundError
   ) {
     status = 404;
     code = exception.code;
@@ -291,9 +311,33 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     status = 403;
     code = exception.code;
   } else if (
+    exception instanceof CareDocumentationEmployeeLinkRequiredError ||
+    exception instanceof CareDocumentationVisitRelationshipRequiredError
+  ) {
+    status = 403;
+    code = exception.code;
+  } else if (
+    exception instanceof CareDocumentationAlreadyFinalizedError ||
+    exception instanceof CareDocumentationNotFinalizedError ||
+    exception instanceof CareDocumentationIncompleteError ||
+    exception instanceof CareDocumentationInvalidStateError ||
+    exception instanceof CareDocumentationVersionConflictError ||
+    exception instanceof VisitExecutionRequiredError ||
+    exception instanceof VisitExecutionNotCompletedError
+  ) {
+    status = 409;
+    code = exception.code;
+  } else if (
+    exception instanceof AmendmentReasonRequiredError ||
+    exception instanceof InvalidDocumentationWorklistQueryError ||
+    exception instanceof InvalidDocumentationEntryError ||
+    exception instanceof InvalidServiceEvidenceError
+  ) {
+    status = 400;
+    code = exception.code;
+  } else if (
     exception instanceof InvalidPerformedServiceQuantityError ||
     exception instanceof InvalidPerformedServiceStatusError ||
-    exception instanceof InvalidExecutionNoteError ||
     exception instanceof InvalidVisitExecutionQueryError ||
     exception instanceof ExecutionCorrectionReasonRequiredError
   ) {

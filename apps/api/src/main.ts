@@ -27,7 +27,7 @@ async function bootstrap(): Promise<void> {
   app.use(helmet());
   app.enableCors({
     origin: config.WEB_ORIGIN,
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Authorization',
       'Content-Type',

@@ -23,6 +23,7 @@
       "dependencies": {
         "@care/audit": "workspace:*",
         "@care/auth": "workspace:*",
+        "@care/care-documentation": "workspace:*",
         "@care/clients": "workspace:*",
         "@care/config": "workspace:*",
         "@care/contracts": "workspace:*",
@@ -101,6 +102,24 @@
         "@care/contracts": "workspace:*",
         "@care/database": "workspace:*",
         "drizzle-orm": "^0.45.3",
+      },
+    },
+    "modules/care-documentation": {
+      "name": "@care/care-documentation",
+      "dependencies": {
+        "@care/audit": "workspace:*",
+        "@care/clients": "workspace:*",
+        "@care/contracts": "workspace:*",
+        "@care/database": "workspace:*",
+        "@care/employees": "workspace:*",
+        "@care/events": "workspace:*",
+        "@care/organizations": "workspace:*",
+        "@care/permissions": "workspace:*",
+        "@care/platform": "workspace:*",
+        "@care/scheduling": "workspace:*",
+        "@care/visit-execution": "workspace:*",
+        "drizzle-orm": "^0.45.3",
+        "uuid": "^14.0.2",
       },
     },
     "modules/clients": {
@@ -409,6 +428,8 @@
     "@care/audit": ["@care/audit@workspace:modules/audit"],
 
     "@care/auth": ["@care/auth@workspace:packages/auth"],
+
+    "@care/care-documentation": ["@care/care-documentation@workspace:modules/care-documentation"],
 
     "@care/clients": ["@care/clients@workspace:modules/clients"],
 

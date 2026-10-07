@@ -35,6 +35,44 @@ import { ClientRepository } from '../infrastructure/persistence/client.repositor
 
 type AuditContext = { ip?: string; userAgent?: string };
 
+const TIMELINE_SUMMARIES: Record<string, string> = {
+  'client.created': 'Klient angelegt',
+  'client.updated': 'Stammdaten aktualisiert',
+  'client.activated': 'Klient aktiviert',
+  'client.archived': 'Klient archiviert',
+  'client.provider_context_changed': 'Versorgerkontext geändert',
+  'client.address_added': 'Adresse hinzugefügt',
+  'client.address_updated': 'Adresse geändert',
+  'client.address_removed': 'Adresse entfernt',
+  'client.contact_added': 'Kontakt hinzugefügt',
+  'client.contact_updated': 'Kontakt geändert',
+  'client.contact_removed': 'Kontakt entfernt',
+  'client.insurance_added': 'Versicherungsverhältnis hinzugefügt',
+  'client.insurance_updated': 'Versicherungsverhältnis geändert',
+  'client.pflegegrad_added': 'Pflegegradverlauf ergänzt',
+  'client.pflegegrad_updated': 'Pflegegradverlauf aktualisiert',
+  'service_agreement.created': 'Leistungsplanung angelegt',
+  'service_agreement.updated': 'Leistungsplanung geändert',
+  'service_agreement.activated': 'Leistungsplanung aktiviert',
+  'service_agreement.suspended': 'Leistungsplanung pausiert',
+  'service_agreement.resumed': 'Leistungsplanung fortgesetzt',
+  'service_agreement.ended': 'Leistungsplanung beendet',
+  'service_agreement.service_added': 'Leistung zur Planung hinzugefügt',
+  'service_agreement.service_updated': 'Geplante Leistung geändert',
+  'service_agreement.service_ended': 'Geplante Leistung beendet',
+  'visit.created': 'Einsatz geplant',
+  'visit.generated': 'Einsatz aus Leistungsplanung erzeugt',
+  'visit.rescheduled': 'Einsatz umgeplant',
+  'visit.confirmed': 'Einsatz bestätigt',
+  'visit.unconfirmed': 'Einsatzbestätigung zurückgenommen',
+  'visit.cancelled': 'Einsatz abgesagt',
+  'visit_execution.started': 'Einsatz begonnen',
+  'visit_execution.completed': 'Einsatz abgeschlossen',
+  'care_documentation.finalized': 'Besuchsdokumentation abgeschlossen',
+  'incident.recorded': 'Vorfall dokumentiert',
+  'care_documentation.amended': 'Besuchsdokumentation ergänzt',
+};
+
 export interface ClientTimelineEntry {
   id: string;
   occurredAt: string;
@@ -576,6 +614,7 @@ export class ClientMasterDataApplicationService {
         principal.tenantId,
         clientId,
         100,
+        Object.keys(TIMELINE_SUMMARIES),
       );
       return records.reverse().map((record) => ({
         id: record.id,
@@ -944,41 +983,7 @@ function today(date: Date): string {
 }
 
 function timelineSummary(action: string): string {
-  const summaries: Record<string, string> = {
-    'client.created': 'Klient angelegt',
-    'client.updated': 'Stammdaten aktualisiert',
-    'client.activated': 'Klient aktiviert',
-    'client.archived': 'Klient archiviert',
-    'client.provider_context_changed': 'Versorgerkontext geändert',
-    'client.address_added': 'Adresse hinzugefügt',
-    'client.address_updated': 'Adresse geändert',
-    'client.address_removed': 'Adresse entfernt',
-    'client.contact_added': 'Kontakt hinzugefügt',
-    'client.contact_updated': 'Kontakt geändert',
-    'client.contact_removed': 'Kontakt entfernt',
-    'client.insurance_added': 'Versicherungsverhältnis hinzugefügt',
-    'client.insurance_updated': 'Versicherungsverhältnis geändert',
-    'client.pflegegrad_added': 'Pflegegradverlauf ergänzt',
-    'client.pflegegrad_updated': 'Pflegegradverlauf aktualisiert',
-    'service_agreement.created': 'Leistungsplanung angelegt',
-    'service_agreement.updated': 'Leistungsplanung geändert',
-    'service_agreement.activated': 'Leistungsplanung aktiviert',
-    'service_agreement.suspended': 'Leistungsplanung pausiert',
-    'service_agreement.resumed': 'Leistungsplanung fortgesetzt',
-    'service_agreement.ended': 'Leistungsplanung beendet',
-    'service_agreement.service_added': 'Leistung zur Planung hinzugefügt',
-    'service_agreement.service_updated': 'Geplante Leistung geändert',
-    'service_agreement.service_ended': 'Geplante Leistung beendet',
-    'visit.created': 'Einsatz geplant',
-    'visit.generated': 'Einsatz aus Leistungsplanung erzeugt',
-    'visit.rescheduled': 'Einsatz umgeplant',
-    'visit.confirmed': 'Einsatz bestätigt',
-    'visit.unconfirmed': 'Einsatzbestätigung zurückgenommen',
-    'visit.cancelled': 'Einsatz abgesagt',
-    'visit_execution.started': 'Einsatz begonnen',
-    'visit_execution.completed': 'Einsatz abgeschlossen',
-  };
-  return summaries[action] ?? 'Klientenstammdaten geändert';
+  return TIMELINE_SUMMARIES[action] ?? 'Klientenstammdaten geändert';
 }
 
 export function createClientMasterDataApplicationService(

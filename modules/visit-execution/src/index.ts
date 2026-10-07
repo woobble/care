@@ -1,10 +1,8 @@
 export { visitExecutionSchema, visitExecutions, performedServices } from './schema';
 export {
   EXECUTION_REASONS,
-  InvalidExecutionNoteError,
   InvalidPerformedServiceQuantityError,
   InvalidPerformedServiceStatusError,
-  normalizeOperationalNote,
   validateServiceDecision,
   type ExecutionReasonCode,
   type ExecutionStatus,
@@ -35,6 +33,5 @@ export {
   type CaregiverVisitSummary,
   type CorrectExecutionTimesInput,
   type RecordPerformedServiceInput,
-  type UpdateExecutionNoteInput,
   type VisitExecutionDetail,
 } from './application/visit-execution.application';

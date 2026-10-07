@@ -39,14 +39,8 @@ export const recordPerformedServiceSchema = z
     status: z.enum(['performed', 'partially_performed', 'not_performed']),
     actualQuantity: z.string().nullable(),
     reasonCode: z.enum(reasonCodes).nullable().optional(),
-    note: z.string().max(1000).nullable().optional(),
   })
   .refine((value) => value.visitServiceId !== undefined || value.serviceDefinitionId !== undefined);
-
-export const updateExecutionNoteSchema = z.object({
-  expectedVersion: positiveVersion,
-  note: z.string().max(1000).nullable(),
-});
 
 export const completeExecutionSchema = z.object({
   expectedVersion: positiveVersion,
@@ -82,17 +76,6 @@ export class RecordPerformedServiceRequestDto {
     nullable: true,
   })
   reasonCode?: (typeof reasonCodes)[number] | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  note?: string | null;
-}
-
-export class UpdateExecutionNoteRequestDto {
-  @ApiProperty({ minimum: 1 })
-  expectedVersion!: number;
-
-  @ApiProperty({ nullable: true, maxLength: 1000 })
-  note!: string | null;
 }
 
 export class CompleteExecutionRequestDto {
@@ -156,9 +139,6 @@ export class ExecutionResponseDto {
   @ApiPropertyOptional({ format: 'date-time', nullable: true })
   actualEnd!: string | null;
 
-  @ApiPropertyOptional({ nullable: true })
-  operationalNote!: string | null;
-
   @ApiPropertyOptional({ format: 'uuid', nullable: true })
   startedByEmployeeId!: string | null;
 
@@ -206,9 +186,6 @@ export class PerformedServiceResponseDto {
   })
   reasonCode!: (typeof reasonCodes)[number] | null;
 
-  @ApiPropertyOptional({ nullable: true })
-  note!: string | null;
-
   @ApiPropertyOptional({ format: 'uuid', nullable: true })
   performedByEmployeeId!: string | null;
 
@@ -236,14 +213,6 @@ export class RecordedServiceResponseDto {
 
   @ApiProperty({ minimum: 1 })
   version!: number;
-}
-
-export class ExecutionNoteResponseDto {
-  @ApiProperty({ minimum: 1 })
-  version!: number;
-
-  @ApiPropertyOptional({ nullable: true })
-  operationalNote!: string | null;
 }
 
 export class CorrectExecutionTimesResponseDto {

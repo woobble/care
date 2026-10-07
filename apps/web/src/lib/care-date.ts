@@ -14,6 +14,29 @@ export function todayRange(timezone = 'Europe/Berlin', now = new Date()): LocalD
   };
 }
 
+export function dateRange(
+  fromDate: string,
+  untilDate: string,
+  timezone = 'Europe/Berlin',
+): LocalDayRange {
+  if (!isDateKey(fromDate) || !isDateKey(untilDate) || untilDate < fromDate) {
+    throw new TypeError('Invalid local date range');
+  }
+  return {
+    date: fromDate,
+    from: localMidnight(fromDate, timezone).toISOString(),
+    until: localMidnight(shiftDateKey(untilDate, 1), timezone).toISOString(),
+  };
+}
+
+export function todayDateKey(timezone = 'Europe/Berlin', now = new Date()): string {
+  return dateKey(now, timezone);
+}
+
+export function shiftDate(value: string, days: number): string {
+  return shiftDateKey(value, days);
+}
+
 export function formatVisitTime(value: string, timezone: string): string {
   return new Intl.DateTimeFormat('de-DE', {
     timeZone: timezone,
@@ -33,6 +56,12 @@ export function formatVisitDateTime(value: string, timezone: string): string {
 function dateKey(value: Date, timezone: string): string {
   const parts = localParts(value, timezone);
   return parts.year + '-' + parts.month + '-' + parts.day;
+}
+
+function isDateKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(value + 'T00:00:00.000Z');
+  return date.toISOString().slice(0, 10) === value;
 }
 
 function shiftDateKey(value: string, days: number): string {

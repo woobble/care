@@ -29,7 +29,6 @@ export const visitExecutions = visitExecution.table(
     actualEnd: timestamp('actual_end', { withTimezone: true }),
     startedByEmployeeId: uuid('started_by_employee_id').notNull(),
     completedByEmployeeId: uuid('completed_by_employee_id'),
-    operationalNote: text('operational_note'),
     version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
@@ -46,10 +45,6 @@ export const visitExecutions = visitExecution.table(
       ),
     ),
     check('visit_executions_time_ck', sql.raw('actual_end IS NULL OR actual_end > actual_start')),
-    check(
-      'visit_executions_note_ck',
-      sql.raw('operational_note IS NULL OR length(operational_note) <= 1000'),
-    ),
     check('visit_executions_version_ck', sql.raw('version > 0')),
     foreignKey({
       name: 'visit_executions_visit_fk',
@@ -102,13 +97,17 @@ export const performedServices = visitExecution.table(
       | 'provider_decision'
       | 'other'
     >(),
-    note: text('note'),
     performedByEmployeeId: uuid('performed_by_employee_id').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
   (table) => [
     uniqueIndex('performed_services_tenant_id_uq').on(table.tenantId, table.id),
+    uniqueIndex('performed_services_tenant_id_execution_uq').on(
+      table.tenantId,
+      table.id,
+      table.executionId,
+    ),
     uniqueIndex('performed_services_planned_service_uq')
       .on(table.tenantId, table.executionId, table.visitServiceId)
       .where(sql.raw('visit_service_id IS NOT NULL')),
@@ -141,7 +140,6 @@ export const performedServices = visitExecution.table(
         "reason_code IS NULL OR reason_code IN ('client_declined', 'client_not_present', 'service_not_required', 'time_constraint', 'provider_decision', 'other')",
       ),
     ),
-    check('performed_services_note_ck', sql.raw('note IS NULL OR length(note) <= 1000')),
     foreignKey({
       name: 'performed_services_execution_fk',
       columns: [table.tenantId, table.executionId, table.visitId],

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { v7 as uuidv7 } from 'uuid';
 import { Client } from 'pg';
 import { expect, test } from '@playwright/test';
@@ -14,20 +13,20 @@ test('Authentik users can be invited and administered from the office UI', async
   const authentikOrigin = new URL(issuer).origin;
   const apiToken = required('AUTHENTIK_E2E_API_TOKEN');
   const database = new Client({ connectionString: required('MIGRATION_DATABASE_URL') });
-  const runId = randomUUID().slice(0, 8);
+  const runId = uuidv7();
   const serviceValidFrom = new Date().toISOString().slice(0, 10);
   const username = `care-e2e-${runId}`;
   const displayName = `Care E2E ${runId}`;
   const email = `${username}@example.test`;
-  const password = `Aa1!${randomUUID()}`;
+  const password = `Aa1!${uuidv7()}`;
   const invitedUsername = `care-invite-${runId}`;
   const invitedName = `Invitee E2E ${runId}`;
   const invitedEmail = `${invitedUsername}@example.test`;
-  const invitedPassword = `Aa1!${randomUUID()}`;
+  const invitedPassword = `Aa1!${uuidv7()}`;
   const caregiverUsername = `caregiver-e2e-${runId}`;
   const caregiverName = `Caregiver E2E ${runId}`;
   const caregiverEmail = `${caregiverUsername}@example.test`;
-  const caregiverPassword = `Aa1!${randomUUID()}`;
+  const caregiverPassword = `Aa1!${uuidv7()}`;
   const executionMarker = `execution-note-${runId}`;
   let authentikUserId: number | undefined;
   let invitedAuthentikUserId: number | undefined;
@@ -48,8 +47,9 @@ test('Authentik users can be invited and administered from the office UI', async
   let serviceId: string | undefined;
   let executionVisitId: string | undefined;
   const serviceCategoryName = `E2E Category ${runId}`;
-  const serviceCategoryCode = `E2E-CAT-${runId}`;
-  const serviceCode = `E2E-SVC-${runId}`;
+  const codeSuffix = runId.slice(-24);
+  const serviceCategoryCode = `E2E-CAT-${codeSuffix}`;
+  const serviceCode = `E2E-SVC-${codeSuffix}`;
   const workforceOrganizationName = `E2E Organization ${runId}`;
   const workforceFacilityName = `E2E Facility ${runId}`;
   const workforceTeamName = `E2E Team ${runId}`;
@@ -488,21 +488,109 @@ test('Authentik users can be invited and administered from the office UI', async
       await caregiverPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
     await caregiverPage.getByRole('button', { name: 'Einsatz starten' }).click();
+    await expect(caregiverPage.getByText('In Bearbeitung', { exact: true })).toBeVisible();
     await expect(caregiverPage.getByRole('heading', { name: 'Geplante Leistungen' })).toBeVisible();
     await caregiverPage.getByRole('button', { name: 'Ergebnis speichern' }).click();
+    await expect(caregiverPage.getByRole('status')).toContainText('Leistungsergebnis gespeichert.');
 
     const unplannedForm = caregiverPage.locator('form').filter({
       has: caregiverPage.getByRole('button', { name: 'Leistung erfassen' }),
     });
     await unplannedForm.locator('select[name="serviceDefinitionId"]').selectOption(serviceId);
     await unplannedForm.getByRole('button', { name: 'Leistung erfassen' }).click();
+    await expect(
+      caregiverPage.getByRole('heading', { name: 'Zusätzlich erfasste Leistungen' }),
+    ).toBeVisible();
+    await caregiverPage.getByRole('button', { name: 'Dokumentation beginnen' }).click();
+    await expect(
+      caregiverPage.getByRole('heading', { name: 'Leistungsdokumentation' }),
+    ).toBeVisible();
+
+    const observationText = `E2E observation ${runId}`;
+    const observationSection = caregiverPage
+      .getByRole('heading', { name: 'Beobachtungen' })
+      .locator('..');
+    await observationSection.locator('textarea[name="content"]').fill(observationText);
+    await observationSection.getByRole('button', { name: 'Eintrag speichern' }).click();
+    await expect(
+      observationSection.locator('li > p').filter({ hasText: observationText }),
+    ).toBeVisible();
+
+    const deviationText = `E2E deviation ${runId}`;
+    const deviationSection = caregiverPage
+      .getByRole('heading', { name: 'Abweichungen' })
+      .locator('..');
+    await deviationSection.locator('textarea[name="content"]').fill(deviationText);
+    await deviationSection.getByRole('button', { name: 'Eintrag speichern' }).click();
+    await expect(
+      deviationSection.locator('li > p').filter({ hasText: deviationText }),
+    ).toBeVisible();
+
+    const incidentText = `E2E incident ${runId}`;
+    const incidentSection = caregiverPage.getByRole('heading', { name: 'Vorfälle' }).locator('..');
+    await incidentSection.locator('textarea[name="content"]').fill(incidentText);
+    await incidentSection.locator('select[name="severity"]').selectOption('low');
+    await incidentSection.getByRole('button', { name: 'Eintrag speichern' }).click();
+    await expect(incidentSection.locator('li > p').filter({ hasText: incidentText })).toBeVisible();
+    await expect(
+      caregiverPage
+        .getByRole('heading', { name: 'Dokumentation finalisieren' })
+        .locator('..')
+        .getByText(/Leistungsnachweis fehlt/)
+        .first(),
+    ).toBeVisible();
+
     await caregiverPage.getByRole('button', { name: 'Einsatz abschließen' }).click();
     await expect(caregiverPage.getByText('Abgeschlossen', { exact: true })).toBeVisible();
+
+    await caregiverPage.goto('/care/today');
+    await expect(
+      caregiverPage.getByText('⚠ Dokumentation unvollständig', { exact: true }),
+    ).toBeVisible();
+    await page.goto('/documentation');
+    await expect(page.getByRole('heading', { name: 'Unvollständige Dokumentation' })).toBeVisible();
+    await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true })).toBeVisible();
+    const documentationClientFilter = page.getByLabel('Klient');
+    await documentationClientFilter.fill(`Agreement E2E ${runId}`);
+    await page.getByRole('button', { name: 'Filter anwenden' }).click();
+    await expect(page.getByText('1 Einsätze', { exact: true })).toBeVisible();
+    await documentationClientFilter.fill('Unknown client');
+    await page.getByRole('button', { name: 'Filter anwenden' }).click();
+    await expect(page.getByText('0 Einsätze', { exact: true })).toBeVisible();
+
+    await caregiverPage.goto(`/care/visits/${executionVisitId}`);
+    const evidenceSection = caregiverPage
+      .getByRole('heading', { name: 'Leistungsdokumentation' })
+      .locator('..');
+    const evidenceRows = evidenceSection.locator('li');
+    await expect(evidenceRows).toHaveCount(2);
+    for (let index = 0; index < (await evidenceRows.count()); index += 1) {
+      const row = evidenceRows.nth(index);
+      await row.locator('textarea[name="note"]').fill(`E2E service evidence ${index + 1} ${runId}`);
+      await row.getByRole('button', { name: 'Nachweis speichern' }).click();
+      await expect(row.getByText('Nachweis erfasst', { exact: true })).toBeVisible();
+    }
+    await expect(
+      caregiverPage.getByRole('button', { name: 'Dokumentation finalisieren' }),
+    ).toBeVisible();
+    await caregiverPage.getByRole('button', { name: 'Dokumentation finalisieren' }).click();
+    await expect(caregiverPage.getByText('Finalisiert', { exact: true })).toBeVisible();
+    await expect(caregiverPage.getByRole('button', { name: 'Eintrag speichern' })).toHaveCount(0);
+    await expect(caregiverPage.getByRole('button', { name: 'Nachweis speichern' })).toHaveCount(0);
 
     await page.goto(`/visits/${executionVisitId}`);
     await expect(page.getByRole('heading', { name: 'Ausführung' })).toBeVisible();
     await expect(page.getByText('Einsatz abgeschlossen', { exact: true })).toBeVisible();
     await expect(page.getByText(`E2E Service ${runId}`, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(observationText, { exact: true })).toBeVisible();
+    await expect(page.getByText(deviationText, { exact: true })).toBeVisible();
+    await expect(page.getByText(incidentText, { exact: true })).toBeVisible();
+    const amendmentDetails = page.locator('details').filter({ hasText: 'Dokumentation ergänzen' });
+    await amendmentDetails.locator('summary').click();
+    await amendmentDetails.locator('input[name="reason"]').fill(`E2E correction reason ${runId}`);
+    await amendmentDetails.locator('textarea[name="correction"]').fill(`E2E amendment ${runId}`);
+    await amendmentDetails.getByRole('button', { name: 'Ergänzung speichern' }).click();
+    await expect(page.getByText(`E2E amendment ${runId}`, { exact: true })).toBeVisible();
     const correctionDetails = page
       .locator('details')
       .filter({ hasText: 'Ausführungszeiten korrigieren' });
@@ -516,6 +604,11 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.goto(`/clients/${agreementClientId}`);
     await expect(page.getByText('Einsatz begonnen', { exact: true })).toBeVisible();
     await expect(page.getByText('Einsatz abgeschlossen', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('Besuchsdokumentation abgeschlossen', { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Vorfall dokumentiert', { exact: true })).toBeVisible();
+    await expect(page.getByText('Besuchsdokumentation ergänzt', { exact: true })).toBeVisible();
     const clientExecutionRow = page.locator(`a[href="/visits/${executionVisitId}"]`);
     await expect(clientExecutionRow).toContainText('Ausführung: Abgeschlossen');
     await expect(clientExecutionRow).toContainText('Tatsächlich');
@@ -870,6 +963,13 @@ async function cleanupServiceAgreementRecords(
         )
       : { rows: [] as Array<{ id: string }> };
     const executionIds = executionRows.rows.map((row) => row.id);
+    const documentationRows = visitIds.length
+      ? await database.query<{ id: string }>(
+          'SELECT id FROM care_documentation.documents WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+          [tenantId, visitIds],
+        )
+      : { rows: [] as Array<{ id: string }> };
+    const documentationIds = documentationRows.rows.map((row) => row.id);
     const schedulingResourceIds = [...generationIds, ...visitIds, ...executionIds, ...agreementIds];
     await database.query(
       `DELETE FROM audit.audit_entries
@@ -887,6 +987,52 @@ async function cleanupServiceAgreementRecords(
       [tenantId, schedulingResourceIds, agreementIds, clientIds, visitIds],
     );
     if (visitIds.length) {
+      if (documentationIds.length) {
+        await database.query(
+          'ALTER TABLE care_documentation.entries DISABLE TRIGGER documentation_entries_draft_only',
+        );
+        await database.query(
+          'ALTER TABLE care_documentation.service_evidence DISABLE TRIGGER service_evidence_draft_only',
+        );
+        await database.query(
+          'ALTER TABLE care_documentation.amendments DISABLE TRIGGER documentation_amendments_append_only',
+        );
+        await database.query(
+          'ALTER TABLE care_documentation.history DISABLE TRIGGER documentation_history_append_only',
+        );
+        await database.query(
+          'DELETE FROM care_documentation.service_evidence WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])',
+          [tenantId, documentationIds],
+        );
+        await database.query(
+          'DELETE FROM care_documentation.entries WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])',
+          [tenantId, documentationIds],
+        );
+        await database.query(
+          'DELETE FROM care_documentation.amendments WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])',
+          [tenantId, documentationIds],
+        );
+        await database.query(
+          'DELETE FROM care_documentation.history WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])',
+          [tenantId, documentationIds],
+        );
+        await database.query(
+          'DELETE FROM care_documentation.documents WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+          [tenantId, documentationIds],
+        );
+        await database.query(
+          'ALTER TABLE care_documentation.amendments ENABLE TRIGGER documentation_amendments_append_only',
+        );
+        await database.query(
+          'ALTER TABLE care_documentation.history ENABLE TRIGGER documentation_history_append_only',
+        );
+        await database.query(
+          'ALTER TABLE care_documentation.service_evidence ENABLE TRIGGER service_evidence_draft_only',
+        );
+        await database.query(
+          'ALTER TABLE care_documentation.entries ENABLE TRIGGER documentation_entries_draft_only',
+        );
+      }
       await database.query(
         'DELETE FROM visit_execution.performed_services WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
         [tenantId, visitIds],

@@ -37,18 +37,15 @@ import {
   CompleteExecutionRequestDto,
   CorrectExecutionTimesRequestDto,
   CorrectExecutionTimesResponseDto,
-  ExecutionNoteResponseDto,
   RecordPerformedServiceRequestDto,
   RecordedServiceResponseDto,
   VisitExecutionDetailResponseDto,
-  UpdateExecutionNoteRequestDto,
   AvailableServiceResponseDto,
   completeExecutionSchema,
   correctExecutionTimesSchema,
   executionSummariesQuerySchema,
   myVisitsQuerySchema,
   recordPerformedServiceSchema,
-  updateExecutionNoteSchema,
   VisitExecutionSummaryResponseDto,
 } from './visit-execution.dto';
 
@@ -114,28 +111,6 @@ export class VisitExecutionController {
       parseId(visitId),
       parseId(performedServiceId),
       parsed.data as RecordPerformedServiceInput,
-      requestContext(request),
-      auditContext(request),
-    );
-  }
-
-  @Put('note')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update the short operational execution note' })
-  @ApiParam({ name: 'visitId', format: 'uuid' })
-  @ApiBody({ type: UpdateExecutionNoteRequestDto })
-  @ApiOkResponse({ type: ExecutionNoteResponseDto })
-  async updateNote(
-    @Req() request: ApiRequest,
-    @Param('visitId') visitId: string,
-    @Body() body: unknown,
-  ) {
-    const parsed = updateExecutionNoteSchema.safeParse(body);
-    if (!parsed.success) throw new BadRequestException();
-    return this.execution.updateNote(
-      this.principal(request),
-      parseId(visitId),
-      parsed.data,
       requestContext(request),
       auditContext(request),
     );

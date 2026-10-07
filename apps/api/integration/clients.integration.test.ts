@@ -1,7 +1,6 @@
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { randomUUID } from 'node:crypto';
 import { v7 as uuidv7 } from 'uuid';
 import type { NextFunction, Request, Response } from 'express';
 import { NestFactory } from '@nestjs/core';
@@ -15,6 +14,8 @@ import { PERMISSIONS } from '@care/permissions';
 import { AppModule } from '../src/app.module';
 import { RequestContextMiddleware } from '../src/http/request-context.middleware';
 import type { ApiRequest } from '../src/http/request';
+
+const UUID_V4_COMPATIBILITY_ID = '00000000-0000-4000-8000-000000000001';
 
 describe('clients API', () => {
   test('authenticates, enforces tenant membership, and commits client, audit, and outbox changes', async () => {
@@ -30,7 +31,7 @@ describe('clients API', () => {
     publicJwk.alg = 'RS256';
     publicJwk.use = 'sig';
     const oidc = await startOidcServer(publicJwk);
-    const subject = randomUUID();
+    const subject = uuidv7();
     const userId = uuidv7();
     const tenantId = uuidv7();
     const membershipId = uuidv7();
@@ -157,7 +158,7 @@ describe('clients API', () => {
       );
       const secondUserId = uuidv7();
       const secondMembershipId = uuidv7();
-      const secondSubject = randomUUID();
+      const secondSubject = uuidv7();
       await owner.query(
         'INSERT INTO identity.users (id, email, display_name) VALUES ($1, $2, $3)',
         [secondUserId, 'office@integration.test', 'Integration Office'],
@@ -194,7 +195,9 @@ describe('clients API', () => {
            ($1, 'employee.assign_team'), ($1, 'employee.link_user'),
            ($1, 'employee.manage_qualifications'), ($1, 'employee.manage_skills'),
            ($1, 'employee.manage_employment'),
-           ($1, 'visit_execution.read'), ($1, 'visit_execution.correct')`,
+           ($1, 'visit_execution.read'), ($1, 'visit_execution.correct'),
+           ($1, 'care_documentation.read'), ($1, 'care_documentation.review'),
+           ($1, 'care_documentation.amend')`,
         [officeRoleId],
       );
       await owner.query(
@@ -208,7 +211,7 @@ describe('clients API', () => {
       );
 
       const caregiverUserId = uuidv7();
-      const caregiverSubject = randomUUID();
+      const caregiverSubject = uuidv7();
       const caregiverMembershipId = uuidv7();
       await owner.query(
         'INSERT INTO identity.users (id, email, display_name) VALUES ($1, $2, $3)',
@@ -232,7 +235,9 @@ describe('clients API', () => {
          VALUES ($1, 'client.read'), ($1, 'service.read'), ($1, 'service_agreement.read'),
                 ($1, 'schedule.read'), ($1, 'visit_execution.read'),
                 ($1, 'visit_execution.start'), ($1, 'visit_execution.record_services'),
-                ($1, 'visit_execution.complete')`,
+                ($1, 'visit_execution.complete'), ($1, 'care_documentation.read'),
+                ($1, 'care_documentation.create'), ($1, 'care_documentation.update'),
+                ($1, 'care_documentation.finalize')`,
         [caregiverRoleId],
       );
       await owner.query(
@@ -267,7 +272,7 @@ describe('clients API', () => {
         (await appRole.query('SELECT membership_id FROM identity.membership_scopes')).rowCount,
       ).toBe(3);
       expect((await appRole.query('SELECT role_id FROM identity.role_permissions')).rowCount).toBe(
-        PERMISSIONS.length + 43,
+        PERMISSIONS.length + 50,
       );
       await appRole.query('COMMIT');
       expect((await appRole.query('SELECT id FROM identity.tenant_memberships')).rowCount).toBe(0);
@@ -307,7 +312,7 @@ describe('clients API', () => {
       expect(unauthenticated.status).toBe(401);
       expect(unauthenticated.headers.get('content-type')).toContain('application/problem+json');
 
-      const unknownTenantId = randomUUID(); // Keep a valid v4 input to cover API compatibility.
+      const unknownTenantId = UUID_V4_COMPATIBILITY_ID; // Keep a valid v4 input to cover API compatibility.
       const forbidden = await fetch(`${baseUrl}/api/v1/clients`, {
         headers: { ...headers, 'X-Tenant-Id': unknownTenantId },
       });
@@ -425,7 +430,7 @@ describe('clients API', () => {
         roles: ['primary_contact', 'emergency_contact', 'legal_representative'],
       });
 
-      const insuranceNumber = `PRIVATE-${randomUUID()}`;
+      const insuranceNumber = `PRIVATE-${uuidv7()}`;
       const insuranceResponse = await fetch(`${baseUrl}/api/v1/clients/${created.id}/insurances`, {
         method: 'POST',
         headers,
@@ -691,7 +696,7 @@ describe('clients API', () => {
       const serviceCategoryResponse = await fetch(`${baseUrl}/api/v1/service-categories`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ name: 'Basic care', code: `CAT-${randomUUID().slice(0, 8)}` }),
+        body: JSON.stringify({ name: 'Basic care', code: `CAT-${uuidv7()}` }),
       });
       expect(serviceCategoryResponse.status).toBe(201);
       const serviceCategory = (await serviceCategoryResponse.json()) as { id: string };
@@ -699,7 +704,7 @@ describe('clients API', () => {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          code: `CARE-${randomUUID().slice(0, 8)}`,
+          code: `CARE-${uuidv7()}`,
           name: 'Morning care',
           categoryId: serviceCategory.id,
           unit: 'occurrence',
@@ -727,7 +732,7 @@ describe('clients API', () => {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          code: `CARE-${randomUUID().slice(0, 8)}`,
+          code: `CARE-${uuidv7()}`,
           name: 'Afternoon care',
           categoryId: serviceCategory.id,
           unit: 'occurrence',
@@ -749,7 +754,7 @@ describe('clients API', () => {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          code: `CARE-${randomUUID().slice(0, 8)}`,
+          code: `CARE-${uuidv7()}`,
           name: 'Facility-only evening care',
           categoryId: serviceCategory.id,
           unit: 'occurrence',
@@ -806,6 +811,10 @@ describe('clients API', () => {
         expect.objectContaining({ permission: 'visit_execution.start' }),
         expect.objectContaining({ permission: 'visit_execution.record_services' }),
         expect.objectContaining({ permission: 'visit_execution.complete' }),
+        expect.objectContaining({ permission: 'care_documentation.read' }),
+        expect.objectContaining({ permission: 'care_documentation.create' }),
+        expect.objectContaining({ permission: 'care_documentation.update' }),
+        expect.objectContaining({ permission: 'care_documentation.finalize' }),
       ]);
       expect(
         (await fetch(`${baseUrl}/api/v1/services`, { headers: serviceCaregiverHeaders })).status,
@@ -890,7 +899,7 @@ describe('clients API', () => {
         ).status,
       ).toBe(200);
 
-      const agreementNote = `private-agreement-note-${randomUUID()}`;
+      const agreementNote = `private-agreement-note-${uuidv7()}`;
       const agreementResponse = await fetch(
         `${baseUrl}/api/v1/clients/${created.id}/service-agreements`,
         {
@@ -898,7 +907,7 @@ describe('clients API', () => {
           headers,
           body: JSON.stringify({
             validFrom: '2000-01-01',
-            reference: `AGR-${randomUUID().slice(0, 8)}`,
+            reference: `AGR-${uuidv7()}`,
             description: 'Operational planning details',
           }),
         },
@@ -1187,7 +1196,7 @@ describe('clients API', () => {
         ]),
       );
       const teamCalendarRange = new URLSearchParams(visitRange);
-      teamCalendarRange.set('teamId', randomUUID()); // Unknown v4 IDs remain valid request values.
+      teamCalendarRange.set('teamId', UUID_V4_COMPATIBILITY_ID); // Unknown v4 IDs remain valid request values.
       const teamCalendarResponse = await fetch(`${baseUrl}/api/v1/visits?${teamCalendarRange}`, {
         headers,
       });
@@ -1266,7 +1275,7 @@ describe('clients API', () => {
         headers,
         body: JSON.stringify({
           firstName: 'Schedule',
-          lastName: `Conflict-${randomUUID().slice(0, 8)}`,
+          lastName: `Conflict-${uuidv7()}`,
           organizationId,
           primaryFacilityId: secondFacilityId,
         }),
@@ -1300,7 +1309,7 @@ describe('clients API', () => {
         },
       });
 
-      const manualMarker = `schedule-note-${randomUUID()}`;
+      const manualMarker = `schedule-note-${uuidv7()}`;
       const manualVisitResponse = await fetch(`${baseUrl}/api/v1/visits`, {
         method: 'POST',
         headers,
@@ -1762,7 +1771,7 @@ describe('clients API', () => {
         headers,
         body: JSON.stringify({
           firstName: 'Execution',
-          lastName: `Client-${randomUUID().slice(0, 8)}`,
+          lastName: `Client-${uuidv7()}`,
           organizationId,
           primaryFacilityId: secondFacilityId,
         }),
@@ -1996,7 +2005,6 @@ describe('clients API', () => {
               status: 'partially_performed',
               actualQuantity: '0.500',
               reasonCode: null,
-              note: null,
             }),
           },
         ),
@@ -2086,24 +2094,392 @@ describe('clients API', () => {
         service: { id: unplannedPerformedServiceId, visitServiceId: null, unplanned: true },
       });
 
-      const operationalMarker = `operational-note-${randomUUID()}`;
-      const updateExecutionNote = await fetch(
-        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/note`,
+      const unassignedDocumentationRead = await fetch(
+        `${baseUrl}/api/v1/visits/${otherEmployeeVisit.id}/documentation`,
+        { headers: caregiverHeaders },
+      );
+      expect(unassignedDocumentationRead.status).toBe(403);
+      expect((await unassignedDocumentationRead.json()).code).toBe(
+        'CARE_DOCUMENTATION_VISIT_RELATIONSHIP_REQUIRED',
+      );
+      const crossTenantDocumentationRead = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/documentation`,
+        { headers: { ...caregiverHeaders, 'X-Tenant-Id': otherTenantId } },
+      );
+      expect(crossTenantDocumentationRead.status).toBe(403);
+
+      const createDocumentation = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/documentation`,
+        { method: 'POST', headers: caregiverHeaders },
+      );
+      expect(createDocumentation.status).toBe(200);
+      const draftDocumentation = (await createDocumentation.json()) as {
+        execution: { status: string };
+        documentation: { id: string; status: string; version: number };
+        completeness: { isComplete: boolean; missing: Array<{ code: string }> };
+      };
+      const documentationId = draftDocumentation.documentation.id;
+      expect(documentationId[14]).toBe('7');
+      expect(draftDocumentation).toMatchObject({
+        execution: { status: 'in_progress' },
+        documentation: { status: 'draft', version: 1 },
+        completeness: { isComplete: false },
+      });
+      expect(draftDocumentation.completeness.missing).toEqual(
+        expect.arrayContaining([
+          { code: 'SERVICE_EVIDENCE_REQUIRED', performedServiceId },
+          { code: 'SERVICE_EVIDENCE_REQUIRED', performedServiceId: unplannedPerformedServiceId },
+        ]),
+      );
+      const idempotentDocumentationCreate = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/documentation`,
+        { method: 'POST', headers: caregiverHeaders },
+      );
+      expect(idempotentDocumentationCreate.status).toBe(200);
+      expect(await idempotentDocumentationCreate.json()).toMatchObject({
+        documentation: { id: documentationId, status: 'draft', version: 1 },
+      });
+      await expect(
+        owner.query(
+          `INSERT INTO care_documentation.documents
+             (id, tenant_id, visit_id, execution_id, status, created_by_employee_id, version, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'draft', $5, 1, now(), now())`,
+          [uuidv7(), tenantId, executionVisit.id, executionId, schedulingEmployee.id],
+        ),
+      ).rejects.toMatchObject({ code: '23505' });
+      await expect(
+        owner.query(
+          `INSERT INTO care_documentation.documents
+             (id, tenant_id, visit_id, execution_id, status, created_by_employee_id, version, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'invalid', $5, 1, now(), now())`,
+          [uuidv7(), tenantId, executionVisit.id, executionId, schedulingEmployee.id],
+        ),
+      ).rejects.toMatchObject({ code: '23514' });
+
+      const sensitiveCareText = `private-care-note-${uuidv7()}`;
+      const observationResponse = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/entries`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: 1,
+            type: 'observation',
+            content: sensitiveCareText,
+          }),
+        },
+      );
+      expect(observationResponse.status).toBe(200);
+      const observationDetail = (await observationResponse.json()) as {
+        documentation: { version: number };
+        entries: Array<{ id: string; type: string; content: string }>;
+      };
+      expect(observationDetail.documentation.version).toBe(2);
+      expect(observationDetail.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'observation', content: sensitiveCareText }),
+        ]),
+      );
+      const observationEntryId = observationDetail.entries.find(
+        (entry) => entry.content === sensitiveCareText,
+      )!.id;
+      expect(observationEntryId[14]).toBe('7');
+      const draftNoteOriginalText = `private-draft-note-original-${uuidv7()}`;
+      const draftNoteUpdatedText = `private-draft-note-updated-${uuidv7()}`;
+      const draftNoteResponse = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/entries`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: 2,
+            type: 'care_note',
+            content: draftNoteOriginalText,
+          }),
+        },
+      );
+      expect(draftNoteResponse.status).toBe(200);
+      const draftNoteDetail = (await draftNoteResponse.json()) as {
+        documentation: { version: number };
+        entries: Array<{ id: string; content: string }>;
+      };
+      expect(draftNoteDetail.documentation.version).toBe(3);
+      const draftNoteId = draftNoteDetail.entries.find(
+        (entry) => entry.content === draftNoteOriginalText,
+      )!.id;
+      const updateDraftNote = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/entries/${draftNoteId}`,
+        {
+          method: 'PATCH',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ expectedVersion: 3, content: draftNoteUpdatedText }),
+        },
+      );
+      expect(updateDraftNote.status).toBe(200);
+      const updatedDraftNoteDetail = (await updateDraftNote.json()) as {
+        documentation: { version: number };
+        entries: Array<{ id: string; content: string }>;
+      };
+      expect(updatedDraftNoteDetail.documentation.version).toBe(4);
+      expect(updatedDraftNoteDetail.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: draftNoteId, content: draftNoteUpdatedText }),
+        ]),
+      );
+      const removeDraftNote = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/entries/${draftNoteId}`,
+        {
+          method: 'DELETE',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ expectedVersion: 4 }),
+        },
+      );
+      expect(removeDraftNote.status).toBe(200);
+      const removedDraftNoteDetail = (await removeDraftNote.json()) as {
+        documentation: { version: number };
+        entries: Array<{ id: string; content: string }>;
+      };
+      expect(removedDraftNoteDetail.documentation.version).toBe(5);
+      expect(removedDraftNoteDetail.entries).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: draftNoteId })]),
+      );
+
+      const staleDocumentationEdit = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/entries`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: 1,
+            type: 'care_note',
+            content: 'Stale documentation write',
+          }),
+        },
+      );
+      expect(staleDocumentationEdit.status).toBe(409);
+      expect((await staleDocumentationEdit.json()).code).toBe(
+        'CARE_DOCUMENTATION_VERSION_CONFLICT',
+      );
+
+      const concurrentDocumentationEdits = await Promise.all([
+        fetch(`${baseUrl}/api/v1/care-documentation/${documentationId}/entries`, {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: 5,
+            type: 'care_note',
+            content: 'First concurrent note',
+          }),
+        }),
+        fetch(`${baseUrl}/api/v1/care-documentation/${documentationId}/entries`, {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: 5,
+            type: 'deviation',
+            content: 'Second concurrent note',
+          }),
+        }),
+      ]);
+      expect(concurrentDocumentationEdits.map((response) => response.status).sort()).toEqual([
+        200, 409,
+      ]);
+      const concurrentConflict = concurrentDocumentationEdits.find(
+        (response) => response.status === 409,
+      )!;
+      expect((await concurrentConflict.json()).code).toBe('CARE_DOCUMENTATION_VERSION_CONFLICT');
+      const concurrentSuccess = concurrentDocumentationEdits.find(
+        (response) => response.status === 200,
+      )!;
+      const concurrentDetail = (await concurrentSuccess.json()) as {
+        documentation: { version: number };
+      };
+      let documentationVersion = concurrentDetail.documentation.version;
+
+      const sensitiveInvalidIncidentText = `private-invalid-incident-${uuidv7()}`;
+      const invalidIncident = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/entries`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            type: 'incident',
+            content: sensitiveInvalidIncidentText,
+            occurredAt: new Date().toISOString(),
+          }),
+        },
+      );
+      expect(invalidIncident.status).toBe(400);
+      const invalidIncidentProblem = await invalidIncident.json();
+      expect(invalidIncidentProblem.code).toBe('DOCUMENTATION_ENTRY_INVALID');
+      expect(JSON.stringify(invalidIncidentProblem)).not.toContain(sensitiveInvalidIncidentText);
+      const sensitiveIncidentText = `private-incident-${uuidv7()}`;
+      const incidentResponse = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/entries`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            type: 'incident',
+            content: sensitiveIncidentText,
+            occurredAt: new Date().toISOString(),
+            severity: 'low',
+          }),
+        },
+      );
+      expect(incidentResponse.status).toBe(200);
+      const incidentDetail = (await incidentResponse.json()) as {
+        documentation: { version: number };
+        entries: Array<{ id: string; type: string; severity: string | null }>;
+      };
+      documentationVersion = incidentDetail.documentation.version;
+      const incidentId = incidentDetail.entries.find((entry) => entry.type === 'incident')!.id;
+      expect(incidentId[14]).toBe('7');
+      expect(incidentDetail.entries).toEqual(
+        expect.arrayContaining([expect.objectContaining({ type: 'incident', severity: 'low' })]),
+      );
+
+      const missingPerformedServiceEvidence = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/evidence/${uuidv7()}`,
         {
           method: 'PUT',
           headers: caregiverHeaders,
-          body: JSON.stringify({ expectedVersion: 3, note: operationalMarker }),
+          body: JSON.stringify({ expectedVersion: documentationVersion, status: 'documented' }),
         },
       );
-      expect(updateExecutionNote.status).toBe(200);
-      expect(await updateExecutionNote.json()).toMatchObject({ version: 4 });
+      expect(missingPerformedServiceEvidence.status).toBe(404);
+      expect((await missingPerformedServiceEvidence.json()).code).toBe(
+        'SERVICE_EVIDENCE_NOT_FOUND',
+      );
+      const finalizeWhileExecutionInProgress = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/finalize`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ expectedVersion: documentationVersion }),
+        },
+      );
+      expect(finalizeWhileExecutionInProgress.status).toBe(409);
+      expect((await finalizeWhileExecutionInProgress.json()).code).toBe(
+        'VISIT_EXECUTION_NOT_COMPLETED',
+      );
+
+      const documentationRange = new URLSearchParams({
+        from: executionRange.get('from')!,
+        until: executionRange.get('until')!,
+        facilityId: secondFacilityId,
+        employeeId: schedulingEmployee.id,
+        incomplete: 'true',
+      });
+      const officeDocumentationWorklist = await fetch(
+        `${baseUrl}/api/v1/care-documentation?${documentationRange}`,
+        { headers: officeHeaders },
+      );
+      expect(officeDocumentationWorklist.status).toBe(200);
+      const officeDocumentationWorklistBody = await officeDocumentationWorklist.json();
+      expect(officeDocumentationWorklistBody).toMatchObject({
+        items: [
+          expect.objectContaining({
+            visitId: executionVisit.id,
+            documentationId,
+            documentationStatus: 'draft',
+            missing: expect.arrayContaining([
+              { code: 'SERVICE_EVIDENCE_REQUIRED', performedServiceId },
+              {
+                code: 'SERVICE_EVIDENCE_REQUIRED',
+                performedServiceId: unplannedPerformedServiceId,
+              },
+            ]),
+          }),
+        ],
+      });
+      expect(JSON.stringify(officeDocumentationWorklistBody)).not.toContain(sensitiveCareText);
+      expect(JSON.stringify(officeDocumentationWorklistBody)).not.toContain(sensitiveIncidentText);
+      expect(JSON.stringify(officeDocumentationWorklistBody)).not.toContain(
+        sensitiveInvalidIncidentText,
+      );
+      expect(JSON.stringify(officeDocumentationWorklistBody)).not.toContain(draftNoteOriginalText);
+      expect(JSON.stringify(officeDocumentationWorklistBody)).not.toContain(draftNoteUpdatedText);
+      const clientFilteredDocumentationRange = new URLSearchParams(documentationRange);
+      clientFilteredDocumentationRange.set('clientQuery', 'Execution Client-');
+      const clientFilteredDocumentationWorklist = await fetch(
+        `${baseUrl}/api/v1/care-documentation?${clientFilteredDocumentationRange}`,
+        { headers: officeHeaders },
+      );
+      expect(clientFilteredDocumentationWorklist.status).toBe(200);
+      expect(await clientFilteredDocumentationWorklist.json()).toMatchObject({
+        items: [expect.objectContaining({ clientId: executionClient.id })],
+        total: 1,
+      });
+      const unmatchedClientDocumentationRange = new URLSearchParams(documentationRange);
+      unmatchedClientDocumentationRange.set('clientQuery', 'Unknown client');
+      const unmatchedClientDocumentationWorklist = await fetch(
+        `${baseUrl}/api/v1/care-documentation?${unmatchedClientDocumentationRange}`,
+        { headers: officeHeaders },
+      );
+      expect(unmatchedClientDocumentationWorklist.status).toBe(200);
+      expect(await unmatchedClientDocumentationWorklist.json()).toMatchObject({
+        items: [],
+        total: 0,
+      });
+      const restrictOfficeDocumentationScope = await fetch(
+        `${baseUrl}/api/v1/admin/members/${secondMembershipId}/scopes`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ scopes: [{ scopeType: 'facility', scopeId: facilityId }] }),
+        },
+      );
+      expect(restrictOfficeDocumentationScope.status).toBe(200);
+      const outOfScopeDocumentationWorklist = await fetch(
+        `${baseUrl}/api/v1/care-documentation?${documentationRange}`,
+        { headers: officeHeaders },
+      );
+      expect(outOfScopeDocumentationWorklist.status).toBe(200);
+      expect(await outOfScopeDocumentationWorklist.json()).toMatchObject({ items: [], total: 0 });
+      const restoreOfficeDocumentationScope = await fetch(
+        `${baseUrl}/api/v1/admin/members/${secondMembershipId}/scopes`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ scopes: [{ scopeType: 'tenant', scopeId: tenantId }] }),
+        },
+      );
+      expect(restoreOfficeDocumentationScope.status).toBe(200);
+      const caregiverDocumentationWorklist = await fetch(
+        `${baseUrl}/api/v1/me/documentation?${new URLSearchParams({
+          from: executionRange.get('from')!,
+          until: executionRange.get('until')!,
+        })}`,
+        { headers: caregiverHeaders },
+      );
+      expect(caregiverDocumentationWorklist.status).toBe(200);
+      expect(await caregiverDocumentationWorklist.json()).toMatchObject({
+        items: [expect.objectContaining({ visitId: executionVisit.id, documentationId })],
+      });
+
+      const amendDraftDocumentation = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/amendments`,
+        {
+          method: 'POST',
+          headers: officeHeaders,
+          body: JSON.stringify({
+            reason: 'Draft correction',
+            correction: 'Must not be accepted yet',
+          }),
+        },
+      );
+      expect(amendDraftDocumentation.status).toBe(409);
+      expect((await amendDraftDocumentation.json()).code).toBe('CARE_DOCUMENTATION_NOT_FINALIZED');
 
       const completeExecution = await fetch(
         `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/complete`,
         {
           method: 'POST',
           headers: caregiverHeaders,
-          body: JSON.stringify({ expectedVersion: 4 }),
+          body: JSON.stringify({ expectedVersion: 3 }),
         },
       );
       expect(completeExecution.status).toBe(200);
@@ -2126,7 +2502,7 @@ describe('clients API', () => {
       expect(completedDetail.execution).toMatchObject({
         id: executionId,
         status: 'completed',
-        version: 5,
+        version: 4,
       });
       expect(completedDetail.services).toEqual(
         expect.arrayContaining([
@@ -2147,17 +2523,407 @@ describe('clients API', () => {
         ]),
       );
 
+      const finalizeIncompleteDocumentation = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/finalize`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ expectedVersion: documentationVersion }),
+        },
+      );
+      expect(finalizeIncompleteDocumentation.status).toBe(409);
+      expect((await finalizeIncompleteDocumentation.json()).code).toBe(
+        'CARE_DOCUMENTATION_INCOMPLETE',
+      );
+
+      const sensitiveEvidenceText = `private-evidence-${uuidv7()}`;
+      const plannedEvidenceResponse = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/evidence/${performedServiceId}`,
+        {
+          method: 'PUT',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            status: 'documented',
+            note: sensitiveEvidenceText,
+          }),
+        },
+      );
+      expect(plannedEvidenceResponse.status).toBe(200);
+      const plannedEvidenceDetail = (await plannedEvidenceResponse.json()) as {
+        documentation: { version: number };
+        services: Array<{
+          performedServiceId: string;
+          evidence: { id: string; note: string | null } | null;
+        }>;
+      };
+      documentationVersion = plannedEvidenceDetail.documentation.version;
+      const plannedEvidenceId = plannedEvidenceDetail.services.find(
+        (service) => service.performedServiceId === performedServiceId,
+      )!.evidence!.id;
+      expect(plannedEvidenceId[14]).toBe('7');
+      expect(plannedEvidenceDetail.services).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            performedServiceId,
+            evidence: expect.objectContaining({ note: sensitiveEvidenceText }),
+          }),
+        ]),
+      );
+      await expect(
+        owner.query(
+          `INSERT INTO care_documentation.service_evidence
+             (id, tenant_id, documentation_id, execution_id, performed_service_id, status, documented_by_employee_id, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, 'documented', $6, now(), now())`,
+          [
+            uuidv7(),
+            tenantId,
+            documentationId,
+            executionId,
+            performedServiceId,
+            schedulingEmployee.id,
+          ],
+        ),
+      ).rejects.toMatchObject({ code: '23505' });
+      await expect(
+        owner.query(
+          `INSERT INTO care_documentation.service_evidence
+             (id, tenant_id, documentation_id, execution_id, performed_service_id, status, documented_by_employee_id, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, 'invalid', $6, now(), now())`,
+          [
+            uuidv7(),
+            tenantId,
+            documentationId,
+            executionId,
+            unplannedPerformedServiceId,
+            schedulingEmployee.id,
+          ],
+        ),
+      ).rejects.toMatchObject({ code: '23514' });
+      const invalidNotRequiredEvidence = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/evidence/${performedServiceId}`,
+        {
+          method: 'PUT',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            status: 'not_required',
+            note: 'This partially performed service still needs evidence',
+          }),
+        },
+      );
+      expect(invalidNotRequiredEvidence.status).toBe(400);
+      expect((await invalidNotRequiredEvidence.json()).code).toBe('SERVICE_EVIDENCE_INVALID');
+      const sensitiveUpdatedEvidenceText = `private-evidence-updated-${uuidv7()}`;
+      const updatePlannedEvidence = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/evidence/${performedServiceId}`,
+        {
+          method: 'PUT',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            status: 'documented',
+            note: sensitiveUpdatedEvidenceText,
+          }),
+        },
+      );
+      expect(updatePlannedEvidence.status).toBe(200);
+      const updatedPlannedEvidenceDetail = (await updatePlannedEvidence.json()) as {
+        documentation: { version: number };
+        services: Array<{
+          performedServiceId: string;
+          evidence: { id: string; note: string | null } | null;
+        }>;
+      };
+      documentationVersion = updatedPlannedEvidenceDetail.documentation.version;
+      expect(updatedPlannedEvidenceDetail.services).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            performedServiceId,
+            evidence: expect.objectContaining({
+              id: plannedEvidenceId,
+              note: sensitiveUpdatedEvidenceText,
+            }),
+          }),
+        ]),
+      );
+      const staleEvidenceUpdate = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/evidence/${performedServiceId}`,
+        {
+          method: 'PUT',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ expectedVersion: documentationVersion - 1, status: 'documented' }),
+        },
+      );
+      expect(staleEvidenceUpdate.status).toBe(409);
+      expect((await staleEvidenceUpdate.json()).code).toBe('CARE_DOCUMENTATION_VERSION_CONFLICT');
+
+      const unplannedEvidenceResponse = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/evidence/${unplannedPerformedServiceId}`,
+        {
+          method: 'PUT',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            status: 'documented',
+            note: 'Unplanned service documented',
+          }),
+        },
+      );
+      expect(unplannedEvidenceResponse.status).toBe(200);
+      const completeDocumentationDetail = (await unplannedEvidenceResponse.json()) as {
+        documentation: { version: number; status: string };
+        completeness: { isComplete: boolean; missing: unknown[] };
+        services: Array<{
+          performedServiceId: string;
+          evidence: { id: string; note: string | null } | null;
+        }>;
+      };
+      documentationVersion = completeDocumentationDetail.documentation.version;
+      const unplannedEvidenceId = completeDocumentationDetail.services.find(
+        (service) => service.performedServiceId === unplannedPerformedServiceId,
+      )!.evidence!.id;
+      expect(unplannedEvidenceId[14]).toBe('7');
+      expect(completeDocumentationDetail).toMatchObject({
+        completeness: { isComplete: true, missing: [] },
+        documentation: { status: 'draft' },
+      });
+      expect(completeDocumentationDetail.services).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            performedServiceId: unplannedPerformedServiceId,
+            evidence: expect.objectContaining({ note: 'Unplanned service documented' }),
+          }),
+        ]),
+      );
+
+      const finalizationRaceText = `private-finalization-race-${uuidv7()}`;
+      const [racingFinalization, racingEdit] = await Promise.all([
+        fetch(`${baseUrl}/api/v1/care-documentation/${documentationId}/finalize`, {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ expectedVersion: documentationVersion }),
+        }),
+        fetch(`${baseUrl}/api/v1/care-documentation/${documentationId}/entries`, {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            type: 'care_note',
+            content: finalizationRaceText,
+          }),
+        }),
+      ]);
+      expect([racingFinalization.status, racingEdit.status].sort()).toEqual([200, 409]);
+      let finalizedResponse = racingFinalization;
+      if (racingFinalization.status === 409) {
+        expect((await racingFinalization.json()).code).toBe('CARE_DOCUMENTATION_VERSION_CONFLICT');
+        expect(racingEdit.status).toBe(200);
+        const updatedDocumentation = (await racingEdit.json()) as {
+          documentation: { version: number };
+        };
+        documentationVersion = updatedDocumentation.documentation.version;
+        finalizedResponse = await fetch(
+          `${baseUrl}/api/v1/care-documentation/${documentationId}/finalize`,
+          {
+            method: 'POST',
+            headers: caregiverHeaders,
+            body: JSON.stringify({ expectedVersion: documentationVersion }),
+          },
+        );
+      } else {
+        expect((await racingEdit.json()).code).toBe('CARE_DOCUMENTATION_ALREADY_FINALIZED');
+      }
+      expect(finalizedResponse.status).toBe(200);
+      const finalizedDocumentation = (await finalizedResponse.json()) as {
+        documentation: { id: string; status: string; version: number };
+        completeness: { isComplete: boolean };
+        entries: Array<{ id: string; content: string }>;
+      };
+      documentationVersion = finalizedDocumentation.documentation.version;
+      expect(finalizedDocumentation).toMatchObject({
+        documentation: { id: documentationId, status: 'finalized' },
+        completeness: { isComplete: true },
+      });
+
+      const caregiverEditFinalizedDocumentation = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/entries/${observationEntryId}`,
+        {
+          method: 'PATCH',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            content: 'Overwrite attempt',
+          }),
+        },
+      );
+      expect(caregiverEditFinalizedDocumentation.status).toBe(409);
+      expect((await caregiverEditFinalizedDocumentation.json()).code).toBe(
+        'CARE_DOCUMENTATION_ALREADY_FINALIZED',
+      );
+      const caregiverCannotAmendDocumentation = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/amendments`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ reason: 'Caregiver amendment', correction: 'Not authorized' }),
+        },
+      );
+      expect(caregiverCannotAmendDocumentation.status).toBe(403);
+
+      const officeDocumentationReview = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/documentation`,
+        { headers: officeHeaders },
+      );
+      expect(officeDocumentationReview.status).toBe(200);
+      expect(await officeDocumentationReview.json()).toMatchObject({
+        documentation: { id: documentationId, status: 'finalized' },
+        entries: expect.arrayContaining([
+          expect.objectContaining({ content: sensitiveCareText }),
+          expect.objectContaining({ content: sensitiveIncidentText }),
+        ]),
+      });
+
+      const sensitiveAmendmentReason = `private-amendment-reason-${uuidv7()}`;
+      const sensitiveAmendmentCorrection = `private-amendment-correction-${uuidv7()}`;
+      const officeAmendment = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/amendments`,
+        {
+          method: 'POST',
+          headers: officeHeaders,
+          body: JSON.stringify({
+            reason: sensitiveAmendmentReason,
+            correction: sensitiveAmendmentCorrection,
+          }),
+        },
+      );
+      expect(officeAmendment.status).toBe(200);
+      const amendedDocumentation = (await officeAmendment.json()) as {
+        documentation: { id: string; status: string; version: number };
+        amendments: Array<{ id: string; reason: string; correction: string }>;
+        history: Array<{ id: string; action: string; metadata: Record<string, unknown> }>;
+      };
+      expect(amendedDocumentation.amendments[0]?.id[14]).toBe('7');
+      expect(amendedDocumentation.history.every((entry) => entry.id[14] === '7')).toBe(true);
+      expect(amendedDocumentation).toMatchObject({
+        documentation: { id: documentationId, status: 'finalized', version: documentationVersion },
+        amendments: expect.arrayContaining([
+          expect.objectContaining({
+            reason: sensitiveAmendmentReason,
+            correction: sensitiveAmendmentCorrection,
+          }),
+        ]),
+      });
+      const serializedDocumentationHistory = JSON.stringify(amendedDocumentation.history);
+      expect(serializedDocumentationHistory).not.toContain(sensitiveCareText);
+      expect(serializedDocumentationHistory).not.toContain(sensitiveIncidentText);
+      expect(serializedDocumentationHistory).not.toContain(sensitiveEvidenceText);
+      expect(serializedDocumentationHistory).not.toContain(sensitiveAmendmentReason);
+      expect(serializedDocumentationHistory).not.toContain(sensitiveAmendmentCorrection);
+      expect(serializedDocumentationHistory).not.toContain(finalizationRaceText);
+
+      const concurrentAmendmentTexts = [
+        {
+          reason: `private-amendment-a-${uuidv7()}`,
+          correction: `private-correction-a-${uuidv7()}`,
+        },
+        {
+          reason: `private-amendment-b-${uuidv7()}`,
+          correction: `private-correction-b-${uuidv7()}`,
+        },
+      ];
+      const concurrentAmendmentResponses = await Promise.all(
+        concurrentAmendmentTexts.map(({ reason, correction }) =>
+          fetch(`${baseUrl}/api/v1/care-documentation/${documentationId}/amendments`, {
+            method: 'POST',
+            headers: officeHeaders,
+            body: JSON.stringify({ reason, correction }),
+          }),
+        ),
+      );
+      expect(concurrentAmendmentResponses.map((response) => response.status)).toEqual([200, 200]);
+      const concurrentAmendmentDetails = await Promise.all(
+        concurrentAmendmentResponses.map((response) => response.json()),
+      );
+      for (const amendment of concurrentAmendmentTexts) {
+        expect(JSON.stringify(concurrentAmendmentDetails)).toContain(amendment.reason);
+        expect(JSON.stringify(concurrentAmendmentDetails)).toContain(amendment.correction);
+      }
+      const persistedAmendmentsResponse = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}`,
+        { headers: officeHeaders },
+      );
+      expect(persistedAmendmentsResponse.status).toBe(200);
+      const persistedAmendments = (await persistedAmendmentsResponse.json()) as {
+        amendments: Array<{ id: string; reason: string; correction: string; createdAt: string }>;
+        history: Array<{ action: string }>;
+      };
+      expect(persistedAmendments.amendments).toHaveLength(3);
+      for (const amendment of concurrentAmendmentTexts) {
+        expect(JSON.stringify(persistedAmendments.amendments)).toContain(amendment.reason);
+        expect(JSON.stringify(persistedAmendments.amendments)).toContain(amendment.correction);
+      }
+      const sensitiveNarrativeMarkers = [
+        sensitiveCareText,
+        sensitiveInvalidIncidentText,
+        sensitiveIncidentText,
+        draftNoteOriginalText,
+        draftNoteUpdatedText,
+        sensitiveEvidenceText,
+        sensitiveUpdatedEvidenceText,
+        finalizationRaceText,
+        sensitiveAmendmentReason,
+        sensitiveAmendmentCorrection,
+        ...concurrentAmendmentTexts.flatMap(({ reason, correction }) => [reason, correction]),
+      ];
+      const persistedDocumentationHistory = JSON.stringify(persistedAmendments.history);
+      for (const marker of sensitiveNarrativeMarkers) {
+        expect(serializedDocumentationHistory).not.toContain(marker);
+        expect(persistedDocumentationHistory).not.toContain(marker);
+      }
+      expect(persistedAmendments.amendments.map((amendment) => amendment.id)).toEqual(
+        [...persistedAmendments.amendments]
+          .sort(
+            (left, right) =>
+              left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
+          )
+          .map((amendment) => amendment.id),
+      );
+      expect(
+        persistedAmendments.history.filter(
+          (entry) => entry.action === 'care_documentation.amended',
+        ),
+      ).toHaveLength(3);
+
+      const completedDocumentationWorklist = await fetch(
+        `${baseUrl}/api/v1/care-documentation?${new URLSearchParams({
+          from: executionRange.get('from')!,
+          until: executionRange.get('until')!,
+          facilityId: secondFacilityId,
+          employeeId: schedulingEmployee.id,
+          status: 'finalized',
+          incomplete: 'false',
+        })}`,
+        { headers: officeHeaders },
+      );
+      expect(completedDocumentationWorklist.status).toBe(200);
+      expect(await completedDocumentationWorklist.json()).toMatchObject({
+        items: [
+          expect.objectContaining({ visitId: executionVisit.id, documentationId, missing: [] }),
+        ],
+      });
+
       const repeatedCompletion = await fetch(
         `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/complete`,
         {
           method: 'POST',
           headers: caregiverHeaders,
-          body: JSON.stringify({ expectedVersion: 4 }),
+          body: JSON.stringify({ expectedVersion: 3 }),
         },
       );
       expect(repeatedCompletion.status).toBe(200);
       expect(await repeatedCompletion.json()).toMatchObject({
-        execution: { id: executionId, status: 'completed', version: 5 },
+        execution: { id: executionId, status: 'completed', version: 4 },
       });
 
       const caregiverCannotCorrect = await fetch(
@@ -2166,7 +2932,7 @@ describe('clients API', () => {
           method: 'POST',
           headers: caregiverHeaders,
           body: JSON.stringify({
-            expectedVersion: 5,
+            expectedVersion: 4,
             actualStart: new Date(
               Date.parse(completedDetail.execution.actualStart) - 60_000,
             ).toISOString(),
@@ -2184,14 +2950,14 @@ describe('clients API', () => {
           method: 'POST',
           headers: officeHeaders,
           body: JSON.stringify({
-            expectedVersion: 5,
+            expectedVersion: 4,
             actualStart: correctedStart,
             reason: 'Correcting an entry mistake',
           }),
         },
       );
       expect(correctExecutionTime.status).toBe(200);
-      expect(await correctExecutionTime.json()).toMatchObject({ version: 6 });
+      expect(await correctExecutionTime.json()).toMatchObject({ version: 5 });
 
       const officeExecutionRead = await fetch(
         `${baseUrl}/api/v1/visits/${executionVisit.id}/execution`,
@@ -2217,7 +2983,7 @@ describe('clients API', () => {
           method: 'PUT',
           headers: officeHeaders,
           body: JSON.stringify({
-            expectedVersion: 6,
+            expectedVersion: 5,
             visitServiceId,
             status: 'performed',
             actualQuantity: '1.000',
@@ -2236,7 +3002,6 @@ describe('clients API', () => {
       expect(visitHistory.history.map((entry) => entry.action)).toEqual(
         expect.arrayContaining([
           'visit_execution.started',
-          'visit_execution.note_updated',
           'performed_service.recorded',
           'performed_service.added_unplanned',
           'visit_execution.completed',
@@ -2255,12 +3020,131 @@ describe('clients API', () => {
         summary: string;
       }>;
       expect(executionTimeline.map((entry) => entry.action)).toEqual(
-        expect.arrayContaining(['visit_execution.started', 'visit_execution.completed']),
+        expect.arrayContaining([
+          'visit_execution.started',
+          'visit_execution.completed',
+          'incident.recorded',
+          'care_documentation.finalized',
+          'care_documentation.amended',
+        ]),
       );
       expect(executionTimeline.map((entry) => entry.summary)).toEqual(
-        expect.arrayContaining(['Einsatz begonnen', 'Einsatz abgeschlossen']),
+        expect.arrayContaining([
+          'Einsatz begonnen',
+          'Einsatz abgeschlossen',
+          'Vorfall dokumentiert',
+          'Besuchsdokumentation abgeschlossen',
+          'Besuchsdokumentation ergänzt',
+        ]),
       );
-      expect(JSON.stringify(executionTimeline)).not.toContain(operationalMarker);
+      expect(
+        executionTimeline.some((entry) =>
+          [
+            'care_documentation.created',
+            'care_documentation.entry_added',
+            'care_documentation.entry_updated',
+            'care_documentation.entry_removed',
+            'service_evidence.recorded',
+            'service_evidence.updated',
+          ].includes(entry.action),
+        ),
+      ).toBe(false);
+      const serializedExecutionTimeline = JSON.stringify(executionTimeline);
+      expect(serializedExecutionTimeline).not.toContain(sensitiveCareText);
+      expect(serializedExecutionTimeline).not.toContain(sensitiveIncidentText);
+      expect(serializedExecutionTimeline).not.toContain(sensitiveEvidenceText);
+      expect(serializedExecutionTimeline).not.toContain(sensitiveAmendmentReason);
+      expect(serializedExecutionTimeline).not.toContain(sensitiveAmendmentCorrection);
+      expect(serializedExecutionTimeline).not.toContain(finalizationRaceText);
+      for (const amendment of concurrentAmendmentTexts) {
+        expect(serializedExecutionTimeline).not.toContain(amendment.reason);
+        expect(serializedExecutionTimeline).not.toContain(amendment.correction);
+      }
+      for (const marker of sensitiveNarrativeMarkers) {
+        expect(serializedExecutionTimeline).not.toContain(marker);
+      }
+
+      const documentationAudit = await owner.query<{ action: string; metadata: string }>(
+        `SELECT action, metadata::text AS metadata FROM audit.audit_entries
+         WHERE tenant_id = $1 AND metadata->>'documentationId' = $2
+         ORDER BY timestamp, id`,
+        [tenantId, documentationId],
+      );
+      expect(documentationAudit.rows.map((entry) => entry.action)).toEqual(
+        expect.arrayContaining([
+          'care_documentation.created',
+          'care_documentation.entry_added',
+          'care_documentation.entry_updated',
+          'care_documentation.entry_removed',
+          'incident.recorded',
+          'service_evidence.recorded',
+          'service_evidence.updated',
+          'care_documentation.finalized',
+          'care_documentation.amended',
+        ]),
+      );
+      const serializedDocumentationAudit = JSON.stringify(documentationAudit.rows);
+      expect(serializedDocumentationAudit).not.toContain(sensitiveCareText);
+      expect(serializedDocumentationAudit).not.toContain(sensitiveIncidentText);
+      expect(serializedDocumentationAudit).not.toContain(sensitiveEvidenceText);
+      expect(serializedDocumentationAudit).not.toContain(sensitiveAmendmentReason);
+      expect(serializedDocumentationAudit).not.toContain(sensitiveAmendmentCorrection);
+      expect(serializedDocumentationAudit).not.toContain(finalizationRaceText);
+      for (const amendment of concurrentAmendmentTexts) {
+        expect(serializedDocumentationAudit).not.toContain(amendment.reason);
+        expect(serializedDocumentationAudit).not.toContain(amendment.correction);
+      }
+      for (const marker of sensitiveNarrativeMarkers) {
+        expect(serializedDocumentationAudit).not.toContain(marker);
+      }
+      const documentationEvents = await owner.query<{ event: string }>(
+        `SELECT event::text AS event FROM platform.outbox_messages
+         WHERE tenant_id = $1 AND event->>'aggregateId' = $2`,
+        [tenantId, documentationId],
+      );
+      const parsedDocumentationEvents = documentationEvents.rows.map(
+        ({ event }) => JSON.parse(event) as { id: string; type: string; version: number },
+      );
+      expect(parsedDocumentationEvents.every((event) => event.id[14] === '7')).toBe(true);
+      expect(parsedDocumentationEvents.map((event) => event.type)).toEqual(
+        expect.arrayContaining([
+          'care_documentation.created',
+          'care_documentation.entry_added',
+          'care_documentation.entry_updated',
+          'care_documentation.entry_removed',
+          'incident.recorded',
+          'service_evidence.recorded',
+          'service_evidence.updated',
+          'care_documentation.finalized',
+          'care_documentation.amended',
+        ]),
+      );
+      expect(parsedDocumentationEvents.every((event) => event.version === 1)).toBe(true);
+      const serializedDocumentationEvents = JSON.stringify(parsedDocumentationEvents);
+      expect(serializedDocumentationEvents).not.toContain(sensitiveCareText);
+      expect(serializedDocumentationEvents).not.toContain(sensitiveIncidentText);
+      expect(serializedDocumentationEvents).not.toContain(sensitiveEvidenceText);
+      expect(serializedDocumentationEvents).not.toContain(sensitiveAmendmentReason);
+      expect(serializedDocumentationEvents).not.toContain(sensitiveAmendmentCorrection);
+      expect(serializedDocumentationEvents).not.toContain(finalizationRaceText);
+      for (const amendment of concurrentAmendmentTexts) {
+        expect(serializedDocumentationEvents).not.toContain(amendment.reason);
+        expect(serializedDocumentationEvents).not.toContain(amendment.correction);
+      }
+      for (const marker of sensitiveNarrativeMarkers) {
+        expect(serializedDocumentationEvents).not.toContain(marker);
+      }
+
+      await expect(
+        owner.query('UPDATE care_documentation.documents SET updated_at = now() WHERE id = $1', [
+          documentationId,
+        ]),
+      ).rejects.toThrow();
+      await expect(
+        owner.query('DELETE FROM care_documentation.history WHERE documentation_id = $1', [
+          documentationId,
+        ]),
+      ).rejects.toThrow();
 
       const executionAudit = await owner.query<{ action: string; metadata: string }>(
         `SELECT action, metadata::text AS metadata FROM audit.audit_entries
@@ -2273,12 +3157,10 @@ describe('clients API', () => {
           'visit_execution.started',
           'performed_service.recorded',
           'performed_service.added_unplanned',
-          'visit_execution.note_updated',
           'visit_execution.completed',
           'visit_execution.times_corrected',
         ]),
       );
-      expect(JSON.stringify(executionAudit.rows)).not.toContain(operationalMarker);
       const executionEvents = await owner.query<{ event: string }>(
         `SELECT event::text AS event FROM platform.outbox_messages
          WHERE tenant_id = $1 AND event->>'aggregateId' = $2`,
@@ -2292,7 +3174,6 @@ describe('clients API', () => {
           'visit_execution.started',
           'performed_service.recorded',
           'performed_service.unplanned_added',
-          'visit_execution.note_updated',
           'visit_execution.completed',
           'visit_execution.corrected',
         ]),
@@ -2316,6 +3197,16 @@ describe('clients API', () => {
           )
         ).rowCount,
       ).toBe(0);
+      await appRole.query('SAVEPOINT before_documentation_cross_tenant_write');
+      await expect(
+        appRole.query(
+          `INSERT INTO care_documentation.history
+             (id, tenant_id, documentation_id, actor_user_id, action, metadata, occurred_at)
+           VALUES ($1, $2, $3, $4, 'care_documentation.test', '{}'::jsonb, now())`,
+          [uuidv7(), tenantId, documentationId, userId],
+        ),
+      ).rejects.toMatchObject({ code: '42501' });
+      await appRole.query('ROLLBACK TO SAVEPOINT before_documentation_cross_tenant_write');
       await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
       expect(
         (
@@ -2324,6 +3215,33 @@ describe('clients API', () => {
           ])
         ).rowCount,
       ).toBe(1);
+      const documentationRlsTables = [
+        ['documents', 'id'],
+        ['entries', 'documentation_id'],
+        ['service_evidence', 'documentation_id'],
+        ['amendments', 'documentation_id'],
+        ['history', 'documentation_id'],
+      ] as const;
+      for (const [table, referenceColumn] of documentationRlsTables) {
+        expect(
+          (
+            await appRole.query(
+              `SELECT id FROM care_documentation.${table}
+               WHERE tenant_id = $1 AND ${referenceColumn} = $2`,
+              [otherTenantId, documentationId],
+            )
+          ).rowCount,
+        ).toBe(0);
+        expect(
+          (
+            await appRole.query(
+              `SELECT id FROM care_documentation.${table}
+               WHERE tenant_id = $1 AND ${referenceColumn} = $2`,
+              [tenantId, documentationId],
+            )
+          ).rowCount,
+        ).toBeGreaterThan(0);
+      }
       await appRole.query('COMMIT');
 
       const archivedAfterEnd = await fetch(`${baseUrl}/api/v1/services/${service.id}/archive`, {
@@ -3104,11 +4022,11 @@ describe('clients API', () => {
       const tenantBInvitationRequest = await fetch(`${baseUrl}/api/v1/admin/invitations`, {
         method: 'POST',
         headers: { ...headers, 'X-Tenant-Id': otherTenantId },
-        body: JSON.stringify({ email: `cross-tenant-${randomUUID()}@integration.test` }),
+        body: JSON.stringify({ email: `cross-tenant-${uuidv7()}@integration.test` }),
       });
       expect(tenantBInvitationRequest.status).toBe(403);
 
-      const newUserEmail = `invited-${randomUUID()}@integration.test`;
+      const newUserEmail = `invited-${uuidv7()}@integration.test`;
       const invalidInvitation = await fetch(`${baseUrl}/api/v1/admin/invitations`, {
         method: 'POST',
         headers,
@@ -3148,7 +4066,7 @@ describe('clients API', () => {
       expect(alreadyMemberInvitation.status).toBe(409);
       expect((await alreadyMemberInvitation.json()).code).toBe('USER_ALREADY_MEMBER');
 
-      const unverifiedSubject = randomUUID();
+      const unverifiedSubject = uuidv7();
       const unverifiedToken = await issueToken(unverifiedSubject, {
         email: newUserEmail,
         email_verified: false,
@@ -3174,7 +4092,7 @@ describe('clients API', () => {
       );
       expect(unverifiedInvitationState.rows[0]?.status).toBe('pending');
 
-      const invitedSubject = randomUUID();
+      const invitedSubject = uuidv7();
       const invitedToken = await issueToken(invitedSubject, {
         email: newUserEmail,
         email_verified: true,
@@ -3203,8 +4121,8 @@ describe('clients API', () => {
       expect(invitationState.rows[0]?.accepted_at).toBeInstanceOf(Date);
       if (!invitedMembershipId) throw new Error('Verified invitation did not create membership');
 
-      const previouslyKnownSubject = randomUUID();
-      const previouslyKnownEmail = `known-${randomUUID()}@integration.test`;
+      const previouslyKnownSubject = uuidv7();
+      const previouslyKnownEmail = `known-${uuidv7()}@integration.test`;
       const previouslyKnownToken = await issueToken(previouslyKnownSubject, {
         email: previouslyKnownEmail,
         email_verified: true,

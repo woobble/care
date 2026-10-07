@@ -317,6 +317,9 @@ try {
         'schedule.generate',
         'visit_execution.read',
         'visit_execution.correct',
+        'care_documentation.read',
+        'care_documentation.review',
+        'care_documentation.amend',
       ] as const,
       Caregiver: [
         'client.read',
@@ -331,6 +334,10 @@ try {
         'visit_execution.start',
         'visit_execution.record_services',
         'visit_execution.complete',
+        'care_documentation.read',
+        'care_documentation.create',
+        'care_documentation.update',
+        'care_documentation.finalize',
       ] as const,
     };
     const roleDefinitions = Object.entries(definitions) as Array<

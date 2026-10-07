@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import {
   InvalidPerformedServiceQuantityError,
   InvalidPerformedServiceStatusError,
-  normalizeOperationalNote,
   validateServiceDecision,
 } from './visit-execution';
 
@@ -104,12 +103,5 @@ describe('performed service decisions', () => {
         reasonCode: 'unregistered_reason',
       }),
     ).toThrow(InvalidPerformedServiceStatusError);
-  });
-
-  test('normalizes short operational notes', () => {
-    expect(normalizeOperationalNote('  Client requested a shorter visit.  ')).toBe(
-      'Client requested a shorter visit.',
-    );
-    expect(normalizeOperationalNote('   ')).toBeNull();
   });
 });

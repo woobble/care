@@ -13,7 +13,6 @@ import {
 import type { OutboxWriter } from '@care/platform';
 import { performedServices, visitExecutions } from '../schema';
 import {
-  normalizeOperationalNote,
   validateServiceDecision,
   type ExecutionReasonCode,
   type PerformedServiceStatus,
@@ -36,12 +35,6 @@ export interface RecordPerformedServiceInput {
   status: PerformedServiceStatus;
   actualQuantity: string | null;
   reasonCode?: ReasonCode | null;
-  note?: string | null;
-}
-
-export interface UpdateExecutionNoteInput {
-  expectedVersion: number;
-  note: string | null;
 }
 
 export interface CorrectExecutionTimesInput {
@@ -68,7 +61,6 @@ export interface VisitExecutionDetail {
     version: number;
     actualStart: string | null;
     actualEnd: string | null;
-    operationalNote: string | null;
     startedByEmployeeId: string | null;
     startedByEmployeeName: string | null;
     completedByEmployeeId: string | null;
@@ -85,7 +77,6 @@ export interface VisitExecutionDetail {
     actualQuantity: string | null;
     status: 'not_recorded' | PerformedServiceStatus;
     reasonCode: ReasonCode | null;
-    note: string | null;
     performedByEmployeeId: string | null;
     performedByEmployeeName: string | null;
     unplanned: boolean;
@@ -320,7 +311,6 @@ export class VisitExecutionApplicationService {
         actualEnd: null,
         startedByEmployeeId: employee.id,
         completedByEmployeeId: null,
-        operationalNote: null,
         version: 1,
         createdAt: now,
         updatedAt: now,
@@ -444,9 +434,7 @@ export class VisitExecutionApplicationService {
         plannedQuantity: snapshot.plannedQuantity,
         actualQuantity: input.actualQuantity,
         reasonCode: input.reasonCode ?? null,
-        note: input.note ?? null,
       });
-      const note = normalizeOperationalNote(input.note);
       const now = new Date();
       const row: PerformedServiceRow = {
         id: existing?.id ?? performedServiceId,
@@ -458,7 +446,6 @@ export class VisitExecutionApplicationService {
         actualQuantity: input.actualQuantity,
         status: input.status,
         reasonCode: input.reasonCode ?? null,
-        note,
         performedByEmployeeId: employee.id,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
@@ -490,7 +477,6 @@ export class VisitExecutionApplicationService {
             actualQuantity: row.actualQuantity,
             status: row.status,
             reasonCode: row.reasonCode,
-            note: row.note,
             performedByEmployeeId: row.performedByEmployeeId,
             updatedAt: now,
           })
@@ -537,73 +523,6 @@ export class VisitExecutionApplicationService {
         },
       });
       return { service: serviceResponse(row), version: nextVersion };
-    });
-  }
-
-  async updateNote(
-    principal: AuthorizationPrincipal,
-    visitId: string,
-    input: UpdateExecutionNoteInput,
-    request: RequestContext,
-    auditContext: AuditContext,
-  ) {
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const context = await this.requireVisit(transaction, principal.tenantId, visitId, true);
-      await this.authorizeVisit(
-        principal,
-        transaction,
-        context.visit,
-        'visit_execution.record_services',
-      );
-      await this.requireAssignedEmployee(transaction, principal, context);
-      const execution = await this.repository.getExecution(
-        transaction,
-        principal.tenantId,
-        visitId,
-        true,
-      );
-      if (!execution) throw new VisitExecutionNotStartedError();
-      const note = normalizeOperationalNote(input.note);
-      if (execution.operationalNote === note) {
-        return { version: execution.version, operationalNote: note };
-      }
-      if (execution.status === 'completed') throw new VisitExecutionAlreadyCompletedError();
-      if (input.expectedVersion !== execution.version)
-        throw new VisitExecutionVersionConflictError();
-      const now = new Date();
-      const nextVersion = execution.version + 1;
-      await transaction
-        .update(visitExecutions)
-        .set({ operationalNote: note, version: nextVersion, updatedAt: now })
-        .where(
-          and(
-            eq(visitExecutions.tenantId, principal.tenantId),
-            eq(visitExecutions.id, execution.id),
-            eq(visitExecutions.version, execution.version),
-          ),
-        );
-      const event = createDomainEvent({
-        type: 'visit_execution.note_updated',
-        tenantId: principal.tenantId,
-        aggregateType: 'visit_execution',
-        aggregateId: execution.id,
-        actor: { type: 'user', id: principal.userId },
-        correlationId: request.correlationId,
-        payload: { executionId: execution.id, visitId, version: nextVersion },
-      });
-      await this.record(transaction, principal, request, auditContext, {
-        event,
-        action: 'visit_execution.note_updated',
-        resourceType: 'visit',
-        resourceId: visitId,
-        metadata: {
-          executionId: execution.id,
-          visitId,
-          changedFields: ['operationalNote'],
-          version: nextVersion,
-        },
-      });
-      return { version: nextVersion, operationalNote: note };
     });
   }
 
@@ -853,7 +772,6 @@ export class VisitExecutionApplicationService {
         version: current?.version ?? 0,
         actualStart: current?.actualStart.toISOString() ?? null,
         actualEnd: current?.actualEnd?.toISOString() ?? null,
-        operationalNote: current?.operationalNote ?? null,
         startedByEmployeeId: current?.startedByEmployeeId ?? null,
         startedByEmployeeName: current ? (names.get(current.startedByEmployeeId) ?? null) : null,
         completedByEmployeeId: current?.completedByEmployeeId ?? null,
@@ -1032,7 +950,6 @@ function performedServiceView(
       actualQuantity: service?.actualQuantity ?? null,
       status: service?.status ?? 'not_recorded',
       reasonCode: service?.reasonCode ?? null,
-      note: service?.note ?? null,
       performedByEmployeeId: service?.performedByEmployeeId ?? null,
       performedByEmployeeName: service ? (names.get(service.performedByEmployeeId) ?? null) : null,
       unplanned: false,
@@ -1050,7 +967,6 @@ function performedServiceView(
     actualQuantity: service.actualQuantity,
     status: service.status,
     reasonCode: service.reasonCode,
-    note: service.note,
     performedByEmployeeId: service.performedByEmployeeId,
     performedByEmployeeName: names.get(service.performedByEmployeeId) ?? null,
     unplanned: true,
@@ -1064,7 +980,6 @@ function sameServiceDecision(left: PerformedServiceRow, right: PerformedServiceR
     left.actualQuantity === right.actualQuantity &&
     left.status === right.status &&
     left.reasonCode === right.reasonCode &&
-    left.note === right.note &&
     left.performedByEmployeeId === right.performedByEmployeeId
   );
 }
@@ -1073,12 +988,11 @@ function serviceChangedFields(
   current: PerformedServiceRow | null,
   next: PerformedServiceRow,
 ): string[] {
-  if (!current) return ['status', 'actualQuantity', 'reasonCode', 'note'];
+  if (!current) return ['status', 'actualQuantity', 'reasonCode'];
   return [
     ...(current.status === next.status ? [] : ['status']),
     ...(current.actualQuantity === next.actualQuantity ? [] : ['actualQuantity']),
     ...(current.reasonCode === next.reasonCode ? [] : ['reasonCode']),
-    ...(current.note === next.note ? [] : ['note']),
   ];
 }
 
@@ -1143,7 +1057,6 @@ function serviceResponse(service: PerformedServiceRow) {
     actualQuantity: service.actualQuantity,
     status: service.status,
     reasonCode: service.reasonCode,
-    note: service.note,
     performedByEmployeeId: service.performedByEmployeeId,
     unplanned: service.visitServiceId === null,
   };

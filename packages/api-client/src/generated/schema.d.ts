@@ -492,23 +492,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/visits/{visitId}/execution/note": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Update the short operational execution note */
-        put: operations["VisitExecutionController_updateNote"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/visits/{visitId}/execution/complete": {
         parameters: {
             query?: never;
@@ -1577,6 +1560,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/visits/{visitId}/documentation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read documentation, evidence, history, and completeness for a visit */
+        get: operations["CareDocumentationController_getForVisit"];
+        put?: never;
+        /** Create an idempotent documentation draft for an executed visit */
+        post: operations["CareDocumentationController_createForVisit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-documentation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List scoped visit documentation and incomplete evidence */
+        get: operations["CareDocumentationController_worklist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/documentation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List documentation status for visits related to the current caregiver */
+        get: operations["CareDocumentationController_myWorklist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read documentation by ID */
+        get: operations["CareDocumentationController_getById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a note, observation, deviation, or incident entry */
+        post: operations["CareDocumentationController_addEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/entries/{entryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a draft documentation entry */
+        delete: operations["CareDocumentationController_removeEntry"];
+        options?: never;
+        head?: never;
+        /** Update a draft documentation entry */
+        patch: operations["CareDocumentationController_updateEntry"];
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/evidence/{performedServiceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Record or update evidence for a performed service */
+        put: operations["CareDocumentationController_recordEvidence"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finalize complete documentation for a completed execution */
+        post: operations["CareDocumentationController_finalize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/amendments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Append an explicit correction to finalized documentation */
+        post: operations["CareDocumentationController_amend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -1899,7 +2037,6 @@ export interface components {
             actualStart?: string | null;
             /** Format: date-time */
             actualEnd?: string | null;
-            operationalNote?: string | null;
             /** Format: uuid */
             startedByEmployeeId?: string | null;
             startedByEmployeeName?: string | null;
@@ -1926,7 +2063,6 @@ export interface components {
             status: "not_recorded" | "performed" | "partially_performed" | "not_performed";
             /** @enum {string|null} */
             reasonCode?: "client_declined" | "client_not_present" | "service_not_required" | "time_constraint" | "provider_decision" | "other" | null;
-            note?: string | null;
             /** Format: uuid */
             performedByEmployeeId?: string | null;
             performedByEmployeeName?: string | null;
@@ -1957,19 +2093,10 @@ export interface components {
             actualQuantity: string | null;
             /** @enum {string|null} */
             reasonCode?: "client_declined" | "client_not_present" | "service_not_required" | "time_constraint" | "provider_decision" | "other" | null;
-            note?: string | null;
         };
         RecordedServiceResponseDto: {
             service: components["schemas"]["PerformedServiceResponseDto"];
             version: number;
-        };
-        UpdateExecutionNoteRequestDto: {
-            expectedVersion: number;
-            note: string | null;
-        };
-        ExecutionNoteResponseDto: {
-            version: number;
-            operationalNote?: string | null;
         };
         CompleteExecutionRequestDto: {
             expectedVersion: number;
@@ -3183,6 +3310,206 @@ export interface components {
             endsAt: string;
             note?: string | null;
         };
+        DocumentationVisitDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            clientId: string;
+            clientDisplayName: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId: string;
+            /** @enum {string} */
+            status: "planned" | "confirmed" | "cancelled";
+            /** Format: date-time */
+            plannedStart: string;
+            /** Format: date-time */
+            plannedEnd: string;
+            timezone: string;
+        };
+        DocumentationExecutionDto: {
+            /** Format: uuid */
+            id?: string | null;
+            /** @enum {string} */
+            status: "not_started" | "in_progress" | "completed";
+            /** Format: date-time */
+            actualStart?: string | null;
+            /** Format: date-time */
+            actualEnd?: string | null;
+        };
+        CareDocumentDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "draft" | "finalized";
+            /** Format: uuid */
+            createdByEmployeeId: string;
+            createdByEmployeeName?: string | null;
+            /** Format: uuid */
+            finalizedByEmployeeId?: string | null;
+            finalizedByEmployeeName?: string | null;
+            /** Format: date-time */
+            finalizedAt?: string | null;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ServiceEvidenceDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "documented" | "not_required";
+            /** Format: uuid */
+            documentedByEmployeeId: string;
+            documentedByEmployeeName?: string | null;
+            note?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        DocumentationServiceDto: {
+            /** Format: uuid */
+            performedServiceId: string;
+            serviceName: string;
+            serviceCode: string;
+            /** @enum {string} */
+            status: "performed" | "partially_performed" | "not_performed";
+            reasonCode?: string | null;
+            actualQuantity?: string | null;
+            /** @enum {string} */
+            unit: "occurrence" | "minute" | "hour" | "day";
+            evidence?: components["schemas"]["ServiceEvidenceDto"] | null;
+        };
+        DocumentationEntryDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            type: "care_note" | "observation" | "deviation" | "incident";
+            /** Format: uuid */
+            authorEmployeeId: string;
+            authorEmployeeName?: string | null;
+            /** Format: date-time */
+            occurredAt?: string | null;
+            /** @enum {string|null} */
+            severity?: "low" | "moderate" | "high" | "critical" | null;
+            content: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        DocumentationAmendmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            authorUserId: string;
+            reason: string;
+            correction: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        DocumentationHistoryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            actorUserId: string;
+            /** Format: uuid */
+            actorEmployeeId?: string | null;
+            action: string;
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            occurredAt: string;
+        };
+        DocumentationMissingRequirementDto: {
+            /** @enum {string} */
+            code: "DOCUMENTATION_REQUIRED" | "VISIT_EXECUTION_REQUIRED" | "SERVICE_EVIDENCE_REQUIRED" | "NOT_PERFORMED_REASON_REQUIRED" | "PARTIAL_SERVICE_EXPLANATION_REQUIRED";
+            /** Format: uuid */
+            performedServiceId?: string;
+        };
+        DocumentationCompletenessDto: {
+            isComplete: boolean;
+            missing: components["schemas"]["DocumentationMissingRequirementDto"][];
+        };
+        CareDocumentationDetailDto: {
+            visit: components["schemas"]["DocumentationVisitDto"];
+            execution: components["schemas"]["DocumentationExecutionDto"];
+            documentation?: components["schemas"]["CareDocumentDto"] | null;
+            services: components["schemas"]["DocumentationServiceDto"][];
+            entries: components["schemas"]["DocumentationEntryDto"][];
+            amendments: components["schemas"]["DocumentationAmendmentDto"][];
+            history: components["schemas"]["DocumentationHistoryDto"][];
+            completeness: components["schemas"]["DocumentationCompletenessDto"];
+        };
+        DocumentationWorklistItemDto: {
+            /** Format: uuid */
+            visitId: string;
+            /** Format: uuid */
+            clientId: string;
+            clientDisplayName: string;
+            /** Format: uuid */
+            facilityId: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: date-time */
+            plannedStart: string;
+            timezone: string;
+            /** @enum {string} */
+            executionStatus: "in_progress" | "completed";
+            /** Format: uuid */
+            documentationId?: string | null;
+            /** @enum {string} */
+            documentationStatus: "missing" | "draft" | "finalized";
+            documentationVersion?: number | null;
+            /** Format: uuid */
+            employeeId: string;
+            employeeName?: string | null;
+            missing: components["schemas"]["DocumentationMissingRequirementDto"][];
+        };
+        DocumentationWorklistDto: {
+            items: components["schemas"]["DocumentationWorklistItemDto"][];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
+        AddDocumentationEntryRequestDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            type: "care_note" | "observation" | "deviation" | "incident";
+            content: string;
+            /** Format: date-time */
+            occurredAt?: string | null;
+            /** @enum {string|null} */
+            severity?: "low" | "moderate" | "high" | "critical" | null;
+        };
+        UpdateDocumentationEntryRequestDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            type?: "care_note" | "observation" | "deviation" | "incident";
+            content?: string;
+            /** Format: date-time */
+            occurredAt?: string | null;
+            /** @enum {string|null} */
+            severity?: "low" | "moderate" | "high" | "critical" | null;
+        };
+        RecordServiceEvidenceRequestDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            status: "documented" | "not_required";
+            note?: string | null;
+        };
+        FinalizeDocumentationRequestDto: {
+            expectedVersion: number;
+        };
+        AddDocumentationAmendmentRequestDto: {
+            reason: string;
+            correction: string;
+        };
         MeResponseDto: {
             /** Format: uuid */
             id: string;
@@ -3196,7 +3523,7 @@ export interface components {
         };
         PermissionGrantDto: {
             /** @enum {string} */
-            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
+            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
             /** @enum {string} */
             scopeType: "assigned_clients" | "team" | "facility" | "organization" | "tenant";
             /** Format: uuid */
@@ -4347,43 +4674,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecordedServiceResponseDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    VisitExecutionController_updateNote: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                visitId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateExecutionNoteRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExecutionNoteResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -7504,6 +7794,410 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CareDocumentationController_getForVisit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                visitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CareDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CareDocumentationController_createForVisit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                visitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CareDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CareDocumentationController_worklist: {
+        parameters: {
+            query: {
+                pageSize?: number;
+                page?: number;
+                incomplete?: boolean;
+                status?: "draft" | "finalized" | "missing";
+                employeeId?: unknown;
+                facilityId?: unknown;
+                /** @description Client name metadata filter */
+                clientQuery?: unknown;
+                until: unknown;
+                from: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentationWorklistDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CareDocumentationController_myWorklist: {
+        parameters: {
+            query: {
+                pageSize?: number;
+                page?: number;
+                until: unknown;
+                from: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentationWorklistDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CareDocumentationController_getById: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CareDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CareDocumentationController_addEntry: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddDocumentationEntryRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CareDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CareDocumentationController_removeEntry: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expectedVersion: number;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CareDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CareDocumentationController_updateEntry: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDocumentationEntryRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CareDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CareDocumentationController_recordEvidence: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                performedServiceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordServiceEvidenceRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CareDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CareDocumentationController_finalize: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinalizeDocumentationRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CareDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CareDocumentationController_amend: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddDocumentationAmendmentRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CareDocumentationDetailDto"];
+                };
             };
             /** @description Problem Details response */
             default: {

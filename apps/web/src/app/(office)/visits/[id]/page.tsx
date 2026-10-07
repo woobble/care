@@ -8,6 +8,7 @@ import {
   hasPermission,
 } from '../../../../lib/api';
 import { ConfirmSubmitButton } from '../../administration/confirm-submit-button';
+import { amendDocumentationAction } from '../../documentation/actions';
 import {
   assignVisitAction,
   changeVisitStatusAction,
@@ -59,12 +60,20 @@ export default async function VisitDetailPage({
   const permissions = await getPermissionGrants(api);
   const canReadExecution = hasPermission(permissions, 'visit_execution.read');
   const canCorrectExecution = hasPermission(permissions, 'visit_execution.correct');
+  const canReadDocumentation = hasPermission(permissions, 'care_documentation.read');
+  const canAmendDocumentation = hasPermission(permissions, 'care_documentation.amend');
   const executionResult = canReadExecution
     ? await get('/api/v1/visits/{visitId}/execution', {
         params: { path: { visitId: visit.id }, header },
       })
     : null;
   const executionDetail = executionResult?.data;
+  const documentationResult = canReadDocumentation
+    ? await get('/api/v1/visits/{visitId}/documentation', {
+        params: { path: { visitId: visit.id }, header },
+      })
+    : null;
+  const documentationDetail = documentationResult?.data;
   const canUpdate = hasPermission(permissions, 'schedule.update') && visit.status !== 'cancelled';
   const canAssign = hasPermission(permissions, 'schedule.assign') && visit.status !== 'cancelled';
   const canConfirm = hasPermission(permissions, 'schedule.confirm') && visit.status !== 'cancelled';
@@ -216,14 +225,6 @@ export default async function VisitDetailPage({
                   value={executionDetail.execution.completedByEmployeeName ?? '–'}
                 />
               </dl>
-              {executionDetail.execution.operationalNote ? (
-                <div>
-                  <h3 className="font-semibold">Kurzer Einsatzhinweis</h3>
-                  <p className="mt-1 whitespace-pre-wrap text-slate-700">
-                    {executionDetail.execution.operationalNote}
-                  </p>
-                </div>
-              ) : null}
               <div>
                 <h3 className="font-semibold">Erfasste Leistungen</h3>
                 {executionDetail.services.length ? (
@@ -254,11 +255,6 @@ export default async function VisitDetailPage({
                         {service.performedByEmployeeName ? (
                           <span className="text-sm text-slate-600">
                             Erfasst von {service.performedByEmployeeName}
-                          </span>
-                        ) : null}
-                        {service.note ? (
-                          <span className="whitespace-pre-wrap text-sm text-slate-700">
-                            {service.note}
                           </span>
                         ) : null}
                       </li>
@@ -325,6 +321,194 @@ export default async function VisitDetailPage({
                     </div>
                     <Button type="submit" className="min-h-11 w-fit">
                       Zeiten korrigieren
+                    </Button>
+                  </form>
+                </details>
+              ) : null}
+            </>
+          ) : null}
+        </section>
+      ) : null}
+
+      {canReadDocumentation ? (
+        <section
+          aria-labelledby="documentation-title"
+          className="grid gap-4 rounded-lg border bg-white p-5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="documentation-title" className="text-xl font-semibold">
+              Dokumentation
+            </h2>
+            {documentationDetail?.documentation ? (
+              <span className="rounded-full border px-3 py-1 text-sm">
+                {documentationDetail.documentation.status === 'finalized'
+                  ? 'Finalisiert'
+                  : 'Entwurf'}
+              </span>
+            ) : null}
+          </div>
+          {documentationResult?.error ? (
+            <p role="alert" className="text-sm text-red-800">
+              Dokumentation konnte nicht geladen werden ({documentationResult.error.code}).
+            </p>
+          ) : null}
+          {documentationDetail ? (
+            <>
+              {documentationDetail.documentation ? (
+                <dl className="grid gap-3 sm:grid-cols-2">
+                  <Detail
+                    label="Erstellt von"
+                    value={documentationDetail.documentation.createdByEmployeeName ?? '–'}
+                  />
+                  <Detail
+                    label="Finalisiert von"
+                    value={documentationDetail.documentation.finalizedByEmployeeName ?? '–'}
+                  />
+                  <Detail
+                    label="Finalisiert am"
+                    value={
+                      documentationDetail.documentation.finalizedAt
+                        ? formatDateTime(
+                            documentationDetail.documentation.finalizedAt,
+                            visit.timezone,
+                          )
+                        : 'Noch nicht finalisiert'
+                    }
+                  />
+                  <Detail
+                    label="Vollständigkeit"
+                    value={
+                      documentationDetail.completeness.isComplete ? 'Vollständig' : 'Unvollständig'
+                    }
+                  />
+                </dl>
+              ) : (
+                <p className="text-amber-900">
+                  Für diesen Einsatz wurde noch keine Dokumentation angelegt.
+                </p>
+              )}
+              {!documentationDetail.completeness.isComplete ? (
+                <ul className="grid gap-1 rounded-md bg-amber-50 p-3 text-sm text-amber-950">
+                  {documentationDetail.completeness.missing.map((missing, index) => (
+                    <li key={`${missing.code}-${missing.performedServiceId ?? index}`}>
+                      {missingRequirementLabel(missing.code)}
+                      {missing.performedServiceId
+                        ? ` (${documentationDetail.services.find((service) => service.performedServiceId === missing.performedServiceId)?.serviceName ?? 'Leistung'})`
+                        : ''}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <div>
+                <h3 className="font-semibold">Leistungsnachweise</h3>
+                {documentationDetail.services.length ? (
+                  <ul className="mt-2 grid gap-2">
+                    {documentationDetail.services.map((service) => (
+                      <li
+                        key={service.performedServiceId}
+                        className="grid gap-1 rounded-md bg-slate-50 p-3"
+                      >
+                        <span className="font-medium">
+                          {service.serviceName} ·{' '}
+                          {service.evidence ? 'Nachweis vorhanden' : 'Nachweis fehlt'}
+                        </span>
+                        {service.evidence?.documentedByEmployeeName ? (
+                          <span className="text-sm text-slate-600">
+                            Erfasst von {service.evidence.documentedByEmployeeName}
+                          </span>
+                        ) : null}
+                        {service.evidence?.note ? (
+                          <p className="whitespace-pre-wrap text-sm">{service.evidence.note}</p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-slate-600">Keine Leistungsergebnisse vorhanden.</p>
+                )}
+              </div>
+              <div>
+                <h3 className="font-semibold">Einträge</h3>
+                {documentationDetail.entries.length ? (
+                  <ul className="mt-2 grid gap-2">
+                    {documentationDetail.entries.map((entry) => (
+                      <li key={entry.id} className="rounded-md bg-slate-50 p-3">
+                        <p className="text-sm font-semibold">
+                          {entryTypeLabel(entry.type)}
+                          {entry.severity ? ` · ${entry.severity}` : ''}
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap">{entry.content}</p>
+                        <p className="mt-2 text-xs text-slate-500">
+                          {entry.authorEmployeeName ?? 'Mitarbeiter'} ·{' '}
+                          {formatDateTime(entry.createdAt, visit.timezone)}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-slate-600">Keine Einträge.</p>
+                )}
+              </div>
+              {documentationDetail.amendments.length ? (
+                <div>
+                  <h3 className="font-semibold">Änderungshistorie</h3>
+                  <ul className="mt-2 grid gap-2">
+                    {documentationDetail.amendments.map((amendment) => (
+                      <li key={amendment.id} className="rounded-md bg-slate-50 p-3">
+                        <p className="font-medium">{amendment.reason}</p>
+                        <p className="mt-1 whitespace-pre-wrap">{amendment.correction}</p>
+                        <p className="mt-2 text-xs text-slate-500">
+                          {formatDateTime(amendment.createdAt, visit.timezone)}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {documentationDetail.history.length ? (
+                <div>
+                  <h3 className="font-semibold">Verlauf</h3>
+                  <ul className="mt-2 grid gap-1 text-sm text-slate-600">
+                    {documentationDetail.history.map((entry) => (
+                      <li key={entry.id}>
+                        {historyLabel(entry.action)} ·{' '}
+                        {formatDateTime(entry.occurredAt, visit.timezone)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {canAmendDocumentation &&
+              documentationDetail.documentation?.status === 'finalized' ? (
+                <details className="rounded-md border p-3">
+                  <summary className="cursor-pointer font-semibold">Dokumentation ergänzen</summary>
+                  <form action={amendDocumentationAction} className="mt-4 grid gap-3">
+                    <input type="hidden" name="visitId" value={visit.id} />
+                    <input
+                      type="hidden"
+                      name="documentationId"
+                      value={documentationDetail.documentation.id}
+                    />
+                    <label className="grid gap-1 text-sm">
+                      <span>Grund</span>
+                      <input
+                        name="reason"
+                        required
+                        maxLength={500}
+                        className="min-h-11 rounded-md border px-3"
+                      />
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span>Korrektur / Ergänzung</span>
+                      <textarea
+                        name="correction"
+                        required
+                        maxLength={4000}
+                        className="min-h-24 rounded-md border px-3 py-2"
+                      />
+                    </label>
+                    <Button type="submit" className="min-h-11 w-fit">
+                      Ergänzung speichern
                     </Button>
                   </form>
                 </details>
@@ -651,6 +835,33 @@ function executionReasonLabel(reason: string): string {
   );
 }
 
+function missingRequirementLabel(code: string): string {
+  return (
+    (
+      {
+        DOCUMENTATION_REQUIRED: 'Dokumentation fehlt',
+        VISIT_EXECUTION_REQUIRED: 'Ausführung fehlt',
+        SERVICE_EVIDENCE_REQUIRED: 'Leistungsnachweis fehlt',
+        NOT_PERFORMED_REASON_REQUIRED: 'Grund für nicht erbrachte Leistung fehlt',
+        PARTIAL_SERVICE_EXPLANATION_REQUIRED: 'Erklärung für teilweise erbrachte Leistung fehlt',
+      } as Record<string, string>
+    )[code] ?? code
+  );
+}
+
+function entryTypeLabel(type: string): string {
+  return (
+    (
+      {
+        care_note: 'Verlaufsnotiz',
+        observation: 'Beobachtung',
+        deviation: 'Abweichung',
+        incident: 'Vorfall',
+      } as Record<string, string>
+    )[type] ?? type
+  );
+}
+
 function historyLabel(action: string): string {
   return (
     (
@@ -665,7 +876,15 @@ function historyLabel(action: string): string {
         'visit.employee_assigned': 'Mitarbeitende zugewiesen',
         'visit.employee_unassigned': 'Zuweisung aufgehoben',
         'visit_execution.started': 'Einsatz begonnen',
-        'visit_execution.note_updated': 'Einsatzhinweis geändert',
+        'care_documentation.created': 'Dokumentation begonnen',
+        'care_documentation.entry_added': 'Dokumentationseintrag ergänzt',
+        'care_documentation.entry_updated': 'Dokumentationseintrag geändert',
+        'care_documentation.entry_removed': 'Dokumentationseintrag entfernt',
+        'service_evidence.recorded': 'Leistungsnachweis erfasst',
+        'service_evidence.updated': 'Leistungsnachweis geändert',
+        'incident.recorded': 'Vorfall dokumentiert',
+        'care_documentation.finalized': 'Dokumentation finalisiert',
+        'care_documentation.amended': 'Dokumentation ergänzt',
         'performed_service.recorded': 'Leistungsergebnis erfasst',
         'performed_service.updated': 'Leistungsergebnis geändert',
         'performed_service.marked_not_performed': 'Leistung als nicht erbracht erfasst',

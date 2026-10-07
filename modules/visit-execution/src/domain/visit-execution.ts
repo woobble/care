@@ -16,7 +16,6 @@ export interface ServiceDecision {
   plannedQuantity: string | null;
   actualQuantity: string | null;
   reasonCode?: string | null;
-  note?: string | null;
 }
 
 export class InvalidPerformedServiceStatusError extends Error {
@@ -37,15 +36,6 @@ export class InvalidPerformedServiceQuantityError extends Error {
   }
 }
 
-export class InvalidExecutionNoteError extends Error {
-  readonly code = 'VISIT_EXECUTION_NOTE_INVALID';
-
-  constructor() {
-    super('The operational note is invalid');
-    this.name = 'InvalidExecutionNoteError';
-  }
-}
-
 export function validateServiceDecision(input: ServiceDecision): void {
   if (!['performed', 'partially_performed', 'not_performed'].includes(input.status)) {
     throw new InvalidPerformedServiceStatusError();
@@ -59,7 +49,6 @@ export function validateServiceDecision(input: ServiceDecision): void {
   if (input.status === 'not_performed' && input.reasonCode == null) {
     throw new InvalidPerformedServiceStatusError();
   }
-  if (input.note != null && input.note.length > 1000) throw new InvalidExecutionNoteError();
   if (input.plannedQuantity != null && quantity(input.plannedQuantity) === null) {
     throw new InvalidPerformedServiceQuantityError();
   }
@@ -80,13 +69,6 @@ export function validateServiceDecision(input: ServiceDecision): void {
   if (input.status === 'not_performed' && actual !== null && actual !== 0n) {
     throw new InvalidPerformedServiceQuantityError();
   }
-}
-
-export function normalizeOperationalNote(note: string | null | undefined): string | null {
-  if (note == null) return null;
-  const normalized = note.trim();
-  if (normalized.length > 1000) throw new InvalidExecutionNoteError();
-  return normalized || null;
 }
 
 function quantity(value: string): bigint | null {

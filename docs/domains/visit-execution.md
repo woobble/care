@@ -18,7 +18,7 @@ Quantities are decimal strings with three fractional digits and are stored as Po
 
 An unplanned service has no `visitServiceId` or agreement-service link. It must be active, valid for the execution date, and available to the visit's organization and facility. It is never added to the scheduled visit. Stable reason codes are `client_declined`, `client_not_present`, `service_not_required`, `time_constraint`, `provider_decision`, and `other`.
 
-Operational notes are short, length-limited context for the next operational step. They are not care documentation. The slice does not model medication, clinical observations, signatures, billing, claims, prices, or benefit consumption.
+Narrative notes and performed-service evidence belong to Care Documentation, not execution. Execution no longer stores an operational note or a performed-service note. The data migration copies existing values into documentation entries and evidence before dropping those columns. Execution still owns actual times, performed-service outcomes, actual quantities, performers, and structured outcome reasons. The slice does not model medication, clinical observations, signatures, billing, claims, prices, or benefit consumption.
 
 ## Authorization and privacy
 
@@ -26,7 +26,7 @@ Caregiver access resolves the authenticated local user to an active linked emplo
 
 Client and employee detail pages use `GET /api/v1/visit-executions/summaries` for recent and upcoming visits. The bounded batch read returns only execution status and actual start/end times after checking each visit's resource scope; caregiver callers also need an active assignment. It does not return operational notes or performed-service details.
 
-Execution tables use forced tenant RLS and tenant-qualified foreign keys. The application also includes tenant predicates and checks resource scope. Operational notes and service details are returned only through authorized execution reads. Audit and outbox metadata contain IDs, statuses, changed field names, counts, and versions rather than notes or service details. The client timeline shows only visit-started and visit-completed summaries; detailed changes remain in visit history.
+Execution tables use forced tenant RLS and tenant-qualified foreign keys. The application also includes tenant predicates and checks resource scope. Execution details are returned only through authorized reads. Audit and outbox metadata contain IDs, statuses, changed field names, counts, and versions rather than narrative text. The client timeline shows only visit-started and visit-completed summaries; detailed execution changes remain in visit history.
 
 ## Concurrency and planning interaction
 

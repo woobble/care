@@ -8,6 +8,7 @@ import { servicesSchema } from '@care/services';
 import { serviceAgreementsSchema } from '@care/service-agreements';
 import { schedulingSchema } from '@care/scheduling';
 import { visitExecutionSchema } from '@care/visit-execution';
+import { careDocumentationSchema } from '@care/care-documentation';
 
 export const databaseSchema = {
   ...identitySchema,
@@ -18,6 +19,7 @@ export const databaseSchema = {
   ...serviceAgreementsSchema,
   ...schedulingSchema,
   ...visitExecutionSchema,
+  ...careDocumentationSchema,
   ...auditSchema,
   ...platformSchema,
 };

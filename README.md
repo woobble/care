@@ -83,4 +83,4 @@ docker build -f apps/web/Dockerfile -t care-web .
 
 Pass runtime settings through the deployment environment. Do not use `.env.example` secrets outside local development. Run migrations as a separate release step with the migration database role.
 
-See [architecture overview](docs/architecture/overview.md), the [client master-data domain](docs/domains/client-master-data.md), the [service catalog domain](docs/domains/service-catalog.md), [tenant isolation](docs/security/tenant-isolation.md), [privacy boundaries](docs/security/privacy.md), and the [ADRs](docs/adr/) for design decisions.
+See [architecture overview](docs/architecture/overview.md), the [client master-data domain](docs/domains/client-master-data.md), the [service catalog domain](docs/domains/service-catalog.md), [visit execution](docs/domains/visit-execution.md), [care documentation](docs/domains/care-documentation.md), [tenant isolation](docs/security/tenant-isolation.md), [privacy boundaries](docs/security/privacy.md), and the [ADRs](docs/adr/) for design decisions.
