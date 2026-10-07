@@ -20,7 +20,7 @@
     "migrate": "bun run --filter @care/api migrate",
     "seed": "bun run --filter @care/api seed",
     "seed:identity": "bun run --filter @care/api seed:identity",
-    "infra:up": "docker compose up -d --wait",
+    "infra:up": "docker compose up -d --wait && docker compose --profile bootstrap run --rm --no-deps seaweedfs-init",
     "infra:down": "docker compose down",
     "reset": "bash scripts/reset.sh"
   },

@@ -43,6 +43,12 @@ export default async function CareVisitPage({
   const documentationResult = await get('/api/v1/visits/{visitId}/documentation', {
     params: { path: { visitId: id }, header },
   });
+  const evidencePackageResult =
+    documentationResult.data?.documentation?.status === 'finalized'
+      ? await get('/api/v1/visits/{visitId}/evidence-package', {
+          params: { path: { visitId: id }, header },
+        })
+      : null;
   const availableResult =
     execution.status === 'in_progress'
       ? await get('/api/v1/visits/{visitId}/execution/available-services', {
@@ -235,6 +241,7 @@ export default async function CareVisitPage({
       <DocumentationSection
         detail={documentationResult.data}
         {...(documentationResult.error?.code ? { errorCode: documentationResult.error.code } : {})}
+        evidenceStatus={evidencePackageResult?.data?.status ?? null}
         visitId={visit.id}
         executionStatus={execution.status}
       />
@@ -377,11 +384,13 @@ function DecisionFields({
 function DocumentationSection({
   detail,
   errorCode,
+  evidenceStatus,
   visitId,
   executionStatus: visitExecutionStatus,
 }: {
   detail: components['schemas']['CareDocumentationDetailDto'] | undefined;
   errorCode?: string;
+  evidenceStatus: 'ready' | 'acknowledged' | 'declined' | 'revoked' | 'outdated' | null;
   visitId: string;
   executionStatus: 'not_started' | 'in_progress' | 'completed';
 }) {
@@ -422,6 +431,29 @@ function DocumentationSection({
           </span>
         ) : null}
       </header>
+
+      {finalized ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-slate-50 p-3">
+          <span className="text-sm font-medium">
+            Bestätigung:{' '}
+            {evidenceStatus === 'acknowledged'
+              ? 'Bestätigt'
+              : evidenceStatus === 'declined'
+                ? 'Abgelehnt'
+                : evidenceStatus === 'outdated'
+                  ? 'Neue Bestätigung erforderlich'
+                  : evidenceStatus === 'revoked'
+                    ? 'Widerrufen'
+                    : 'Ausstehend'}
+          </span>
+          <Link
+            href={`/care/visits/${visitId}/evidence`}
+            className="min-h-10 rounded-md border border-slate-400 px-3 py-2 text-sm font-semibold text-blue-900 underline"
+          >
+            Leistungsnachweis prüfen
+          </Link>
+        </div>
+      ) : null}
 
       {!document ? (
         visitExecutionStatus === 'not_started' ? (

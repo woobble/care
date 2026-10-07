@@ -1715,6 +1715,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/visits/{visitId}/evidence-package": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the current service evidence package for a visit */
+        get: operations["ServiceEvidenceController_getForVisit"];
+        put?: never;
+        /** Create or return the deterministic package for finalized service evidence */
+        post: operations["ServiceEvidenceController_prepareForVisit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evidence-packages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an immutable service evidence package and its acknowledgement history */
+        get: operations["ServiceEvidenceController_getPackage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evidence-packages/{id}/acknowledgement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Capture a touch signature or typed acknowledgement for a package */
+        post: operations["ServiceEvidenceController_acknowledge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evidence-packages/{id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a signatory decline without creating a signature */
+        post: operations["ServiceEvidenceController_decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/acknowledgements/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke an acknowledgement with a required reason */
+        post: operations["ServiceEvidenceController_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/acknowledgements/{id}/signature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a signature through an authorization-controlled private endpoint */
+        get: operations["ServiceEvidenceController_getSignature"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/service-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List service evidence and acknowledgement status within the caller scope */
+        get: operations["ServiceEvidenceController_worklist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/service-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List service evidence status for visits related to the current caregiver */
+        get: operations["ServiceEvidenceController_myWorklist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -3510,6 +3647,184 @@ export interface components {
             reason: string;
             correction: string;
         };
+        EvidencePackageItemDto: {
+            /** Format: uuid */
+            performedServiceId: string;
+            serviceCode: string;
+            serviceName: string;
+            /** @enum {string} */
+            unit: "occurrence" | "minute" | "hour" | "day";
+            plannedQuantity?: string | null;
+            actualQuantity?: string | null;
+            /** @enum {string} */
+            outcome: "performed" | "partially_performed" | "not_performed";
+            reasonCode?: string | null;
+            /** Format: uuid */
+            performedByEmployeeId: string;
+            /** @enum {string} */
+            evidenceState: "documented" | "not_required";
+        };
+        EvidenceSnapshotDto: {
+            /** @enum {number} */
+            snapshotVersion: 1;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            clientId: string;
+            clientName: string;
+            /** Format: uuid */
+            visitId: string;
+            /** Format: date-time */
+            plannedStart: string;
+            timezone: string;
+            /** Format: uuid */
+            executionId: string;
+            executionVersion: number;
+            /** Format: date-time */
+            actualStart: string;
+            /** Format: date-time */
+            actualEnd: string;
+            /** Format: uuid */
+            documentationId: string;
+            documentationVersion: number;
+            amendmentCount: number;
+            items: components["schemas"]["EvidencePackageItemDto"][];
+        };
+        EvidenceAcknowledgementDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "acknowledged" | "declined" | "revoked";
+            /** @enum {string} */
+            signatoryType: "client" | "representative" | "other_authorized_person";
+            signatoryName: string;
+            /** Format: uuid */
+            signatoryContactId?: string | null;
+            /** @enum {string} */
+            capacity: "client" | "legal_guardian" | "authorized_representative" | "relative" | "other";
+            relationship?: string | null;
+            representationType?: string | null;
+            method: string;
+            statementVersion: string;
+            statementText: string;
+            evidencePackageHash: string;
+            signatureSha256?: string | null;
+            signatureAvailable: boolean;
+            /** Format: date-time */
+            acknowledgedAt?: string | null;
+            /** Format: date-time */
+            declinedAt?: string | null;
+            declineReasonCode?: string | null;
+            declineNote?: string | null;
+            /** Format: uuid */
+            capturedByEmployeeId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt?: string | null;
+            /** Format: uuid */
+            revokedByUserId?: string | null;
+            revocationReason?: string | null;
+        };
+        EligibleSignatoryDto: {
+            /** Format: uuid */
+            contactId: string;
+            displayName: string;
+            /** @enum {string} */
+            signatoryType: "representative" | "other_authorized_person";
+            /** @enum {string} */
+            capacity: "legal_guardian" | "authorized_representative" | "relative" | "other";
+            relationship: string;
+            /** @enum {string} */
+            representationType: "power_of_attorney" | "legal_guardianship" | "authorized_representative";
+        };
+        EvidencePackageResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            documentationId: string;
+            version: number;
+            /** Format: date-time */
+            generatedAt: string;
+            snapshotHash: string;
+            snapshot: components["schemas"]["EvidenceSnapshotDto"];
+            statementVersion: string;
+            statementText: string;
+            isCurrent: boolean;
+            /** @enum {string} */
+            status: "ready" | "acknowledged" | "declined" | "revoked" | "outdated";
+            acknowledgementRequired: boolean;
+            acknowledgements: components["schemas"]["EvidenceAcknowledgementDto"][];
+            eligibleSignatories: components["schemas"]["EligibleSignatoryDto"][];
+        };
+        SignatoryRequestDto: {
+            /** @enum {string} */
+            type: "client" | "representative" | "other_authorized_person";
+            /** Format: uuid */
+            contactId?: string;
+        };
+        AcknowledgeEvidenceRequestDto: {
+            /** Format: uuid */
+            idempotencyKey: string;
+            signatory: components["schemas"]["SignatoryRequestDto"];
+            /** @enum {string} */
+            method: "touch_signature" | "typed_confirmation";
+            confirmationName?: string;
+            strokes?: {
+                x: number;
+                y: number;
+            }[][];
+        };
+        DeclineEvidenceRequestDto: {
+            /** Format: uuid */
+            idempotencyKey: string;
+            signatory: components["schemas"]["SignatoryRequestDto"];
+            /** @enum {string} */
+            reasonCode: "declined_without_reason" | "disagrees_with_record" | "unable_to_sign" | "signatory_not_available" | "other";
+            note?: string | null;
+        };
+        RevokeAcknowledgementRequestDto: {
+            reason: string;
+        };
+        SignatureResponseDto: {
+            /** @enum {number} */
+            version: 1;
+            strokes: {
+                x: number;
+                y: number;
+            }[][];
+        };
+        ServiceEvidenceWorklistItemDto: {
+            /** Format: uuid */
+            visitId: string;
+            /** Format: uuid */
+            documentationId: string;
+            /** Format: uuid */
+            evidencePackageId?: string | null;
+            packageVersion?: number | null;
+            /** Format: uuid */
+            clientId: string;
+            clientName: string;
+            /** Format: date-time */
+            plannedStart: string;
+            timezone: string;
+            /** @enum {string} */
+            status: "awaiting_acknowledgement" | "acknowledged" | "declined" | "revoked" | "outdated" | "superseded";
+            snapshotHash?: string | null;
+            signatoryType?: string | null;
+            signatoryName?: string | null;
+            capacity?: string | null;
+            method?: string | null;
+            /** Format: date-time */
+            acknowledgedAt?: string | null;
+            signatureAvailable: boolean;
+        };
+        ServiceEvidenceWorklistDto: {
+            items: components["schemas"]["ServiceEvidenceWorklistItemDto"][];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
         MeResponseDto: {
             /** Format: uuid */
             id: string;
@@ -3523,7 +3838,7 @@ export interface components {
         };
         PermissionGrantDto: {
             /** @enum {string} */
-            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
+            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "service_evidence.read" | "service_evidence.prepare" | "acknowledgement.read" | "acknowledgement.capture" | "acknowledgement.revoke" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
             /** @enum {string} */
             scopeType: "assigned_clients" | "team" | "facility" | "organization" | "tenant";
             /** Format: uuid */
@@ -8197,6 +8512,332 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CareDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceEvidenceController_getForVisit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                visitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidencePackageResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceEvidenceController_prepareForVisit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                visitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidencePackageResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceEvidenceController_getPackage: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidencePackageResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceEvidenceController_acknowledge: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcknowledgeEvidenceRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Acknowledgement created or idempotently returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceAcknowledgementDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceEvidenceController_decline: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeclineEvidenceRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Decline record created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceAcknowledgementDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceEvidenceController_revoke: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeAcknowledgementRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Revocation recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceAcknowledgementDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceEvidenceController_getSignature: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceEvidenceController_worklist: {
+        parameters: {
+            query: {
+                pageSize?: number;
+                page?: number;
+                signatoryType?: "client" | "representative" | "other_authorized_person";
+                facilityId?: unknown;
+                organizationId?: unknown;
+                employeeId?: unknown;
+                clientQuery?: unknown;
+                clientId?: unknown;
+                visitId?: unknown;
+                status?: "awaiting_acknowledgement" | "acknowledged" | "declined" | "revoked" | "outdated" | "superseded";
+                until: unknown;
+                from: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceEvidenceWorklistDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceEvidenceController_myWorklist: {
+        parameters: {
+            query: {
+                pageSize?: number;
+                page?: number;
+                until: unknown;
+                from: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceEvidenceWorklistDto"];
                 };
             };
             /** @description Problem Details response */

@@ -8868,6 +8868,660 @@
         ]
       }
     },
+    "/api/v1/visits/{visitId}/evidence-package": {
+      "get": {
+        "operationId": "ServiceEvidenceController_getForVisit",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidencePackageResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read the current service evidence package for a visit",
+        "tags": [
+          "service evidence and acknowledgements"
+        ]
+      },
+      "post": {
+        "operationId": "ServiceEvidenceController_prepareForVisit",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidencePackageResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create or return the deterministic package for finalized service evidence",
+        "tags": [
+          "service evidence and acknowledgements"
+        ]
+      }
+    },
+    "/api/v1/evidence-packages/{id}": {
+      "get": {
+        "operationId": "ServiceEvidenceController_getPackage",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidencePackageResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read an immutable service evidence package and its acknowledgement history",
+        "tags": [
+          "service evidence and acknowledgements"
+        ]
+      }
+    },
+    "/api/v1/evidence-packages/{id}/acknowledgement": {
+      "post": {
+        "operationId": "ServiceEvidenceController_acknowledge",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcknowledgeEvidenceRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Acknowledgement created or idempotently returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceAcknowledgementDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Capture a touch signature or typed acknowledgement for a package",
+        "tags": [
+          "service evidence and acknowledgements"
+        ]
+      }
+    },
+    "/api/v1/evidence-packages/{id}/decline": {
+      "post": {
+        "operationId": "ServiceEvidenceController_decline",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclineEvidenceRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decline record created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceAcknowledgementDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Record a signatory decline without creating a signature",
+        "tags": [
+          "service evidence and acknowledgements"
+        ]
+      }
+    },
+    "/api/v1/acknowledgements/{id}/revoke": {
+      "post": {
+        "operationId": "ServiceEvidenceController_revoke",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeAcknowledgementRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Revocation recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceAcknowledgementDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Revoke an acknowledgement with a required reason",
+        "tags": [
+          "service evidence and acknowledgements"
+        ]
+      }
+    },
+    "/api/v1/acknowledgements/{id}/signature": {
+      "get": {
+        "operationId": "ServiceEvidenceController_getSignature",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignatureResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read a signature through an authorization-controlled private endpoint",
+        "tags": [
+          "service evidence and acknowledgements"
+        ]
+      }
+    },
+    "/api/v1/service-evidence": {
+      "get": {
+        "operationId": "ServiceEvidenceController_worklist",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "signatoryType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "client",
+                "representative",
+                "other_authorized_person"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "employeeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "clientQuery",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          },
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "visitId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "awaiting_acknowledgement",
+                "acknowledged",
+                "declined",
+                "revoked",
+                "outdated",
+                "superseded"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceEvidenceWorklistDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List service evidence and acknowledgement status within the caller scope",
+        "tags": [
+          "service evidence and acknowledgements"
+        ]
+      }
+    },
+    "/api/v1/me/service-evidence": {
+      "get": {
+        "operationId": "ServiceEvidenceController_myWorklist",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "until",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceEvidenceWorklistDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List service evidence status for visits related to the current caregiver",
+        "tags": [
+          "service evidence and acknowledgements",
+          "caregiver"
+        ]
+      }
+    },
     "/api/v1/me": {
       "get": {
         "operationId": "MeController_me",
@@ -15080,6 +15734,665 @@
           "correction"
         ]
       },
+      "EvidencePackageItemDto": {
+        "type": "object",
+        "properties": {
+          "performedServiceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceCode": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "occurrence",
+              "minute",
+              "hour",
+              "day"
+            ]
+          },
+          "plannedQuantity": {
+            "type": "string",
+            "nullable": true
+          },
+          "actualQuantity": {
+            "type": "string",
+            "nullable": true
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "performed",
+              "partially_performed",
+              "not_performed"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "performedByEmployeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "evidenceState": {
+            "type": "string",
+            "enum": [
+              "documented",
+              "not_required"
+            ]
+          }
+        },
+        "required": [
+          "performedServiceId",
+          "serviceCode",
+          "serviceName",
+          "unit",
+          "outcome",
+          "performedByEmployeeId",
+          "evidenceState"
+        ]
+      },
+      "EvidenceSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "snapshotVersion": {
+            "type": "number",
+            "enum": [
+              1
+            ]
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientName": {
+            "type": "string"
+          },
+          "visitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "plannedStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "executionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "executionVersion": {
+            "type": "number"
+          },
+          "actualStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actualEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "documentationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "documentationVersion": {
+            "type": "number"
+          },
+          "amendmentCount": {
+            "type": "number"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvidencePackageItemDto"
+            }
+          }
+        },
+        "required": [
+          "snapshotVersion",
+          "tenantId",
+          "clientId",
+          "clientName",
+          "visitId",
+          "plannedStart",
+          "timezone",
+          "executionId",
+          "executionVersion",
+          "actualStart",
+          "actualEnd",
+          "documentationId",
+          "documentationVersion",
+          "amendmentCount",
+          "items"
+        ]
+      },
+      "EvidenceAcknowledgementDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "acknowledged",
+              "declined",
+              "revoked"
+            ]
+          },
+          "signatoryType": {
+            "type": "string",
+            "enum": [
+              "client",
+              "representative",
+              "other_authorized_person"
+            ]
+          },
+          "signatoryName": {
+            "type": "string"
+          },
+          "signatoryContactId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "capacity": {
+            "type": "string",
+            "enum": [
+              "client",
+              "legal_guardian",
+              "authorized_representative",
+              "relative",
+              "other"
+            ]
+          },
+          "relationship": {
+            "type": "string",
+            "nullable": true
+          },
+          "representationType": {
+            "type": "string",
+            "nullable": true
+          },
+          "method": {
+            "type": "string"
+          },
+          "statementVersion": {
+            "type": "string"
+          },
+          "statementText": {
+            "type": "string"
+          },
+          "evidencePackageHash": {
+            "type": "string"
+          },
+          "signatureSha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "signatureAvailable": {
+            "type": "boolean"
+          },
+          "acknowledgedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "declinedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "declineReasonCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "declineNote": {
+            "type": "string",
+            "nullable": true
+          },
+          "capturedByEmployeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "revokedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "revocationReason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "signatoryType",
+          "signatoryName",
+          "capacity",
+          "method",
+          "statementVersion",
+          "statementText",
+          "evidencePackageHash",
+          "signatureAvailable",
+          "capturedByEmployeeId",
+          "createdAt"
+        ]
+      },
+      "EligibleSignatoryDto": {
+        "type": "object",
+        "properties": {
+          "contactId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "signatoryType": {
+            "type": "string",
+            "enum": [
+              "representative",
+              "other_authorized_person"
+            ]
+          },
+          "capacity": {
+            "type": "string",
+            "enum": [
+              "legal_guardian",
+              "authorized_representative",
+              "relative",
+              "other"
+            ]
+          },
+          "relationship": {
+            "type": "string"
+          },
+          "representationType": {
+            "type": "string",
+            "enum": [
+              "power_of_attorney",
+              "legal_guardianship",
+              "authorized_representative"
+            ]
+          }
+        },
+        "required": [
+          "contactId",
+          "displayName",
+          "signatoryType",
+          "capacity",
+          "relationship",
+          "representationType"
+        ]
+      },
+      "EvidencePackageResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "documentationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "number"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "snapshotHash": {
+            "type": "string"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/EvidenceSnapshotDto"
+          },
+          "statementVersion": {
+            "type": "string"
+          },
+          "statementText": {
+            "type": "string"
+          },
+          "isCurrent": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "acknowledged",
+              "declined",
+              "revoked",
+              "outdated"
+            ]
+          },
+          "acknowledgementRequired": {
+            "type": "boolean"
+          },
+          "acknowledgements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvidenceAcknowledgementDto"
+            }
+          },
+          "eligibleSignatories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EligibleSignatoryDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "documentationId",
+          "version",
+          "generatedAt",
+          "snapshotHash",
+          "snapshot",
+          "statementVersion",
+          "statementText",
+          "isCurrent",
+          "status",
+          "acknowledgementRequired",
+          "acknowledgements",
+          "eligibleSignatories"
+        ]
+      },
+      "SignatoryRequestDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "client",
+              "representative",
+              "other_authorized_person"
+            ]
+          },
+          "contactId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "AcknowledgeEvidenceRequestDto": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "signatory": {
+            "$ref": "#/components/schemas/SignatoryRequestDto"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "touch_signature",
+              "typed_confirmation"
+            ]
+          },
+          "confirmationName": {
+            "type": "string"
+          },
+          "strokes": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "signatory",
+          "method"
+        ]
+      },
+      "DeclineEvidenceRequestDto": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "signatory": {
+            "$ref": "#/components/schemas/SignatoryRequestDto"
+          },
+          "reasonCode": {
+            "type": "string",
+            "enum": [
+              "declined_without_reason",
+              "disagrees_with_record",
+              "unable_to_sign",
+              "signatory_not_available",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "signatory",
+          "reasonCode"
+        ]
+      },
+      "RevokeAcknowledgementRequestDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "SignatureResponseDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "enum": [
+              1
+            ]
+          },
+          "strokes": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "version",
+          "strokes"
+        ]
+      },
+      "ServiceEvidenceWorklistItemDto": {
+        "type": "object",
+        "properties": {
+          "visitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "documentationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "evidencePackageId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "packageVersion": {
+            "type": "number",
+            "nullable": true
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientName": {
+            "type": "string"
+          },
+          "plannedStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "awaiting_acknowledgement",
+              "acknowledged",
+              "declined",
+              "revoked",
+              "outdated",
+              "superseded"
+            ]
+          },
+          "snapshotHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "signatoryType": {
+            "type": "string",
+            "nullable": true
+          },
+          "signatoryName": {
+            "type": "string",
+            "nullable": true
+          },
+          "capacity": {
+            "type": "string",
+            "nullable": true
+          },
+          "method": {
+            "type": "string",
+            "nullable": true
+          },
+          "acknowledgedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "signatureAvailable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "visitId",
+          "documentationId",
+          "clientId",
+          "clientName",
+          "plannedStart",
+          "timezone",
+          "status",
+          "signatureAvailable"
+        ]
+      },
+      "ServiceEvidenceWorklistDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceEvidenceWorklistItemDto"
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
       "MeResponseDto": {
         "type": "object",
         "properties": {
@@ -15161,6 +16474,11 @@
               "care_documentation.finalize",
               "care_documentation.amend",
               "care_documentation.review",
+              "service_evidence.read",
+              "service_evidence.prepare",
+              "acknowledgement.read",
+              "acknowledgement.capture",
+              "acknowledgement.revoke",
               "employee.read",
               "employee.create",
               "employee.update",

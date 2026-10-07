@@ -193,6 +193,54 @@ export interface EventPayloadMap {
     clientId: string;
     amendmentId: string;
   };
+  'evidence_package.created': {
+    evidencePackageId: string;
+    documentationId: string;
+    visitId: string;
+    clientId: string;
+    version: number;
+    snapshotHash: string;
+  };
+  'evidence_package.superseded': {
+    evidencePackageId: string;
+    supersedesEvidencePackageId: string;
+    documentationId: string;
+    visitId: string;
+    clientId: string;
+    version: number;
+    snapshotHash: string;
+  };
+  'service_evidence.acknowledged': {
+    acknowledgementId: string;
+    evidencePackageId: string;
+    documentationId: string;
+    visitId: string;
+    clientId: string;
+    evidencePackageHash: string;
+    status: 'acknowledged';
+    signatoryType: string;
+    signatoryCapacity: string;
+    signatureSha256?: string;
+  };
+  'service_evidence.declined': {
+    acknowledgementId: string;
+    evidencePackageId: string;
+    documentationId: string;
+    visitId: string;
+    clientId: string;
+    evidencePackageHash: string;
+    status: 'declined';
+    signatoryType: string;
+    signatoryCapacity: string;
+  };
+  'service_evidence.acknowledgement_revoked': {
+    acknowledgementId: string;
+    evidencePackageId: string;
+    documentationId: string;
+    visitId: string;
+    clientId: string;
+    evidencePackageHash: string;
+  };
   'service_evidence.recorded': {
     documentationId: string;
     visitId: string;
@@ -294,6 +342,7 @@ export interface DomainEvent<T extends EventName = EventName> {
     | 'visit'
     | 'visit_execution'
     | 'care_documentation'
+    | 'service_evidence'
     | 'schedule_generation'
     | 'employee_availability'
     | 'tenant_membership'

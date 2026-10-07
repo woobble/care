@@ -12,6 +12,12 @@ process.env.DATABASE_URL ??= 'postgres://care_app:build-only@127.0.0.1:5432/care
 process.env.OIDC_ISSUER ??= 'http://localhost:9000/application/o/care-platform/';
 process.env.OIDC_CLIENT_ID ??= 'care-platform';
 process.env.WEB_ORIGIN ??= 'http://localhost:3000';
+process.env.S3_ENDPOINT ??= 'http://localhost:9002';
+process.env.S3_REGION ??= 'us-east-1';
+process.env.S3_BUCKET ??= 'care-documents';
+process.env.S3_ACCESS_KEY ??= 'care-s3';
+process.env.S3_SECRET_KEY ??= 'care-s3-build-only';
+process.env.S3_FORCE_PATH_STYLE ??= 'true';
 
 const app = await NestFactory.create(AppModule, { logger: false, abortOnError: false });
 const config = new DocumentBuilder()

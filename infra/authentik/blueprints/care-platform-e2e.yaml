@@ -14,3 +14,4 @@ entries:
       key: !Env AUTHENTIK_E2E_API_TOKEN
       user: !Find [authentik_core.user, [username, akadmin]]
       intent: api
+      expiring: false

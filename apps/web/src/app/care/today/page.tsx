@@ -7,11 +7,14 @@ export default async function CareTodayPage() {
   const range = todayRange();
   const api = await getApiClient();
   const get = api.GET;
-  const [visitsResult, documentationResult] = await Promise.all([
+  const [visitsResult, documentationResult, evidenceResult] = await Promise.all([
     get('/api/v1/me/visits', {
       params: { query: { from: range.from, until: range.until }, header: await getTenantHeader() },
     }),
     get('/api/v1/me/documentation', {
+      params: { query: { from: range.from, until: range.until }, header: await getTenantHeader() },
+    }),
+    get('/api/v1/me/service-evidence', {
       params: { query: { from: range.from, until: range.until }, header: await getTenantHeader() },
     }),
   ]);
@@ -20,6 +23,13 @@ export default async function CareTodayPage() {
   const documentationByVisit = new Map(
     (documentationResult.data?.items ?? []).map((item) => [item.visitId, item]),
   );
+  const evidenceItems = evidenceResult.data?.items ?? [];
+  const evidenceByVisit = new Map<string, (typeof evidenceItems)[number]>();
+  for (const item of [...evidenceItems].sort(
+    (left, right) => (left.packageVersion ?? 0) - (right.packageVersion ?? 0),
+  )) {
+    evidenceByVisit.set(item.visitId, item);
+  }
 
   return (
     <div className="grid gap-5">
@@ -60,7 +70,7 @@ export default async function CareTodayPage() {
                   {visit.executionStatus === 'completed' ? (
                     <span className="text-sm font-medium">
                       {documentationByVisit.get(visit.id)?.documentationStatus === 'finalized'
-                        ? '✓ Dokumentation finalisiert'
+                        ? `✓ Dokumentation finalisiert · ${acknowledgementStatusLabel(evidenceByVisit.get(visit.id)?.status)}`
                         : documentationByVisit.get(visit.id)?.documentationStatus === 'draft'
                           ? '⚠ Dokumentation unvollständig'
                           : '⚠ Dokumentation fehlt'}
@@ -104,4 +114,12 @@ function statusClass(executionStatus: string, visitStatus: string): string {
   if (executionStatus === 'completed') return 'bg-green-100 text-green-900';
   if (executionStatus === 'in_progress') return 'bg-blue-100 text-blue-900';
   return 'bg-amber-100 text-amber-900';
+}
+
+function acknowledgementStatusLabel(status: string | undefined): string {
+  if (status === 'acknowledged') return 'Bestätigung liegt vor';
+  if (status === 'declined') return 'Bestätigung abgelehnt';
+  if (status === 'outdated') return 'neue Bestätigung erforderlich';
+  if (status === 'revoked') return 'Bestätigung widerrufen';
+  return 'Bestätigung fehlt';
 }

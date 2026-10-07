@@ -832,3 +832,251 @@ test('UUIDv7 migration rewrites legacy IDs and structured references while prese
     await database.container.stop();
   }
 }, 180_000);
+
+test('service evidence tables enforce forced RLS and append-only package history', async () => {
+  const database = await startCareTestDatabase();
+  const owner = new Client({ connectionString: database.migrationUrl });
+  const app = new Client({ connectionString: database.appUrl });
+  const tenantId = uuidv7();
+  const otherTenantId = uuidv7();
+  const organizationId = uuidv7();
+  const facilityId = uuidv7();
+  const clientId = uuidv7();
+  const employeeId = uuidv7();
+  const visitId = uuidv7();
+  const executionId = uuidv7();
+  const documentationId = uuidv7();
+  const packageId = uuidv7();
+  const acknowledgementId = uuidv7();
+  const userId = uuidv7();
+  const snapshotHash = 'a'.repeat(64);
+  const now = new Date();
+
+  try {
+    await owner.connect();
+    await app.connect();
+    await owner.query(
+      'INSERT INTO organizations.tenants (id, name, slug) VALUES ($1, $2, $3), ($4, $5, $6)',
+      [
+        tenantId,
+        'Evidence tenant',
+        `evidence-${tenantId}`,
+        otherTenantId,
+        'Other tenant',
+        `other-${otherTenantId}`,
+      ],
+    );
+    await owner.query(
+      'INSERT INTO organizations.organizations (id, tenant_id, name) VALUES ($1, $2, $3)',
+      [organizationId, tenantId, 'Evidence organization'],
+    );
+    await owner.query(
+      `INSERT INTO organizations.facilities (id, tenant_id, organization_id, name)
+         VALUES ($1, $2, $3, 'Evidence facility')`,
+      [facilityId, tenantId, organizationId],
+    );
+    await owner.query(
+      `INSERT INTO clients.clients
+           (id, tenant_id, organization_id, primary_facility_id, first_name, last_name, status, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, 'Ada', 'Evidence', 'active', $5, $5)`,
+      [clientId, tenantId, organizationId, facilityId, now],
+    );
+    await owner.query(
+      `INSERT INTO employees.employees (id, tenant_id, organization_id, first_name, last_name)
+         VALUES ($1, $2, $3, 'Care', 'Worker')`,
+      [employeeId, tenantId, organizationId],
+    );
+    await owner.query(
+      `INSERT INTO scheduling.visits
+           (id, tenant_id, client_id, organization_id, facility_id, origin, status,
+            planned_start, planned_end, timezone, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'manual', 'planned', $6, $7, 'Europe/Berlin', $8, $8)`,
+      [
+        visitId,
+        tenantId,
+        clientId,
+        organizationId,
+        facilityId,
+        now,
+        new Date(now.getTime() + 3600000),
+        now,
+      ],
+    );
+    await owner.query(
+      `INSERT INTO visit_execution.executions
+           (id, tenant_id, visit_id, status, actual_start, actual_end,
+            started_by_employee_id, completed_by_employee_id, created_at, updated_at)
+         VALUES ($1, $2, $3, 'completed', $4, $5, $6, $6, $4, $5)`,
+      [executionId, tenantId, visitId, now, new Date(now.getTime() + 1800000), employeeId],
+    );
+    await owner.query(
+      `INSERT INTO care_documentation.documents
+           (id, tenant_id, visit_id, execution_id, status, created_by_employee_id,
+            finalized_by_employee_id, finalized_at, version, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, 'finalized', $5, $5, $6, 1, $6, $6)`,
+      [documentationId, tenantId, visitId, executionId, employeeId, now],
+    );
+    await owner.query(
+      `INSERT INTO service_evidence.evidence_packages
+           (id, tenant_id, documentation_id, version, documentation_version, execution_version,
+            amendment_count, snapshot, snapshot_hash, generated_at, created_by_user_id)
+         VALUES ($1, $2, $3, 1, 1, 1, 0, $4::jsonb, $5, $6, $7)`,
+      [
+        packageId,
+        tenantId,
+        documentationId,
+        JSON.stringify({ snapshotVersion: 1, items: [] }),
+        snapshotHash,
+        now,
+        userId,
+      ],
+    );
+
+    const rls = await owner.query<{
+      relrowsecurity: boolean;
+      relforcerowsecurity: boolean;
+    }>(
+      `SELECT relrowsecurity, relforcerowsecurity
+         FROM pg_class AS relation
+         JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+         WHERE namespace.nspname = 'service_evidence'
+           AND relation.relname IN ('evidence_packages', 'acknowledgements')
+         ORDER BY relation.relname`,
+    );
+    expect(rls.rows).toHaveLength(2);
+    expect(rls.rows.every((row) => row.relrowsecurity && row.relforcerowsecurity)).toBe(true);
+
+    await app.query('BEGIN');
+    await app.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+    const visiblePackages = await app.query<{ id: string }>(
+      'SELECT id FROM service_evidence.evidence_packages',
+    );
+    expect(visiblePackages.rows.map((row) => row.id)).toEqual([packageId]);
+    const visibleOtherTenant = await app.query<{ id: string }>(
+      'SELECT id FROM service_evidence.acknowledgements',
+    );
+    expect(visibleOtherTenant.rows).toHaveLength(0);
+    await app.query('COMMIT');
+
+    await app.query('BEGIN');
+    await app.query("SELECT set_config('app.tenant_id', $1, true)", [otherTenantId]);
+    const hiddenPackages = await app.query<{ id: string }>(
+      'SELECT id FROM service_evidence.evidence_packages',
+    );
+    expect(hiddenPackages.rows).toHaveLength(0);
+    let crossTenantWriteCode: string | undefined;
+    try {
+      await app.query(
+        `INSERT INTO service_evidence.evidence_packages
+             (id, tenant_id, documentation_id, version, documentation_version, execution_version,
+              amendment_count, snapshot, snapshot_hash, generated_at, created_by_user_id)
+           VALUES ($1, $2, $3, 1, 1, 1, 0, $4::jsonb, $5, $6, $7)`,
+        [
+          uuidv7(),
+          tenantId,
+          documentationId,
+          JSON.stringify({ snapshotVersion: 1, items: [] }),
+          snapshotHash,
+          now,
+          userId,
+        ],
+      );
+    } catch (error) {
+      crossTenantWriteCode = (error as { code?: string }).code;
+    }
+    await app.query('ROLLBACK');
+    expect(crossTenantWriteCode).toBe('42501');
+
+    let packageMutationCode: string | undefined;
+    try {
+      await owner.query(
+        'UPDATE service_evidence.evidence_packages SET snapshot_hash = $1 WHERE id = $2',
+        ['b'.repeat(64), packageId],
+      );
+    } catch (error) {
+      packageMutationCode = (error as { code?: string }).code;
+    }
+    expect(packageMutationCode).toBe('23514');
+    let packageDeleteCode: string | undefined;
+    try {
+      await owner.query('DELETE FROM service_evidence.evidence_packages WHERE id = $1', [
+        packageId,
+      ]);
+    } catch (error) {
+      packageDeleteCode = (error as { code?: string }).code;
+    }
+    expect(packageDeleteCode).toBe('23514');
+
+    await owner.query(
+      `INSERT INTO service_evidence.acknowledgements
+           (id, tenant_id, evidence_package_id, evidence_package_hash, client_id, signatory_type,
+            signatory_name_snapshot, signatory_capacity, status, method, statement_version,
+            statement_text_snapshot, captured_by_employee_id, idempotency_key,
+            acknowledged_at, created_at)
+         VALUES ($1, $2, $3, $4, $5, 'client', 'Ada Evidence', 'client', 'acknowledged',
+                 'typed_confirmation', 'de-v1', 'Test statement', $6, $7, $8, $8)`,
+      [acknowledgementId, tenantId, packageId, snapshotHash, clientId, employeeId, uuidv7(), now],
+    );
+    await app.query('BEGIN');
+    await app.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+    const visibleAcknowledgements = await app.query<{ id: string }>(
+      'SELECT id FROM service_evidence.acknowledgements',
+    );
+    expect(visibleAcknowledgements.rows.map((row) => row.id)).toEqual([acknowledgementId]);
+    await app.query('COMMIT');
+
+    await app.query('BEGIN');
+    await app.query("SELECT set_config('app.tenant_id', $1, true)", [otherTenantId]);
+    const hiddenAcknowledgements = await app.query<{ id: string }>(
+      'SELECT id FROM service_evidence.acknowledgements',
+    );
+    expect(hiddenAcknowledgements.rows).toHaveLength(0);
+    let crossTenantAcknowledgementWriteCode: string | undefined;
+    try {
+      await app.query(
+        `INSERT INTO service_evidence.acknowledgements
+             (id, tenant_id, evidence_package_id, evidence_package_hash, client_id, signatory_type,
+              signatory_name_snapshot, signatory_capacity, status, method, statement_version,
+              statement_text_snapshot, captured_by_employee_id, idempotency_key,
+              acknowledged_at, created_at)
+           VALUES ($1, $2, $3, $4, $5, 'client', 'Ada Evidence', 'client', 'acknowledged',
+                   'typed_confirmation', 'de-v1', 'Test statement', $6, $7, $8, $8)`,
+        [uuidv7(), tenantId, packageId, snapshotHash, clientId, employeeId, uuidv7(), now],
+      );
+    } catch (error) {
+      crossTenantAcknowledgementWriteCode = (error as { code?: string }).code;
+    }
+    await app.query('ROLLBACK');
+    expect(crossTenantAcknowledgementWriteCode).toBe('42501');
+
+    let acknowledgementMutationCode: string | undefined;
+    try {
+      await owner.query(
+        `UPDATE service_evidence.acknowledgements
+           SET signatory_name_snapshot = 'Changed name' WHERE id = $1`,
+        [acknowledgementId],
+      );
+    } catch (error) {
+      acknowledgementMutationCode = (error as { code?: string }).code;
+    }
+    expect(acknowledgementMutationCode).toBe('23514');
+    await owner.query(
+      `UPDATE service_evidence.acknowledgements
+         SET revoked_at = $1, revoked_by_user_id = $2, revocation_reason = 'Test revocation'
+         WHERE id = $3`,
+      [now, userId, acknowledgementId],
+    );
+    const revoked = await owner.query<{ revoked_at: Date; revocation_reason: string }>(
+      'SELECT revoked_at, revocation_reason FROM service_evidence.acknowledgements WHERE id = $1',
+      [acknowledgementId],
+    );
+    expect(revoked.rows[0]).toMatchObject({
+      revoked_at: expect.any(Date),
+      revocation_reason: 'Test revocation',
+    });
+  } finally {
+    await app.end();
+    await owner.end();
+    await database.container.stop();
+  }
+}, 180_000);

@@ -212,6 +212,98 @@ export async function finalizeDocumentationAction(formData: FormData): Promise<v
   redirect(visitPath(visitId, 'documentation-finalized'));
 }
 
+export async function prepareEvidencePackageAction(formData: FormData): Promise<void> {
+  const visitId = readUuid(formData.get('visitId'));
+  if (!visitId) redirect('/care/today?error=INVALID_REQUEST');
+  const { data, error } = await (
+    await getApiClient()
+  ).POST('/api/v1/visits/{visitId}/evidence-package', {
+    params: { path: { visitId }, header: await getTenantHeader() },
+  });
+  if (error || !data)
+    redirect(evidencePath(visitId, error?.code ?? 'EVIDENCE_PACKAGE_INVALID_STATE'));
+  revalidateEvidence(visitId, data.id);
+  redirect(evidencePath(visitId, 'package-prepared'));
+}
+
+export async function acknowledgeEvidenceAction(formData: FormData): Promise<void> {
+  const visitId = readUuid(formData.get('visitId'));
+  const evidencePackageId = readUuid(formData.get('evidencePackageId'));
+  const idempotencyKey = readUuid(formData.get('idempotencyKey'));
+  const signatory = readSignatory(formData);
+  const method = readString(formData, 'method');
+  if (!visitId || !evidencePackageId || !idempotencyKey || !signatory) {
+    redirect(evidencePath(visitId, 'INVALID_REQUEST'));
+  }
+
+  const api = await getApiClient();
+  const common = { idempotencyKey, signatory };
+  const result =
+    method === 'touch_signature'
+      ? await api.POST('/api/v1/evidence-packages/{id}/acknowledgement', {
+          params: { path: { id: evidencePackageId }, header: await getTenantHeader() },
+          body: {
+            ...common,
+            method,
+            strokes: parseSignatureStrokes(readString(formData, 'strokes')),
+          },
+        })
+      : method === 'typed_confirmation'
+        ? await api.POST('/api/v1/evidence-packages/{id}/acknowledgement', {
+            params: { path: { id: evidencePackageId }, header: await getTenantHeader() },
+            body: {
+              ...common,
+              method,
+              confirmationName: readString(formData, 'confirmationName'),
+            },
+          })
+        : null;
+
+  if (!result) redirect(evidencePath(visitId, 'INVALID_REQUEST'));
+  if (result.error) redirect(evidencePath(visitId, result.error.code));
+  revalidateEvidence(visitId, evidencePackageId);
+  redirect(evidencePath(visitId, 'acknowledged'));
+}
+
+export async function declineEvidenceAction(formData: FormData): Promise<void> {
+  const visitId = readUuid(formData.get('visitId'));
+  const evidencePackageId = readUuid(formData.get('evidencePackageId'));
+  const idempotencyKey = readUuid(formData.get('idempotencyKey'));
+  const signatory = readSignatory(formData);
+  const reasonCode = readString(formData, 'reasonCode');
+  const reasons = [
+    'declined_without_reason',
+    'disagrees_with_record',
+    'unable_to_sign',
+    'signatory_not_available',
+    'other',
+  ] as const;
+  if (
+    !visitId ||
+    !evidencePackageId ||
+    !idempotencyKey ||
+    !signatory ||
+    !(reasons as readonly string[]).includes(reasonCode)
+  ) {
+    redirect(evidencePath(visitId, 'INVALID_REQUEST'));
+  }
+
+  const { error } = await (
+    await getApiClient()
+  ).POST('/api/v1/evidence-packages/{id}/decline', {
+    params: { path: { id: evidencePackageId }, header: await getTenantHeader() },
+    body: {
+      idempotencyKey,
+      signatory,
+      reasonCode: reasonCode as (typeof reasons)[number],
+      note: readNullableString(formData, 'note'),
+    },
+  });
+  if (error) redirect(evidencePath(visitId, error.code));
+  revalidateEvidence(visitId, evidencePackageId);
+  redirect(evidencePath(visitId, 'declined'));
+}
+
 function readUuid(value: FormDataEntryValue | null): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim();
@@ -231,6 +323,73 @@ function readPositiveInteger(value: FormDataEntryValue | null): number | null {
   if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) return null;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function readSignatory(
+  formData: FormData,
+):
+  | { type: 'client' }
+  | { type: 'representative' | 'other_authorized_person'; contactId: string }
+  | null {
+  const value = readString(formData, 'signatory');
+  if (value === 'client') return { type: 'client' };
+  const separator = value.indexOf(':');
+  const type = value.slice(0, separator);
+  const contactId = readUuid(separator > -1 ? value.slice(separator + 1) : null);
+  if (!contactId || (type !== 'representative' && type !== 'other_authorized_person')) {
+    return null;
+  }
+  return { type, contactId };
+}
+
+function parseSignatureStrokes(value: string): { x: number; y: number }[][] {
+  if (!value || value.length > 48_000) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed) || parsed.length > 32) return [];
+  let count = 0;
+  for (const stroke of parsed) {
+    if (!Array.isArray(stroke)) return [];
+    count += stroke.length;
+    if (count > 2_000) return [];
+    for (const point of stroke) {
+      if (
+        typeof point !== 'object' ||
+        point === null ||
+        !('x' in point) ||
+        !('y' in point) ||
+        typeof point.x !== 'number' ||
+        typeof point.y !== 'number' ||
+        !Number.isFinite(point.x) ||
+        !Number.isFinite(point.y) ||
+        point.x < 0 ||
+        point.x > 1 ||
+        point.y < 0 ||
+        point.y > 1
+      ) {
+        return [];
+      }
+    }
+  }
+  return parsed as { x: number; y: number }[][];
+}
+
+function evidencePath(visitId: string | null, value: string): string {
+  return visitId
+    ? `/care/visits/${visitId}/evidence?notice=${encodeURIComponent(value)}`
+    : '/care/today?error=' + encodeURIComponent(value);
+}
+
+function revalidateEvidence(visitId: string, evidencePackageId: string): void {
+  revalidatePath('/care/today');
+  revalidatePath('/care/visits/' + visitId);
+  revalidatePath('/care/visits/' + visitId + '/evidence');
+  revalidatePath('/service-evidence');
+  revalidatePath('/service-evidence/' + evidencePackageId);
 }
 
 function visitPath(visitId: string | null, value: string): string {

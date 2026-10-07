@@ -27,7 +27,7 @@ Copy `.env.example` to `.env` for local development. Compose reads it for infras
 | `S3_FORCE_PATH_STYLE`              | Storage                    | Use path-style S3 requests; defaults to `true`.                                                          |
 | `AUTHENTIK_SECRET_KEY`             | Compose                    | Authentik encryption secret.                                                                             |
 | `AUTHENTIK_BOOTSTRAP_PASSWORD`     | Compose                    | Local `akadmin` bootstrap password.                                                                      |
-| `AUTHENTIK_E2E_API_TOKEN`          | Compose worker, E2E test   | Local API token used to create and remove the temporary E2E user.                                        |
+| `AUTHENTIK_E2E_API_TOKEN`          | Compose worker, E2E test   | Local non-expiring API token used to manage temporary E2E identities.                                    |
 | `DEV_SEED_OIDC_SUB`                | Identity seed              | Authentik subject granted the local Demo Care Administrator role.                                        |
 | `GRAFANA_ADMIN_PASSWORD`           | Compose                    | Local Grafana administrator password.                                                                    |
 | `MAILPIT_SMTP_PORT`                | Compose                    | Host port mapped to Mailpit SMTP; defaults to `1026`.                                                    |

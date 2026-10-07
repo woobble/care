@@ -12,6 +12,8 @@ The lifecycle is `draft → finalized`. A draft is edited with an expected versi
 
 Finalized documents and their entries and evidence are immutable through both the API and database triggers. Office users with `care_documentation.amend` can append a reason and correction to a finalized document. Amendments do not rewrite the original, do not change its version, and are returned in creation order. Amendments and history are append-only.
 
+Formal service acknowledgement is owned by the separate `service_evidence` module. It snapshots the finalized performed-service facts into an immutable evidence package and records the signatory outcome against that snapshot. An amendment or execution correction makes the package outdated and requires a replacement package and new acknowledgement; the historical package and acknowledgement remain intact. Care narrative is not part of the acknowledgement by default. See [Service evidence and signatory acknowledgement](service-evidence.md).
+
 ## Execution boundary and evidence
 
 Visit execution owns actual start/end times, performed-service status, actual quantity, performer, and any structured reason for a service outcome. Care documentation owns narrative notes, observations, deviations, incidents, and service evidence. Planned quantities and service snapshots remain on their existing planning and execution records.
@@ -42,4 +44,4 @@ All documentation tables use forced tenant RLS, tenant-qualified foreign keys, a
 
 ## Billing and signatures
 
-This data is not a claim, invoice, price, benefit-consumption record, formal service signature, or client acknowledgement. Service evidence is a foundation for later workflows and does not assert a legally sufficient signature.
+Care documentation and service evidence are not claims, invoices, prices, or benefit-consumption records. An application-level service acknowledgement exists in the separate service-evidence domain; it is not a qualified electronic signature or identity verification.

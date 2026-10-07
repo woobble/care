@@ -97,6 +97,27 @@ services:
         target: /etc/seaweedfs/s3.json
     restart: unless-stopped
 
+  seaweedfs-init:
+    image: amazon/aws-cli:2.33.1
+    profiles: [bootstrap]
+    entrypoint: [/bin/sh, -eu, -c]
+    command:
+      - >-
+        until aws s3api list-buckets --endpoint-url "$${S3_ENDPOINT}" >/dev/null 2>&1; do sleep 1; done;
+        if ! aws s3api head-bucket --bucket "$${S3_BUCKET}" --endpoint-url "$${S3_ENDPOINT}" >/dev/null 2>&1; then
+          aws s3api create-bucket --bucket "$${S3_BUCKET}" --endpoint-url "$${S3_ENDPOINT}";
+        fi
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-care-s3}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-care-s3-dev-only}
+      AWS_DEFAULT_REGION: ${S3_REGION:-us-east-1}
+      AWS_EC2_METADATA_DISABLED: 'true'
+      S3_ENDPOINT: http://seaweedfs:8333
+      S3_BUCKET: ${S3_BUCKET:-care-documents}
+    depends_on:
+      seaweedfs:
+        condition: service_started
+
   mailpit:
     image: axllent/mailpit:v1.31.4
     ports:

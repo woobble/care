@@ -55,6 +55,12 @@ describe('clients API', () => {
     process.env.OIDC_ISSUER = oidc.issuer;
     process.env.OIDC_CLIENT_ID = 'care-integration-test';
     process.env.WEB_ORIGIN = 'http://localhost:3000';
+    process.env.S3_ENDPOINT = 'http://127.0.0.1:8333';
+    process.env.S3_REGION = 'us-east-1';
+    process.env.S3_BUCKET = 'care-test-private';
+    process.env.S3_ACCESS_KEY = 'care-test-access';
+    process.env.S3_SECRET_KEY = 'care-test-secret';
+    process.env.S3_FORCE_PATH_STYLE = 'true';
 
     try {
       await owner.connect();
@@ -197,7 +203,9 @@ describe('clients API', () => {
            ($1, 'employee.manage_employment'),
            ($1, 'visit_execution.read'), ($1, 'visit_execution.correct'),
            ($1, 'care_documentation.read'), ($1, 'care_documentation.review'),
-           ($1, 'care_documentation.amend')`,
+           ($1, 'care_documentation.amend'),
+           ($1, 'service_evidence.read'), ($1, 'service_evidence.prepare'),
+           ($1, 'acknowledgement.read'), ($1, 'acknowledgement.revoke')`,
         [officeRoleId],
       );
       await owner.query(
@@ -213,6 +221,9 @@ describe('clients API', () => {
       const caregiverUserId = uuidv7();
       const caregiverSubject = uuidv7();
       const caregiverMembershipId = uuidv7();
+      const unrelatedCaregiverUserId = uuidv7();
+      const unrelatedCaregiverSubject = uuidv7();
+      const unrelatedCaregiverMembershipId = uuidv7();
       await owner.query(
         'INSERT INTO identity.users (id, email, display_name) VALUES ($1, $2, $3)',
         [caregiverUserId, 'caregiver@integration.test', 'Integration Caregiver'],
@@ -237,7 +248,8 @@ describe('clients API', () => {
                 ($1, 'visit_execution.start'), ($1, 'visit_execution.record_services'),
                 ($1, 'visit_execution.complete'), ($1, 'care_documentation.read'),
                 ($1, 'care_documentation.create'), ($1, 'care_documentation.update'),
-                ($1, 'care_documentation.finalize')`,
+                ($1, 'care_documentation.finalize'), ($1, 'service_evidence.read'),
+                ($1, 'acknowledgement.read'), ($1, 'acknowledgement.capture')`,
         [caregiverRoleId],
       );
       await owner.query(
@@ -248,6 +260,27 @@ describe('clients API', () => {
         `INSERT INTO identity.membership_scopes (membership_id, tenant_id, scope_type, scope_id)
          VALUES ($1, $2, 'tenant', $3)`,
         [caregiverMembershipId, tenantId, tenantId],
+      );
+      await owner.query(
+        'INSERT INTO identity.users (id, email, display_name) VALUES ($1, $2, $3)',
+        [unrelatedCaregiverUserId, 'unrelated-caregiver@integration.test', 'Unrelated Caregiver'],
+      );
+      await owner.query(
+        'INSERT INTO identity.external_identities (id, user_id, issuer, subject) VALUES ($1, $2, $3, $4)',
+        [uuidv7(), unrelatedCaregiverUserId, oidc.issuer, unrelatedCaregiverSubject],
+      );
+      await owner.query(
+        "INSERT INTO identity.tenant_memberships (id, user_id, tenant_id, status) VALUES ($1, $2, $3, 'active')",
+        [unrelatedCaregiverMembershipId, unrelatedCaregiverUserId, tenantId],
+      );
+      await owner.query(
+        'INSERT INTO identity.membership_roles (membership_id, tenant_id, role_id) VALUES ($1, $2, $3)',
+        [unrelatedCaregiverMembershipId, tenantId, caregiverRoleId],
+      );
+      await owner.query(
+        `INSERT INTO identity.membership_scopes (membership_id, tenant_id, scope_type, scope_id)
+         VALUES ($1, $2, 'tenant', $3)`,
+        [unrelatedCaregiverMembershipId, tenantId, tenantId],
       );
       await owner.query('INSERT INTO identity.roles (id, tenant_id, name) VALUES ($1, $2, $3)', [
         otherTenantRoleId,
@@ -266,13 +299,13 @@ describe('clients API', () => {
       expect((await appRole.query('SELECT id FROM identity.roles')).rowCount).toBe(0);
       await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
       expect((await appRole.query('SELECT role_id FROM identity.membership_roles')).rowCount).toBe(
-        3,
+        4,
       );
       expect(
         (await appRole.query('SELECT membership_id FROM identity.membership_scopes')).rowCount,
-      ).toBe(3);
+      ).toBe(4);
       expect((await appRole.query('SELECT role_id FROM identity.role_permissions')).rowCount).toBe(
-        PERMISSIONS.length + 50,
+        PERMISSIONS.length + 57,
       );
       await appRole.query('COMMIT');
       expect((await appRole.query('SELECT id FROM identity.tenant_memberships')).rowCount).toBe(0);
@@ -815,6 +848,9 @@ describe('clients API', () => {
         expect.objectContaining({ permission: 'care_documentation.create' }),
         expect.objectContaining({ permission: 'care_documentation.update' }),
         expect.objectContaining({ permission: 'care_documentation.finalize' }),
+        expect.objectContaining({ permission: 'service_evidence.read' }),
+        expect.objectContaining({ permission: 'acknowledgement.read' }),
+        expect.objectContaining({ permission: 'acknowledgement.capture' }),
       ]);
       expect(
         (await fetch(`${baseUrl}/api/v1/services`, { headers: serviceCaregiverHeaders })).status,
@@ -1778,6 +1814,25 @@ describe('clients API', () => {
       });
       expect(executionClientResponse.status).toBe(201);
       const executionClient = (await executionClientResponse.json()) as { id: string };
+      const createExecutionRepresentative = async (firstName: string, validUntil: string) => {
+        const response = await fetch(`${baseUrl}/api/v1/clients/${executionClient.id}/contacts`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            firstName,
+            lastName: 'Representative',
+            relationshipType: 'legal_representative',
+            roles: ['legal_representative'],
+            representationType: 'power_of_attorney',
+            representationValidFrom: '1990-01-01',
+            representationValidUntil: validUntil,
+          }),
+        });
+        expect(response.status).toBe(201);
+        return (await response.json()) as { id: string };
+      };
+      const expiredRepresentative = await createExecutionRepresentative('Expired', '2000-01-01');
+      const eligibleRepresentative = await createExecutionRepresentative('Eligible', '2099-12-31');
       expect(
         (
           await fetch(`${baseUrl}/api/v1/clients/${executionClient.id}/activate`, {
@@ -1796,6 +1851,15 @@ describe('clients API', () => {
         },
       );
       expect(linkCaregiver.status).toBe(200);
+      const linkUnrelatedCaregiver = await fetch(
+        `${baseUrl}/api/v1/employees/${unavailableEmployee.id}/user`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ userId: unrelatedCaregiverUserId }),
+        },
+      );
+      expect(linkUnrelatedCaregiver.status).toBe(200);
 
       const executionDate = dateInBerlin(-1);
       const createExecutionVisit = async (startTime: string, employeeId: string) => {
@@ -1825,6 +1889,10 @@ describe('clients API', () => {
       const caregiverHeaders = {
         ...headers,
         Authorization: `Bearer ${await issueToken(caregiverSubject)}`,
+      };
+      const unrelatedCaregiverHeaders = {
+        ...headers,
+        Authorization: `Bearer ${await issueToken(unrelatedCaregiverSubject)}`,
       };
       const officeHeaders = {
         ...headers,
@@ -2784,6 +2852,152 @@ describe('clients API', () => {
         ]),
       });
 
+      const initialPackageResponse = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/evidence-package`,
+        { method: 'POST', headers: caregiverHeaders },
+      );
+      expect(initialPackageResponse.status).toBe(200);
+      const initialPackage = (await initialPackageResponse.json()) as {
+        id: string;
+        version: number;
+        snapshotHash: string;
+        snapshot: { clientName: string; items: Array<{ performedServiceId: string }> };
+        isCurrent: boolean;
+        status: string;
+        acknowledgements: Array<{ id: string; status: string }>;
+      };
+      expect(initialPackage).toMatchObject({ version: 1, isCurrent: true, status: 'ready' });
+      expect(initialPackage.snapshot.items.length).toBeGreaterThan(0);
+      const repeatedPackageResponse = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/evidence-package`,
+        { method: 'POST', headers: officeHeaders },
+      );
+      expect(repeatedPackageResponse.status).toBe(200);
+      expect(await repeatedPackageResponse.json()).toMatchObject({
+        id: initialPackage.id,
+        version: initialPackage.version,
+        snapshotHash: initialPackage.snapshotHash,
+      });
+
+      const officeWorklistQuery = new URLSearchParams({
+        from: executionRange.get('from')!,
+        until: executionRange.get('until')!,
+        visitId: executionVisit.id,
+      });
+      const initialWorklistResponse = await fetch(
+        `${baseUrl}/api/v1/service-evidence?${officeWorklistQuery}`,
+        { headers: officeHeaders },
+      );
+      expect(initialWorklistResponse.status).toBe(200);
+      expect(await initialWorklistResponse.json()).toMatchObject({
+        items: [
+          expect.objectContaining({
+            visitId: executionVisit.id,
+            evidencePackageId: initialPackage.id,
+            status: 'awaiting_acknowledgement',
+          }),
+        ],
+      });
+
+      const officeCannotCapture = await fetch(
+        `${baseUrl}/api/v1/evidence-packages/${initialPackage.id}/acknowledgement`,
+        {
+          method: 'POST',
+          headers: officeHeaders,
+          body: JSON.stringify({
+            idempotencyKey: uuidv7(),
+            signatory: { type: 'client' },
+            method: 'typed_confirmation',
+            confirmationName: initialPackage.snapshot.clientName,
+          }),
+        },
+      );
+      expect(officeCannotCapture.status).toBe(403);
+
+      const unrelatedCaregiverPrepare = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/evidence-package`,
+        { method: 'POST', headers: unrelatedCaregiverHeaders },
+      );
+      expect(unrelatedCaregiverPrepare.status).toBe(403);
+      expect((await unrelatedCaregiverPrepare.json()).code).toBe(
+        'SERVICE_EVIDENCE_VISIT_RELATIONSHIP_REQUIRED',
+      );
+      const crossTenantPackageRead = await fetch(
+        `${baseUrl}/api/v1/evidence-packages/${initialPackage.id}`,
+        { headers: { ...caregiverHeaders, 'X-Tenant-Id': otherTenantId } },
+      );
+      expect(crossTenantPackageRead.status).toBe(403);
+
+      const expiredRepresentativeCapture = await fetch(
+        `${baseUrl}/api/v1/evidence-packages/${initialPackage.id}/acknowledgement`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            idempotencyKey: uuidv7(),
+            signatory: { type: 'representative', contactId: expiredRepresentative.id },
+            method: 'typed_confirmation',
+            confirmationName: 'Expired Representative',
+          }),
+        },
+      );
+      expect(expiredRepresentativeCapture.status).toBe(403);
+      expect((await expiredRepresentativeCapture.json()).code).toBe(
+        'ACKNOWLEDGEMENT_SIGNATORY_INVALID',
+      );
+
+      const clientAcknowledgementInput = {
+        idempotencyKey: uuidv7(),
+        signatory: { type: 'client' },
+        method: 'typed_confirmation',
+        confirmationName: initialPackage.snapshot.clientName,
+      } as const;
+      const concurrentClientAcknowledgements = await Promise.all(
+        [0, 1].map(() =>
+          fetch(`${baseUrl}/api/v1/evidence-packages/${initialPackage.id}/acknowledgement`, {
+            method: 'POST',
+            headers: caregiverHeaders,
+            body: JSON.stringify(clientAcknowledgementInput),
+          }),
+        ),
+      );
+      expect(concurrentClientAcknowledgements.map((response) => response.status)).toEqual([
+        200, 200,
+      ]);
+      const clientAcknowledgements = await Promise.all(
+        concurrentClientAcknowledgements.map((response) => response.json()),
+      );
+      expect(clientAcknowledgements[0]).toMatchObject({
+        status: 'acknowledged',
+        signatoryType: 'client',
+        method: 'typed_confirmation',
+        evidencePackageHash: initialPackage.snapshotHash,
+      });
+      expect(clientAcknowledgements[1].id).toBe(clientAcknowledgements[0].id);
+
+      const conflictingRetry = await fetch(
+        `${baseUrl}/api/v1/evidence-packages/${initialPackage.id}/acknowledgement`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            ...clientAcknowledgementInput,
+            confirmationName: 'A different name',
+          }),
+        },
+      );
+      expect(conflictingRetry.status).toBe(400);
+      expect((await conflictingRetry.json()).code).toBe('ACKNOWLEDGEMENT_IDEMPOTENCY_CONFLICT');
+      const caregiverCannotRevoke = await fetch(
+        `${baseUrl}/api/v1/acknowledgements/${clientAcknowledgements[0].id}/revoke`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ reason: 'Not allowed' }),
+        },
+      );
+      expect(caregiverCannotRevoke.status).toBe(403);
+
       const sensitiveAmendmentReason = `private-amendment-reason-${uuidv7()}`;
       const sensitiveAmendmentCorrection = `private-amendment-correction-${uuidv7()}`;
       const officeAmendment = await fetch(
@@ -2894,6 +3108,174 @@ describe('clients API', () => {
           (entry) => entry.action === 'care_documentation.amended',
         ),
       ).toHaveLength(3);
+
+      const outdatedPackageResponse = await fetch(
+        `${baseUrl}/api/v1/evidence-packages/${initialPackage.id}`,
+        { headers: officeHeaders },
+      );
+      expect(outdatedPackageResponse.status).toBe(200);
+      expect(await outdatedPackageResponse.json()).toMatchObject({
+        id: initialPackage.id,
+        isCurrent: false,
+        status: 'outdated',
+        acknowledgements: [
+          expect.objectContaining({
+            id: clientAcknowledgements[0].id,
+            status: 'acknowledged',
+            evidencePackageHash: initialPackage.snapshotHash,
+          }),
+        ],
+      });
+      const staleAcknowledgement = await fetch(
+        `${baseUrl}/api/v1/evidence-packages/${initialPackage.id}/acknowledgement`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            ...clientAcknowledgementInput,
+            idempotencyKey: uuidv7(),
+          }),
+        },
+      );
+      expect(staleAcknowledgement.status).toBe(409);
+      expect((await staleAcknowledgement.json()).code).toBe('EVIDENCE_PACKAGE_STALE');
+
+      const secondPackageResponse = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/evidence-package`,
+        { method: 'POST', headers: caregiverHeaders },
+      );
+      expect(secondPackageResponse.status).toBe(200);
+      const secondPackage = (await secondPackageResponse.json()) as {
+        id: string;
+        version: number;
+        snapshot: { clientName: string };
+        isCurrent: boolean;
+      };
+      expect(secondPackage).toMatchObject({ version: 2, isCurrent: true });
+
+      const raceAcknowledgementInput = {
+        idempotencyKey: uuidv7(),
+        signatory: { type: 'client' },
+        method: 'typed_confirmation',
+        confirmationName: secondPackage.snapshot.clientName,
+      };
+      const amendmentRaceReason = `amendment-race-${uuidv7()}`;
+      const [racingAcknowledgement, racingAmendment] = await Promise.all([
+        fetch(`${baseUrl}/api/v1/evidence-packages/${secondPackage.id}/acknowledgement`, {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify(raceAcknowledgementInput),
+        }),
+        fetch(`${baseUrl}/api/v1/care-documentation/${documentationId}/amendments`, {
+          method: 'POST',
+          headers: officeHeaders,
+          body: JSON.stringify({
+            reason: amendmentRaceReason,
+            correction: `amendment-race-correction-${uuidv7()}`,
+          }),
+        }),
+      ]);
+      expect(racingAmendment.status).toBe(200);
+      expect([200, 409]).toContain(racingAcknowledgement.status);
+      if (racingAcknowledgement.status === 409) {
+        expect((await racingAcknowledgement.json()).code).toBe('EVIDENCE_PACKAGE_STALE');
+      }
+      const racePackageRead = await fetch(
+        `${baseUrl}/api/v1/evidence-packages/${secondPackage.id}`,
+        { headers: officeHeaders },
+      );
+      expect(racePackageRead.status).toBe(200);
+      expect(await racePackageRead.json()).toMatchObject({
+        isCurrent: false,
+        status: 'outdated',
+      });
+
+      const replacementPackageResponse = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/evidence-package`,
+        { method: 'POST', headers: caregiverHeaders },
+      );
+      expect(replacementPackageResponse.status).toBe(200);
+      const replacementPackage = (await replacementPackageResponse.json()) as {
+        id: string;
+        version: number;
+        snapshot: { clientName: string };
+        isCurrent: boolean;
+      };
+      expect(replacementPackage).toMatchObject({ version: 3, isCurrent: true });
+
+      const representativeAcknowledgementResponse = await fetch(
+        `${baseUrl}/api/v1/evidence-packages/${replacementPackage.id}/acknowledgement`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            idempotencyKey: uuidv7(),
+            signatory: { type: 'representative', contactId: eligibleRepresentative.id },
+            method: 'typed_confirmation',
+            confirmationName: 'Eligible Representative',
+          }),
+        },
+      );
+      expect(representativeAcknowledgementResponse.status).toBe(200);
+      const representativeAcknowledgement = await representativeAcknowledgementResponse.json();
+      expect(representativeAcknowledgement).toMatchObject({
+        status: 'acknowledged',
+        signatoryType: 'representative',
+        signatoryName: 'Eligible Representative',
+        capacity: 'authorized_representative',
+        signatoryContactId: eligibleRepresentative.id,
+      });
+      const representativeAcknowledgementId = representativeAcknowledgement.id as string;
+      const officeRevocation = await fetch(
+        `${baseUrl}/api/v1/acknowledgements/${representativeAcknowledgementId}/revoke`,
+        {
+          method: 'POST',
+          headers: officeHeaders,
+          body: JSON.stringify({ reason: 'API integration revocation' }),
+        },
+      );
+      expect(officeRevocation.status).toBe(200);
+      expect(await officeRevocation.json()).toMatchObject({
+        id: representativeAcknowledgementId,
+        status: 'revoked',
+        revocationReason: 'API integration revocation',
+      });
+
+      const competingAcknowledgement = fetch(
+        `${baseUrl}/api/v1/evidence-packages/${replacementPackage.id}/acknowledgement`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            idempotencyKey: uuidv7(),
+            signatory: { type: 'client' },
+            method: 'typed_confirmation',
+            confirmationName: replacementPackage.snapshot.clientName,
+          }),
+        },
+      );
+      const competingDecline = fetch(
+        `${baseUrl}/api/v1/evidence-packages/${replacementPackage.id}/decline`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            idempotencyKey: uuidv7(),
+            signatory: { type: 'client' },
+            reasonCode: 'disagrees_with_record',
+            note: 'Concurrent acknowledgement and decline',
+          }),
+        },
+      );
+      const acknowledgementDeclineRace = await Promise.all([
+        competingAcknowledgement,
+        competingDecline,
+      ]);
+      const raceStatuses = acknowledgementDeclineRace.map((response) => response.status);
+      expect(raceStatuses.filter((status) => status === 200)).toHaveLength(1);
+      expect(raceStatuses.filter((status) => status === 409)).toHaveLength(1);
+      const losingOutcome = acknowledgementDeclineRace[raceStatuses.indexOf(409)]!;
+      expect((await losingOutcome.json()).code).toBe('ACKNOWLEDGEMENT_ALREADY_EXISTS');
 
       const completedDocumentationWorklist = await fetch(
         `${baseUrl}/api/v1/care-documentation?${new URLSearchParams({

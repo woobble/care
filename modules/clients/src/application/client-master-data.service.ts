@@ -71,6 +71,11 @@ const TIMELINE_SUMMARIES: Record<string, string> = {
   'care_documentation.finalized': 'Besuchsdokumentation abgeschlossen',
   'incident.recorded': 'Vorfall dokumentiert',
   'care_documentation.amended': 'Besuchsdokumentation ergänzt',
+  'evidence_package.created': 'Leistungsnachweis erstellt',
+  'evidence_package.superseded': 'Leistungsbestätigung ersetzt',
+  'acknowledgement.created': 'Leistungsnachweis bestätigt',
+  'acknowledgement.declined': 'Leistungsnachweis nicht bestätigt',
+  'acknowledgement.revoked': 'Leistungsbestätigung widerrufen',
 };
 
 export interface ClientTimelineEntry {

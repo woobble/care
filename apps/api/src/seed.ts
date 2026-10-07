@@ -320,6 +320,10 @@ try {
         'care_documentation.read',
         'care_documentation.review',
         'care_documentation.amend',
+        'service_evidence.read',
+        'service_evidence.prepare',
+        'acknowledgement.read',
+        'acknowledgement.revoke',
       ] as const,
       Caregiver: [
         'client.read',
@@ -338,6 +342,9 @@ try {
         'care_documentation.create',
         'care_documentation.update',
         'care_documentation.finalize',
+        'service_evidence.read',
+        'acknowledgement.read',
+        'acknowledgement.capture',
       ] as const,
     };
     const roleDefinitions = Object.entries(definitions) as Array<

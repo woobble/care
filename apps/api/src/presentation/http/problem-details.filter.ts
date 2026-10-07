@@ -147,6 +147,33 @@ import {
   VisitExecutionNotCompletedError,
   VisitExecutionRequiredError,
 } from '@care/care-documentation';
+import {
+  AcknowledgementAlreadyExistsError,
+  AcknowledgementConfirmationNameMismatchError,
+  AcknowledgementConfirmationRequiredError,
+  AcknowledgementIdempotencyConflictError,
+  AcknowledgementInvalidInputError,
+  AcknowledgementInvalidStateError,
+  AcknowledgementNotFoundError,
+  AcknowledgementRevocationReasonRequiredError,
+  AcknowledgementSignatureCleanupError,
+  AcknowledgementSignatureIntegrityError,
+  AcknowledgementSignatureNotFoundError,
+  AcknowledgementSignatureRequiredError,
+  AcknowledgementSignatoryInvalidError,
+  DocumentationNotFinalizedError,
+  EmptySignatureError,
+  EvidencePackageIntegrityError,
+  EvidencePackageInvalidStateError,
+  EvidencePackageNotFoundError,
+  EvidencePackageNotReadyError,
+  EvidencePackageStaleError,
+  InvalidServiceEvidenceWorklistQueryError,
+  InvalidSignatureError,
+  ServiceEvidenceEmployeeLinkRequiredError,
+  ServiceEvidenceVisitRelationshipRequiredError,
+  SignatureTooLargeError,
+} from '@care/service-evidence';
 import type { ApiRequest } from '../../http/request';
 
 @Injectable()
@@ -300,7 +327,10 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof PerformedServiceNotFoundError ||
     exception instanceof CareDocumentationNotFoundError ||
     exception instanceof DocumentationEntryNotFoundError ||
-    exception instanceof ServiceEvidenceNotFoundError
+    exception instanceof ServiceEvidenceNotFoundError ||
+    exception instanceof EvidencePackageNotFoundError ||
+    exception instanceof AcknowledgementNotFoundError ||
+    exception instanceof AcknowledgementSignatureNotFoundError
   ) {
     status = 404;
     code = exception.code;
@@ -312,7 +342,10 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     code = exception.code;
   } else if (
     exception instanceof CareDocumentationEmployeeLinkRequiredError ||
-    exception instanceof CareDocumentationVisitRelationshipRequiredError
+    exception instanceof CareDocumentationVisitRelationshipRequiredError ||
+    exception instanceof ServiceEvidenceEmployeeLinkRequiredError ||
+    exception instanceof ServiceEvidenceVisitRelationshipRequiredError ||
+    exception instanceof AcknowledgementSignatoryInvalidError
   ) {
     status = 403;
     code = exception.code;
@@ -323,7 +356,13 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof CareDocumentationInvalidStateError ||
     exception instanceof CareDocumentationVersionConflictError ||
     exception instanceof VisitExecutionRequiredError ||
-    exception instanceof VisitExecutionNotCompletedError
+    exception instanceof VisitExecutionNotCompletedError ||
+    exception instanceof DocumentationNotFinalizedError ||
+    exception instanceof EvidencePackageNotReadyError ||
+    exception instanceof EvidencePackageStaleError ||
+    exception instanceof EvidencePackageInvalidStateError ||
+    exception instanceof AcknowledgementAlreadyExistsError ||
+    exception instanceof AcknowledgementInvalidStateError
   ) {
     status = 409;
     code = exception.code;
@@ -331,9 +370,26 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof AmendmentReasonRequiredError ||
     exception instanceof InvalidDocumentationWorklistQueryError ||
     exception instanceof InvalidDocumentationEntryError ||
-    exception instanceof InvalidServiceEvidenceError
+    exception instanceof InvalidServiceEvidenceError ||
+    exception instanceof AcknowledgementConfirmationNameMismatchError ||
+    exception instanceof AcknowledgementConfirmationRequiredError ||
+    exception instanceof AcknowledgementIdempotencyConflictError ||
+    exception instanceof AcknowledgementInvalidInputError ||
+    exception instanceof AcknowledgementRevocationReasonRequiredError ||
+    exception instanceof AcknowledgementSignatureRequiredError ||
+    exception instanceof EmptySignatureError ||
+    exception instanceof InvalidSignatureError ||
+    exception instanceof SignatureTooLargeError ||
+    exception instanceof InvalidServiceEvidenceWorklistQueryError
   ) {
     status = 400;
+    code = exception.code;
+  } else if (
+    exception instanceof EvidencePackageIntegrityError ||
+    exception instanceof AcknowledgementSignatureIntegrityError ||
+    exception instanceof AcknowledgementSignatureCleanupError
+  ) {
+    status = 500;
     code = exception.code;
   } else if (
     exception instanceof InvalidPerformedServiceQuantityError ||

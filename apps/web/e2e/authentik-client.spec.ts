@@ -2,6 +2,8 @@ import { v7 as uuidv7 } from 'uuid';
 import { Client } from 'pg';
 import { expect, test } from '@playwright/test';
 import type { BrowserContext, Page } from '@playwright/test';
+import { loadStorageConfig } from '@care/config';
+import { createS3ObjectStorage } from '@care/storage';
 
 test('Authentik users can be invited and administered from the office UI', async ({
   page,
@@ -46,6 +48,9 @@ test('Authentik users can be invited and administered from the office UI', async
   let agreementClientId: string | undefined;
   let serviceId: string | undefined;
   let executionVisitId: string | undefined;
+  let initialEvidencePackageId: string | undefined;
+  let replacementEvidencePackageId: string | undefined;
+  let representativeContactId: string | undefined;
   const serviceCategoryName = `E2E Category ${runId}`;
   const codeSuffix = runId.slice(-24);
   const serviceCategoryCode = `E2E-CAT-${codeSuffix}`;
@@ -271,6 +276,22 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.getByRole('button', { name: 'Klient anlegen' }).click();
     await expect(page.getByRole('heading', { name: `Agreement E2E ${runId}` })).toBeVisible();
     agreementClientId = new URL(page.url()).pathname.split('/').at(-1);
+    if (!agreementClientId) throw new Error('The client detail page did not expose its ID');
+    representativeContactId = uuidv7();
+    await database.query(
+      `INSERT INTO clients.client_contacts
+         (id, tenant_id, client_id, first_name, last_name, relationship_type,
+          representation_type, representation_valid_from, representation_valid_until,
+          created_at, updated_at)
+       VALUES ($1, $2, $3, 'E2E', 'Representative', 'legal_representative',
+               'power_of_attorney', '2000-01-01', '2099-12-31', now(), now())`,
+      [representativeContactId, tenantId, agreementClientId],
+    );
+    await database.query(
+      `INSERT INTO clients.client_contact_roles (tenant_id, client_id, contact_id, role)
+       VALUES ($1, $2, $3, 'legal_representative')`,
+      [tenantId, agreementClientId, representativeContactId],
+    );
     await page.getByRole('button', { name: 'Aktivieren' }).click();
     await expect(page.locator('span').filter({ hasText: /^Aktiv$/ })).toBeVisible();
     await page.getByRole('link', { name: 'Leistungsplanung' }).click();
@@ -578,6 +599,59 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(caregiverPage.getByRole('button', { name: 'Eintrag speichern' })).toHaveCount(0);
     await expect(caregiverPage.getByRole('button', { name: 'Nachweis speichern' })).toHaveCount(0);
 
+    await caregiverPage.goto(`/care/visits/${executionVisitId}/evidence`);
+    await expect(
+      caregiverPage.getByRole('heading', { name: 'Leistungsnachweis prüfen' }),
+    ).toBeVisible();
+    await caregiverPage.getByRole('button', { name: 'Leistungsnachweis erstellen' }).click();
+    await expect(caregiverPage.getByText('Version 1', { exact: true })).toBeVisible();
+    await expect(
+      caregiverPage.getByText(`E2E Service ${runId}`, { exact: true }).first(),
+    ).toBeVisible();
+    const firstSignaturePad = caregiverPage.getByRole('img', {
+      name: /Unterschriftsfeld/,
+    });
+    await firstSignaturePad.scrollIntoViewIfNeeded();
+    const signatureBounds = await firstSignaturePad.boundingBox();
+    if (!signatureBounds) throw new Error('The mobile signature pad is not visible');
+    await caregiverPage.mouse.move(
+      signatureBounds.x + signatureBounds.width * 0.2,
+      signatureBounds.y + signatureBounds.height * 0.6,
+    );
+    await caregiverPage.mouse.down();
+    await caregiverPage.mouse.move(
+      signatureBounds.x + signatureBounds.width * 0.45,
+      signatureBounds.y + signatureBounds.height * 0.35,
+      { steps: 4 },
+    );
+    await caregiverPage.mouse.move(
+      signatureBounds.x + signatureBounds.width * 0.75,
+      signatureBounds.y + signatureBounds.height * 0.55,
+      { steps: 4 },
+    );
+    await caregiverPage.mouse.up();
+    await caregiverPage.once('dialog', (dialog) => dialog.accept());
+    const signatureSubmit = caregiverPage.getByRole('button', { name: 'Unterschrift bestätigen' });
+    await expect(signatureSubmit).toBeEnabled();
+    await signatureSubmit.click();
+    await expect(
+      caregiverPage.getByRole('status').filter({ hasText: 'Leistungsnachweis bestätigt' }),
+    ).toBeVisible();
+    expect(
+      await caregiverPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    const firstPackage = await database.query<{ id: string }>(
+      `SELECT package.id
+       FROM service_evidence.evidence_packages AS package
+       JOIN care_documentation.documents AS documentation
+         ON documentation.tenant_id = package.tenant_id AND documentation.id = package.documentation_id
+       WHERE package.tenant_id = $1 AND documentation.visit_id = $2
+       ORDER BY package.version DESC LIMIT 1`,
+      [tenantId, executionVisitId],
+    );
+    initialEvidencePackageId = firstPackage.rows[0]?.id;
+    if (!initialEvidencePackageId) throw new Error('The first evidence package was not persisted');
+
     await page.goto(`/visits/${executionVisitId}`);
     await expect(page.getByRole('heading', { name: 'Ausführung' })).toBeVisible();
     await expect(page.getByText('Einsatz abgeschlossen', { exact: true })).toBeVisible();
@@ -600,6 +674,100 @@ test('Authentik users can be invited and administered from the office UI', async
     await correctionDetails.locator('textarea[name="reason"]').fill('E2E correction reason');
     await correctionDetails.getByRole('button', { name: 'Zeiten korrigieren' }).click();
     await expect(page.getByText('Einsatzzeiten korrigiert', { exact: true })).toBeVisible();
+
+    await caregiverPage.goto(`/care/visits/${executionVisitId}/evidence`);
+    await expect(
+      caregiverPage.getByText('Neue Version erforderlich', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      caregiverPage.getByText('Die frühere Bestätigung bleibt erhalten', { exact: false }),
+    ).toBeVisible();
+    await caregiverPage
+      .getByRole('button', { name: 'Aktuellen Leistungsnachweis erstellen' })
+      .click();
+    await expect(caregiverPage.getByText('Version 2', { exact: true })).toBeVisible();
+    const signatoryPicker = caregiverPage.getByLabel('Unterzeichnende Person auswählen');
+    await signatoryPicker.selectOption(`representative:${representativeContactId}`);
+    await caregiverPage.locator('input[name="method-choice"][value="typed_confirmation"]').check();
+    await caregiverPage.locator('input[name="confirmationName"]').fill('E2E Representative');
+    await caregiverPage.once('dialog', (dialog) => dialog.accept());
+    await caregiverPage.getByRole('button', { name: 'Bestätigung erfassen' }).click();
+    await expect(
+      caregiverPage.getByRole('status').filter({ hasText: 'Leistungsnachweis bestätigt' }),
+    ).toBeVisible();
+    const replacementPackage = await database.query<{ id: string; version: number }>(
+      `SELECT package.id, package.version
+       FROM service_evidence.evidence_packages AS package
+       JOIN care_documentation.documents AS documentation
+         ON documentation.tenant_id = package.tenant_id AND documentation.id = package.documentation_id
+       WHERE package.tenant_id = $1 AND documentation.visit_id = $2
+       ORDER BY package.version DESC LIMIT 1`,
+      [tenantId, executionVisitId],
+    );
+    replacementEvidencePackageId = replacementPackage.rows[0]?.id;
+    if (replacementPackage.rows[0]?.version !== 2 || !replacementEvidencePackageId) {
+      throw new Error('The replacement evidence package was not persisted as version 2');
+    }
+
+    await page.goto(
+      `/service-evidence?clientQuery=${encodeURIComponent(`Agreement E2E ${runId}`)}`,
+    );
+    await expect(page.getByRole('heading', { name: 'Leistungsnachweise' })).toBeVisible();
+    const acknowledgedRow = page
+      .getByRole('row')
+      .filter({ hasText: `Agreement E2E ${runId}` })
+      .filter({ hasText: 'Bestätigt' });
+    await expect(acknowledgedRow).toContainText('E2E Representative');
+    await expect(acknowledgedRow.getByRole('link')).toHaveAttribute(
+      'href',
+      `/service-evidence/${replacementEvidencePackageId}`,
+    );
+    await acknowledgedRow.getByRole('link').click();
+    await expect(page.getByText('E2E Representative', { exact: true })).toBeVisible();
+    await expect(page.getByText('bevollmächtigte Vertretung', { exact: true })).toBeVisible();
+    await expect(page.getByText('Namensbestätigung', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Version 1 · Ersetzt' })).toHaveAttribute(
+      'href',
+      `/service-evidence/${initialEvidencePackageId}`,
+    );
+    await page.getByRole('link', { name: 'Version 1 · Ersetzt' }).click();
+    await expect(page.getByRole('img', { name: 'Gespeicherte Unterschrift' })).toBeVisible();
+    await page.goto(`/service-evidence/${replacementEvidencePackageId}`);
+    const revokeForm = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Bestätigung widerrufen' }),
+    });
+    await revokeForm.locator('input[name="reason"]').fill(`E2E revocation ${runId}`);
+    await page.once('dialog', (dialog) => dialog.accept());
+    await revokeForm.getByRole('button', { name: 'Bestätigung widerrufen' }).click();
+    await expect(page.getByRole('status')).toContainText('Bestätigung wurde widerrufen');
+    await expect(page.getByText('Widerrufen', { exact: true }).first()).toBeVisible();
+
+    await caregiverPage.goto(`/care/visits/${executionVisitId}/evidence`);
+    await caregiverPage
+      .getByLabel('Unterzeichnende Person auswählen')
+      .selectOption(`representative:${representativeContactId}`);
+    await caregiverPage
+      .locator('details')
+      .filter({
+        hasText: 'Bestätigung abgelehnt oder nicht möglich',
+      })
+      .locator('summary')
+      .click();
+    const declineForm = caregiverPage.locator('form').filter({
+      has: caregiverPage.getByRole('button', { name: 'Ablehnung erfassen' }),
+    });
+    await declineForm.locator('select[name="reasonCode"]').selectOption('disagrees_with_record');
+    await declineForm.locator('textarea[name="note"]').fill(`E2E decline note ${runId}`);
+    await caregiverPage.once('dialog', (dialog) => dialog.accept());
+    await declineForm.getByRole('button', { name: 'Ablehnung erfassen' }).click();
+    await expect(
+      caregiverPage
+        .getByRole('status')
+        .filter({ hasText: 'Die Ablehnung wurde für diese Version festgehalten' }),
+    ).toBeVisible();
+    expect(
+      await caregiverPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
 
     await page.goto(`/clients/${agreementClientId}`);
     await expect(page.getByText('Einsatz begonnen', { exact: true })).toBeVisible();
@@ -732,8 +900,11 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page.getByText('Revoked memberships cannot be reactivated.')).toBeVisible();
   } finally {
     try {
-      await caregiverContext?.close();
-      await invitedContext?.close();
+      await Promise.all(
+        [caregiverContext, invitedContext]
+          .filter((context): context is BrowserContext => context !== undefined)
+          .map((context) => context.close().catch(() => undefined)),
+      );
       if (tenantId) {
         const agreementClientIds = [agreementClientId].filter(
           (id): id is string => id !== undefined,
@@ -936,6 +1107,7 @@ async function cleanupServiceAgreementRecords(
   clientIds: string[],
   additionalVisitIds: string[] = [],
 ): Promise<void> {
+  let signatureStorageKeys: string[] = [];
   await database.query('BEGIN');
   try {
     await database.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
@@ -970,7 +1142,32 @@ async function cleanupServiceAgreementRecords(
         )
       : { rows: [] as Array<{ id: string }> };
     const documentationIds = documentationRows.rows.map((row) => row.id);
-    const schedulingResourceIds = [...generationIds, ...visitIds, ...executionIds, ...agreementIds];
+    const evidencePackageRows = documentationIds.length
+      ? await database.query<{ id: string }>(
+          'SELECT id FROM service_evidence.evidence_packages WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])',
+          [tenantId, documentationIds],
+        )
+      : { rows: [] as Array<{ id: string }> };
+    const evidencePackageIds = evidencePackageRows.rows.map((row) => row.id);
+    const acknowledgementRows = evidencePackageIds.length
+      ? await database.query<{ id: string; signature_storage_key: string | null }>(
+          `SELECT id, signature_storage_key FROM service_evidence.acknowledgements
+           WHERE tenant_id = $1 AND evidence_package_id = ANY($2::uuid[])`,
+          [tenantId, evidencePackageIds],
+        )
+      : { rows: [] as Array<{ id: string; signature_storage_key: string | null }> };
+    const acknowledgementIds = acknowledgementRows.rows.map((row) => row.id);
+    signatureStorageKeys = acknowledgementRows.rows
+      .map((row) => row.signature_storage_key)
+      .filter((key): key is string => key !== null);
+    const schedulingResourceIds = [
+      ...generationIds,
+      ...visitIds,
+      ...executionIds,
+      ...agreementIds,
+      ...evidencePackageIds,
+      ...acknowledgementIds,
+    ];
     await database.query(
       `DELETE FROM audit.audit_entries
        WHERE tenant_id = $1 AND
@@ -988,6 +1185,26 @@ async function cleanupServiceAgreementRecords(
     );
     if (visitIds.length) {
       if (documentationIds.length) {
+        await database.query(
+          'ALTER TABLE service_evidence.acknowledgements DISABLE TRIGGER acknowledgements_append_only',
+        );
+        await database.query(
+          'ALTER TABLE service_evidence.evidence_packages DISABLE TRIGGER evidence_packages_immutable',
+        );
+        await database.query(
+          'DELETE FROM service_evidence.acknowledgements WHERE tenant_id = $1 AND evidence_package_id = ANY($2::uuid[])',
+          [tenantId, evidencePackageIds],
+        );
+        await database.query(
+          'DELETE FROM service_evidence.evidence_packages WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+          [tenantId, evidencePackageIds],
+        );
+        await database.query(
+          'ALTER TABLE service_evidence.evidence_packages ENABLE TRIGGER evidence_packages_immutable',
+        );
+        await database.query(
+          'ALTER TABLE service_evidence.acknowledgements ENABLE TRIGGER acknowledgements_append_only',
+        );
         await database.query(
           'ALTER TABLE care_documentation.entries DISABLE TRIGGER documentation_entries_draft_only',
         );
@@ -1034,8 +1251,14 @@ async function cleanupServiceAgreementRecords(
         );
       }
       await database.query(
+        'ALTER TABLE visit_execution.performed_services DISABLE TRIGGER performed_services_completed_immutable',
+      );
+      await database.query(
         'DELETE FROM visit_execution.performed_services WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
         [tenantId, visitIds],
+      );
+      await database.query(
+        'ALTER TABLE visit_execution.performed_services ENABLE TRIGGER performed_services_completed_immutable',
       );
       await database.query(
         'DELETE FROM visit_execution.executions WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
@@ -1072,6 +1295,18 @@ async function cleanupServiceAgreementRecords(
   } catch (error) {
     await database.query('ROLLBACK');
     throw error;
+  }
+  if (signatureStorageKeys.length) {
+    const config = loadStorageConfig();
+    const storage = createS3ObjectStorage({
+      endpoint: config.S3_ENDPOINT,
+      region: config.S3_REGION,
+      bucket: config.S3_BUCKET,
+      accessKey: config.S3_ACCESS_KEY,
+      secretKey: config.S3_SECRET_KEY,
+      forcePathStyle: config.S3_FORCE_PATH_STYLE,
+    });
+    await Promise.all(signatureStorageKeys.map((key) => storage.delete(key)));
   }
 }
 
