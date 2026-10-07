@@ -406,6 +406,18 @@ export class ClientMasterDataRepository {
               eq(auditEntries.resourceType, 'service_agreement'),
               sql`${auditEntries.metadata}->>'clientId' = ${clientId}`,
             ),
+            and(
+              eq(auditEntries.resourceType, 'visit'),
+              sql`${auditEntries.metadata}->>'clientId' = ${clientId}`,
+              inArray(auditEntries.action, [
+                'visit.created',
+                'visit.generated',
+                'visit.rescheduled',
+                'visit.confirmed',
+                'visit.unconfirmed',
+                'visit.cancelled',
+              ]),
+            ),
           ),
         ),
       )

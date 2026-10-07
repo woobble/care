@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import {
   createServiceAgreementApplicationService,
+  type ServiceAgreementGuards,
   type ServiceAgreementApplicationService,
 } from '@care/service-agreements';
 import type { ClientApplicationService } from '@care/clients';
@@ -16,6 +17,7 @@ import {
   ORGANIZATION_APPLICATION,
   OUTBOX_WRITER,
   SERVICE_AGREEMENT_APPLICATION,
+  SERVICE_AGREEMENT_GUARDS,
   SERVICE_APPLICATION,
   UNIT_OF_WORK,
 } from '../tokens';
@@ -26,6 +28,7 @@ import { IdentityModule } from './identity.module';
 import { OrganizationsModule } from './organizations.module';
 import { PlatformModule } from './platform.module';
 import { ServicesModule } from './services.module';
+import { ServiceAgreementProtectionModule } from './service-agreement-protection.module';
 import {
   ClientServiceAgreementsController,
   ServiceAgreementsController,
@@ -40,6 +43,7 @@ import {
     ClientsModule,
     OrganizationsModule,
     ServicesModule,
+    ServiceAgreementProtectionModule,
   ],
   controllers: [ClientServiceAgreementsController, ServiceAgreementsController],
   providers: [
@@ -54,6 +58,7 @@ import {
         SERVICE_APPLICATION,
         AUDIT_WRITER,
         OUTBOX_WRITER,
+        SERVICE_AGREEMENT_GUARDS,
       ],
       useFactory: (
         unitOfWork: UnitOfWork,
@@ -62,6 +67,7 @@ import {
         services: ServiceApplicationService,
         audit: AuditWriter,
         outbox: OutboxWriter,
+        guards: ServiceAgreementGuards,
       ): ServiceAgreementApplicationService =>
         createServiceAgreementApplicationService(
           unitOfWork,
@@ -70,8 +76,10 @@ import {
           services,
           audit,
           outbox,
+          guards,
         ),
     },
   ],
+  exports: [SERVICE_AGREEMENT_APPLICATION],
 })
 export class ServiceAgreementsModule {}

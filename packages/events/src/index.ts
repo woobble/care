@@ -112,6 +112,27 @@ export interface EventPayloadMap {
     agreementServiceId: string;
     serviceDefinitionId: string;
   };
+  'visit.created': { visitId: string; clientId: string };
+  'visit.generated': { visitId: string; agreementId: string; clientId: string };
+  'visit.updated': { visitId: string; clientId: string; changedFields: string[] };
+  'visit.rescheduled': { visitId: string; clientId: string };
+  'visit.confirmed': { visitId: string; clientId: string };
+  'visit.unconfirmed': { visitId: string; clientId: string };
+  'visit.cancelled': { visitId: string; clientId: string };
+  'visit.assignment_changed': {
+    visitId: string;
+    clientId: string;
+    employeeId: string;
+    operation: 'assigned' | 'unassigned';
+  };
+  'schedule.generation_completed': {
+    generationId: string;
+    agreementId: string;
+    generatedCount: number;
+    alreadyExistingCount: number;
+    requiresManualPlacementCount: number;
+  };
+  'employee.unavailability_created': { employeeId: string; unavailabilityId: string };
   'tenant.invitation.created': { invitationId: string };
   'tenant.invitation.accepted': { invitationId: string; membershipId: string };
   'tenant.invitation.expired': { invitationId: string };
@@ -150,6 +171,9 @@ export interface DomainEvent<T extends EventName = EventName> {
     | 'service_category'
     | 'service'
     | 'service_agreement'
+    | 'visit'
+    | 'schedule_generation'
+    | 'employee_availability'
     | 'tenant_membership'
     | 'tenant_invitation';
   aggregateId: string;

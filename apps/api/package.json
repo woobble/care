@@ -31,6 +31,7 @@
     "@care/organizations": "workspace:*",
     "@care/permissions": "workspace:*",
     "@care/platform": "workspace:*",
+    "@care/scheduling": "workspace:*",
     "@care/service-agreements": "workspace:*",
     "@care/services": "workspace:*",
     "@nestjs/common": "^12.1.2",

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PERMISSIONS, type ScopeType } from '@care/permissions';
 
 export class MeResponseDto {
@@ -43,4 +43,18 @@ export class ProblemDetailsDto {
 
   @ApiProperty()
   traceId!: string;
+
+  @ApiPropertyOptional({
+    type: 'object',
+    properties: {
+      plannedStart: { type: 'string', format: 'date-time' },
+      plannedEnd: { type: 'string', format: 'date-time' },
+      timezone: { type: 'string' },
+    },
+  })
+  conflictingInterval?: {
+    plannedStart: string;
+    plannedEnd: string;
+    timezone: string;
+  };
 }

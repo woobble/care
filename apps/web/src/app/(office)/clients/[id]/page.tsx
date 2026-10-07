@@ -44,6 +44,7 @@ export default async function ClientDetailPage({
   const api = await getApiClient();
   const get = api.GET;
   const header = await getTenantHeader();
+  const { visitNow, visitFuture, visitRecent } = clientVisitRange();
   const [
     clientResult,
     addressesResult,
@@ -53,6 +54,8 @@ export default async function ClientDetailPage({
     timelineResult,
     organizationsResult,
     facilitiesResult,
+    upcomingVisitsResult,
+    recentCancelledVisitsResult,
   ] = await Promise.all([
     get('/api/v1/clients/{id}', { params: { path: { id }, header } }),
     get('/api/v1/clients/{clientId}/addresses', { params: { path: { clientId: id }, header } }),
@@ -62,6 +65,31 @@ export default async function ClientDetailPage({
     get('/api/v1/clients/{clientId}/timeline', { params: { path: { clientId: id }, header } }),
     get('/api/v1/organizations', { params: { header } }),
     get('/api/v1/facilities', { params: { header } }),
+    get('/api/v1/visits', {
+      params: {
+        query: {
+          from: visitNow.toISOString(),
+          until: visitFuture.toISOString(),
+          clientId: id,
+          page: 1,
+          pageSize: 100,
+        },
+        header,
+      },
+    }),
+    get('/api/v1/visits', {
+      params: {
+        query: {
+          from: visitRecent.toISOString(),
+          until: visitNow.toISOString(),
+          clientId: id,
+          status: 'cancelled',
+          page: 1,
+          pageSize: 100,
+        },
+        header,
+      },
+    }),
   ]);
   if (clientResult.error?.code === 'CLIENT_NOT_FOUND') notFound();
 
@@ -149,6 +177,7 @@ export default async function ClientDetailPage({
             >
               Leistungsplanung
             </Link>
+            <SectionLink href="#visits">Einsätze</SectionLink>
             <SectionLink href="#timeline">Verlauf</SectionLink>
           </nav>
 
@@ -901,6 +930,77 @@ export default async function ClientDetailPage({
             </div>
           </section>
 
+          <section id="visits" aria-labelledby="visits-title" className="grid gap-4 scroll-mt-6">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="visits-title" className="text-xl font-semibold">
+                Kommende Einsätze
+              </h2>
+              <Button asChild variant="secondary" size="sm">
+                <Link href={`/planning?clientId=${client.id}`}>Im Kalender öffnen</Link>
+              </Button>
+            </div>
+            {upcomingVisitsResult.error ? (
+              <p className="rounded-lg border bg-white p-4 text-sm text-slate-600">
+                Einsätze sind mit der aktuellen Berechtigung nicht verfügbar.
+              </p>
+            ) : upcomingVisitsResult.data?.items.length ? (
+              <ol className="grid gap-2">
+                {upcomingVisitsResult.data.items.map((visit) => (
+                  <li key={visit.id}>
+                    <Link
+                      className="grid gap-1 rounded-lg border bg-white p-4 hover:border-blue-400 sm:grid-cols-[12rem_1fr_auto]"
+                      href={`/visits/${visit.id}`}
+                    >
+                      <time dateTime={visit.plannedStart}>
+                        {formatVisitDateTime(visit.plannedStart, visit.timezone)}
+                      </time>
+                      <span>
+                        <strong>
+                          {visit.services.map((service) => service.serviceName).join(' · ')}
+                        </strong>
+                        <span className="block text-sm text-slate-600">
+                          {visit.assignments.length
+                            ? visit.assignments
+                                .map((assignment) => assignment.employeeDisplayName)
+                                .join(', ')
+                            : 'Noch nicht zugewiesen'}
+                        </span>
+                      </span>
+                      <span className="text-sm">
+                        {visit.status === 'cancelled'
+                          ? 'Abgesagt'
+                          : visit.status === 'confirmed'
+                            ? 'Bestätigt'
+                            : 'Geplant'}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="rounded-lg border bg-white p-4 text-slate-600">
+                Keine Einsätze in den nächsten 30 Tagen.
+              </p>
+            )}
+            {recentCancelledVisitsResult.data?.items.length ? (
+              <details className="rounded-lg border bg-white p-4">
+                <summary className="cursor-pointer font-semibold">
+                  Kürzlich abgesagte Einsätze ({recentCancelledVisitsResult.data.items.length})
+                </summary>
+                <ul className="mt-3 grid gap-2">
+                  {recentCancelledVisitsResult.data.items.map((visit) => (
+                    <li key={visit.id}>
+                      <Link className="text-blue-900 underline" href={`/visits/${visit.id}`}>
+                        {formatVisitDateTime(visit.plannedStart, visit.timezone)} ·{' '}
+                        {visit.services.map((service) => service.serviceName).join(', ')}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </section>
+
           <section
             id="timeline"
             aria-labelledby="timeline-title"
@@ -1125,6 +1225,14 @@ function formatDateTime(value: string): string {
   );
 }
 
+function formatVisitDateTime(value: string, timeZone: string): string {
+  return new Intl.DateTimeFormat('de-DE', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone,
+  }).format(new Date(value));
+}
+
 function formatAddress(address: {
   street: string;
   houseNumber: string | null;
@@ -1143,6 +1251,15 @@ function formatAddress(address: {
 
 function currentDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function clientVisitRange(): { visitNow: Date; visitFuture: Date; visitRecent: Date } {
+  const visitNow = new Date();
+  return {
+    visitNow,
+    visitFuture: new Date(visitNow.getTime() + 30 * 24 * 60 * 60 * 1000),
+    visitRecent: new Date(visitNow.getTime() - 30 * 24 * 60 * 60 * 1000),
+  };
 }
 
 function genderLabel(value: string | null): string | null {

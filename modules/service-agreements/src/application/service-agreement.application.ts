@@ -40,6 +40,7 @@ import {
   type ServiceAgreementListRow,
   type ServiceAgreementSearchFilter,
 } from '../infrastructure/service-agreement.repository';
+import type { ServiceAgreementGuards } from '../infrastructure/service-agreement-guard';
 
 type AuditContext = { ip?: string; userAgent?: string };
 
@@ -80,6 +81,7 @@ export class ServiceAgreementApplicationService {
     private readonly audit: AuditWriter,
     private readonly outbox: OutboxWriter,
     private readonly repository = new ServiceAgreementRepository(),
+    private readonly guards?: ServiceAgreementGuards,
   ) {}
 
   async search(
@@ -116,6 +118,20 @@ export class ServiceAgreementApplicationService {
       await this.requireReadableAgreement(transaction, principal, agreement);
       return agreement;
     });
+  }
+
+  async getForScheduling(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    id: string,
+  ): Promise<{ agreement: ServiceAgreementSnapshot; services: AgreementServiceSnapshot[] }> {
+    const agreement = await this.repository.getAgreement(transaction, principal.tenantId, id, true);
+    if (!agreement) throw new ServiceAgreementNotFoundError();
+    await this.requireReadableAgreement(transaction, principal, agreement);
+    return {
+      agreement,
+      services: await this.repository.listServices(transaction, principal.tenantId, id),
+    };
   }
 
   async create(
@@ -206,6 +222,18 @@ export class ServiceAgreementApplicationService {
       const changedFields = agreement.update(input);
       if (changedFields.length === 0) return agreement.snapshot;
       const snapshot = agreement.snapshot;
+      if (
+        changedFields.some((field) => field === 'validFrom' || field === 'validUntil') &&
+        (await this.guards?.hasFutureVisitsOutsideAgreementValidity?.(
+          transaction,
+          principal.tenantId,
+          id,
+          snapshot.validFrom,
+          snapshot.validUntil,
+        ))
+      ) {
+        throw new ServiceAgreementHasFutureVisitsError();
+      }
       if (snapshot.status === 'active') {
         await this.requireCurrentProvider(transaction, principal.tenantId, client, snapshot);
         await this.validateActiveServices(transaction, principal, snapshot);
@@ -406,6 +434,18 @@ export class ServiceAgreementApplicationService {
         lock: true,
       });
       const snapshot = line.snapshot;
+      if (
+        changedFields.some((field) => field === 'validFrom' || field === 'validUntil') &&
+        (await this.guards?.hasFutureVisitsOutsideAgreementServiceValidity?.(
+          transaction,
+          principal.tenantId,
+          serviceId,
+          snapshot.validFrom,
+          snapshot.validUntil,
+        ))
+      ) {
+        throw new ServiceAgreementHasFutureVisitsError();
+      }
       await this.repository.updateService(transaction, snapshot);
       const event = createDomainEvent({
         type: 'service_agreement.service_changed',
@@ -473,6 +513,15 @@ export class ServiceAgreementApplicationService {
       }
       line.end(now);
       const snapshot = line.snapshot;
+      if (
+        await this.guards?.hasFutureVisitsForAgreementService?.(
+          transaction,
+          principal.tenantId,
+          serviceId,
+        )
+      ) {
+        throw new ServiceAgreementHasFutureVisitsError();
+      }
       await this.repository.updateService(transaction, snapshot);
       const event = createDomainEvent({
         type: 'service_agreement.service_ended',
@@ -537,6 +586,11 @@ export class ServiceAgreementApplicationService {
       } else if (operation === 'suspend') {
         entity.suspend(now);
       } else {
+        if (
+          await this.guards?.hasFutureVisitsForAgreement?.(transaction, principal.tenantId, id, now)
+        ) {
+          throw new ServiceAgreementHasFutureVisitsError();
+        }
         entity.end(now);
         await this.repository.endActiveServices(transaction, principal.tenantId, id, now);
       }
@@ -928,6 +982,7 @@ export function createServiceAgreementApplicationService(
   services: ServiceApplicationService,
   audit: AuditWriter,
   outbox: OutboxWriter,
+  guards?: ServiceAgreementGuards,
 ): ServiceAgreementApplicationService {
   return new ServiceAgreementApplicationService(
     unitOfWork,
@@ -936,5 +991,16 @@ export function createServiceAgreementApplicationService(
     services,
     audit,
     outbox,
+    undefined,
+    guards,
   );
+}
+
+export class ServiceAgreementHasFutureVisitsError extends Error {
+  readonly code = 'FUTURE_VISITS_EXIST';
+
+  constructor() {
+    super('Resolve future scheduled visits before changing agreement validity');
+    this.name = 'ServiceAgreementHasFutureVisitsError';
+  }
 }

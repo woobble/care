@@ -16,12 +16,16 @@ import {
   updateAgreementServiceAction,
   updateServiceAgreementAction,
 } from './actions';
+import { generateAgreementVisitsAction } from '../../../planning/actions';
 
 type SearchParams = Promise<{
   error?: string;
   findServicesFor?: string;
   serviceValidFrom?: string;
   serviceValidUntil?: string;
+  generated?: string;
+  existing?: string;
+  placement?: string;
 }>;
 
 const unitLabels = {
@@ -142,6 +146,10 @@ export default async function ClientServiceAgreementsPage({
       : undefined;
   const serviceOptions = serviceOptionsResult?.data?.items ?? [];
   const error = query.error ?? agreementsResult.error?.code;
+  const generationSummary =
+    query.generated !== undefined
+      ? `Erzeugt: ${countLabel(query.generated)} · bereits vorhanden: ${countLabel(query.existing)} · manuelle Platzierung nötig: ${countLabel(query.placement)}`
+      : null;
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
@@ -163,6 +171,14 @@ export default async function ClientServiceAgreementsPage({
       {error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
           Änderung konnte nicht gespeichert werden ({error}). Prüfen Sie Eingaben und Berechtigung.
+        </p>
+      ) : null}
+      {generationSummary ? (
+        <p
+          role="status"
+          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+        >
+          Besuchserzeugung abgeschlossen. {generationSummary}
         </p>
       ) : null}
 
@@ -306,6 +322,20 @@ export default async function ClientServiceAgreementsPage({
                     agreement.organizationId,
                     agreement.facilityId,
                   );
+                const canGenerate =
+                  agreement.status === 'active' &&
+                  hasClientPermission(
+                    permissions,
+                    'schedule.generate',
+                    tenantId,
+                    agreement.organizationId,
+                    agreement.facilityId,
+                  );
+                const generationFrom = laterDate(today(), agreement.validFrom);
+                const generationUntil = earlierDate(
+                  addDays(generationFrom, 27),
+                  agreement.validUntil ?? null,
+                );
                 const canSearchServices =
                   agreement.id === selectedAgreement?.id &&
                   selectedProviderCanManage &&
@@ -379,6 +409,43 @@ export default async function ClientServiceAgreementsPage({
                         </form>
                       ) : null}
                     </div>
+
+                    {canGenerate && generationUntil >= generationFrom ? (
+                      <details className="rounded-md border border-dashed p-4">
+                        <summary className="cursor-pointer font-semibold text-blue-900">
+                          Besuche erzeugen
+                        </summary>
+                        <p className="mt-2 text-sm text-slate-600">
+                          Wiederholungsregeln erzeugen geplante Einsätze. Bei Bedarf wird nichts
+                          automatisch erzeugt; Häufigkeiten pro Woche benötigen eine manuelle
+                          Platzierung.
+                        </p>
+                        <form
+                          action={generateAgreementVisitsAction}
+                          className="mt-3 grid gap-3 sm:grid-cols-3"
+                        >
+                          <input type="hidden" name="clientId" value={client.id} />
+                          <input type="hidden" name="agreementId" value={agreement.id} />
+                          <DateField
+                            id={`generate-${agreement.id}-from`}
+                            name="from"
+                            label="Von"
+                            defaultValue={generationFrom}
+                            required
+                          />
+                          <DateField
+                            id={`generate-${agreement.id}-until`}
+                            name="until"
+                            label="Bis (maximal 28 Tage)"
+                            defaultValue={generationUntil}
+                            required
+                          />
+                          <div className="flex items-end">
+                            <Button type="submit">Besuche erzeugen</Button>
+                          </div>
+                        </form>
+                      </details>
+                    ) : null}
 
                     {agreement.status !== 'ended' && canUpdate ? (
                       <details>
@@ -1030,5 +1097,31 @@ function formatDateTime(value: string): string {
 }
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Berlin',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function addDays(value: string, count: number): string {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + count);
+  return date.toISOString().slice(0, 10);
+}
+
+function laterDate(left: string, right: string): string {
+  return left > right ? left : right;
+}
+
+function earlierDate(candidate: string, upperBound: string | null): string {
+  return upperBound !== null && upperBound < candidate ? upperBound : candidate;
+}
+
+function countLabel(value: string | undefined): string {
+  const count = Number(value);
+  return Number.isInteger(count) && count >= 0 ? String(count) : '0';
 }

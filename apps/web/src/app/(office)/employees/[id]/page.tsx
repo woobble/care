@@ -34,6 +34,7 @@ export default async function EmployeeDetailPage({
   const employeeResult = await get('/api/v1/employees/{id}', { params: { path: { id }, header } });
   if (!employeeResult.data) notFound();
   const employee = employeeResult.data;
+  const { scheduleNow, scheduleUntil } = employeeVisitRange();
   const [facilitiesResult, teamsResult, qualificationsResult, skillsResult, linkableUsersResult] =
     await Promise.all([
       get('/api/v1/facilities', {
@@ -54,6 +55,18 @@ export default async function EmployeeDetailPage({
         ? Promise.resolve({ data: undefined, error: undefined })
         : get('/api/v1/employees/{id}/linkable-users', { params: { path: { id }, header } }),
     ]);
+  const visitsResult = await get('/api/v1/visits', {
+    params: {
+      query: {
+        from: scheduleNow.toISOString(),
+        until: scheduleUntil.toISOString(),
+        employeeId: id,
+        page: 1,
+        pageSize: 100,
+      },
+      header,
+    },
+  });
   const facilities = (facilitiesResult.data ?? []).filter(
     (facility) => facility.status === 'active',
   );
@@ -104,6 +117,57 @@ export default async function EmployeeDetailPage({
         </div>
       </header>
       <ActionNotice error={query.error} updated={query.updated} />
+
+      <section
+        aria-labelledby="schedule-title"
+        className="grid gap-3 rounded-lg border bg-white p-5"
+      >
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="schedule-title" className="text-xl font-semibold">
+            Kommende Einsätze
+          </h2>
+          <Button asChild variant="secondary" size="sm">
+            <Link href={`/planning?employeeId=${employee.id}`}>In der Einsatzplanung öffnen</Link>
+          </Button>
+        </div>
+        {visitsResult.error ? (
+          <p className="text-sm text-slate-600">
+            Einsätze sind mit der aktuellen Berechtigung nicht verfügbar.
+          </p>
+        ) : visitsResult.data?.items.length ? (
+          <ol className="grid gap-2">
+            {visitsResult.data.items.map((visit) => (
+              <li key={visit.id}>
+                <Link
+                  className="grid gap-1 rounded-md border p-3 hover:border-blue-400 sm:grid-cols-[12rem_1fr_auto]"
+                  href={`/visits/${visit.id}`}
+                >
+                  <time dateTime={visit.plannedStart}>
+                    {formatVisitDateTime(visit.plannedStart, visit.timezone)}
+                  </time>
+                  <span>
+                    <strong>{visit.clientDisplayName}</strong>
+                    <span className="block text-sm text-slate-600">
+                      {visit.services.map((service) => service.serviceName).join(' · ')}
+                    </span>
+                  </span>
+                  <span className="text-sm">
+                    {visit.status === 'cancelled'
+                      ? 'Abgesagt'
+                      : visit.status === 'confirmed'
+                        ? 'Bestätigt'
+                        : 'Geplant'}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-sm text-slate-600">
+            Keine zugewiesenen Einsätze in den nächsten 30 Tagen.
+          </p>
+        )}
+      </section>
 
       <section
         id="overview"
@@ -680,4 +744,20 @@ function StatusForm({
 function dateRange(from: string | null, until: string | null): string {
   if (!from && !until) return 'Unbefristet';
   return `${from ?? 'Offen'} — ${until ?? 'Offen'}`;
+}
+
+function formatVisitDateTime(value: string, timeZone: string): string {
+  return new Intl.DateTimeFormat('de-DE', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone,
+  }).format(new Date(value));
+}
+
+function employeeVisitRange(): { scheduleNow: Date; scheduleUntil: Date } {
+  const scheduleNow = new Date();
+  return {
+    scheduleNow,
+    scheduleUntil: new Date(scheduleNow.getTime() + 30 * 24 * 60 * 60 * 1000),
+  };
 }

@@ -36,6 +36,12 @@ export const clientRecords = clients.table(
   },
   (table) => [
     uniqueIndex('clients_tenant_id_uq').on(table.tenantId, table.id),
+    uniqueIndex('clients_scheduling_provider_reference_uq').on(
+      table.tenantId,
+      table.organizationId,
+      table.primaryFacilityId,
+      table.id,
+    ),
     index('clients_tenant_status_created_idx').on(table.tenantId, table.status, table.createdAt),
     index('clients_tenant_organization_status_idx').on(
       table.tenantId,

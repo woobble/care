@@ -58,6 +58,17 @@ export default async function OrganizationsPage({
           <Field id="organization-email" name="email" label="Email" type="email" maxLength={320} />
           <Field id="organization-phone" name="phone" label="Phone" type="tel" maxLength={40} />
           <Field id="organization-address" name="address" label="Address" maxLength={500} />
+          <Field
+            id="organization-timezone"
+            name="timezone"
+            label="Zeitzone"
+            defaultValue="Europe/Berlin"
+            required
+            maxLength={100}
+          />
+          <p className="text-sm text-slate-600 md:col-span-2">
+            IANA-Zeitzone für Termine, zum Beispiel Europe/Berlin.
+          </p>
           <div className="md:col-span-2">
             <Button type="submit">Create organization</Button>
           </div>
@@ -123,6 +134,7 @@ function Field({
   name,
   label,
   type = 'text',
+  defaultValue = '',
   required = false,
   maxLength,
 }: Readonly<{
@@ -130,13 +142,21 @@ function Field({
   name: string;
   label: string;
   type?: string;
+  defaultValue?: string;
   required?: boolean;
   maxLength: number;
 }>) {
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} name={name} type={type} maxLength={maxLength} required={required} />
+      <Input
+        id={id}
+        name={name}
+        type={type}
+        defaultValue={defaultValue}
+        maxLength={maxLength}
+        required={required}
+      />
     </div>
   );
 }

@@ -31,6 +31,13 @@ export const agreements = serviceAgreements.table(
   },
   (table) => [
     uniqueIndex('service_agreements_tenant_id_uq').on(table.tenantId, table.id),
+    uniqueIndex('service_agreements_scheduling_reference_uq').on(
+      table.tenantId,
+      table.clientId,
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
     index('service_agreements_tenant_client_idx').on(
       table.tenantId,
       table.clientId,
@@ -95,6 +102,12 @@ export const agreementServices = serviceAgreements.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
   (table) => [
+    uniqueIndex('agreement_services_scheduling_reference_uq').on(
+      table.tenantId,
+      table.agreementId,
+      table.id,
+      table.serviceDefinitionId,
+    ),
     index('agreement_services_tenant_agreement_status_idx').on(
       table.tenantId,
       table.agreementId,

@@ -68,6 +68,15 @@ export default async function FacilitiesPage({
           <Field id="email" name="email" label="Email" type="email" maxLength={320} />
           <Field id="phone" name="phone" label="Phone" type="tel" maxLength={40} />
           <Field id="address" name="address" label="Address" maxLength={500} />
+          <Field
+            id="timezone"
+            name="timezone"
+            label="Zeitzone (optional überschreiben)"
+            maxLength={100}
+          />
+          <p className="text-sm text-slate-600 md:col-span-2">
+            Leer lassen, um die Zeitzone der Organisation zu übernehmen.
+          </p>
           <div className="md:col-span-2">
             <Button type="submit">Create facility</Button>
           </div>

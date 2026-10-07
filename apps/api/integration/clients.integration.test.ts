@@ -186,6 +186,9 @@ describe('clients API', () => {
            ($1, 'service_agreement.update'), ($1, 'service_agreement.activate'),
            ($1, 'service_agreement.suspend'), ($1, 'service_agreement.end'),
            ($1, 'service_agreement.manage_services'),
+           ($1, 'schedule.read'), ($1, 'schedule.create'), ($1, 'schedule.update'),
+           ($1, 'schedule.cancel'), ($1, 'schedule.confirm'), ($1, 'schedule.assign'),
+           ($1, 'schedule.generate'),
            ($1, 'employee.update'), ($1, 'employee.assign_facility'),
            ($1, 'employee.assign_team'), ($1, 'employee.link_user'),
            ($1, 'employee.manage_qualifications'), ($1, 'employee.manage_skills'),
@@ -224,7 +227,8 @@ describe('clients API', () => {
       ]);
       await owner.query(
         `INSERT INTO identity.role_permissions (role_id, permission)
-         VALUES ($1, 'client.read'), ($1, 'service.read'), ($1, 'service_agreement.read')`,
+         VALUES ($1, 'client.read'), ($1, 'service.read'), ($1, 'service_agreement.read'),
+                ($1, 'schedule.read')`,
         [caregiverRoleId],
       );
       await owner.query(
@@ -259,7 +263,7 @@ describe('clients API', () => {
         (await appRole.query('SELECT membership_id FROM identity.membership_scopes')).rowCount,
       ).toBe(3);
       expect((await appRole.query('SELECT role_id FROM identity.role_permissions')).rowCount).toBe(
-        PERMISSIONS.length + 29,
+        PERMISSIONS.length + 37,
       );
       await appRole.query('COMMIT');
       expect((await appRole.query('SELECT id FROM identity.tenant_memberships')).rowCount).toBe(0);
@@ -792,6 +796,7 @@ describe('clients API', () => {
         expect.objectContaining({ permission: 'client.read' }),
         expect.objectContaining({ permission: 'service.read' }),
         expect.objectContaining({ permission: 'service_agreement.read' }),
+        expect.objectContaining({ permission: 'schedule.read' }),
       ]);
       expect(
         (await fetch(`${baseUrl}/api/v1/services`, { headers: serviceCaregiverHeaders })).status,
@@ -1050,6 +1055,495 @@ describe('clients API', () => {
         { method: 'POST', headers },
       );
       expect(activateAgreement.status).toBe(200);
+
+      const suspendBeforeScheduling = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/suspend`,
+        { method: 'POST', headers },
+      );
+      expect(suspendBeforeScheduling.status).toBe(200);
+      const suspendedGeneration = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/generate-visits`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ from: dateInBerlin(2), until: dateInBerlin(8) }),
+        },
+      );
+      expect(suspendedGeneration.status).toBe(409);
+      expect((await suspendedGeneration.json()).code).toBe('VISIT_AGREEMENT_INVALID');
+      const resumeBeforeScheduling = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/resume`,
+        { method: 'POST', headers },
+      );
+      expect(resumeBeforeScheduling.status).toBe(200);
+
+      const createSchedulingEmployee = async (firstName: string, lastName: string) => {
+        const response = await fetch(`${baseUrl}/api/v1/employees`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            organizationId,
+            firstName,
+            lastName,
+            startDate: '2000-01-01',
+            employmentType: 'employee',
+          }),
+        });
+        expect(response.status).toBe(201);
+        const employee = (await response.json()) as { id: string };
+        const assignment = await fetch(
+          `${baseUrl}/api/v1/employees/${employee.id}/facilities/${secondFacilityId}`,
+          { method: 'PUT', headers, body: JSON.stringify({ isPrimary: true }) },
+        );
+        expect(assignment.status).toBe(200);
+        return employee;
+      };
+      const schedulingEmployee = await createSchedulingEmployee('Schedule', 'Assigned');
+      const unavailableEmployee = await createSchedulingEmployee('Schedule', 'Unavailable');
+      const generationFrom = dateInBerlin(2);
+      const generationUntil = addCalendarDays(generationFrom, 6);
+      const generate = () =>
+        fetch(`${baseUrl}/api/v1/service-agreements/${agreement.id}/generate-visits`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ from: generationFrom, until: generationUntil }),
+        });
+      const concurrentGenerations = await Promise.all([generate(), generate()]);
+      expect(concurrentGenerations.map((response) => response.status)).toEqual([200, 200]);
+      const generationResults = (await Promise.all(
+        concurrentGenerations.map((response) => response.json()),
+      )) as Array<{
+        generationId: string;
+        generated: number;
+        alreadyExisting: number;
+        requiresManualPlacement: number;
+      }>;
+      const generatedCount = generationResults.reduce(
+        (total, result) => total + result.generated,
+        0,
+      );
+      expect(generatedCount).toBeGreaterThan(0);
+      expect(generationResults.reduce((total, result) => total + result.alreadyExisting, 0)).toBe(
+        generatedCount,
+      );
+      expect(generationResults.every((result) => result.requiresManualPlacement === 0)).toBe(true);
+
+      const generationRetryResponse = await generate();
+      expect(generationRetryResponse.status).toBe(200);
+      expect(await generationRetryResponse.json()).toMatchObject({
+        generated: 0,
+        alreadyExisting: generatedCount,
+        requiresManualPlacement: 0,
+      });
+
+      const visitRange = new URLSearchParams({
+        from: new Date(`${generationFrom}T00:00:00.000Z`).toISOString(),
+        until: new Date(`${addCalendarDays(generationUntil, 1)}T00:00:00.000Z`).toISOString(),
+        origin: 'agreement_generated',
+        unassigned: 'true',
+        pageSize: '100',
+      });
+      const generatedVisitsResponse = await fetch(`${baseUrl}/api/v1/visits?${visitRange}`, {
+        headers,
+      });
+      if (generatedVisitsResponse.status !== 200) {
+        throw new Error(
+          `Visit calendar returned ${generatedVisitsResponse.status}: ${JSON.stringify(await generatedVisitsResponse.json())}`,
+        );
+      }
+      expect(generatedVisitsResponse.status).toBe(200);
+      const generatedVisitPage = (await generatedVisitsResponse.json()) as {
+        total: number;
+        items: Array<{
+          id: string;
+          clientId: string;
+          plannedStart: string;
+          plannedEnd: string;
+          timezone: string;
+          origin: string;
+          manuallyAdjusted: boolean;
+          services: Array<{ agreementServiceId: string | null; serviceName: string }>;
+          assignments: Array<{ employeeId: string }>;
+        }>;
+      };
+      expect(generatedVisitPage.total).toBe(generatedCount);
+      expect(generatedVisitPage.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            origin: 'agreement_generated',
+            clientId: created.id,
+            assignments: [],
+            services: [expect.objectContaining({ serviceName: 'Morning care updated' })],
+          }),
+        ]),
+      );
+      const teamCalendarRange = new URLSearchParams(visitRange);
+      teamCalendarRange.set('teamId', randomUUID());
+      const teamCalendarResponse = await fetch(`${baseUrl}/api/v1/visits?${teamCalendarRange}`, {
+        headers,
+      });
+      expect(teamCalendarResponse.status).toBe(200);
+      expect(await teamCalendarResponse.json()).toMatchObject({ total: 0, items: [] });
+      const firstGeneratedVisit = generatedVisitPage.items[0];
+      if (!firstGeneratedVisit) throw new Error('Generation returned no concrete visits');
+      const firstVisitLocalTime = localDateTime(
+        firstGeneratedVisit.plannedStart,
+        firstGeneratedVisit.plannedEnd,
+        firstGeneratedVisit.timezone,
+      );
+
+      const blockedTimeResponse = await fetch(
+        `${baseUrl}/api/v1/employees/${unavailableEmployee.id}/unavailability`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            startsAt: firstGeneratedVisit.plannedStart,
+            endsAt: firstGeneratedVisit.plannedEnd,
+            note: 'temporary test block',
+          }),
+        },
+      );
+      expect(blockedTimeResponse.status).toBe(201);
+      const unavailableAssignment = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/assignments`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ employeeId: unavailableEmployee.id }),
+        },
+      );
+      expect(unavailableAssignment.status).toBe(409);
+      expect((await unavailableAssignment.json()).code).toBe('VISIT_EMPLOYEE_NOT_AVAILABLE');
+
+      const assignedResponse = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/assignments`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ employeeId: schedulingEmployee.id }),
+        },
+      );
+      expect(assignedResponse.status).toBe(201);
+      const assignment = (await assignedResponse.json()) as { id: string; status: string };
+      expect(assignment.status).toBe('active');
+      const duplicateAssignment = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/assignments`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ employeeId: schedulingEmployee.id }),
+        },
+      );
+      expect(duplicateAssignment.status).toBe(409);
+      expect((await duplicateAssignment.json()).code).toBe('VISIT_ASSIGNMENT_DUPLICATE');
+
+      const clientConflict = await fetch(`${baseUrl}/api/v1/visits`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          clientId: created.id,
+          localDate: firstVisitLocalTime.date,
+          localStartTime: firstVisitLocalTime.start,
+          localEndTime: firstVisitLocalTime.end,
+          services: [{ serviceDefinitionId: service.id }],
+        }),
+      });
+      expect(clientConflict.status).toBe(409);
+      expect((await clientConflict.json()).code).toBe('VISIT_CLIENT_CONFLICT');
+
+      const collisionClientResponse = await fetch(`${baseUrl}/api/v1/clients`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          firstName: 'Schedule',
+          lastName: `Conflict-${randomUUID().slice(0, 8)}`,
+          organizationId,
+          primaryFacilityId: secondFacilityId,
+        }),
+      });
+      expect(collisionClientResponse.status).toBe(201);
+      const collisionClient = (await collisionClientResponse.json()) as { id: string };
+      const activateCollisionClient = await fetch(
+        `${baseUrl}/api/v1/clients/${collisionClient.id}/activate`,
+        { method: 'POST', headers },
+      );
+      expect(activateCollisionClient.status).toBe(200);
+      const employeeConflict = await fetch(`${baseUrl}/api/v1/visits`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          clientId: collisionClient.id,
+          localDate: firstVisitLocalTime.date,
+          localStartTime: firstVisitLocalTime.start,
+          localEndTime: firstVisitLocalTime.end,
+          employeeIds: [schedulingEmployee.id],
+          services: [{ serviceDefinitionId: service.id }],
+        }),
+      });
+      expect(employeeConflict.status).toBe(409);
+      expect(await employeeConflict.json()).toMatchObject({
+        code: 'VISIT_EMPLOYEE_CONFLICT',
+        conflictingInterval: {
+          plannedStart: expect.any(String),
+          plannedEnd: expect.any(String),
+          timezone: 'Europe/Berlin',
+        },
+      });
+
+      const manualMarker = `schedule-note-${randomUUID()}`;
+      const manualVisitResponse = await fetch(`${baseUrl}/api/v1/visits`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          clientId: created.id,
+          localDate: addCalendarDays(generationUntil, 2),
+          localStartTime: '11:00',
+          localEndTime: '11:30',
+          note: manualMarker,
+          services: [{ serviceDefinitionId: service.id, plannedQuantity: '1' }],
+        }),
+      });
+      expect(manualVisitResponse.status).toBe(201);
+      const manualVisit = (await manualVisitResponse.json()) as {
+        id: string;
+        origin: string;
+        serviceAgreementId: string | null;
+        services: Array<{ serviceCode: string; serviceName: string; unit: string }>;
+      };
+      expect(manualVisit).toMatchObject({
+        origin: 'manual',
+        serviceAgreementId: null,
+        services: [
+          expect.objectContaining({ serviceName: 'Morning care updated', unit: 'occurrence' }),
+        ],
+      });
+
+      const invalidDstVisit = await fetch(`${baseUrl}/api/v1/visits`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          clientId: created.id,
+          localDate: '2026-03-29',
+          localStartTime: '02:15',
+          localEndTime: '03:00',
+          services: [{ serviceDefinitionId: service.id }],
+        }),
+      });
+      expect(invalidDstVisit.status).toBe(400);
+      expect((await invalidDstVisit.json()).code).toBe('VISIT_INVALID_TIME');
+
+      const rescheduledVisit = await fetch(`${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          localDate: firstVisitLocalTime.date,
+          localStartTime: '09:00',
+          localEndTime: '09:30',
+        }),
+      });
+      if (rescheduledVisit.status !== 200) {
+        throw new Error(
+          `Visit reschedule returned ${rescheduledVisit.status}: ${JSON.stringify(await rescheduledVisit.json())}`,
+        );
+      }
+      expect(rescheduledVisit.status).toBe(200);
+      expect(await rescheduledVisit.json()).toMatchObject({ manuallyAdjusted: true });
+      const generationAfterAdjustment = await generate();
+      expect(generationAfterAdjustment.status).toBe(200);
+      expect(await generationAfterAdjustment.json()).toMatchObject({
+        generated: 0,
+        alreadyExisting: generatedCount,
+      });
+      const adjustedVisitResponse = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}`,
+        { headers },
+      );
+      expect(adjustedVisitResponse.status).toBe(200);
+      expect(await adjustedVisitResponse.json()).toMatchObject({ manuallyAdjusted: true });
+
+      const endAgreementWithFutureVisits = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/end`,
+        { method: 'POST', headers },
+      );
+      expect(endAgreementWithFutureVisits.status).toBe(409);
+      expect((await endAgreementWithFutureVisits.json()).code).toBe('FUTURE_VISITS_EXIST');
+      const deactivateAssignedEmployee = await fetch(
+        `${baseUrl}/api/v1/employees/${schedulingEmployee.id}/deactivate`,
+        { method: 'POST', headers },
+      );
+      expect(deactivateAssignedEmployee.status).toBe(409);
+      expect((await deactivateAssignedEmployee.json()).code).toBe('FUTURE_VISITS_EXIST');
+
+      const unassignResponse = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/assignments/${assignment.id}`,
+        { method: 'DELETE', headers },
+      );
+      expect(unassignResponse.status).toBe(204);
+      const assignmentHistoryResponse = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/assignments`,
+        { headers },
+      );
+      expect(assignmentHistoryResponse.status).toBe(200);
+      expect(await assignmentHistoryResponse.json()).toMatchObject([
+        expect.objectContaining({ id: assignment.id, status: 'unassigned' }),
+      ]);
+      const confirmedVisit = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/confirm`,
+        { method: 'POST', headers },
+      );
+      expect(confirmedVisit.status).toBe(200);
+      expect(((await confirmedVisit.json()) as { status: string }).status).toBe('confirmed');
+      const unconfirmedVisit = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/unconfirm`,
+        { method: 'POST', headers },
+      );
+      expect(unconfirmedVisit.status).toBe(200);
+      const cancelledVisit = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/cancel`,
+        { method: 'POST', headers },
+      );
+      expect(cancelledVisit.status).toBe(200);
+      for (const visit of generatedVisitPage.items.slice(1)) {
+        const response = await fetch(`${baseUrl}/api/v1/visits/${visit.id}/cancel`, {
+          method: 'POST',
+          headers,
+        });
+        expect(response.status).toBe(200);
+      }
+      const cancelManualVisit = await fetch(`${baseUrl}/api/v1/visits/${manualVisit.id}/cancel`, {
+        method: 'POST',
+        headers,
+      });
+      expect(cancelManualVisit.status).toBe(200);
+
+      const caregiverScheduleHeaders = {
+        ...headers,
+        Authorization: `Bearer ${await issueToken(caregiverSubject)}`,
+      };
+      const caregiverScheduleRead = await fetch(`${baseUrl}/api/v1/visits?${visitRange}`, {
+        headers: caregiverScheduleHeaders,
+      });
+      expect(caregiverScheduleRead.status).toBe(200);
+      const caregiverCannotConfirmVisit = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/confirm`,
+        { method: 'POST', headers: caregiverScheduleHeaders },
+      );
+      expect(caregiverCannotConfirmVisit.status).toBe(403);
+
+      const scheduleTimelineResponse = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/timeline`,
+        { headers },
+      );
+      expect(scheduleTimelineResponse.status).toBe(200);
+      const scheduleTimeline = (await scheduleTimelineResponse.json()) as Array<{
+        action: string;
+        summary: string;
+      }>;
+      expect(scheduleTimeline.map((entry) => entry.action)).toEqual(
+        expect.arrayContaining([
+          'visit.generated',
+          'visit.rescheduled',
+          'visit.confirmed',
+          'visit.unconfirmed',
+          'visit.cancelled',
+        ]),
+      );
+      expect(scheduleTimeline.every((entry) => entry.summary.length > 0)).toBe(true);
+      expect(JSON.stringify(scheduleTimeline)).not.toContain(manualMarker);
+
+      const visitIds = generatedVisitPage.items.map((visit) => visit.id).concat(manualVisit.id);
+      const visitAudit = await owner.query<{ action: string; metadata: string }>(
+        `SELECT action, metadata::text AS metadata FROM audit.audit_entries
+         WHERE tenant_id = $1 AND resource_type = 'visit' AND resource_id = ANY($2::uuid[])
+         ORDER BY timestamp, id`,
+        [tenantId, visitIds],
+      );
+      expect(visitAudit.rows.map((row) => row.action)).toEqual(
+        expect.arrayContaining([
+          'visit.generated',
+          'visit.created',
+          'visit.rescheduled',
+          'visit.confirmed',
+          'visit.unconfirmed',
+          'visit.cancelled',
+          'visit.employee_assigned',
+          'visit.employee_unassigned',
+        ]),
+      );
+      const visitEvents = await owner.query<{ event: string }>(
+        `SELECT event::text AS event FROM platform.outbox_messages
+         WHERE tenant_id = $1 AND event ->> 'aggregateId' = ANY($2::text[])
+            OR tenant_id = $1 AND event -> 'payload' ->> 'agreementId' = $3`,
+        [tenantId, visitIds, agreement.id],
+      );
+      expect(JSON.stringify(visitAudit.rows)).not.toContain(manualMarker);
+      expect(JSON.stringify(visitEvents.rows)).not.toContain(manualMarker);
+      const parsedVisitEvents = visitEvents.rows.map(
+        ({ event }) =>
+          JSON.parse(event) as {
+            type: string;
+            version: number;
+          },
+      );
+      expect(parsedVisitEvents.map((event) => event.type)).toEqual(
+        expect.arrayContaining([
+          'visit.generated',
+          'visit.created',
+          'visit.rescheduled',
+          'visit.assignment_changed',
+          'visit.confirmed',
+          'visit.unconfirmed',
+          'visit.cancelled',
+          'schedule.generation_completed',
+        ]),
+      );
+      expect(parsedVisitEvents.every((event) => event.version === 1)).toBe(true);
+
+      await appRole.query('BEGIN');
+      await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [otherTenantId]);
+      expect(
+        (
+          await appRole.query('SELECT id FROM scheduling.visits WHERE id = $1', [
+            firstGeneratedVisit.id,
+          ])
+        ).rowCount,
+      ).toBe(0);
+      await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+      expect(
+        (
+          await appRole.query('SELECT id FROM scheduling.visits WHERE id = $1', [
+            firstGeneratedVisit.id,
+          ])
+        ).rowCount,
+      ).toBe(1);
+      await appRole.query('COMMIT');
+
+      await expect(
+        owner.query(
+          `INSERT INTO scheduling.visits
+             (id, tenant_id, client_id, organization_id, facility_id, origin,
+              service_agreement_id, status, planned_start, planned_end, timezone, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, 'manual', NULL, 'planned', $6, $7, 'Europe/Berlin', now(), now())`,
+          [
+            randomUUID(),
+            tenantId,
+            crossTenantClientId,
+            organizationId,
+            secondFacilityId,
+            new Date(),
+            new Date(Date.now() + 60_000),
+          ],
+        ),
+      ).rejects.toThrow();
+      await expect(
+        owner.query(
+          `INSERT INTO scheduling.visit_assignments
+             (id, tenant_id, visit_id, employee_id, status, assigned_at, assigned_by)
+           VALUES ($1, $2, $3, $4, 'active', now(), $5)`,
+          [randomUUID(), tenantId, firstGeneratedVisit.id, randomUUID(), userId],
+        ),
+      ).rejects.toThrow();
 
       const caregiverAgreementHeaders = {
         ...headers,
@@ -2480,6 +2974,48 @@ describe('clients API', () => {
     }
   }, 240_000);
 });
+
+function dateInBerlin(daysFromToday = 0): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Berlin',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const part = (name: string) => parts.find((item) => item.type === name)?.value ?? '';
+  return addCalendarDays(`${part('year')}-${part('month')}-${part('day')}`, daysFromToday);
+}
+
+function addCalendarDays(value: string, count: number): string {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + count);
+  return date.toISOString().slice(0, 10);
+}
+
+function localDateTime(
+  startValue: string,
+  endValue: string,
+  timezone: string,
+): { date: string; start: string; end: string } {
+  const format = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = format.formatToParts(new Date(startValue));
+  const endParts = format.formatToParts(new Date(endValue));
+  const value = (values: Intl.DateTimeFormatPart[], name: string) =>
+    values.find((item) => item.type === name)?.value ?? '';
+  return {
+    date: `${value(parts, 'year')}-${value(parts, 'month')}-${value(parts, 'day')}`,
+    start: `${value(parts, 'hour')}:${value(parts, 'minute')}`,
+    end: `${value(endParts, 'hour')}:${value(endParts, 'minute')}`,
+  };
+}
 
 async function startOidcServer(jwk: JsonWebKey): Promise<{ server: Server; issuer: string }> {
   let issuer: string;

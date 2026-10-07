@@ -308,6 +308,13 @@ try {
         'service_agreement.suspend',
         'service_agreement.end',
         'service_agreement.manage_services',
+        'schedule.read',
+        'schedule.create',
+        'schedule.update',
+        'schedule.cancel',
+        'schedule.confirm',
+        'schedule.assign',
+        'schedule.generate',
       ] as const,
       Caregiver: [
         'client.read',
@@ -317,6 +324,7 @@ try {
         'team.read',
         'service.read',
         'service_agreement.read',
+        'schedule.read',
       ] as const,
     };
     const roleDefinitions = Object.entries(definitions) as Array<

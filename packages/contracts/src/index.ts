@@ -22,6 +22,11 @@ export interface ProblemDetails {
   code: string;
   traceId: string;
   detail?: string;
+  conflictingInterval?: {
+    plannedStart: string;
+    plannedEnd: string;
+    timezone: string;
+  };
 }
 
 export interface Page<T> {

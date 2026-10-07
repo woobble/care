@@ -969,6 +969,12 @@ function timelineSummary(action: string): string {
     'service_agreement.service_added': 'Leistung zur Planung hinzugefügt',
     'service_agreement.service_updated': 'Geplante Leistung geändert',
     'service_agreement.service_ended': 'Geplante Leistung beendet',
+    'visit.created': 'Einsatz geplant',
+    'visit.generated': 'Einsatz aus Leistungsplanung erzeugt',
+    'visit.rescheduled': 'Einsatz umgeplant',
+    'visit.confirmed': 'Einsatz bestätigt',
+    'visit.unconfirmed': 'Einsatzbestätigung zurückgenommen',
+    'visit.cancelled': 'Einsatz abgesagt',
   };
   return summaries[action] ?? 'Klientenstammdaten geändert';
 }

@@ -21,6 +21,7 @@ import type {
   TeamSnapshot,
 } from '../domain/organization';
 import { OrganizationRepository } from '../infrastructure/persistence/organization.repository';
+import { isSupportedTimeZone } from '../domain/timezone';
 
 export interface OrganizationServiceAgreementGuard {
   hasActiveForOrganization(
@@ -35,11 +36,26 @@ export interface OrganizationServiceAgreementGuard {
   ): Promise<boolean>;
 }
 
+export interface OrganizationSchedulingGuard {
+  hasFutureVisitsForOrganization(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    organizationId: string,
+  ): Promise<boolean>;
+  hasFutureVisitsForFacility(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    facilityId: string,
+  ): Promise<boolean>;
+}
+
 export interface AgreementProviderContext {
   organizationId: string;
   facilityId: string;
   organizationName: string;
   facilityName: string;
+  organizationTimezone: string;
+  facilityTimezone: string | null;
 }
 
 export class OrganizationApplicationService {
@@ -49,6 +65,7 @@ export class OrganizationApplicationService {
     private readonly outbox: OutboxWriter,
     private readonly organizations: OrganizationRepository = new OrganizationRepository(),
     private readonly serviceAgreements?: OrganizationServiceAgreementGuard,
+    private readonly scheduling?: OrganizationSchedulingGuard,
   ) {}
 
   async listOrganizations(
@@ -88,6 +105,9 @@ export class OrganizationApplicationService {
     context: RequestContext,
     request: RequestMetadata,
   ): Promise<OrganizationSnapshot> {
+    if (data.timezone !== undefined && !isSupportedTimeZone(data.timezone)) {
+      throw new InvalidSchedulingTimezoneError();
+    }
     this.authorize(principal, 'organization.create');
     const now = new Date();
     const id = uuidv7();
@@ -129,6 +149,9 @@ export class OrganizationApplicationService {
     context: RequestContext,
     request: RequestMetadata,
   ): Promise<OrganizationSnapshot> {
+    if (changes.timezone !== undefined && !isSupportedTimeZone(changes.timezone)) {
+      throw new InvalidSchedulingTimezoneError();
+    }
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const current = await this.organizations.getOrganization(
         transaction,
@@ -253,6 +276,8 @@ export class OrganizationApplicationService {
       facilityId: facility.id,
       organizationName: organization.name,
       facilityName: facility.name,
+      organizationTimezone: organization.timezone,
+      facilityTimezone: facility.timezone,
     };
   }
 
@@ -262,6 +287,9 @@ export class OrganizationApplicationService {
     context: RequestContext,
     request: RequestMetadata,
   ): Promise<FacilitySnapshot> {
+    if (data.timezone != null && !isSupportedTimeZone(data.timezone)) {
+      throw new InvalidSchedulingTimezoneError();
+    }
     const now = new Date();
     const id = uuidv7();
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
@@ -312,6 +340,9 @@ export class OrganizationApplicationService {
     context: RequestContext,
     request: RequestMetadata,
   ): Promise<FacilitySnapshot> {
+    if (changes.timezone != null && !isSupportedTimeZone(changes.timezone)) {
+      throw new InvalidSchedulingTimezoneError();
+    }
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const current = await this.organizations.getFacility(
         transaction,
@@ -591,6 +622,12 @@ export class OrganizationApplicationService {
       }
       if (
         operation === 'archive' &&
+        (await this.scheduling?.hasFutureVisitsForOrganization(transaction, principal.tenantId, id))
+      ) {
+        throw new OrganizationHasFutureVisitsError();
+      }
+      if (
+        operation === 'archive' &&
         (await this.organizations.hasActiveChildren(transaction, principal.tenantId, id))
       ) {
         throw new OrganizationHasActiveChildrenError();
@@ -664,6 +701,12 @@ export class OrganizationApplicationService {
         (await this.serviceAgreements?.hasActiveForFacility(transaction, principal.tenantId, id))
       ) {
         throw new FacilityHasActiveServiceAgreementsError();
+      }
+      if (
+        operation === 'archive' &&
+        (await this.scheduling?.hasFutureVisitsForFacility(transaction, principal.tenantId, id))
+      ) {
+        throw new FacilityHasFutureVisitsError();
       }
       const now = new Date();
       const facility = await this.organizations.setFacilityStatus(
@@ -824,12 +867,37 @@ export class OrganizationHasActiveServiceAgreementsError extends Error {
   }
 }
 
+export class OrganizationHasFutureVisitsError extends Error {
+  readonly code = 'FUTURE_VISITS_EXIST';
+  constructor() {
+    super('Resolve future visits before archiving this organization');
+    this.name = 'OrganizationHasFutureVisitsError';
+  }
+}
+
+export class InvalidSchedulingTimezoneError extends Error {
+  readonly code = 'INVALID_SCHEDULING_TIMEZONE';
+
+  constructor() {
+    super('Scheduling timezone must be a supported IANA timezone');
+    this.name = 'InvalidSchedulingTimezoneError';
+  }
+}
+
 export class FacilityHasActiveServiceAgreementsError extends Error {
   readonly code = 'FACILITY_HAS_ACTIVE_SERVICE_AGREEMENTS';
 
   constructor() {
     super('End active service agreements before archiving this facility');
     this.name = 'FacilityHasActiveServiceAgreementsError';
+  }
+}
+
+export class FacilityHasFutureVisitsError extends Error {
+  readonly code = 'FUTURE_VISITS_EXIST';
+  constructor() {
+    super('Resolve future visits before archiving this facility');
+    this.name = 'FacilityHasFutureVisitsError';
   }
 }
 

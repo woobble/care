@@ -42,6 +42,14 @@ export interface EmployeeRequestMetadata {
   userAgent?: string;
 }
 
+export interface EmployeeSchedulingGuard {
+  hasFutureAssignmentsForEmployee(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+  ): Promise<boolean>;
+}
+
 export interface EmployeeSearchInput {
   text?: string;
   status?: EmployeeStatus;
@@ -86,7 +94,49 @@ export class EmployeeApplicationService {
     private readonly audit: AuditWriter,
     private readonly outbox: OutboxWriter,
     private readonly employees: EmployeeRepository = new EmployeeRepository(),
+    private readonly scheduling?: EmployeeSchedulingGuard,
   ) {}
+
+  async validateForScheduling(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+    organizationId: string,
+    facilityId: string,
+    onDate: string,
+  ): Promise<EmployeeSnapshot> {
+    const employee = await this.requireEmployee(transaction, tenantId, employeeId, true);
+    if (employee.status !== 'active') throw new EmployeeNotActiveForScheduleError();
+    if (employee.organizationId !== organizationId) {
+      throw new EmployeeNotAssignedToFacilityError();
+    }
+    const assignments = await this.employees.facilityAssignments(transaction, tenantId, employeeId);
+    if (
+      !assignments.some(
+        (assignment) =>
+          assignment.facilityId === facilityId &&
+          assignment.organizationId === organizationId &&
+          assignment.status === 'active' &&
+          assignment.facilityStatus === 'active' &&
+          (assignment.validFrom === null || assignment.validFrom <= onDate) &&
+          (assignment.validUntil === null || assignment.validUntil >= onDate),
+      )
+    ) {
+      throw new EmployeeNotAssignedToFacilityError();
+    }
+    return employee;
+  }
+
+  async getForSchedulingManagement(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+    lock = false,
+  ) {
+    const employee = await this.requireEmployee(transaction, tenantId, employeeId, lock);
+    const context = await this.employees.readContext(transaction, tenantId, employeeId);
+    return { employee, ...context };
+  }
 
   async search(
     principal: AuthorizationPrincipal,
@@ -1485,6 +1535,16 @@ export class EmployeeApplicationService {
       if (status === current.status) {
         return this.detailForPrincipal(transaction, principal, current, resource);
       }
+      if (
+        status !== 'active' &&
+        (await this.scheduling?.hasFutureAssignmentsForEmployee(
+          transaction,
+          principal.tenantId,
+          id,
+        ))
+      ) {
+        throw new EmployeeHasFutureVisitsError();
+      }
       const now = new Date();
       const employee = await this.employees.setStatus(
         transaction,
@@ -1692,6 +1752,33 @@ export class EmployeeApplicationService {
       metadata: input.metadata,
     });
     await this.outbox.enqueue(transaction, input.event);
+  }
+}
+
+export class EmployeeNotActiveForScheduleError extends Error {
+  readonly code = 'VISIT_EMPLOYEE_INACTIVE';
+
+  constructor() {
+    super('Only active employees can be assigned to a visit');
+    this.name = 'EmployeeNotActiveForScheduleError';
+  }
+}
+
+export class EmployeeNotAssignedToFacilityError extends Error {
+  readonly code = 'VISIT_EMPLOYEE_NOT_ASSIGNED_TO_FACILITY';
+
+  constructor() {
+    super('Employee is not actively assigned to this facility for the visit date');
+    this.name = 'EmployeeNotAssignedToFacilityError';
+  }
+}
+
+export class EmployeeHasFutureVisitsError extends Error {
+  readonly code = 'FUTURE_VISITS_EXIST';
+
+  constructor() {
+    super('Resolve future assigned visits before deactivating or archiving this employee');
+    this.name = 'EmployeeHasFutureVisitsError';
   }
 }
 

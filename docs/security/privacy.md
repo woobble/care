@@ -7,3 +7,5 @@ The application does not log client request bodies or child-resource values. Aud
 All users with an applicable `client.read` grant can read the client child resources through the API; this slice does not define separate permissions for insurance identifiers or contact details. Review this access boundary before adding broader caregiver workflows. Contact notes are length-limited and the UI explicitly discourages medical information there.
 
 Service catalog data is operational configuration. It is tenant-isolated and has separate `service.read` and catalog mutation permissions. It contains no prices, claims, or billing records.
+
+Scheduling reveals that a client has a planned visit, along with only the display name, provider, time, planned service snapshots, status, and assigned employee names needed for coordination. Calendar responses omit insurance, Pflegegrad, contacts, and full client history. Visit notes are not copied into audit metadata or outbox events. Caregiver schedule access is read-only and remains subject to client and schedule scope checks. A planned visit is not a care record or evidence of service delivery.

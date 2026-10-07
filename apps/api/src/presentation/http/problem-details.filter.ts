@@ -11,6 +11,7 @@ import {
   ClientInsuranceNotFoundError,
   ClientNotFoundError,
   ClientHasActiveServiceAgreementsError,
+  FutureVisitsExistError,
   FacilityNotInOrganizationError,
   InvalidClientAddressError,
   InvalidClientContactError,
@@ -30,6 +31,9 @@ import {
   EmployeeArchivedError,
   EmployeeConflictError,
   EmployeeNotFoundError,
+  EmployeeHasFutureVisitsError,
+  EmployeeNotActiveForScheduleError,
+  EmployeeNotAssignedToFacilityError,
   InvalidEmployeeDataError,
   InvalidEmployeePaginationError,
   InvalidEmployeeTransitionError,
@@ -63,6 +67,9 @@ import {
   TeamArchivedError,
   TeamNotFoundError,
   FacilityHasActiveServiceAgreementsError,
+  FacilityHasFutureVisitsError,
+  OrganizationHasFutureVisitsError,
+  InvalidSchedulingTimezoneError,
 } from '@care/organizations';
 import {
   InvalidServiceAvailabilityError,
@@ -77,7 +84,29 @@ import {
   ServiceNotValidForPeriodError,
   ServiceDefinitionHasActiveServiceAgreementsError,
 } from '@care/services';
-import { ServiceAgreementError } from '@care/service-agreements';
+import {
+  ServiceAgreementError,
+  ServiceAgreementHasFutureVisitsError,
+} from '@care/service-agreements';
+import {
+  DuplicateVisitAssignmentError,
+  InvalidEmployeeUnavailabilityError,
+  InvalidScheduleGenerationRangeError,
+  InvalidVisitAssignmentError,
+  InvalidVisitDataError,
+  InvalidVisitQueryError,
+  InvalidVisitServiceError,
+  InvalidVisitStatusError,
+  VisitAgreementInvalidError,
+  VisitAgreementServiceInvalidError,
+  VisitAssignmentNotFoundError,
+  VisitCancelledError,
+  VisitClientConflictError,
+  VisitEmployeeConflictError,
+  VisitEmployeeUnavailableError,
+  VisitNotFoundError,
+  VisitOutsideProviderContextError,
+} from '@care/scheduling';
 import type { ApiRequest } from '../../http/request';
 
 @Injectable()
@@ -115,6 +144,9 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     status = 409;
     code = exception.code;
   } else if (exception instanceof ClientHasActiveServiceAgreementsError) {
+    status = 409;
+    code = exception.code;
+  } else if (exception instanceof FutureVisitsExistError) {
     status = 409;
     code = exception.code;
   } else if (exception instanceof InvalidClientTransitionError) {
@@ -171,6 +203,41 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof ServiceNotAvailableForProviderError ||
     exception instanceof ServiceNotValidForPeriodError ||
     exception instanceof ServiceDefinitionHasActiveServiceAgreementsError
+  ) {
+    status = 409;
+    code = exception.code;
+  } else if (
+    exception instanceof VisitNotFoundError ||
+    exception instanceof VisitAssignmentNotFoundError
+  ) {
+    status = 404;
+    code = exception.code;
+  } else if (
+    exception instanceof InvalidVisitDataError ||
+    exception instanceof InvalidVisitServiceError ||
+    exception instanceof InvalidVisitQueryError ||
+    exception instanceof InvalidScheduleGenerationRangeError ||
+    exception instanceof InvalidEmployeeUnavailabilityError ||
+    exception instanceof InvalidVisitAssignmentError ||
+    exception instanceof InvalidSchedulingTimezoneError
+  ) {
+    status = 400;
+    code = exception.code;
+  } else if (
+    exception instanceof InvalidVisitStatusError ||
+    exception instanceof VisitCancelledError ||
+    exception instanceof VisitOutsideProviderContextError ||
+    exception instanceof VisitClientConflictError ||
+    exception instanceof VisitEmployeeConflictError ||
+    exception instanceof VisitEmployeeUnavailableError ||
+    exception instanceof VisitAgreementInvalidError ||
+    exception instanceof VisitAgreementServiceInvalidError ||
+    exception instanceof DuplicateVisitAssignmentError ||
+    exception instanceof EmployeeNotActiveForScheduleError ||
+    exception instanceof EmployeeNotAssignedToFacilityError ||
+    exception instanceof EmployeeHasFutureVisitsError ||
+    exception instanceof OrganizationHasFutureVisitsError ||
+    exception instanceof FacilityHasFutureVisitsError
   ) {
     status = 409;
     code = exception.code;
@@ -232,18 +299,30 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
   } else if (exception instanceof ServiceAgreementError) {
     status = exception.status;
     code = exception.code;
+  } else if (exception instanceof ServiceAgreementHasFutureVisitsError) {
+    status = 409;
+    code = exception.code;
   } else if (exception instanceof HttpException) {
     status = exception.getStatus();
     code = statusCode(status);
   }
 
   const title = titleFor(status);
+  const conflictingInterval =
+    exception instanceof VisitEmployeeConflictError
+      ? {
+          plannedStart: exception.plannedStart.toISOString(),
+          plannedEnd: exception.plannedEnd.toISOString(),
+          timezone: exception.timezone,
+        }
+      : undefined;
   return {
     type: `https://care-platform.example/problems/${code.toLowerCase().replaceAll('_', '-')}`,
     title,
     status,
     code,
     traceId,
+    ...(conflictingInterval ? { conflictingInterval } : {}),
   };
 }
 

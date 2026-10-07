@@ -15,6 +15,7 @@ export const createOrganizationSchema = z
     address: optionalAddress,
     phone: optionalPhone,
     email: optionalEmail,
+    timezone: z.string().trim().min(1).max(100).optional(),
   })
   .strict();
 
@@ -30,6 +31,7 @@ export const createFacilitySchema = z
     address: optionalAddress,
     phone: optionalPhone,
     email: optionalEmail,
+    timezone: z.string().trim().min(1).max(100).nullable().optional(),
   })
   .strict();
 
@@ -84,6 +86,9 @@ export class OrganizationResponseDto {
   @ApiProperty({ type: String, format: 'email', nullable: true })
   email!: string | null;
 
+  @ApiProperty({ example: 'Europe/Berlin' })
+  timezone!: string;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 
@@ -124,6 +129,9 @@ export class FacilityResponseDto {
 
   @ApiProperty({ type: String, format: 'email', nullable: true })
   email!: string | null;
+
+  @ApiPropertyOptional({ example: 'Europe/Berlin', nullable: true })
+  timezone!: string | null;
 
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
@@ -182,6 +190,9 @@ export class CreateOrganizationDto {
 
   @ApiPropertyOptional({ type: String, format: 'email', nullable: true })
   email?: string | null;
+
+  @ApiPropertyOptional({ example: 'Europe/Berlin' })
+  timezone?: string;
 }
 
 export class UpdateOrganizationDto {
@@ -202,6 +213,9 @@ export class UpdateOrganizationDto {
 
   @ApiPropertyOptional({ type: String, format: 'email', nullable: true })
   email?: string | null;
+
+  @ApiPropertyOptional({ example: 'Europe/Berlin' })
+  timezone?: string;
 }
 
 export class CreateFacilityDto {
@@ -222,6 +236,9 @@ export class CreateFacilityDto {
 
   @ApiPropertyOptional({ type: String, format: 'email', nullable: true })
   email?: string | null;
+
+  @ApiPropertyOptional({ example: 'Europe/Berlin', nullable: true })
+  timezone?: string | null;
 }
 
 export class UpdateFacilityDto {
@@ -239,6 +256,9 @@ export class UpdateFacilityDto {
 
   @ApiPropertyOptional({ type: String, format: 'email', nullable: true })
   email?: string | null;
+
+  @ApiPropertyOptional({ example: 'Europe/Berlin', nullable: true })
+  timezone?: string | null;
 }
 
 export class CreateTeamDto {

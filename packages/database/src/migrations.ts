@@ -14,6 +14,7 @@ const migrations = {
     '0001_initial.sql',
     '0002_tenant_integrity.sql',
     '0003_operational_structure.sql',
+    '0004_scheduling_timezone.sql',
   ],
   identity: [
     '0001_initial.sql',
@@ -22,9 +23,10 @@ const migrations = {
     '0004_team_membership_scope.sql',
   ],
   employees: ['0001_initial.sql', '0002_user_link_integrity.sql', '0003_employee_management.sql'],
-  clients: ['0001_initial.sql', '0002_master_data.sql'],
+  clients: ['0001_initial.sql', '0002_master_data.sql', '0003_scheduling_provider_reference.sql'],
   services: ['0001_catalog.sql'],
-  'service-agreements': ['0001_service_agreements.sql'],
+  'service-agreements': ['0001_service_agreements.sql', '0002_scheduling_references.sql'],
+  scheduling: ['0001_scheduling.sql'],
   audit: ['0001_initial.sql', '0002_query_indexes.sql'],
   platform: ['0001_initial.sql'],
 } as const;

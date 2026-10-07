@@ -87,6 +87,16 @@ export default async function FacilityDetailPage({
             defaultValue={facility.address ?? ''}
             maxLength={500}
           />
+          <Field
+            id="timezone"
+            label="Zeitzone (optional überschreiben)"
+            name="timezone"
+            defaultValue={facility.timezone ?? ''}
+            maxLength={100}
+          />
+          <p className="text-sm text-slate-600 md:col-span-2">
+            Leer lassen, um die Zeitzone der Organisation zu übernehmen.
+          </p>
           <div className="md:col-span-2">
             <Button type="submit">Save changes</Button>
           </div>

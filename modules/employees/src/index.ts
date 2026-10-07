@@ -8,7 +8,12 @@ export {
   skillDefinitions,
   employeeSkills,
 } from './schema';
-export { EmployeeApplicationService } from './application/employee.service';
+export {
+  EmployeeApplicationService,
+  EmployeeNotActiveForScheduleError,
+  EmployeeNotAssignedToFacilityError,
+  EmployeeHasFutureVisitsError,
+} from './application/employee.service';
 export {
   CrossTenantReferenceError,
   EmployeeAlreadyLinkedError,
@@ -42,6 +47,7 @@ export type {
 } from './domain/employee';
 export type {
   EmployeeRequestMetadata,
+  EmployeeSchedulingGuard,
   EmployeeSearchInput,
   FacilityAssignmentInput,
   QualificationInput,

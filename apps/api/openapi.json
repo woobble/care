@@ -6728,6 +6728,844 @@
         ]
       }
     },
+    "/api/v1/visits": {
+      "get": {
+        "operationId": "VisitsController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "plannedStart",
+                "clientName",
+                "createdAt"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "origin",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "agreement_generated",
+                "manual"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "unassigned",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "serviceDefinitionId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "planned",
+                "confirmed",
+                "cancelled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "teamId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "employeeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "until",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitListResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List visits in a bounded calendar range",
+        "tags": [
+          "visits"
+        ]
+      },
+      "post": {
+        "operationId": "VisitsController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVisitDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitMutationResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a manually planned visit",
+        "tags": [
+          "visits"
+        ]
+      }
+    },
+    "/api/v1/visits/{id}": {
+      "get": {
+        "operationId": "VisitsController_get",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a visit and its operational history",
+        "tags": [
+          "visits"
+        ]
+      },
+      "patch": {
+        "operationId": "VisitsController_update",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateVisitDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitMutationResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reschedule or update an operational note",
+        "tags": [
+          "visits"
+        ]
+      }
+    },
+    "/api/v1/visits/{id}/confirm": {
+      "post": {
+        "operationId": "VisitsController_confirm",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitMutationResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Confirm a planned visit",
+        "tags": [
+          "visits"
+        ]
+      }
+    },
+    "/api/v1/visits/{id}/unconfirm": {
+      "post": {
+        "operationId": "VisitsController_unconfirm",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitMutationResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Return a confirmed visit to planned status",
+        "tags": [
+          "visits"
+        ]
+      }
+    },
+    "/api/v1/visits/{id}/cancel": {
+      "post": {
+        "operationId": "VisitsController_cancel",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitMutationResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancel a visit while retaining its history",
+        "tags": [
+          "visits"
+        ]
+      }
+    },
+    "/api/v1/visits/{id}/assignments": {
+      "get": {
+        "operationId": "VisitsController_assignments",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VisitAssignmentResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List assignment history for a visit",
+        "tags": [
+          "visits"
+        ]
+      },
+      "post": {
+        "operationId": "VisitsController_assign",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVisitAssignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitAssignmentMutationResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Assign an employee to a visit",
+        "tags": [
+          "visits"
+        ]
+      }
+    },
+    "/api/v1/visits/{id}/assignments/{assignmentId}": {
+      "delete": {
+        "operationId": "VisitsController_unassign",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "assignmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Unassign an employee while retaining assignment history",
+        "tags": [
+          "visits"
+        ]
+      }
+    },
+    "/api/v1/service-agreements/{id}/generate-visits": {
+      "post": {
+        "operationId": "AgreementVisitGenerationController_generate",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleGenerationRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleGenerationResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Generate planned visits from agreement cadence rules",
+        "tags": [
+          "visit planning"
+        ]
+      }
+    },
+    "/api/v1/employees/{employeeId}/unavailability": {
+      "post": {
+        "operationId": "EmployeeUnavailabilityController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "employeeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeeUnavailabilityRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Employee unavailability recorded"
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Record an employee unavailability period",
+        "tags": [
+          "employee availability"
+        ]
+      }
+    },
     "/api/v1/me": {
       "get": {
         "operationId": "MeController_me",
@@ -6891,6 +7729,22 @@
           },
           "traceId": {
             "type": "string"
+          },
+          "conflictingInterval": {
+            "type": "object",
+            "properties": {
+              "plannedStart": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "plannedEnd": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "timezone": {
+                "type": "string"
+              }
+            }
           }
         },
         "required": [
@@ -7215,6 +8069,10 @@
             "format": "email",
             "nullable": true
           },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Berlin"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -7234,6 +8092,7 @@
           "address",
           "phone",
           "email",
+          "timezone",
           "createdAt",
           "updatedAt"
         ]
@@ -7270,6 +8129,10 @@
             "type": "string",
             "format": "email",
             "nullable": true
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Berlin"
           }
         },
         "required": [
@@ -7308,6 +8171,10 @@
             "type": "string",
             "format": "email",
             "nullable": true
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Berlin"
           }
         }
       },
@@ -7361,6 +8228,11 @@
           "email": {
             "type": "string",
             "format": "email",
+            "nullable": true
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Berlin",
             "nullable": true
           },
           "createdAt": {
@@ -7419,6 +8291,11 @@
             "type": "string",
             "format": "email",
             "nullable": true
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Berlin",
+            "nullable": true
           }
         },
         "required": [
@@ -7452,6 +8329,11 @@
           "email": {
             "type": "string",
             "format": "email",
+            "nullable": true
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Berlin",
             "nullable": true
           }
         }
@@ -10978,6 +11860,711 @@
           }
         }
       },
+      "VisitServiceResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceDefinitionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "agreementServiceId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "serviceCode": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "occurrence",
+              "minute",
+              "hour",
+              "day"
+            ]
+          },
+          "plannedQuantity": {
+            "type": "string"
+          },
+          "plannedDurationMinutes": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "serviceDefinitionId",
+          "serviceCode",
+          "serviceName",
+          "unit",
+          "plannedQuantity"
+        ]
+      },
+      "VisitAssignmentResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "employeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "employeeDisplayName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "unassigned"
+            ]
+          },
+          "assignedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "unassignedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "employeeId",
+          "employeeDisplayName",
+          "status",
+          "assignedAt"
+        ]
+      },
+      "VisitResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientDisplayName": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationName": {
+            "type": "string"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityName": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "agreement_generated",
+              "manual"
+            ]
+          },
+          "serviceAgreementId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "confirmed",
+              "cancelled"
+            ]
+          },
+          "plannedStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "plannedEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeWindowStart": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "timeWindowEnd": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Berlin"
+          },
+          "manuallyAdjusted": {
+            "type": "boolean"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisitServiceResponseDto"
+            }
+          },
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisitAssignmentResponseDto"
+            }
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "clientDisplayName",
+          "organizationId",
+          "organizationName",
+          "facilityId",
+          "facilityName",
+          "origin",
+          "status",
+          "plannedStart",
+          "plannedEnd",
+          "timezone",
+          "manuallyAdjusted",
+          "services",
+          "assignments"
+        ]
+      },
+      "VisitListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisitResponseDto"
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "CreateVisitServiceDto": {
+        "type": "object",
+        "properties": {
+          "serviceDefinitionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "agreementServiceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "plannedQuantity": {
+            "type": "string",
+            "default": "1"
+          },
+          "plannedDurationMinutes": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1440,
+            "nullable": true
+          }
+        },
+        "required": [
+          "serviceDefinitionId"
+        ]
+      },
+      "CreateVisitDto": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceAgreementId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "plannedStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "plannedEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "localDate": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-07"
+          },
+          "localStartTime": {
+            "type": "string",
+            "format": "time",
+            "example": "08:30"
+          },
+          "localEndTime": {
+            "type": "string",
+            "format": "time",
+            "example": "09:30"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "nullable": true
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateVisitServiceDto"
+            }
+          },
+          "employeeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "clientId",
+          "services"
+        ]
+      },
+      "VisitMutationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "agreement_generated",
+              "manual"
+            ]
+          },
+          "serviceAgreementId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "confirmed",
+              "cancelled"
+            ]
+          },
+          "plannedStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "plannedEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Berlin"
+          },
+          "manuallyAdjusted": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "nullable": true
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisitServiceResponseDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "organizationId",
+          "facilityId",
+          "origin",
+          "status",
+          "plannedStart",
+          "plannedEnd",
+          "timezone",
+          "manuallyAdjusted",
+          "services"
+        ]
+      },
+      "VisitHistoryEntryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "timestamp"
+        ]
+      },
+      "VisitDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientDisplayName": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationName": {
+            "type": "string"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityName": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "agreement_generated",
+              "manual"
+            ]
+          },
+          "serviceAgreementId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "confirmed",
+              "cancelled"
+            ]
+          },
+          "plannedStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "plannedEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeWindowStart": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "timeWindowEnd": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Berlin"
+          },
+          "manuallyAdjusted": {
+            "type": "boolean"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisitServiceResponseDto"
+            }
+          },
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisitAssignmentResponseDto"
+            }
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "nullable": true
+          },
+          "assignmentHistory": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisitAssignmentResponseDto"
+            }
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisitHistoryEntryDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "clientDisplayName",
+          "organizationId",
+          "organizationName",
+          "facilityId",
+          "facilityName",
+          "origin",
+          "status",
+          "plannedStart",
+          "plannedEnd",
+          "timezone",
+          "manuallyAdjusted",
+          "services",
+          "assignments",
+          "assignmentHistory",
+          "history"
+        ]
+      },
+      "UpdateVisitDto": {
+        "type": "object",
+        "properties": {
+          "plannedStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "plannedEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "localDate": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-07"
+          },
+          "localStartTime": {
+            "type": "string",
+            "format": "time",
+            "example": "08:30"
+          },
+          "localEndTime": {
+            "type": "string",
+            "format": "time",
+            "example": "09:30"
+          },
+          "timeWindowStart": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "timeWindowEnd": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "nullable": true
+          }
+        }
+      },
+      "CreateVisitAssignmentDto": {
+        "type": "object",
+        "properties": {
+          "employeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "maxLength": 80,
+            "nullable": true
+          }
+        },
+        "required": [
+          "employeeId"
+        ]
+      },
+      "VisitAssignmentMutationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "visitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "employeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "maxLength": 80,
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "unassigned"
+            ]
+          },
+          "assignedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "unassignedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "visitId",
+          "employeeId",
+          "status",
+          "assignedAt"
+        ]
+      },
+      "ScheduleGenerationRequestDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-07"
+          },
+          "until": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-11-03"
+          }
+        },
+        "required": [
+          "from",
+          "until"
+        ]
+      },
+      "ScheduleGenerationResponseDto": {
+        "type": "object",
+        "properties": {
+          "generationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "generated": {
+            "type": "number"
+          },
+          "alreadyExisting": {
+            "type": "number"
+          },
+          "requiresManualPlacement": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "generationId",
+          "generated",
+          "alreadyExisting",
+          "requiresManualPlacement"
+        ]
+      },
+      "EmployeeUnavailabilityRequestDto": {
+        "type": "object",
+        "properties": {
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true
+          }
+        },
+        "required": [
+          "startsAt",
+          "endsAt"
+        ]
+      },
       "MeResponseDto": {
         "type": "object",
         "properties": {
@@ -11041,6 +12628,13 @@
               "service_agreement.suspend",
               "service_agreement.end",
               "service_agreement.manage_services",
+              "schedule.read",
+              "schedule.create",
+              "schedule.update",
+              "schedule.cancel",
+              "schedule.confirm",
+              "schedule.assign",
+              "schedule.generate",
               "employee.read",
               "employee.create",
               "employee.update",

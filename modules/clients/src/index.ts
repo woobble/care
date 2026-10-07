@@ -63,7 +63,9 @@ export {
   type ClientSearchQuery,
   type CreateClientInput,
   type ClientServiceAgreementGuard,
+  type ClientSchedulingGuard,
   ClientHasActiveServiceAgreementsError,
+  FutureVisitsExistError,
 } from './application/client.service';
 export {
   ClientMasterDataApplicationService,

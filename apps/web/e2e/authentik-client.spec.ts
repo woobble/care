@@ -294,6 +294,79 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.getByRole('button', { name: 'Aktivieren', exact: true }).click();
     await expect(page.getByText('Leistungsplanung aktiviert', { exact: true })).toBeVisible();
     await expect(agreementCard.getByText('Aktiv', { exact: true }).first()).toBeVisible();
+
+    const generationFrom = addCalendarDays(dateInBerlin(), 1);
+    const generationUntil = addCalendarDays(generationFrom, 6);
+    const generationDetails = page
+      .locator('details')
+      .filter({ hasText: 'Besuche erzeugen' })
+      .first();
+    await generationDetails.locator('summary').click();
+    const generationForm = generationDetails.locator('form');
+    await generationForm.locator('input[name="from"]').fill(generationFrom);
+    await generationForm.locator('input[name="until"]').fill(generationUntil);
+    await generationForm.getByRole('button', { name: 'Besuche erzeugen' }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Besuchserzeugung abgeschlossen.' }),
+    ).toBeVisible();
+    const generatedRows = await database.query<{ id: string; planned_start: Date }>(
+      `SELECT id, planned_start FROM scheduling.visits
+       WHERE tenant_id = $1 AND client_id = $2 AND service_agreement_id IS NOT NULL
+       ORDER BY planned_start, id`,
+      [tenantId, agreementClientId],
+    );
+    const generatedVisit = generatedRows.rows[0];
+    if (!generatedVisit) throw new Error('The agreement UI did not generate a visit');
+    const generatedDate = dateInTimezone(generatedVisit.planned_start, 'Europe/Berlin');
+    await page.goto(`/planning?clientId=${agreementClientId}&date=${generatedDate}`);
+    await expect(page.getByRole('heading', { name: 'Einsatzplanung' })).toBeVisible();
+    const generatedVisitLink = page.locator(`a[href="/visits/${generatedVisit.id}"]`);
+    await expect(generatedVisitLink).toContainText(`Agreement E2E ${runId}`);
+    await generatedVisitLink.click();
+    await expect(page.getByRole('heading', { name: `Agreement E2E ${runId}` })).toBeVisible();
+    await page.getByLabel('Mitarbeitende zuweisen').selectOption(workforceEmployeeId);
+    await page.getByRole('button', { name: 'Zuweisen' }).click();
+    await expect(
+      page
+        .getByRole('region', { name: 'Mitarbeitende' })
+        .getByRole('listitem')
+        .filter({ hasText: `E2E ${runId}` }),
+    ).toBeVisible();
+
+    await page.getByLabel('Beginn', { exact: true }).fill('08:15');
+    await page.getByLabel('Ende', { exact: true }).fill('08:45');
+    await page.getByRole('button', { name: 'Speichern' }).click();
+    await expect(page.getByText('Ja', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Bestätigen' }).click();
+    await expect(page.getByText('Bestätigt', { exact: true })).toBeVisible();
+
+    await page.goto(`/clients/${agreementClientId}`);
+    await expect(page.getByRole('heading', { name: 'Kommende Einsätze' })).toBeVisible();
+    await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true })).toBeVisible();
+    await page.goto(`/employees/${workforceEmployeeId}`);
+    await expect(page.getByRole('heading', { name: 'Kommende Einsätze' })).toBeVisible();
+    await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true })).toBeVisible();
+
+    await page.goto(`/visits/${generatedVisit.id}`);
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Einsatz absagen' }).click();
+    await expect(page.getByText('Abgesagt', { exact: true })).toBeVisible();
+    const remainingVisits = await database.query<{ id: string; status: string }>(
+      `SELECT id, status FROM scheduling.visits
+       WHERE tenant_id = $1 AND client_id = $2 AND service_agreement_id IS NOT NULL
+         AND status <> 'cancelled'
+       ORDER BY planned_start, id`,
+      [tenantId, agreementClientId],
+    );
+    for (const visit of remainingVisits.rows) {
+      await page.goto(`/visits/${visit.id}`);
+      page.once('dialog', (dialog) => dialog.accept());
+      await page.getByRole('button', { name: 'Einsatz absagen' }).click();
+      await expect(page.getByText('Abgesagt', { exact: true })).toBeVisible();
+    }
+
+    await page.goto(`/clients/${agreementClientId}/service-agreements`);
+    await expect(page.getByRole('heading', { name: 'Leistungsplanung' })).toBeVisible();
     await page.getByRole('button', { name: 'Pausieren' }).click();
     await expect(agreementCard.getByText('Pausiert', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Fortsetzen' }).click();
@@ -556,6 +629,49 @@ async function cleanupServiceAgreementRecords(
     );
     const agreementIds = agreements.rows.map((agreement) => agreement.id);
     if (agreementIds.length) {
+      const generationRows = await database.query<{ id: string }>(
+        'SELECT id FROM scheduling.schedule_generations WHERE tenant_id = $1 AND agreement_id = ANY($2::uuid[])',
+        [tenantId, agreementIds],
+      );
+      const visitRows = await database.query<{ id: string }>(
+        'SELECT id FROM scheduling.visits WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+        [tenantId, clientIds],
+      );
+      const generationIds = generationRows.rows.map((row) => row.id);
+      const visitIds = visitRows.rows.map((row) => row.id);
+      const schedulingResourceIds = [...generationIds, ...visitIds];
+      if (schedulingResourceIds.length) {
+        await database.query(
+          'DELETE FROM audit.audit_entries WHERE tenant_id = $1 AND resource_id = ANY($2::uuid[])',
+          [tenantId, schedulingResourceIds],
+        );
+        await database.query(
+          `DELETE FROM platform.outbox_messages
+           WHERE tenant_id = $1
+             AND (event ->> 'aggregateId' = ANY($2::text[])
+               OR event -> 'payload' ->> 'agreementId' = ANY($3::text[])
+               OR event -> 'payload' ->> 'clientId' = ANY($4::text[]))`,
+          [tenantId, [...schedulingResourceIds, ...agreementIds], agreementIds, clientIds],
+        );
+      }
+      if (visitIds.length) {
+        await database.query(
+          'DELETE FROM scheduling.visit_assignments WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+          [tenantId, visitIds],
+        );
+        await database.query(
+          'DELETE FROM scheduling.visit_services WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+          [tenantId, visitIds],
+        );
+        await database.query(
+          'DELETE FROM scheduling.visits WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+          [tenantId, visitIds],
+        );
+      }
+      await database.query(
+        'DELETE FROM scheduling.schedule_generations WHERE tenant_id = $1 AND agreement_id = ANY($2::uuid[])',
+        [tenantId, agreementIds],
+      );
       await database.query(
         'DELETE FROM audit.audit_entries WHERE tenant_id = $1 AND resource_type = $2 AND resource_id = ANY($3::uuid[])',
         [tenantId, 'service_agreement', agreementIds],
@@ -578,6 +694,27 @@ async function cleanupServiceAgreementRecords(
     await database.query('ROLLBACK');
     throw error;
   }
+}
+
+function dateInBerlin(): string {
+  return dateInTimezone(new Date(), 'Europe/Berlin');
+}
+
+function dateInTimezone(value: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const part = (name: string) => parts.find((item) => item.type === name)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function addCalendarDays(value: string, count: number): string {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + count);
+  return date.toISOString().slice(0, 10);
 }
 
 async function cleanupWorkforceRecords(

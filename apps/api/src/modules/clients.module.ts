@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import {
   createClientApplicationService,
   createClientMasterDataApplicationService,
+  type ClientSchedulingGuard,
 } from '@care/clients';
 import type { AuditWriter } from '@care/audit';
 import type { UnitOfWork } from '@care/database';
@@ -14,6 +15,7 @@ import {
   CLIENT_MASTER_DATA_APPLICATION,
   OUTBOX_WRITER,
   SERVICE_AGREEMENT_GUARDS,
+  SCHEDULING_GUARDS,
   UNIT_OF_WORK,
 } from '../tokens';
 import { AuditModule } from './audit.module';
@@ -38,13 +40,20 @@ import { ServiceAgreementProtectionModule } from './service-agreement-protection
     TenantContextGuard,
     {
       provide: CLIENT_APPLICATION,
-      inject: [UNIT_OF_WORK, AUDIT_WRITER, OUTBOX_WRITER, SERVICE_AGREEMENT_GUARDS],
+      inject: [
+        UNIT_OF_WORK,
+        AUDIT_WRITER,
+        OUTBOX_WRITER,
+        SERVICE_AGREEMENT_GUARDS,
+        SCHEDULING_GUARDS,
+      ],
       useFactory: (
         unitOfWork: UnitOfWork,
         audit: AuditWriter,
         outbox: OutboxWriter,
         guards: ServiceAgreementGuards,
-      ) => createClientApplicationService(unitOfWork, audit, outbox, guards),
+        scheduling: ClientSchedulingGuard,
+      ) => createClientApplicationService(unitOfWork, audit, outbox, guards, scheduling),
     },
     {
       provide: CLIENT_MASTER_DATA_APPLICATION,

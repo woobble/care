@@ -10,13 +10,18 @@ export {
   InvalidTeamAssignmentError,
   OrganizationHasActiveServiceAgreementsError,
   FacilityHasActiveServiceAgreementsError,
+  InvalidSchedulingTimezoneError,
+  OrganizationHasFutureVisitsError,
+  FacilityHasFutureVisitsError,
   type OrganizationServiceAgreementGuard,
+  type OrganizationSchedulingGuard,
   type AgreementProviderContext,
 } from './application/organization.service';
 export {
   OrganizationHasActiveChildrenError,
   FacilityHasActiveTeamsError,
 } from './domain/organization';
+export { isSupportedTimeZone } from './domain/timezone';
 export { OrganizationRepository } from './infrastructure/persistence/organization.repository';
 export type {
   FacilityData,

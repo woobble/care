@@ -9,6 +9,7 @@ test('worker dispatches an outbox event before marking it delivered', async () =
   const database = await startCareTestDatabase();
   const owner = new Client({ connectionString: database.migrationUrl });
   const tenantId = randomUUID();
+  const generatedVisitId = randomUUID();
   const events = [
     createDomainEvent({
       type: 'employee.created',
@@ -36,6 +37,19 @@ test('worker dispatches an outbox event before marking it delivered', async () =
       actor: { type: 'system' },
       correlationId: randomUUID(),
       payload: { clientId: randomUUID() },
+    }),
+    createDomainEvent({
+      type: 'visit.generated',
+      tenantId,
+      aggregateType: 'visit',
+      aggregateId: generatedVisitId,
+      actor: { type: 'system' },
+      correlationId: randomUUID(),
+      payload: {
+        visitId: generatedVisitId,
+        agreementId: randomUUID(),
+        clientId: randomUUID(),
+      },
     }),
   ];
   let worker: ReturnType<typeof Bun.spawn> | undefined;

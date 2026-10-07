@@ -41,6 +41,19 @@ export interface ClientServiceAgreementGuard {
   ): Promise<boolean>;
 }
 
+export interface ClientSchedulingGuard {
+  hasVisitsForClient(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    clientId: string,
+  ): Promise<boolean>;
+  hasFutureVisitsForClient(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    clientId: string,
+  ): Promise<boolean>;
+}
+
 export interface ClientSearchQuery {
   text?: string;
   status?: ClientStatus;
@@ -62,6 +75,7 @@ export class ClientApplicationService {
     private readonly audit: AuditWriter,
     private readonly outbox: OutboxWriter,
     private readonly serviceAgreements?: ClientServiceAgreementGuard,
+    private readonly scheduling?: ClientSchedulingGuard,
   ) {}
 
   async getForServiceAgreement(
@@ -310,6 +324,15 @@ export class ClientApplicationService {
       ) {
         throw new ClientHasActiveServiceAgreementsError();
       }
+      if (
+        (previous.organizationId !== contextChange.organizationId ||
+          previous.primaryFacilityId !== contextChange.primaryFacilityId) &&
+        (await this.scheduling?.hasVisitsForClient(transaction, principal.tenantId, id))
+      ) {
+        throw new FutureVisitsExistError(
+          'Provider context cannot change after a visit is recorded',
+        );
+      }
       const changedFields = client.changeProviderContext(contextChange);
       if (changedFields.length === 0) return previous;
       const snapshot = client.snapshot;
@@ -383,6 +406,9 @@ export class ClientApplicationService {
         client.archive();
         if (await this.serviceAgreements?.hasActiveForClient(transaction, principal.tenantId, id)) {
           throw new ClientHasActiveServiceAgreementsError();
+        }
+        if (await this.scheduling?.hasFutureVisitsForClient(transaction, principal.tenantId, id)) {
+          throw new FutureVisitsExistError();
         }
       }
       const snapshot = client.snapshot;
@@ -481,6 +507,7 @@ export function createClientApplicationService(
   audit: AuditWriter,
   outbox: OutboxWriter,
   serviceAgreements?: ClientServiceAgreementGuard,
+  scheduling?: ClientSchedulingGuard,
 ): ClientApplicationService {
   return new ClientApplicationService(
     unitOfWork,
@@ -490,6 +517,7 @@ export function createClientApplicationService(
     audit,
     outbox,
     serviceAgreements,
+    scheduling,
   );
 }
 
@@ -499,5 +527,14 @@ export class ClientHasActiveServiceAgreementsError extends Error {
   constructor() {
     super('End active service agreements before changing or archiving this client');
     this.name = 'ClientHasActiveServiceAgreementsError';
+  }
+}
+
+export class FutureVisitsExistError extends Error {
+  readonly code = 'FUTURE_VISITS_EXIST';
+
+  constructor(message = 'Resolve future scheduled visits before archiving this client') {
+    super(message);
+    this.name = 'FutureVisitsExistError';
   }
 }

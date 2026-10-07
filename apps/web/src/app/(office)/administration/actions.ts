@@ -143,6 +143,7 @@ export async function createOrganizationAction(formData: FormData): Promise<void
       address: readNullableText(formData, 'address'),
       phone: readNullableText(formData, 'phone'),
       email: readNullableText(formData, 'email'),
+      timezone: readText(formData, 'timezone') || 'Europe/Berlin',
     },
   });
   if (error || !data)
@@ -168,6 +169,7 @@ export async function updateOrganizationAction(formData: FormData): Promise<void
       address: readNullableText(formData, 'address'),
       phone: readNullableText(formData, 'phone'),
       email: readNullableText(formData, 'email'),
+      timezone: readText(formData, 'timezone') || 'Europe/Berlin',
     },
   });
   if (error)
@@ -219,6 +221,7 @@ export async function createFacilityAction(formData: FormData): Promise<void> {
       address: readNullableText(formData, 'address'),
       phone: readNullableText(formData, 'phone'),
       email: readNullableText(formData, 'email'),
+      timezone: readNullableText(formData, 'timezone'),
     },
   });
   if (error || !data)
@@ -243,6 +246,7 @@ export async function updateFacilityAction(formData: FormData): Promise<void> {
       address: readNullableText(formData, 'address'),
       phone: readNullableText(formData, 'phone'),
       email: readNullableText(formData, 'email'),
+      timezone: readNullableText(formData, 'timezone'),
     },
   });
   if (error) redirect(`/administration/facilities/${id}?error=${encodeURIComponent(error.code)}`);

@@ -23,6 +23,31 @@ export interface ServiceAgreementGuards {
     tenantId: string,
     serviceDefinitionId: string,
   ): Promise<boolean>;
+  hasFutureVisitsForAgreement?(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    agreementId: string,
+    after?: Date,
+  ): Promise<boolean>;
+  hasFutureVisitsOutsideAgreementValidity?(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    agreementId: string,
+    validFrom: string,
+    validUntil: string | null,
+  ): Promise<boolean>;
+  hasFutureVisitsForAgreementService?(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    agreementServiceId: string,
+  ): Promise<boolean>;
+  hasFutureVisitsOutsideAgreementServiceValidity?(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    agreementServiceId: string,
+    validFrom: string | null,
+    validUntil: string | null,
+  ): Promise<boolean>;
 }
 
 export class DrizzleServiceAgreementGuards implements ServiceAgreementGuards {

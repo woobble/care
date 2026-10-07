@@ -33,6 +33,7 @@ export {
 } from './domain/service-agreement';
 export {
   ServiceAgreementApplicationService,
+  ServiceAgreementHasFutureVisitsError,
   createServiceAgreementApplicationService,
   type ServiceAgreementSearchQuery,
   type CreateServiceAgreementInput,

@@ -4,7 +4,7 @@ The `service-agreements` module owns the relationship between a client and the s
 
 ## Boundary and ownership
 
-The service catalog defines what a provider can offer. A service agreement records what the provider plans to deliver to one client. The agreement is not a schedule, visit, performed service, care record, or billing source. Scheduling will later interpret its planning data and create concrete visits through a separate workflow.
+The service catalog defines what a provider can offer. A service agreement records what the provider plans to deliver to one client. The agreement is not itself a schedule, visit, performed service, care record, or billing source. The separate scheduling module can explicitly interpret active agreement lines and create concrete planned visits. A planned visit is not proof that care occurred.
 
 The module owns `ServiceAgreement` and `AgreementService`. It references clients, organizations, facilities, and catalog definitions through their public application interfaces and tenant-qualified database keys. Each agreement line snapshots the selected service code, name, and unit so its history remains readable after catalog edits or archival.
 
@@ -54,13 +54,14 @@ Tenant, organization, and facility scopes follow the existing client scope rules
 - A client with an active agreement cannot be archived. End or suspend the agreement first; archival does not silently change agreement state.
 - Organizations and facilities cannot be archived while active agreements reference them.
 - A service definition can be archived after active agreements using it have ended. Historical agreement lines remain readable.
+- Ending an agreement or narrowing its validity is blocked while incompatible future non-cancelled visits remain. Suspending an agreement stops new generation but does not remove existing visits.
 - Agreement and service-line history is retained; the API does not physically delete it.
 
 ## Transactions, timeline, and events
 
-Each mutation writes the aggregate change, audit entry, and version 1 outbox event in one unit-of-work transaction. Client timeline queries include agreement audit rows by their `clientId` metadata and render fixed German summaries without exposing raw metadata.
+Each mutation writes the aggregate change, audit entry, and version 1 outbox event in one unit-of-work transaction. Client timeline queries include agreement audit rows by their `clientId` metadata and render fixed German summaries without exposing raw metadata. Explicit visit generation is owned by scheduling and records generated occurrences separately.
 
-The worker registers handlers for agreement and line events and logs their event types. It does not create schedules or visits.
+The worker logs agreement, line, visit, assignment, and generation events until downstream workflows exist. It does not execute care or create billing facts.
 
 ## API
 

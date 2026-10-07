@@ -97,6 +97,14 @@ export default async function OrganizationDetailPage({
             defaultValue={organization.address ?? ''}
             maxLength={500}
           />
+          <Field
+            id="timezone"
+            label="Zeitzone"
+            name="timezone"
+            defaultValue={organization.timezone}
+            required
+            maxLength={100}
+          />
           <div className="md:col-span-2">
             <Button type="submit">Save changes</Button>
           </div>
@@ -139,6 +147,15 @@ export default async function OrganizationDetailPage({
           <Field id="facility-email" label="Email" name="email" type="email" maxLength={320} />
           <Field id="facility-phone" label="Phone" name="phone" type="tel" maxLength={40} />
           <Field id="facility-address" label="Address" name="address" maxLength={500} />
+          <Field
+            id="facility-timezone"
+            label="Zeitzone (optional überschreiben)"
+            name="timezone"
+            maxLength={100}
+          />
+          <p className="text-sm text-slate-600 md:col-span-2">
+            Leer lassen, um die Zeitzone der Organisation zu übernehmen.
+          </p>
           <div className="md:col-span-2">
             <Button type="submit">Create facility</Button>
           </div>

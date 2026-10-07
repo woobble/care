@@ -7,12 +7,14 @@ export interface OrganizationData {
   address: string | null;
   phone: string | null;
   email: string | null;
+  timezone?: string;
 }
 
 export interface OrganizationSnapshot extends OrganizationData {
   id: string;
   tenantId: string;
   status: StructureStatus;
+  timezone: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,6 +26,7 @@ export interface FacilityData {
   address: string | null;
   phone: string | null;
   email: string | null;
+  timezone?: string | null;
 }
 
 export interface FacilitySnapshot extends FacilityData {
@@ -32,6 +35,7 @@ export interface FacilitySnapshot extends FacilityData {
   organizationName: string;
   organizationStatus: StructureStatus;
   status: StructureStatus;
+  timezone: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
