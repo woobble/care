@@ -34,7 +34,7 @@ Generation reports `generated`, `alreadyExisting`, and `requiresManualPlacement`
 
 ## Authorization and privacy
 
-Scheduling requires the corresponding `schedule.*` permission as well as access to the client. Tenant, organization, and facility scope filter visits to the intersection of schedule and client access. Team-scoped schedule reads include only visits with an active assignment to an employee whose team membership is active on the visit's local date. Unassigned visits are not visible through team scope. `assigned_clients` remains unsupported. Caregiver roles can read schedules but cannot mutate them.
+Scheduling requires the corresponding `schedule.*` permission as well as access to the client. Tenant, organization, and facility scope filter visits to the intersection of schedule and client access. Team-scoped schedule reads include only visits with an active assignment to an employee whose team membership is active on the visit's local date. Unassigned visits are not visible through team scope. `assigned_clients` remains unsupported. Caregiver execution reads and mutations use the self-schedule endpoint and additionally require the authenticated user's linked employee to have an active assignment.
 
 Calendar responses expose the client display name, provider names, planned time, status, service snapshots, and active employee summaries. They omit insurance, Pflegegrad, contacts, and the client timeline. Notes stay out of audit metadata and outbox payloads. All scheduling-owned tables have forced tenant RLS in addition to application authorization.
 
@@ -48,7 +48,7 @@ Future non-cancelled visits prevent client, facility, or organization archive wh
 
 The versioned API supports bounded calendar queries, manual creation, rescheduling, lifecycle commands, assignment history, agreement generation, and employee unavailability. Calendar queries return a joined read model with related service and assignment summaries rather than issuing one request or query per visit.
 
-The Office UI provides a week/day planning board, filters, open visits, manual planning, visit details and history, assignment, lifecycle actions, and agreement generation. Client and employee detail pages show upcoming visits. There is no caregiver execution workflow or mobile schedule shell in this slice.
+The Office UI provides a week/day planning board, filters, open visits, manual planning, visit details and history, assignment, lifecycle actions, and agreement generation. Client and employee detail pages show upcoming visits. Visit execution is a separate module; once it starts, planning cannot cancel, reschedule, or alter that visit's planned services.
 
 ## Deliberate limits
 

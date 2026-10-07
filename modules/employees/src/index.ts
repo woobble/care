@@ -13,6 +13,7 @@ export {
   EmployeeNotActiveForScheduleError,
   EmployeeNotAssignedToFacilityError,
   EmployeeHasFutureVisitsError,
+  EmployeeHasInProgressExecutionError,
 } from './application/employee.service';
 export {
   CrossTenantReferenceError,
@@ -48,6 +49,7 @@ export type {
 export type {
   EmployeeRequestMetadata,
   EmployeeSchedulingGuard,
+  EmployeeExecutionGuard,
   EmployeeSearchInput,
   FacilityAssignmentInput,
   QualificationInput,

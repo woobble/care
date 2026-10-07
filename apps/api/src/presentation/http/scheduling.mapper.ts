@@ -65,13 +65,14 @@ export function visitResponse(visit: VisitCalendarRow) {
 export function visitDetailResponse(input: {
   visit: VisitCalendarRow;
   assignmentHistory: Array<VisitAssignmentSnapshot & { employeeDisplayName: string }>;
-  history: Array<{ id: string; action: string; timestamp: Date }>;
+  history: Array<{ id: string; actorId: string; action: string; timestamp: Date }>;
 }) {
   return {
     ...visitResponse(input.visit),
     assignmentHistory: input.assignmentHistory.map(assignmentResponse),
-    history: input.history.map(({ id, action, timestamp }) => ({
+    history: input.history.map(({ id, actorId, action, timestamp }) => ({
       id,
+      actorId,
       action,
       timestamp: timestamp.toISOString(),
     })),

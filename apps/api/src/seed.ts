@@ -315,6 +315,8 @@ try {
         'schedule.confirm',
         'schedule.assign',
         'schedule.generate',
+        'visit_execution.read',
+        'visit_execution.correct',
       ] as const,
       Caregiver: [
         'client.read',
@@ -325,6 +327,10 @@ try {
         'service.read',
         'service_agreement.read',
         'schedule.read',
+        'visit_execution.read',
+        'visit_execution.start',
+        'visit_execution.record_services',
+        'visit_execution.complete',
       ] as const,
     };
     const roleDefinitions = Object.entries(definitions) as Array<

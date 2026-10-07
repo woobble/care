@@ -55,6 +55,7 @@ export default async function ClientDetailPage({
     organizationsResult,
     facilitiesResult,
     upcomingVisitsResult,
+    recentVisitsResult,
     recentCancelledVisitsResult,
   ] = await Promise.all([
     get('/api/v1/clients/{id}', { params: { path: { id }, header } }),
@@ -83,6 +84,18 @@ export default async function ClientDetailPage({
           from: visitRecent.toISOString(),
           until: visitNow.toISOString(),
           clientId: id,
+          page: 1,
+          pageSize: 100,
+        },
+        header,
+      },
+    }),
+    get('/api/v1/visits', {
+      params: {
+        query: {
+          from: visitRecent.toISOString(),
+          until: visitNow.toISOString(),
+          clientId: id,
           status: 'cancelled',
           page: 1,
           pageSize: 100,
@@ -91,6 +104,32 @@ export default async function ClientDetailPage({
       },
     }),
   ]);
+  const visitItems = upcomingVisitsResult.data?.items ?? [];
+  const recentVisitItems = recentVisitsResult.data?.items ?? [];
+  const fetchExecutionSummaries = (items: typeof visitItems) =>
+    items.length
+      ? get('/api/v1/visit-executions/summaries', {
+          params: {
+            query: { visitIds: items.map((visit) => visit.id).join(',') },
+            header,
+          },
+        })
+      : Promise.resolve({ data: [], error: undefined });
+  const [executionSummariesResult, recentExecutionSummariesResult] = await Promise.all([
+    fetchExecutionSummaries(visitItems),
+    fetchExecutionSummaries(recentVisitItems),
+  ]);
+  const executionByVisitId = new Map(
+    (executionSummariesResult.data ?? []).map((summary) => [summary.visitId, summary]),
+  );
+  const recentExecutionByVisitId = new Map(
+    (recentExecutionSummariesResult.data ?? []).map((summary) => [summary.visitId, summary]),
+  );
+  const recentExecutionItems = recentVisitItems.filter(
+    (visit) =>
+      recentExecutionByVisitId.get(visit.id)?.executionStatus !== undefined &&
+      recentExecutionByVisitId.get(visit.id)?.executionStatus !== 'not_started',
+  );
   if (clientResult.error?.code === 'CLIENT_NOT_FOUND') notFound();
 
   const client = clientResult.data;
@@ -943,45 +982,117 @@ export default async function ClientDetailPage({
               <p className="rounded-lg border bg-white p-4 text-sm text-slate-600">
                 Einsätze sind mit der aktuellen Berechtigung nicht verfügbar.
               </p>
-            ) : upcomingVisitsResult.data?.items.length ? (
+            ) : visitItems.length ? (
               <ol className="grid gap-2">
-                {upcomingVisitsResult.data.items.map((visit) => (
-                  <li key={visit.id}>
-                    <Link
-                      className="grid gap-1 rounded-lg border bg-white p-4 hover:border-blue-400 sm:grid-cols-[12rem_1fr_auto]"
-                      href={`/visits/${visit.id}`}
-                    >
-                      <time dateTime={visit.plannedStart}>
-                        {formatVisitDateTime(visit.plannedStart, visit.timezone)}
-                      </time>
-                      <span>
-                        <strong>
-                          {visit.services.map((service) => service.serviceName).join(' · ')}
-                        </strong>
-                        <span className="block text-sm text-slate-600">
-                          {visit.assignments.length
-                            ? visit.assignments
-                                .map((assignment) => assignment.employeeDisplayName)
-                                .join(', ')
-                            : 'Noch nicht zugewiesen'}
+                {visitItems.map((visit) => {
+                  const execution = executionByVisitId.get(visit.id);
+                  return (
+                    <li key={visit.id}>
+                      <Link
+                        className="grid gap-1 rounded-lg border bg-white p-4 hover:border-blue-400 sm:grid-cols-[12rem_1fr_auto]"
+                        href={`/visits/${visit.id}`}
+                      >
+                        <time dateTime={visit.plannedStart}>
+                          {formatVisitDateTime(visit.plannedStart, visit.timezone)}
+                        </time>
+                        <span>
+                          <strong>
+                            {visit.services.map((service) => service.serviceName).join(' · ')}
+                          </strong>
+                          <span className="block text-sm text-slate-600">
+                            {visit.assignments.length
+                              ? visit.assignments
+                                  .map((assignment) => assignment.employeeDisplayName)
+                                  .join(', ')
+                              : 'Noch nicht zugewiesen'}
+                          </span>
+                          {execution ? (
+                            <span className="block text-sm text-slate-600">
+                              Ausführung:{' '}
+                              {execution.executionStatus === 'completed'
+                                ? 'Abgeschlossen'
+                                : execution.executionStatus === 'in_progress'
+                                  ? 'In Bearbeitung'
+                                  : 'Noch nicht begonnen'}
+                              {execution.actualStart ? (
+                                <>
+                                  {' · Tatsächlich '}
+                                  {formatVisitDateTime(execution.actualStart, visit.timezone)}
+                                  {execution.actualEnd
+                                    ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone)}`
+                                    : ''}
+                                </>
+                              ) : null}
+                            </span>
+                          ) : executionSummariesResult.error ? (
+                            <span className="block text-sm text-slate-600">
+                              Ausführungsstatus nicht verfügbar.
+                            </span>
+                          ) : null}
                         </span>
-                      </span>
-                      <span className="text-sm">
-                        {visit.status === 'cancelled'
-                          ? 'Abgesagt'
-                          : visit.status === 'confirmed'
-                            ? 'Bestätigt'
-                            : 'Geplant'}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
+                        <span className="text-sm">
+                          {visit.status === 'cancelled'
+                            ? 'Abgesagt'
+                            : visit.status === 'confirmed'
+                              ? 'Bestätigt'
+                              : 'Geplant'}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ol>
             ) : (
               <p className="rounded-lg border bg-white p-4 text-slate-600">
                 Keine Einsätze in den nächsten 30 Tagen.
               </p>
             )}
+            {recentVisitsResult.error ? (
+              <p className="text-sm text-slate-600">
+                Vergangene Ausführungen sind nicht verfügbar.
+              </p>
+            ) : recentExecutionSummariesResult.error ? (
+              <p className="text-sm text-slate-600">
+                Ausführungsstatus vergangener Einsätze ist nicht verfügbar.
+              </p>
+            ) : recentExecutionItems.length ? (
+              <div className="grid gap-3">
+                <h3 className="font-semibold">Zuletzt ausgeführte Einsätze</h3>
+                <ol className="grid gap-2">
+                  {recentExecutionItems.map((visit) => {
+                    const execution = recentExecutionByVisitId.get(visit.id);
+                    if (!execution) return null;
+                    return (
+                      <li key={visit.id}>
+                        <Link
+                          className="grid gap-1 rounded-lg border bg-white p-4 hover:border-blue-400"
+                          href={`/visits/${visit.id}`}
+                        >
+                          <time dateTime={visit.plannedStart}>
+                            {formatVisitDateTime(visit.plannedStart, visit.timezone)}
+                          </time>
+                          <strong>
+                            {visit.services.map((service) => service.serviceName).join(' · ')}
+                          </strong>
+                          <span className="text-sm text-slate-600">
+                            Ausführung:{' '}
+                            {execution.executionStatus === 'completed'
+                              ? 'Abgeschlossen'
+                              : 'In Bearbeitung'}
+                            {execution.actualStart
+                              ? ` · Tatsächlich ${formatVisitDateTime(execution.actualStart, visit.timezone)}`
+                              : ''}
+                            {execution.actualEnd
+                              ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone)}`
+                              : ''}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            ) : null}
             {recentCancelledVisitsResult.data?.items.length ? (
               <details className="rounded-lg border bg-white p-4">
                 <summary className="cursor-pointer font-semibold">

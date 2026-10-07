@@ -38,6 +38,7 @@
         "@care/scheduling": "workspace:*",
         "@care/service-agreements": "workspace:*",
         "@care/services": "workspace:*",
+        "@care/visit-execution": "workspace:*",
         "@nestjs/common": "^12.1.2",
         "@nestjs/core": "^12.1.2",
         "@nestjs/platform-express": "^12.1.2",
@@ -69,6 +70,7 @@
         "next": "^16.3.8",
         "react": "^19.3.0",
         "react-dom": "^19.3.0",
+        "uuid": "^14.0.2",
       },
       "devDependencies": {
         "@playwright/test": "^1.63.0",
@@ -211,6 +213,25 @@
         "@care/organizations": "workspace:*",
         "@care/permissions": "workspace:*",
         "@care/platform": "workspace:*",
+        "drizzle-orm": "^0.45.3",
+        "uuid": "^14.0.2",
+      },
+    },
+    "modules/visit-execution": {
+      "name": "@care/visit-execution",
+      "dependencies": {
+        "@care/audit": "workspace:*",
+        "@care/clients": "workspace:*",
+        "@care/contracts": "workspace:*",
+        "@care/database": "workspace:*",
+        "@care/employees": "workspace:*",
+        "@care/events": "workspace:*",
+        "@care/organizations": "workspace:*",
+        "@care/permissions": "workspace:*",
+        "@care/platform": "workspace:*",
+        "@care/scheduling": "workspace:*",
+        "@care/service-agreements": "workspace:*",
+        "@care/services": "workspace:*",
         "drizzle-orm": "^0.45.3",
         "uuid": "^14.0.2",
       },
@@ -420,6 +441,8 @@
     "@care/testing": ["@care/testing@workspace:packages/testing"],
 
     "@care/ui": ["@care/ui@workspace:packages/ui"],
+
+    "@care/visit-execution": ["@care/visit-execution@workspace:modules/visit-execution"],
 
     "@care/web": ["@care/web@workspace:apps/web"],
 

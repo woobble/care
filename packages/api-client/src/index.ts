@@ -20,4 +20,4 @@ export function createCareApi(options: ApiClientOptions) {
 }
 
 export type CareApi = ReturnType<typeof createCareApi>;
-export type { paths } from './generated/schema';
+export type { components, paths } from './generated/schema';

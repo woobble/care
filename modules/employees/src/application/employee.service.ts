@@ -50,6 +50,14 @@ export interface EmployeeSchedulingGuard {
   ): Promise<boolean>;
 }
 
+export interface EmployeeExecutionGuard {
+  hasInProgressExecutionForEmployee(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+  ): Promise<boolean>;
+}
+
 export interface EmployeeSearchInput {
   text?: string;
   status?: EmployeeStatus;
@@ -95,6 +103,7 @@ export class EmployeeApplicationService {
     private readonly outbox: OutboxWriter,
     private readonly employees: EmployeeRepository = new EmployeeRepository(),
     private readonly scheduling?: EmployeeSchedulingGuard,
+    private readonly execution?: EmployeeExecutionGuard,
   ) {}
 
   async validateForScheduling(
@@ -1537,6 +1546,16 @@ export class EmployeeApplicationService {
       }
       if (
         status !== 'active' &&
+        (await this.execution?.hasInProgressExecutionForEmployee(
+          transaction,
+          principal.tenantId,
+          id,
+        ))
+      ) {
+        throw new EmployeeHasInProgressExecutionError();
+      }
+      if (
+        status !== 'active' &&
         (await this.scheduling?.hasFutureAssignmentsForEmployee(
           transaction,
           principal.tenantId,
@@ -1779,6 +1798,15 @@ export class EmployeeHasFutureVisitsError extends Error {
   constructor() {
     super('Resolve future assigned visits before deactivating or archiving this employee');
     this.name = 'EmployeeHasFutureVisitsError';
+  }
+}
+
+export class EmployeeHasInProgressExecutionError extends Error {
+  readonly code = 'EMPLOYEE_EXECUTION_IN_PROGRESS';
+
+  constructor() {
+    super('Complete the in-progress visit before deactivating or archiving this employee');
+    this.name = 'EmployeeHasInProgressExecutionError';
   }
 }
 

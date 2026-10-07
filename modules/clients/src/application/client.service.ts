@@ -54,6 +54,14 @@ export interface ClientSchedulingGuard {
   ): Promise<boolean>;
 }
 
+export interface ClientExecutionGuard {
+  hasInProgressExecutionForClient(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    clientId: string,
+  ): Promise<boolean>;
+}
+
 export interface ClientSearchQuery {
   text?: string;
   status?: ClientStatus;
@@ -76,6 +84,7 @@ export class ClientApplicationService {
     private readonly outbox: OutboxWriter,
     private readonly serviceAgreements?: ClientServiceAgreementGuard,
     private readonly scheduling?: ClientSchedulingGuard,
+    private readonly execution?: ClientExecutionGuard,
   ) {}
 
   async getForServiceAgreement(
@@ -410,6 +419,11 @@ export class ClientApplicationService {
         if (await this.scheduling?.hasFutureVisitsForClient(transaction, principal.tenantId, id)) {
           throw new FutureVisitsExistError();
         }
+        if (
+          await this.execution?.hasInProgressExecutionForClient(transaction, principal.tenantId, id)
+        ) {
+          throw new ClientExecutionInProgressError();
+        }
       }
       const snapshot = client.snapshot;
       await this.clients.update(transaction, snapshot);
@@ -508,6 +522,7 @@ export function createClientApplicationService(
   outbox: OutboxWriter,
   serviceAgreements?: ClientServiceAgreementGuard,
   scheduling?: ClientSchedulingGuard,
+  execution?: ClientExecutionGuard,
 ): ClientApplicationService {
   return new ClientApplicationService(
     unitOfWork,
@@ -518,6 +533,7 @@ export function createClientApplicationService(
     outbox,
     serviceAgreements,
     scheduling,
+    execution,
   );
 }
 
@@ -536,5 +552,14 @@ export class FutureVisitsExistError extends Error {
   constructor(message = 'Resolve future scheduled visits before archiving this client') {
     super(message);
     this.name = 'FutureVisitsExistError';
+  }
+}
+
+export class ClientExecutionInProgressError extends Error {
+  readonly code = 'CLIENT_EXECUTION_IN_PROGRESS';
+
+  constructor() {
+    super('Complete the in-progress visit before archiving this client');
+    this.name = 'ClientExecutionInProgressError';
   }
 }

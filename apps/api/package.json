@@ -34,6 +34,7 @@
     "@care/scheduling": "workspace:*",
     "@care/service-agreements": "workspace:*",
     "@care/services": "workspace:*",
+    "@care/visit-execution": "workspace:*",
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",
     "@nestjs/platform-express": "^12.1.2",

@@ -407,6 +407,159 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List visits actively assigned to the current employee */
+        get: operations["MyVisitsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visits/{visitId}/execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read visit execution and planned service decisions */
+        get: operations["VisitExecutionController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visits/{visitId}/execution/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start an assigned visit using server time */
+        post: operations["VisitExecutionController_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visits/{visitId}/execution/available-services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List services available for an unplanned execution record */
+        get: operations["VisitExecutionController_availableServices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visits/{visitId}/execution/services/{performedServiceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Record or update one planned or unplanned service result */
+        put: operations["VisitExecutionController_recordService"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visits/{visitId}/execution/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update the short operational execution note */
+        put: operations["VisitExecutionController_updateNote"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visits/{visitId}/execution/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete a visit after every planned service has a result */
+        post: operations["VisitExecutionController_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visit-executions/{id}/correct-times": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Correct actual arrival or departure with a reason */
+        post: operations["VisitExecutionCorrectionsController_correctTimes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visit-executions/summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read authorized execution status and actual times for visits */
+        get: operations["VisitExecutionSummariesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/employees": {
         parameters: {
             query?: never;
@@ -1689,6 +1842,159 @@ export interface components {
             facilityId?: string | null;
             name?: string;
         };
+        CaregiverVisitServiceResponseDto: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            unit: "occurrence" | "minute" | "hour" | "day";
+            /** @example 1.000 */
+            plannedQuantity: string;
+        };
+        CaregiverVisitResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            clientId: string;
+            clientDisplayName: string;
+            address?: string | null;
+            /** @enum {string} */
+            status: "planned" | "confirmed" | "cancelled";
+            /** Format: date-time */
+            plannedStart: string;
+            /** Format: date-time */
+            plannedEnd: string;
+            timezone: string;
+            /** @enum {string} */
+            executionStatus: "not_started" | "in_progress" | "completed";
+            /** Format: date-time */
+            actualStart?: string | null;
+            /** Format: date-time */
+            actualEnd?: string | null;
+            services: components["schemas"]["CaregiverVisitServiceResponseDto"][];
+        };
+        ExecutionVisitResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            clientId: string;
+            clientDisplayName: string;
+            address?: string | null;
+            /** @enum {string} */
+            status: "planned" | "confirmed" | "cancelled";
+            /** Format: date-time */
+            plannedStart: string;
+            /** Format: date-time */
+            plannedEnd: string;
+            timezone: string;
+        };
+        ExecutionResponseDto: {
+            /** Format: uuid */
+            id?: string | null;
+            /** @enum {string} */
+            status: "not_started" | "in_progress" | "completed";
+            version: number;
+            /** Format: date-time */
+            actualStart?: string | null;
+            /** Format: date-time */
+            actualEnd?: string | null;
+            operationalNote?: string | null;
+            /** Format: uuid */
+            startedByEmployeeId?: string | null;
+            startedByEmployeeName?: string | null;
+            /** Format: uuid */
+            completedByEmployeeId?: string | null;
+            completedByEmployeeName?: string | null;
+        };
+        PerformedServiceResponseDto: {
+            /** Format: uuid */
+            id?: string | null;
+            /** Format: uuid */
+            visitServiceId?: string | null;
+            /** Format: uuid */
+            serviceDefinitionId: string;
+            serviceCode: string;
+            serviceName: string;
+            /** @enum {string} */
+            unit: "occurrence" | "minute" | "hour" | "day";
+            /** @example 30.000 */
+            plannedQuantity?: string | null;
+            /** @example 20.000 */
+            actualQuantity?: string | null;
+            /** @enum {string} */
+            status: "not_recorded" | "performed" | "partially_performed" | "not_performed";
+            /** @enum {string|null} */
+            reasonCode?: "client_declined" | "client_not_present" | "service_not_required" | "time_constraint" | "provider_decision" | "other" | null;
+            note?: string | null;
+            /** Format: uuid */
+            performedByEmployeeId?: string | null;
+            performedByEmployeeName?: string | null;
+            unplanned: boolean;
+        };
+        VisitExecutionDetailResponseDto: {
+            visit: components["schemas"]["ExecutionVisitResponseDto"];
+            execution: components["schemas"]["ExecutionResponseDto"];
+            services: components["schemas"]["PerformedServiceResponseDto"][];
+        };
+        AvailableServiceResponseDto: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            unit: "occurrence" | "minute" | "hour" | "day";
+        };
+        RecordPerformedServiceRequestDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            visitServiceId?: string;
+            /** Format: uuid */
+            serviceDefinitionId?: string;
+            /** @enum {string} */
+            status: "performed" | "partially_performed" | "not_performed";
+            /** @example 20.000 */
+            actualQuantity: string | null;
+            /** @enum {string|null} */
+            reasonCode?: "client_declined" | "client_not_present" | "service_not_required" | "time_constraint" | "provider_decision" | "other" | null;
+            note?: string | null;
+        };
+        RecordedServiceResponseDto: {
+            service: components["schemas"]["PerformedServiceResponseDto"];
+            version: number;
+        };
+        UpdateExecutionNoteRequestDto: {
+            expectedVersion: number;
+            note: string | null;
+        };
+        ExecutionNoteResponseDto: {
+            version: number;
+            operationalNote?: string | null;
+        };
+        CompleteExecutionRequestDto: {
+            expectedVersion: number;
+        };
+        CorrectExecutionTimesRequestDto: {
+            expectedVersion: number;
+            /** Format: date-time */
+            actualStart?: string;
+            /** Format: date-time */
+            actualEnd?: string;
+            reason: string;
+        };
+        CorrectExecutionTimesResponseDto: {
+            version: number;
+        };
+        VisitExecutionSummaryResponseDto: {
+            /** Format: uuid */
+            visitId: string;
+            /** @enum {string} */
+            executionStatus: "not_started" | "in_progress" | "completed";
+            /** Format: date-time */
+            actualStart?: string | null;
+            /** Format: date-time */
+            actualEnd?: string | null;
+        };
         EmployeeResponseDto: {
             /** Format: uuid */
             id: string;
@@ -2764,6 +3070,8 @@ export interface components {
         VisitHistoryEntryDto: {
             /** Format: uuid */
             id: string;
+            /** Format: uuid */
+            actorId: string;
             action: string;
             /** Format: date-time */
             timestamp: string;
@@ -2888,7 +3196,7 @@ export interface components {
         };
         PermissionGrantDto: {
             /** @enum {string} */
-            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
+            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
             /** @enum {string} */
             scopeType: "assigned_clients" | "team" | "facility" | "organization" | "tenant";
             /** Format: uuid */
@@ -3868,6 +4176,322 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TeamResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    MyVisitsController_list: {
+        parameters: {
+            query: {
+                until: unknown;
+                from: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaregiverVisitResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    VisitExecutionController_get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                visitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitExecutionDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    VisitExecutionController_start: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                visitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitExecutionDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    VisitExecutionController_availableServices: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                visitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailableServiceResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    VisitExecutionController_recordService: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                visitId: string;
+                performedServiceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordPerformedServiceRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordedServiceResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    VisitExecutionController_updateNote: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                visitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateExecutionNoteRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionNoteResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    VisitExecutionController_complete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                visitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteExecutionRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitExecutionDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    VisitExecutionCorrectionsController_correctTimes: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectExecutionTimesRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CorrectExecutionTimesResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    VisitExecutionSummariesController_list: {
+        parameters: {
+            query: {
+                /** @description Comma-separated visit IDs; maximum 100 */
+                visitIds: string;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitExecutionSummaryResponseDto"][];
                 };
             };
             /** @description Problem Details response */

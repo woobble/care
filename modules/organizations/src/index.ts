@@ -13,8 +13,11 @@ export {
   InvalidSchedulingTimezoneError,
   OrganizationHasFutureVisitsError,
   FacilityHasFutureVisitsError,
+  OrganizationExecutionInProgressError,
+  FacilityExecutionInProgressError,
   type OrganizationServiceAgreementGuard,
   type OrganizationSchedulingGuard,
+  type OrganizationExecutionGuard,
   type AgreementProviderContext,
 } from './application/organization.service';
 export {

@@ -975,6 +975,8 @@ function timelineSummary(action: string): string {
     'visit.confirmed': 'Einsatz bestätigt',
     'visit.unconfirmed': 'Einsatzbestätigung zurückgenommen',
     'visit.cancelled': 'Einsatz abgesagt',
+    'visit_execution.started': 'Einsatz begonnen',
+    'visit_execution.completed': 'Einsatz abgeschlossen',
   };
   return summaries[action] ?? 'Klientenstammdaten geändert';
 }

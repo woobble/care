@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { randomUUID } from 'node:crypto';
+import { v7 as uuidv7 } from 'uuid';
 import type { NextFunction, Request, Response } from 'express';
 import { NestFactory } from '@nestjs/core';
 import { describe, expect, test } from 'bun:test';
@@ -192,7 +193,8 @@ describe('clients API', () => {
            ($1, 'employee.update'), ($1, 'employee.assign_facility'),
            ($1, 'employee.assign_team'), ($1, 'employee.link_user'),
            ($1, 'employee.manage_qualifications'), ($1, 'employee.manage_skills'),
-           ($1, 'employee.manage_employment')`,
+           ($1, 'employee.manage_employment'),
+           ($1, 'visit_execution.read'), ($1, 'visit_execution.correct')`,
         [officeRoleId],
       );
       await owner.query(
@@ -228,7 +230,9 @@ describe('clients API', () => {
       await owner.query(
         `INSERT INTO identity.role_permissions (role_id, permission)
          VALUES ($1, 'client.read'), ($1, 'service.read'), ($1, 'service_agreement.read'),
-                ($1, 'schedule.read')`,
+                ($1, 'schedule.read'), ($1, 'visit_execution.read'),
+                ($1, 'visit_execution.start'), ($1, 'visit_execution.record_services'),
+                ($1, 'visit_execution.complete')`,
         [caregiverRoleId],
       );
       await owner.query(
@@ -263,7 +267,7 @@ describe('clients API', () => {
         (await appRole.query('SELECT membership_id FROM identity.membership_scopes')).rowCount,
       ).toBe(3);
       expect((await appRole.query('SELECT role_id FROM identity.role_permissions')).rowCount).toBe(
-        PERMISSIONS.length + 37,
+        PERMISSIONS.length + 43,
       );
       await appRole.query('COMMIT');
       expect((await appRole.query('SELECT id FROM identity.tenant_memberships')).rowCount).toBe(0);
@@ -797,6 +801,10 @@ describe('clients API', () => {
         expect.objectContaining({ permission: 'service.read' }),
         expect.objectContaining({ permission: 'service_agreement.read' }),
         expect.objectContaining({ permission: 'schedule.read' }),
+        expect.objectContaining({ permission: 'visit_execution.read' }),
+        expect.objectContaining({ permission: 'visit_execution.start' }),
+        expect.objectContaining({ permission: 'visit_execution.record_services' }),
+        expect.objectContaining({ permission: 'visit_execution.complete' }),
       ]);
       expect(
         (await fetch(`${baseUrl}/api/v1/services`, { headers: serviceCaregiverHeaders })).status,
@@ -1748,11 +1756,604 @@ describe('clients API', () => {
       expect(updateEndedAgreement.status).toBe(409);
       expect((await updateEndedAgreement.json()).code).toBe('SERVICE_AGREEMENT_ALREADY_ENDED');
 
+      const executionClientResponse = await fetch(`${baseUrl}/api/v1/clients`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          firstName: 'Execution',
+          lastName: `Client-${randomUUID().slice(0, 8)}`,
+          organizationId,
+          primaryFacilityId: secondFacilityId,
+        }),
+      });
+      expect(executionClientResponse.status).toBe(201);
+      const executionClient = (await executionClientResponse.json()) as { id: string };
+      expect(
+        (
+          await fetch(`${baseUrl}/api/v1/clients/${executionClient.id}/activate`, {
+            method: 'POST',
+            headers,
+          })
+        ).status,
+      ).toBe(200);
+
+      const linkCaregiver = await fetch(
+        `${baseUrl}/api/v1/employees/${schedulingEmployee.id}/user`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ userId: caregiverUserId }),
+        },
+      );
+      expect(linkCaregiver.status).toBe(200);
+
+      const executionDate = dateInBerlin(-1);
+      const createExecutionVisit = async (startTime: string, employeeId: string) => {
+        const response = await fetch(`${baseUrl}/api/v1/visits`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            clientId: executionClient.id,
+            localDate: executionDate,
+            localStartTime: startTime,
+            localEndTime: `${String(Number(startTime.slice(0, 2)) + 1).padStart(2, '0')}:00`,
+            employeeIds: [employeeId],
+            services: [{ serviceDefinitionId: service.id, plannedQuantity: '1' }],
+          }),
+        });
+        expect(response.status).toBe(201);
+        return (await response.json()) as { id: string; services: Array<{ id: string }> };
+      };
+      const executionVisit = await createExecutionVisit('08:00', schedulingEmployee.id);
+      const otherEmployeeVisit = await createExecutionVisit('10:00', unavailableEmployee.id);
+      const cancelledExecutionVisit = await createExecutionVisit('12:00', schedulingEmployee.id);
+      const cancelBeforeStart = await fetch(
+        `${baseUrl}/api/v1/visits/${cancelledExecutionVisit.id}/cancel`,
+        { method: 'POST', headers },
+      );
+      expect(cancelBeforeStart.status).toBe(200);
+      const caregiverHeaders = {
+        ...headers,
+        Authorization: `Bearer ${await issueToken(caregiverSubject)}`,
+      };
+      const officeHeaders = {
+        ...headers,
+        Authorization: `Bearer ${await issueToken(secondSubject)}`,
+      };
+      const executionRange = new URLSearchParams({
+        from: new Date(`${executionDate}T00:00:00.000Z`).toISOString(),
+        until: new Date(`${addCalendarDays(executionDate, 1)}T23:59:59.000Z`).toISOString(),
+      });
+      const caregiverVisits = await fetch(`${baseUrl}/api/v1/me/visits?${executionRange}`, {
+        headers: caregiverHeaders,
+      });
+      expect(caregiverVisits.status).toBe(200);
+      expect(await caregiverVisits.json()).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: executionVisit.id })]),
+      );
+
+      const unassignedStart = await fetch(
+        `${baseUrl}/api/v1/visits/${otherEmployeeVisit.id}/execution/start`,
+        { method: 'POST', headers: caregiverHeaders },
+      );
+      expect(unassignedStart.status).toBe(403);
+      expect((await unassignedStart.json()).code).toBe('VISIT_NOT_ASSIGNED_TO_EMPLOYEE');
+      const cancelledStart = await fetch(
+        `${baseUrl}/api/v1/visits/${cancelledExecutionVisit.id}/execution/start`,
+        { method: 'POST', headers: caregiverHeaders },
+      );
+      expect(cancelledStart.status).toBe(409);
+      expect((await cancelledStart.json()).code).toBe('VISIT_CANCELLED');
+      const officeCannotStart = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/start`,
+        { method: 'POST', headers: officeHeaders },
+      );
+      expect(officeCannotStart.status).toBe(403);
+      const crossTenantExecutionRead = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution`,
+        { headers: { ...caregiverHeaders, 'X-Tenant-Id': otherTenantId } },
+      );
+      expect(crossTenantExecutionRead.status).toBe(403);
+
+      const executionBeforeStart = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution`,
+        { headers: caregiverHeaders },
+      );
+      expect(executionBeforeStart.status).toBe(200);
+      expect(await executionBeforeStart.json()).toMatchObject({
+        execution: { status: 'not_started', version: 0 },
+        services: [expect.objectContaining({ status: 'not_recorded', plannedQuantity: '1.000' })],
+      });
+
+      const executionSummaryUrl = new URL(`${baseUrl}/api/v1/visit-executions/summaries`);
+      executionSummaryUrl.searchParams.set('visitIds', executionVisit.id);
+      const caregiverExecutionSummary = await fetch(executionSummaryUrl, {
+        headers: caregiverHeaders,
+      });
+      expect(caregiverExecutionSummary.status).toBe(200);
+      expect(await caregiverExecutionSummary.json()).toEqual([
+        {
+          visitId: executionVisit.id,
+          executionStatus: 'not_started',
+          actualStart: null,
+          actualEnd: null,
+        },
+      ]);
+      const unassignedExecutionSummary = await fetch(
+        `${baseUrl}/api/v1/visit-executions/summaries?visitIds=${otherEmployeeVisit.id}`,
+        { headers: caregiverHeaders },
+      );
+      expect(unassignedExecutionSummary.status).toBe(403);
+      const crossTenantExecutionSummary = await fetch(executionSummaryUrl, {
+        headers: { ...caregiverHeaders, 'X-Tenant-Id': otherTenantId },
+      });
+      expect(crossTenantExecutionSummary.status).toBe(403);
+      const invalidExecutionSummary = await fetch(
+        `${baseUrl}/api/v1/visit-executions/summaries?visitIds=${executionVisit.id},${executionVisit.id}`,
+        { headers: officeHeaders },
+      );
+      expect(invalidExecutionSummary.status).toBe(400);
+
+      const concurrentStarts = await Promise.all([
+        fetch(`${baseUrl}/api/v1/visits/${executionVisit.id}/execution/start`, {
+          method: 'POST',
+          headers: caregiverHeaders,
+        }),
+        fetch(`${baseUrl}/api/v1/visits/${executionVisit.id}/execution/start`, {
+          method: 'POST',
+          headers: caregiverHeaders,
+        }),
+      ]);
+      expect(concurrentStarts.map((response) => response.status)).toEqual([200, 200]);
+      const startedDetails = (await Promise.all(
+        concurrentStarts.map((response) => response.json()),
+      )) as Array<{ execution: { id: string; version: number } }>;
+      expect(startedDetails[0]?.execution).toEqual(startedDetails[1]?.execution);
+      const executionId = startedDetails[0]!.execution.id;
+      expect(startedDetails[0]!.execution.version).toBe(1);
+
+      // The past visit and ended agreement let facility and organization archive checks reach
+      // their in-progress execution guards instead of earlier planning or agreement guards.
+      const executionArchiveChecks = [
+        {
+          response: fetch(`${baseUrl}/api/v1/clients/${executionClient.id}/archive`, {
+            method: 'POST',
+            headers,
+          }),
+          code: 'CLIENT_EXECUTION_IN_PROGRESS',
+        },
+        {
+          response: fetch(`${baseUrl}/api/v1/employees/${schedulingEmployee.id}/deactivate`, {
+            method: 'POST',
+            headers,
+          }),
+          code: 'EMPLOYEE_EXECUTION_IN_PROGRESS',
+        },
+        {
+          response: fetch(`${baseUrl}/api/v1/facilities/${secondFacilityId}/archive`, {
+            method: 'POST',
+            headers,
+          }),
+          code: 'FACILITY_EXECUTION_IN_PROGRESS',
+        },
+        {
+          response: fetch(`${baseUrl}/api/v1/organizations/${organizationId}/archive`, {
+            method: 'POST',
+            headers,
+          }),
+          code: 'ORGANIZATION_EXECUTION_IN_PROGRESS',
+        },
+      ];
+      for (const { response: archiveResponse, code } of executionArchiveChecks) {
+        const response = await archiveResponse;
+        expect(response.status).toBe(409);
+        expect((await response.json()).code).toBe(code);
+      }
+
+      const rescheduleExecution = await fetch(`${baseUrl}/api/v1/visits/${executionVisit.id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          localDate: executionDate,
+          localStartTime: '08:05',
+          localEndTime: '09:05',
+        }),
+      });
+      expect(rescheduleExecution.status).toBe(409);
+      expect((await rescheduleExecution.json()).code).toBe('VISIT_EXECUTION_PLANNING_LOCKED');
+      const cancelExecution = await fetch(`${baseUrl}/api/v1/visits/${executionVisit.id}/cancel`, {
+        method: 'POST',
+        headers,
+      });
+      expect(cancelExecution.status).toBe(409);
+      expect((await cancelExecution.json()).code).toBe('VISIT_EXECUTION_PLANNING_LOCKED');
+
+      const unresolvedCompletion = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/complete`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ expectedVersion: 1 }),
+        },
+      );
+      expect(unresolvedCompletion.status).toBe(409);
+      expect((await unresolvedCompletion.json()).code).toBe('PERFORMED_SERVICE_REQUIRED');
+
+      const visitServiceId = executionVisit.services[0]?.id;
+      if (!visitServiceId) throw new Error('Execution visit has no planned service');
+      const performedServiceId = uuidv7();
+      const [recordPlannedService, completionRace] = await Promise.all([
+        fetch(
+          `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/services/${performedServiceId}`,
+          {
+            method: 'PUT',
+            headers: caregiverHeaders,
+            body: JSON.stringify({
+              expectedVersion: 1,
+              visitServiceId,
+              serviceDefinitionId: service.id,
+              status: 'partially_performed',
+              actualQuantity: '0.500',
+              reasonCode: null,
+              note: null,
+            }),
+          },
+        ),
+        fetch(`${baseUrl}/api/v1/visits/${executionVisit.id}/execution/complete`, {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ expectedVersion: 1 }),
+        }),
+      ]);
+      expect(recordPlannedService.status).toBe(200);
+      expect(completionRace.status).toBe(409);
+      expect(['PERFORMED_SERVICE_REQUIRED', 'VISIT_EXECUTION_VERSION_CONFLICT']).toContain(
+        (await completionRace.json()).code,
+      );
+      expect(await recordPlannedService.json()).toMatchObject({
+        version: 2,
+        service: { id: performedServiceId, status: 'partially_performed', actualQuantity: '0.500' },
+      });
+
+      const invalidPrecisionUpdate = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/services/${performedServiceId}`,
+        {
+          method: 'PUT',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: 2,
+            visitServiceId,
+            status: 'performed',
+            actualQuantity: '1.0000',
+          }),
+        },
+      );
+      expect(invalidPrecisionUpdate.status).toBe(400);
+      expect((await invalidPrecisionUpdate.json()).code).toBe('PERFORMED_SERVICE_INVALID_QUANTITY');
+
+      const staleServiceUpdate = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/services/${performedServiceId}`,
+        {
+          method: 'PUT',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: 1,
+            visitServiceId,
+            status: 'partially_performed',
+            actualQuantity: '0.250',
+          }),
+        },
+      );
+      expect(staleServiceUpdate.status).toBe(409);
+      expect((await staleServiceUpdate.json()).code).toBe('VISIT_EXECUTION_VERSION_CONFLICT');
+
+      const unavailableUnplannedService = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/services/${uuidv7()}`,
+        {
+          method: 'PUT',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: 2,
+            serviceDefinitionId: unavailableService.id,
+            status: 'performed',
+            actualQuantity: '1.000',
+          }),
+        },
+      );
+      expect(unavailableUnplannedService.status).toBe(409);
+      expect((await unavailableUnplannedService.json()).code).toBe(
+        'PERFORMED_SERVICE_SERVICE_INVALID',
+      );
+
+      const unplannedPerformedServiceId = uuidv7();
+      const addUnplannedService = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/services/${unplannedPerformedServiceId}`,
+        {
+          method: 'PUT',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: 2,
+            serviceDefinitionId: service.id,
+            status: 'performed',
+            actualQuantity: '1.000',
+          }),
+        },
+      );
+      expect(addUnplannedService.status).toBe(200);
+      expect(await addUnplannedService.json()).toMatchObject({
+        version: 3,
+        service: { id: unplannedPerformedServiceId, visitServiceId: null, unplanned: true },
+      });
+
+      const operationalMarker = `operational-note-${randomUUID()}`;
+      const updateExecutionNote = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/note`,
+        {
+          method: 'PUT',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ expectedVersion: 3, note: operationalMarker }),
+        },
+      );
+      expect(updateExecutionNote.status).toBe(200);
+      expect(await updateExecutionNote.json()).toMatchObject({ version: 4 });
+
+      const completeExecution = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/complete`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ expectedVersion: 4 }),
+        },
+      );
+      expect(completeExecution.status).toBe(200);
+      const completedDetail = (await completeExecution.json()) as {
+        execution: {
+          id: string;
+          status: string;
+          version: number;
+          actualStart: string;
+          actualEnd: string;
+        };
+        services: Array<{
+          visitServiceId: string | null;
+          plannedQuantity: string | null;
+          actualQuantity: string | null;
+          status: string;
+          unplanned: boolean;
+        }>;
+      };
+      expect(completedDetail.execution).toMatchObject({
+        id: executionId,
+        status: 'completed',
+        version: 5,
+      });
+      expect(completedDetail.services).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            visitServiceId,
+            plannedQuantity: '1.000',
+            actualQuantity: '0.500',
+            status: 'partially_performed',
+            unplanned: false,
+          }),
+          expect.objectContaining({
+            visitServiceId: null,
+            plannedQuantity: null,
+            actualQuantity: '1.000',
+            status: 'performed',
+            unplanned: true,
+          }),
+        ]),
+      );
+
+      const repeatedCompletion = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/complete`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ expectedVersion: 4 }),
+        },
+      );
+      expect(repeatedCompletion.status).toBe(200);
+      expect(await repeatedCompletion.json()).toMatchObject({
+        execution: { id: executionId, status: 'completed', version: 5 },
+      });
+
+      const caregiverCannotCorrect = await fetch(
+        `${baseUrl}/api/v1/visit-executions/${executionId}/correct-times`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: 5,
+            actualStart: new Date(
+              Date.parse(completedDetail.execution.actualStart) - 60_000,
+            ).toISOString(),
+            reason: 'Correcting an entry mistake',
+          }),
+        },
+      );
+      expect(caregiverCannotCorrect.status).toBe(403);
+      const correctedStart = new Date(
+        Date.parse(completedDetail.execution.actualStart) - 60_000,
+      ).toISOString();
+      const correctExecutionTime = await fetch(
+        `${baseUrl}/api/v1/visit-executions/${executionId}/correct-times`,
+        {
+          method: 'POST',
+          headers: officeHeaders,
+          body: JSON.stringify({
+            expectedVersion: 5,
+            actualStart: correctedStart,
+            reason: 'Correcting an entry mistake',
+          }),
+        },
+      );
+      expect(correctExecutionTime.status).toBe(200);
+      expect(await correctExecutionTime.json()).toMatchObject({ version: 6 });
+
+      const officeExecutionRead = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution`,
+        { headers: officeHeaders },
+      );
+      expect(officeExecutionRead.status).toBe(200);
+      expect(await officeExecutionRead.json()).toMatchObject({
+        execution: { id: executionId, status: 'completed', actualStart: correctedStart },
+      });
+      const officeExecutionSummary = await fetch(executionSummaryUrl, { headers: officeHeaders });
+      expect(officeExecutionSummary.status).toBe(200);
+      expect(await officeExecutionSummary.json()).toEqual([
+        {
+          visitId: executionVisit.id,
+          executionStatus: 'completed',
+          actualStart: correctedStart,
+          actualEnd: completedDetail.execution.actualEnd,
+        },
+      ]);
+      const officeCannotRecordService = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/services/${performedServiceId}`,
+        {
+          method: 'PUT',
+          headers: officeHeaders,
+          body: JSON.stringify({
+            expectedVersion: 6,
+            visitServiceId,
+            status: 'performed',
+            actualQuantity: '1.000',
+          }),
+        },
+      );
+      expect(officeCannotRecordService.status).toBe(403);
+
+      const visitHistoryResponse = await fetch(`${baseUrl}/api/v1/visits/${executionVisit.id}`, {
+        headers: officeHeaders,
+      });
+      expect(visitHistoryResponse.status).toBe(200);
+      const visitHistory = (await visitHistoryResponse.json()) as {
+        history: Array<{ action: string; actorId: string }>;
+      };
+      expect(visitHistory.history.map((entry) => entry.action)).toEqual(
+        expect.arrayContaining([
+          'visit_execution.started',
+          'visit_execution.note_updated',
+          'performed_service.recorded',
+          'performed_service.added_unplanned',
+          'visit_execution.completed',
+          'visit_execution.times_corrected',
+        ]),
+      );
+      expect(visitHistory.history.every((entry) => Boolean(entry.actorId))).toBe(true);
+
+      const executionTimelineResponse = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/timeline`,
+        { headers: officeHeaders },
+      );
+      expect(executionTimelineResponse.status).toBe(200);
+      const executionTimeline = (await executionTimelineResponse.json()) as Array<{
+        action: string;
+        summary: string;
+      }>;
+      expect(executionTimeline.map((entry) => entry.action)).toEqual(
+        expect.arrayContaining(['visit_execution.started', 'visit_execution.completed']),
+      );
+      expect(executionTimeline.map((entry) => entry.summary)).toEqual(
+        expect.arrayContaining(['Einsatz begonnen', 'Einsatz abgeschlossen']),
+      );
+      expect(JSON.stringify(executionTimeline)).not.toContain(operationalMarker);
+
+      const executionAudit = await owner.query<{ action: string; metadata: string }>(
+        `SELECT action, metadata::text AS metadata FROM audit.audit_entries
+         WHERE tenant_id = $1 AND (resource_id = $2 OR metadata->>'executionId' = $3)
+         ORDER BY timestamp, id`,
+        [tenantId, executionClient.id, executionId],
+      );
+      expect(executionAudit.rows.map((entry) => entry.action)).toEqual(
+        expect.arrayContaining([
+          'visit_execution.started',
+          'performed_service.recorded',
+          'performed_service.added_unplanned',
+          'visit_execution.note_updated',
+          'visit_execution.completed',
+          'visit_execution.times_corrected',
+        ]),
+      );
+      expect(JSON.stringify(executionAudit.rows)).not.toContain(operationalMarker);
+      const executionEvents = await owner.query<{ event: string }>(
+        `SELECT event::text AS event FROM platform.outbox_messages
+         WHERE tenant_id = $1 AND event->>'aggregateId' = $2`,
+        [tenantId, executionId],
+      );
+      const parsedExecutionEvents = executionEvents.rows.map(
+        ({ event }) => JSON.parse(event) as { type: string; version: number },
+      );
+      expect(parsedExecutionEvents.map((event) => event.type)).toEqual(
+        expect.arrayContaining([
+          'visit_execution.started',
+          'performed_service.recorded',
+          'performed_service.unplanned_added',
+          'visit_execution.note_updated',
+          'visit_execution.completed',
+          'visit_execution.corrected',
+        ]),
+      );
+      expect(parsedExecutionEvents.every((event) => event.version === 1)).toBe(true);
+
+      await appRole.query('BEGIN');
+      await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [otherTenantId]);
+      expect(
+        (
+          await appRole.query('SELECT id FROM visit_execution.executions WHERE id = $1', [
+            executionId,
+          ])
+        ).rowCount,
+      ).toBe(0);
+      expect(
+        (
+          await appRole.query(
+            'SELECT id FROM visit_execution.performed_services WHERE execution_id = $1',
+            [executionId],
+          )
+        ).rowCount,
+      ).toBe(0);
+      await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+      expect(
+        (
+          await appRole.query('SELECT id FROM visit_execution.executions WHERE id = $1', [
+            executionId,
+          ])
+        ).rowCount,
+      ).toBe(1);
+      await appRole.query('COMMIT');
+
       const archivedAfterEnd = await fetch(`${baseUrl}/api/v1/services/${service.id}/archive`, {
         method: 'POST',
         headers,
       });
       expect(archivedAfterEnd.status).toBe(200);
+      const executionAfterServiceArchive = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution`,
+        { headers: caregiverHeaders },
+      );
+      expect(executionAfterServiceArchive.status).toBe(200);
+      const historicalExecution = (await executionAfterServiceArchive.json()) as {
+        services: Array<{ serviceDefinitionId: string; serviceCode: string; serviceName: string }>;
+      };
+      expect(historicalExecution.services).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            serviceDefinitionId: service.id,
+            serviceCode: expect.any(String),
+            serviceName: 'Morning care updated',
+          }),
+        ]),
+      );
+      const crossTenantExecutionInsert = owner.query(
+        `INSERT INTO visit_execution.executions
+           (id, tenant_id, visit_id, status, actual_start, started_by_employee_id, created_at, updated_at)
+         VALUES ($1, $2, $3, 'in_progress', now(), $4, now(), now())`,
+        [uuidv7(), otherTenantId, executionVisit.id, schedulingEmployee.id],
+      );
+      await expect(crossTenantExecutionInsert).rejects.toThrow();
       const futureAgreementResponse = await fetch(
         `${baseUrl}/api/v1/clients/${created.id}/service-agreements`,
         {
@@ -2462,37 +3063,37 @@ describe('clients API', () => {
       expect(Number(workforceEvents.rows[0]?.count)).toBeGreaterThanOrEqual(10);
 
       const officeToken = await issueToken(secondSubject);
-      const officeHeaders = { ...headers, Authorization: `Bearer ${officeToken}` };
+      const officeAdminHeaders = { ...headers, Authorization: `Bearer ${officeToken}` };
       const officeCannotListMembers = await fetch(`${baseUrl}/api/v1/admin/members`, {
-        headers: officeHeaders,
+        headers: officeAdminHeaders,
       });
       expect(officeCannotListMembers.status).toBe(403);
       const officeCannotReadAudit = await fetch(`${baseUrl}/api/v1/audit`, {
-        headers: officeHeaders,
+        headers: officeAdminHeaders,
       });
       expect(officeCannotReadAudit.status).toBe(403);
       const officeCannotAssignAdministrator = await fetch(
         `${baseUrl}/api/v1/admin/members/${secondMembershipId}/roles`,
         {
           method: 'PUT',
-          headers: officeHeaders,
+          headers: officeAdminHeaders,
           body: JSON.stringify({ roleIds: [roleId] }),
         },
       );
       expect(officeCannotAssignAdministrator.status).toBe(403);
       const caregiverToken = await issueToken(caregiverSubject);
-      const caregiverHeaders = { ...headers, Authorization: `Bearer ${caregiverToken}` };
+      const caregiverAdminHeaders = { ...headers, Authorization: `Bearer ${caregiverToken}` };
       const caregiverCannotListMembers = await fetch(`${baseUrl}/api/v1/admin/members`, {
-        headers: caregiverHeaders,
+        headers: caregiverAdminHeaders,
       });
       expect(caregiverCannotListMembers.status).toBe(403);
       const caregiverCannotReadAudit = await fetch(`${baseUrl}/api/v1/audit`, {
-        headers: caregiverHeaders,
+        headers: caregiverAdminHeaders,
       });
       expect(caregiverCannotReadAudit.status).toBe(403);
       const caregiverCannotDeactivateMember = await fetch(
         `${baseUrl}/api/v1/admin/members/${caregiverMembershipId}/deactivate`,
-        { method: 'POST', headers: caregiverHeaders },
+        { method: 'POST', headers: caregiverAdminHeaders },
       );
       expect(caregiverCannotDeactivateMember.status).toBe(403);
       const tenantBAdminRequest = await fetch(`${baseUrl}/api/v1/admin/members`, {

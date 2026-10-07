@@ -12,6 +12,7 @@ import { PlatformModule } from './modules/platform.module';
 import { ServicesModule } from './modules/services.module';
 import { ServiceAgreementsModule } from './modules/service-agreements.module';
 import { SchedulingModule } from './modules/scheduling.module';
+import { VisitExecutionModule } from './modules/visit-execution.module';
 import { HealthController } from './presentation/http/health.controller';
 import { ProblemDetailsFilter } from './presentation/http/problem-details.filter';
 
@@ -28,6 +29,7 @@ import { ProblemDetailsFilter } from './presentation/http/problem-details.filter
     ServicesModule,
     ServiceAgreementsModule,
     SchedulingModule,
+    VisitExecutionModule,
     MeModule,
   ],
   controllers: [HealthController],

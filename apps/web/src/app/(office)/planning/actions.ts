@@ -7,6 +7,47 @@ import { getApiClient, getTenantHeader } from '../../../lib/api';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+const localDateTimePattern = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)$/;
+
+export async function correctVisitExecutionTimesAction(formData: FormData): Promise<void> {
+  const visitId = readUuid(formData.get('visitId'));
+  const clientId = readUuid(formData.get('clientId'));
+  const executionId = readUuid(formData.get('executionId'));
+  const expectedVersion = readPositiveInteger(formData.get('expectedVersion'));
+  const timezone = readString(formData, 'timezone');
+  const actualStart = zonedLocalDateTimeToIso(readString(formData, 'actualStart'), timezone);
+  const actualEndInput = readString(formData, 'actualEnd');
+  const actualEnd = actualEndInput ? zonedLocalDateTimeToIso(actualEndInput, timezone) : null;
+  const reason = readString(formData, 'reason');
+  if (
+    !visitId ||
+    !clientId ||
+    !executionId ||
+    !expectedVersion ||
+    !actualStart ||
+    (actualEndInput && !actualEnd) ||
+    !reason
+  ) {
+    redirect(visitPath(visitId, 'INVALID_REQUEST'));
+  }
+
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/visit-executions/{id}/correct-times', {
+    params: { path: { id: executionId }, header: await getTenantHeader() },
+    body: {
+      expectedVersion,
+      actualStart,
+      ...(actualEnd ? { actualEnd } : {}),
+      reason,
+    },
+  });
+  if (error) redirect(visitPath(visitId, error.code));
+  revalidatePath('/planning');
+  revalidatePath(`/visits/${visitId}`);
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath(`/care/visits/${visitId}`);
+  redirect(`/visits/${visitId}?updated=times_corrected`);
+}
 
 export async function createVisitAction(formData: FormData): Promise<void> {
   const clientId = readUuid(formData.get('clientId'));
@@ -177,6 +218,52 @@ export async function generateAgreementVisitsAction(formData: FormData): Promise
 function readString(formData: FormData, name: string): string {
   const value = formData.get(name);
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function readPositiveInteger(value: FormDataEntryValue | null): number | undefined {
+  if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function zonedLocalDateTimeToIso(value: string, timezone: string): string | null {
+  const match = localDateTimePattern.exec(value);
+  if (!match) return null;
+  const target = match.slice(1).map(Number);
+  const targetMillis = Date.UTC(target[0]!, target[1]! - 1, target[2]!, target[3]!, target[4]!);
+  const targetTuple = target.join('-');
+  try {
+    const offsets = new Set<number>();
+    for (const hours of [-36, -24, -12, 0, 12, 24, 36]) {
+      const probe = targetMillis + hours * 60 * 60 * 1000;
+      const parts = zonedDateParts(new Date(probe), timezone);
+      offsets.add(Date.UTC(parts[0]!, parts[1]! - 1, parts[2]!, parts[3]!, parts[4]!) - probe);
+    }
+    const candidates = [...offsets]
+      .map((offset) => targetMillis - offset)
+      .filter(
+        (candidate) => zonedDateParts(new Date(candidate), timezone).join('-') === targetTuple,
+      );
+    return candidates.length === 1 ? new Date(candidates[0]!).toISOString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function zonedDateParts(value: Date, timezone: string): number[] {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone,
+    calendar: 'iso8601',
+    numberingSystem: 'latn',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(value);
+  const part = (type: string) => Number(parts.find((item) => item.type === type)?.value);
+  return [part('year'), part('month'), part('day'), part('hour'), part('minute')];
 }
 
 function readNullableText(formData: FormData, name: string): string | null {

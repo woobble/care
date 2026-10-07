@@ -23,19 +23,29 @@ test('Authentik users can be invited and administered from the office UI', async
   const invitedName = `Invitee E2E ${runId}`;
   const invitedEmail = `${invitedUsername}@example.test`;
   const invitedPassword = `Aa1!${randomUUID()}`;
+  const caregiverUsername = `caregiver-e2e-${runId}`;
+  const caregiverName = `Caregiver E2E ${runId}`;
+  const caregiverEmail = `${caregiverUsername}@example.test`;
+  const caregiverPassword = `Aa1!${randomUUID()}`;
+  const executionMarker = `execution-note-${runId}`;
   let authentikUserId: number | undefined;
   let invitedAuthentikUserId: number | undefined;
+  let caregiverAuthentikUserId: number | undefined;
   let subject: string | undefined;
   let invitedSubject: string | undefined;
+  let caregiverSubject: string | undefined;
   let platformUserId: string | undefined;
   let invitedPlatformUserId: string | undefined;
+  let caregiverPlatformUserId: string | undefined;
   let tenantId: string | undefined;
   let adminMembershipId: string | undefined;
   let invitedMembershipId: string | undefined;
+  let caregiverMembershipId: string | undefined;
   let invitationId: string | undefined;
   let clientId: string | undefined;
   let agreementClientId: string | undefined;
   let serviceId: string | undefined;
+  let executionVisitId: string | undefined;
   const serviceCategoryName = `E2E Category ${runId}`;
   const serviceCategoryCode = `E2E-CAT-${runId}`;
   const serviceCode = `E2E-SVC-${runId}`;
@@ -44,6 +54,7 @@ test('Authentik users can be invited and administered from the office UI', async
   const workforceTeamName = `E2E Team ${runId}`;
   const workforcePersonnelNumber = `E2E-${runId}`;
   let invitedContext: BrowserContext | undefined;
+  let caregiverContext: BrowserContext | undefined;
 
   await database.connect();
   try {
@@ -376,10 +387,150 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(agreementCard.getByText('Beendet', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Leistungsplanung beendet', { exact: true })).toBeVisible();
 
+    const caregiver = await createAuthentikUser(authentikOrigin, apiToken, {
+      username: caregiverUsername,
+      name: caregiverName,
+      email: caregiverEmail,
+      password: caregiverPassword,
+      emailVerified: true,
+    });
+    caregiverAuthentikUserId = caregiver.pk;
+    caregiverSubject = caregiver.uuid;
+    caregiverContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const caregiverPage = await caregiverContext.newPage();
+    await signInWithAuthentik(caregiverPage, caregiverUsername, caregiverPassword);
+    await expect(
+      caregiverPage.getByText('Ihr Benutzerkonto hat noch keinen aktiven Mandantenzugriff.'),
+    ).toBeVisible();
+    const caregiverProvision = await waitForPlatformUser(database, issuer, caregiverSubject);
+    caregiverPlatformUserId = caregiverProvision.id;
+    expect(caregiverProvision.membershipCount).toBe(0);
+    const caregiverRole = await database.query<{ id: string }>(
+      "SELECT id FROM identity.roles WHERE tenant_id = $1 AND name = 'Caregiver'",
+      [tenantId],
+    );
+    const caregiverRoleId = caregiverRole.rows[0]?.id;
+    if (!caregiverRoleId || !caregiverPlatformUserId) {
+      throw new Error('The seeded Caregiver role or provisioned caregiver user is missing');
+    }
+    caregiverMembershipId = randomUUID();
+    await database.query('BEGIN');
+    try {
+      await database.query(
+        `INSERT INTO identity.tenant_memberships (id, user_id, tenant_id, status)
+         VALUES ($1, $2, $3, 'active')`,
+        [caregiverMembershipId, caregiverPlatformUserId, tenantId],
+      );
+      await database.query(
+        `INSERT INTO identity.membership_roles (membership_id, tenant_id, role_id)
+         VALUES ($1, $2, $3)`,
+        [caregiverMembershipId, tenantId, caregiverRoleId],
+      );
+      await database.query(
+        `INSERT INTO identity.membership_scopes (membership_id, tenant_id, scope_type, scope_id)
+         VALUES ($1, $2, 'tenant', $3)`,
+        [caregiverMembershipId, tenantId, tenantId],
+      );
+      await database.query('COMMIT');
+    } catch (error) {
+      await database.query('ROLLBACK');
+      throw error;
+    }
+
+    await page.goto(`/employees/${workforceEmployeeId}`);
+    await page.getByLabel('Aktiven Benutzer verknüpfen').selectOption(caregiverPlatformUserId);
+    await page.getByRole('button', { name: 'Benutzer verknüpfen' }).click();
+    await expect(page.getByText(caregiverName, { exact: true })).toBeVisible();
+
+    if (!serviceId || !agreementClientId) {
+      throw new Error('The E2E service and client must exist before execution');
+    }
+    await page.goto(`/services/${serviceId}`);
+    await expect(page.getByRole('heading', { name: `E2E Service ${runId}` })).toBeVisible();
+    const executionDate = dateInBerlin();
+    await page.goto(`/planning?date=${executionDate}`);
+    const manualVisitForm = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Einsatz anlegen' }),
+    });
+    await manualVisitForm.getByLabel('Klientin oder Klient').selectOption(agreementClientId);
+    await manualVisitForm.locator('input[name="localDate"]').fill(executionDate);
+    await manualVisitForm.locator('input[name="localStartTime"]').fill('08:00');
+    await manualVisitForm.locator('input[name="localEndTime"]').fill('08:30');
+    await manualVisitForm.locator('select[name="serviceDefinitionIds"]').selectOption(serviceId);
+    await manualVisitForm.locator('select[name="employeeId"]').selectOption(workforceEmployeeId);
+    await manualVisitForm.locator('textarea[name="note"]').fill(executionMarker);
+    await manualVisitForm.getByRole('button', { name: 'Einsatz anlegen' }).click();
+    await expect(page).toHaveURL(/(?:\?|&)updated=visit(?:&|$)/);
+    const executionVisit = await database.query<{ id: string }>(
+      'SELECT id FROM scheduling.visits WHERE tenant_id = $1 AND note = $2',
+      [tenantId, executionMarker],
+    );
+    executionVisitId = executionVisit.rows[0]?.id;
+    if (!executionVisitId) {
+      throw new Error('The Office UI reported success but the execution visit was not persisted');
+    }
+
+    await caregiverPage.goto('/');
+    await caregiverPage.getByLabel('Mandant').selectOption(tenantId);
+    await caregiverPage.getByRole('button', { name: 'Weiter' }).click();
+    await expect(caregiverPage).toHaveURL(/\/clients$/);
+    await caregiverPage.goto('/care/today');
+    await expect(caregiverPage).toHaveURL(/\/care\/today$/);
+    await expect(caregiverPage.getByRole('heading', { name: 'Meine Einsätze' })).toBeVisible();
+    const mobileVisitLink = caregiverPage.locator(`a[href="/care/visits/${executionVisitId}"]`);
+    await expect(mobileVisitLink).toContainText(`Agreement E2E ${runId}`);
+    await mobileVisitLink.click();
+    await expect(
+      caregiverPage.getByRole('heading', { name: `Agreement E2E ${runId}` }),
+    ).toBeVisible();
+    expect(
+      await caregiverPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await caregiverPage.getByRole('button', { name: 'Einsatz starten' }).click();
+    await expect(caregiverPage.getByRole('heading', { name: 'Geplante Leistungen' })).toBeVisible();
+    await caregiverPage.getByRole('button', { name: 'Ergebnis speichern' }).click();
+
+    const unplannedForm = caregiverPage.locator('form').filter({
+      has: caregiverPage.getByRole('button', { name: 'Leistung erfassen' }),
+    });
+    await unplannedForm.locator('select[name="serviceDefinitionId"]').selectOption(serviceId);
+    await unplannedForm.getByRole('button', { name: 'Leistung erfassen' }).click();
+    await caregiverPage.getByRole('button', { name: 'Einsatz abschließen' }).click();
+    await expect(caregiverPage.getByText('Abgeschlossen', { exact: true })).toBeVisible();
+
+    await page.goto(`/visits/${executionVisitId}`);
+    await expect(page.getByRole('heading', { name: 'Ausführung' })).toBeVisible();
+    await expect(page.getByText('Einsatz abgeschlossen', { exact: true })).toBeVisible();
+    await expect(page.getByText(`E2E Service ${runId}`, { exact: true }).first()).toBeVisible();
+    const correctionDetails = page
+      .locator('details')
+      .filter({ hasText: 'Ausführungszeiten korrigieren' });
+    await correctionDetails.locator('summary').click();
+    const actualStartInput = correctionDetails.locator('input[name="actualStart"]');
+    await actualStartInput.fill(shiftDateTimeLocal(await actualStartInput.inputValue(), -1));
+    await correctionDetails.locator('textarea[name="reason"]').fill('E2E correction reason');
+    await correctionDetails.getByRole('button', { name: 'Zeiten korrigieren' }).click();
+    await expect(page.getByText('Einsatzzeiten korrigiert', { exact: true })).toBeVisible();
+
+    await page.goto(`/clients/${agreementClientId}`);
+    await expect(page.getByText('Einsatz begonnen', { exact: true })).toBeVisible();
+    await expect(page.getByText('Einsatz abgeschlossen', { exact: true })).toBeVisible();
+    const clientExecutionRow = page.locator(`a[href="/visits/${executionVisitId}"]`);
+    await expect(clientExecutionRow).toContainText('Ausführung: Abgeschlossen');
+    await expect(clientExecutionRow).toContainText('Tatsächlich');
+    await page.goto(`/employees/${workforceEmployeeId}`);
+    const employeeExecutionRow = page.locator(`a[href="/visits/${executionVisitId}"]`);
+    await expect(employeeExecutionRow).toContainText('Ausführung: Abgeschlossen');
+    await expect(employeeExecutionRow).toContainText('Tatsächlich');
+
     if (!serviceId) throw new Error('The service detail page did not expose its ID');
     await page.goto(`/services/${serviceId}`);
     await page.getByRole('button', { name: 'Leistung archivieren' }).click();
     await expect(page.locator('span').filter({ hasText: /^Archiviert$/ })).toBeVisible();
+    if (executionVisitId) {
+      await page.goto(`/visits/${executionVisitId}`);
+      await expect(page.getByText(`E2E Service ${runId}`, { exact: true }).first()).toBeVisible();
+    }
 
     await page.goto('/administration/users');
     await expect(page.getByRole('heading', { name: 'Users & Access' })).toBeVisible();
@@ -487,18 +638,28 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page.getByText('Revoked memberships cannot be reactivated.')).toBeVisible();
   } finally {
     try {
+      await caregiverContext?.close();
       await invitedContext?.close();
       if (tenantId) {
         const agreementClientIds = [agreementClientId].filter(
           (id): id is string => id !== undefined,
         );
         if (agreementClientIds.length) {
-          await cleanupServiceAgreementRecords(database, tenantId, agreementClientIds);
+          await cleanupServiceAgreementRecords(
+            database,
+            tenantId,
+            agreementClientIds,
+            [executionVisitId].filter((id): id is string => id !== undefined),
+          );
         }
         await cleanupServiceCatalogRecords(database, tenantId, {
           serviceCode,
           serviceCategoryCode,
         });
+        await database.query(
+          'UPDATE employees.employees SET user_id = NULL WHERE tenant_id = $1 AND personnel_number = $2',
+          [tenantId, workforcePersonnelNumber],
+        );
       }
       await cleanup(database, {
         issuer,
@@ -511,12 +672,16 @@ test('Authentik users can be invited and administered from the office UI', async
             ...(invitedSubject ? { subject: invitedSubject } : {}),
             ...(invitedPlatformUserId ? { userId: invitedPlatformUserId } : {}),
           },
+          {
+            ...(caregiverSubject ? { subject: caregiverSubject } : {}),
+            ...(caregiverPlatformUserId ? { userId: caregiverPlatformUserId } : {}),
+          },
         ],
-        membershipIds: [adminMembershipId, invitedMembershipId].filter(
+        membershipIds: [adminMembershipId, invitedMembershipId, caregiverMembershipId].filter(
           (id): id is string => id !== undefined,
         ),
         invitationIds: invitationId ? [invitationId] : [],
-        invitationEmails: [invitedEmail],
+        invitationEmails: [invitedEmail, caregiverEmail],
         ...(tenantId ? { tenantId } : {}),
         ...(clientId || agreementClientId
           ? {
@@ -554,6 +719,15 @@ test('Authentik users can be invited and administered from the office UI', async
           true,
         );
       }
+      if (caregiverAuthentikUserId !== undefined) {
+        await authentikRequest(
+          authentikOrigin,
+          apiToken,
+          `/api/v3/core/users/${caregiverAuthentikUserId}/`,
+          { method: 'DELETE' },
+          true,
+        );
+      }
     }
   }
 });
@@ -575,6 +749,7 @@ async function cleanupServiceCatalogRecords(
 ): Promise<void> {
   await database.query('BEGIN');
   try {
+    await database.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
     const serviceRows = await database.query<{ id: string }>(
       'SELECT id FROM services.service_definitions WHERE tenant_id = $1 AND code = $2',
       [tenantId, codes.serviceCode],
@@ -583,17 +758,62 @@ async function cleanupServiceCatalogRecords(
       'SELECT id FROM services.service_categories WHERE tenant_id = $1 AND code = $2',
       [tenantId, codes.serviceCategoryCode],
     );
-    const ids = [...serviceRows.rows, ...categoryRows.rows].map((row) => row.id);
+    const serviceIds = serviceRows.rows.map((row) => row.id);
+    const visitRows = serviceIds.length
+      ? await database.query<{ id: string }>(
+          `SELECT DISTINCT visit_id AS id FROM scheduling.visit_services
+           WHERE tenant_id = $1 AND service_definition_id = ANY($2::uuid[])`,
+          [tenantId, serviceIds],
+        )
+      : { rows: [] as Array<{ id: string }> };
+    const visitIds = visitRows.rows.map((row) => row.id);
+    const executionRows = visitIds.length
+      ? await database.query<{ id: string }>(
+          'SELECT id FROM visit_execution.executions WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+          [tenantId, visitIds],
+        )
+      : { rows: [] as Array<{ id: string }> };
+    const executionIds = executionRows.rows.map((row) => row.id);
+    const resourceIds = [
+      ...serviceIds,
+      ...categoryRows.rows.map((row) => row.id),
+      ...visitIds,
+      ...executionIds,
+    ];
     await database.query(
       'DELETE FROM audit.audit_entries WHERE tenant_id = $1 AND resource_id = ANY($2::uuid[])',
-      [tenantId, ids],
+      [tenantId, resourceIds],
     );
     await database.query(
-      "DELETE FROM platform.outbox_messages WHERE tenant_id = $1 AND event ->> 'aggregateId' = ANY($2::text[])",
-      [tenantId, ids],
+      `DELETE FROM platform.outbox_messages
+       WHERE tenant_id = $1
+         AND (event ->> 'aggregateId' = ANY($2::text[])
+           OR event -> 'payload' ->> 'visitId' = ANY($3::text[]))`,
+      [tenantId, resourceIds, visitIds],
     );
     if (serviceRows.rows.length) {
-      const serviceIds = serviceRows.rows.map((row) => row.id);
+      if (visitIds.length) {
+        await database.query(
+          'DELETE FROM visit_execution.performed_services WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+          [tenantId, visitIds],
+        );
+        await database.query(
+          'DELETE FROM visit_execution.executions WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+          [tenantId, visitIds],
+        );
+        await database.query(
+          'DELETE FROM scheduling.visit_assignments WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+          [tenantId, visitIds],
+        );
+        await database.query(
+          'DELETE FROM scheduling.visit_services WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+          [tenantId, visitIds],
+        );
+        await database.query(
+          'DELETE FROM scheduling.visits WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+          [tenantId, visitIds],
+        );
+      }
       await database.query(
         'DELETE FROM services.service_availability WHERE tenant_id = $1 AND service_id = ANY($2::uuid[])',
         [tenantId, serviceIds],
@@ -620,64 +840,76 @@ async function cleanupServiceAgreementRecords(
   database: Client,
   tenantId: string,
   clientIds: string[],
+  additionalVisitIds: string[] = [],
 ): Promise<void> {
   await database.query('BEGIN');
   try {
+    await database.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
     const agreements = await database.query<{ id: string }>(
       'SELECT id FROM service_agreements.agreements WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
       [tenantId, clientIds],
     );
     const agreementIds = agreements.rows.map((agreement) => agreement.id);
+    const generationRows = agreementIds.length
+      ? await database.query<{ id: string }>(
+          'SELECT id FROM scheduling.schedule_generations WHERE tenant_id = $1 AND agreement_id = ANY($2::uuid[])',
+          [tenantId, agreementIds],
+        )
+      : { rows: [] as Array<{ id: string }> };
+    const visitRows = await database.query<{ id: string }>(
+      'SELECT id FROM scheduling.visits WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      [tenantId, clientIds],
+    );
+    const generationIds = generationRows.rows.map((row) => row.id);
+    const visitIds = [...new Set([...visitRows.rows.map((row) => row.id), ...additionalVisitIds])];
+    const executionRows = visitIds.length
+      ? await database.query<{ id: string }>(
+          'SELECT id FROM visit_execution.executions WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+          [tenantId, visitIds],
+        )
+      : { rows: [] as Array<{ id: string }> };
+    const executionIds = executionRows.rows.map((row) => row.id);
+    const schedulingResourceIds = [...generationIds, ...visitIds, ...executionIds, ...agreementIds];
+    await database.query(
+      `DELETE FROM audit.audit_entries
+       WHERE tenant_id = $1 AND
+         (resource_id = ANY($2::uuid[]) OR (resource_type = 'client' AND resource_id = ANY($3::uuid[])))`,
+      [tenantId, schedulingResourceIds, clientIds],
+    );
+    await database.query(
+      `DELETE FROM platform.outbox_messages
+       WHERE tenant_id = $1
+         AND (event ->> 'aggregateId' = ANY($2::text[])
+           OR event -> 'payload' ->> 'agreementId' = ANY($3::text[])
+           OR event -> 'payload' ->> 'clientId' = ANY($4::text[])
+           OR event -> 'payload' ->> 'visitId' = ANY($5::text[]))`,
+      [tenantId, schedulingResourceIds, agreementIds, clientIds, visitIds],
+    );
+    if (visitIds.length) {
+      await database.query(
+        'DELETE FROM visit_execution.performed_services WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+        [tenantId, visitIds],
+      );
+      await database.query(
+        'DELETE FROM visit_execution.executions WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+        [tenantId, visitIds],
+      );
+      await database.query(
+        'DELETE FROM scheduling.visit_assignments WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+        [tenantId, visitIds],
+      );
+      await database.query(
+        'DELETE FROM scheduling.visit_services WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+        [tenantId, visitIds],
+      );
+      await database.query(
+        'DELETE FROM scheduling.visits WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+        [tenantId, visitIds],
+      );
+    }
     if (agreementIds.length) {
-      const generationRows = await database.query<{ id: string }>(
-        'SELECT id FROM scheduling.schedule_generations WHERE tenant_id = $1 AND agreement_id = ANY($2::uuid[])',
-        [tenantId, agreementIds],
-      );
-      const visitRows = await database.query<{ id: string }>(
-        'SELECT id FROM scheduling.visits WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
-        [tenantId, clientIds],
-      );
-      const generationIds = generationRows.rows.map((row) => row.id);
-      const visitIds = visitRows.rows.map((row) => row.id);
-      const schedulingResourceIds = [...generationIds, ...visitIds];
-      if (schedulingResourceIds.length) {
-        await database.query(
-          'DELETE FROM audit.audit_entries WHERE tenant_id = $1 AND resource_id = ANY($2::uuid[])',
-          [tenantId, schedulingResourceIds],
-        );
-        await database.query(
-          `DELETE FROM platform.outbox_messages
-           WHERE tenant_id = $1
-             AND (event ->> 'aggregateId' = ANY($2::text[])
-               OR event -> 'payload' ->> 'agreementId' = ANY($3::text[])
-               OR event -> 'payload' ->> 'clientId' = ANY($4::text[]))`,
-          [tenantId, [...schedulingResourceIds, ...agreementIds], agreementIds, clientIds],
-        );
-      }
-      if (visitIds.length) {
-        await database.query(
-          'DELETE FROM scheduling.visit_assignments WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
-          [tenantId, visitIds],
-        );
-        await database.query(
-          'DELETE FROM scheduling.visit_services WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
-          [tenantId, visitIds],
-        );
-        await database.query(
-          'DELETE FROM scheduling.visits WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
-          [tenantId, visitIds],
-        );
-      }
       await database.query(
         'DELETE FROM scheduling.schedule_generations WHERE tenant_id = $1 AND agreement_id = ANY($2::uuid[])',
-        [tenantId, agreementIds],
-      );
-      await database.query(
-        'DELETE FROM audit.audit_entries WHERE tenant_id = $1 AND resource_type = $2 AND resource_id = ANY($3::uuid[])',
-        [tenantId, 'service_agreement', agreementIds],
-      );
-      await database.query(
-        "DELETE FROM platform.outbox_messages WHERE tenant_id = $1 AND event ->> 'aggregateId' = ANY($2::text[])",
         [tenantId, agreementIds],
       );
       await database.query(
@@ -698,6 +930,15 @@ async function cleanupServiceAgreementRecords(
 
 function dateInBerlin(): string {
   return dateInTimezone(new Date(), 'Europe/Berlin');
+}
+
+function shiftDateTimeLocal(value: string, minutes: number): string {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) {
+    throw new Error('Expected a local datetime input value');
+  }
+  const date = new Date(`${value}:00.000Z`);
+  date.setUTCMinutes(date.getUTCMinutes() + minutes);
+  return date.toISOString().slice(0, 16);
 }
 
 function dateInTimezone(value: Date, timezone: string): string {
@@ -729,6 +970,7 @@ async function cleanupWorkforceRecords(
 ): Promise<void> {
   await database.query('BEGIN');
   try {
+    await database.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
     const organizations = await database.query<{ id: string }>(
       'SELECT id FROM organizations.organizations WHERE tenant_id = $1 AND name = $2',
       [tenantId, names.organizationName],
@@ -913,6 +1155,9 @@ async function cleanup(
 ): Promise<void> {
   await database.query('BEGIN');
   try {
+    if (input.tenantId) {
+      await database.query("SELECT set_config('app.tenant_id', $1, true)", [input.tenantId]);
+    }
     const subjects = input.users.flatMap((user) => (user.subject ? [user.subject] : []));
     const mappedUsers = subjects.length
       ? await database.query<{ id: string }>(

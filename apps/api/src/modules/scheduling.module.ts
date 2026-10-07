@@ -12,6 +12,7 @@ import type { OrganizationApplicationService } from '@care/organizations';
 import type { OutboxWriter } from '@care/platform';
 import type { ServiceAgreementApplicationService } from '@care/service-agreements';
 import type { ServiceApplicationService } from '@care/services';
+import type { VisitExecutionGuards } from '@care/visit-execution';
 import { DatabaseModule } from '../database/database.module';
 import {
   AUDIT_WRITER,
@@ -20,6 +21,7 @@ import {
   ORGANIZATION_APPLICATION,
   OUTBOX_WRITER,
   SCHEDULING_APPLICATION,
+  VISIT_EXECUTION_GUARDS,
   SERVICE_AGREEMENT_APPLICATION,
   SERVICE_APPLICATION,
   UNIT_OF_WORK,
@@ -38,6 +40,7 @@ import { OrganizationsModule } from './organizations.module';
 import { PlatformModule } from './platform.module';
 import { ServiceAgreementsModule } from './service-agreements.module';
 import { ServicesModule } from './services.module';
+import { VisitExecutionModule } from './visit-execution.module';
 
 @Module({
   imports: [
@@ -50,6 +53,7 @@ import { ServicesModule } from './services.module';
     OrganizationsModule,
     ServicesModule,
     ServiceAgreementsModule,
+    VisitExecutionModule,
   ],
   controllers: [
     VisitsController,
@@ -70,6 +74,7 @@ import { ServicesModule } from './services.module';
         SERVICE_AGREEMENT_APPLICATION,
         AUDIT_WRITER,
         OUTBOX_WRITER,
+        VISIT_EXECUTION_GUARDS,
       ],
       useFactory: (
         unitOfWork: UnitOfWork,
@@ -80,6 +85,7 @@ import { ServicesModule } from './services.module';
         agreements: ServiceAgreementApplicationService,
         audit: AuditWriter,
         outbox: OutboxWriter,
+        executionGuards: VisitExecutionGuards,
       ): SchedulingApplicationService =>
         createSchedulingApplicationService(
           unitOfWork,
@@ -91,6 +97,7 @@ import { ServicesModule } from './services.module';
           audit,
           outbox,
           loadApiConfig().SCHEDULE_GENERATION_HORIZON_DAYS,
+          executionGuards,
         ),
     },
   ],

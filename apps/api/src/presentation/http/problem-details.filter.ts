@@ -11,6 +11,7 @@ import {
   ClientInsuranceNotFoundError,
   ClientNotFoundError,
   ClientHasActiveServiceAgreementsError,
+  ClientExecutionInProgressError,
   FutureVisitsExistError,
   FacilityNotInOrganizationError,
   InvalidClientAddressError,
@@ -32,6 +33,7 @@ import {
   EmployeeConflictError,
   EmployeeNotFoundError,
   EmployeeHasFutureVisitsError,
+  EmployeeHasInProgressExecutionError,
   EmployeeNotActiveForScheduleError,
   EmployeeNotAssignedToFacilityError,
   InvalidEmployeeDataError,
@@ -69,7 +71,9 @@ import {
   FacilityHasActiveServiceAgreementsError,
   FacilityHasFutureVisitsError,
   OrganizationHasFutureVisitsError,
+  OrganizationExecutionInProgressError,
   InvalidSchedulingTimezoneError,
+  FacilityExecutionInProgressError,
 } from '@care/organizations';
 import {
   InvalidServiceAvailabilityError,
@@ -106,7 +110,26 @@ import {
   VisitEmployeeUnavailableError,
   VisitNotFoundError,
   VisitOutsideProviderContextError,
+  VisitExecutionPlanningLockedError,
 } from '@care/scheduling';
+import {
+  EmployeeLinkRequiredError,
+  ExecutionCorrectionReasonRequiredError,
+  InvalidExecutionNoteError,
+  InvalidPerformedServiceQuantityError,
+  InvalidPerformedServiceStatusError,
+  InvalidVisitExecutionQueryError,
+  PerformedServiceNotFoundError,
+  PerformedServiceRequiredError,
+  PerformedServiceServiceInvalidError,
+  VisitExecutionAlreadyCompletedError,
+  VisitExecutionNotFoundError,
+  VisitExecutionNotStartedError,
+  VisitExecutionTimeInvalidError,
+  VisitExecutionVersionConflictError,
+  VisitExecutionVisitCancelledError,
+  VisitNotAssignedToEmployeeError,
+} from '@care/visit-execution';
 import type { ApiRequest } from '../../http/request';
 
 @Injectable()
@@ -147,6 +170,9 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     status = 409;
     code = exception.code;
   } else if (exception instanceof FutureVisitsExistError) {
+    status = 409;
+    code = exception.code;
+  } else if (exception instanceof ClientExecutionInProgressError) {
     status = 409;
     code = exception.code;
   } else if (exception instanceof InvalidClientTransitionError) {
@@ -227,6 +253,7 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof InvalidVisitStatusError ||
     exception instanceof VisitCancelledError ||
     exception instanceof VisitOutsideProviderContextError ||
+    exception instanceof VisitExecutionPlanningLockedError ||
     exception instanceof VisitClientConflictError ||
     exception instanceof VisitEmployeeConflictError ||
     exception instanceof VisitEmployeeUnavailableError ||
@@ -236,10 +263,41 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof EmployeeNotActiveForScheduleError ||
     exception instanceof EmployeeNotAssignedToFacilityError ||
     exception instanceof EmployeeHasFutureVisitsError ||
+    exception instanceof EmployeeHasInProgressExecutionError ||
     exception instanceof OrganizationHasFutureVisitsError ||
-    exception instanceof FacilityHasFutureVisitsError
+    exception instanceof OrganizationExecutionInProgressError ||
+    exception instanceof FacilityHasFutureVisitsError ||
+    exception instanceof FacilityExecutionInProgressError ||
+    exception instanceof VisitExecutionAlreadyCompletedError ||
+    exception instanceof VisitExecutionNotStartedError ||
+    exception instanceof VisitExecutionTimeInvalidError ||
+    exception instanceof VisitExecutionVersionConflictError ||
+    exception instanceof VisitExecutionVisitCancelledError ||
+    exception instanceof PerformedServiceRequiredError ||
+    exception instanceof PerformedServiceServiceInvalidError
   ) {
     status = 409;
+    code = exception.code;
+  } else if (
+    exception instanceof VisitExecutionNotFoundError ||
+    exception instanceof PerformedServiceNotFoundError
+  ) {
+    status = 404;
+    code = exception.code;
+  } else if (
+    exception instanceof EmployeeLinkRequiredError ||
+    exception instanceof VisitNotAssignedToEmployeeError
+  ) {
+    status = 403;
+    code = exception.code;
+  } else if (
+    exception instanceof InvalidPerformedServiceQuantityError ||
+    exception instanceof InvalidPerformedServiceStatusError ||
+    exception instanceof InvalidExecutionNoteError ||
+    exception instanceof InvalidVisitExecutionQueryError ||
+    exception instanceof ExecutionCorrectionReasonRequiredError
+  ) {
+    status = 400;
     code = exception.code;
   } else if (exception instanceof TenantAccessError) {
     status = exception.status;

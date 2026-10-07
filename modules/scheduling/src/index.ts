@@ -33,6 +33,7 @@ export { localDateTimeInstants, localDateTimeToInstant } from './domain/zoned-ti
 export {
   DrizzleSchedulingGuards,
   createSchedulingGuards,
+  type SchedulingExecutionGuard,
   type SchedulingGuards,
 } from './infrastructure/scheduling-guards';
 export {
@@ -40,6 +41,7 @@ export {
   createSchedulingApplicationService,
   InvalidVisitQueryError,
   VisitNotFoundError,
+  VisitExecutionPlanningLockedError,
   VisitOutsideProviderContextError,
   VisitClientConflictError,
   VisitEmployeeConflictError,

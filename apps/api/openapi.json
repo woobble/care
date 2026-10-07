@@ -1752,6 +1752,575 @@
         ]
       }
     },
+    "/api/v1/me/visits": {
+      "get": {
+        "operationId": "MyVisitsController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CaregiverVisitResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List visits actively assigned to the current employee",
+        "tags": [
+          "caregiver"
+        ]
+      }
+    },
+    "/api/v1/visits/{visitId}/execution": {
+      "get": {
+        "operationId": "VisitExecutionController_get",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitExecutionDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read visit execution and planned service decisions",
+        "tags": [
+          "visit execution"
+        ]
+      }
+    },
+    "/api/v1/visits/{visitId}/execution/start": {
+      "post": {
+        "operationId": "VisitExecutionController_start",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitExecutionDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Start an assigned visit using server time",
+        "tags": [
+          "visit execution"
+        ]
+      }
+    },
+    "/api/v1/visits/{visitId}/execution/available-services": {
+      "get": {
+        "operationId": "VisitExecutionController_availableServices",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AvailableServiceResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List services available for an unplanned execution record",
+        "tags": [
+          "visit execution"
+        ]
+      }
+    },
+    "/api/v1/visits/{visitId}/execution/services/{performedServiceId}": {
+      "put": {
+        "operationId": "VisitExecutionController_recordService",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "performedServiceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordPerformedServiceRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordedServiceResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Record or update one planned or unplanned service result",
+        "tags": [
+          "visit execution"
+        ]
+      }
+    },
+    "/api/v1/visits/{visitId}/execution/note": {
+      "put": {
+        "operationId": "VisitExecutionController_updateNote",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExecutionNoteRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionNoteResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update the short operational execution note",
+        "tags": [
+          "visit execution"
+        ]
+      }
+    },
+    "/api/v1/visits/{visitId}/execution/complete": {
+      "post": {
+        "operationId": "VisitExecutionController_complete",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteExecutionRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitExecutionDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Complete a visit after every planned service has a result",
+        "tags": [
+          "visit execution"
+        ]
+      }
+    },
+    "/api/v1/visit-executions/{id}/correct-times": {
+      "post": {
+        "operationId": "VisitExecutionCorrectionsController_correctTimes",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectExecutionTimesRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrectExecutionTimesResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Correct actual arrival or departure with a reason",
+        "tags": [
+          "visit execution"
+        ]
+      }
+    },
+    "/api/v1/visit-executions/summaries": {
+      "get": {
+        "operationId": "VisitExecutionSummariesController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visitIds",
+            "required": true,
+            "in": "query",
+            "description": "Comma-separated visit IDs; maximum 100",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VisitExecutionSummaryResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read authorized execution status and actual times for visits",
+        "tags": [
+          "visit execution"
+        ]
+      }
+    },
     "/api/v1/employees": {
       "get": {
         "operationId": "EmployeesController_search",
@@ -8434,6 +9003,544 @@
           }
         }
       },
+      "CaregiverVisitServiceResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "occurrence",
+              "minute",
+              "hour",
+              "day"
+            ]
+          },
+          "plannedQuantity": {
+            "type": "string",
+            "example": "1.000"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "unit",
+          "plannedQuantity"
+        ]
+      },
+      "CaregiverVisitResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientDisplayName": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "confirmed",
+              "cancelled"
+            ]
+          },
+          "plannedStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "plannedEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "executionStatus": {
+            "type": "string",
+            "enum": [
+              "not_started",
+              "in_progress",
+              "completed"
+            ]
+          },
+          "actualStart": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "actualEnd": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CaregiverVisitServiceResponseDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "clientDisplayName",
+          "status",
+          "plannedStart",
+          "plannedEnd",
+          "timezone",
+          "executionStatus",
+          "services"
+        ]
+      },
+      "ExecutionVisitResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientDisplayName": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "confirmed",
+              "cancelled"
+            ]
+          },
+          "plannedStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "plannedEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "clientDisplayName",
+          "status",
+          "plannedStart",
+          "plannedEnd",
+          "timezone"
+        ]
+      },
+      "ExecutionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_started",
+              "in_progress",
+              "completed"
+            ]
+          },
+          "version": {
+            "type": "number",
+            "minimum": 0
+          },
+          "actualStart": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "actualEnd": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "operationalNote": {
+            "type": "string",
+            "nullable": true
+          },
+          "startedByEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "startedByEmployeeName": {
+            "type": "string",
+            "nullable": true
+          },
+          "completedByEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "completedByEmployeeName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "status",
+          "version"
+        ]
+      },
+      "PerformedServiceResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "visitServiceId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "serviceDefinitionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceCode": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "occurrence",
+              "minute",
+              "hour",
+              "day"
+            ]
+          },
+          "plannedQuantity": {
+            "type": "string",
+            "nullable": true,
+            "example": "30.000"
+          },
+          "actualQuantity": {
+            "type": "string",
+            "nullable": true,
+            "example": "20.000"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_recorded",
+              "performed",
+              "partially_performed",
+              "not_performed"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "client_declined",
+              "client_not_present",
+              "service_not_required",
+              "time_constraint",
+              "provider_decision",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "performedByEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "performedByEmployeeName": {
+            "type": "string",
+            "nullable": true
+          },
+          "unplanned": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "serviceDefinitionId",
+          "serviceCode",
+          "serviceName",
+          "unit",
+          "status",
+          "unplanned"
+        ]
+      },
+      "VisitExecutionDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "visit": {
+            "$ref": "#/components/schemas/ExecutionVisitResponseDto"
+          },
+          "execution": {
+            "$ref": "#/components/schemas/ExecutionResponseDto"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PerformedServiceResponseDto"
+            }
+          }
+        },
+        "required": [
+          "visit",
+          "execution",
+          "services"
+        ]
+      },
+      "AvailableServiceResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "occurrence",
+              "minute",
+              "hour",
+              "day"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "unit"
+        ]
+      },
+      "RecordPerformedServiceRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "visitServiceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceDefinitionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "performed",
+              "partially_performed",
+              "not_performed"
+            ]
+          },
+          "actualQuantity": {
+            "type": "string",
+            "nullable": true,
+            "example": "20.000"
+          },
+          "reasonCode": {
+            "type": "string",
+            "enum": [
+              "client_declined",
+              "client_not_present",
+              "service_not_required",
+              "time_constraint",
+              "provider_decision",
+              "other"
+            ],
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "status",
+          "actualQuantity"
+        ]
+      },
+      "RecordedServiceResponseDto": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "$ref": "#/components/schemas/PerformedServiceResponseDto"
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "service",
+          "version"
+        ]
+      },
+      "UpdateExecutionNoteRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "note"
+        ]
+      },
+      "ExecutionNoteResponseDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "minimum": 1
+          },
+          "operationalNote": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "CompleteExecutionRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ]
+      },
+      "CorrectExecutionTimesRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "actualStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actualEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "reason"
+        ]
+      },
+      "CorrectExecutionTimesResponseDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "VisitExecutionSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "visitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "executionStatus": {
+            "type": "string",
+            "enum": [
+              "not_started",
+              "in_progress",
+              "completed"
+            ]
+          },
+          "actualStart": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "actualEnd": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "visitId",
+          "executionStatus"
+        ]
+      },
       "EmployeeResponseDto": {
         "type": "object",
         "properties": {
@@ -12258,6 +13365,10 @@
             "type": "string",
             "format": "uuid"
           },
+          "actorId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "action": {
             "type": "string"
           },
@@ -12268,6 +13379,7 @@
         },
         "required": [
           "id",
+          "actorId",
           "action",
           "timestamp"
         ]
@@ -12635,6 +13747,11 @@
               "schedule.confirm",
               "schedule.assign",
               "schedule.generate",
+              "visit_execution.read",
+              "visit_execution.start",
+              "visit_execution.record_services",
+              "visit_execution.complete",
+              "visit_execution.correct",
               "employee.read",
               "employee.create",
               "employee.update",

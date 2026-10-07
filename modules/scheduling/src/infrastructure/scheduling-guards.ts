@@ -2,6 +2,14 @@ import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
 import { visitAssignments, visitServices, visits } from '../schema';
 
+export interface SchedulingExecutionGuard {
+  hasExecutionForVisit(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    visitId: string,
+  ): Promise<boolean>;
+}
+
 export interface SchedulingGuards {
   hasVisitsForClient(
     transaction: DatabaseTransaction,

@@ -130,7 +130,13 @@ export const visitServices = scheduling.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
   (table) => [
-    index('visit_services_tenant_visit_idx').on(table.tenantId, table.visitId, table.id),
+    uniqueIndex('visit_services_tenant_visit_id_uq').on(table.tenantId, table.visitId, table.id),
+    uniqueIndex('visit_services_tenant_visit_service_definition_uq').on(
+      table.tenantId,
+      table.visitId,
+      table.id,
+      table.serviceDefinitionId,
+    ),
     index('visit_services_service_idx').on(
       table.tenantId,
       table.serviceDefinitionId,

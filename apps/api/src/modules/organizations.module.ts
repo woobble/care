@@ -5,6 +5,7 @@ import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
 import type { ServiceAgreementGuards } from '@care/service-agreements';
 import type { OrganizationSchedulingGuard } from '@care/organizations';
+import type { VisitExecutionGuards } from '@care/visit-execution';
 import { DatabaseModule } from '../database/database.module';
 import { IdentityModule } from './identity.module';
 import { OrganizationsController } from '../presentation/http/organizations.controller';
@@ -15,10 +16,12 @@ import {
   SERVICE_AGREEMENT_GUARDS,
   SCHEDULING_GUARDS,
   UNIT_OF_WORK,
+  VISIT_EXECUTION_GUARDS,
 } from '../tokens';
 import { AuditModule } from './audit.module';
 import { PlatformModule } from './platform.module';
 import { ServiceAgreementProtectionModule } from './service-agreement-protection.module';
+import { VisitExecutionModule } from './visit-execution.module';
 
 @Module({
   imports: [
@@ -27,6 +30,7 @@ import { ServiceAgreementProtectionModule } from './service-agreement-protection
     AuditModule,
     PlatformModule,
     ServiceAgreementProtectionModule,
+    VisitExecutionModule,
   ],
   controllers: [OrganizationsController],
   providers: [
@@ -38,6 +42,7 @@ import { ServiceAgreementProtectionModule } from './service-agreement-protection
         OUTBOX_WRITER,
         SERVICE_AGREEMENT_GUARDS,
         SCHEDULING_GUARDS,
+        VISIT_EXECUTION_GUARDS,
       ],
       useFactory: (
         unitOfWork: UnitOfWork,
@@ -45,6 +50,7 @@ import { ServiceAgreementProtectionModule } from './service-agreement-protection
         outbox: OutboxWriter,
         guards: ServiceAgreementGuards,
         scheduling: OrganizationSchedulingGuard,
+        execution: VisitExecutionGuards,
       ) =>
         new OrganizationApplicationService(
           unitOfWork,
@@ -53,6 +59,7 @@ import { ServiceAgreementProtectionModule } from './service-agreement-protection
           undefined,
           guards,
           scheduling,
+          execution,
         ),
     },
   ],

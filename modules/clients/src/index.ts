@@ -64,7 +64,9 @@ export {
   type CreateClientInput,
   type ClientServiceAgreementGuard,
   type ClientSchedulingGuard,
+  type ClientExecutionGuard,
   ClientHasActiveServiceAgreementsError,
+  ClientExecutionInProgressError,
   FutureVisitsExistError,
 } from './application/client.service';
 export {

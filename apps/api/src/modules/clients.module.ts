@@ -8,6 +8,7 @@ import type { AuditWriter } from '@care/audit';
 import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
 import type { ServiceAgreementGuards } from '@care/service-agreements';
+import type { VisitExecutionGuards } from '@care/visit-execution';
 import { DatabaseModule } from '../database/database.module';
 import {
   AUDIT_WRITER,
@@ -16,6 +17,7 @@ import {
   OUTBOX_WRITER,
   SERVICE_AGREEMENT_GUARDS,
   SCHEDULING_GUARDS,
+  VISIT_EXECUTION_GUARDS,
   UNIT_OF_WORK,
 } from '../tokens';
 import { AuditModule } from './audit.module';
@@ -25,6 +27,7 @@ import { ClientsController } from '../presentation/http/clients.controller';
 import { ClientMasterDataController } from '../presentation/http/client-master-data.controller';
 import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
 import { ServiceAgreementProtectionModule } from './service-agreement-protection.module';
+import { VisitExecutionModule } from './visit-execution.module';
 
 @Module({
   imports: [
@@ -33,6 +36,7 @@ import { ServiceAgreementProtectionModule } from './service-agreement-protection
     AuditModule,
     PlatformModule,
     ServiceAgreementProtectionModule,
+    VisitExecutionModule,
   ],
   controllers: [ClientsController, ClientMasterDataController],
   providers: [
@@ -46,6 +50,7 @@ import { ServiceAgreementProtectionModule } from './service-agreement-protection
         OUTBOX_WRITER,
         SERVICE_AGREEMENT_GUARDS,
         SCHEDULING_GUARDS,
+        VISIT_EXECUTION_GUARDS,
       ],
       useFactory: (
         unitOfWork: UnitOfWork,
@@ -53,7 +58,8 @@ import { ServiceAgreementProtectionModule } from './service-agreement-protection
         outbox: OutboxWriter,
         guards: ServiceAgreementGuards,
         scheduling: ClientSchedulingGuard,
-      ) => createClientApplicationService(unitOfWork, audit, outbox, guards, scheduling),
+        execution: VisitExecutionGuards,
+      ) => createClientApplicationService(unitOfWork, audit, outbox, guards, scheduling, execution),
     },
     {
       provide: CLIENT_MASTER_DATA_APPLICATION,

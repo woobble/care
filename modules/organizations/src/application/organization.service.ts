@@ -49,6 +49,19 @@ export interface OrganizationSchedulingGuard {
   ): Promise<boolean>;
 }
 
+export interface OrganizationExecutionGuard {
+  hasInProgressExecutionForOrganization(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    organizationId: string,
+  ): Promise<boolean>;
+  hasInProgressExecutionForFacility(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    facilityId: string,
+  ): Promise<boolean>;
+}
+
 export interface AgreementProviderContext {
   organizationId: string;
   facilityId: string;
@@ -66,6 +79,7 @@ export class OrganizationApplicationService {
     private readonly organizations: OrganizationRepository = new OrganizationRepository(),
     private readonly serviceAgreements?: OrganizationServiceAgreementGuard,
     private readonly scheduling?: OrganizationSchedulingGuard,
+    private readonly execution?: OrganizationExecutionGuard,
   ) {}
 
   async listOrganizations(
@@ -628,6 +642,16 @@ export class OrganizationApplicationService {
       }
       if (
         operation === 'archive' &&
+        (await this.execution?.hasInProgressExecutionForOrganization(
+          transaction,
+          principal.tenantId,
+          id,
+        ))
+      ) {
+        throw new OrganizationExecutionInProgressError();
+      }
+      if (
+        operation === 'archive' &&
         (await this.organizations.hasActiveChildren(transaction, principal.tenantId, id))
       ) {
         throw new OrganizationHasActiveChildrenError();
@@ -707,6 +731,16 @@ export class OrganizationApplicationService {
         (await this.scheduling?.hasFutureVisitsForFacility(transaction, principal.tenantId, id))
       ) {
         throw new FacilityHasFutureVisitsError();
+      }
+      if (
+        operation === 'archive' &&
+        (await this.execution?.hasInProgressExecutionForFacility(
+          transaction,
+          principal.tenantId,
+          id,
+        ))
+      ) {
+        throw new FacilityExecutionInProgressError();
       }
       const now = new Date();
       const facility = await this.organizations.setFacilityStatus(
@@ -875,6 +909,15 @@ export class OrganizationHasFutureVisitsError extends Error {
   }
 }
 
+export class OrganizationExecutionInProgressError extends Error {
+  readonly code = 'ORGANIZATION_EXECUTION_IN_PROGRESS';
+
+  constructor() {
+    super('Complete in-progress visits before archiving this organization');
+    this.name = 'OrganizationExecutionInProgressError';
+  }
+}
+
 export class InvalidSchedulingTimezoneError extends Error {
   readonly code = 'INVALID_SCHEDULING_TIMEZONE';
 
@@ -898,6 +941,15 @@ export class FacilityHasFutureVisitsError extends Error {
   constructor() {
     super('Resolve future visits before archiving this facility');
     this.name = 'FacilityHasFutureVisitsError';
+  }
+}
+
+export class FacilityExecutionInProgressError extends Error {
+  readonly code = 'FACILITY_EXECUTION_IN_PROGRESS';
+
+  constructor() {
+    super('Complete in-progress visits before archiving this facility');
+    this.name = 'FacilityExecutionInProgressError';
   }
 }
 

@@ -459,6 +459,7 @@ export class SchedulingRepository {
     const rows = await transaction
       .select({
         id: auditEntries.id,
+        actorId: auditEntries.actorId,
         action: auditEntries.action,
         timestamp: auditEntries.timestamp,
       })
@@ -466,12 +467,25 @@ export class SchedulingRepository {
       .where(
         and(
           eq(auditEntries.tenantId, tenantId),
-          eq(auditEntries.resourceType, 'visit'),
-          eq(auditEntries.resourceId, visitId),
+          or(
+            and(eq(auditEntries.resourceType, 'visit'), eq(auditEntries.resourceId, visitId)),
+            and(
+              inArray(auditEntries.action, [
+                'visit_execution.started',
+                'visit_execution.completed',
+              ]),
+              sql`${auditEntries.metadata}->>'visitId' = ${visitId}`,
+            ),
+          ),
         ),
       )
       .orderBy(asc(auditEntries.timestamp), asc(auditEntries.id));
-    return rows.map((row) => ({ id: row.id, action: row.action, timestamp: row.timestamp }));
+    return rows.map((row) => ({
+      id: row.id,
+      actorId: row.actorId,
+      action: row.action,
+      timestamp: row.timestamp,
+    }));
   }
 
   private async servicesForVisits(

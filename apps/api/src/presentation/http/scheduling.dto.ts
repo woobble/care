@@ -416,6 +416,9 @@ export class VisitHistoryEntryDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
 
+  @ApiProperty({ format: 'uuid' })
+  actorId!: string;
+
   @ApiProperty()
   action!: string;
 

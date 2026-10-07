@@ -125,6 +125,63 @@ export interface EventPayloadMap {
     employeeId: string;
     operation: 'assigned' | 'unassigned';
   };
+  'visit_execution.started': {
+    executionId: string;
+    visitId: string;
+    clientId: string;
+    actualStart: string;
+    version: number;
+  };
+  'visit_execution.completed': {
+    executionId: string;
+    visitId: string;
+    clientId: string;
+    actualStart: string;
+    actualEnd: string;
+    performedCount: number;
+    notPerformedCount: number;
+    version: number;
+  };
+  'visit_execution.corrected': {
+    executionId: string;
+    visitId: string;
+    clientId: string;
+    changedFields: string[];
+    version: number;
+  };
+  'visit_execution.note_updated': {
+    executionId: string;
+    visitId: string;
+    version: number;
+  };
+  'performed_service.recorded': {
+    executionId: string;
+    visitId: string;
+    performedServiceId: string;
+    status: 'performed' | 'partially_performed' | 'not_performed';
+    version: number;
+  };
+  'performed_service.updated': {
+    executionId: string;
+    visitId: string;
+    performedServiceId: string;
+    status: 'performed' | 'partially_performed' | 'not_performed';
+    version: number;
+  };
+  'performed_service.marked_not_performed': {
+    executionId: string;
+    visitId: string;
+    performedServiceId: string;
+    reasonCode: string;
+    version: number;
+  };
+  'performed_service.unplanned_added': {
+    executionId: string;
+    visitId: string;
+    performedServiceId: string;
+    status: 'performed' | 'partially_performed' | 'not_performed';
+    version: number;
+  };
   'schedule.generation_completed': {
     generationId: string;
     agreementId: string;
@@ -172,6 +229,7 @@ export interface DomainEvent<T extends EventName = EventName> {
     | 'service'
     | 'service_agreement'
     | 'visit'
+    | 'visit_execution'
     | 'schedule_generation'
     | 'employee_availability'
     | 'tenant_membership'

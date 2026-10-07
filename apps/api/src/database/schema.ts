@@ -7,6 +7,7 @@ import { platformSchema } from '@care/platform';
 import { servicesSchema } from '@care/services';
 import { serviceAgreementsSchema } from '@care/service-agreements';
 import { schedulingSchema } from '@care/scheduling';
+import { visitExecutionSchema } from '@care/visit-execution';
 
 export const databaseSchema = {
   ...identitySchema,
@@ -16,6 +17,7 @@ export const databaseSchema = {
   ...servicesSchema,
   ...serviceAgreementsSchema,
   ...schedulingSchema,
+  ...visitExecutionSchema,
   ...auditSchema,
   ...platformSchema,
 };

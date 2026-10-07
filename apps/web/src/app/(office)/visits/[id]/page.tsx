@@ -11,6 +11,7 @@ import { ConfirmSubmitButton } from '../../administration/confirm-submit-button'
 import {
   assignVisitAction,
   changeVisitStatusAction,
+  correctVisitExecutionTimesAction,
   unassignVisitAction,
   updateVisitAction,
 } from '../../planning/actions';
@@ -56,6 +57,14 @@ export default async function VisitDetailPage({
     },
   });
   const permissions = await getPermissionGrants(api);
+  const canReadExecution = hasPermission(permissions, 'visit_execution.read');
+  const canCorrectExecution = hasPermission(permissions, 'visit_execution.correct');
+  const executionResult = canReadExecution
+    ? await get('/api/v1/visits/{visitId}/execution', {
+        params: { path: { visitId: visit.id }, header },
+      })
+    : null;
+  const executionDetail = executionResult?.data;
   const canUpdate = hasPermission(permissions, 'schedule.update') && visit.status !== 'cancelled';
   const canAssign = hasPermission(permissions, 'schedule.assign') && visit.status !== 'cancelled';
   const canConfirm = hasPermission(permissions, 'schedule.confirm') && visit.status !== 'cancelled';
@@ -158,6 +167,172 @@ export default async function VisitDetailPage({
           </div>
         ) : null}
       </section>
+
+      {canReadExecution ? (
+        <section
+          aria-labelledby="execution-title"
+          className="grid gap-4 rounded-lg border bg-white p-5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="execution-title" className="text-xl font-semibold">
+              Ausführung
+            </h2>
+            {executionDetail ? (
+              <span className="rounded-full border px-3 py-1 text-sm">
+                {executionStatusLabel(executionDetail.execution.status)}
+              </span>
+            ) : null}
+          </div>
+          {executionResult?.error ? (
+            <p role="alert" className="text-sm text-red-800">
+              Ausführung konnte nicht geladen werden ({executionResult.error.code}).
+            </p>
+          ) : null}
+          {executionDetail ? (
+            <>
+              <dl className="grid gap-3 sm:grid-cols-2">
+                <Detail
+                  label="Tatsächliche Ankunft"
+                  value={
+                    executionDetail.execution.actualStart
+                      ? formatDateTime(executionDetail.execution.actualStart, visit.timezone)
+                      : 'Noch nicht erfasst'
+                  }
+                />
+                <Detail
+                  label="Tatsächliche Abfahrt"
+                  value={
+                    executionDetail.execution.actualEnd
+                      ? formatDateTime(executionDetail.execution.actualEnd, visit.timezone)
+                      : 'Noch nicht erfasst'
+                  }
+                />
+                <Detail
+                  label="Begonnen von"
+                  value={executionDetail.execution.startedByEmployeeName ?? '–'}
+                />
+                <Detail
+                  label="Abgeschlossen von"
+                  value={executionDetail.execution.completedByEmployeeName ?? '–'}
+                />
+              </dl>
+              {executionDetail.execution.operationalNote ? (
+                <div>
+                  <h3 className="font-semibold">Kurzer Einsatzhinweis</h3>
+                  <p className="mt-1 whitespace-pre-wrap text-slate-700">
+                    {executionDetail.execution.operationalNote}
+                  </p>
+                </div>
+              ) : null}
+              <div>
+                <h3 className="font-semibold">Erfasste Leistungen</h3>
+                {executionDetail.services.length ? (
+                  <ul className="mt-2 grid gap-2">
+                    {executionDetail.services.map((service, index) => (
+                      <li
+                        key={
+                          service.id ??
+                          service.visitServiceId ??
+                          service.serviceDefinitionId + index
+                        }
+                        className="grid gap-1 rounded-md bg-slate-50 p-3"
+                      >
+                        <span className="font-medium">
+                          {service.serviceName}
+                          {service.unplanned ? ' · ungeplant' : ''}
+                        </span>
+                        <span className="text-sm text-slate-700">
+                          {executionServiceStatusLabel(service.status)} · geplant{' '}
+                          {service.plannedQuantity ?? '–'} {unitLabel(service.unit)} · tatsächlich{' '}
+                          {service.actualQuantity ?? '–'} {unitLabel(service.unit)}
+                        </span>
+                        {service.reasonCode ? (
+                          <span className="text-sm text-slate-700">
+                            Grund: {executionReasonLabel(service.reasonCode)}
+                          </span>
+                        ) : null}
+                        {service.performedByEmployeeName ? (
+                          <span className="text-sm text-slate-600">
+                            Erfasst von {service.performedByEmployeeName}
+                          </span>
+                        ) : null}
+                        {service.note ? (
+                          <span className="whitespace-pre-wrap text-sm text-slate-700">
+                            {service.note}
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-slate-600">Noch keine Leistungsergebnisse erfasst.</p>
+                )}
+              </div>
+              {canCorrectExecution &&
+              executionDetail.execution.id &&
+              executionDetail.execution.actualStart ? (
+                <details className="rounded-md border p-3">
+                  <summary className="cursor-pointer font-semibold">
+                    Ausführungszeiten korrigieren
+                  </summary>
+                  <form action={correctVisitExecutionTimesAction} className="mt-4 grid gap-4">
+                    <input type="hidden" name="visitId" value={visit.id} />
+                    <input type="hidden" name="clientId" value={visit.clientId} />
+                    <input type="hidden" name="executionId" value={executionDetail.execution.id} />
+                    <input
+                      type="hidden"
+                      name="expectedVersion"
+                      value={executionDetail.execution.version}
+                    />
+                    <input type="hidden" name="timezone" value={visit.timezone} />
+                    <Field
+                      label="Tatsächliche Ankunft"
+                      name="actualStart"
+                      type="datetime-local"
+                      defaultValue={
+                        localDateTime(executionDetail.execution.actualStart, visit.timezone).date +
+                        'T' +
+                        localDateTime(executionDetail.execution.actualStart, visit.timezone).time
+                      }
+                      required
+                    />
+                    {executionDetail.execution.status === 'completed' ? (
+                      <Field
+                        label="Tatsächliche Abfahrt"
+                        name="actualEnd"
+                        type="datetime-local"
+                        defaultValue={
+                          executionDetail.execution.actualEnd
+                            ? localDateTime(executionDetail.execution.actualEnd, visit.timezone)
+                                .date +
+                              'T' +
+                              localDateTime(executionDetail.execution.actualEnd, visit.timezone)
+                                .time
+                            : ''
+                        }
+                        required
+                      />
+                    ) : null}
+                    <div className="grid gap-2">
+                      <Label htmlFor="execution-correction-reason">Grund der Korrektur</Label>
+                      <textarea
+                        id="execution-correction-reason"
+                        name="reason"
+                        required
+                        maxLength={1000}
+                        className="min-h-20 rounded-md border px-3 py-2"
+                      />
+                    </div>
+                    <Button type="submit" className="min-h-11 w-fit">
+                      Zeiten korrigieren
+                    </Button>
+                  </form>
+                </details>
+              ) : null}
+            </>
+          ) : null}
+        </section>
+      ) : null}
 
       {canUpdate ? (
         <section
@@ -306,6 +481,7 @@ export default async function VisitDetailPage({
             {visit.history.map((entry) => (
               <li key={entry.id} className="flex flex-wrap justify-between gap-2 border-b pb-2">
                 <span>{historyLabel(entry.action)}</span>
+                <span className="text-sm text-slate-600">Bearbeitet von {entry.actorId}</span>
                 <time dateTime={entry.timestamp}>
                   {formatDateTime(entry.timestamp, visit.timezone)}
                 </time>
@@ -435,6 +611,46 @@ function unitLabel(unit: string): string {
   );
 }
 
+function executionStatusLabel(status: string): string {
+  return (
+    (
+      {
+        not_started: 'Nicht begonnen',
+        in_progress: 'In Bearbeitung',
+        completed: 'Abgeschlossen',
+      } as Record<string, string>
+    )[status] ?? status
+  );
+}
+
+function executionServiceStatusLabel(status: string): string {
+  return (
+    (
+      {
+        not_recorded: 'Noch nicht erfasst',
+        performed: 'Erbracht',
+        partially_performed: 'Teilweise erbracht',
+        not_performed: 'Nicht erbracht',
+      } as Record<string, string>
+    )[status] ?? status
+  );
+}
+
+function executionReasonLabel(reason: string): string {
+  return (
+    (
+      {
+        client_declined: 'Klient lehnte ab',
+        client_not_present: 'Klient nicht angetroffen',
+        service_not_required: 'Leistung nicht erforderlich',
+        time_constraint: 'Zeitliche Einschränkung',
+        provider_decision: 'Entscheidung des Dienstes',
+        other: 'Sonstiger Grund',
+      } as Record<string, string>
+    )[reason] ?? reason
+  );
+}
+
 function historyLabel(action: string): string {
   return (
     (
@@ -448,6 +664,14 @@ function historyLabel(action: string): string {
         'visit.cancelled': 'Einsatz abgesagt',
         'visit.employee_assigned': 'Mitarbeitende zugewiesen',
         'visit.employee_unassigned': 'Zuweisung aufgehoben',
+        'visit_execution.started': 'Einsatz begonnen',
+        'visit_execution.note_updated': 'Einsatzhinweis geändert',
+        'performed_service.recorded': 'Leistungsergebnis erfasst',
+        'performed_service.updated': 'Leistungsergebnis geändert',
+        'performed_service.marked_not_performed': 'Leistung als nicht erbracht erfasst',
+        'performed_service.added_unplanned': 'Zusätzliche Leistung erfasst',
+        'visit_execution.completed': 'Einsatz abgeschlossen',
+        'visit_execution.times_corrected': 'Einsatzzeiten korrigiert',
       } as Record<string, string>
     )[action] ?? 'Einsatz geändert'
   );

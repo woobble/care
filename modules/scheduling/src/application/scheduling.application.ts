@@ -46,6 +46,7 @@ import type {
   VisitReadScope,
   VisitSearchFilter,
 } from '../infrastructure/scheduling.repository';
+import type { SchedulingExecutionGuard } from '../infrastructure/scheduling-guards';
 
 // Each loop below awaits statements on one transaction-bound connection; the ordering is part of the transaction and lock semantics.
 // oxlint-disable no-await-in-loop
@@ -129,6 +130,7 @@ export class SchedulingApplicationService {
     private readonly outbox: OutboxWriter,
     private readonly repository = new SchedulingRepository(),
     private readonly generationHorizonDays = 28,
+    private readonly executionGuard?: SchedulingExecutionGuard,
   ) {}
 
   async search(
@@ -173,7 +175,7 @@ export class SchedulingApplicationService {
   ): Promise<{
     visit: VisitCalendarRow;
     assignmentHistory: Array<VisitAssignmentSnapshot & { employeeDisplayName: string }>;
-    history: Array<{ id: string; action: string; timestamp: Date }>;
+    history: Array<{ id: string; actorId: string; action: string; timestamp: Date }>;
   }> {
     const scope = visitReadScope(principal);
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
@@ -377,6 +379,7 @@ export class SchedulingApplicationService {
         next.plannedEnd.getTime() !== visit.plannedEnd.getTime() ||
         next.timeWindowStart?.getTime() !== visit.timeWindowStart?.getTime() ||
         next.timeWindowEnd?.getTime() !== visit.timeWindowEnd?.getTime();
+      if (timeChanged) await this.ensurePlanningMutable(transaction, visit);
       const changedFields = [
         ...(timeChanged ? ['plannedStart', 'plannedEnd'] : []),
         ...(next.note !== visit.note ? ['note'] : []),
@@ -497,6 +500,7 @@ export class SchedulingApplicationService {
         true,
       );
       if (visit.status === 'cancelled') throw new VisitCancelledError();
+      await this.ensurePlanningMutable(transaction, visit);
       await this.lockResources(transaction, principal.tenantId, [
         `client:${visit.clientId}`,
         `employee:${input.employeeId}`,
@@ -552,6 +556,7 @@ export class SchedulingApplicationService {
         assignmentId,
       );
       if (!assignment || assignment.status !== 'active') throw new VisitAssignmentNotFoundError();
+      await this.ensurePlanningMutable(transaction, visit);
       await this.lockResources(transaction, principal.tenantId, [
         `client:${visit.clientId}`,
         `employee:${assignment.employeeId}`,
@@ -891,6 +896,7 @@ export class SchedulingApplicationService {
         permission,
         true,
       );
+      await this.ensurePlanningMutable(transaction, visit);
       const lifecycle = new VisitLifecycle(visit.status);
       const status =
         operation === 'confirm'
@@ -960,6 +966,15 @@ export class SchedulingApplicationService {
     );
     if (!entry) throw new VisitNotFoundError();
     return visit;
+  }
+
+  private async ensurePlanningMutable(
+    transaction: DatabaseTransaction,
+    visit: VisitData,
+  ): Promise<void> {
+    if (await this.executionGuard?.hasExecutionForVisit(transaction, visit.tenantId, visit.id)) {
+      throw new VisitExecutionPlanningLockedError();
+    }
   }
 
   private async requireVisitForMutation(
@@ -1574,6 +1589,7 @@ export function createSchedulingApplicationService(
   audit: AuditWriter,
   outbox: OutboxWriter,
   generationHorizonDays = 28,
+  executionGuard?: SchedulingExecutionGuard,
 ): SchedulingApplicationService {
   return new SchedulingApplicationService(
     unitOfWork,
@@ -1586,7 +1602,17 @@ export function createSchedulingApplicationService(
     outbox,
     new SchedulingRepository(),
     generationHorizonDays,
+    executionGuard,
   );
+}
+
+export class VisitExecutionPlanningLockedError extends Error {
+  readonly code = 'VISIT_EXECUTION_PLANNING_LOCKED';
+
+  constructor() {
+    super('Scheduling changes are locked after visit execution starts');
+    this.name = 'VisitExecutionPlanningLockedError';
+  }
 }
 
 export class InvalidVisitQueryError extends Error {

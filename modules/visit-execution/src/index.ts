@@ -1,0 +1,40 @@
+export { visitExecutionSchema, visitExecutions, performedServices } from './schema';
+export {
+  EXECUTION_REASONS,
+  InvalidExecutionNoteError,
+  InvalidPerformedServiceQuantityError,
+  InvalidPerformedServiceStatusError,
+  normalizeOperationalNote,
+  validateServiceDecision,
+  type ExecutionReasonCode,
+  type ExecutionStatus,
+  type PerformedServiceStatus,
+  type ServiceDecision,
+} from './domain/visit-execution';
+export {
+  createVisitExecutionGuards,
+  DrizzleVisitExecutionGuards,
+  type VisitExecutionGuards,
+} from './infrastructure/visit-execution.guards';
+export {
+  createVisitExecutionApplicationService,
+  VisitExecutionApplicationService,
+  EmployeeLinkRequiredError,
+  ExecutionCorrectionReasonRequiredError,
+  InvalidVisitExecutionQueryError,
+  PerformedServiceNotFoundError,
+  PerformedServiceRequiredError,
+  PerformedServiceServiceInvalidError,
+  VisitExecutionAlreadyCompletedError,
+  VisitExecutionNotFoundError,
+  VisitExecutionNotStartedError,
+  VisitExecutionTimeInvalidError,
+  VisitExecutionVersionConflictError,
+  VisitExecutionVisitCancelledError,
+  VisitNotAssignedToEmployeeError,
+  type CaregiverVisitSummary,
+  type CorrectExecutionTimesInput,
+  type RecordPerformedServiceInput,
+  type UpdateExecutionNoteInput,
+  type VisitExecutionDetail,
+} from './application/visit-execution.application';
