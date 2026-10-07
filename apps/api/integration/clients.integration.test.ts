@@ -24,29 +24,29 @@ describe('clients API', () => {
     const workerDatabase = createDatabase(database.workerUrl, platformSchema);
     const outbox = new DrizzleOutboxRepository(workerDatabase.db);
     const { privateKey, publicKey } = await generateKeyPair('RS256', { modulusLength: 2048 });
-    const keyId = randomUUID();
+    const keyId = uuidv7();
     const publicJwk = await exportJWK(publicKey);
     publicJwk.kid = keyId;
     publicJwk.alg = 'RS256';
     publicJwk.use = 'sig';
     const oidc = await startOidcServer(publicJwk);
     const subject = randomUUID();
-    const userId = randomUUID();
-    const tenantId = randomUUID();
-    const membershipId = randomUUID();
-    const roleId = randomUUID();
-    const officeRoleId = randomUUID();
-    const caregiverRoleId = randomUUID();
-    const otherTenantId = randomUUID();
-    const otherTenantRoleId = randomUUID();
-    const organizationId = randomUUID();
-    const secondOrganizationId = randomUUID();
-    const facilityId = randomUUID();
-    const secondFacilityId = randomUUID();
-    const secondOrganizationFacilityId = randomUUID();
-    const otherOrganizationId = randomUUID();
-    const otherFacilityId = randomUUID();
-    const crossTenantClientId = randomUUID();
+    const userId = uuidv7();
+    const tenantId = uuidv7();
+    const membershipId = uuidv7();
+    const roleId = uuidv7();
+    const officeRoleId = uuidv7();
+    const caregiverRoleId = uuidv7();
+    const otherTenantId = uuidv7();
+    const otherTenantRoleId = uuidv7();
+    const organizationId = uuidv7();
+    const secondOrganizationId = uuidv7();
+    const facilityId = uuidv7();
+    const secondFacilityId = uuidv7();
+    const secondOrganizationFacilityId = uuidv7();
+    const otherOrganizationId = uuidv7();
+    const otherFacilityId = uuidv7();
+    const crossTenantClientId = uuidv7();
     let app: Awaited<ReturnType<typeof NestFactory.create>> | undefined;
 
     process.env.NODE_ENV = 'test';
@@ -68,8 +68,8 @@ describe('clients API', () => {
         'Other Integration Tenant',
         `integration-${otherTenantId}`,
       ]);
-      const defaultStatusUserId = randomUUID();
-      const defaultStatusMembershipId = randomUUID();
+      const defaultStatusUserId = uuidv7();
+      const defaultStatusMembershipId = uuidv7();
       await owner.query('INSERT INTO identity.users (id) VALUES ($1)', [defaultStatusUserId]);
       const defaultMembership = await owner.query<{ status: string }>(
         `INSERT INTO identity.tenant_memberships (id, user_id, tenant_id)
@@ -130,7 +130,7 @@ describe('clients API', () => {
       );
       await owner.query(
         'INSERT INTO identity.external_identities (id, user_id, issuer, subject) VALUES ($1, $2, $3, $4)',
-        [randomUUID(), userId, oidc.issuer, subject],
+        [uuidv7(), userId, oidc.issuer, subject],
       );
       await owner.query(
         "INSERT INTO identity.tenant_memberships (id, user_id, tenant_id, status) VALUES ($1, $2, $3, 'active')",
@@ -155,8 +155,8 @@ describe('clients API', () => {
          VALUES ($1, $2, 'tenant', $3)`,
         [membershipId, tenantId, tenantId],
       );
-      const secondUserId = randomUUID();
-      const secondMembershipId = randomUUID();
+      const secondUserId = uuidv7();
+      const secondMembershipId = uuidv7();
       const secondSubject = randomUUID();
       await owner.query(
         'INSERT INTO identity.users (id, email, display_name) VALUES ($1, $2, $3)',
@@ -164,7 +164,7 @@ describe('clients API', () => {
       );
       await owner.query(
         'INSERT INTO identity.external_identities (id, user_id, issuer, subject) VALUES ($1, $2, $3, $4)',
-        [randomUUID(), secondUserId, oidc.issuer, secondSubject],
+        [uuidv7(), secondUserId, oidc.issuer, secondSubject],
       );
       await owner.query(
         "INSERT INTO identity.tenant_memberships (id, user_id, tenant_id, status) VALUES ($1, $2, $3, 'active')",
@@ -207,16 +207,16 @@ describe('clients API', () => {
         [secondMembershipId, tenantId, tenantId],
       );
 
-      const caregiverUserId = randomUUID();
+      const caregiverUserId = uuidv7();
       const caregiverSubject = randomUUID();
-      const caregiverMembershipId = randomUUID();
+      const caregiverMembershipId = uuidv7();
       await owner.query(
         'INSERT INTO identity.users (id, email, display_name) VALUES ($1, $2, $3)',
         [caregiverUserId, 'caregiver@integration.test', 'Integration Caregiver'],
       );
       await owner.query(
         'INSERT INTO identity.external_identities (id, user_id, issuer, subject) VALUES ($1, $2, $3, $4)',
-        [randomUUID(), caregiverUserId, oidc.issuer, caregiverSubject],
+        [uuidv7(), caregiverUserId, oidc.issuer, caregiverSubject],
       );
       await owner.query(
         "INSERT INTO identity.tenant_memberships (id, user_id, tenant_id, status) VALUES ($1, $2, $3, 'active')",
@@ -307,8 +307,9 @@ describe('clients API', () => {
       expect(unauthenticated.status).toBe(401);
       expect(unauthenticated.headers.get('content-type')).toContain('application/problem+json');
 
+      const unknownTenantId = randomUUID(); // Keep a valid v4 input to cover API compatibility.
       const forbidden = await fetch(`${baseUrl}/api/v1/clients`, {
-        headers: { ...headers, 'X-Tenant-Id': randomUUID() },
+        headers: { ...headers, 'X-Tenant-Id': unknownTenantId },
       });
       expect(forbidden.status).toBe(403);
 
@@ -917,7 +918,7 @@ describe('clients API', () => {
              (id, tenant_id, client_id, organization_id, facility_id, status,
               valid_from, valid_until, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, 'draft', '2030-02-02', '2030-02-01', now(), now())`,
-          [randomUUID(), tenantId, created.id, organizationId, secondFacilityId],
+          [uuidv7(), tenantId, created.id, organizationId, secondFacilityId],
         ),
       ).rejects.toThrow();
       await expect(
@@ -927,7 +928,7 @@ describe('clients API', () => {
               service_unit, status, valid_from, valid_until, created_at, updated_at)
            VALUES ($1, $2, $3, $4, 'BAD-DATE', 'Invalid period', 'occurrence', 'active',
                    '2030-02-02', '2030-02-01', now(), now())`,
-          [randomUUID(), tenantId, agreement.id, service.id],
+          [uuidv7(), tenantId, agreement.id, service.id],
         ),
       ).rejects.toThrow();
       await expect(
@@ -937,7 +938,7 @@ describe('clients API', () => {
               service_unit, status, created_at, updated_at)
            VALUES ($1, $2, $3, $4, 'BAD-REF', 'Missing service', 'occurrence', 'active',
                    now(), now())`,
-          [randomUUID(), tenantId, agreement.id, randomUUID()],
+          [uuidv7(), tenantId, agreement.id, uuidv7()],
         ),
       ).rejects.toThrow();
       await expect(
@@ -946,7 +947,7 @@ describe('clients API', () => {
              (id, tenant_id, agreement_id, service_definition_id, service_code, service_name,
               service_unit, status, created_at, updated_at)
            VALUES ($1, $2, $3, $4, 'CROSS', 'Cross Tenant', 'occurrence', 'active', now(), now())`,
-          [randomUUID(), otherTenantId, agreement.id, service.id],
+          [uuidv7(), otherTenantId, agreement.id, service.id],
         ),
       ).rejects.toThrow();
       await expect(
@@ -955,7 +956,7 @@ describe('clients API', () => {
              (id, tenant_id, agreement_id, service_definition_id, service_code, service_name,
               service_unit, status, quantity, created_at, updated_at)
            VALUES ($1, $2, $3, $4, 'BAD', 'Invalid quantity', 'occurrence', 'active', 1.5, now(), now())`,
-          [randomUUID(), tenantId, agreement.id, unavailableService.id],
+          [uuidv7(), tenantId, agreement.id, unavailableService.id],
         ),
       ).rejects.toThrow();
       const agreementServiceResponse = await fetch(
@@ -1186,7 +1187,7 @@ describe('clients API', () => {
         ]),
       );
       const teamCalendarRange = new URLSearchParams(visitRange);
-      teamCalendarRange.set('teamId', randomUUID());
+      teamCalendarRange.set('teamId', randomUUID()); // Unknown v4 IDs remain valid request values.
       const teamCalendarResponse = await fetch(`${baseUrl}/api/v1/visits?${teamCalendarRange}`, {
         headers,
       });
@@ -1534,7 +1535,7 @@ describe('clients API', () => {
               service_agreement_id, status, planned_start, planned_end, timezone, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, 'manual', NULL, 'planned', $6, $7, 'Europe/Berlin', now(), now())`,
           [
-            randomUUID(),
+            uuidv7(),
             tenantId,
             crossTenantClientId,
             organizationId,
@@ -1549,7 +1550,7 @@ describe('clients API', () => {
           `INSERT INTO scheduling.visit_assignments
              (id, tenant_id, visit_id, employee_id, status, assigned_at, assigned_by)
            VALUES ($1, $2, $3, $4, 'active', now(), $5)`,
-          [randomUUID(), tenantId, firstGeneratedVisit.id, randomUUID(), userId],
+          [uuidv7(), tenantId, firstGeneratedVisit.id, uuidv7(), userId],
         ),
       ).rejects.toThrow();
 
@@ -3538,7 +3539,7 @@ describe('clients API', () => {
         await owner.query(
           `INSERT INTO employees.employees (id, tenant_id, user_id, first_name, last_name)
            VALUES ($1, $2, $3, 'Cross', 'Tenant')`,
-          [randomUUID(), otherTenantId, userId],
+          [uuidv7(), otherTenantId, userId],
         );
       } catch (error) {
         employeeCrossTenantConstraint = (error as { code?: string }).code === '23503';
@@ -3549,7 +3550,7 @@ describe('clients API', () => {
         await owner.query(
           `INSERT INTO organizations.facilities (id, tenant_id, organization_id, name)
            VALUES ($1, $2, $3, 'Cross Tenant Facility')`,
-          [randomUUID(), tenantId, otherOrganizationId],
+          [uuidv7(), tenantId, otherOrganizationId],
         );
       } catch (error) {
         facilityOrganizationConstraint = (error as { code?: string }).code === '23503';

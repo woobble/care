@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { v7 as uuidv7 } from 'uuid';
 import { resolve } from 'node:path';
 import { Client } from 'pg';
 import { expect, test } from 'bun:test';
@@ -8,35 +8,35 @@ import { startCareTestDatabase } from '@care/testing';
 test('worker dispatches an outbox event before marking it delivered', async () => {
   const database = await startCareTestDatabase();
   const owner = new Client({ connectionString: database.migrationUrl });
-  const tenantId = randomUUID();
-  const generatedVisitId = randomUUID();
+  const tenantId = uuidv7();
+  const generatedVisitId = uuidv7();
   const events = [
     createDomainEvent({
       type: 'employee.created',
       tenantId,
       aggregateType: 'employee',
-      aggregateId: randomUUID(),
+      aggregateId: uuidv7(),
       actor: { type: 'system' },
-      correlationId: randomUUID(),
-      payload: { employeeId: randomUUID(), organizationId: randomUUID() },
+      correlationId: uuidv7(),
+      payload: { employeeId: uuidv7(), organizationId: uuidv7() },
     }),
     createDomainEvent({
       type: 'team.updated',
       tenantId,
       aggregateType: 'team',
-      aggregateId: randomUUID(),
+      aggregateId: uuidv7(),
       actor: { type: 'system' },
-      correlationId: randomUUID(),
-      payload: { teamId: randomUUID(), changedFields: ['name'] },
+      correlationId: uuidv7(),
+      payload: { teamId: uuidv7(), changedFields: ['name'] },
     }),
     createDomainEvent({
       type: 'client.created',
       tenantId,
       aggregateType: 'client',
-      aggregateId: randomUUID(),
+      aggregateId: uuidv7(),
       actor: { type: 'system' },
-      correlationId: randomUUID(),
-      payload: { clientId: randomUUID() },
+      correlationId: uuidv7(),
+      payload: { clientId: uuidv7() },
     }),
     createDomainEvent({
       type: 'visit.generated',
@@ -44,11 +44,11 @@ test('worker dispatches an outbox event before marking it delivered', async () =
       aggregateType: 'visit',
       aggregateId: generatedVisitId,
       actor: { type: 'system' },
-      correlationId: randomUUID(),
+      correlationId: uuidv7(),
       payload: {
         visitId: generatedVisitId,
-        agreementId: randomUUID(),
-        clientId: randomUUID(),
+        agreementId: uuidv7(),
+        clientId: uuidv7(),
       },
     }),
   ];

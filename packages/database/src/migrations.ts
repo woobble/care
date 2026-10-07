@@ -29,7 +29,7 @@ const migrations = {
   scheduling: ['0001_scheduling.sql'],
   'visit-execution': ['0001_visit_execution.sql'],
   audit: ['0001_initial.sql', '0002_query_indexes.sql'],
-  platform: ['0001_initial.sql'],
+  platform: ['0001_initial.sql', '0002_uuidv7_rekey.sql'],
 } as const;
 const migrationsRoot = resolve(import.meta.dirname, '../../../modules');
 

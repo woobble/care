@@ -7,6 +7,7 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
 import { genericOAuth } from 'better-auth/plugins/generic-oauth';
+import { v7 as uuidv7 } from 'uuid';
 
 const buildSecret = 'build-only-secret-value-that-is-never-used-at-runtime';
 const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
@@ -67,7 +68,10 @@ export const auth = betterAuth({
     encryptOAuthTokens: true,
     accountLinking: { enabled: false },
   },
-  advanced: { useSecureCookies: config.NODE_ENV === 'production' },
+  advanced: {
+    generateId: () => uuidv7(),
+    useSecureCookies: config.NODE_ENV === 'production',
+  },
   plugins: [
     genericOAuth({
       config: [authentikConfig],

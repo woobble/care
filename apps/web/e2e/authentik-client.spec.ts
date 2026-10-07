@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { v7 as uuidv7 } from 'uuid';
 import { Client } from 'pg';
 import { expect, test } from '@playwright/test';
 import type { BrowserContext, Page } from '@playwright/test';
@@ -88,7 +89,7 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     const adminRoleId = adminRole.rows[0]?.id;
     if (!adminRoleId) throw new Error('Demo Care Administrator role is missing; run bun run seed');
-    adminMembershipId = randomUUID();
+    adminMembershipId = uuidv7();
     await database.query('BEGIN');
     try {
       await database.query(
@@ -413,7 +414,7 @@ test('Authentik users can be invited and administered from the office UI', async
     if (!caregiverRoleId || !caregiverPlatformUserId) {
       throw new Error('The seeded Caregiver role or provisioned caregiver user is missing');
     }
-    caregiverMembershipId = randomUUID();
+    caregiverMembershipId = uuidv7();
     await database.query('BEGIN');
     try {
       await database.query(

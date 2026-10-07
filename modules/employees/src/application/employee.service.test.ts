@@ -22,11 +22,11 @@ import {
 import { EmployeeApplicationService } from './employee.service';
 import type { EmployeeRepository } from '../infrastructure/persistence/employee.repository';
 
-const tenantId = '91ce6a63-434f-4423-a7dc-3eaf36766378';
-const organizationId = '193df432-2718-46ba-8a42-6b4242c3f121';
-const employeeId = '814ff2bb-b5f8-4c6b-a4dc-2ea98b6b7c16';
-const principalUserId = 'd7f8230b-0732-4da4-8373-1bb84ac3c893';
-const userId = 'e3ee3c73-5c2d-4da9-82ac-c90bcb35f909';
+const tenantId = '91ce6a63-434f-7423-a7dc-3eaf36766378';
+const organizationId = '193df432-2718-76ba-8a42-6b4242c3f121';
+const employeeId = '814ff2bb-b5f8-7c6b-a4dc-2ea98b6b7c16';
+const principalUserId = 'd7f8230b-0732-7da4-8373-1bb84ac3c893';
+const userId = 'e3ee3c73-5c2d-7da9-82ac-c90bcb35f909';
 const employee: EmployeeSnapshot = {
   id: employeeId,
   tenantId,
@@ -52,9 +52,9 @@ const requestContext: RequestContext = { requestId: 'request-id', correlationId:
 describe('employee application rules', () => {
   test('requires a primary facility and atomically promotes a newly assigned primary', async () => {
     const existingAssignment = {
-      id: '036d992d-a4a2-4ce2-9843-19c6162ef4c8',
+      id: '036d992d-a4a2-7ce2-9843-19c6162ef4c8',
       employeeId,
-      facilityId: '936f521e-324f-44c0-aa72-5bcb9440bd28',
+      facilityId: '936f521e-324f-74c0-aa72-5bcb9440bd28',
       facilityName: 'Facility One',
       organizationId,
       isPrimary: true,
@@ -87,7 +87,7 @@ describe('employee application rules', () => {
       service.service.assignFacility(
         principal('employee.assign_facility', 'employee.read'),
         employeeId,
-        '36e28b6a-b51d-49cc-bc28-4db824f6d762',
+        '36e28b6a-b51d-79cc-bc28-4db824f6d762',
         { isPrimary: true },
         requestContext,
         {},
@@ -97,7 +97,7 @@ describe('employee application rules', () => {
     expect(demotedOtherAssignments).toBe(true);
     expect(createdAssignment).toMatchObject({
       employeeId,
-      facilityId: '36e28b6a-b51d-49cc-bc28-4db824f6d762',
+      facilityId: '36e28b6a-b51d-79cc-bc28-4db824f6d762',
       isPrimary: true,
     });
     expect(service.auditRecords.map((entry) => entry.action)).toContain(
@@ -120,7 +120,7 @@ describe('employee application rules', () => {
       primaryRequired.service.assignFacility(
         principal('employee.assign_facility'),
         employeeId,
-        '36e28b6a-b51d-49cc-bc28-4db824f6d762',
+        '36e28b6a-b51d-79cc-bc28-4db824f6d762',
         { isPrimary: false },
         requestContext,
         {},
@@ -157,7 +157,7 @@ describe('employee application rules', () => {
     ).rejects.toBeInstanceOf(UserAlreadyLinkedError);
 
     const employeeHasDifferentUser = createService({
-      findById: async () => ({ ...employee, userId: '252ce385-06dc-49a1-9873-bfc2db391959' }),
+      findById: async () => ({ ...employee, userId: '252ce385-06dc-79a1-9873-bfc2db391959' }),
     });
     await expect(
       employeeHasDifferentUser.service.linkUser(
@@ -173,7 +173,7 @@ describe('employee application rules', () => {
   test('rejects team membership across the employee owning organization', async () => {
     const service = createService({
       teamContext: async () => ({
-        id: '487b8ea6-7cc0-4be2-a810-26c76f142d0c',
+        id: '487b8ea6-7cc0-7be2-a810-26c76f142d0c',
         organizationId: 'different-organization',
         facilityId: null,
         status: 'active',
@@ -188,7 +188,7 @@ describe('employee application rules', () => {
       service.service.assignTeam(
         principal('employee.assign_team'),
         employeeId,
-        '487b8ea6-7cc0-4be2-a810-26c76f142d0c',
+        '487b8ea6-7cc0-7be2-a810-26c76f142d0c',
         {},
         requestContext,
         {},
@@ -199,7 +199,7 @@ describe('employee application rules', () => {
   test('records an active qualification with its validity and issuer', async () => {
     let created: Parameters<EmployeeRepository['addQualification']>[1] | undefined;
     const qualification: QualificationDefinitionSnapshot = {
-      id: '3b6a8edb-868f-43aa-9fd2-3bf213760a18',
+      id: '3b6a8edb-868f-73aa-9fd2-3bf213760a18',
       tenantId,
       name: 'Registered Nurse',
       code: 'RN',
@@ -255,7 +255,7 @@ describe('employee application rules', () => {
   test('records an active skill assignment', async () => {
     let assignedSkill: { employeeId: string; skillId: string } | undefined;
     const skill: SkillDefinitionSnapshot = {
-      id: '1368228f-8091-4d8f-bfb2-9dd6f1698199',
+      id: '1368228f-8091-7d8f-bfb2-9dd6f1698199',
       tenantId,
       name: 'Wound Care',
       code: null,
