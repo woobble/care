@@ -690,6 +690,18 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "archived"
+              ],
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -722,9 +734,64 @@
             "bearer": []
           }
         ],
-        "summary": "List organizations visible in the selected tenant",
+        "summary": "List visible organizations",
         "tags": [
-          "organizations"
+          "organization structure"
+        ]
+      },
+      "post": {
+        "operationId": "OrganizationsController_createOrganization",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrganizationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create an organization",
+        "tags": [
+          "organization structure"
         ]
       }
     },
@@ -780,7 +847,183 @@
         ],
         "summary": "Get an organization",
         "tags": [
-          "organizations"
+          "organization structure"
+        ]
+      },
+      "patch": {
+        "operationId": "OrganizationsController_updateOrganization",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrganizationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update organization master data",
+        "tags": [
+          "organization structure"
+        ]
+      }
+    },
+    "/api/v1/organizations/{id}/activate": {
+      "post": {
+        "operationId": "OrganizationsController_activateOrganization",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Activate an organization",
+        "tags": [
+          "organization structure"
+        ]
+      }
+    },
+    "/api/v1/organizations/{id}/archive": {
+      "post": {
+        "operationId": "OrganizationsController_archiveOrganization",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive an organization without deleting it",
+        "tags": [
+          "organization structure"
         ]
       }
     },
@@ -795,6 +1038,27 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "archived"
+              ],
+              "type": "string"
             }
           }
         ],
@@ -828,9 +1092,64 @@
             "bearer": []
           }
         ],
-        "summary": "List facilities visible in the selected tenant",
+        "summary": "List visible facilities",
         "tags": [
-          "organizations"
+          "organization structure"
+        ]
+      },
+      "post": {
+        "operationId": "OrganizationsController_createFacility",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFacilityDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacilityResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a facility inside an organization",
+        "tags": [
+          "organization structure"
         ]
       }
     },
@@ -886,7 +1205,2228 @@
         ],
         "summary": "Get a facility",
         "tags": [
-          "organizations"
+          "organization structure"
+        ]
+      },
+      "patch": {
+        "operationId": "OrganizationsController_updateFacility",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFacilityDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacilityResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update facility master data",
+        "tags": [
+          "organization structure"
+        ]
+      }
+    },
+    "/api/v1/facilities/{id}/activate": {
+      "post": {
+        "operationId": "OrganizationsController_activateFacility",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacilityResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Activate a facility",
+        "tags": [
+          "organization structure"
+        ]
+      }
+    },
+    "/api/v1/facilities/{id}/archive": {
+      "post": {
+        "operationId": "OrganizationsController_archiveFacility",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacilityResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive a facility without deleting it",
+        "tags": [
+          "organization structure"
+        ]
+      }
+    },
+    "/api/v1/teams": {
+      "get": {
+        "operationId": "OrganizationsController_listTeams",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "archived"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeamResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List visible teams",
+        "tags": [
+          "organization structure"
+        ]
+      },
+      "post": {
+        "operationId": "OrganizationsController_createTeam",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a team",
+        "tags": [
+          "organization structure"
+        ]
+      }
+    },
+    "/api/v1/teams/{id}": {
+      "get": {
+        "operationId": "OrganizationsController_getTeam",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a team",
+        "tags": [
+          "organization structure"
+        ]
+      },
+      "patch": {
+        "operationId": "OrganizationsController_updateTeam",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTeamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a team",
+        "tags": [
+          "organization structure"
+        ]
+      }
+    },
+    "/api/v1/teams/{id}/activate": {
+      "post": {
+        "operationId": "OrganizationsController_activateTeam",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Activate a team",
+        "tags": [
+          "organization structure"
+        ]
+      }
+    },
+    "/api/v1/teams/{id}/archive": {
+      "post": {
+        "operationId": "OrganizationsController_archiveTeam",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive a team without deleting it",
+        "tags": [
+          "organization structure"
+        ]
+      }
+    },
+    "/api/v1/employees": {
+      "get": {
+        "operationId": "EmployeesController_search",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "inactive",
+                "archived"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "teamId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "lastName",
+                "firstName",
+                "createdAt"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeListResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Search employees in the selected tenant and authorized scopes",
+        "tags": [
+          "employees"
+        ]
+      },
+      "post": {
+        "operationId": "EmployeesController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEmployeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create an employee without requiring a platform user account",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}": {
+      "get": {
+        "operationId": "EmployeesController_get",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get employee master data and authorized assignments",
+        "tags": [
+          "employees"
+        ]
+      },
+      "patch": {
+        "operationId": "EmployeesController_update",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEmployeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update employee master data",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}/activate": {
+      "post": {
+        "operationId": "EmployeesController_activate",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Activate an inactive employee",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}/deactivate": {
+      "post": {
+        "operationId": "EmployeesController_deactivate",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Deactivate an employee",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}/archive": {
+      "post": {
+        "operationId": "EmployeesController_archive",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive an employee without deleting the record",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}/linkable-users": {
+      "get": {
+        "operationId": "EmployeesController_linkableUsers",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LinkableUserResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List active local users in this tenant that can be linked",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}/user": {
+      "put": {
+        "operationId": "EmployeesController_linkUser",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Link an employee to an existing local user",
+        "tags": [
+          "employees"
+        ]
+      },
+      "delete": {
+        "operationId": "EmployeesController_unlinkUser",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Unlink a local user from an employee",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}/facilities/{facilityId}": {
+      "put": {
+        "operationId": "EmployeesController_assignFacility",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FacilityAssignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Assign an employee to a facility and optionally make it primary",
+        "tags": [
+          "employees"
+        ]
+      },
+      "delete": {
+        "operationId": "EmployeesController_unassignFacility",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Deactivate an employee facility assignment",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}/teams/{teamId}": {
+      "put": {
+        "operationId": "EmployeesController_assignTeam",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamMembershipDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Assign an employee to a team",
+        "tags": [
+          "employees"
+        ]
+      },
+      "delete": {
+        "operationId": "EmployeesController_unassignTeam",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Deactivate an employee team membership",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/qualifications": {
+      "get": {
+        "operationId": "EmployeesController_listQualifications",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "archived"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DefinitionResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List tenant qualification definitions",
+        "tags": [
+          "employees"
+        ]
+      },
+      "post": {
+        "operationId": "EmployeesController_createQualification",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDefinitionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefinitionResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a tenant qualification definition",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/qualifications/{id}": {
+      "patch": {
+        "operationId": "EmployeesController_updateQualification",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDefinitionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefinitionResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a qualification definition",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/qualifications/{id}/archive": {
+      "post": {
+        "operationId": "EmployeesController_archiveQualification",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefinitionResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive a qualification definition",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}/qualifications/{qualificationId}": {
+      "put": {
+        "operationId": "EmployeesController_assignQualification",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "qualificationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QualificationAssignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add or update an employee qualification",
+        "tags": [
+          "employees"
+        ]
+      },
+      "delete": {
+        "operationId": "EmployeesController_removeQualification",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "qualificationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove an employee qualification",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/skills": {
+      "get": {
+        "operationId": "EmployeesController_listSkills",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "archived"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DefinitionResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List tenant skill definitions",
+        "tags": [
+          "employees"
+        ]
+      },
+      "post": {
+        "operationId": "EmployeesController_createSkill",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDefinitionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefinitionResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a tenant skill definition",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/skills/{id}": {
+      "patch": {
+        "operationId": "EmployeesController_updateSkill",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDefinitionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefinitionResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a skill definition",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/skills/{id}/archive": {
+      "post": {
+        "operationId": "EmployeesController_archiveSkill",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefinitionResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive a skill definition",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}/skills/{skillId}": {
+      "put": {
+        "operationId": "EmployeesController_assignSkill",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "skillId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Assign an employee skill",
+        "tags": [
+          "employees"
+        ]
+      },
+      "delete": {
+        "operationId": "EmployeesController_removeSkill",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "skillId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove an employee skill",
+        "tags": [
+          "employees"
         ]
       }
     },
@@ -1029,11 +3569,37 @@
             }
           },
           {
-            "name": "q",
+            "name": "sortOrder",
             "required": false,
             "in": "query",
             "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
               "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "lastName",
+                "firstName",
+                "createdAt",
+                "dateOfBirth"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
             }
           },
           {
@@ -1045,11 +3611,50 @@
             }
           },
           {
-            "name": "pageSize",
+            "name": "pflegegrad",
             "required": false,
             "in": "query",
             "schema": {
+              "minimum": 1,
+              "maximum": 5,
               "type": "number"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "pending",
+                "active",
+                "archived"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -1080,7 +3685,7 @@
             "bearer": []
           }
         ],
-        "summary": "Search clients in the selected tenant",
+        "summary": "Search clients in the selected tenant and granted provider scopes",
         "tags": [
           "clients"
         ]
@@ -1135,7 +3740,7 @@
             "bearer": []
           }
         ],
-        "summary": "Create a pending client",
+        "summary": "Create a pending client with provider context",
         "tags": [
           "clients"
         ]
@@ -1255,7 +3860,73 @@
             "bearer": []
           }
         ],
-        "summary": "Update client personal and contact data",
+        "summary": "Update client personal data",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/clients/{id}/provider-context": {
+      "put": {
+        "operationId": "ClientsController_changeProviderContext",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderContextDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Assign or change a client provider organization and primary facility",
         "tags": [
           "clients"
         ]
@@ -1373,6 +4044,1731 @@
         ]
       }
     },
+    "/api/v1/clients/{clientId}/addresses": {
+      "get": {
+        "operationId": "ClientMasterDataController_listAddresses",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ClientAddressResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List client addresses",
+        "tags": [
+          "clients"
+        ]
+      },
+      "post": {
+        "operationId": "ClientMasterDataController_addAddress",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateClientAddressDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientAddressResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add a client address",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/clients/{clientId}/addresses/{addressId}": {
+      "patch": {
+        "operationId": "ClientMasterDataController_updateAddress",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "addressId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateClientAddressDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientAddressResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a client address",
+        "tags": [
+          "clients"
+        ]
+      },
+      "delete": {
+        "operationId": "ClientMasterDataController_removeAddress",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "addressId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove a client address",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/clients/{clientId}/contacts": {
+      "get": {
+        "operationId": "ClientMasterDataController_listContacts",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ClientContactResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List client contacts and structured roles",
+        "tags": [
+          "clients"
+        ]
+      },
+      "post": {
+        "operationId": "ClientMasterDataController_addContact",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientContactInputDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientContactResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add a client contact",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/clients/{clientId}/contacts/{contactId}": {
+      "patch": {
+        "operationId": "ClientMasterDataController_updateContact",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "contactId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientContactPatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientContactResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a client contact and its roles",
+        "tags": [
+          "clients"
+        ]
+      },
+      "delete": {
+        "operationId": "ClientMasterDataController_removeContact",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "contactId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove a client contact",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/clients/{clientId}/insurances": {
+      "get": {
+        "operationId": "ClientMasterDataController_listInsurances",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ClientInsuranceResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List client insurance relationships",
+        "tags": [
+          "clients"
+        ]
+      },
+      "post": {
+        "operationId": "ClientMasterDataController_addInsurance",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientInsuranceInputDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientInsuranceResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add an insurance relationship",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/clients/{clientId}/insurances/{insuranceId}": {
+      "patch": {
+        "operationId": "ClientMasterDataController_updateInsurance",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "insuranceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientInsurancePatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientInsuranceResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update an insurance relationship",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/clients/{clientId}/pflegegrade": {
+      "get": {
+        "operationId": "ClientMasterDataController_listPflegegrade",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PflegegradResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List Pflegegrad history",
+        "tags": [
+          "clients"
+        ]
+      },
+      "post": {
+        "operationId": "ClientMasterDataController_addPflegegrad",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PflegegradInputDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PflegegradResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add a Pflegegrad history record",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/clients/{clientId}/pflegegrade/{recordId}": {
+      "patch": {
+        "operationId": "ClientMasterDataController_updatePflegegrad",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "recordId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PflegegradPatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PflegegradResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a future pending Pflegegrad record",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/clients/{clientId}/timeline": {
+      "get": {
+        "operationId": "ClientMasterDataController_timeline",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ClientTimelineEntryDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read a client-oriented timeline",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/api/v1/service-categories": {
+      "get": {
+        "operationId": "ServiceCategoriesController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeArchived",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ServiceCategoryResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List service categories",
+        "tags": [
+          "service categories"
+        ]
+      },
+      "post": {
+        "operationId": "ServiceCategoriesController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceCategoryInputDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceCategoryResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a service category",
+        "tags": [
+          "service categories"
+        ]
+      }
+    },
+    "/api/v1/service-categories/{id}": {
+      "get": {
+        "operationId": "ServiceCategoriesController_get",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceCategoryResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a service category",
+        "tags": [
+          "service categories"
+        ]
+      },
+      "patch": {
+        "operationId": "ServiceCategoriesController_update",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceCategoryPatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceCategoryResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a service category",
+        "tags": [
+          "service categories"
+        ]
+      }
+    },
+    "/api/v1/service-categories/{id}/archive": {
+      "post": {
+        "operationId": "ServiceCategoriesController_archive",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceCategoryResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive a service category",
+        "tags": [
+          "service categories"
+        ]
+      }
+    },
+    "/api/v1/services": {
+      "get": {
+        "operationId": "ServicesController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "validAt",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "categoryId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "archived"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceListResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Search available service definitions",
+        "tags": [
+          "services"
+        ]
+      },
+      "post": {
+        "operationId": "ServicesController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceInputDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a service definition",
+        "tags": [
+          "services"
+        ]
+      }
+    },
+    "/api/v1/services/{id}": {
+      "get": {
+        "operationId": "ServicesController_get",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a service definition",
+        "tags": [
+          "services"
+        ]
+      },
+      "patch": {
+        "operationId": "ServicesController_update",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServicePatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a service definition",
+        "tags": [
+          "services"
+        ]
+      }
+    },
+    "/api/v1/services/{id}/archive": {
+      "post": {
+        "operationId": "ServicesController_archive",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive a service definition",
+        "tags": [
+          "services"
+        ]
+      }
+    },
+    "/api/v1/services/{id}/availability": {
+      "get": {
+        "operationId": "ServicesController_availability",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ServiceAvailabilityResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List a service definition availability history",
+        "tags": [
+          "services"
+        ]
+      },
+      "put": {
+        "operationId": "ServicesController_setAvailability",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceServiceAvailabilityDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ServiceAvailabilityResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Replace active service availability assignments",
+        "tags": [
+          "services"
+        ]
+      }
+    },
     "/api/v1/me": {
       "get": {
         "operationId": "MeController_me",
@@ -1445,6 +5841,56 @@
           }
         ],
         "summary": "List active tenant memberships for the current user",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/api/v1/me/permissions": {
+      "get": {
+        "operationId": "MeController_permissions",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PermissionGrantDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List the current tenant permission grants",
         "tags": [
           "identity"
         ]
@@ -1738,7 +6184,8 @@
             "enum": [
               "tenant",
               "organization",
-              "facility"
+              "facility",
+              "team"
             ]
           },
           "scopeId": {
@@ -1781,7 +6228,39 @@
           "name": {
             "type": "string"
           },
+          "legalName": {
+            "type": "string",
+            "nullable": true
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
           "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
             "type": "string",
             "format": "date-time"
           }
@@ -1790,8 +6269,88 @@
           "id",
           "tenantId",
           "name",
-          "createdAt"
+          "legalName",
+          "code",
+          "status",
+          "address",
+          "phone",
+          "email",
+          "createdAt",
+          "updatedAt"
         ]
+      },
+      "CreateOrganizationDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "legalName": {
+            "type": "string",
+            "maxLength": 200,
+            "nullable": true
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "UpdateOrganizationDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "legalName": {
+            "type": "string",
+            "maxLength": 200,
+            "nullable": true
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          }
+        }
       },
       "FacilityResponseDto": {
         "type": "object",
@@ -1811,10 +6370,45 @@
           "organizationName": {
             "type": "string"
           },
+          "organizationStatus": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          },
           "name": {
             "type": "string"
           },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
           "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
             "type": "string",
             "format": "date-time"
           }
@@ -1824,9 +6418,1004 @@
           "tenantId",
           "organizationId",
           "organizationName",
+          "organizationStatus",
           "name",
-          "createdAt"
+          "code",
+          "status",
+          "address",
+          "phone",
+          "email",
+          "createdAt",
+          "updatedAt"
         ]
+      },
+      "CreateFacilityDto": {
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          }
+        },
+        "required": [
+          "organizationId",
+          "name"
+        ]
+      },
+      "UpdateFacilityDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          }
+        }
+      },
+      "TeamResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityId": {
+            "type": "string",
+            "nullable": true
+          },
+          "organizationName": {
+            "type": "string"
+          },
+          "facilityName": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "organizationId",
+          "facilityId",
+          "organizationName",
+          "facilityName",
+          "name",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateTeamDto": {
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "organizationId",
+          "name"
+        ]
+      },
+      "UpdateTeamDto": {
+        "type": "object",
+        "properties": {
+          "facilityId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        }
+      },
+      "EmployeeResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "organizationName": {
+            "type": "string",
+            "nullable": true
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "preferredName": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "personnelNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "employmentType": {
+            "type": "string",
+            "nullable": true
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "weeklyHours": {
+            "type": "number",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive",
+              "archived"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "organizationId",
+          "organizationName",
+          "userId",
+          "firstName",
+          "lastName",
+          "preferredName",
+          "email",
+          "phone",
+          "personnelNumber",
+          "employmentType",
+          "startDate",
+          "endDate",
+          "weeklyHours",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "EmployeeListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployeeResponseDto"
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "CreateEmployeeDto": {
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "preferredName": {
+            "type": "string",
+            "maxLength": 120,
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
+          },
+          "personnelNumber": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true
+          },
+          "employmentType": {
+            "type": "string",
+            "maxLength": 80,
+            "nullable": true
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "weeklyHours": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 168
+          }
+        },
+        "required": [
+          "organizationId",
+          "firstName",
+          "lastName"
+        ]
+      },
+      "FacilityAssignmentResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityName": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive"
+            ]
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "facilityStatus": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "facilityId",
+          "facilityName",
+          "organizationId",
+          "isPrimary",
+          "status",
+          "validFrom",
+          "validUntil",
+          "facilityStatus"
+        ]
+      },
+      "TeamMembershipResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "teamName": {
+            "type": "string"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive"
+            ]
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "teamStatus": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "teamId",
+          "teamName",
+          "facilityId",
+          "role",
+          "status",
+          "validFrom",
+          "validUntil",
+          "teamStatus"
+        ]
+      },
+      "EmployeeQualificationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "qualificationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "issuer": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "qualificationId",
+          "name",
+          "code",
+          "description",
+          "validFrom",
+          "validUntil",
+          "issuer",
+          "status"
+        ]
+      },
+      "EmployeeSkillResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "skillId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "skillId",
+          "name",
+          "code",
+          "description",
+          "status"
+        ]
+      },
+      "EmployeeUserResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "membershipStatus": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "active",
+              "inactive",
+              "revoked"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "email",
+          "membershipStatus"
+        ]
+      },
+      "EmployeeDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "organizationName": {
+            "type": "string",
+            "nullable": true
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "preferredName": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "personnelNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "employmentType": {
+            "type": "string",
+            "nullable": true
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "weeklyHours": {
+            "type": "number",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive",
+              "archived"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "facilityAssignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FacilityAssignmentResponseDto"
+            }
+          },
+          "teamMemberships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamMembershipResponseDto"
+            }
+          },
+          "qualifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployeeQualificationResponseDto"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployeeSkillResponseDto"
+            }
+          },
+          "linkedUser": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EmployeeUserResponseDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "organizationId",
+          "organizationName",
+          "userId",
+          "firstName",
+          "lastName",
+          "preferredName",
+          "email",
+          "phone",
+          "personnelNumber",
+          "employmentType",
+          "startDate",
+          "endDate",
+          "weeklyHours",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "facilityAssignments",
+          "teamMemberships",
+          "qualifications",
+          "skills",
+          "linkedUser"
+        ]
+      },
+      "UpdateEmployeeDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "preferredName": {
+            "type": "string",
+            "maxLength": 120,
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
+          },
+          "personnelNumber": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true
+          },
+          "employmentType": {
+            "type": "string",
+            "maxLength": 80,
+            "nullable": true
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "weeklyHours": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 168
+          }
+        }
+      },
+      "LinkableUserResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "email"
+        ]
+      },
+      "LinkUserDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "userId"
+        ]
+      },
+      "FacilityAssignmentDto": {
+        "type": "object",
+        "properties": {
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          }
+        }
+      },
+      "TeamMembershipDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 80
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          }
+        }
+      },
+      "DefinitionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "name",
+          "code",
+          "description",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateDefinitionDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "UpdateDefinitionDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true
+          }
+        }
+      },
+      "QualificationAssignmentDto": {
+        "type": "object",
+        "properties": {
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "issuer": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 160
+          }
+        }
       },
       "AuditEntryDto": {
         "type": "object",
@@ -1907,7 +7496,7 @@
           "total"
         ]
       },
-      "ClientResponseDto": {
+      "ClientListItemResponseDto": {
         "type": "object",
         "properties": {
           "id": {
@@ -1917,6 +7506,16 @@
           "tenantId": {
             "type": "string",
             "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "primaryFacilityId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
           },
           "firstName": {
             "type": "string"
@@ -1933,12 +7532,193 @@
             "format": "date",
             "nullable": true
           },
+          "dateOfDeath": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "female",
+              "male",
+              "diverse"
+            ],
+            "nullable": true
+          },
+          "salutation": {
+            "type": "string",
+            "enum": [
+              "mr",
+              "ms",
+              "mx",
+              "other"
+            ],
+            "nullable": true
+          },
           "email": {
             "type": "string",
             "format": "email",
             "nullable": true
           },
           "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "mobile": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "active",
+              "archived"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "organizationName": {
+            "type": "string",
+            "nullable": true
+          },
+          "facilityName": {
+            "type": "string",
+            "nullable": true
+          },
+          "currentPflegegrad": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 5
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "organizationId",
+          "primaryFacilityId",
+          "firstName",
+          "lastName",
+          "preferredName",
+          "dateOfBirth",
+          "dateOfDeath",
+          "gender",
+          "salutation",
+          "email",
+          "phone",
+          "mobile",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "organizationName",
+          "facilityName",
+          "currentPflegegrad"
+        ]
+      },
+      "ClientListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClientListItemResponseDto"
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "ClientResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "primaryFacilityId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "preferredName": {
+            "type": "string",
+            "nullable": true
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "dateOfDeath": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "female",
+              "male",
+              "diverse"
+            ],
+            "nullable": true
+          },
+          "salutation": {
+            "type": "string",
+            "enum": [
+              "mr",
+              "ms",
+              "mx",
+              "other"
+            ],
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "mobile": {
             "type": "string",
             "nullable": true
           },
@@ -1962,41 +7742,72 @@
         "required": [
           "id",
           "tenantId",
+          "organizationId",
+          "primaryFacilityId",
           "firstName",
           "lastName",
           "preferredName",
           "dateOfBirth",
+          "dateOfDeath",
+          "gender",
+          "salutation",
           "email",
           "phone",
+          "mobile",
           "status",
           "createdAt",
           "updatedAt"
         ]
       },
-      "ClientListResponseDto": {
+      "PrimaryAddressInputDto": {
         "type": "object",
         "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ClientResponseDto"
-            }
+          "addressType": {
+            "type": "string",
+            "enum": [
+              "home",
+              "billing",
+              "other"
+            ]
           },
-          "page": {
-            "type": "number"
+          "street": {
+            "type": "string"
           },
-          "pageSize": {
-            "type": "number"
+          "houseNumber": {
+            "type": "string",
+            "nullable": true
           },
-          "total": {
-            "type": "number"
+          "addressAddition": {
+            "type": "string",
+            "nullable": true
+          },
+          "postalCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string"
+          },
+          "countryCode": {
+            "type": "string",
+            "default": "DE",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
           }
         },
         "required": [
-          "items",
-          "page",
-          "pageSize",
-          "total"
+          "addressType",
+          "street",
+          "city"
         ]
       },
       "CreateClientDto": {
@@ -2022,6 +7833,30 @@
             "format": "date",
             "nullable": true
           },
+          "dateOfDeath": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "female",
+              "male",
+              "diverse"
+            ],
+            "nullable": true
+          },
+          "salutation": {
+            "type": "string",
+            "enum": [
+              "mr",
+              "ms",
+              "mx",
+              "other"
+            ],
+            "nullable": true
+          },
           "email": {
             "type": "string",
             "format": "email",
@@ -2031,11 +7866,35 @@
             "type": "string",
             "maxLength": 40,
             "nullable": true
+          },
+          "mobile": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "primaryFacilityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "primaryAddress": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PrimaryAddressInputDto"
+              }
+            ]
           }
         },
         "required": [
           "firstName",
-          "lastName"
+          "lastName",
+          "organizationId",
+          "primaryFacilityId"
         ]
       },
       "UpdateClientDto": {
@@ -2061,6 +7920,30 @@
             "format": "date",
             "nullable": true
           },
+          "dateOfDeath": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "female",
+              "male",
+              "diverse"
+            ],
+            "nullable": true
+          },
+          "salutation": {
+            "type": "string",
+            "enum": [
+              "mr",
+              "ms",
+              "mx",
+              "other"
+            ],
+            "nullable": true
+          },
           "email": {
             "type": "string",
             "format": "email",
@@ -2070,8 +7953,1377 @@
             "type": "string",
             "maxLength": 40,
             "nullable": true
+          },
+          "mobile": {
+            "type": "string",
+            "maxLength": 40,
+            "nullable": true
           }
         }
+      },
+      "ProviderContextDto": {
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "primaryFacilityId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "organizationId",
+          "primaryFacilityId"
+        ]
+      },
+      "ClientAddressResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "addressType": {
+            "type": "string",
+            "enum": [
+              "home",
+              "billing",
+              "other"
+            ]
+          },
+          "street": {
+            "type": "string"
+          },
+          "houseNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressAddition": {
+            "type": "string",
+            "nullable": true
+          },
+          "postalCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string"
+          },
+          "countryCode": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "addressType",
+          "street",
+          "houseNumber",
+          "addressAddition",
+          "postalCode",
+          "city",
+          "countryCode",
+          "validFrom",
+          "validUntil",
+          "isPrimary",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateClientAddressDto": {
+        "type": "object",
+        "properties": {
+          "addressType": {
+            "type": "string",
+            "enum": [
+              "home",
+              "billing",
+              "other"
+            ]
+          },
+          "street": {
+            "type": "string"
+          },
+          "houseNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressAddition": {
+            "type": "string",
+            "nullable": true
+          },
+          "postalCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string"
+          },
+          "countryCode": {
+            "type": "string",
+            "default": "DE",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "isPrimary": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "addressType",
+          "street",
+          "city",
+          "isPrimary"
+        ]
+      },
+      "UpdateClientAddressDto": {
+        "type": "object",
+        "properties": {
+          "addressType": {
+            "type": "string",
+            "enum": [
+              "home",
+              "billing",
+              "other"
+            ]
+          },
+          "street": {
+            "type": "string"
+          },
+          "houseNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressAddition": {
+            "type": "string",
+            "nullable": true
+          },
+          "postalCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string"
+          },
+          "countryCode": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "isPrimary": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ClientContactResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "relationshipType": {
+            "type": "string",
+            "enum": [
+              "daughter",
+              "son",
+              "spouse",
+              "relative",
+              "legal_representative",
+              "guardian",
+              "other"
+            ]
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "primary_contact",
+                "emergency_contact",
+                "legal_representative",
+                "authorized_contact",
+                "invoice_recipient"
+              ]
+            }
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "mobile": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "addressStreet": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressHouseNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressAddition": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressPostalCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressCity": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressCountryCode": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^[A-Z]{2}$"
+          },
+          "representationType": {
+            "type": "string",
+            "enum": [
+              "power_of_attorney",
+              "legal_guardianship",
+              "authorized_representative"
+            ],
+            "nullable": true
+          },
+          "representationValidFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "representationValidUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "representationReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "relationshipType",
+          "roles",
+          "phone",
+          "mobile",
+          "email",
+          "addressStreet",
+          "addressHouseNumber",
+          "addressAddition",
+          "addressPostalCode",
+          "addressCity",
+          "addressCountryCode",
+          "representationType",
+          "representationValidFrom",
+          "representationValidUntil",
+          "representationReference",
+          "notes",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ClientContactInputDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "relationshipType": {
+            "type": "string",
+            "enum": [
+              "daughter",
+              "son",
+              "spouse",
+              "relative",
+              "legal_representative",
+              "guardian",
+              "other"
+            ]
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "mobile": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "addressStreet": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressHouseNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressAddition": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressPostalCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressCity": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressCountryCode": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^[A-Z]{2}$"
+          },
+          "representationType": {
+            "type": "string",
+            "enum": [
+              "power_of_attorney",
+              "legal_guardianship",
+              "authorized_representative"
+            ],
+            "nullable": true
+          },
+          "representationValidFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "representationValidUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "representationReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "primary_contact",
+                "emergency_contact",
+                "legal_representative",
+                "authorized_contact",
+                "invoice_recipient"
+              ]
+            }
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "firstName",
+          "lastName",
+          "relationshipType"
+        ]
+      },
+      "ClientContactPatchDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "relationshipType": {
+            "type": "string",
+            "enum": [
+              "daughter",
+              "son",
+              "spouse",
+              "relative",
+              "legal_representative",
+              "guardian",
+              "other"
+            ]
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "mobile": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "addressStreet": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressHouseNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressAddition": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressPostalCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressCity": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressCountryCode": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^[A-Z]{2}$"
+          },
+          "representationType": {
+            "type": "string",
+            "enum": [
+              "power_of_attorney",
+              "legal_guardianship",
+              "authorized_representative"
+            ],
+            "nullable": true
+          },
+          "representationValidFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "representationValidUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "representationReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "primary_contact",
+                "emergency_contact",
+                "legal_representative",
+                "authorized_contact",
+                "invoice_recipient"
+              ]
+            }
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          }
+        }
+      },
+      "ClientInsuranceResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "insuranceType": {
+            "type": "string",
+            "enum": [
+              "pflegeversicherung",
+              "krankenversicherung",
+              "private",
+              "other"
+            ]
+          },
+          "insurerName": {
+            "type": "string"
+          },
+          "insuranceNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "memberNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "insuranceType",
+          "insurerName",
+          "insuranceNumber",
+          "memberNumber",
+          "validFrom",
+          "validUntil",
+          "isPrimary",
+          "notes",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ClientInsuranceInputDto": {
+        "type": "object",
+        "properties": {
+          "insuranceType": {
+            "type": "string",
+            "enum": [
+              "pflegeversicherung",
+              "krankenversicherung",
+              "private",
+              "other"
+            ]
+          },
+          "insurerName": {
+            "type": "string"
+          },
+          "insuranceNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "memberNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "insuranceType",
+          "insurerName",
+          "isPrimary"
+        ]
+      },
+      "ClientInsurancePatchDto": {
+        "type": "object",
+        "properties": {
+          "insuranceType": {
+            "type": "string",
+            "enum": [
+              "pflegeversicherung",
+              "krankenversicherung",
+              "private",
+              "other"
+            ]
+          },
+          "insurerName": {
+            "type": "string"
+          },
+          "insuranceNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "memberNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          }
+        }
+      },
+      "PflegegradResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "grade": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "decisionDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "insurerReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "confirmed",
+              "revoked"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "grade",
+          "validFrom",
+          "validUntil",
+          "decisionDate",
+          "insurerReference",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PflegegradInputDto": {
+        "type": "object",
+        "properties": {
+          "grade": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "decisionDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "insurerReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "confirmed",
+              "revoked"
+            ]
+          }
+        },
+        "required": [
+          "grade",
+          "validFrom",
+          "status"
+        ]
+      },
+      "PflegegradPatchDto": {
+        "type": "object",
+        "properties": {
+          "grade": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "decisionDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "insurerReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "confirmed",
+              "revoked"
+            ]
+          }
+        }
+      },
+      "ClientTimelineEntryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "occurredAt",
+          "actorId",
+          "action",
+          "summary"
+        ]
+      },
+      "ServiceCategoryResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          },
+          "sortOrder": {
+            "type": "number",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "description",
+          "status",
+          "sortOrder",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ServiceCategoryInputDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "code": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 40
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          },
+          "sortOrder": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ServiceCategoryPatchDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "code": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 40
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          },
+          "sortOrder": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 10000
+          }
+        }
+      },
+      "ServiceListItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "occurrence",
+              "minute",
+              "hour",
+              "day"
+            ]
+          },
+          "defaultDurationMinutes": {
+            "type": "number",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "categoryName": {
+            "type": "string"
+          },
+          "availabilityCount": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "code",
+          "name",
+          "description",
+          "categoryId",
+          "unit",
+          "defaultDurationMinutes",
+          "status",
+          "validFrom",
+          "validUntil",
+          "createdAt",
+          "updatedAt",
+          "categoryName",
+          "availabilityCount"
+        ]
+      },
+      "ServiceListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceListItemResponseDto"
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "ServiceResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "occurrence",
+              "minute",
+              "hour",
+              "day"
+            ]
+          },
+          "defaultDurationMinutes": {
+            "type": "number",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "code",
+          "name",
+          "description",
+          "categoryId",
+          "unit",
+          "defaultDurationMinutes",
+          "status",
+          "validFrom",
+          "validUntil",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ServiceInputDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "occurrence",
+              "minute",
+              "hour",
+              "day"
+            ]
+          },
+          "defaultDurationMinutes": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "categoryId",
+          "unit",
+          "validFrom"
+        ]
+      },
+      "ServicePatchDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "occurrence",
+              "minute",
+              "hour",
+              "day"
+            ]
+          },
+          "defaultDurationMinutes": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          }
+        }
+      },
+      "ServiceAvailabilityResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "serviceId",
+          "organizationId",
+          "facilityId",
+          "active",
+          "validFrom",
+          "validUntil",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ServiceAvailabilityInputDto": {
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "active": {
+            "type": "boolean",
+            "default": true
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          }
+        },
+        "required": [
+          "organizationId"
+        ]
+      },
+      "ReplaceServiceAvailabilityDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceAvailabilityInputDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
       },
       "MeResponseDto": {
         "type": "object",
@@ -2107,6 +9359,74 @@
         "required": [
           "id",
           "name"
+        ]
+      },
+      "PermissionGrantDto": {
+        "type": "object",
+        "properties": {
+          "permission": {
+            "type": "string",
+            "enum": [
+              "tenant.members.read",
+              "tenant.members.manage",
+              "tenant.roles.read",
+              "tenant.roles.assign",
+              "client.read",
+              "client.create",
+              "client.update",
+              "client.archive",
+              "service.read",
+              "service.create",
+              "service.update",
+              "service.archive",
+              "service.manage_categories",
+              "service.manage_availability",
+              "employee.read",
+              "employee.create",
+              "employee.update",
+              "employee.archive",
+              "employee.assign_facility",
+              "employee.assign_team",
+              "employee.link_user",
+              "employee.manage_qualifications",
+              "employee.manage_skills",
+              "employee.manage_employment",
+              "employee.manage",
+              "organization.read",
+              "organization.create",
+              "organization.update",
+              "organization.activate",
+              "organization.archive",
+              "organization.manage",
+              "facility.read",
+              "facility.create",
+              "facility.update",
+              "facility.activate",
+              "facility.archive",
+              "team.read",
+              "team.manage",
+              "audit.read"
+            ]
+          },
+          "scopeType": {
+            "type": "string",
+            "enum": [
+              "assigned_clients",
+              "team",
+              "facility",
+              "organization",
+              "tenant"
+            ]
+          },
+          "scopeId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "permission",
+          "scopeType",
+          "scopeId"
         ]
       }
     }

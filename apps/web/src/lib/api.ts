@@ -1,6 +1,7 @@
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createCareApi } from '@care/api-client';
+import type { CareApi } from '@care/api-client';
 import { loadWebConfig } from '@care/config';
 import { auth } from '../auth';
 
@@ -37,4 +38,48 @@ export async function getTenantHeader(): Promise<{ 'X-Tenant-Id': string }> {
   const tenantId = (await cookies()).get('care-tenant')?.value;
   if (!tenantId) redirect('/');
   return { 'X-Tenant-Id': tenantId };
+}
+
+export async function getPermissionGrants(api?: CareApi) {
+  const client = api ?? (await getApiClient());
+  const { data, error } = await client.GET('/api/v1/me/permissions', {
+    params: { header: await getTenantHeader() },
+  });
+  return error ? [] : (data ?? []);
+}
+
+export type CurrentPermissionGrant = Awaited<ReturnType<typeof getPermissionGrants>>[number];
+
+export function hasPermission(
+  grants: readonly CurrentPermissionGrant[],
+  permission: CurrentPermissionGrant['permission'],
+): boolean {
+  return grants.some((grant) => grant.permission === permission);
+}
+
+export function hasTenantPermission(
+  grants: readonly CurrentPermissionGrant[],
+  permission: CurrentPermissionGrant['permission'],
+  tenantId: string,
+): boolean {
+  return grants.some(
+    (grant) =>
+      grant.permission === permission && grant.scopeType === 'tenant' && grant.scopeId === tenantId,
+  );
+}
+
+export function hasClientPermission(
+  grants: readonly CurrentPermissionGrant[],
+  permission: CurrentPermissionGrant['permission'],
+  tenantId: string,
+  organizationId: string | null,
+  facilityId: string | null,
+): boolean {
+  return grants.some(
+    (grant) =>
+      grant.permission === permission &&
+      ((grant.scopeType === 'tenant' && grant.scopeId === tenantId) ||
+        (grant.scopeType === 'organization' && grant.scopeId === organizationId) ||
+        (grant.scopeType === 'facility' && grant.scopeId === facilityId)),
+  );
 }

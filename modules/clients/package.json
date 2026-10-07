@@ -19,6 +19,7 @@
     "@care/contracts": "workspace:*",
     "@care/database": "workspace:*",
     "@care/events": "workspace:*",
+    "@care/organizations": "workspace:*",
     "@care/permissions": "workspace:*",
     "@care/platform": "workspace:*",
     "drizzle-orm": "^0.45.3",

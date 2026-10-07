@@ -1,89 +1,171 @@
 import { v7 as uuidv7 } from 'uuid';
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
-import type { UnitOfWork } from '@care/database';
+import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
-import { assertCan, type AuthorizationPrincipal, type Permission } from '@care/permissions';
+import { assertCan, type AuthorizationPrincipal } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { Client, type ClientPersonalData, type ClientSnapshot } from '../domain/client';
+import { OrganizationRepository } from '@care/organizations';
+import {
+  Client,
+  type ClientPersonalData,
+  type ClientProviderContext,
+  type ClientSnapshot,
+  type ClientStatus,
+  InvalidProviderContextError,
+} from '../domain/client';
+import {
+  validateClientAddress,
+  type ClientAddressData,
+  type ClientAddressSnapshot,
+} from '../domain/client-master-data';
+import { clientScopeFilter, authorizeClientResource } from './client-access';
+import { appendClientChange } from './client-change';
+import {
+  ClientNotFoundError,
+  FacilityNotInOrganizationError,
+  InvalidPaginationError,
+} from './errors';
+import { ClientMasterDataRepository } from '../infrastructure/persistence/client-master-data.repository';
 import { ClientRepository } from '../infrastructure/persistence/client.repository';
+
+export interface CreateClientInput extends ClientPersonalData, ClientProviderContext {
+  primaryAddress?: ClientAddressData | null;
+}
+
+export interface ClientSearchQuery {
+  text?: string;
+  status?: ClientStatus;
+  organizationId?: string;
+  facilityId?: string;
+  pflegegrad?: number;
+  page?: number;
+  pageSize?: number;
+  sortBy?: 'lastName' | 'firstName' | 'createdAt' | 'dateOfBirth';
+  sortOrder?: 'asc' | 'desc';
+}
 
 export class ClientApplicationService {
   constructor(
     private readonly unitOfWork: UnitOfWork,
     private readonly clients: ClientRepository,
+    private readonly masterData: ClientMasterDataRepository,
+    private readonly organizations: OrganizationRepository,
     private readonly audit: AuditWriter,
     private readonly outbox: OutboxWriter,
   ) {}
 
-  async search(
-    principal: AuthorizationPrincipal,
-    query: { text?: string; page?: number; pageSize?: number } = {},
-  ) {
-    this.authorize(principal, 'client.read');
+  async search(principal: AuthorizationPrincipal, query: ClientSearchQuery = {}) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 25;
+    const sortBy = query.sortBy ?? 'lastName';
+    const sortOrder = query.sortOrder ?? 'asc';
     if (
       !Number.isInteger(page) ||
       page < 1 ||
       !Number.isInteger(pageSize) ||
       pageSize < 1 ||
-      pageSize > 100
+      pageSize > 100 ||
+      (query.pflegegrad !== undefined &&
+        (!Number.isInteger(query.pflegegrad) || query.pflegegrad < 1 || query.pflegegrad > 5))
     ) {
       throw new InvalidPaginationError();
     }
+    const access = clientScopeFilter(principal, 'client.read');
+    const validAt = new Date().toISOString().slice(0, 10);
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
       this.clients.search(transaction, {
         tenantId: principal.tenantId,
-        ...(query.text === undefined ? {} : { query: query.text }),
+        access,
+        ...(query.text === undefined ? {} : { text: query.text }),
+        ...(query.status === undefined ? {} : { status: query.status }),
+        ...(query.organizationId === undefined ? {} : { organizationId: query.organizationId }),
+        ...(query.facilityId === undefined ? {} : { facilityId: query.facilityId }),
+        ...(query.pflegegrad === undefined ? {} : { pflegegrad: query.pflegegrad }),
         page,
         pageSize,
+        sortBy,
+        sortOrder,
+        validAt,
       }),
     );
   }
 
   async get(principal: AuthorizationPrincipal, id: string): Promise<ClientSnapshot> {
-    this.authorize(principal, 'client.read', { clientId: id });
-    const client = await this.unitOfWork.transaction(
-      { tenantId: principal.tenantId },
-      (transaction) => this.clients.findById(transaction, principal.tenantId, id),
-    );
-    if (!client) throw new ClientNotFoundError();
-    return client;
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const client = await this.clients.findById(transaction, principal.tenantId, id);
+      if (!client) throw new ClientNotFoundError();
+      authorizeClientResource(principal, 'client.read', client);
+      return client;
+    });
   }
 
   async create(
     principal: AuthorizationPrincipal,
-    data: ClientPersonalData,
+    data: CreateClientInput,
     context: RequestContext,
     auditContext: { ip?: string; userAgent?: string },
   ): Promise<ClientSnapshot> {
-    this.authorize(principal, 'client.create');
     const now = new Date();
+    if (data.primaryAddress) validateClientAddress({ ...data.primaryAddress, isPrimary: true });
     const client = Client.pending({
       id: uuidv7(),
       tenantId: principal.tenantId,
-      ...data,
+      organizationId: data.organizationId,
+      primaryFacilityId: data.primaryFacilityId,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      preferredName: data.preferredName ?? null,
+      dateOfBirth: data.dateOfBirth ?? null,
+      dateOfDeath: data.dateOfDeath ?? null,
+      gender: data.gender ?? null,
+      salutation: data.salutation ?? null,
+      email: data.email ?? null,
+      phone: data.phone ?? null,
+      mobile: data.mobile ?? null,
       createdAt: now,
       updatedAt: now,
     });
+
     await this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      await this.validateProviderContext(transaction, principal.tenantId, data);
+      assertCan(principal, {
+        action: 'client.create',
+        resource: {
+          tenantId: principal.tenantId,
+          organizationId: data.organizationId,
+          facilityId: data.primaryFacilityId,
+        },
+      });
       const snapshot = client.snapshot;
       await this.clients.insert(transaction, snapshot);
-      await this.audit.append(
+      await appendClientChange({
         transaction,
-        this.auditRecord({
-          principal,
-          context,
-          auditContext,
-          action: 'client.created',
-          client: snapshot,
-          metadata: { changedFields: Object.keys(data) },
-        }),
-      );
-      await this.outbox.enqueue(
-        transaction,
-        createDomainEvent({
+        audit: this.audit,
+        outbox: this.outbox,
+        principal,
+        context,
+        auditContext,
+        clientId: snapshot.id,
+        occurredAt: now,
+        action: 'client.created',
+        metadata: {
+          changedFields: [
+            'firstName',
+            'lastName',
+            'preferredName',
+            'dateOfBirth',
+            'dateOfDeath',
+            'gender',
+            'salutation',
+            'email',
+            'phone',
+            'mobile',
+            'organizationId',
+            'primaryFacilityId',
+          ],
+        },
+        event: createDomainEvent({
           type: 'client.created',
           tenantId: principal.tenantId,
           aggregateType: 'client',
@@ -92,7 +174,37 @@ export class ClientApplicationService {
           correlationId: context.correlationId,
           payload: { clientId: snapshot.id },
         }),
-      );
+      });
+      if (data.primaryAddress) {
+        const address = this.addressSnapshot(
+          principal.tenantId,
+          snapshot.id,
+          { ...data.primaryAddress, isPrimary: true },
+          now,
+        );
+        await this.masterData.insertAddress(transaction, address);
+        await appendClientChange({
+          transaction,
+          audit: this.audit,
+          outbox: this.outbox,
+          principal,
+          context,
+          auditContext,
+          clientId: snapshot.id,
+          occurredAt: now,
+          action: 'client.address_added',
+          metadata: { addressId: address.id, isPrimary: true },
+          event: createDomainEvent({
+            type: 'client.address_changed',
+            tenantId: principal.tenantId,
+            aggregateType: 'client',
+            aggregateId: snapshot.id,
+            actor: { type: 'user', id: principal.userId },
+            correlationId: context.correlationId,
+            payload: { clientId: snapshot.id, addressId: address.id, operation: 'added' },
+          }),
+        });
+      }
     });
     return client.snapshot;
   }
@@ -104,10 +216,10 @@ export class ClientApplicationService {
     context: RequestContext,
     auditContext: { ip?: string; userAgent?: string },
   ): Promise<ClientSnapshot> {
-    this.authorize(principal, 'client.update', { clientId: id });
-    return this.mutate(principal, id, context, auditContext, 'client.updated', async (client) => {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const client = await this.requireClient(transaction, principal, id, 'client.update', true);
       const current = client.snapshot;
-      const personalData: ClientPersonalData = {
+      const changedFields = client.updatePersonalData({
         firstName: changes.firstName ?? current.firstName,
         lastName: changes.lastName ?? current.lastName,
         preferredName:
@@ -116,10 +228,100 @@ export class ClientApplicationService {
             : changes.preferredName,
         dateOfBirth:
           changes.dateOfBirth === undefined ? (current.dateOfBirth ?? null) : changes.dateOfBirth,
+        dateOfDeath:
+          changes.dateOfDeath === undefined ? (current.dateOfDeath ?? null) : changes.dateOfDeath,
+        gender: changes.gender === undefined ? (current.gender ?? null) : changes.gender,
+        salutation:
+          changes.salutation === undefined ? (current.salutation ?? null) : changes.salutation,
         email: changes.email === undefined ? (current.email ?? null) : changes.email,
         phone: changes.phone === undefined ? (current.phone ?? null) : changes.phone,
-      };
-      return client.updatePersonalData(personalData);
+        mobile: changes.mobile === undefined ? (current.mobile ?? null) : changes.mobile,
+      });
+      if (changedFields.length === 0) return client.snapshot;
+      const snapshot = client.snapshot;
+      await this.clients.update(transaction, snapshot);
+      await appendClientChange({
+        transaction,
+        audit: this.audit,
+        outbox: this.outbox,
+        principal,
+        context,
+        auditContext,
+        clientId: id,
+        occurredAt: snapshot.updatedAt,
+        action: 'client.updated',
+        metadata: { changedFields },
+        event: createDomainEvent({
+          type: 'client.updated',
+          tenantId: principal.tenantId,
+          aggregateType: 'client',
+          aggregateId: id,
+          actor: { type: 'user', id: principal.userId },
+          correlationId: context.correlationId,
+          payload: { clientId: id, changedFields },
+        }),
+      });
+      return snapshot;
+    });
+  }
+
+  async changeProviderContext(
+    principal: AuthorizationPrincipal,
+    id: string,
+    contextChange: ClientProviderContext,
+    context: RequestContext,
+    auditContext: { ip?: string; userAgent?: string },
+  ): Promise<ClientSnapshot> {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const client = await this.requireClient(transaction, principal, id, 'client.update', true);
+      await this.validateProviderContext(transaction, principal.tenantId, contextChange);
+      assertCan(principal, {
+        action: 'client.update',
+        resource: {
+          tenantId: principal.tenantId,
+          organizationId: contextChange.organizationId,
+          facilityId: contextChange.primaryFacilityId,
+          clientId: id,
+        },
+      });
+      const previous = client.snapshot;
+      const changedFields = client.changeProviderContext(contextChange);
+      if (changedFields.length === 0) return previous;
+      const snapshot = client.snapshot;
+      await this.clients.update(transaction, snapshot);
+      await appendClientChange({
+        transaction,
+        audit: this.audit,
+        outbox: this.outbox,
+        principal,
+        context,
+        auditContext,
+        clientId: id,
+        occurredAt: snapshot.updatedAt,
+        action: 'client.provider_context_changed',
+        metadata: {
+          previousOrganizationId: previous.organizationId,
+          previousFacilityId: previous.primaryFacilityId,
+          organizationId: snapshot.organizationId,
+          primaryFacilityId: snapshot.primaryFacilityId,
+        },
+        event: createDomainEvent({
+          type: 'client.provider_context_changed',
+          tenantId: principal.tenantId,
+          aggregateType: 'client',
+          aggregateId: id,
+          actor: { type: 'user', id: principal.userId },
+          correlationId: context.correlationId,
+          payload: {
+            clientId: id,
+            previousOrganizationId: previous.organizationId,
+            previousFacilityId: previous.primaryFacilityId,
+            organizationId: snapshot.organizationId!,
+            primaryFacilityId: snapshot.primaryFacilityId!,
+          },
+        }),
+      });
+      return snapshot;
     });
   }
 
@@ -129,11 +331,7 @@ export class ClientApplicationService {
     context: RequestContext,
     auditContext: { ip?: string; userAgent?: string },
   ): Promise<ClientSnapshot> {
-    this.authorize(principal, 'client.update', { clientId: id });
-    return this.mutate(principal, id, context, auditContext, 'client.activated', (client) => {
-      client.activate();
-      return ['status'];
-    });
+    return this.changeStatus(principal, id, 'activate', context, auditContext);
   }
 
   async archive(
@@ -142,100 +340,108 @@ export class ClientApplicationService {
     context: RequestContext,
     auditContext: { ip?: string; userAgent?: string },
   ): Promise<ClientSnapshot> {
-    this.authorize(principal, 'client.archive', { clientId: id });
-    return this.mutate(principal, id, context, auditContext, 'client.archived', (client) => {
-      client.archive();
-      return ['status'];
-    });
+    return this.changeStatus(principal, id, 'archive', context, auditContext);
   }
 
-  private async mutate(
+  private async changeStatus(
     principal: AuthorizationPrincipal,
     id: string,
+    operation: 'activate' | 'archive',
     context: RequestContext,
     auditContext: { ip?: string; userAgent?: string },
-    eventType: 'client.updated' | 'client.activated' | 'client.archived',
-    change: (client: Client) => string[] | Promise<string[]>,
   ): Promise<ClientSnapshot> {
+    const action = operation === 'archive' ? 'client.archive' : 'client.update';
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const row = await this.clients.findById(transaction, principal.tenantId, id, true);
-      if (!row) throw new ClientNotFoundError();
-      const client = Client.reconstitute(row);
-      const changedFields = await change(client);
+      const client = await this.requireClient(transaction, principal, id, action, true);
+      if (operation === 'activate') client.activate();
+      else client.archive();
       const snapshot = client.snapshot;
-      if (changedFields.length === 0) return snapshot;
-
       await this.clients.update(transaction, snapshot);
-      await this.audit.append(
+      const eventType = operation === 'activate' ? 'client.activated' : 'client.archived';
+      await appendClientChange({
         transaction,
-        this.auditRecord({
-          principal,
-          context,
-          auditContext,
-          action: eventType,
-          client: snapshot,
-          metadata: { changedFields },
+        audit: this.audit,
+        outbox: this.outbox,
+        principal,
+        context,
+        auditContext,
+        clientId: id,
+        occurredAt: snapshot.updatedAt,
+        action: eventType,
+        metadata: { changedFields: ['status'] },
+        event: createDomainEvent({
+          type: eventType,
+          tenantId: principal.tenantId,
+          aggregateType: 'client',
+          aggregateId: id,
+          actor: { type: 'user', id: principal.userId },
+          correlationId: context.correlationId,
+          payload: { clientId: id },
         }),
-      );
-      const event =
-        eventType === 'client.updated'
-          ? createDomainEvent({
-              type: eventType,
-              tenantId: principal.tenantId,
-              aggregateType: 'client',
-              aggregateId: snapshot.id,
-              actor: { type: 'user', id: principal.userId },
-              correlationId: context.correlationId,
-              payload: { clientId: snapshot.id, changedFields },
-            })
-          : createDomainEvent({
-              type: eventType,
-              tenantId: principal.tenantId,
-              aggregateType: 'client',
-              aggregateId: snapshot.id,
-              actor: { type: 'user', id: principal.userId },
-              correlationId: context.correlationId,
-              payload: { clientId: snapshot.id },
-            });
-      await this.outbox.enqueue(transaction, event);
+      });
       return snapshot;
     });
   }
 
-  private authorize(
+  private async requireClient(
+    transaction: DatabaseTransaction,
     principal: AuthorizationPrincipal,
-    action: Permission,
-    resource: { clientId?: string } = {},
-  ): void {
-    assertCan(principal, {
-      action,
-      resource: { tenantId: principal.tenantId, ...resource },
-    });
+    id: string,
+    action: 'client.read' | 'client.update' | 'client.archive',
+    lock: boolean,
+  ): Promise<Client> {
+    const row = await this.clients.findById(transaction, principal.tenantId, id, lock);
+    if (!row) throw new ClientNotFoundError();
+    authorizeClientResource(principal, action, row);
+    return Client.reconstitute(row);
   }
 
-  private auditRecord(input: {
-    principal: AuthorizationPrincipal;
-    context: RequestContext;
-    auditContext: { ip?: string; userAgent?: string };
-    action: string;
-    client: ClientSnapshot;
-    metadata: Record<string, unknown>;
-  }) {
+  private async validateProviderContext(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    context: ClientProviderContext,
+  ): Promise<void> {
+    const organization = await this.organizations.getOrganization(
+      transaction,
+      tenantId,
+      context.organizationId,
+      true,
+    );
+    const facility = await this.organizations.getFacility(
+      transaction,
+      tenantId,
+      context.primaryFacilityId,
+      true,
+    );
+    if (!organization || !facility) throw new InvalidProviderContextError();
+    if (facility.organizationId !== context.organizationId)
+      throw new FacilityNotInOrganizationError();
+    if (organization.status !== 'active' || facility.status !== 'active')
+      throw new InvalidProviderContextError();
+  }
+
+  private addressSnapshot(
+    tenantId: string,
+    clientId: string,
+    data: ClientAddressData,
+    now: Date,
+  ): ClientAddressSnapshot {
     return {
       id: uuidv7(),
-      tenantId: input.principal.tenantId,
-      actorId: input.principal.userId,
-      action: input.action,
-      resourceType: 'client',
-      resourceId: input.client.id,
-      timestamp: input.client.updatedAt,
-      requestId: input.context.requestId,
-      correlationId: input.context.correlationId,
-      ...(input.auditContext.ip === undefined ? {} : { ip: input.auditContext.ip }),
-      ...(input.auditContext.userAgent === undefined
-        ? {}
-        : { userAgent: input.auditContext.userAgent }),
-      metadata: input.metadata,
+      tenantId,
+      clientId,
+      addressType: data.addressType,
+      street: data.street,
+      houseNumber: data.houseNumber ?? null,
+      addressAddition: data.addressAddition ?? null,
+      postalCode: data.postalCode ?? null,
+      city: data.city,
+      countryCode: data.countryCode ?? 'DE',
+      validFrom: data.validFrom ?? null,
+      validUntil: data.validUntil ?? null,
+      isPrimary: data.isPrimary,
+      createdAt: now,
+      updatedAt: now,
     };
   }
 }
@@ -245,23 +451,12 @@ export function createClientApplicationService(
   audit: AuditWriter,
   outbox: OutboxWriter,
 ): ClientApplicationService {
-  return new ClientApplicationService(unitOfWork, new ClientRepository(), audit, outbox);
-}
-
-export class ClientNotFoundError extends Error {
-  readonly code = 'CLIENT_NOT_FOUND';
-
-  constructor() {
-    super('Client not found');
-    this.name = 'ClientNotFoundError';
-  }
-}
-
-export class InvalidPaginationError extends Error {
-  readonly code = 'INVALID_PAGINATION';
-
-  constructor() {
-    super('Pagination values are invalid');
-    this.name = 'InvalidPaginationError';
-  }
+  return new ClientApplicationService(
+    unitOfWork,
+    new ClientRepository(),
+    new ClientMasterDataRepository(),
+    new OrganizationRepository(),
+    audit,
+    outbox,
+  );
 }

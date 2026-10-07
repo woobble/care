@@ -1,5 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import { and, eq, exists, sql } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
 import {
   PERMISSIONS,
@@ -20,8 +19,6 @@ import {
   TenantAccessDeniedError,
 } from './identity.service';
 
-const lockedMemberships = alias(tenantMemberships, 'locked_membership');
-
 export async function loadTenantAuthorizationPrincipal(
   transaction: DatabaseTransaction,
   userId: string,
@@ -30,19 +27,23 @@ export async function loadTenantAuthorizationPrincipal(
 ): Promise<AuthorizationPrincipal> {
   await transaction.execute(sql`select set_config('app.tenant_id', ${tenantId}, true)`);
   const membershipQuery = transaction
-    .select({ id: lockedMemberships.id })
-    .from(lockedMemberships)
-    .innerJoin(tenants, eq(lockedMemberships.tenantId, tenants.id))
+    .select({ id: tenantMemberships.id })
+    .from(tenantMemberships)
     .where(
       and(
-        eq(lockedMemberships.userId, userId),
-        eq(lockedMemberships.tenantId, tenantId),
-        eq(lockedMemberships.status, 'active'),
-        eq(tenants.active, true),
+        eq(tenantMemberships.userId, userId),
+        eq(tenantMemberships.tenantId, tenantId),
+        eq(tenantMemberships.status, 'active'),
+        exists(
+          transaction
+            .select({ id: tenants.id })
+            .from(tenants)
+            .where(and(eq(tenants.id, tenantId), eq(tenants.active, true))),
+        ),
       ),
     );
   const memberships = options.lockMembership
-    ? await membershipQuery.for('update', { of: lockedMemberships }).limit(1)
+    ? await membershipQuery.for('update').limit(1)
     : await membershipQuery.limit(1);
   const membership = memberships[0];
   if (!membership) throw new TenantAccessDeniedError();

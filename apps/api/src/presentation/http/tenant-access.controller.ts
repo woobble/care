@@ -57,7 +57,7 @@ const scopeAssignmentSchema = z
       .array(
         z
           .object({
-            scopeType: z.enum(['tenant', 'organization', 'facility']),
+            scopeType: z.enum(['tenant', 'organization', 'facility', 'team']),
             scopeId: z.string().uuid(),
           })
           .strict(),

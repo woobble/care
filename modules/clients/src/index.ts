@@ -1,15 +1,71 @@
-export { clientsSchema, clientRecords } from './schema';
+export {
+  clientsSchema,
+  clientRecords,
+  clientAddresses,
+  clientContacts,
+  clientContactRoles,
+  clientInsurances,
+  pflegegradRecords,
+} from './schema';
 export {
   Client,
+  displayClientName,
   ClientArchivedError,
+  InvalidProviderContextError,
   InvalidClientPersonalDataError,
   InvalidClientTransitionError,
+  type ClientGender,
+  type ClientSalutation,
   type ClientStatus,
   type ClientSnapshot,
   type ClientPersonalData,
+  type ClientProviderContext,
 } from './domain/client';
-export { ClientNotFoundError, InvalidPaginationError } from './application/client.service';
+export {
+  validateClientAddress,
+  validateClientContact,
+  validateClientInsurance,
+  validatePflegegrad,
+  type ClientAddressData,
+  type ClientAddressSnapshot,
+  type ClientAddressType,
+  type ClientContactData,
+  type ClientContactSnapshot,
+  type ClientContactRole,
+  type ClientRelationshipType,
+  type ClientRepresentationType,
+  type ClientInsuranceData,
+  type ClientInsuranceSnapshot,
+  type ClientInsuranceType,
+  type PflegegradData,
+  type PflegegradSnapshot,
+  type PflegegradStatus,
+  InvalidClientAddressError,
+  ClientAddressNotFoundError,
+  InvalidClientContactError,
+  ClientContactNotFoundError,
+  InvalidClientInsuranceError,
+  ClientInsuranceNotFoundError,
+  InvalidPflegegradError,
+  PflegegradNotFoundError,
+  OverlappingPflegegradPeriodError,
+} from './domain/client-master-data';
+export {
+  ClientNotFoundError,
+  InvalidPaginationError,
+  FacilityNotInOrganizationError,
+  ClientScopeDeniedError,
+  PflegegradRecordImmutableError,
+} from './application/errors';
 export {
   ClientApplicationService,
   createClientApplicationService,
+  type ClientSearchQuery,
+  type CreateClientInput,
 } from './application/client.service';
+export {
+  ClientMasterDataApplicationService,
+  createClientMasterDataApplicationService,
+  type ClientTimelineEntry,
+} from './application/client-master-data.service';
+export type { ClientSearchItem } from './infrastructure/persistence/client.repository';

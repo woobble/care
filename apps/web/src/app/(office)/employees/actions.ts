@@ -1,0 +1,386 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { getApiClient, getTenantHeader } from '../../../lib/api';
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function createEmployeeAction(formData: FormData): Promise<void> {
+  const organizationId = readUuid(formData.get('organizationId'));
+  const firstName = readText(formData, 'firstName');
+  const lastName = readText(formData, 'lastName');
+  const weeklyHours = readNumber(formData, 'weeklyHours');
+  const startDate = readDate(formData, 'startDate');
+  const endDate = readDate(formData, 'endDate');
+  if (
+    !organizationId ||
+    !firstName ||
+    !lastName ||
+    weeklyHours === undefined ||
+    startDate === undefined ||
+    endDate === undefined
+  ) {
+    redirect('/employees/new?error=INVALID_REQUEST');
+  }
+  const api = await getApiClient();
+  const { data, error } = await api.POST('/api/v1/employees', {
+    params: { header: await getTenantHeader() },
+    body: {
+      organizationId,
+      firstName,
+      lastName,
+      preferredName: readNullableText(formData, 'preferredName'),
+      email: readNullableText(formData, 'email'),
+      phone: readNullableText(formData, 'phone'),
+      personnelNumber: readNullableText(formData, 'personnelNumber'),
+      employmentType: readNullableText(formData, 'employmentType'),
+      startDate,
+      endDate,
+      weeklyHours,
+    },
+  });
+  if (error || !data)
+    redirect(`/employees/new?error=${encodeURIComponent(error?.code ?? 'CREATE_FAILED')}`);
+  revalidatePath('/employees');
+  redirect(`/employees/${data.id}`);
+}
+
+export async function updateEmployeeAction(formData: FormData): Promise<void> {
+  const id = readUuid(formData.get('id'));
+  const firstName = readText(formData, 'firstName');
+  const lastName = readText(formData, 'lastName');
+  const weeklyHours = readNumber(formData, 'weeklyHours');
+  const startDate = readDate(formData, 'startDate');
+  const endDate = readDate(formData, 'endDate');
+  if (
+    !id ||
+    !firstName ||
+    !lastName ||
+    weeklyHours === undefined ||
+    startDate === undefined ||
+    endDate === undefined
+  ) {
+    redirect(`/employees/${encodeURIComponent(id ?? '')}?error=INVALID_REQUEST`);
+  }
+  const api = await getApiClient();
+  const { error } = await api.PATCH('/api/v1/employees/{id}', {
+    params: { path: { id }, header: await getTenantHeader() },
+    body: {
+      firstName,
+      lastName,
+      preferredName: readNullableText(formData, 'preferredName'),
+      email: readNullableText(formData, 'email'),
+      phone: readNullableText(formData, 'phone'),
+      personnelNumber: readNullableText(formData, 'personnelNumber'),
+      employmentType: readNullableText(formData, 'employmentType'),
+      startDate,
+      endDate,
+      weeklyHours,
+    },
+  });
+  if (error) redirect(`/employees/${id}?error=${encodeURIComponent(error.code)}`);
+  revalidatePath('/employees');
+  revalidatePath(`/employees/${id}`);
+  redirect(`/employees/${id}?updated=employee`);
+}
+
+export async function changeEmployeeStatusAction(formData: FormData): Promise<void> {
+  const id = readUuid(formData.get('id'));
+  const operation = formData.get('operation');
+  if (!id || (operation !== 'activate' && operation !== 'deactivate' && operation !== 'archive')) {
+    redirect('/employees?error=INVALID_REQUEST');
+  }
+  const api = await getApiClient();
+  const options = { params: { path: { id }, header: await getTenantHeader() } };
+  const response =
+    operation === 'activate'
+      ? await api.POST('/api/v1/employees/{id}/activate', options)
+      : operation === 'deactivate'
+        ? await api.POST('/api/v1/employees/{id}/deactivate', options)
+        : await api.POST('/api/v1/employees/{id}/archive', options);
+  if (response.error) redirect(`/employees/${id}?error=${encodeURIComponent(response.error.code)}`);
+  revalidatePath('/employees');
+  revalidatePath(`/employees/${id}`);
+  redirect(`/employees/${id}?updated=${operation}`);
+}
+
+export async function assignFacilityAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const facilityId = readUuid(formData.get('facilityId'));
+  const validFrom = readDate(formData, 'validFrom');
+  const validUntil = readDate(formData, 'validUntil');
+  if (!employeeId || !facilityId || validFrom === undefined || validUntil === undefined) {
+    redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  }
+  const api = await getApiClient();
+  const { error } = await api.PUT('/api/v1/employees/{id}/facilities/{facilityId}', {
+    params: { path: { id: employeeId, facilityId }, header: await getTenantHeader() },
+    body: {
+      ...(formData.get('isPrimary') === 'on' ? { isPrimary: true } : {}),
+      validFrom,
+      validUntil,
+    },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  await refreshEmployee(employeeId);
+  redirect(`/employees/${employeeId}?updated=assignment`);
+}
+
+export async function unassignFacilityAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const facilityId = readUuid(formData.get('facilityId'));
+  if (!employeeId || !facilityId) redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.DELETE('/api/v1/employees/{id}/facilities/{facilityId}', {
+    params: { path: { id: employeeId, facilityId }, header: await getTenantHeader() },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  await refreshEmployee(employeeId);
+  redirect(`/employees/${employeeId}?updated=assignment`);
+}
+
+export async function assignTeamAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const teamId = readUuid(formData.get('teamId'));
+  const validFrom = readDate(formData, 'validFrom');
+  const validUntil = readDate(formData, 'validUntil');
+  if (!employeeId || !teamId || validFrom === undefined || validUntil === undefined) {
+    redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  }
+  const api = await getApiClient();
+  const { error } = await api.PUT('/api/v1/employees/{id}/teams/{teamId}', {
+    params: { path: { id: employeeId, teamId }, header: await getTenantHeader() },
+    body: {
+      role: readNullableText(formData, 'role'),
+      validFrom,
+      validUntil,
+    },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  await refreshEmployee(employeeId);
+  redirect(`/employees/${employeeId}?updated=assignment`);
+}
+
+export async function unassignTeamAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const teamId = readUuid(formData.get('teamId'));
+  if (!employeeId || !teamId) redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.DELETE('/api/v1/employees/{id}/teams/{teamId}', {
+    params: { path: { id: employeeId, teamId }, header: await getTenantHeader() },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  await refreshEmployee(employeeId);
+  redirect(`/employees/${employeeId}?updated=assignment`);
+}
+
+export async function linkEmployeeUserAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const userId = readUuid(formData.get('userId'));
+  if (!employeeId || !userId) redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.PUT('/api/v1/employees/{id}/user', {
+    params: { path: { id: employeeId }, header: await getTenantHeader() },
+    body: { userId },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  await refreshEmployee(employeeId);
+  redirect(`/employees/${employeeId}?updated=access`);
+}
+
+export async function unlinkEmployeeUserAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  if (!employeeId) redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.DELETE('/api/v1/employees/{id}/user', {
+    params: { path: { id: employeeId }, header: await getTenantHeader() },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  await refreshEmployee(employeeId);
+  redirect(`/employees/${employeeId}?updated=access`);
+}
+
+export async function assignQualificationAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const qualificationId = readUuid(formData.get('qualificationId'));
+  const validFrom = readDate(formData, 'validFrom');
+  const validUntil = readDate(formData, 'validUntil');
+  if (!employeeId || !qualificationId || validFrom === undefined || validUntil === undefined) {
+    redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  }
+  const api = await getApiClient();
+  const { error } = await api.PUT('/api/v1/employees/{id}/qualifications/{qualificationId}', {
+    params: { path: { id: employeeId, qualificationId }, header: await getTenantHeader() },
+    body: { validFrom, validUntil, issuer: readNullableText(formData, 'issuer') },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  await refreshEmployee(employeeId);
+  redirect(`/employees/${employeeId}?updated=qualification`);
+}
+
+export async function removeQualificationAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const qualificationId = readUuid(formData.get('qualificationId'));
+  if (!employeeId || !qualificationId) redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.DELETE('/api/v1/employees/{id}/qualifications/{qualificationId}', {
+    params: { path: { id: employeeId, qualificationId }, header: await getTenantHeader() },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  await refreshEmployee(employeeId);
+  redirect(`/employees/${employeeId}?updated=qualification`);
+}
+
+export async function assignSkillAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const skillId = readUuid(formData.get('skillId'));
+  if (!employeeId || !skillId) redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.PUT('/api/v1/employees/{id}/skills/{skillId}', {
+    params: { path: { id: employeeId, skillId }, header: await getTenantHeader() },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  await refreshEmployee(employeeId);
+  redirect(`/employees/${employeeId}?updated=skill`);
+}
+
+export async function removeSkillAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const skillId = readUuid(formData.get('skillId'));
+  if (!employeeId || !skillId) redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.DELETE('/api/v1/employees/{id}/skills/{skillId}', {
+    params: { path: { id: employeeId, skillId }, header: await getTenantHeader() },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  await refreshEmployee(employeeId);
+  redirect(`/employees/${employeeId}?updated=skill`);
+}
+
+export async function createQualificationAction(formData: FormData): Promise<void> {
+  await createDefinition(formData, 'qualification');
+}
+
+export async function updateQualificationAction(formData: FormData): Promise<void> {
+  await updateDefinition(formData, 'qualification');
+}
+
+export async function archiveQualificationAction(formData: FormData): Promise<void> {
+  await archiveDefinition(formData, 'qualification');
+}
+
+export async function createSkillAction(formData: FormData): Promise<void> {
+  await createDefinition(formData, 'skill');
+}
+
+export async function updateSkillAction(formData: FormData): Promise<void> {
+  await updateDefinition(formData, 'skill');
+}
+
+export async function archiveSkillAction(formData: FormData): Promise<void> {
+  await archiveDefinition(formData, 'skill');
+}
+
+async function createDefinition(
+  formData: FormData,
+  kind: 'qualification' | 'skill',
+): Promise<void> {
+  const name = readText(formData, 'name');
+  if (!name || name.length > 160) redirect('/administration/qualifications?error=INVALID_REQUEST');
+  const api = await getApiClient();
+  const path = kind === 'qualification' ? '/api/v1/qualifications' : '/api/v1/skills';
+  const { error } = await api.POST(path, {
+    params: { header: await getTenantHeader() },
+    body: {
+      name,
+      code: readNullableText(formData, 'code'),
+      description: readNullableText(formData, 'description'),
+    },
+  });
+  if (error) redirect(`/administration/qualifications?error=${encodeURIComponent(error.code)}`);
+  revalidatePath('/administration/qualifications');
+  redirect('/administration/qualifications?updated=definition');
+}
+
+async function updateDefinition(
+  formData: FormData,
+  kind: 'qualification' | 'skill',
+): Promise<void> {
+  const id = readUuid(formData.get('id'));
+  const name = readText(formData, 'name');
+  if (!id || !name || name.length > 160)
+    redirect('/administration/qualifications?error=INVALID_REQUEST');
+  const api = await getApiClient();
+  const path = kind === 'qualification' ? '/api/v1/qualifications/{id}' : '/api/v1/skills/{id}';
+  const { error } = await api.PATCH(path, {
+    params: { path: { id }, header: await getTenantHeader() },
+    body: {
+      name,
+      code: readNullableText(formData, 'code'),
+      description: readNullableText(formData, 'description'),
+    },
+  });
+  if (error) redirect(`/administration/qualifications?error=${encodeURIComponent(error.code)}`);
+  revalidatePath('/administration/qualifications');
+  redirect('/administration/qualifications?updated=definition');
+}
+
+async function archiveDefinition(
+  formData: FormData,
+  kind: 'qualification' | 'skill',
+): Promise<void> {
+  const id = readUuid(formData.get('id'));
+  if (!id) redirect('/administration/qualifications?error=INVALID_REQUEST');
+  const api = await getApiClient();
+  const path =
+    kind === 'qualification'
+      ? '/api/v1/qualifications/{id}/archive'
+      : '/api/v1/skills/{id}/archive';
+  const { error } = await api.POST(path, {
+    params: { path: { id }, header: await getTenantHeader() },
+  });
+  if (error) redirect(`/administration/qualifications?error=${encodeURIComponent(error.code)}`);
+  revalidatePath('/administration/qualifications');
+  redirect('/administration/qualifications?updated=definition');
+}
+
+async function refreshEmployee(id: string): Promise<void> {
+  revalidatePath('/employees');
+  revalidatePath(`/employees/${id}`);
+  revalidatePath('/administration/qualifications');
+}
+
+function employeePath(id: string | null, error: string): string {
+  return id
+    ? `/employees/${id}?error=${encodeURIComponent(error)}`
+    : `/employees?error=${encodeURIComponent(error)}`;
+}
+
+function readUuid(value: FormDataEntryValue | null): string | null {
+  return typeof value === 'string' && uuidPattern.test(value) ? value : null;
+}
+
+function readText(formData: FormData, name: string): string {
+  const value = formData.get(name);
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function readNullableText(formData: FormData, name: string): string | null {
+  return readText(formData, name) || null;
+}
+
+function readDate(formData: FormData, name: string): string | null | undefined {
+  const value = readText(formData, name);
+  if (!value) return null;
+  if (!datePattern.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) return undefined;
+  return value;
+}
+
+function readNumber(formData: FormData, name: string): number | null | undefined {
+  const value = readText(formData, name);
+  if (!value) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 && number <= 168 ? number : undefined;
+}

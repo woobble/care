@@ -22,14 +22,16 @@ export default async function MemberDetailPage({
   const query = await searchParams;
   const api = await getApiClient();
   const get = api.GET;
-  const [memberResult, rolesResult, organizationsResult, facilitiesResult] = await Promise.all([
-    get('/api/v1/admin/members/{id}', {
-      params: { path: { id }, header: await getTenantHeader() },
-    }),
-    get('/api/v1/admin/roles', { params: { header: await getTenantHeader() } }),
-    get('/api/v1/organizations', { params: { header: await getTenantHeader() } }),
-    get('/api/v1/facilities', { params: { header: await getTenantHeader() } }),
-  ]);
+  const [memberResult, rolesResult, organizationsResult, facilitiesResult, teamsResult] =
+    await Promise.all([
+      get('/api/v1/admin/members/{id}', {
+        params: { path: { id }, header: await getTenantHeader() },
+      }),
+      get('/api/v1/admin/roles', { params: { header: await getTenantHeader() } }),
+      get('/api/v1/organizations', { params: { header: await getTenantHeader() } }),
+      get('/api/v1/facilities', { params: { header: await getTenantHeader() } }),
+      get('/api/v1/teams', { params: { header: await getTenantHeader() } }),
+    ]);
   if (memberResult.response.status === 404) notFound();
   if (!memberResult.data) {
     return (
@@ -42,6 +44,7 @@ export default async function MemberDetailPage({
   const roles = rolesResult.data ?? [];
   const organizations = organizationsResult.data ?? [];
   const facilities = facilitiesResult.data ?? [];
+  const teams = teamsResult.data ?? [];
   const assignedRoleIds = new Set(member.roles.map((role) => role.id));
   const assignedScopes = new Set(
     member.scopes.map((scope) => `${scope.scopeType}:${scope.scopeId}`),
@@ -78,13 +81,17 @@ export default async function MemberDetailPage({
           Member access updated.
         </p>
       ) : null}
-      {rolesResult.error || organizationsResult.error || facilitiesResult.error ? (
+      {rolesResult.error ||
+      organizationsResult.error ||
+      facilitiesResult.error ||
+      teamsResult.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-          Roles or scope targets could not be loaded. (
+          Roles or scope targets could not be loaded (
           {rolesResult.error?.code ||
             organizationsResult.error?.code ||
-            facilitiesResult.error?.code}
-          )
+            facilitiesResult.error?.code ||
+            teamsResult.error?.code}
+          ).
         </p>
       ) : null}
 
@@ -165,7 +172,7 @@ export default async function MemberDetailPage({
             Access scopes
           </h2>
           <p className="text-sm text-slate-600">
-            A tenant scope cannot be combined with organization or facility scopes.
+            A tenant scope cannot be combined with organization, facility, or team scopes.
           </p>
         </div>
         <form action={replaceMemberScopesAction} className="grid gap-4">
@@ -178,8 +185,25 @@ export default async function MemberDetailPage({
             </label>
             <label className="flex items-center gap-2">
               <input type="radio" name="scopeMode" value="scoped" defaultChecked={!tenantScope} />
-              Selected organizations and facilities
+              Selected organizations, facilities, and teams
             </label>
+          </fieldset>
+          <fieldset className="grid gap-3">
+            <legend className="font-medium">Teams</legend>
+            {teams.map((team) => (
+              <label key={team.id} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="scope"
+                  value={`team:${team.id}`}
+                  defaultChecked={assignedScopes.has(`team:${team.id}`)}
+                />
+                {team.name} — {team.organizationName}
+              </label>
+            ))}
+            {teams.length === 0 ? (
+              <p className="text-sm text-slate-600">No visible teams.</p>
+            ) : null}
           </fieldset>
           <fieldset className="grid gap-3">
             <legend className="font-medium">Organizations</legend>

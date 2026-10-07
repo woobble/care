@@ -84,6 +84,44 @@ describe('can', () => {
     ).toBe(true);
   });
 
+  test('matches employee facility and team assignment collections', () => {
+    const scoped: AuthorizationPrincipal = {
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      grants: [
+        { permission: 'employee.read', scopeType: 'facility', scopeId: 'facility-2' },
+        { permission: 'employee.read', scopeType: 'team', scopeId: 'team-3' },
+      ],
+    };
+
+    expect(
+      can(scoped, {
+        action: 'employee.read',
+        resource: {
+          tenantId: 'tenant-1',
+          organizationId: 'organization-1',
+          facilityIds: ['facility-1', 'facility-2'],
+          teamIds: ['team-3'],
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test('keeps legacy broad management grants compatible', () => {
+    const administrator: AuthorizationPrincipal = {
+      userId: 'admin',
+      tenantId: 'tenant-1',
+      grants: [
+        { permission: 'employee.manage', scopeType: 'tenant', scopeId: 'tenant-1' },
+        { permission: 'organization.manage', scopeType: 'tenant', scopeId: 'tenant-1' },
+      ],
+    };
+    const resource = { tenantId: 'tenant-1', organizationId: 'organization-1' };
+
+    expect(can(administrator, { action: 'employee.assign_team', resource })).toBe(true);
+    expect(can(administrator, { action: 'team.manage', resource })).toBe(true);
+  });
+
   test('requires explicit role assignment and prevents permission escalation', () => {
     const administrator: AuthorizationPrincipal = {
       userId: 'admin',

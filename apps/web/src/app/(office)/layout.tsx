@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Button } from '@care/ui';
-import { getApiClient } from '../../lib/api';
+import { getApiClient, getPermissionGrants, hasPermission } from '../../lib/api';
 import { signOutAction } from '../actions/auth';
 
 export default async function OfficeLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -11,6 +11,7 @@ export default async function OfficeLayout({ children }: Readonly<{ children: Re
   const { data: tenants, error } = await get('/api/v1/me/tenants');
   const tenantId = (await cookies()).get('care-tenant')?.value;
   if (error || !tenantId || !tenants?.some((tenant) => tenant.id === tenantId)) redirect('/');
+  const permissions = await getPermissionGrants(api);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -23,6 +24,14 @@ export default async function OfficeLayout({ children }: Readonly<{ children: Re
             Care Platform
           </Link>
           <div className="flex items-center gap-2">
+            {hasPermission(permissions, 'service.read') ? (
+              <Button asChild variant="secondary" size="sm">
+                <Link href="/services">Leistungen</Link>
+              </Button>
+            ) : null}
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/employees">Mitarbeitende</Link>
+            </Button>
             <Button asChild variant="secondary" size="sm">
               <Link href="/administration/users">Administration</Link>
             </Button>

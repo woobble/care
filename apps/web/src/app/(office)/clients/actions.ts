@@ -1,22 +1,75 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { getApiClient, getTenantHeader } from '../../../lib/api';
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+const contactRoles = [
+  'primary_contact',
+  'emergency_contact',
+  'legal_representative',
+  'authorized_contact',
+  'invoice_recipient',
+] as const;
 
 export async function createClientAction(formData: FormData): Promise<void> {
   const firstName = readString(formData, 'firstName');
   const lastName = readString(formData, 'lastName');
+  const organizationId = readUuid(formData.get('organizationId'));
+  const primaryFacilityId = readUuid(formData.get('primaryFacilityId'));
   const preferredName = readString(formData, 'preferredName');
   const dateOfBirth = readString(formData, 'dateOfBirth');
+  const dateOfDeath = readString(formData, 'dateOfDeath');
+  const gender = readChoice(formData, 'gender', ['female', 'male', 'diverse'] as const);
+  const salutation = readChoice(formData, 'salutation', ['mr', 'ms', 'mx', 'other'] as const);
   const email = readString(formData, 'email');
   const phone = readString(formData, 'phone');
+  const mobile = readString(formData, 'mobile');
+  const street = readString(formData, 'addressStreet');
+  const houseNumber = readString(formData, 'addressHouseNumber');
+  const addressAddition = readString(formData, 'addressAddition');
+  const postalCode = readString(formData, 'addressPostalCode');
+  const city = readString(formData, 'addressCity');
+  const countryCode = readString(formData, 'addressCountryCode').toUpperCase() || 'DE';
+  const hasAddress = [street, houseNumber, addressAddition, postalCode, city].some(Boolean);
+  if (
+    !firstName ||
+    !lastName ||
+    !organizationId ||
+    !primaryFacilityId ||
+    (hasAddress && (!street || !city))
+  ) {
+    redirect('/clients/new?error=INVALID_REQUEST');
+  }
   const body = {
     firstName,
     lastName,
+    organizationId,
+    primaryFacilityId,
     ...(preferredName ? { preferredName } : {}),
     ...(dateOfBirth ? { dateOfBirth } : {}),
+    ...(dateOfDeath ? { dateOfDeath } : {}),
+    ...(gender ? { gender } : {}),
+    ...(salutation ? { salutation } : {}),
     ...(email ? { email } : {}),
     ...(phone ? { phone } : {}),
+    ...(mobile ? { mobile } : {}),
+    ...(hasAddress
+      ? {
+          primaryAddress: {
+            addressType: 'home' as const,
+            street,
+            city,
+            countryCode,
+            isPrimary: true,
+            ...(houseNumber ? { houseNumber } : {}),
+            ...(addressAddition ? { addressAddition } : {}),
+            ...(postalCode ? { postalCode } : {}),
+          },
+        }
+      : {}),
   };
   const api = await getApiClient();
   const { data, error } = await api.POST('/api/v1/clients', {
@@ -24,6 +77,7 @@ export async function createClientAction(formData: FormData): Promise<void> {
     body,
   });
   if (error || !data) redirect('/clients/new?error=create');
+  revalidatePath('/clients');
   redirect(`/clients/${data.id}`);
 }
 
@@ -35,19 +89,382 @@ export async function archiveClientAction(formData: FormData): Promise<void> {
   await changeClientState(formData, 'archive');
 }
 
+export async function updateClientAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const firstName = readString(formData, 'firstName');
+  const lastName = readString(formData, 'lastName');
+  if (!firstName || !lastName) redirect(clientPath(id, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.PATCH('/api/v1/clients/{id}', {
+    params: { path: { id }, header: await getTenantHeader() },
+    body: {
+      firstName,
+      lastName,
+      preferredName: readNullableText(formData, 'preferredName'),
+      dateOfBirth: readNullableDate(formData, 'dateOfBirth'),
+      dateOfDeath: readNullableDate(formData, 'dateOfDeath'),
+      gender: readChoice(formData, 'gender', ['female', 'male', 'diverse'] as const) ?? null,
+      salutation: readChoice(formData, 'salutation', ['mr', 'ms', 'mx', 'other'] as const) ?? null,
+      email: readNullableText(formData, 'email'),
+      phone: readNullableText(formData, 'phone'),
+      mobile: readNullableText(formData, 'mobile'),
+    },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(clientPath(id, ''));
+}
+
+export async function changeClientProviderContextAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const organizationId = readUuid(formData.get('organizationId'));
+  const primaryFacilityId = readUuid(formData.get('primaryFacilityId'));
+  if (!organizationId || !primaryFacilityId) redirect(clientPath(id, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.PUT('/api/v1/clients/{id}/provider-context', {
+    params: { path: { id }, header: await getTenantHeader() },
+    body: { organizationId, primaryFacilityId },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(clientPath(id, ''));
+}
+
+export async function addClientAddressAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const street = readString(formData, 'street');
+  const city = readString(formData, 'city');
+  const addressType = readChoice(formData, 'addressType', ['home', 'billing', 'other'] as const);
+  if (!street || !city || !addressType) redirect(clientPath(id, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/clients/{clientId}/addresses', {
+    params: { path: { clientId: id }, header: await getTenantHeader() },
+    body: {
+      addressType,
+      street,
+      city,
+      houseNumber: readNullableText(formData, 'houseNumber'),
+      addressAddition: readNullableText(formData, 'addressAddition'),
+      postalCode: readNullableText(formData, 'postalCode'),
+      countryCode: readString(formData, 'countryCode').toUpperCase() || 'DE',
+      validFrom: readNullableDate(formData, 'validFrom'),
+      validUntil: readNullableDate(formData, 'validUntil'),
+      isPrimary: formData.get('isPrimary') === 'on',
+    },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(clientPath(id, ''));
+}
+
+export async function updateClientAddressAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const addressId = readUuid(formData.get('addressId'));
+  const street = readString(formData, 'street');
+  const city = readString(formData, 'city');
+  if (!addressId || !street || !city) redirect(clientPath(id, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.PATCH('/api/v1/clients/{clientId}/addresses/{addressId}', {
+    params: { path: { clientId: id, addressId }, header: await getTenantHeader() },
+    body: {
+      addressType: readChoice(formData, 'addressType', ['home', 'billing', 'other']) ?? 'home',
+      street,
+      city,
+      houseNumber: readNullableText(formData, 'houseNumber'),
+      addressAddition: readNullableText(formData, 'addressAddition'),
+      postalCode: readNullableText(formData, 'postalCode'),
+      countryCode: readString(formData, 'countryCode').toUpperCase() || 'DE',
+      validFrom: readNullableDate(formData, 'validFrom'),
+      validUntil: readNullableDate(formData, 'validUntil'),
+      isPrimary: formData.get('isPrimary') === 'on',
+    },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(clientPath(id, ''));
+}
+
+export async function removeClientAddressAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const addressId = readUuid(formData.get('addressId'));
+  if (!addressId) redirect(clientPath(id, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.DELETE('/api/v1/clients/{clientId}/addresses/{addressId}', {
+    params: { path: { clientId: id, addressId }, header: await getTenantHeader() },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(clientPath(id, ''));
+}
+
+export async function addClientContactAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const firstName = readString(formData, 'firstName');
+  const lastName = readString(formData, 'lastName');
+  const relationshipType = readChoice(formData, 'relationshipType', [
+    'daughter',
+    'son',
+    'spouse',
+    'relative',
+    'legal_representative',
+    'guardian',
+    'other',
+  ] as const);
+  if (!firstName || !lastName || !relationshipType) redirect(clientPath(id, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/clients/{clientId}/contacts', {
+    params: { path: { clientId: id }, header: await getTenantHeader() },
+    body: {
+      firstName,
+      lastName,
+      relationshipType,
+      phone: readNullableText(formData, 'phone'),
+      mobile: readNullableText(formData, 'mobile'),
+      email: readNullableText(formData, 'email'),
+      roles: readChoices(formData, 'roles', contactRoles),
+      representationType:
+        readChoice(formData, 'representationType', [
+          'power_of_attorney',
+          'legal_guardianship',
+          'authorized_representative',
+        ] as const) ?? null,
+      representationValidFrom: readNullableDate(formData, 'representationValidFrom'),
+      representationValidUntil: readNullableDate(formData, 'representationValidUntil'),
+      representationReference: readNullableText(formData, 'representationReference'),
+      addressStreet: readNullableText(formData, 'addressStreet'),
+      addressHouseNumber: readNullableText(formData, 'addressHouseNumber'),
+      addressAddition: readNullableText(formData, 'addressAddition'),
+      addressPostalCode: readNullableText(formData, 'addressPostalCode'),
+      addressCity: readNullableText(formData, 'addressCity'),
+      addressCountryCode: readNullableText(formData, 'addressCountryCode')?.toUpperCase() ?? null,
+      notes: readNullableText(formData, 'notes'),
+    },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(clientPath(id, ''));
+}
+
+export async function updateClientContactAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const contactId = readUuid(formData.get('contactId'));
+  const firstName = readString(formData, 'firstName');
+  const lastName = readString(formData, 'lastName');
+  const relationshipType = readChoice(formData, 'relationshipType', [
+    'daughter',
+    'son',
+    'spouse',
+    'relative',
+    'legal_representative',
+    'guardian',
+    'other',
+  ] as const);
+  if (!contactId || !firstName || !lastName || !relationshipType)
+    redirect(clientPath(id, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.PATCH('/api/v1/clients/{clientId}/contacts/{contactId}', {
+    params: { path: { clientId: id, contactId }, header: await getTenantHeader() },
+    body: {
+      firstName,
+      lastName,
+      relationshipType,
+      phone: readNullableText(formData, 'phone'),
+      mobile: readNullableText(formData, 'mobile'),
+      email: readNullableText(formData, 'email'),
+      roles: readChoices(formData, 'roles', contactRoles),
+      notes: readNullableText(formData, 'notes'),
+    },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(clientPath(id, ''));
+}
+
+export async function removeClientContactAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const contactId = readUuid(formData.get('contactId'));
+  if (!contactId) redirect(clientPath(id, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.DELETE('/api/v1/clients/{clientId}/contacts/{contactId}', {
+    params: { path: { clientId: id, contactId }, header: await getTenantHeader() },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(clientPath(id, ''));
+}
+
+export async function addClientInsuranceAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const insuranceType = readChoice(formData, 'insuranceType', [
+    'pflegeversicherung',
+    'krankenversicherung',
+    'private',
+    'other',
+  ] as const);
+  const insurerName = readString(formData, 'insurerName');
+  if (!insuranceType || !insurerName) redirect(clientPath(id, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/clients/{clientId}/insurances', {
+    params: { path: { clientId: id }, header: await getTenantHeader() },
+    body: {
+      insuranceType,
+      insurerName,
+      insuranceNumber: readNullableText(formData, 'insuranceNumber'),
+      memberNumber: readNullableText(formData, 'memberNumber'),
+      validFrom: readNullableDate(formData, 'validFrom'),
+      validUntil: readNullableDate(formData, 'validUntil'),
+      isPrimary: formData.get('isPrimary') === 'on',
+      notes: readNullableText(formData, 'notes'),
+    },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(clientPath(id, ''));
+}
+
+export async function updateClientInsuranceAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const insuranceId = readUuid(formData.get('insuranceId'));
+  const insuranceType = readChoice(formData, 'insuranceType', [
+    'pflegeversicherung',
+    'krankenversicherung',
+    'private',
+    'other',
+  ] as const);
+  const insurerName = readString(formData, 'insurerName');
+  if (!insuranceId || !insuranceType || !insurerName) redirect(clientPath(id, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.PATCH('/api/v1/clients/{clientId}/insurances/{insuranceId}', {
+    params: { path: { clientId: id, insuranceId }, header: await getTenantHeader() },
+    body: {
+      insuranceType,
+      insurerName,
+      insuranceNumber: readNullableText(formData, 'insuranceNumber'),
+      memberNumber: readNullableText(formData, 'memberNumber'),
+      validFrom: readNullableDate(formData, 'validFrom'),
+      validUntil: readNullableDate(formData, 'validUntil'),
+      isPrimary: formData.get('isPrimary') === 'on',
+      notes: readNullableText(formData, 'notes'),
+    },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(clientPath(id, ''));
+}
+
+export async function addClientPflegegradAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const grade = readInteger(formData, 'grade');
+  const validFrom = readString(formData, 'validFrom');
+  const status = readChoice(formData, 'status', ['pending', 'confirmed', 'revoked'] as const);
+  if (!grade || !validFrom || !datePattern.test(validFrom) || !status)
+    redirect(clientPath(id, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/clients/{clientId}/pflegegrade', {
+    params: { path: { clientId: id }, header: await getTenantHeader() },
+    body: {
+      grade,
+      validFrom,
+      status,
+      validUntil: readNullableDate(formData, 'validUntil'),
+      decisionDate: readNullableDate(formData, 'decisionDate'),
+      insurerReference: readNullableText(formData, 'insurerReference'),
+    },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(clientPath(id, ''));
+}
+
+export async function updateFuturePflegegradAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const recordId = readUuid(formData.get('recordId'));
+  const grade = readInteger(formData, 'grade');
+  const validFrom = readString(formData, 'validFrom');
+  const status = readChoice(formData, 'status', ['pending', 'confirmed', 'revoked'] as const);
+  if (!recordId || !grade || !validFrom || !datePattern.test(validFrom) || !status)
+    redirect(clientPath(id, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.PATCH('/api/v1/clients/{clientId}/pflegegrade/{recordId}', {
+    params: { path: { clientId: id, recordId }, header: await getTenantHeader() },
+    body: { grade, validFrom, status },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(clientPath(id, ''));
+}
+
 async function changeClientState(formData: FormData, state: 'activate' | 'archive'): Promise<void> {
-  const id = readString(formData, 'id');
+  const id = requireClientId(formData);
   const api = await getApiClient();
   const header = await getTenantHeader();
   const response =
     state === 'activate'
       ? await api.POST('/api/v1/clients/{id}/activate', { params: { path: { id }, header } })
       : await api.POST('/api/v1/clients/{id}/archive', { params: { path: { id }, header } });
-  if (response.error) redirect(`/clients/${encodeURIComponent(id)}?error=${state}`);
-  redirect(`/clients/${encodeURIComponent(id)}`);
+  if (response.error) redirect(clientPath(id, response.error.code));
+  await refreshClient(id);
+  redirect(clientPath(id, ''));
 }
 
 function readString(formData: FormData, name: string): string {
   const value = formData.get(name);
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function readNullableText(formData: FormData, name: string): string | null {
+  return readString(formData, name) || null;
+}
+
+function readNullableDate(formData: FormData, name: string): string | null {
+  return readString(formData, name) || null;
+}
+
+function readUuid(value: FormDataEntryValue | null): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const id = value.trim();
+  return uuidPattern.test(id) ? id : undefined;
+}
+
+function requireClientId(formData: FormData): string {
+  const id = readUuid(formData.get('id'));
+  if (!id) redirect('/clients?error=INVALID_REQUEST');
+  return id;
+}
+
+function readChoice<const Values extends readonly string[]>(
+  formData: FormData,
+  name: string,
+  values: Values,
+): Values[number] | undefined {
+  const value = readString(formData, name);
+  return values.includes(value) ? (value as Values[number]) : undefined;
+}
+
+function readChoices<const Values extends readonly string[]>(
+  formData: FormData,
+  name: string,
+  values: Values,
+): Values[number][] {
+  return [
+    ...new Set(formData.getAll(name).filter((item): item is string => typeof item === 'string')),
+  ].filter((item): item is Values[number] => values.includes(item as Values[number]));
+}
+
+function readInteger(formData: FormData, name: string): number | undefined {
+  const value = readString(formData, name);
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : undefined;
+}
+
+function clientPath(id: string, error: string): string {
+  return error
+    ? `/clients/${encodeURIComponent(id)}?error=${encodeURIComponent(error)}`
+    : `/clients/${encodeURIComponent(id)}`;
+}
+
+async function refreshClient(id: string): Promise<void> {
+  revalidatePath('/clients');
+  revalidatePath(`/clients/${id}`);
 }

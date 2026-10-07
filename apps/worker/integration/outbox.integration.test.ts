@@ -8,18 +8,36 @@ import { startCareTestDatabase } from '@care/testing';
 test('worker dispatches an outbox event before marking it delivered', async () => {
   const database = await startCareTestDatabase();
   const owner = new Client({ connectionString: database.migrationUrl });
-  const eventId = randomUUID();
   const tenantId = randomUUID();
-  const event = createDomainEvent({
-    id: eventId,
-    type: 'client.created',
-    tenantId,
-    aggregateType: 'client',
-    aggregateId: randomUUID(),
-    actor: { type: 'system' },
-    correlationId: randomUUID(),
-    payload: { clientId: randomUUID() },
-  });
+  const events = [
+    createDomainEvent({
+      type: 'employee.created',
+      tenantId,
+      aggregateType: 'employee',
+      aggregateId: randomUUID(),
+      actor: { type: 'system' },
+      correlationId: randomUUID(),
+      payload: { employeeId: randomUUID(), organizationId: randomUUID() },
+    }),
+    createDomainEvent({
+      type: 'team.updated',
+      tenantId,
+      aggregateType: 'team',
+      aggregateId: randomUUID(),
+      actor: { type: 'system' },
+      correlationId: randomUUID(),
+      payload: { teamId: randomUUID(), changedFields: ['name'] },
+    }),
+    createDomainEvent({
+      type: 'client.created',
+      tenantId,
+      aggregateType: 'client',
+      aggregateId: randomUUID(),
+      actor: { type: 'system' },
+      correlationId: randomUUID(),
+      payload: { clientId: randomUUID() },
+    }),
+  ];
   let worker: ReturnType<typeof Bun.spawn> | undefined;
 
   try {
@@ -29,11 +47,14 @@ test('worker dispatches an outbox event before marking it delivered', async () =
       'Worker Test',
       `worker-${tenantId}`,
     ]);
-    await owner.query(
-      `INSERT INTO platform.outbox_messages (id, tenant_id, event_type, event_version, event, status)
-       VALUES ($1, $2, $3, $4, $5, 'pending')`,
-      [eventId, tenantId, event.type, event.version, event],
-    );
+    for (const event of events) {
+      // oxlint-disable-next-line no-await-in-loop
+      await owner.query(
+        `INSERT INTO platform.outbox_messages (id, tenant_id, event_type, event_version, event, status)
+         VALUES ($1, $2, $3, $4, $5, 'pending')`,
+        [event.id, tenantId, event.type, event.version, event],
+      );
+    }
     worker = Bun.spawn([process.execPath, 'run', 'src/main.ts'], {
       cwd: resolve(import.meta.dirname, '..'),
       env: {
@@ -46,21 +67,23 @@ test('worker dispatches an outbox event before marking it delivered', async () =
       stderr: 'pipe',
     });
 
-    let status: string | undefined;
+    let delivered = false;
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      const result = await owner.query<{ status: string }>(
-        'SELECT status FROM platform.outbox_messages WHERE id = $1',
-        [eventId],
+      const result = await owner.query<{ id: string; status: string }>(
+        'SELECT id, status FROM platform.outbox_messages WHERE id = ANY($1::uuid[])',
+        [events.map((event) => event.id)],
       );
-      status = result.rows[0]?.status;
-      if (status === 'delivered') break;
+      delivered =
+        result.rows.length === events.length &&
+        result.rows.every((row) => row.status === 'delivered');
+      if (delivered) break;
       if (worker.exitCode !== null) {
         const stderr = await new Response(worker.stderr).text();
         throw new Error(`Outbox worker exited with ${worker.exitCode}: ${stderr}`);
       }
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
     }
-    expect(status).toBe('delivered');
+    expect(delivered).toBe(true);
   } finally {
     if (worker && worker.exitCode === null) {
       worker.kill('SIGTERM');

@@ -103,13 +103,13 @@ export async function replaceMemberScopesAction(formData: FormData): Promise<voi
     const [scopeType, scopeId, extra] = item.split(':');
     if (
       extra !== undefined ||
-      (scopeType !== 'organization' && scopeType !== 'facility') ||
+      (scopeType !== 'organization' && scopeType !== 'facility' && scopeType !== 'team') ||
       !scopeId ||
       !uuidPattern.test(scopeId)
     ) {
       return null;
     }
-    return { scopeType: scopeType as 'organization' | 'facility', scopeId };
+    return { scopeType: scopeType as 'organization' | 'facility' | 'team', scopeId };
   });
   if (selectedScopes.some((scope) => scope === null)) {
     redirect(`/administration/users/${id}?error=INVALID_REQUEST`);
@@ -128,4 +128,217 @@ export async function replaceMemberScopesAction(formData: FormData): Promise<voi
   revalidatePath('/administration/users');
   revalidatePath(`/administration/users/${id}`);
   redirect(`/administration/users/${id}?updated=scopes`);
+}
+
+export async function createOrganizationAction(formData: FormData): Promise<void> {
+  const name = readText(formData, 'name');
+  if (!name || name.length > 160) redirect('/administration/organizations?error=INVALID_REQUEST');
+  const api = await getApiClient();
+  const { data, error } = await api.POST('/api/v1/organizations', {
+    params: { header: await getTenantHeader() },
+    body: {
+      name,
+      legalName: readNullableText(formData, 'legalName'),
+      code: readNullableText(formData, 'code'),
+      address: readNullableText(formData, 'address'),
+      phone: readNullableText(formData, 'phone'),
+      email: readNullableText(formData, 'email'),
+    },
+  });
+  if (error || !data)
+    redirect(
+      `/administration/organizations?error=${encodeURIComponent(error?.code ?? 'CREATE_FAILED')}`,
+    );
+  revalidatePath('/administration/organizations');
+  redirect(`/administration/organizations/${data.id}`);
+}
+
+export async function updateOrganizationAction(formData: FormData): Promise<void> {
+  const id = readUuid(formData.get('id'));
+  const name = readText(formData, 'name');
+  if (!id || !name || name.length > 160)
+    redirect('/administration/organizations?error=INVALID_REQUEST');
+  const api = await getApiClient();
+  const { error } = await api.PATCH('/api/v1/organizations/{id}', {
+    params: { path: { id }, header: await getTenantHeader() },
+    body: {
+      name,
+      legalName: readNullableText(formData, 'legalName'),
+      code: readNullableText(formData, 'code'),
+      address: readNullableText(formData, 'address'),
+      phone: readNullableText(formData, 'phone'),
+      email: readNullableText(formData, 'email'),
+    },
+  });
+  if (error)
+    redirect(`/administration/organizations/${id}?error=${encodeURIComponent(error.code)}`);
+  revalidatePath('/administration/organizations');
+  revalidatePath(`/administration/organizations/${id}`);
+  redirect(`/administration/organizations/${id}?updated=organization`);
+}
+
+export async function setOrganizationStatusAction(formData: FormData): Promise<void> {
+  const id = readUuid(formData.get('id'));
+  const operation = formData.get('operation');
+  if (!id || (operation !== 'activate' && operation !== 'archive')) {
+    redirect('/administration/organizations?error=INVALID_REQUEST');
+  }
+  const api = await getApiClient();
+  const response =
+    operation === 'activate'
+      ? await api.POST('/api/v1/organizations/{id}/activate', {
+          params: { path: { id }, header: await getTenantHeader() },
+        })
+      : await api.POST('/api/v1/organizations/{id}/archive', {
+          params: { path: { id }, header: await getTenantHeader() },
+        });
+  if (response.error)
+    redirect(
+      `/administration/organizations/${id}?error=${encodeURIComponent(response.error.code)}`,
+    );
+  revalidatePath('/administration/organizations');
+  revalidatePath(`/administration/organizations/${id}`);
+  redirect(`/administration/organizations/${id}?updated=${operation}`);
+}
+
+export async function createFacilityAction(formData: FormData): Promise<void> {
+  const organizationId = readUuid(formData.get('organizationId'));
+  const name = readText(formData, 'name');
+  const redirectTo = organizationId
+    ? `/administration/organizations/${organizationId}`
+    : '/administration/facilities';
+  if (!organizationId || !name || name.length > 160)
+    redirect(`${redirectTo}?error=INVALID_REQUEST`);
+  const api = await getApiClient();
+  const { data, error } = await api.POST('/api/v1/facilities', {
+    params: { header: await getTenantHeader() },
+    body: {
+      organizationId,
+      name,
+      code: readNullableText(formData, 'code'),
+      address: readNullableText(formData, 'address'),
+      phone: readNullableText(formData, 'phone'),
+      email: readNullableText(formData, 'email'),
+    },
+  });
+  if (error || !data)
+    redirect(`${redirectTo}?error=${encodeURIComponent(error?.code ?? 'CREATE_FAILED')}`);
+  revalidatePath('/administration/organizations');
+  revalidatePath('/administration/facilities');
+  revalidatePath(redirectTo);
+  redirect(`/administration/facilities/${data.id}`);
+}
+
+export async function updateFacilityAction(formData: FormData): Promise<void> {
+  const id = readUuid(formData.get('id'));
+  const name = readText(formData, 'name');
+  if (!id || !name || name.length > 160)
+    redirect('/administration/facilities?error=INVALID_REQUEST');
+  const api = await getApiClient();
+  const { error } = await api.PATCH('/api/v1/facilities/{id}', {
+    params: { path: { id }, header: await getTenantHeader() },
+    body: {
+      name,
+      code: readNullableText(formData, 'code'),
+      address: readNullableText(formData, 'address'),
+      phone: readNullableText(formData, 'phone'),
+      email: readNullableText(formData, 'email'),
+    },
+  });
+  if (error) redirect(`/administration/facilities/${id}?error=${encodeURIComponent(error.code)}`);
+  revalidatePath('/administration/facilities');
+  revalidatePath(`/administration/facilities/${id}`);
+  redirect(`/administration/facilities/${id}?updated=facility`);
+}
+
+export async function setFacilityStatusAction(formData: FormData): Promise<void> {
+  const id = readUuid(formData.get('id'));
+  const operation = formData.get('operation');
+  if (!id || (operation !== 'activate' && operation !== 'archive')) {
+    redirect('/administration/facilities?error=INVALID_REQUEST');
+  }
+  const api = await getApiClient();
+  const response =
+    operation === 'activate'
+      ? await api.POST('/api/v1/facilities/{id}/activate', {
+          params: { path: { id }, header: await getTenantHeader() },
+        })
+      : await api.POST('/api/v1/facilities/{id}/archive', {
+          params: { path: { id }, header: await getTenantHeader() },
+        });
+  if (response.error)
+    redirect(`/administration/facilities/${id}?error=${encodeURIComponent(response.error.code)}`);
+  revalidatePath('/administration/facilities');
+  revalidatePath(`/administration/facilities/${id}`);
+  redirect(`/administration/facilities/${id}?updated=${operation}`);
+}
+
+export async function createTeamAction(formData: FormData): Promise<void> {
+  const organizationId = readUuid(formData.get('organizationId'));
+  const facilityValue = readText(formData, 'facilityId');
+  const facilityId = facilityValue ? readUuid(facilityValue) : null;
+  const name = readText(formData, 'name');
+  if (!organizationId || (facilityValue && !facilityId) || !name || name.length > 160) {
+    redirect('/administration/teams?error=INVALID_REQUEST');
+  }
+  const api = await getApiClient();
+  const { data, error } = await api.POST('/api/v1/teams', {
+    params: { header: await getTenantHeader() },
+    body: { organizationId, facilityId, name },
+  });
+  if (error || !data)
+    redirect(`/administration/teams?error=${encodeURIComponent(error?.code ?? 'CREATE_FAILED')}`);
+  revalidatePath('/administration/teams');
+  redirect(`/administration/teams/${data.id}`);
+}
+
+export async function updateTeamAction(formData: FormData): Promise<void> {
+  const id = readUuid(formData.get('id'));
+  const facilityValue = readText(formData, 'facilityId');
+  const facilityId = facilityValue ? readUuid(facilityValue) : null;
+  const name = readText(formData, 'name');
+  if (!id || (facilityValue && !facilityId) || !name || name.length > 160) {
+    redirect('/administration/teams?error=INVALID_REQUEST');
+  }
+  const api = await getApiClient();
+  const { error } = await api.PATCH('/api/v1/teams/{id}', {
+    params: { path: { id }, header: await getTenantHeader() },
+    body: { name, facilityId },
+  });
+  if (error) redirect(`/administration/teams/${id}?error=${encodeURIComponent(error.code)}`);
+  revalidatePath('/administration/teams');
+  revalidatePath(`/administration/teams/${id}`);
+  redirect(`/administration/teams/${id}?updated=team`);
+}
+
+export async function setTeamStatusAction(formData: FormData): Promise<void> {
+  const id = readUuid(formData.get('id'));
+  const operation = formData.get('operation');
+  if (!id || (operation !== 'activate' && operation !== 'archive')) {
+    redirect('/administration/teams?error=INVALID_REQUEST');
+  }
+  const api = await getApiClient();
+  const response =
+    operation === 'activate'
+      ? await api.POST('/api/v1/teams/{id}/activate', {
+          params: { path: { id }, header: await getTenantHeader() },
+        })
+      : await api.POST('/api/v1/teams/{id}/archive', {
+          params: { path: { id }, header: await getTenantHeader() },
+        });
+  if (response.error)
+    redirect(`/administration/teams/${id}?error=${encodeURIComponent(response.error.code)}`);
+  revalidatePath('/administration/teams');
+  revalidatePath(`/administration/teams/${id}`);
+  redirect(`/administration/teams/${id}?updated=${operation}`);
+}
+
+function readText(formData: FormData, name: string): string {
+  const value = formData.get(name);
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function readNullableText(formData: FormData, name: string): string | null {
+  const value = readText(formData, name);
+  return value || null;
 }

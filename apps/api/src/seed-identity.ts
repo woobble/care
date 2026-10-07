@@ -11,6 +11,7 @@ import { clientsSchema } from '@care/clients';
 import { employeesSchema } from '@care/employees';
 import { organizationsSchema } from '@care/organizations';
 import { platformSchema } from '@care/platform';
+import { servicesSchema } from '@care/services';
 
 const { NODE_ENV, MIGRATION_DATABASE_URL } = loadMigrationConfig();
 if (NODE_ENV !== 'development') {
@@ -28,6 +29,7 @@ const schema = {
   ...organizationsSchema,
   ...employeesSchema,
   ...clientsSchema,
+  ...servicesSchema,
   ...auditSchema,
   ...platformSchema,
 };

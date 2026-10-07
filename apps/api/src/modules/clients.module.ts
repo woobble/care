@@ -1,19 +1,29 @@
 import { Module } from '@nestjs/common';
-import { createClientApplicationService } from '@care/clients';
+import {
+  createClientApplicationService,
+  createClientMasterDataApplicationService,
+} from '@care/clients';
 import type { AuditWriter } from '@care/audit';
 import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
 import { DatabaseModule } from '../database/database.module';
-import { AUDIT_WRITER, CLIENT_APPLICATION, OUTBOX_WRITER, UNIT_OF_WORK } from '../tokens';
+import {
+  AUDIT_WRITER,
+  CLIENT_APPLICATION,
+  CLIENT_MASTER_DATA_APPLICATION,
+  OUTBOX_WRITER,
+  UNIT_OF_WORK,
+} from '../tokens';
 import { AuditModule } from './audit.module';
 import { PlatformModule } from './platform.module';
 import { IdentityModule } from './identity.module';
 import { ClientsController } from '../presentation/http/clients.controller';
+import { ClientMasterDataController } from '../presentation/http/client-master-data.controller';
 import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
 
 @Module({
   imports: [DatabaseModule, IdentityModule, AuditModule, PlatformModule],
-  controllers: [ClientsController],
+  controllers: [ClientsController, ClientMasterDataController],
   providers: [
     OidcGuard,
     TenantContextGuard,
@@ -22,6 +32,12 @@ import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
       inject: [UNIT_OF_WORK, AUDIT_WRITER, OUTBOX_WRITER],
       useFactory: (unitOfWork: UnitOfWork, audit: AuditWriter, outbox: OutboxWriter) =>
         createClientApplicationService(unitOfWork, audit, outbox),
+    },
+    {
+      provide: CLIENT_MASTER_DATA_APPLICATION,
+      inject: [UNIT_OF_WORK, AUDIT_WRITER, OUTBOX_WRITER],
+      useFactory: (unitOfWork: UnitOfWork, audit: AuditWriter, outbox: OutboxWriter) =>
+        createClientMasterDataApplicationService(unitOfWork, audit, outbox),
     },
   ],
   exports: [CLIENT_APPLICATION],

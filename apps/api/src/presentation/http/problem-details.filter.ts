@@ -6,11 +6,41 @@ import type { ProblemDetails } from '@care/contracts';
 import { AuthorizationDeniedError } from '@care/permissions';
 import {
   ClientArchivedError,
+  ClientAddressNotFoundError,
+  ClientContactNotFoundError,
+  ClientInsuranceNotFoundError,
   ClientNotFoundError,
+  FacilityNotInOrganizationError,
+  InvalidClientAddressError,
+  InvalidClientContactError,
+  InvalidClientInsuranceError,
   InvalidClientPersonalDataError,
+  InvalidPflegegradError,
   InvalidClientTransitionError,
   InvalidPaginationError,
+  InvalidProviderContextError,
+  OverlappingPflegegradPeriodError,
+  PflegegradNotFoundError,
+  PflegegradRecordImmutableError,
 } from '@care/clients';
+import {
+  CrossTenantReferenceError,
+  EmployeeAlreadyLinkedError,
+  EmployeeArchivedError,
+  EmployeeConflictError,
+  EmployeeNotFoundError,
+  InvalidEmployeeDataError,
+  InvalidEmployeePaginationError,
+  InvalidEmployeeTransitionError,
+  InvalidFacilityAssignmentError,
+  InvalidTeamAssignmentError,
+  PrimaryFacilityRequiredError,
+  QualificationArchivedError,
+  QualificationNotFoundError,
+  SkillArchivedError,
+  SkillNotFoundError,
+  UserAlreadyLinkedError,
+} from '@care/employees';
 import {
   DisabledUserError,
   InvitationNotPendingError,
@@ -20,7 +50,27 @@ import {
   TenantAccessDeniedError,
   TenantAccessError,
 } from '@care/identity';
-import { FacilityNotFoundError, OrganizationNotFoundError } from '@care/organizations';
+import {
+  FacilityArchivedError,
+  FacilityHasActiveTeamsError,
+  FacilityNotFoundError,
+  InvalidTeamAssignmentError as InvalidStructureTeamAssignmentError,
+  OrganizationArchivedError,
+  OrganizationHasActiveChildrenError,
+  OrganizationNotFoundError,
+  TeamArchivedError,
+  TeamNotFoundError,
+} from '@care/organizations';
+import {
+  InvalidServiceAvailabilityError,
+  InvalidServiceCategoryError,
+  InvalidServiceDefinitionError,
+  InvalidServicePaginationError,
+  ServiceCategoryArchivedError,
+  ServiceCategoryNotFoundError,
+  ServiceDefinitionArchivedError,
+  ServiceNotFoundError,
+} from '@care/services';
 import type { ApiRequest } from '../../http/request';
 
 @Injectable()
@@ -51,14 +101,61 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
   } else if (exception instanceof InvalidPaginationError) {
     status = 400;
     code = exception.code;
+  } else if (exception instanceof InvalidEmployeePaginationError) {
+    status = 400;
+    code = exception.code;
   } else if (exception instanceof ClientArchivedError) {
     status = 409;
     code = exception.code;
   } else if (exception instanceof InvalidClientTransitionError) {
     status = 409;
     code = exception.code;
+  } else if (
+    exception instanceof ClientAddressNotFoundError ||
+    exception instanceof ClientContactNotFoundError ||
+    exception instanceof ClientInsuranceNotFoundError ||
+    exception instanceof PflegegradNotFoundError
+  ) {
+    status = 404;
+    code = exception.code;
+  } else if (
+    exception instanceof OverlappingPflegegradPeriodError ||
+    exception instanceof PflegegradRecordImmutableError
+  ) {
+    status = 409;
+    code = exception.code;
+  } else if (
+    exception instanceof InvalidClientAddressError ||
+    exception instanceof InvalidClientContactError ||
+    exception instanceof InvalidClientInsuranceError ||
+    exception instanceof InvalidPflegegradError ||
+    exception instanceof InvalidProviderContextError ||
+    exception instanceof FacilityNotInOrganizationError
+  ) {
+    status = 400;
+    code = exception.code;
   } else if (exception instanceof AuthorizationDeniedError) {
     status = 403;
+    code = exception.code;
+  } else if (
+    exception instanceof ServiceNotFoundError ||
+    exception instanceof ServiceCategoryNotFoundError
+  ) {
+    status = 404;
+    code = exception.code;
+  } else if (
+    exception instanceof ServiceCategoryArchivedError ||
+    exception instanceof ServiceDefinitionArchivedError
+  ) {
+    status = 409;
+    code = exception.code;
+  } else if (
+    exception instanceof InvalidServiceAvailabilityError ||
+    exception instanceof InvalidServiceCategoryError ||
+    exception instanceof InvalidServiceDefinitionError ||
+    exception instanceof InvalidServicePaginationError
+  ) {
+    status = 400;
     code = exception.code;
   } else if (exception instanceof TenantAccessError) {
     status = exception.status;
@@ -73,9 +170,39 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     code = exception.code;
   } else if (
     exception instanceof OrganizationNotFoundError ||
-    exception instanceof FacilityNotFoundError
+    exception instanceof FacilityNotFoundError ||
+    exception instanceof TeamNotFoundError ||
+    exception instanceof EmployeeNotFoundError ||
+    exception instanceof QualificationNotFoundError ||
+    exception instanceof SkillNotFoundError
   ) {
     status = 404;
+    code = exception.code;
+  } else if (
+    exception instanceof OrganizationArchivedError ||
+    exception instanceof FacilityArchivedError ||
+    exception instanceof TeamArchivedError ||
+    exception instanceof EmployeeArchivedError ||
+    exception instanceof InvalidEmployeeTransitionError ||
+    exception instanceof EmployeeAlreadyLinkedError ||
+    exception instanceof UserAlreadyLinkedError ||
+    exception instanceof PrimaryFacilityRequiredError ||
+    exception instanceof QualificationArchivedError ||
+    exception instanceof SkillArchivedError ||
+    exception instanceof OrganizationHasActiveChildrenError ||
+    exception instanceof FacilityHasActiveTeamsError ||
+    exception instanceof EmployeeConflictError
+  ) {
+    status = 409;
+    code = exception.code;
+  } else if (
+    exception instanceof InvalidEmployeeDataError ||
+    exception instanceof InvalidFacilityAssignmentError ||
+    exception instanceof InvalidTeamAssignmentError ||
+    exception instanceof InvalidStructureTeamAssignmentError ||
+    exception instanceof CrossTenantReferenceError
+  ) {
+    status = 400;
     code = exception.code;
   } else if (
     exception instanceof DisabledUserError ||

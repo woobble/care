@@ -112,8 +112,8 @@ export class ReplaceMembershipRolesDto {
 }
 
 export class TenantScopeInputDto {
-  @ApiProperty({ enum: ['tenant', 'organization', 'facility'] })
-  scopeType!: 'tenant' | 'organization' | 'facility';
+  @ApiProperty({ enum: ['tenant', 'organization', 'facility', 'team'] })
+  scopeType!: 'tenant' | 'organization' | 'facility' | 'team';
 
   @ApiProperty({ format: 'uuid' })
   scopeId!: string;

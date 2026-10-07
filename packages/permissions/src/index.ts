@@ -7,11 +7,36 @@ export const PERMISSIONS = [
   'client.create',
   'client.update',
   'client.archive',
+  'service.read',
+  'service.create',
+  'service.update',
+  'service.archive',
+  'service.manage_categories',
+  'service.manage_availability',
   'employee.read',
+  'employee.create',
+  'employee.update',
+  'employee.archive',
+  'employee.assign_facility',
+  'employee.assign_team',
+  'employee.link_user',
+  'employee.manage_qualifications',
+  'employee.manage_skills',
+  'employee.manage_employment',
   'employee.manage',
   'organization.read',
+  'organization.create',
+  'organization.update',
+  'organization.activate',
+  'organization.archive',
   'organization.manage',
   'facility.read',
+  'facility.create',
+  'facility.update',
+  'facility.activate',
+  'facility.archive',
+  'team.read',
+  'team.manage',
   'audit.read',
 ] as const;
 
@@ -36,7 +61,9 @@ export interface ResourceContext {
   clientId?: string;
   organizationId?: string;
   facilityId?: string;
+  facilityIds?: readonly string[];
   teamId?: string;
+  teamIds?: readonly string[];
   assignedUserIds?: readonly string[];
 }
 
@@ -50,7 +77,7 @@ export function can(principal: AuthorizationPrincipal, request: AuthorizationReq
 
   return principal.grants.some(
     (grant) =>
-      grant.permission === request.action &&
+      permissionMatches(grant.permission, request.action) &&
       scopeMatches(grant, request.resource, principal.userId),
   );
 }
@@ -77,9 +104,14 @@ function scopeMatches(grant: PermissionGrant, resource: ResourceContext, userId:
     case 'organization':
       return grant.scopeId === resource.organizationId;
     case 'facility':
-      return grant.scopeId === resource.facilityId;
+      return (
+        grant.scopeId === resource.facilityId ||
+        resource.facilityIds?.includes(grant.scopeId) === true
+      );
     case 'team':
-      return grant.scopeId === resource.teamId;
+      return (
+        grant.scopeId === resource.teamId || resource.teamIds?.includes(grant.scopeId) === true
+      );
     case 'assigned_clients':
       return (
         grant.scopeId === userId &&
@@ -87,6 +119,19 @@ function scopeMatches(grant: PermissionGrant, resource: ResourceContext, userId:
         resource.assignedUserIds?.includes(userId) === true
       );
   }
+}
+
+function permissionMatches(granted: Permission, requested: Permission): boolean {
+  if (granted === requested) return true;
+  if (granted === 'employee.manage') return requested.startsWith('employee.');
+  if (granted === 'organization.manage') {
+    return (
+      requested.startsWith('organization.') ||
+      requested.startsWith('facility.') ||
+      requested.startsWith('team.')
+    );
+  }
+  return false;
 }
 
 export class AuthorizationDeniedError extends Error {

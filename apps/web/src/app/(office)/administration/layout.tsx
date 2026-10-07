@@ -20,6 +20,24 @@ export default function AdministrationLayout({
         </Link>
         <Link
           className="rounded-md px-3 py-2 text-blue-900 underline-offset-4 hover:underline"
+          href="/administration/facilities"
+        >
+          Facilities
+        </Link>
+        <Link
+          className="rounded-md px-3 py-2 text-blue-900 underline-offset-4 hover:underline"
+          href="/administration/teams"
+        >
+          Teams
+        </Link>
+        <Link
+          className="rounded-md px-3 py-2 text-blue-900 underline-offset-4 hover:underline"
+          href="/administration/qualifications"
+        >
+          Qualifications &amp; skills
+        </Link>
+        <Link
+          className="rounded-md px-3 py-2 text-blue-900 underline-offset-4 hover:underline"
           href="/administration/audit"
         >
           Audit Log

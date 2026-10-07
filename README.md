@@ -35,19 +35,19 @@ Mailpit is at <http://localhost:8025> and accepts local SMTP on port `1026`. Pro
 
 ## Commands
 
-| Command                    | Purpose                                                                   |
-| -------------------------- | ------------------------------------------------------------------------- |
-| `bun install`              | Install root and workspace dependencies from `bun.lock`                   |
-| `bun run build`            | Generate OpenAPI types and build all workspaces                           |
-| `bun run typecheck`        | Typecheck every workspace                                                 |
-| `bun run test`             | Run unit tests                                                            |
-| `bun run test:integration` | Run PostgreSQL Testcontainers and API integration tests; Docker required  |
-| `bun run test:e2e`         | Start Compose, migrate and seed, then run Authentik access and client E2E |
-| `bun run migrate`          | Apply checked, transactional SQL migrations                               |
-| `bun run seed`             | Create demo tenant, organization, facility, and roles                     |
-| `bun run seed:identity`    | Grant a configured Authentik subject demo tenant access                   |
-| `bun run infra:down`       | Stop local services; keeps named volumes                                  |
-| `bun run reset`            | Confirm and reset Compose data; reruns migrations and demo seed           |
+| Command                    | Purpose                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| `bun install`              | Install root and workspace dependencies from `bun.lock`                        |
+| `bun run build`            | Generate OpenAPI types and build all workspaces                                |
+| `bun run typecheck`        | Typecheck every workspace                                                      |
+| `bun run test`             | Run unit tests                                                                 |
+| `bun run test:integration` | Run PostgreSQL Testcontainers and API integration tests; Docker required       |
+| `bun run test:e2e`         | Start Compose, migrate and seed, then run Authentik, client, and workforce E2E |
+| `bun run migrate`          | Apply checked, transactional SQL migrations                                    |
+| `bun run seed`             | Create demo tenant, organization, facility, and roles                          |
+| `bun run seed:identity`    | Grant a configured Authentik subject demo tenant access                        |
+| `bun run infra:down`       | Stop local services; keeps named volumes                                       |
+| `bun run reset`            | Confirm and reset Compose data; reruns migrations and demo seed                |
 
 The same module-owned SQL migrations run in development and integration tests. Once applied, a migration's checksum is immutable; add a new numbered migration for schema changes. The identity module has an additional migration for membership and role RLS policies.
 
@@ -55,11 +55,11 @@ The Playwright flow uses the local `AUTHENTIK_E2E_API_TOKEN` to create temporary
 
 ## Tenant access administration
 
-Tenant administrators manage membership under **Administration → Users & Access**. They can invite an email address, review members and invitations, assign the seeded Administrator, Office, or Caregiver role, choose tenant, organization, or facility scopes, activate or deactivate access, and revoke access permanently. Sign-in alone never grants access. An invited identity must sign in through Authentik with that verified email before it appears as a pending member; an administrator then assigns access and activates it. Invitations are recorded in the platform, but this slice does not send email.
+Tenant administrators manage membership under **Administration → Users & Access**. They can invite an email address, review members and invitations, assign the seeded Administrator, Office, or Caregiver role, choose tenant, organization, facility, or team scopes, activate or deactivate access, and revoke access permanently. Sign-in alone never grants access. An invited identity must sign in through Authentik with that verified email before it appears as a pending member; an administrator then assigns access and activates it. Invitations are recorded in the platform, but this slice does not send email.
 
-**Administration → Organizations** shows the tenant's readable organization and facility structure. **Administration → Audit Log** shows access and domain changes permitted by `audit.read`. The API remains authoritative for permission checks, tenant boundaries, scope validation, and audit/outbox writes. Client records currently have tenant ownership only, so facility and organization scopes apply to organization/facility reads but are not inferred for clients.
+**Administration → Organizations, Facilities, and Teams** manage the provider hierarchy. Organization scope includes employees and clients owned by that organization; facility scope follows an employee's active facility assignment or a client's primary facility. Team scope remains meaningful for employees only; client-team and assigned-client scopes are unsupported until those relationships exist. Legacy clients without provider context remain tenant-visible and appear as unassigned; organization- and facility-scoped users cannot access them. New clients require an organization and primary facility. **Clients** manages personal data, addresses, contacts and representative roles, insurance relationships, Pflegegrad history, and a client-oriented timeline. **Leistungen** manages service categories, service definitions, validity, and organization/facility availability. Service definitions are not billing items and contain no prices. The seeded Caregiver can read services but cannot change the catalog. **Employees** provides paginated search and employee lifecycle, employment metadata, assignments, optional local-user links, qualifications, and skills. Employee records are separate from local identity accounts. **Administration → Qualifications & skills** manages tenant-wide definitions. **Administration → Audit Log** shows access and domain changes permitted by `audit.read`. The API remains authoritative for permissions, tenant boundaries, scope validation, and transactional audit/outbox writes.
 
-The general `bun run seed` command creates Demo Care, Demo Pflegedienst, Main Office, Facility West, and the three system roles. It does not grant a user access. `bun run seed:identity` grants the configured local Authentik subject the Demo Care Administrator role. Both seed commands refuse to run unless `NODE_ENV=development`; use them only to create the initial local administrator, then manage memberships in the application.
+The general `bun run seed` command creates Demo Care, Demo Pflegedienst, Main Office, Facility West, the three system roles, and neutral service catalog examples. It does not grant a user access. `bun run seed:identity` grants the configured local Authentik subject the Demo Care Administrator role. Both seed commands refuse to run unless `NODE_ENV=development`; use them only to create the initial local administrator, then manage memberships in the application.
 
 Install the Playwright Chromium browser once before running the browser suite:
 
@@ -83,4 +83,4 @@ docker build -f apps/web/Dockerfile -t care-web .
 
 Pass runtime settings through the deployment environment. Do not use `.env.example` secrets outside local development. Run migrations as a separate release step with the migration database role.
 
-See [architecture overview](docs/architecture/overview.md), [tenant isolation](docs/security/tenant-isolation.md), and the [ADRs](docs/adr/) for design decisions.
+See [architecture overview](docs/architecture/overview.md), the [client master-data domain](docs/domains/client-master-data.md), the [service catalog domain](docs/domains/service-catalog.md), [tenant isolation](docs/security/tenant-isolation.md), [privacy boundaries](docs/security/privacy.md), and the [ADRs](docs/adr/) for design decisions.

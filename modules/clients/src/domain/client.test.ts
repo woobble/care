@@ -5,6 +5,8 @@ const makeClient = () =>
   Client.pending({
     id: '0199b2d2-8e00-7000-8000-000000000001',
     tenantId: '0199b2d2-8e00-7000-8000-000000000002',
+    organizationId: '0199b2d2-8e00-7000-8000-000000000003',
+    primaryFacilityId: '0199b2d2-8e00-7000-8000-000000000004',
     firstName: 'Ada',
     lastName: 'Musterfrau',
     createdAt: new Date('2025-01-01T00:00:00Z'),

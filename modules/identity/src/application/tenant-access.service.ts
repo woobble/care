@@ -14,7 +14,7 @@ import {
   type ScopeType,
 } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { facilities, organizationsTable } from '@care/organizations';
+import { facilities, organizationsTable, teams } from '@care/organizations';
 import {
   activateMembership,
   deactivateMembership,
@@ -34,7 +34,7 @@ import {
 import { loadTenantAuthorizationPrincipal } from './authorization-principal';
 import { InvalidAuthorizationConfigurationError } from './identity.service';
 
-export type TenantAdminScopeType = 'tenant' | 'organization' | 'facility';
+export type TenantAdminScopeType = 'tenant' | 'organization' | 'facility' | 'team';
 
 export interface TenantScopeInput {
   scopeType: TenantAdminScopeType;
@@ -966,6 +966,7 @@ export class TenantAccessService {
         scopeId: membershipScopes.scopeId,
         organizationName: organizationsTable.name,
         facilityName: facilities.name,
+        teamName: teams.name,
         facilityOrganizationId: facilities.organizationId,
       })
       .from(membershipScopes)
@@ -983,6 +984,14 @@ export class TenantAccessService {
           eq(facilities.id, membershipScopes.scopeId),
           eq(facilities.tenantId, tenantId),
           eq(membershipScopes.scopeType, 'facility'),
+        ),
+      )
+      .leftJoin(
+        teams,
+        and(
+          eq(teams.id, membershipScopes.scopeId),
+          eq(teams.tenantId, tenantId),
+          eq(membershipScopes.scopeType, 'team'),
         ),
       )
       .where(
@@ -1042,6 +1051,7 @@ export class TenantAccessService {
         scopeId: membershipScopes.scopeId,
         organizationName: organizationsTable.name,
         facilityName: facilities.name,
+        teamName: teams.name,
       })
       .from(membershipScopes)
       .leftJoin(
@@ -1058,6 +1068,14 @@ export class TenantAccessService {
           eq(facilities.id, membershipScopes.scopeId),
           eq(facilities.tenantId, tenantId),
           eq(membershipScopes.scopeType, 'facility'),
+        ),
+      )
+      .leftJoin(
+        teams,
+        and(
+          eq(teams.id, membershipScopes.scopeId),
+          eq(teams.tenantId, tenantId),
+          eq(membershipScopes.scopeType, 'team'),
         ),
       )
       .where(
@@ -1089,6 +1107,7 @@ export class TenantAccessService {
         scopeType: row.scopeType,
         scopeId: row.scopeId,
         name:
+          row.teamName ??
           row.facilityName ??
           row.organizationName ??
           (row.scopeType === 'tenant' ? 'Entire tenant' : null),
@@ -1115,19 +1134,22 @@ export class TenantAccessService {
     transaction: DatabaseTransaction,
     tenantId: string,
     scopes: readonly { scopeType: string; scopeId: string }[],
-  ): Promise<Array<{ tenantId: string; organizationId?: string; facilityId?: string }>> {
+  ): Promise<
+    Array<{ tenantId: string; organizationId?: string; facilityId?: string; teamId?: string }>
+  > {
     if (
       scopes.some(
         (scope) =>
           scope.scopeType !== 'tenant' &&
           scope.scopeType !== 'organization' &&
-          scope.scopeType !== 'facility',
+          scope.scopeType !== 'facility' &&
+          scope.scopeType !== 'team',
       )
     ) {
       throw new TenantAccessError(
         'INVALID_SCOPE',
         400,
-        'Team and assigned-client scopes are not available for administration yet',
+        'Assigned-client scopes are not available for administration yet',
       );
     }
     const organizationIds = [
@@ -1138,6 +1160,11 @@ export class TenantAccessService {
     const facilityIds = [
       ...new Set(
         scopes.filter((scope) => scope.scopeType === 'facility').map((scope) => scope.scopeId),
+      ),
+    ];
+    const teamIds = [
+      ...new Set(
+        scopes.filter((scope) => scope.scopeType === 'team').map((scope) => scope.scopeId),
       ),
     ];
     const organizationRows = organizationIds.length
@@ -1157,9 +1184,20 @@ export class TenantAccessService {
           .from(facilities)
           .where(and(eq(facilities.tenantId, tenantId), inArray(facilities.id, facilityIds)))
       : [];
+    const teamRows = teamIds.length
+      ? await transaction
+          .select({
+            id: teams.id,
+            organizationId: teams.organizationId,
+            facilityId: teams.facilityId,
+          })
+          .from(teams)
+          .where(and(eq(teams.tenantId, tenantId), inArray(teams.id, teamIds)))
+      : [];
     if (
       organizationRows.length !== organizationIds.length ||
-      facilityRows.length !== facilityIds.length
+      facilityRows.length !== facilityIds.length ||
+      teamRows.length !== teamIds.length
     ) {
       throw new TenantAccessError(
         'CROSS_TENANT_REFERENCE',
@@ -1170,6 +1208,7 @@ export class TenantAccessService {
     const facilityOrganizationById = new Map(
       facilityRows.map((facility) => [facility.id, facility.organizationId]),
     );
+    const teamById = new Map(teamRows.map((team) => [team.id, team]));
     return scopes.map((scope) => {
       if (scope.scopeType === 'tenant') {
         if (scope.scopeId !== tenantId) {
@@ -1178,6 +1217,18 @@ export class TenantAccessService {
         return tenantResource(tenantId);
       }
       if (scope.scopeType === 'organization') return { tenantId, organizationId: scope.scopeId };
+      if (scope.scopeType === 'team') {
+        const team = teamById.get(scope.scopeId);
+        if (!team) {
+          throw new TenantAccessError('CROSS_TENANT_REFERENCE', 400, 'Team scope is invalid');
+        }
+        return {
+          tenantId,
+          organizationId: team.organizationId,
+          ...(team.facilityId ? { facilityId: team.facilityId } : {}),
+          teamId: team.id,
+        };
+      }
       const organizationId = facilityOrganizationById.get(scope.scopeId);
       if (!organizationId) {
         throw new TenantAccessError('CROSS_TENANT_REFERENCE', 400, 'Facility scope is invalid');
@@ -1189,7 +1240,12 @@ export class TenantAccessService {
   private requirePermission(
     principal: AuthorizationPrincipal,
     permission: Permission,
-    resource: { tenantId: string; organizationId?: string; facilityId?: string },
+    resource: {
+      tenantId: string;
+      organizationId?: string;
+      facilityId?: string;
+      teamId?: string;
+    },
   ): void {
     if (!can(principal, { action: permission, resource })) {
       throw new TenantAccessError(

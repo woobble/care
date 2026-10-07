@@ -64,7 +64,10 @@ export interface paths {
         /** List tenant invitations */
         get: operations["TenantAccessController_listInvitations"];
         put?: never;
-        /** Invite an identity by verified email address */
+        /**
+         * Invite an identity by verified email address
+         * @description The invitation remains pending until a valid Authentik identity presents the same verified email.
+         */
         post: operations["TenantAccessController_invite"];
         delete?: never;
         options?: never;
@@ -182,7 +185,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Replace a member’s tenant, organization, and facility scopes */
+        /**
+         * Replace a member’s tenant, organization, and facility scopes
+         * @description A tenant scope cannot be combined with organization or facility scopes.
+         */
         put: operations["TenantAccessController_replaceScopes"];
         post?: never;
         delete?: never;
@@ -198,10 +204,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List organizations visible in the selected tenant */
+        /** List visible organizations */
         get: operations["OrganizationsController_listOrganizations"];
         put?: never;
-        post?: never;
+        /** Create an organization */
+        post: operations["OrganizationsController_createOrganization"];
         delete?: never;
         options?: never;
         head?: never;
@@ -222,6 +229,41 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** Update organization master data */
+        patch: operations["OrganizationsController_updateOrganization"];
+        trace?: never;
+    };
+    "/api/v1/organizations/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate an organization */
+        post: operations["OrganizationsController_activateOrganization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive an organization without deleting it */
+        post: operations["OrganizationsController_archiveOrganization"];
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -232,10 +274,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List facilities visible in the selected tenant */
+        /** List visible facilities */
         get: operations["OrganizationsController_listFacilities"];
         put?: never;
-        post?: never;
+        /** Create a facility inside an organization */
+        post: operations["OrganizationsController_createFacility"];
         delete?: never;
         options?: never;
         head?: never;
@@ -256,6 +299,409 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** Update facility master data */
+        patch: operations["OrganizationsController_updateFacility"];
+        trace?: never;
+    };
+    "/api/v1/facilities/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate a facility */
+        post: operations["OrganizationsController_activateFacility"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/facilities/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a facility without deleting it */
+        post: operations["OrganizationsController_archiveFacility"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List visible teams */
+        get: operations["OrganizationsController_listTeams"];
+        put?: never;
+        /** Create a team */
+        post: operations["OrganizationsController_createTeam"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teams/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a team */
+        get: operations["OrganizationsController_getTeam"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a team */
+        patch: operations["OrganizationsController_updateTeam"];
+        trace?: never;
+    };
+    "/api/v1/teams/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate a team */
+        post: operations["OrganizationsController_activateTeam"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teams/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a team without deleting it */
+        post: operations["OrganizationsController_archiveTeam"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search employees in the selected tenant and authorized scopes */
+        get: operations["EmployeesController_search"];
+        put?: never;
+        /** Create an employee without requiring a platform user account */
+        post: operations["EmployeesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get employee master data and authorized assignments */
+        get: operations["EmployeesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update employee master data */
+        patch: operations["EmployeesController_update"];
+        trace?: never;
+    };
+    "/api/v1/employees/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate an inactive employee */
+        post: operations["EmployeesController_activate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate an employee */
+        post: operations["EmployeesController_deactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive an employee without deleting the record */
+        post: operations["EmployeesController_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{id}/linkable-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List active local users in this tenant that can be linked */
+        get: operations["EmployeesController_linkableUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{id}/user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Link an employee to an existing local user */
+        put: operations["EmployeesController_linkUser"];
+        post?: never;
+        /** Unlink a local user from an employee */
+        delete: operations["EmployeesController_unlinkUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{id}/facilities/{facilityId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Assign an employee to a facility and optionally make it primary */
+        put: operations["EmployeesController_assignFacility"];
+        post?: never;
+        /** Deactivate an employee facility assignment */
+        delete: operations["EmployeesController_unassignFacility"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{id}/teams/{teamId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Assign an employee to a team */
+        put: operations["EmployeesController_assignTeam"];
+        post?: never;
+        /** Deactivate an employee team membership */
+        delete: operations["EmployeesController_unassignTeam"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/qualifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List tenant qualification definitions */
+        get: operations["EmployeesController_listQualifications"];
+        put?: never;
+        /** Create a tenant qualification definition */
+        post: operations["EmployeesController_createQualification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/qualifications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a qualification definition */
+        patch: operations["EmployeesController_updateQualification"];
+        trace?: never;
+    };
+    "/api/v1/qualifications/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a qualification definition */
+        post: operations["EmployeesController_archiveQualification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{id}/qualifications/{qualificationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Add or update an employee qualification */
+        put: operations["EmployeesController_assignQualification"];
+        post?: never;
+        /** Remove an employee qualification */
+        delete: operations["EmployeesController_removeQualification"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List tenant skill definitions */
+        get: operations["EmployeesController_listSkills"];
+        put?: never;
+        /** Create a tenant skill definition */
+        post: operations["EmployeesController_createSkill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a skill definition */
+        patch: operations["EmployeesController_updateSkill"];
+        trace?: never;
+    };
+    "/api/v1/skills/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a skill definition */
+        post: operations["EmployeesController_archiveSkill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{id}/skills/{skillId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Assign an employee skill */
+        put: operations["EmployeesController_assignSkill"];
+        post?: never;
+        /** Remove an employee skill */
+        delete: operations["EmployeesController_removeSkill"];
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -266,7 +712,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List tenant audit records */
+        /**
+         * List tenant audit records
+         * @description Records are always tenant-scoped. When both date bounds are set, from must not be later than to.
+         */
         get: operations["AuditController_list"];
         put?: never;
         post?: never;
@@ -283,10 +732,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search clients in the selected tenant */
+        /** Search clients in the selected tenant and granted provider scopes */
         get: operations["ClientsController_list"];
         put?: never;
-        /** Create a pending client */
+        /** Create a pending client with provider context */
         post: operations["ClientsController_create"];
         delete?: never;
         options?: never;
@@ -308,8 +757,25 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update client personal and contact data */
+        /** Update client personal data */
         patch: operations["ClientsController_update"];
+        trace?: never;
+    };
+    "/api/v1/clients/{id}/provider-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Assign or change a client provider organization and primary facility */
+        put: operations["ClientsController_changeProviderContext"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/clients/{id}/activate": {
@@ -346,6 +812,289 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clients/{clientId}/addresses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List client addresses */
+        get: operations["ClientMasterDataController_listAddresses"];
+        put?: never;
+        /** Add a client address */
+        post: operations["ClientMasterDataController_addAddress"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/addresses/{addressId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a client address */
+        delete: operations["ClientMasterDataController_removeAddress"];
+        options?: never;
+        head?: never;
+        /** Update a client address */
+        patch: operations["ClientMasterDataController_updateAddress"];
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List client contacts and structured roles */
+        get: operations["ClientMasterDataController_listContacts"];
+        put?: never;
+        /** Add a client contact */
+        post: operations["ClientMasterDataController_addContact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/contacts/{contactId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a client contact */
+        delete: operations["ClientMasterDataController_removeContact"];
+        options?: never;
+        head?: never;
+        /** Update a client contact and its roles */
+        patch: operations["ClientMasterDataController_updateContact"];
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/insurances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List client insurance relationships */
+        get: operations["ClientMasterDataController_listInsurances"];
+        put?: never;
+        /** Add an insurance relationship */
+        post: operations["ClientMasterDataController_addInsurance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/insurances/{insuranceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update an insurance relationship */
+        patch: operations["ClientMasterDataController_updateInsurance"];
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/pflegegrade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Pflegegrad history */
+        get: operations["ClientMasterDataController_listPflegegrade"];
+        put?: never;
+        /** Add a Pflegegrad history record */
+        post: operations["ClientMasterDataController_addPflegegrad"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/pflegegrade/{recordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a future pending Pflegegrad record */
+        patch: operations["ClientMasterDataController_updatePflegegrad"];
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a client-oriented timeline */
+        get: operations["ClientMasterDataController_timeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/service-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List service categories */
+        get: operations["ServiceCategoriesController_list"];
+        put?: never;
+        /** Create a service category */
+        post: operations["ServiceCategoriesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/service-categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a service category */
+        get: operations["ServiceCategoriesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a service category */
+        patch: operations["ServiceCategoriesController_update"];
+        trace?: never;
+    };
+    "/api/v1/service-categories/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a service category */
+        post: operations["ServiceCategoriesController_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search available service definitions */
+        get: operations["ServicesController_list"];
+        put?: never;
+        /** Create a service definition */
+        post: operations["ServicesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/services/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a service definition */
+        get: operations["ServicesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a service definition */
+        patch: operations["ServicesController_update"];
+        trace?: never;
+    };
+    "/api/v1/services/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a service definition */
+        post: operations["ServicesController_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/services/{id}/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a service definition availability history */
+        get: operations["ServicesController_availability"];
+        /** Replace active service availability assignments */
+        put: operations["ServicesController_setAvailability"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -372,6 +1121,23 @@ export interface paths {
         };
         /** List active tenant memberships for the current user */
         get: operations["MeController_tenants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current tenant permission grants */
+        get: operations["MeController_permissions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -430,7 +1196,10 @@ export interface components {
             total: number;
         };
         InvitationCreateDto: {
-            /** Format: email */
+            /**
+             * Format: email
+             * @description Normalized to lowercase. Acceptance requires a matching verified Authentik email.
+             */
             email: string;
         };
         TenantInvitationDto: {
@@ -451,15 +1220,13 @@ export interface components {
         };
         InviteUserResponseDto: {
             invitation: components["schemas"]["TenantInvitationDto"];
-            /** Format: uuid */
-            membershipId: string | null;
         };
         ReplaceMembershipRolesDto: {
             roleIds: string[];
         };
         TenantScopeInputDto: {
             /** @enum {string} */
-            scopeType: "tenant" | "organization" | "facility";
+            scopeType: "tenant" | "organization" | "facility" | "team";
             /** Format: uuid */
             scopeId: string;
         };
@@ -472,8 +1239,36 @@ export interface components {
             /** Format: uuid */
             tenantId: string;
             name: string;
+            legalName: string | null;
+            code: string | null;
+            /** @enum {string} */
+            status: "active" | "archived";
+            address: string | null;
+            phone: string | null;
+            /** Format: email */
+            email: string | null;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateOrganizationDto: {
+            name: string;
+            legalName?: string | null;
+            code?: string | null;
+            address?: string | null;
+            phone?: string | null;
+            /** Format: email */
+            email?: string | null;
+        };
+        UpdateOrganizationDto: {
+            name?: string;
+            legalName?: string | null;
+            code?: string | null;
+            address?: string | null;
+            phone?: string | null;
+            /** Format: email */
+            email?: string | null;
         };
         FacilityResponseDto: {
             /** Format: uuid */
@@ -483,9 +1278,300 @@ export interface components {
             /** Format: uuid */
             organizationId: string;
             organizationName: string;
+            /** @enum {string} */
+            organizationStatus: "active" | "archived";
             name: string;
+            code: string | null;
+            /** @enum {string} */
+            status: "active" | "archived";
+            address: string | null;
+            phone: string | null;
+            /** Format: email */
+            email: string | null;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateFacilityDto: {
+            /** Format: uuid */
+            organizationId: string;
+            name: string;
+            code?: string | null;
+            address?: string | null;
+            phone?: string | null;
+            /** Format: email */
+            email?: string | null;
+        };
+        UpdateFacilityDto: {
+            name?: string;
+            code?: string | null;
+            address?: string | null;
+            phone?: string | null;
+            /** Format: email */
+            email?: string | null;
+        };
+        TeamResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            organizationId: string;
+            facilityId: string | null;
+            organizationName: string;
+            facilityName: string | null;
+            name: string;
+            /** @enum {string} */
+            status: "active" | "archived";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateTeamDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId?: string | null;
+            name: string;
+        };
+        UpdateTeamDto: {
+            /** Format: uuid */
+            facilityId?: string | null;
+            name?: string;
+        };
+        EmployeeResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            organizationId: string | null;
+            organizationName: string | null;
+            /** Format: uuid */
+            userId: string | null;
+            firstName: string;
+            lastName: string;
+            preferredName: string | null;
+            /** Format: email */
+            email: string | null;
+            phone: string | null;
+            personnelNumber: string | null;
+            employmentType: string | null;
+            /** Format: date */
+            startDate: string | null;
+            /** Format: date */
+            endDate: string | null;
+            weeklyHours: number | null;
+            /** @enum {string} */
+            status: "active" | "inactive" | "archived";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        EmployeeListResponseDto: {
+            items: components["schemas"]["EmployeeResponseDto"][];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
+        CreateEmployeeDto: {
+            /** Format: uuid */
+            organizationId: string;
+            firstName: string;
+            lastName: string;
+            preferredName?: string | null;
+            /** Format: email */
+            email?: string | null;
+            phone?: string | null;
+            personnelNumber?: string | null;
+            employmentType?: string | null;
+            /** Format: date */
+            startDate?: string | null;
+            /** Format: date */
+            endDate?: string | null;
+            weeklyHours?: number | null;
+        };
+        FacilityAssignmentResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            facilityId: string;
+            facilityName: string;
+            /** Format: uuid */
+            organizationId: string;
+            isPrimary: boolean;
+            /** @enum {string} */
+            status: "active" | "inactive";
+            /** Format: date */
+            validFrom: string | null;
+            /** Format: date */
+            validUntil: string | null;
+            /** @enum {string} */
+            facilityStatus: "active" | "archived";
+        };
+        TeamMembershipResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            teamId: string;
+            teamName: string;
+            /** Format: uuid */
+            facilityId: string | null;
+            role: string | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+            /** Format: date */
+            validFrom: string | null;
+            /** Format: date */
+            validUntil: string | null;
+            /** @enum {string} */
+            teamStatus: "active" | "archived";
+        };
+        EmployeeQualificationResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            qualificationId: string;
+            name: string;
+            code: string | null;
+            description: string | null;
+            /** Format: date */
+            validFrom: string | null;
+            /** Format: date */
+            validUntil: string | null;
+            issuer: string | null;
+            /** @enum {string} */
+            status: "active" | "archived";
+        };
+        EmployeeSkillResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            skillId: string;
+            name: string;
+            code: string | null;
+            description: string | null;
+            /** @enum {string} */
+            status: "active" | "archived";
+        };
+        EmployeeUserResponseDto: {
+            /** Format: uuid */
+            id: string;
+            displayName: string | null;
+            /** Format: email */
+            email: string | null;
+            /** @enum {string} */
+            membershipStatus: "pending" | "active" | "inactive" | "revoked";
+        };
+        EmployeeDetailResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            organizationId: string | null;
+            organizationName: string | null;
+            /** Format: uuid */
+            userId: string | null;
+            firstName: string;
+            lastName: string;
+            preferredName: string | null;
+            /** Format: email */
+            email: string | null;
+            phone: string | null;
+            personnelNumber: string | null;
+            employmentType: string | null;
+            /** Format: date */
+            startDate: string | null;
+            /** Format: date */
+            endDate: string | null;
+            weeklyHours: number | null;
+            /** @enum {string} */
+            status: "active" | "inactive" | "archived";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            facilityAssignments: components["schemas"]["FacilityAssignmentResponseDto"][];
+            teamMemberships: components["schemas"]["TeamMembershipResponseDto"][];
+            qualifications: components["schemas"]["EmployeeQualificationResponseDto"][];
+            skills: components["schemas"]["EmployeeSkillResponseDto"][];
+            linkedUser: components["schemas"]["EmployeeUserResponseDto"] | null;
+        };
+        UpdateEmployeeDto: {
+            firstName?: string;
+            lastName?: string;
+            preferredName?: string | null;
+            /** Format: email */
+            email?: string | null;
+            phone?: string | null;
+            personnelNumber?: string | null;
+            employmentType?: string | null;
+            /** Format: date */
+            startDate?: string | null;
+            /** Format: date */
+            endDate?: string | null;
+            weeklyHours?: number | null;
+        };
+        LinkableUserResponseDto: {
+            /** Format: uuid */
+            id: string;
+            displayName: string | null;
+            /** Format: email */
+            email: string | null;
+        };
+        LinkUserDto: {
+            /** Format: uuid */
+            userId: string;
+        };
+        FacilityAssignmentDto: {
+            isPrimary?: boolean;
+            /** Format: date */
+            validFrom?: string | null;
+            /** Format: date */
+            validUntil?: string | null;
+        };
+        TeamMembershipDto: {
+            role?: string | null;
+            /** Format: date */
+            validFrom?: string | null;
+            /** Format: date */
+            validUntil?: string | null;
+        };
+        DefinitionResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            name: string;
+            code: string | null;
+            description: string | null;
+            /** @enum {string} */
+            status: "active" | "archived";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateDefinitionDto: {
+            name: string;
+            code?: string | null;
+            description?: string | null;
+        };
+        UpdateDefinitionDto: {
+            name?: string;
+            code?: string | null;
+            description?: string | null;
+        };
+        QualificationAssignmentDto: {
+            /** Format: date */
+            validFrom?: string | null;
+            /** Format: date */
+            validUntil?: string | null;
+            issuer?: string | null;
         };
         AuditEntryDto: {
             /** Format: uuid */
@@ -512,19 +1598,70 @@ export interface components {
             pageSize: number;
             total: number;
         };
-        ClientResponseDto: {
+        ClientListItemResponseDto: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
             tenantId: string;
+            /** Format: uuid */
+            organizationId: string | null;
+            /** Format: uuid */
+            primaryFacilityId: string | null;
             firstName: string;
             lastName: string;
             preferredName: string | null;
             /** Format: date */
             dateOfBirth: string | null;
+            /** Format: date */
+            dateOfDeath: string | null;
+            /** @enum {string|null} */
+            gender: "female" | "male" | "diverse" | null;
+            /** @enum {string|null} */
+            salutation: "mr" | "ms" | "mx" | "other" | null;
             /** Format: email */
             email: string | null;
             phone: string | null;
+            mobile: string | null;
+            /** @enum {string} */
+            status: "pending" | "active" | "archived";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            organizationName: string | null;
+            facilityName: string | null;
+            currentPflegegrad: number | null;
+        };
+        ClientListResponseDto: {
+            items: components["schemas"]["ClientListItemResponseDto"][];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
+        ClientResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            organizationId: string | null;
+            /** Format: uuid */
+            primaryFacilityId: string | null;
+            firstName: string;
+            lastName: string;
+            preferredName: string | null;
+            /** Format: date */
+            dateOfBirth: string | null;
+            /** Format: date */
+            dateOfDeath: string | null;
+            /** @enum {string|null} */
+            gender: "female" | "male" | "diverse" | null;
+            /** @enum {string|null} */
+            salutation: "mr" | "ms" | "mx" | "other" | null;
+            /** Format: email */
+            email: string | null;
+            phone: string | null;
+            mobile: string | null;
             /** @enum {string} */
             status: "pending" | "active" | "archived";
             /** Format: date-time */
@@ -532,11 +1669,20 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
-        ClientListResponseDto: {
-            items: components["schemas"]["ClientResponseDto"][];
-            page: number;
-            pageSize: number;
-            total: number;
+        PrimaryAddressInputDto: {
+            /** @enum {string} */
+            addressType: "home" | "billing" | "other";
+            street: string;
+            houseNumber?: string | null;
+            addressAddition?: string | null;
+            postalCode?: string | null;
+            city: string;
+            /** @default DE */
+            countryCode: string;
+            /** Format: date */
+            validFrom?: string | null;
+            /** Format: date */
+            validUntil?: string | null;
         };
         CreateClientDto: {
             firstName: string;
@@ -544,9 +1690,21 @@ export interface components {
             preferredName?: string | null;
             /** Format: date */
             dateOfBirth?: string | null;
+            /** Format: date */
+            dateOfDeath?: string | null;
+            /** @enum {string|null} */
+            gender?: "female" | "male" | "diverse" | null;
+            /** @enum {string|null} */
+            salutation?: "mr" | "ms" | "mx" | "other" | null;
             /** Format: email */
             email?: string | null;
             phone?: string | null;
+            mobile?: string | null;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            primaryFacilityId: string;
+            primaryAddress?: components["schemas"]["PrimaryAddressInputDto"] | null;
         };
         UpdateClientDto: {
             firstName?: string;
@@ -554,9 +1712,396 @@ export interface components {
             preferredName?: string | null;
             /** Format: date */
             dateOfBirth?: string | null;
+            /** Format: date */
+            dateOfDeath?: string | null;
+            /** @enum {string|null} */
+            gender?: "female" | "male" | "diverse" | null;
+            /** @enum {string|null} */
+            salutation?: "mr" | "ms" | "mx" | "other" | null;
             /** Format: email */
             email?: string | null;
             phone?: string | null;
+            mobile?: string | null;
+        };
+        ProviderContextDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            primaryFacilityId: string;
+        };
+        ClientAddressResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            addressType: "home" | "billing" | "other";
+            street: string;
+            houseNumber: string | null;
+            addressAddition: string | null;
+            postalCode: string | null;
+            city: string;
+            countryCode: string;
+            /** Format: date */
+            validFrom: string | null;
+            /** Format: date */
+            validUntil: string | null;
+            isPrimary: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateClientAddressDto: {
+            /** @enum {string} */
+            addressType: "home" | "billing" | "other";
+            street: string;
+            houseNumber?: string | null;
+            addressAddition?: string | null;
+            postalCode?: string | null;
+            city: string;
+            /** @default DE */
+            countryCode: string;
+            /** Format: date */
+            validFrom?: string | null;
+            /** Format: date */
+            validUntil?: string | null;
+            isPrimary: boolean;
+        };
+        UpdateClientAddressDto: {
+            /** @enum {string} */
+            addressType?: "home" | "billing" | "other";
+            street?: string;
+            houseNumber?: string | null;
+            addressAddition?: string | null;
+            postalCode?: string | null;
+            city?: string;
+            countryCode?: string;
+            /** Format: date */
+            validFrom?: string | null;
+            /** Format: date */
+            validUntil?: string | null;
+            isPrimary?: boolean;
+        };
+        ClientContactResponseDto: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            lastName: string;
+            /** @enum {string} */
+            relationshipType: "daughter" | "son" | "spouse" | "relative" | "legal_representative" | "guardian" | "other";
+            roles: ("primary_contact" | "emergency_contact" | "legal_representative" | "authorized_contact" | "invoice_recipient")[];
+            phone: string | null;
+            mobile: string | null;
+            /** Format: email */
+            email: string | null;
+            addressStreet: string | null;
+            addressHouseNumber: string | null;
+            addressAddition: string | null;
+            addressPostalCode: string | null;
+            addressCity: string | null;
+            addressCountryCode: string | null;
+            /** @enum {string|null} */
+            representationType: "power_of_attorney" | "legal_guardianship" | "authorized_representative" | null;
+            /** Format: date */
+            representationValidFrom: string | null;
+            /** Format: date */
+            representationValidUntil: string | null;
+            representationReference: string | null;
+            notes: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ClientContactInputDto: {
+            firstName: string;
+            lastName: string;
+            /** @enum {string} */
+            relationshipType: "daughter" | "son" | "spouse" | "relative" | "legal_representative" | "guardian" | "other";
+            phone?: string | null;
+            mobile?: string | null;
+            /** Format: email */
+            email?: string | null;
+            addressStreet?: string | null;
+            addressHouseNumber?: string | null;
+            addressAddition?: string | null;
+            addressPostalCode?: string | null;
+            addressCity?: string | null;
+            addressCountryCode?: string | null;
+            /** @enum {string|null} */
+            representationType?: "power_of_attorney" | "legal_guardianship" | "authorized_representative" | null;
+            /** Format: date */
+            representationValidFrom?: string | null;
+            /** Format: date */
+            representationValidUntil?: string | null;
+            representationReference?: string | null;
+            roles?: ("primary_contact" | "emergency_contact" | "legal_representative" | "authorized_contact" | "invoice_recipient")[];
+            notes?: string | null;
+        };
+        ClientContactPatchDto: {
+            firstName?: string;
+            lastName?: string;
+            /** @enum {string} */
+            relationshipType?: "daughter" | "son" | "spouse" | "relative" | "legal_representative" | "guardian" | "other";
+            phone?: string | null;
+            mobile?: string | null;
+            /** Format: email */
+            email?: string | null;
+            addressStreet?: string | null;
+            addressHouseNumber?: string | null;
+            addressAddition?: string | null;
+            addressPostalCode?: string | null;
+            addressCity?: string | null;
+            addressCountryCode?: string | null;
+            /** @enum {string|null} */
+            representationType?: "power_of_attorney" | "legal_guardianship" | "authorized_representative" | null;
+            /** Format: date */
+            representationValidFrom?: string | null;
+            /** Format: date */
+            representationValidUntil?: string | null;
+            representationReference?: string | null;
+            roles?: ("primary_contact" | "emergency_contact" | "legal_representative" | "authorized_contact" | "invoice_recipient")[];
+            notes?: string | null;
+        };
+        ClientInsuranceResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            insuranceType: "pflegeversicherung" | "krankenversicherung" | "private" | "other";
+            insurerName: string;
+            insuranceNumber: string | null;
+            memberNumber: string | null;
+            /** Format: date */
+            validFrom: string | null;
+            /** Format: date */
+            validUntil: string | null;
+            isPrimary: boolean;
+            notes: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ClientInsuranceInputDto: {
+            /** @enum {string} */
+            insuranceType: "pflegeversicherung" | "krankenversicherung" | "private" | "other";
+            insurerName: string;
+            insuranceNumber?: string | null;
+            memberNumber?: string | null;
+            /** Format: date */
+            validFrom?: string | null;
+            /** Format: date */
+            validUntil?: string | null;
+            isPrimary: boolean;
+            notes?: string | null;
+        };
+        ClientInsurancePatchDto: {
+            /** @enum {string} */
+            insuranceType?: "pflegeversicherung" | "krankenversicherung" | "private" | "other";
+            insurerName?: string;
+            insuranceNumber?: string | null;
+            memberNumber?: string | null;
+            /** Format: date */
+            validFrom?: string | null;
+            /** Format: date */
+            validUntil?: string | null;
+            isPrimary?: boolean;
+            notes?: string | null;
+        };
+        PflegegradResponseDto: {
+            /** Format: uuid */
+            id: string;
+            grade: number;
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil: string | null;
+            /** Format: date */
+            decisionDate: string | null;
+            insurerReference: string | null;
+            /** @enum {string} */
+            status: "pending" | "confirmed" | "revoked";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        PflegegradInputDto: {
+            grade: number;
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil?: string | null;
+            /** Format: date */
+            decisionDate?: string | null;
+            insurerReference?: string | null;
+            /** @enum {string} */
+            status: "pending" | "confirmed" | "revoked";
+        };
+        PflegegradPatchDto: {
+            grade?: number;
+            /** Format: date */
+            validFrom?: string;
+            /** Format: date */
+            validUntil?: string | null;
+            /** Format: date */
+            decisionDate?: string | null;
+            insurerReference?: string | null;
+            /** @enum {string} */
+            status?: "pending" | "confirmed" | "revoked";
+        };
+        ClientTimelineEntryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            occurredAt: string;
+            /** Format: uuid */
+            actorId: string;
+            action: string;
+            summary: string;
+        };
+        ServiceCategoryResponseDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            code: string | null;
+            description: string | null;
+            /** @enum {string} */
+            status: "active" | "archived";
+            sortOrder: number | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ServiceCategoryInputDto: {
+            name: string;
+            code?: string | null;
+            description?: string | null;
+            sortOrder?: number | null;
+        };
+        ServiceCategoryPatchDto: {
+            name?: string;
+            code?: string | null;
+            description?: string | null;
+            sortOrder?: number | null;
+        };
+        ServiceListItemResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            code: string;
+            name: string;
+            description: string | null;
+            /** Format: uuid */
+            categoryId: string;
+            /** @enum {string} */
+            unit: "occurrence" | "minute" | "hour" | "day";
+            defaultDurationMinutes: number | null;
+            /** @enum {string} */
+            status: "active" | "archived";
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            categoryName: string;
+            availabilityCount: number;
+        };
+        ServiceListResponseDto: {
+            items: components["schemas"]["ServiceListItemResponseDto"][];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
+        ServiceResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            code: string;
+            name: string;
+            description: string | null;
+            /** Format: uuid */
+            categoryId: string;
+            /** @enum {string} */
+            unit: "occurrence" | "minute" | "hour" | "day";
+            defaultDurationMinutes: number | null;
+            /** @enum {string} */
+            status: "active" | "archived";
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ServiceInputDto: {
+            code: string;
+            name: string;
+            description?: string | null;
+            /** Format: uuid */
+            categoryId: string;
+            /** @enum {string} */
+            unit: "occurrence" | "minute" | "hour" | "day";
+            defaultDurationMinutes?: number | null;
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil?: string | null;
+        };
+        ServicePatchDto: {
+            code?: string;
+            name?: string;
+            description?: string | null;
+            /** Format: uuid */
+            categoryId?: string;
+            /** @enum {string} */
+            unit?: "occurrence" | "minute" | "hour" | "day";
+            defaultDurationMinutes?: number | null;
+            /** Format: date */
+            validFrom?: string;
+            /** Format: date */
+            validUntil?: string | null;
+        };
+        ServiceAvailabilityResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            serviceId: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId: string | null;
+            active: boolean;
+            /** Format: date */
+            validFrom: string | null;
+            /** Format: date */
+            validUntil: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ServiceAvailabilityInputDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId?: string | null;
+            /** @default true */
+            active: boolean;
+            /** Format: date */
+            validFrom?: string | null;
+            /** Format: date */
+            validUntil?: string | null;
+        };
+        ReplaceServiceAvailabilityDto: {
+            items: components["schemas"]["ServiceAvailabilityInputDto"][];
         };
         MeResponseDto: {
             /** Format: uuid */
@@ -568,6 +2113,14 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+        };
+        PermissionGrantDto: {
+            /** @enum {string} */
+            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
+            /** @enum {string} */
+            scopeType: "assigned_clients" | "team" | "facility" | "organization" | "tenant";
+            /** Format: uuid */
+            scopeId: string;
         };
     };
     responses: never;
@@ -961,7 +2514,9 @@ export interface operations {
     };
     OrganizationsController_listOrganizations: {
         parameters: {
-            query?: never;
+            query?: {
+                status?: "active" | "archived";
+            };
             header: {
                 "X-Tenant-Id": string;
             };
@@ -976,6 +2531,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrganizationResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_createOrganization: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOrganizationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -1021,9 +2610,112 @@ export interface operations {
             };
         };
     };
-    OrganizationsController_listFacilities: {
+    OrganizationsController_updateOrganization: {
         parameters: {
             query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOrganizationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_activateOrganization: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_archiveOrganization: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_listFacilities: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                status?: "active" | "archived";
+            };
             header: {
                 "X-Tenant-Id": string;
             };
@@ -1038,6 +2730,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FacilityResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_createFacility: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFacilityDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FacilityResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -1070,6 +2796,1188 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FacilityResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_updateFacility: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFacilityDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FacilityResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_activateFacility: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FacilityResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_archiveFacility: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FacilityResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_listTeams: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                facilityId?: string;
+                status?: "active" | "archived";
+            };
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_createTeam: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTeamDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_getTeam: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_updateTeam: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTeamDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_activateTeam: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_archiveTeam: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_search: {
+        parameters: {
+            query?: {
+                q?: string;
+                status?: "active" | "inactive" | "archived";
+                organizationId?: string;
+                facilityId?: string;
+                teamId?: string;
+                page?: number;
+                pageSize?: number;
+                sortBy?: "lastName" | "firstName" | "createdAt";
+                sortOrder?: "asc" | "desc";
+            };
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEmployeeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_get: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_update: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEmployeeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_activate: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_deactivate: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_archive: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_linkableUsers: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkableUserResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_linkUser: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkUserDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_unlinkUser: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_assignFacility: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                facilityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FacilityAssignmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_unassignFacility: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                facilityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_assignTeam: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamMembershipDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_unassignTeam: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_listQualifications: {
+        parameters: {
+            query?: {
+                status?: "active" | "archived";
+            };
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefinitionResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_createQualification: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDefinitionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefinitionResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_updateQualification: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDefinitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefinitionResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_archiveQualification: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefinitionResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_assignQualification: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                qualificationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QualificationAssignmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_removeQualification: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                qualificationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_listSkills: {
+        parameters: {
+            query?: {
+                status?: "active" | "archived";
+            };
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefinitionResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_createSkill: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDefinitionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefinitionResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_updateSkill: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDefinitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefinitionResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_archiveSkill: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefinitionResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_assignSkill: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_removeSkill: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -1125,9 +4033,15 @@ export interface operations {
     ClientsController_list: {
         parameters: {
             query?: {
-                q?: string;
-                page?: number;
+                sortOrder?: "asc" | "desc";
+                sortBy?: "lastName" | "firstName" | "createdAt" | "dateOfBirth";
                 pageSize?: number;
+                page?: number;
+                pflegegrad?: number;
+                facilityId?: unknown;
+                organizationId?: unknown;
+                status?: "pending" | "active" | "archived";
+                q?: string;
             };
             header: {
                 /** @description Tenant selected for this request */
@@ -1262,6 +4176,43 @@ export interface operations {
             };
         };
     };
+    ClientsController_changeProviderContext: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderContextDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
     ClientsController_activate: {
         parameters: {
             query?: never;
@@ -1328,6 +4279,954 @@ export interface operations {
             };
         };
     };
+    ClientMasterDataController_listAddresses: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientAddressResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_addAddress: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateClientAddressDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientAddressResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_removeAddress: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+                addressId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_updateAddress: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+                addressId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateClientAddressDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientAddressResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_listContacts: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientContactResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_addContact: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientContactInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientContactResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_removeContact: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+                contactId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_updateContact: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+                contactId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientContactPatchDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientContactResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_listInsurances: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientInsuranceResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_addInsurance: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientInsuranceInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientInsuranceResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_updateInsurance: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+                insuranceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientInsurancePatchDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientInsuranceResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_listPflegegrade: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PflegegradResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_addPflegegrad: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PflegegradInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PflegegradResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_updatePflegegrad: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+                recordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PflegegradPatchDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PflegegradResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClientMasterDataController_timeline: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientTimelineEntryDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceCategoriesController_list: {
+        parameters: {
+            query?: {
+                includeArchived?: boolean;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceCategoryResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceCategoriesController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServiceCategoryInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceCategoryResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceCategoriesController_get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceCategoryResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceCategoriesController_update: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServiceCategoryPatchDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceCategoryResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServiceCategoriesController_archive: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceCategoryResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServicesController_list: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                validAt?: string;
+                facilityId?: unknown;
+                organizationId?: unknown;
+                categoryId?: unknown;
+                status?: "active" | "archived";
+                q?: string;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServicesController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServiceInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServicesController_get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServicesController_update: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServicePatchDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServicesController_archive: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServicesController_availability: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceAvailabilityResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServicesController_setAvailability: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceServiceAvailabilityDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceAvailabilityResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
     MeController_me: {
         parameters: {
             query?: never;
@@ -1371,6 +5270,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantSummaryDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    MeController_permissions: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionGrantDto"][];
                 };
             };
             /** @description Problem Details response */

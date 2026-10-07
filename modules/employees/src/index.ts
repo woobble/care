@@ -1,1 +1,49 @@
-export { employeesSchema, employeeRecords } from './schema';
+export {
+  employeesSchema,
+  employeeRecords,
+  employeeFacilityAssignments,
+  employeeTeamMemberships,
+  qualificationDefinitions,
+  employeeQualifications,
+  skillDefinitions,
+  employeeSkills,
+} from './schema';
+export { EmployeeApplicationService } from './application/employee.service';
+export {
+  CrossTenantReferenceError,
+  EmployeeAlreadyLinkedError,
+  EmployeeArchivedError,
+  EmployeeConflictError,
+  EmployeeNotFoundError,
+  InvalidEmployeeDataError,
+  InvalidEmployeePaginationError,
+  InvalidEmployeeTransitionError,
+  InvalidFacilityAssignmentError,
+  InvalidTeamAssignmentError,
+  PrimaryFacilityRequiredError,
+  QualificationArchivedError,
+  QualificationNotFoundError,
+  SkillArchivedError,
+  SkillNotFoundError,
+  UserAlreadyLinkedError,
+} from './domain/employee';
+export type {
+  DefinitionStatus,
+  EmployeeChanges,
+  EmployeeData,
+  EmployeeDetailSnapshot,
+  EmployeeSnapshot,
+  EmployeeStatus,
+  EmployeeUserLinkSnapshot,
+  FacilityAssignmentSnapshot,
+  QualificationDefinitionSnapshot,
+  SkillDefinitionSnapshot,
+  TeamMembershipSnapshot,
+} from './domain/employee';
+export type {
+  EmployeeRequestMetadata,
+  EmployeeSearchInput,
+  FacilityAssignmentInput,
+  QualificationInput,
+  TeamMembershipInput,
+} from './application/employee.service';

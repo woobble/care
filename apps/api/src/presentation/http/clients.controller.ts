@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -28,21 +29,39 @@ import {
 import { z } from 'zod';
 import {
   ClientApplicationService,
-  type ClientPersonalData,
-  type ClientSnapshot,
+  type ClientSearchQuery,
+  type CreateClientInput,
 } from '@care/clients';
 import { CLIENT_APPLICATION } from '../../tokens';
 import { OidcGuard, TenantContextGuard } from '../../http/auth.guards';
 import { requestContext, type ApiRequest } from '../../http/request';
+import { ProblemDetailsDto } from './dto';
 import {
   ClientListResponseDto,
   ClientResponseDto,
   CreateClientDto,
+  ProviderContextDto,
   UpdateClientDto,
-  ProblemDetailsDto,
   createClientSchema,
+  providerContextSchema,
   updateClientSchema,
-} from './dto';
+} from './clients.dto';
+import { clientListItemResponse, clientResponse } from './clients.mapper';
+import { withoutUndefined } from './validation';
+
+const searchSchema = z
+  .object({
+    q: z.string().max(120).optional(),
+    status: z.enum(['pending', 'active', 'archived']).optional(),
+    organizationId: z.string().uuid().optional(),
+    facilityId: z.string().uuid().optional(),
+    pflegegrad: z.coerce.number().int().min(1).max(5).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    sortBy: z.enum(['lastName', 'firstName', 'createdAt', 'dateOfBirth']).default('lastName'),
+    sortOrder: z.enum(['asc', 'desc']).default('asc'),
+  })
+  .strict();
 
 @ApiTags('clients')
 @ApiBearerAuth()
@@ -54,32 +73,39 @@ export class ClientsController {
   constructor(@Inject(CLIENT_APPLICATION) private readonly clients: ClientApplicationService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Search clients in the selected tenant' })
+  @ApiOperation({ summary: 'Search clients in the selected tenant and granted provider scopes' })
   @ApiQuery({ name: 'q', required: false, type: String })
+  @ApiQuery({ name: 'status', required: false, enum: ['pending', 'active', 'archived'] })
+  @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'pflegegrad', required: false, type: Number, minimum: 1, maximum: 5 })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['lastName', 'firstName', 'createdAt', 'dateOfBirth'],
+  })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   @ApiOkResponse({ type: ClientListResponseDto })
   async list(
     @Req() request: ApiRequest,
-    @Query('q') query?: string,
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
+    @Query() query: Record<string, string | undefined>,
   ): Promise<ClientListResponseDto> {
-    const pagination = z
-      .object({
-        page: z.coerce.number().int().min(1).default(1),
-        pageSize: z.coerce.number().int().min(1).max(100).default(25),
-      })
-      .safeParse({ page, pageSize });
-    if (!pagination.success) throw new BadRequestException();
-    const result = await this.clients.search(this.principal(request), {
-      ...(query === undefined ? {} : { text: query }),
-      ...pagination.data,
-    });
+    const parsed = searchSchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    const { q, ...filters } = parsed.data;
+    const result = await this.clients.search(
+      this.principal(request),
+      withoutUndefined({
+        ...(q === undefined ? {} : { text: q }),
+        ...filters,
+      }) satisfies ClientSearchQuery,
+    );
     return {
-      items: result.items.map(toResponse),
-      page: pagination.data.page,
-      pageSize: pagination.data.pageSize,
+      items: result.items.map(clientListItemResponse),
+      page: parsed.data.page,
+      pageSize: parsed.data.pageSize,
       total: result.total,
     };
   }
@@ -89,28 +115,36 @@ export class ClientsController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: ClientResponseDto })
   async get(@Req() request: ApiRequest, @Param('id') id: string): Promise<ClientResponseDto> {
-    return toResponse(await this.clients.get(this.principal(request), parseId(id)));
+    return clientResponse(await this.clients.get(this.principal(request), parseId(id)));
   }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a pending client' })
+  @ApiOperation({ summary: 'Create a pending client with provider context' })
   @ApiBody({ type: CreateClientDto })
   @ApiCreatedResponse({ type: ClientResponseDto })
   async create(@Req() request: ApiRequest, @Body() body: unknown): Promise<ClientResponseDto> {
     const parsed = createClientSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException();
-    const client = await this.clients.create(
-      this.principal(request),
-      toPersonalData(parsed.data),
-      requestContext(request),
-      auditContext(request),
+    const { primaryAddress, ...personalAndProviderData } = withoutUndefined(parsed.data);
+    const input: CreateClientInput = {
+      ...personalAndProviderData,
+      ...(primaryAddress
+        ? { primaryAddress: withoutUndefined({ ...primaryAddress, isPrimary: true }) }
+        : {}),
+    };
+    return clientResponse(
+      await this.clients.create(
+        this.principal(request),
+        input,
+        requestContext(request),
+        auditContext(request),
+      ),
     );
-    return toResponse(client);
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update client personal and contact data' })
+  @ApiOperation({ summary: 'Update client personal data' })
   @ApiBody({ type: UpdateClientDto })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: ClientResponseDto })
@@ -121,14 +155,38 @@ export class ClientsController {
   ): Promise<ClientResponseDto> {
     const parsed = updateClientSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException();
-    const client = await this.clients.update(
-      this.principal(request),
-      parseId(id),
-      toPartialPersonalData(parsed.data),
-      requestContext(request),
-      auditContext(request),
+    return clientResponse(
+      await this.clients.update(
+        this.principal(request),
+        parseId(id),
+        withoutUndefined(parsed.data),
+        requestContext(request),
+        auditContext(request),
+      ),
     );
-    return toResponse(client);
+  }
+
+  @Put(':id/provider-context')
+  @ApiOperation({ summary: 'Assign or change a client provider organization and primary facility' })
+  @ApiBody({ type: ProviderContextDto })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: ClientResponseDto })
+  async changeProviderContext(
+    @Req() request: ApiRequest,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<ClientResponseDto> {
+    const parsed = providerContextSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException();
+    return clientResponse(
+      await this.clients.changeProviderContext(
+        this.principal(request),
+        parseId(id),
+        parsed.data,
+        requestContext(request),
+        auditContext(request),
+      ),
+    );
   }
 
   @Post(':id/activate')
@@ -137,7 +195,7 @@ export class ClientsController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: ClientResponseDto })
   async activate(@Req() request: ApiRequest, @Param('id') id: string): Promise<ClientResponseDto> {
-    return toResponse(
+    return clientResponse(
       await this.clients.activate(
         this.principal(request),
         parseId(id),
@@ -153,7 +211,7 @@ export class ClientsController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: ClientResponseDto })
   async archive(@Req() request: ApiRequest, @Param('id') id: string): Promise<ClientResponseDto> {
-    return toResponse(
+    return clientResponse(
       await this.clients.archive(
         this.principal(request),
         parseId(id),
@@ -175,50 +233,10 @@ function parseId(value: string): string {
   return result.data;
 }
 
-function toPersonalData(value: z.infer<typeof createClientSchema>): ClientPersonalData {
-  return {
-    firstName: value.firstName,
-    lastName: value.lastName,
-    ...(value.preferredName === undefined ? {} : { preferredName: value.preferredName }),
-    ...(value.dateOfBirth === undefined ? {} : { dateOfBirth: value.dateOfBirth }),
-    ...(value.email === undefined ? {} : { email: value.email }),
-    ...(value.phone === undefined ? {} : { phone: value.phone }),
-  };
-}
-
-function toPartialPersonalData(
-  value: z.infer<typeof updateClientSchema>,
-): Partial<ClientPersonalData> {
-  return {
-    ...(value.firstName === undefined ? {} : { firstName: value.firstName }),
-    ...(value.lastName === undefined ? {} : { lastName: value.lastName }),
-    ...(value.preferredName === undefined ? {} : { preferredName: value.preferredName }),
-    ...(value.dateOfBirth === undefined ? {} : { dateOfBirth: value.dateOfBirth }),
-    ...(value.email === undefined ? {} : { email: value.email }),
-    ...(value.phone === undefined ? {} : { phone: value.phone }),
-  };
-}
-
 function auditContext(request: ApiRequest) {
   const userAgent = request.headers['user-agent'];
   return {
     ...(request.ip ? { ip: request.ip } : {}),
     ...(typeof userAgent === 'string' ? { userAgent: userAgent.slice(0, 512) } : {}),
-  };
-}
-
-function toResponse(client: ClientSnapshot): ClientResponseDto {
-  return {
-    id: client.id,
-    tenantId: client.tenantId,
-    firstName: client.firstName,
-    lastName: client.lastName,
-    preferredName: client.preferredName ?? null,
-    dateOfBirth: client.dateOfBirth ?? null,
-    email: client.email ?? null,
-    phone: client.phone ?? null,
-    status: client.status,
-    createdAt: client.createdAt.toISOString(),
-    updatedAt: client.updatedAt.toISOString(),
   };
 }

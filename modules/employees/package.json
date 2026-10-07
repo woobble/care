@@ -8,15 +8,21 @@
   },
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target bun --packages external",
+    "test": "bun test ./src",
     "lint": "oxlint src",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "typecheck": "tsc --noEmit --pretty false -p tsconfig.json"
   },
   "dependencies": {
+    "@care/audit": "workspace:*",
     "@care/contracts": "workspace:*",
     "@care/database": "workspace:*",
+    "@care/events": "workspace:*",
     "@care/identity": "workspace:*",
+    "@care/organizations": "workspace:*",
+    "@care/permissions": "workspace:*",
+    "@care/platform": "workspace:*",
     "drizzle-orm": "^0.45.3",
     "uuid": "^14.0.2"
   }
