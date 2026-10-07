@@ -82,6 +82,36 @@ export interface EventPayloadMap {
   'service.updated': { serviceId: string; changedFields: string[] };
   'service.archived': { serviceId: string };
   'service.availability_changed': { serviceId: string; changedOrganizationIds: string[] };
+  'service_agreement.created': {
+    agreementId: string;
+    clientId: string;
+    organizationId: string;
+    facilityId: string;
+  };
+  'service_agreement.updated': { agreementId: string; clientId: string; changedFields: string[] };
+  'service_agreement.activated': { agreementId: string; clientId: string };
+  'service_agreement.suspended': { agreementId: string; clientId: string };
+  'service_agreement.resumed': { agreementId: string; clientId: string };
+  'service_agreement.ended': { agreementId: string; clientId: string };
+  'service_agreement.service_added': {
+    agreementId: string;
+    clientId: string;
+    agreementServiceId: string;
+    serviceDefinitionId: string;
+  };
+  'service_agreement.service_changed': {
+    agreementId: string;
+    clientId: string;
+    agreementServiceId: string;
+    serviceDefinitionId: string;
+    changedFields: string[];
+  };
+  'service_agreement.service_ended': {
+    agreementId: string;
+    clientId: string;
+    agreementServiceId: string;
+    serviceDefinitionId: string;
+  };
   'tenant.invitation.created': { invitationId: string };
   'tenant.invitation.accepted': { invitationId: string; membershipId: string };
   'tenant.invitation.expired': { invitationId: string };
@@ -119,6 +149,7 @@ export interface DomainEvent<T extends EventName = EventName> {
     | 'client'
     | 'service_category'
     | 'service'
+    | 'service_agreement'
     | 'tenant_membership'
     | 'tenant_invitation';
   aggregateId: string;

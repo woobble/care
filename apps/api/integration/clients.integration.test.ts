@@ -182,6 +182,10 @@ describe('clients API', () => {
            ($1, 'service.read'), ($1, 'service.create'), ($1, 'service.update'),
            ($1, 'service.archive'), ($1, 'service.manage_categories'),
            ($1, 'service.manage_availability'),
+           ($1, 'service_agreement.read'), ($1, 'service_agreement.create'),
+           ($1, 'service_agreement.update'), ($1, 'service_agreement.activate'),
+           ($1, 'service_agreement.suspend'), ($1, 'service_agreement.end'),
+           ($1, 'service_agreement.manage_services'),
            ($1, 'employee.update'), ($1, 'employee.assign_facility'),
            ($1, 'employee.assign_team'), ($1, 'employee.link_user'),
            ($1, 'employee.manage_qualifications'), ($1, 'employee.manage_skills'),
@@ -220,7 +224,7 @@ describe('clients API', () => {
       ]);
       await owner.query(
         `INSERT INTO identity.role_permissions (role_id, permission)
-         VALUES ($1, 'client.read'), ($1, 'service.read')`,
+         VALUES ($1, 'client.read'), ($1, 'service.read'), ($1, 'service_agreement.read')`,
         [caregiverRoleId],
       );
       await owner.query(
@@ -255,7 +259,7 @@ describe('clients API', () => {
         (await appRole.query('SELECT membership_id FROM identity.membership_scopes')).rowCount,
       ).toBe(3);
       expect((await appRole.query('SELECT role_id FROM identity.role_permissions')).rowCount).toBe(
-        PERMISSIONS.length + 21,
+        PERMISSIONS.length + 29,
       );
       await appRole.query('COMMIT');
       expect((await appRole.query('SELECT id FROM identity.tenant_memberships')).rowCount).toBe(0);
@@ -701,10 +705,59 @@ describe('clients API', () => {
         {
           method: 'PUT',
           headers,
-          body: JSON.stringify({ items: [{ organizationId, facilityId }] }),
+          body: JSON.stringify({
+            items: [
+              { organizationId, facilityId },
+              { organizationId, facilityId: secondFacilityId },
+            ],
+          }),
         },
       );
       expect(serviceAvailabilityResponse.status).toBe(200);
+      const secondServiceResponse = await fetch(`${baseUrl}/api/v1/services`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          code: `CARE-${randomUUID().slice(0, 8)}`,
+          name: 'Afternoon care',
+          categoryId: serviceCategory.id,
+          unit: 'occurrence',
+          validFrom: '2000-01-01',
+        }),
+      });
+      expect(secondServiceResponse.status).toBe(201);
+      const secondService = (await secondServiceResponse.json()) as { id: string };
+      const secondServiceAvailability = await fetch(
+        `${baseUrl}/api/v1/services/${secondService.id}/availability`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ items: [{ organizationId, facilityId: secondFacilityId }] }),
+        },
+      );
+      expect(secondServiceAvailability.status).toBe(200);
+      const unavailableServiceResponse = await fetch(`${baseUrl}/api/v1/services`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          code: `CARE-${randomUUID().slice(0, 8)}`,
+          name: 'Facility-only evening care',
+          categoryId: serviceCategory.id,
+          unit: 'occurrence',
+          validFrom: '2000-01-01',
+        }),
+      });
+      expect(unavailableServiceResponse.status).toBe(201);
+      const unavailableService = (await unavailableServiceResponse.json()) as { id: string };
+      const unavailableServiceAvailability = await fetch(
+        `${baseUrl}/api/v1/services/${unavailableService.id}/availability`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ items: [{ organizationId, facilityId }] }),
+        },
+      );
+      expect(unavailableServiceAvailability.status).toBe(200);
       const serviceSearch = await fetch(
         `${baseUrl}/api/v1/services?q=Morning&organizationId=${organizationId}&facilityId=${facilityId}`,
         { headers },
@@ -738,6 +791,7 @@ describe('clients API', () => {
       expect(await caregiverPermissions.json()).toEqual([
         expect.objectContaining({ permission: 'client.read' }),
         expect.objectContaining({ permission: 'service.read' }),
+        expect.objectContaining({ permission: 'service_agreement.read' }),
       ]);
       expect(
         (await fetch(`${baseUrl}/api/v1/services`, { headers: serviceCaregiverHeaders })).status,
@@ -773,6 +827,551 @@ describe('clients API', () => {
       });
       expect(activated.status).toBe(200);
       expect(((await activated.json()) as { status: string }).status).toBe('active');
+
+      const invalidAgreementValidity = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/service-agreements`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ validFrom: '2030-02-30', validUntil: '2030-03-01' }),
+        },
+      );
+      expect(invalidAgreementValidity.status).toBe(400);
+      expect((await invalidAgreementValidity.json()).code).toBe(
+        'SERVICE_AGREEMENT_INVALID_VALIDITY',
+      );
+
+      const crossTenantAgreement = await fetch(
+        `${baseUrl}/api/v1/clients/${crossTenantClientId}/service-agreements`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ validFrom: '2000-01-01' }),
+        },
+      );
+      expect(crossTenantAgreement.status).toBe(404);
+
+      const emptyAgreementResponse = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/service-agreements`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ validFrom: '2000-01-01', reference: 'EMPTY-AGREEMENT' }),
+        },
+      );
+      expect(emptyAgreementResponse.status).toBe(201);
+      const emptyAgreement = (await emptyAgreementResponse.json()) as { id: string };
+      const activateEmptyAgreement = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${emptyAgreement.id}/activate`,
+        { method: 'POST', headers },
+      );
+      expect(activateEmptyAgreement.status).toBe(409);
+      expect((await activateEmptyAgreement.json()).code).toBe('SERVICE_AGREEMENT_REQUIRES_SERVICE');
+      expect(
+        (
+          await fetch(`${baseUrl}/api/v1/service-agreements/${emptyAgreement.id}/end`, {
+            method: 'POST',
+            headers,
+          })
+        ).status,
+      ).toBe(200);
+
+      const agreementNote = `private-agreement-note-${randomUUID()}`;
+      const agreementResponse = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/service-agreements`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            validFrom: '2000-01-01',
+            reference: `AGR-${randomUUID().slice(0, 8)}`,
+            description: 'Operational planning details',
+          }),
+        },
+      );
+      expect(agreementResponse.status).toBe(201);
+      const agreement = (await agreementResponse.json()) as {
+        id: string;
+        status: string;
+        organizationId: string;
+        facilityId: string;
+      };
+      expect(agreement.status).toBe('draft');
+      expect(agreement).toMatchObject({ organizationId, facilityId: secondFacilityId });
+      await expect(
+        owner.query(
+          `INSERT INTO service_agreements.agreements
+             (id, tenant_id, client_id, organization_id, facility_id, status,
+              valid_from, valid_until, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, 'draft', '2030-02-02', '2030-02-01', now(), now())`,
+          [randomUUID(), tenantId, created.id, organizationId, secondFacilityId],
+        ),
+      ).rejects.toThrow();
+      await expect(
+        owner.query(
+          `INSERT INTO service_agreements.agreement_services
+             (id, tenant_id, agreement_id, service_definition_id, service_code, service_name,
+              service_unit, status, valid_from, valid_until, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'BAD-DATE', 'Invalid period', 'occurrence', 'active',
+                   '2030-02-02', '2030-02-01', now(), now())`,
+          [randomUUID(), tenantId, agreement.id, service.id],
+        ),
+      ).rejects.toThrow();
+      await expect(
+        owner.query(
+          `INSERT INTO service_agreements.agreement_services
+             (id, tenant_id, agreement_id, service_definition_id, service_code, service_name,
+              service_unit, status, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'BAD-REF', 'Missing service', 'occurrence', 'active',
+                   now(), now())`,
+          [randomUUID(), tenantId, agreement.id, randomUUID()],
+        ),
+      ).rejects.toThrow();
+      await expect(
+        owner.query(
+          `INSERT INTO service_agreements.agreement_services
+             (id, tenant_id, agreement_id, service_definition_id, service_code, service_name,
+              service_unit, status, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'CROSS', 'Cross Tenant', 'occurrence', 'active', now(), now())`,
+          [randomUUID(), otherTenantId, agreement.id, service.id],
+        ),
+      ).rejects.toThrow();
+      await expect(
+        owner.query(
+          `INSERT INTO service_agreements.agreement_services
+             (id, tenant_id, agreement_id, service_definition_id, service_code, service_name,
+              service_unit, status, quantity, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'BAD', 'Invalid quantity', 'occurrence', 'active', 1.5, now(), now())`,
+          [randomUUID(), tenantId, agreement.id, unavailableService.id],
+        ),
+      ).rejects.toThrow();
+      const agreementServiceResponse = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/services`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            serviceDefinitionId: service.id,
+            validFrom: '2000-01-01',
+            quantity: '1',
+            note: agreementNote,
+            scheduleRule: { type: 'weekly', weekdays: ['monday', 'wednesday'] },
+            preferredTimeStart: '08:00',
+            preferredTimeEnd: '09:00',
+          }),
+        },
+      );
+      expect(agreementServiceResponse.status).toBe(201);
+      const agreementService = (await agreementServiceResponse.json()) as {
+        id: string;
+        serviceName: string;
+        scheduleRule: { type: string; weekdays?: string[] };
+        quantity: string;
+      };
+      expect(agreementService).toMatchObject({
+        serviceName: 'Morning care updated',
+        quantity: '1',
+        scheduleRule: { type: 'weekly', weekdays: ['monday', 'wednesday'] },
+      });
+      const secondAgreementServiceResponse = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/services`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            serviceDefinitionId: secondService.id,
+            validFrom: '2000-01-01',
+            quantity: '1',
+            scheduleRule: { type: 'on_demand' },
+          }),
+        },
+      );
+      expect(secondAgreementServiceResponse.status).toBe(201);
+      const secondAgreementService = (await secondAgreementServiceResponse.json()) as {
+        id: string;
+      };
+      const unavailableServiceAssignment = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/services`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ serviceDefinitionId: unavailableService.id }),
+        },
+      );
+      expect(unavailableServiceAssignment.status).toBe(409);
+      expect((await unavailableServiceAssignment.json()).code).toBe(
+        'SERVICE_NOT_AVAILABLE_FOR_PROVIDER',
+      );
+      const duplicateAgreementService = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/services`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ serviceDefinitionId: service.id }),
+        },
+      );
+      expect(duplicateAgreementService.status).toBe(409);
+      expect((await duplicateAgreementService.json()).code).toBe('AGREEMENT_SERVICE_DUPLICATE');
+
+      const invalidAgreementSchedule = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/services/${agreementService.id}`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ scheduleRule: { type: 'weekly', weekdays: [] } }),
+        },
+      );
+      expect(invalidAgreementSchedule.status).toBe(400);
+      expect((await invalidAgreementSchedule.json()).code).toBe('INVALID_SCHEDULE_RULE');
+      const invalidAgreementQuantity = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/services/${agreementService.id}`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ quantity: '1.5' }),
+        },
+      );
+      expect(invalidAgreementQuantity.status).toBe(400);
+      expect((await invalidAgreementQuantity.json()).code).toBe(
+        'AGREEMENT_SERVICE_INVALID_QUANTITY',
+      );
+
+      const updateAgreementService = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/services/${agreementService.id}`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ preferredTimeStart: '08:30', preferredTimeEnd: '09:30' }),
+        },
+      );
+      expect(updateAgreementService.status).toBe(200);
+      const activateAgreement = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/activate`,
+        { method: 'POST', headers },
+      );
+      expect(activateAgreement.status).toBe(200);
+
+      const caregiverAgreementHeaders = {
+        ...headers,
+        Authorization: `Bearer ${await issueToken(caregiverSubject)}`,
+      };
+      const caregiverAgreementList = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/service-agreements`,
+        { headers: caregiverAgreementHeaders },
+      );
+      expect(caregiverAgreementList.status).toBe(200);
+      const caregiverCannotSuspendAgreement = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/suspend`,
+        { method: 'POST', headers: caregiverAgreementHeaders },
+      );
+      expect(caregiverCannotSuspendAgreement.status).toBe(403);
+
+      const otherFacilityScope = await fetch(
+        `${baseUrl}/api/v1/admin/members/${secondMembershipId}/scopes`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ scopes: [{ scopeType: 'facility', scopeId: facilityId }] }),
+        },
+      );
+      expect(otherFacilityScope.status).toBe(200);
+      const officeCannotReadOutOfScopeAgreement = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/service-agreements`,
+        {
+          headers: { ...headers, Authorization: `Bearer ${await issueToken(secondSubject)}` },
+        },
+      );
+      expect(officeCannotReadOutOfScopeAgreement.status).toBe(404);
+      const matchingFacilityScope = await fetch(
+        `${baseUrl}/api/v1/admin/members/${secondMembershipId}/scopes`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ scopes: [{ scopeType: 'facility', scopeId: secondFacilityId }] }),
+        },
+      );
+      expect(matchingFacilityScope.status).toBe(200);
+      const officeCanReadInScopeAgreement = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/service-agreements`,
+        {
+          headers: { ...headers, Authorization: `Bearer ${await issueToken(secondSubject)}` },
+        },
+      );
+      expect(officeCanReadInScopeAgreement.status).toBe(200);
+      const restoreOfficeTenantScope = await fetch(
+        `${baseUrl}/api/v1/admin/members/${secondMembershipId}/scopes`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ scopes: [{ scopeType: 'tenant', scopeId: tenantId }] }),
+        },
+      );
+      expect(restoreOfficeTenantScope.status).toBe(200);
+
+      await appRole.query('BEGIN');
+      await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [otherTenantId]);
+      expect(
+        (
+          await appRole.query('SELECT id FROM service_agreements.agreements WHERE id = $1', [
+            agreement.id,
+          ])
+        ).rowCount,
+      ).toBe(0);
+      expect(
+        (
+          await appRole.query(
+            'SELECT id FROM service_agreements.agreement_services WHERE id = $1',
+            [agreementService.id],
+          )
+        ).rowCount,
+      ).toBe(0);
+      await appRole.query('COMMIT');
+
+      const overlappingAgreementResponse = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/service-agreements`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ validFrom: '2000-01-01', reference: 'OVERLAP-AGREEMENT' }),
+        },
+      );
+      expect(overlappingAgreementResponse.status).toBe(201);
+      const overlappingAgreement = (await overlappingAgreementResponse.json()) as { id: string };
+      const overlappingServiceResponse = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${overlappingAgreement.id}/services`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            serviceDefinitionId: service.id,
+            scheduleRule: { type: 'on_demand' },
+          }),
+        },
+      );
+      expect(overlappingServiceResponse.status).toBe(201);
+      const overlapActivation = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${overlappingAgreement.id}/activate`,
+        { method: 'POST', headers },
+      );
+      expect(overlapActivation.status).toBe(409);
+      expect((await overlapActivation.json()).code).toBe('SERVICE_AGREEMENT_OVERLAP');
+      expect(
+        (
+          await fetch(`${baseUrl}/api/v1/service-agreements/${overlappingAgreement.id}/end`, {
+            method: 'POST',
+            headers,
+          })
+        ).status,
+      ).toBe(200);
+
+      const archiveActiveService = await fetch(`${baseUrl}/api/v1/services/${service.id}/archive`, {
+        method: 'POST',
+        headers,
+      });
+      expect(archiveActiveService.status).toBe(409);
+      expect((await archiveActiveService.json()).code).toBe('SERVICE_HAS_ACTIVE_AGREEMENTS');
+      const archiveActiveOrganization = await fetch(
+        `${baseUrl}/api/v1/organizations/${organizationId}/archive`,
+        { method: 'POST', headers },
+      );
+      expect(archiveActiveOrganization.status).toBe(409);
+      expect((await archiveActiveOrganization.json()).code).toBe(
+        'ORGANIZATION_HAS_ACTIVE_SERVICE_AGREEMENTS',
+      );
+      const archiveActiveFacility = await fetch(
+        `${baseUrl}/api/v1/facilities/${secondFacilityId}/archive`,
+        { method: 'POST', headers },
+      );
+      expect(archiveActiveFacility.status).toBe(409);
+      expect((await archiveActiveFacility.json()).code).toBe(
+        'FACILITY_HAS_ACTIVE_SERVICE_AGREEMENTS',
+      );
+      const providerContextDuringAgreement = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/provider-context`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ organizationId, primaryFacilityId: facilityId }),
+        },
+      );
+      expect(providerContextDuringAgreement.status).toBe(409);
+      expect((await providerContextDuringAgreement.json()).code).toBe(
+        'CLIENT_HAS_ACTIVE_SERVICE_AGREEMENTS',
+      );
+      const archiveActiveClient = await fetch(`${baseUrl}/api/v1/clients/${created.id}/archive`, {
+        method: 'POST',
+        headers,
+      });
+      expect(archiveActiveClient.status).toBe(409);
+      expect((await archiveActiveClient.json()).code).toBe('CLIENT_HAS_ACTIVE_SERVICE_AGREEMENTS');
+
+      const endedAgreementService = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/services/${secondAgreementService.id}/end`,
+        { method: 'POST', headers },
+      );
+      expect(endedAgreementService.status).toBe(200);
+      expect(((await endedAgreementService.json()) as { status: string }).status).toBe('ended');
+      const cannotEndLastService = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/services/${agreementService.id}/end`,
+        { method: 'POST', headers },
+      );
+      expect(cannotEndLastService.status).toBe(409);
+      expect((await cannotEndLastService.json()).code).toBe('SERVICE_AGREEMENT_REQUIRES_SERVICE');
+      expect(
+        (
+          await fetch(`${baseUrl}/api/v1/service-agreements/${agreement.id}/suspend`, {
+            method: 'POST',
+            headers,
+          })
+        ).status,
+      ).toBe(200);
+      expect(
+        (
+          await fetch(`${baseUrl}/api/v1/service-agreements/${agreement.id}/resume`, {
+            method: 'POST',
+            headers,
+          })
+        ).status,
+      ).toBe(200);
+      const endedAgreementResponse = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}/end`,
+        { method: 'POST', headers },
+      );
+      expect(endedAgreementResponse.status).toBe(200);
+      expect(((await endedAgreementResponse.json()) as { status: string }).status).toBe('ended');
+      expect(
+        (await fetch(`${baseUrl}/api/v1/service-agreements/${agreement.id}/services`, { headers }))
+          .status,
+      ).toBe(200);
+      const updateEndedAgreement = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${agreement.id}`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ reference: 'NO-REOPEN' }),
+        },
+      );
+      expect(updateEndedAgreement.status).toBe(409);
+      expect((await updateEndedAgreement.json()).code).toBe('SERVICE_AGREEMENT_ALREADY_ENDED');
+
+      const archivedAfterEnd = await fetch(`${baseUrl}/api/v1/services/${service.id}/archive`, {
+        method: 'POST',
+        headers,
+      });
+      expect(archivedAfterEnd.status).toBe(200);
+      const futureAgreementResponse = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/service-agreements`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ validFrom: '2000-01-01' }),
+        },
+      );
+      expect(futureAgreementResponse.status).toBe(201);
+      const futureAgreement = (await futureAgreementResponse.json()) as { id: string };
+      const archivedServiceAssignment = await fetch(
+        `${baseUrl}/api/v1/service-agreements/${futureAgreement.id}/services`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ serviceDefinitionId: service.id }),
+        },
+      );
+      expect(archivedServiceAssignment.status).toBe(409);
+      expect((await archivedServiceAssignment.json()).code).toBe('SERVICE_ARCHIVED');
+      expect(
+        (
+          await fetch(`${baseUrl}/api/v1/service-agreements/${futureAgreement.id}/end`, {
+            method: 'POST',
+            headers,
+          })
+        ).status,
+      ).toBe(200);
+
+      const agreementTimelineResponse = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/timeline`,
+        { headers },
+      );
+      expect(agreementTimelineResponse.status).toBe(200);
+      const agreementTimeline = (await agreementTimelineResponse.json()) as Array<{
+        summary: string;
+        action: string;
+        actorId: string;
+        occurredAt: string;
+      }>;
+      const agreementEntries = agreementTimeline.filter((entry) =>
+        entry.action.startsWith('service_agreement.'),
+      );
+      const agreementActions = agreementEntries.map((entry) => entry.action);
+      const expectedAgreementActions = [
+        'service_agreement.created',
+        'service_agreement.service_added',
+        'service_agreement.service_updated',
+        'service_agreement.service_ended',
+        'service_agreement.activated',
+        'service_agreement.suspended',
+        'service_agreement.resumed',
+        'service_agreement.ended',
+      ];
+      expect(agreementActions).toEqual(expect.arrayContaining(expectedAgreementActions));
+      expect(agreementActions.indexOf('service_agreement.created')).toBeLessThan(
+        agreementActions.indexOf('service_agreement.service_added'),
+      );
+      expect(agreementActions.indexOf('service_agreement.service_updated')).toBeLessThan(
+        agreementActions.indexOf('service_agreement.activated'),
+      );
+      const timelineTimestamps = agreementTimeline.map((entry) => Date.parse(entry.occurredAt));
+      expect(timelineTimestamps).toEqual(
+        [...timelineTimestamps].sort((left, right) => left - right),
+      );
+      expect(agreementEntries.every((entry) => entry.actorId && entry.summary)).toBe(true);
+      expect(JSON.stringify(agreementTimeline)).not.toContain(agreementNote);
+
+      const agreementAudit = await owner.query<{ action: string; metadata: string }>(
+        `SELECT action, metadata::text AS metadata FROM audit.audit_entries
+         WHERE tenant_id = $1 AND resource_type = 'service_agreement' AND resource_id = $2
+         ORDER BY timestamp, id`,
+        [tenantId, agreement.id],
+      );
+      const agreementEvents = await owner.query<{ event: string }>(
+        `SELECT event::text AS event FROM platform.outbox_messages
+         WHERE tenant_id = $1 AND event ->> 'aggregateId' = $2`,
+        [tenantId, agreement.id],
+      );
+      expect(agreementAudit.rows.map((row) => row.action)).toEqual(
+        expect.arrayContaining([
+          'service_agreement.created',
+          'service_agreement.service_added',
+          'service_agreement.service_updated',
+          'service_agreement.service_ended',
+          'service_agreement.activated',
+          'service_agreement.suspended',
+          'service_agreement.resumed',
+          'service_agreement.ended',
+        ]),
+      );
+      const agreementAuditActions = agreementAudit.rows.map((row) => row.action);
+      expect(agreementAuditActions.indexOf('service_agreement.service_ended')).toBeLessThan(
+        agreementAuditActions.indexOf('service_agreement.ended'),
+      );
+      expect(JSON.stringify(agreementAudit.rows)).not.toContain(agreementNote);
+      expect(JSON.stringify(agreementEvents.rows)).not.toContain(agreementNote);
+      const parsedAgreementEvents = agreementEvents.rows.map(
+        ({ event }) => JSON.parse(event) as { type: string; version: number },
+      );
+      expect(parsedAgreementEvents.map((event) => event.type)).toEqual(
+        expect.arrayContaining([
+          'service_agreement.created',
+          'service_agreement.service_added',
+          'service_agreement.service_changed',
+          'service_agreement.service_ended',
+          'service_agreement.activated',
+          'service_agreement.suspended',
+          'service_agreement.resumed',
+          'service_agreement.ended',
+        ]),
+      );
+      expect(parsedAgreementEvents.every((event) => event.version === 1)).toBe(true);
 
       const archived = await fetch(`${baseUrl}/api/v1/clients/${created.id}/archive`, {
         method: 'POST',

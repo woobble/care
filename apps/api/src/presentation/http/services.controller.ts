@@ -67,6 +67,8 @@ const serviceSearchQuery = z
     organizationId: z.string().uuid().optional(),
     facilityId: z.string().uuid().optional(),
     validAt: z.string().optional(),
+    validFrom: z.string().optional(),
+    validUntil: z.string().optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
   })
@@ -182,6 +184,14 @@ export class ServicesController {
   @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'validAt', required: false, type: String, format: 'date' })
+  @ApiQuery({
+    name: 'validFrom',
+    required: false,
+    type: String,
+    format: 'date',
+    description: 'Return services available for the complete requested period',
+  })
+  @ApiQuery({ name: 'validUntil', required: false, type: String, format: 'date' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiOkResponse({ type: ServiceListResponseDto })

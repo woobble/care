@@ -62,6 +62,8 @@ export {
   createClientApplicationService,
   type ClientSearchQuery,
   type CreateClientInput,
+  type ClientServiceAgreementGuard,
+  ClientHasActiveServiceAgreementsError,
 } from './application/client.service';
 export {
   ClientMasterDataApplicationService,

@@ -10,6 +10,7 @@ import { MeModule } from './modules/me.module';
 import { OrganizationsModule } from './modules/organizations.module';
 import { PlatformModule } from './modules/platform.module';
 import { ServicesModule } from './modules/services.module';
+import { ServiceAgreementsModule } from './modules/service-agreements.module';
 import { HealthController } from './presentation/http/health.controller';
 import { ProblemDetailsFilter } from './presentation/http/problem-details.filter';
 
@@ -24,6 +25,7 @@ import { ProblemDetailsFilter } from './presentation/http/problem-details.filter
     PlatformModule,
     ClientsModule,
     ServicesModule,
+    ServiceAgreementsModule,
     MeModule,
   ],
   controllers: [HealthController],

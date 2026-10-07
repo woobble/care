@@ -33,6 +33,14 @@ export interface CreateClientInput extends ClientPersonalData, ClientProviderCon
   primaryAddress?: ClientAddressData | null;
 }
 
+export interface ClientServiceAgreementGuard {
+  hasActiveForClient(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    clientId: string,
+  ): Promise<boolean>;
+}
+
 export interface ClientSearchQuery {
   text?: string;
   status?: ClientStatus;
@@ -53,7 +61,17 @@ export class ClientApplicationService {
     private readonly organizations: OrganizationRepository,
     private readonly audit: AuditWriter,
     private readonly outbox: OutboxWriter,
+    private readonly serviceAgreements?: ClientServiceAgreementGuard,
   ) {}
+
+  async getForServiceAgreement(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    id: string,
+    lock = false,
+  ): Promise<ClientSnapshot> {
+    return (await this.requireClient(transaction, principal, id, 'client.read', lock)).snapshot;
+  }
 
   async search(principal: AuthorizationPrincipal, query: ClientSearchQuery = {}) {
     const page = query.page ?? 1;
@@ -285,6 +303,13 @@ export class ClientApplicationService {
         },
       });
       const previous = client.snapshot;
+      if (
+        (previous.organizationId !== contextChange.organizationId ||
+          previous.primaryFacilityId !== contextChange.primaryFacilityId) &&
+        (await this.serviceAgreements?.hasActiveForClient(transaction, principal.tenantId, id))
+      ) {
+        throw new ClientHasActiveServiceAgreementsError();
+      }
       const changedFields = client.changeProviderContext(contextChange);
       if (changedFields.length === 0) return previous;
       const snapshot = client.snapshot;
@@ -354,7 +379,12 @@ export class ClientApplicationService {
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const client = await this.requireClient(transaction, principal, id, action, true);
       if (operation === 'activate') client.activate();
-      else client.archive();
+      else {
+        client.archive();
+        if (await this.serviceAgreements?.hasActiveForClient(transaction, principal.tenantId, id)) {
+          throw new ClientHasActiveServiceAgreementsError();
+        }
+      }
       const snapshot = client.snapshot;
       await this.clients.update(transaction, snapshot);
       const eventType = operation === 'activate' ? 'client.activated' : 'client.archived';
@@ -450,6 +480,7 @@ export function createClientApplicationService(
   unitOfWork: UnitOfWork,
   audit: AuditWriter,
   outbox: OutboxWriter,
+  serviceAgreements?: ClientServiceAgreementGuard,
 ): ClientApplicationService {
   return new ClientApplicationService(
     unitOfWork,
@@ -458,5 +489,15 @@ export function createClientApplicationService(
     new OrganizationRepository(),
     audit,
     outbox,
+    serviceAgreements,
   );
+}
+
+export class ClientHasActiveServiceAgreementsError extends Error {
+  readonly code = 'CLIENT_HAS_ACTIVE_SERVICE_AGREEMENTS';
+
+  constructor() {
+    super('End active service agreements before changing or archiving this client');
+    this.name = 'ClientHasActiveServiceAgreementsError';
+  }
 }

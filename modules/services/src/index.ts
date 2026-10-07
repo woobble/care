@@ -31,5 +31,9 @@ export {
   ServiceApplicationService,
   createServiceApplicationService,
   type ServiceSearchQuery,
+  ServiceNotAvailableForProviderError,
+  ServiceNotValidForPeriodError,
+  ServiceDefinitionHasActiveServiceAgreementsError,
+  type ServiceAgreementArchiveGuard,
 } from './application/service.application';
 export type { ServiceSearchItem } from './infrastructure/service.repository';

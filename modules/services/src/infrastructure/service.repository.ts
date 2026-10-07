@@ -40,6 +40,8 @@ export interface ServiceSearchFilter {
   facilityId?: string;
   serviceId?: string;
   validAt: string;
+  validFrom?: string;
+  validUntil?: string;
   page: number;
   pageSize: number;
 }
@@ -183,10 +185,25 @@ export class ServiceRepository {
   ): Promise<{ items: ServiceSearchItem[]; total: number }> {
     const filters: SQL[] = [eq(serviceDefinitions.tenantId, input.tenantId)];
     filters.push(eq(serviceDefinitions.status, input.status ?? 'active'));
-    filters.push(lte(serviceDefinitions.validFrom, input.validAt));
-    filters.push(
-      or(isNull(serviceDefinitions.validUntil), gt(serviceDefinitions.validUntil, input.validAt))!,
-    );
+    if (input.validFrom) {
+      filters.push(lte(serviceDefinitions.validFrom, input.validFrom));
+      filters.push(
+        input.validUntil
+          ? or(
+              isNull(serviceDefinitions.validUntil),
+              gt(serviceDefinitions.validUntil, input.validUntil),
+            )!
+          : isNull(serviceDefinitions.validUntil),
+      );
+    } else {
+      filters.push(lte(serviceDefinitions.validFrom, input.validAt));
+      filters.push(
+        or(
+          isNull(serviceDefinitions.validUntil),
+          gt(serviceDefinitions.validUntil, input.validAt),
+        )!,
+      );
+    }
     if (input.categoryId) filters.push(eq(serviceDefinitions.categoryId, input.categoryId));
     if (input.serviceId) filters.push(eq(serviceDefinitions.id, input.serviceId));
     if (input.text?.trim()) {
@@ -211,11 +228,26 @@ export class ServiceRepository {
       eq(serviceAvailability.tenantId, input.tenantId),
       eq(serviceAvailability.serviceId, serviceDefinitions.id),
       eq(serviceAvailability.active, true),
-      or(isNull(serviceAvailability.validFrom), lte(serviceAvailability.validFrom, input.validAt))!,
-      or(
-        isNull(serviceAvailability.validUntil),
-        gt(serviceAvailability.validUntil, input.validAt),
-      )!,
+      input.validFrom
+        ? or(
+            isNull(serviceAvailability.validFrom),
+            lte(serviceAvailability.validFrom, input.validFrom),
+          )!
+        : or(
+            isNull(serviceAvailability.validFrom),
+            lte(serviceAvailability.validFrom, input.validAt),
+          )!,
+      input.validFrom
+        ? input.validUntil
+          ? or(
+              isNull(serviceAvailability.validUntil),
+              gt(serviceAvailability.validUntil, input.validUntil),
+            )!
+          : isNull(serviceAvailability.validUntil)
+        : or(
+            isNull(serviceAvailability.validUntil),
+            gt(serviceAvailability.validUntil, input.validAt),
+          )!,
       ...(availabilityScope ? [availabilityScope] : []),
       ...(availabilityQueryFilter ? [availabilityQueryFilter] : []),
     ];

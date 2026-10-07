@@ -10,6 +10,7 @@ import {
   ClientContactNotFoundError,
   ClientInsuranceNotFoundError,
   ClientNotFoundError,
+  ClientHasActiveServiceAgreementsError,
   FacilityNotInOrganizationError,
   InvalidClientAddressError,
   InvalidClientContactError,
@@ -57,9 +58,11 @@ import {
   InvalidTeamAssignmentError as InvalidStructureTeamAssignmentError,
   OrganizationArchivedError,
   OrganizationHasActiveChildrenError,
+  OrganizationHasActiveServiceAgreementsError,
   OrganizationNotFoundError,
   TeamArchivedError,
   TeamNotFoundError,
+  FacilityHasActiveServiceAgreementsError,
 } from '@care/organizations';
 import {
   InvalidServiceAvailabilityError,
@@ -70,7 +73,11 @@ import {
   ServiceCategoryNotFoundError,
   ServiceDefinitionArchivedError,
   ServiceNotFoundError,
+  ServiceNotAvailableForProviderError,
+  ServiceNotValidForPeriodError,
+  ServiceDefinitionHasActiveServiceAgreementsError,
 } from '@care/services';
+import { ServiceAgreementError } from '@care/service-agreements';
 import type { ApiRequest } from '../../http/request';
 
 @Injectable()
@@ -105,6 +112,9 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     status = 400;
     code = exception.code;
   } else if (exception instanceof ClientArchivedError) {
+    status = 409;
+    code = exception.code;
+  } else if (exception instanceof ClientHasActiveServiceAgreementsError) {
     status = 409;
     code = exception.code;
   } else if (exception instanceof InvalidClientTransitionError) {
@@ -157,6 +167,13 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
   ) {
     status = 400;
     code = exception.code;
+  } else if (
+    exception instanceof ServiceNotAvailableForProviderError ||
+    exception instanceof ServiceNotValidForPeriodError ||
+    exception instanceof ServiceDefinitionHasActiveServiceAgreementsError
+  ) {
+    status = 409;
+    code = exception.code;
   } else if (exception instanceof TenantAccessError) {
     status = exception.status;
     code = exception.code;
@@ -190,6 +207,8 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof QualificationArchivedError ||
     exception instanceof SkillArchivedError ||
     exception instanceof OrganizationHasActiveChildrenError ||
+    exception instanceof OrganizationHasActiveServiceAgreementsError ||
+    exception instanceof FacilityHasActiveServiceAgreementsError ||
     exception instanceof FacilityHasActiveTeamsError ||
     exception instanceof EmployeeConflictError
   ) {
@@ -209,6 +228,9 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof TenantAccessDeniedError
   ) {
     status = 403;
+    code = exception.code;
+  } else if (exception instanceof ServiceAgreementError) {
+    status = exception.status;
     code = exception.code;
   } else if (exception instanceof HttpException) {
     status = exception.getStatus();

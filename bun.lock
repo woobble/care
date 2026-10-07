@@ -35,6 +35,7 @@
         "@care/organizations": "workspace:*",
         "@care/permissions": "workspace:*",
         "@care/platform": "workspace:*",
+        "@care/service-agreements": "workspace:*",
         "@care/services": "workspace:*",
         "@nestjs/common": "^12.1.2",
         "@nestjs/core": "^12.1.2",
@@ -161,6 +162,22 @@
         "@care/contracts": "workspace:*",
         "@care/database": "workspace:*",
         "@care/events": "workspace:*",
+        "drizzle-orm": "^0.45.3",
+        "uuid": "^14.0.2",
+      },
+    },
+    "modules/service-agreements": {
+      "name": "@care/service-agreements",
+      "dependencies": {
+        "@care/audit": "workspace:*",
+        "@care/clients": "workspace:*",
+        "@care/contracts": "workspace:*",
+        "@care/database": "workspace:*",
+        "@care/events": "workspace:*",
+        "@care/organizations": "workspace:*",
+        "@care/permissions": "workspace:*",
+        "@care/platform": "workspace:*",
+        "@care/services": "workspace:*",
         "drizzle-orm": "^0.45.3",
         "uuid": "^14.0.2",
       },
@@ -372,6 +389,8 @@
     "@care/permissions": ["@care/permissions@workspace:packages/permissions"],
 
     "@care/platform": ["@care/platform@workspace:modules/platform"],
+
+    "@care/service-agreements": ["@care/service-agreements@workspace:modules/service-agreements"],
 
     "@care/services": ["@care/services@workspace:modules/services"],
 

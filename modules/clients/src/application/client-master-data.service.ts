@@ -960,6 +960,15 @@ function timelineSummary(action: string): string {
     'client.insurance_updated': 'Versicherungsverhältnis geändert',
     'client.pflegegrad_added': 'Pflegegradverlauf ergänzt',
     'client.pflegegrad_updated': 'Pflegegradverlauf aktualisiert',
+    'service_agreement.created': 'Leistungsplanung angelegt',
+    'service_agreement.updated': 'Leistungsplanung geändert',
+    'service_agreement.activated': 'Leistungsplanung aktiviert',
+    'service_agreement.suspended': 'Leistungsplanung pausiert',
+    'service_agreement.resumed': 'Leistungsplanung fortgesetzt',
+    'service_agreement.ended': 'Leistungsplanung beendet',
+    'service_agreement.service_added': 'Leistung zur Planung hinzugefügt',
+    'service_agreement.service_updated': 'Geplante Leistung geändert',
+    'service_agreement.service_ended': 'Geplante Leistung beendet',
   };
   return summaries[action] ?? 'Klientenstammdaten geändert';
 }

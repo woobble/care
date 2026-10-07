@@ -24,6 +24,7 @@ const migrations = {
   employees: ['0001_initial.sql', '0002_user_link_integrity.sql', '0003_employee_management.sql'],
   clients: ['0001_initial.sql', '0002_master_data.sql'],
   services: ['0001_catalog.sql'],
+  'service-agreements': ['0001_service_agreements.sql'],
   audit: ['0001_initial.sql', '0002_query_indexes.sql'],
   platform: ['0001_initial.sql'],
 } as const;

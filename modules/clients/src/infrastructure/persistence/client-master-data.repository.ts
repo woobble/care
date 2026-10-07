@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
 import { auditEntries } from '@care/audit';
 import {
@@ -400,8 +400,13 @@ export class ClientMasterDataRepository {
       .where(
         and(
           eq(auditEntries.tenantId, tenantId),
-          eq(auditEntries.resourceType, 'client'),
-          eq(auditEntries.resourceId, clientId),
+          or(
+            and(eq(auditEntries.resourceType, 'client'), eq(auditEntries.resourceId, clientId)),
+            and(
+              eq(auditEntries.resourceType, 'service_agreement'),
+              sql`${auditEntries.metadata}->>'clientId' = ${clientId}`,
+            ),
+          ),
         ),
       )
       .orderBy(desc(auditEntries.timestamp), desc(auditEntries.id))

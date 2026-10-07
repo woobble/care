@@ -22,12 +22,33 @@ import type {
 } from '../domain/organization';
 import { OrganizationRepository } from '../infrastructure/persistence/organization.repository';
 
+export interface OrganizationServiceAgreementGuard {
+  hasActiveForOrganization(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    organizationId: string,
+  ): Promise<boolean>;
+  hasActiveForFacility(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    facilityId: string,
+  ): Promise<boolean>;
+}
+
+export interface AgreementProviderContext {
+  organizationId: string;
+  facilityId: string;
+  organizationName: string;
+  facilityName: string;
+}
+
 export class OrganizationApplicationService {
   constructor(
     private readonly unitOfWork: UnitOfWork,
     private readonly audit: AuditWriter,
     private readonly outbox: OutboxWriter,
     private readonly organizations: OrganizationRepository = new OrganizationRepository(),
+    private readonly serviceAgreements?: OrganizationServiceAgreementGuard,
   ) {}
 
   async listOrganizations(
@@ -202,6 +223,37 @@ export class OrganizationApplicationService {
       facilityId: facility.id,
     });
     return facility;
+  }
+
+  async activeProviderContextForAgreement(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    organizationId: string,
+    facilityId: string,
+    lock = true,
+  ): Promise<AgreementProviderContext | null> {
+    const organization = await this.organizations.getOrganization(
+      transaction,
+      tenantId,
+      organizationId,
+      lock,
+    );
+    const facility = await this.organizations.getFacility(transaction, tenantId, facilityId, lock);
+    if (
+      !organization ||
+      !facility ||
+      organization.status !== 'active' ||
+      facility.status !== 'active' ||
+      facility.organizationId !== organization.id
+    ) {
+      return null;
+    }
+    return {
+      organizationId: organization.id,
+      facilityId: facility.id,
+      organizationName: organization.name,
+      facilityName: facility.name,
+    };
   }
 
   async createFacility(
@@ -529,6 +581,16 @@ export class OrganizationApplicationService {
       if (current.status === transitionStructureStatus(operation)) return current;
       if (
         operation === 'archive' &&
+        (await this.serviceAgreements?.hasActiveForOrganization(
+          transaction,
+          principal.tenantId,
+          id,
+        ))
+      ) {
+        throw new OrganizationHasActiveServiceAgreementsError();
+      }
+      if (
+        operation === 'archive' &&
         (await this.organizations.hasActiveChildren(transaction, principal.tenantId, id))
       ) {
         throw new OrganizationHasActiveChildrenError();
@@ -596,6 +658,12 @@ export class OrganizationApplicationService {
         (await this.organizations.hasActiveTeamsForFacility(transaction, principal.tenantId, id))
       ) {
         throw new FacilityHasActiveTeamsError();
+      }
+      if (
+        operation === 'archive' &&
+        (await this.serviceAgreements?.hasActiveForFacility(transaction, principal.tenantId, id))
+      ) {
+        throw new FacilityHasActiveServiceAgreementsError();
       }
       const now = new Date();
       const facility = await this.organizations.setFacilityStatus(
@@ -745,6 +813,24 @@ export class OrganizationApplicationService {
 export interface RequestMetadata {
   ip?: string;
   userAgent?: string;
+}
+
+export class OrganizationHasActiveServiceAgreementsError extends Error {
+  readonly code = 'ORGANIZATION_HAS_ACTIVE_SERVICE_AGREEMENTS';
+
+  constructor() {
+    super('End active service agreements before archiving this organization');
+    this.name = 'OrganizationHasActiveServiceAgreementsError';
+  }
+}
+
+export class FacilityHasActiveServiceAgreementsError extends Error {
+  readonly code = 'FACILITY_HAS_ACTIVE_SERVICE_AGREEMENTS';
+
+  constructor() {
+    super('End active service agreements before archiving this facility');
+    this.name = 'FacilityHasActiveServiceAgreementsError';
+  }
 }
 
 export class OrganizationNotFoundError extends Error {

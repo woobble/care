@@ -143,6 +143,12 @@ export default async function ClientDetailPage({
             <SectionLink href="#overview">Übersicht</SectionLink>
             <SectionLink href="#contacts">Kontakte</SectionLink>
             <SectionLink href="#insurance">Versicherung & Pflegegrad</SectionLink>
+            <Link
+              className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
+              href={`/clients/${client.id}/service-agreements`}
+            >
+              Leistungsplanung
+            </Link>
             <SectionLink href="#timeline">Verlauf</SectionLink>
           </nav>
 

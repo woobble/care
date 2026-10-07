@@ -8,6 +8,10 @@ export {
   TeamNotFoundError,
   TeamArchivedError,
   InvalidTeamAssignmentError,
+  OrganizationHasActiveServiceAgreementsError,
+  FacilityHasActiveServiceAgreementsError,
+  type OrganizationServiceAgreementGuard,
+  type AgreementProviderContext,
 } from './application/organization.service';
 export {
   OrganizationHasActiveChildrenError,

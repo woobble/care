@@ -3,7 +3,7 @@ import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
-import { AuthorizationDeniedError, can } from '@care/permissions';
+import { AuthorizationDeniedError, assertCan, can } from '@care/permissions';
 import type { AuthorizationPrincipal, Permission } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
 import { OrganizationRepository } from '@care/organizations';
@@ -36,8 +36,18 @@ export interface ServiceSearchQuery {
   organizationId?: string;
   facilityId?: string;
   validAt?: string;
+  validFrom?: string;
+  validUntil?: string;
   page?: number;
   pageSize?: number;
+}
+
+export interface ServiceAgreementArchiveGuard {
+  hasActiveForService(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    serviceDefinitionId: string,
+  ): Promise<boolean>;
 }
 
 export class ServiceApplicationService {
@@ -47,6 +57,7 @@ export class ServiceApplicationService {
     private readonly organizations: OrganizationRepository,
     private readonly audit: AuditWriter,
     private readonly outbox: OutboxWriter,
+    private readonly serviceAgreements?: ServiceAgreementArchiveGuard,
   ) {}
 
   async listCategories(
@@ -223,8 +234,22 @@ export class ServiceApplicationService {
       throw new InvalidServicePaginationError();
     }
     const access = this.serviceReadScope(principal);
-    const validAt = query.validAt ?? today(new Date());
-    if (!isISODate(validAt)) throw new InvalidServicePaginationError();
+    if (
+      (query.validAt !== undefined && query.validFrom !== undefined) ||
+      (query.validUntil !== undefined && query.validFrom === undefined)
+    ) {
+      throw new InvalidServicePaginationError();
+    }
+    const validFrom = query.validFrom;
+    const validUntil = query.validUntil;
+    const validAt = query.validAt ?? validFrom ?? today(new Date());
+    if (
+      !isISODate(validAt) ||
+      (validFrom !== undefined && !isISODate(validFrom)) ||
+      (validUntil !== undefined && (!isISODate(validUntil) || validUntil < validFrom!))
+    ) {
+      throw new InvalidServicePaginationError();
+    }
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
       this.services.search(transaction, {
         tenantId: principal.tenantId,
@@ -234,6 +259,8 @@ export class ServiceApplicationService {
         ...(query.categoryId === undefined ? {} : { categoryId: query.categoryId }),
         ...(query.organizationId === undefined ? {} : { organizationId: query.organizationId }),
         ...(query.facilityId === undefined ? {} : { facilityId: query.facilityId }),
+        ...(validFrom === undefined ? {} : { validFrom }),
+        ...(validUntil === undefined ? {} : { validUntil }),
         validAt,
         page,
         pageSize,
@@ -260,6 +287,59 @@ export class ServiceApplicationService {
       }
       return service;
     });
+  }
+
+  async getForAgreement(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    input: {
+      serviceDefinitionId: string;
+      organizationId: string;
+      facilityId: string;
+      validFrom: string;
+      validUntil: string | null;
+      lock?: boolean;
+    },
+  ): Promise<ServiceDefinitionSnapshot> {
+    assertCan(principal, {
+      action: 'service.read',
+      resource: {
+        tenantId: principal.tenantId,
+        organizationId: input.organizationId,
+        facilityId: input.facilityId,
+      },
+    });
+    const service = await this.services.getDefinition(
+      transaction,
+      principal.tenantId,
+      input.serviceDefinitionId,
+      input.lock ?? true,
+    );
+    if (!service) throw new ServiceNotFoundError();
+    if (service.status === 'archived') throw new ServiceDefinitionArchivedError();
+    if (
+      service.validFrom > input.validFrom ||
+      (service.validUntil !== null &&
+        (input.validUntil === null || service.validUntil <= input.validUntil))
+    ) {
+      throw new ServiceNotValidForPeriodError();
+    }
+    const availability = await this.services.listAvailability(
+      transaction,
+      principal.tenantId,
+      input.serviceDefinitionId,
+    );
+    const usable = availability.some(
+      (row) =>
+        row.active &&
+        row.organizationId === input.organizationId &&
+        (row.facilityId === null || row.facilityId === input.facilityId) &&
+        (row.validFrom === null || row.validFrom <= input.validFrom) &&
+        (row.validUntil === null ||
+          (input.validUntil !== null && row.validUntil > input.validUntil)),
+    );
+    if (!usable) throw new ServiceNotAvailableForProviderError();
+    return service;
   }
 
   async create(
@@ -382,6 +462,9 @@ export class ServiceApplicationService {
       if (!row) throw new ServiceNotFoundError();
       const service = ServiceDefinition.reconstitute(row);
       service.archive(now);
+      if (await this.serviceAgreements?.hasActiveForService(transaction, principal.tenantId, id)) {
+        throw new ServiceDefinitionHasActiveServiceAgreementsError();
+      }
       const snapshot = service.snapshot;
       await this.services.updateDefinition(transaction, snapshot);
       await this.recordChange({
@@ -714,6 +797,7 @@ export function createServiceApplicationService(
   unitOfWork: UnitOfWork,
   audit: AuditWriter,
   outbox: OutboxWriter,
+  serviceAgreements?: ServiceAgreementArchiveGuard,
 ): ServiceApplicationService {
   return new ServiceApplicationService(
     unitOfWork,
@@ -721,5 +805,33 @@ export function createServiceApplicationService(
     new OrganizationRepository(),
     audit,
     outbox,
+    serviceAgreements,
   );
+}
+
+export class ServiceNotAvailableForProviderError extends Error {
+  readonly code = 'SERVICE_NOT_AVAILABLE_FOR_PROVIDER';
+
+  constructor() {
+    super('The service is not available to this provider for the requested period');
+    this.name = 'ServiceNotAvailableForProviderError';
+  }
+}
+
+export class ServiceNotValidForPeriodError extends Error {
+  readonly code = 'SERVICE_NOT_VALID_FOR_PERIOD';
+
+  constructor() {
+    super('The service is not valid for the requested period');
+    this.name = 'ServiceNotValidForPeriodError';
+  }
+}
+
+export class ServiceDefinitionHasActiveServiceAgreementsError extends Error {
+  readonly code = 'SERVICE_HAS_ACTIVE_AGREEMENTS';
+
+  constructor() {
+    super('End active service agreements before archiving this service');
+    this.name = 'ServiceDefinitionHasActiveServiceAgreementsError';
+  }
 }
