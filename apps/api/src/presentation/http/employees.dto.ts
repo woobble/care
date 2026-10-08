@@ -217,6 +217,15 @@ export class EmployeeQualificationResponseDto {
 
   @ApiProperty({ enum: ['active', 'archived'] })
   status!: 'active' | 'archived';
+
+  @ApiProperty({ enum: ['active', 'revoked'] })
+  assignmentStatus!: 'active' | 'revoked';
+
+  @ApiProperty({ format: 'date-time', nullable: true })
+  revokedAt!: string | null;
+
+  @ApiProperty({ format: 'date-time' })
+  updatedAt!: string;
 }
 
 export class EmployeeSkillResponseDto {

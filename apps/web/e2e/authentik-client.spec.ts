@@ -49,6 +49,8 @@ test('Authentik users can be invited and administered from the office UI', async
   let clientId: string | undefined;
   let agreementClientId: string | undefined;
   let serviceId: string | undefined;
+  let carePlanAuthorEmployeeId: string | undefined;
+  let carePlanQualificationId: string | undefined;
   let executionVisitId: string | undefined;
   let initialEvidencePackageId: string | undefined;
   let replacementEvidencePackageId: string | undefined;
@@ -330,6 +332,46 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.getByLabel('Link an active user').selectOption(platformUserId!);
     await page.getByRole('button', { name: 'Link user' }).click();
     await expect(page.getByText(displayName, { exact: true })).toBeVisible();
+    const carePlanAuthorRow = await database.query<{ id: string }>(
+      'SELECT id FROM employees.employees WHERE tenant_id = $1 AND personnel_number = $2',
+      [tenantId, carePlanAuthorPersonnelNumber],
+    );
+    carePlanAuthorEmployeeId = carePlanAuthorRow.rows[0]?.id;
+    if (!carePlanAuthorEmployeeId) throw new Error('The care-plan author employee is missing');
+    const carePlanQualification = await database.query<{ id: string }>(
+      "SELECT id FROM employees.qualification_definitions WHERE tenant_id = $1 AND code = 'PFK'",
+      [tenantId],
+    );
+    carePlanQualificationId = carePlanQualification.rows[0]?.id;
+    if (!carePlanQualificationId) throw new Error('The seeded PFK qualification is missing');
+
+    await ensureCompetencyPolicy(
+      page,
+      database,
+      tenantId,
+      'care_plan.activate',
+      carePlanQualificationId,
+    );
+    await ensureCompetencyPolicy(
+      page,
+      database,
+      tenantId,
+      'care_plan.evaluate',
+      carePlanQualificationId,
+    );
+
+    await page.goto('/administration/qualifications');
+    const protectedQualification = page
+      .locator('article')
+      .filter({ hasText: /Pflegefachkraft.*PFK/ })
+      .first();
+    page.once('dialog', (dialog) => dialog.accept());
+    await protectedQualification.getByRole('button', { name: 'Archive qualification' }).click();
+    await expect(
+      page.getByText('This qualification is required by an active competency policy.', {
+        exact: true,
+      }),
+    ).toBeVisible();
 
     await page.goto(`/clients/${agreementClientId}/care-plan`);
     const createCarePlanForm = page.locator('form').filter({
@@ -386,6 +428,23 @@ test('Authentik users can be invited and administered from the office UI', async
     await measureForm.getByRole('button', { name: 'Save measure' }).click();
     await expect(
       page.getByRole('heading', { name: carePlanMeasureTitle, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByText('Your employee record is missing a required qualification.', { exact: true })
+        .first(),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Activate revision' })).toHaveCount(0);
+
+    await page.goto(`/employees/${carePlanAuthorEmployeeId}`);
+    await page.getByLabel('Add qualification').selectOption({ label: 'Pflegefachkraft (PFK)' });
+    await page.getByRole('button', { name: 'Save qualification' }).click();
+    await expect(
+      page.locator('#qualifications li').filter({ hasText: 'Pflegefachkraft (PFK)' }).last(),
+    ).toBeVisible();
+    await page.goto(`/clients/${agreementClientId}/care-plan?planId=${carePlanId}`);
+    await expect(
+      page.getByText(/Eligible under active competency policy version/).first(),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Activate revision' }).click();
     await expect(
@@ -910,7 +969,31 @@ test('Authentik users can be invited and administered from the office UI', async
     initialEvidencePackageId = firstPackage.rows[0]?.id;
     if (!initialEvidencePackageId) throw new Error('The first evidence package was not persisted');
 
+    if (!carePlanAuthorEmployeeId || !carePlanQualificationId)
+      throw new Error('The care-plan author qualification setup is incomplete');
+    const expiredQualificationDate = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const expiredAssignment = await database.query(
+      `UPDATE employees.employee_qualifications
+       SET valid_until = $4, updated_at = now()
+       WHERE tenant_id = $1 AND employee_id = $2 AND qualification_id = $3 AND status = 'active'`,
+      [tenantId, carePlanAuthorEmployeeId, carePlanQualificationId, expiredQualificationDate],
+    );
+    expect(expiredAssignment.rowCount).toBe(1);
     await page.goto(`/clients/${agreementClientId}/care-plan?planId=${carePlanId}`);
+    await expect(
+      page.getByText('A required qualification is not valid today.', { exact: true }).first(),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Record evaluation' })).toHaveCount(0);
+    await database.query(
+      `UPDATE employees.employee_qualifications
+       SET valid_until = NULL, updated_at = now()
+       WHERE tenant_id = $1 AND employee_id = $2 AND qualification_id = $3 AND status = 'active'`,
+      [tenantId, carePlanAuthorEmployeeId, carePlanQualificationId],
+    );
+    await page.reload();
+    await expect(
+      page.getByText(/Eligible under active competency policy version/).first(),
+    ).toBeVisible();
     const evaluationForm = page.locator('form').filter({
       has: page.locator('select[name="result"]'),
     });
@@ -953,6 +1036,28 @@ test('Authentik users can be invited and administered from the office UI', async
       draftReferenceRow.getByText(`Clinical record ID: ${clinicalRiskRecordId}`, { exact: true }),
     ).toBeVisible();
 
+    await page.goto(`/employees/${carePlanAuthorEmployeeId}`);
+    const planAuthorQualification = page
+      .locator('#qualifications li')
+      .filter({ hasText: 'Pflegefachkraft (PFK)' })
+      .last();
+    page.once('dialog', (dialog) => dialog.accept());
+    await planAuthorQualification.getByRole('button', { name: 'Remove' }).click();
+    await expect(planAuthorQualification).toContainText('Assignment revoked');
+    await page.goto(`/clients/${agreementClientId}/care-plan?planId=${carePlanId}`);
+    await expect(
+      page
+        .getByText('Your employee record is missing a required qualification.', { exact: true })
+        .first(),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Activate revision' })).toHaveCount(0);
+    await page.goto(`/employees/${carePlanAuthorEmployeeId}`);
+    await page.getByLabel('Add qualification').selectOption({ label: 'Pflegefachkraft (PFK)' });
+    await page.getByRole('button', { name: 'Save qualification' }).click();
+    await page.goto(`/clients/${agreementClientId}/care-plan?planId=${carePlanId}`);
+    await expect(
+      page.getByText(/Eligible under active competency policy version/).first(),
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Activate revision' }).click();
     const revisionRows = page.locator('section[aria-labelledby="history-title"] > ol > li');
     await expect(revisionRows).toHaveCount(2);
@@ -1325,6 +1430,68 @@ test('Authentik users can be invited and administered from the office UI', async
     }
   }
 });
+
+async function configureCompetencyPolicy(
+  page: Page,
+  operationKey: 'care_plan.activate' | 'care_plan.evaluate',
+  qualificationId: string,
+): Promise<void> {
+  await page.goto('/administration/competency-policies');
+  const operationSection = page
+    .locator('section')
+    .filter({
+      has: page.locator(`input[name="operationKey"][value="${operationKey}"]`),
+    })
+    .first();
+  const draftForm = operationSection.locator('form').first();
+  await draftForm.locator('input[name="name"]').fill(`E2E ${operationKey}`);
+  await draftForm
+    .locator(`input[name="qualificationDefinitionId"][value="${qualificationId}"]`)
+    .check();
+  await draftForm.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page).toHaveURL(/\/administration\/competency-policies\?updated=draft$/);
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await operationSection.getByRole('button', { name: 'Activate version' }).click();
+  await expect(page).toHaveURL(/\/administration\/competency-policies\?updated=activated$/);
+}
+
+async function ensureCompetencyPolicy(
+  page: Page,
+  database: Client,
+  tenantId: string,
+  operationKey: 'care_plan.activate' | 'care_plan.evaluate',
+  qualificationId: string,
+): Promise<void> {
+  const activePolicy = await database.query<{
+    requirementMode: string;
+    qualificationIds: string[];
+  }>(
+    `SELECT version.requirement_mode AS "requirementMode",
+            array_agg(requirement.qualification_definition_id::text
+                      ORDER BY requirement.qualification_definition_id) AS "qualificationIds"
+     FROM "authorization".professional_competency_policies AS policy
+     JOIN "authorization".professional_competency_policy_versions AS version
+       ON version.tenant_id = policy.tenant_id
+      AND version.policy_id = policy.id
+      AND version.status = 'active'
+     JOIN "authorization".professional_competency_policy_requirements AS requirement
+       ON requirement.tenant_id = version.tenant_id
+      AND requirement.policy_version_id = version.id
+     WHERE policy.tenant_id = $1 AND policy.operation_key = $2
+     GROUP BY version.id`,
+    [tenantId, operationKey],
+  );
+  const [configured] = activePolicy.rows;
+  if (
+    configured?.requirementMode === 'ALL' &&
+    configured.qualificationIds.length === 1 &&
+    configured.qualificationIds[0] === qualificationId
+  ) {
+    return;
+  }
+  await configureCompetencyPolicy(page, operationKey, qualificationId);
+}
 
 async function waitForAuthentik(origin: string, issuer: string): Promise<void> {
   const discoveryUrl = new URL('.well-known/openid-configuration', issuer);

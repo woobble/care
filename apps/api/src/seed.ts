@@ -290,6 +290,8 @@ try {
         'employee.assign_team',
         'employee.link_user',
         'employee.manage_qualifications',
+        'competency_policy.read',
+        'competency_policy.manage',
         'employee.manage_skills',
         'employee.manage_employment',
         'organization.read',

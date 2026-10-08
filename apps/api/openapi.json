@@ -3933,6 +3933,249 @@
         ]
       }
     },
+    "/api/v1/competency-policies": {
+      "get": {
+        "operationId": "listCompetencyPolicies",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompetencyPolicyAdminDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List tenant competency policies",
+        "tags": [
+          "competency policies"
+        ]
+      }
+    },
+    "/api/v1/competency-policies/{operationKey}/versions": {
+      "post": {
+        "operationId": "createCompetencyPolicyDraft",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operationKey",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "care_plan.activate",
+                "care_plan.evaluate"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompetencyPolicyDraftInputDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompetencyPolicyAdminDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a draft competency policy version",
+        "tags": [
+          "competency policies"
+        ]
+      }
+    },
+    "/api/v1/competency-policies/{operationKey}/versions/{version}/activate": {
+      "post": {
+        "operationId": "activateCompetencyPolicy",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operationKey",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "care_plan.activate",
+                "care_plan.evaluate"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "description": "Version number, starting at 1",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompetencyPolicyAdminDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Activate a policy version",
+        "tags": [
+          "competency policies"
+        ]
+      }
+    },
+    "/api/v1/competency-policies/{operationKey}/deactivate": {
+      "post": {
+        "operationId": "deactivateCompetencyPolicy",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operationKey",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "care_plan.activate",
+                "care_plan.evaluate"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompetencyPolicyAdminDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Deactivate the active policy version",
+        "tags": [
+          "competency policies"
+        ]
+      }
+    },
     "/api/v1/audit": {
       "get": {
         "description": "Records are always tenant-scoped. When both date bounds are set, from must not be later than to.",
@@ -12434,6 +12677,74 @@
         ]
       }
     },
+    "/api/v1/care-plans/{planId}/eligibility": {
+      "get": {
+        "operationId": "previewCarePlanEligibility",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "planId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "operation",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "activate",
+                "evaluate"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarePlanEligibilityDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Check permission scope and competency eligibility for a care plan action",
+        "tags": [
+          "care planning"
+        ]
+      }
+    },
     "/api/v1/care-plans/{planId}/evaluations": {
       "post": {
         "operationId": "createCarePlanEvaluation",
@@ -15055,6 +15366,22 @@
               "active",
               "archived"
             ]
+          },
+          "assignmentStatus": {
+            "type": "string",
+            "enum": [
+              "active",
+              "revoked"
+            ]
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "required": [
@@ -15066,7 +15393,10 @@
           "validFrom",
           "validUntil",
           "issuer",
-          "status"
+          "status",
+          "assignmentStatus",
+          "revokedAt",
+          "updatedAt"
         ]
       },
       "EmployeeSkillResponseDto": {
@@ -15523,6 +15853,223 @@
             "maxLength": 160
           }
         }
+      },
+      "CompetencyPolicyRequirementDto": {
+        "type": "object",
+        "properties": {
+          "qualificationDefinitionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          }
+        },
+        "required": [
+          "qualificationDefinitionId",
+          "code",
+          "name",
+          "status"
+        ]
+      },
+      "CompetencyPolicyVersionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "requirementMode": {
+            "type": "string",
+            "enum": [
+              "ANY",
+              "ALL"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "active",
+              "inactive"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "activatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deactivatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompetencyPolicyRequirementDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "name",
+          "description",
+          "requirementMode",
+          "status",
+          "createdAt",
+          "activatedAt",
+          "deactivatedAt",
+          "requirements"
+        ]
+      },
+      "CompetencyPolicyOperationDto": {
+        "type": "object",
+        "properties": {
+          "operationKey": {
+            "type": "string",
+            "enum": [
+              "care_plan.activate",
+              "care_plan.evaluate"
+            ]
+          },
+          "policyId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "latestVersion": {
+            "type": "number",
+            "minimum": 0
+          },
+          "activeVersion": {
+            "type": "number",
+            "minimum": 1,
+            "nullable": true
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompetencyPolicyVersionDto"
+            }
+          }
+        },
+        "required": [
+          "operationKey",
+          "policyId",
+          "latestVersion",
+          "activeVersion",
+          "versions"
+        ]
+      },
+      "CompetencyPolicyQualificationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name"
+        ]
+      },
+      "CompetencyPolicyAdminDto": {
+        "type": "object",
+        "properties": {
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompetencyPolicyOperationDto"
+            }
+          },
+          "qualificationDefinitions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompetencyPolicyQualificationDto"
+            }
+          }
+        },
+        "required": [
+          "operations",
+          "qualificationDefinitions"
+        ]
+      },
+      "CompetencyPolicyDraftInputDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true
+          },
+          "requirementMode": {
+            "type": "string",
+            "enum": [
+              "ANY",
+              "ALL"
+            ]
+          },
+          "qualificationDefinitionIds": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "name",
+          "requirementMode",
+          "qualificationDefinitionIds"
+        ]
       },
       "AuditEntryDto": {
         "type": "object",
@@ -22798,6 +23345,82 @@
           "expectedVersion"
         ]
       },
+      "CarePlanCompetencyEligibilityDto": {
+        "type": "object",
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "reasonCode": {
+            "type": "string",
+            "enum": [
+              "COMPETENCY_POLICY_NOT_CONFIGURED",
+              "COMPETENCY_POLICY_INACTIVE",
+              "COMPETENCY_POLICY_INVALID",
+              "COMPETENCY_EMPLOYEE_LINK_REQUIRED",
+              "COMPETENCY_EMPLOYEE_INACTIVE",
+              "COMPETENCY_QUALIFICATION_MISSING",
+              "COMPETENCY_QUALIFICATION_EXPIRED",
+              "COMPETENCY_REQUIREMENTS_NOT_MET",
+              "COMPETENCY_POLICY_CHANGED"
+            ]
+          },
+          "policyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policyVersion": {
+            "type": "number"
+          },
+          "employeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "matchedQualificationIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "evaluatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "allowed"
+        ]
+      },
+      "CarePlanEligibilityDto": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string",
+            "enum": [
+              "care_plan.activate",
+              "care_plan.evaluate"
+            ]
+          },
+          "permissionAllowed": {
+            "type": "boolean"
+          },
+          "competency": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CarePlanCompetencyEligibilityDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "operation",
+          "permissionAllowed",
+          "competency"
+        ]
+      },
       "CarePlanGoalOutcomeInputDto": {
         "type": "object",
         "properties": {
@@ -23748,6 +24371,8 @@
               "employee.assign_team",
               "employee.link_user",
               "employee.manage_qualifications",
+              "competency_policy.read",
+              "competency_policy.manage",
               "employee.manage_skills",
               "employee.manage_employment",
               "employee.manage",

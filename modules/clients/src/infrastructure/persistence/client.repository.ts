@@ -141,49 +141,44 @@ export class ClientRepository {
       input.sortBy === 'lastName'
         ? [asc(clientRecords.firstName), asc(clientRecords.id)]
         : [asc(clientRecords.lastName), asc(clientRecords.firstName), asc(clientRecords.id)];
-    const [rows, totals] = await Promise.all([
-      transaction
-        .select({
-          client: clientRecords,
-          organizationName: organizationsTable.name,
-          facilityName: facilities.name,
-          currentPflegegrad: pflegegradRecords.grade,
-        })
-        .from(clientRecords)
-        .leftJoin(
-          organizationsTable,
-          and(
-            eq(organizationsTable.tenantId, clientRecords.tenantId),
-            eq(organizationsTable.id, clientRecords.organizationId),
-          ),
-        )
-        .leftJoin(
-          facilities,
-          and(
-            eq(facilities.tenantId, clientRecords.tenantId),
-            eq(facilities.id, clientRecords.primaryFacilityId),
-            eq(facilities.organizationId, clientRecords.organizationId),
-          ),
-        )
-        .leftJoin(
-          pflegegradRecords,
-          and(
-            eq(pflegegradRecords.tenantId, clientRecords.tenantId),
-            eq(pflegegradRecords.clientId, clientRecords.id),
-            eq(pflegegradRecords.status, 'confirmed'),
-            lte(pflegegradRecords.validFrom, input.validAt),
-            or(
-              isNull(pflegegradRecords.validUntil),
-              gt(pflegegradRecords.validUntil, input.validAt),
-            ),
-          ),
-        )
-        .where(where)
-        .orderBy(ordered, ...secondary)
-        .limit(input.pageSize)
-        .offset((input.page - 1) * input.pageSize),
-      transaction.select({ total: count() }).from(clientRecords).where(where),
-    ]);
+    const rows = await transaction
+      .select({
+        client: clientRecords,
+        organizationName: organizationsTable.name,
+        facilityName: facilities.name,
+        currentPflegegrad: pflegegradRecords.grade,
+      })
+      .from(clientRecords)
+      .leftJoin(
+        organizationsTable,
+        and(
+          eq(organizationsTable.tenantId, clientRecords.tenantId),
+          eq(organizationsTable.id, clientRecords.organizationId),
+        ),
+      )
+      .leftJoin(
+        facilities,
+        and(
+          eq(facilities.tenantId, clientRecords.tenantId),
+          eq(facilities.id, clientRecords.primaryFacilityId),
+          eq(facilities.organizationId, clientRecords.organizationId),
+        ),
+      )
+      .leftJoin(
+        pflegegradRecords,
+        and(
+          eq(pflegegradRecords.tenantId, clientRecords.tenantId),
+          eq(pflegegradRecords.clientId, clientRecords.id),
+          eq(pflegegradRecords.status, 'confirmed'),
+          lte(pflegegradRecords.validFrom, input.validAt),
+          or(isNull(pflegegradRecords.validUntil), gt(pflegegradRecords.validUntil, input.validAt)),
+        ),
+      )
+      .where(where)
+      .orderBy(ordered, ...secondary)
+      .limit(input.pageSize)
+      .offset((input.page - 1) * input.pageSize);
+    const totals = await transaction.select({ total: count() }).from(clientRecords).where(where);
     return {
       items: rows.map((row) => ({
         client: toSnapshot(row.client),

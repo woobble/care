@@ -215,10 +215,16 @@ export const employeeQualifications = employees.table(
     validFrom: date('valid_from', { mode: 'string' }),
     validUntil: date('valid_until', { mode: 'string' }),
     issuer: text('issuer'),
+    status: text('status').$type<'active' | 'revoked'>().notNull().default('active'),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('employee_qualification_employee_definition_uq').on(
+    uniqueIndex('employee_qualification_active_employee_definition_uq')
+      .on(table.tenantId, table.employeeId, table.qualificationId)
+      .where(sql`${table.status} = 'active'`),
+    index('employee_qualification_employee_history_idx').on(
       table.tenantId,
       table.employeeId,
       table.qualificationId,
@@ -226,6 +232,10 @@ export const employeeQualifications = employees.table(
     check(
       'employee_qualification_dates_check',
       sql`${table.validUntil} IS NULL OR ${table.validFrom} IS NULL OR ${table.validUntil} >= ${table.validFrom}`,
+    ),
+    check(
+      'employee_qualification_revocation_check',
+      sql`(${table.status} = 'active' AND ${table.revokedAt} IS NULL) OR (${table.status} = 'revoked' AND ${table.revokedAt} IS NOT NULL)`,
     ),
     foreignKey({
       name: 'employee_qualification_employee_fk',

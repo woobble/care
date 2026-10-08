@@ -7,8 +7,14 @@ import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent, type DomainEvent } from '@care/events';
 import { employeeRecords } from '@care/employees';
 import {
+  authorizeProfessionalOperation,
   assertCan,
   AuthorizationDeniedError,
+  can,
+  type CompetencyOperation,
+  type CompetencyAuthorizationMetadata,
+  type CompetencyPolicyEvaluationResult,
+  type CompetencyPolicyEvaluator,
   type AuthorizationPrincipal,
   type Permission,
   type ResourceContext,
@@ -72,10 +78,13 @@ type DraftItemType =
 type DraftItemOperation = 'added' | 'updated' | 'removed';
 type CarePlanAction = Extract<Permission, `care_plan.${string}`>;
 
-/**
- * Care plan authoring requires the matching care_plan permission and an active employee link.
- * Qualification-based checks are not configured in this domain yet.
- */
+export interface CarePlanEligibilityView {
+  operation: CompetencyOperation;
+  permissionAllowed: boolean;
+  competency: CompetencyPolicyEvaluationResult | null;
+}
+
+/** Care Plan activation and evaluation require permission, scope, and an active competency policy. */
 export class CarePlanningApplicationService {
   constructor(
     private readonly unitOfWork: UnitOfWork,
@@ -83,6 +92,7 @@ export class CarePlanningApplicationService {
     private readonly visitExecution: Pick<VisitExecutionApplicationService, 'get'>,
     private readonly audit: AuditWriter,
     private readonly outbox: OutboxWriter,
+    private readonly competencyPolicies: CompetencyPolicyEvaluator<DatabaseTransaction>,
     private readonly repository = new CarePlanRepository(),
   ) {}
 
@@ -200,6 +210,28 @@ export class CarePlanningApplicationService {
     });
   }
 
+  async previewAuthorization(
+    principal: AuthorizationPrincipal,
+    planId: string,
+    operation: CompetencyOperation,
+  ): Promise<CarePlanEligibilityView> {
+    this.denyCaregiver(principal);
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const plan = await this.authorizedPlan(transaction, principal, planId, 'care_plan.read');
+      const resource = professionalResource(plan);
+      const permissionAllowed = can(principal, { action: operation, resource });
+      if (!permissionAllowed) return { operation, permissionAllowed, competency: null };
+      const competency = await this.competencyPolicies.evaluate(transaction, {
+        tenantId: principal.tenantId,
+        userId: principal.userId,
+        operation,
+        resource: { type: resource.type, id: resource.id },
+        effectiveAt: new Date(),
+      });
+      return { operation, permissionAllowed, competency };
+    });
+  }
+
   async getActiveForVisit(
     principal: AuthorizationPrincipal,
     visitId: string,
@@ -292,10 +324,12 @@ export class CarePlanningApplicationService {
         'care_plan.review_history',
       );
       assertCan(principal, { action: 'care_plan.read', resource: planResource(plan) });
-      const [revisions, evaluations] = await Promise.all([
-        this.repository.history(transaction, principal.tenantId, plan.id),
-        this.repository.evaluationHistory(transaction, principal.tenantId, plan.id),
-      ]);
+      const revisions = await this.repository.history(transaction, principal.tenantId, plan.id);
+      const evaluations = await this.repository.evaluationHistory(
+        transaction,
+        principal.tenantId,
+        plan.id,
+      );
       return { revisions, evaluations };
     });
   }
@@ -315,10 +349,18 @@ export class CarePlanningApplicationService {
         'care_plan.review_history',
       );
       assertCan(principal, { action: 'care_plan.read', resource: planResource(plan) });
-      const [from, to] = await Promise.all([
-        this.repository.revisionDetail(transaction, principal.tenantId, plan.id, fromRevisionId),
-        this.repository.revisionDetail(transaction, principal.tenantId, plan.id, toRevisionId),
-      ]);
+      const from = await this.repository.revisionDetail(
+        transaction,
+        principal.tenantId,
+        plan.id,
+        fromRevisionId,
+      );
+      const to = await this.repository.revisionDetail(
+        transaction,
+        principal.tenantId,
+        plan.id,
+        toRevisionId,
+      );
       if (!from || !to) throw new CarePlanRevisionNotFoundError();
       return diffCarePlanRevisions(from, to);
     });
@@ -1096,15 +1138,26 @@ export class CarePlanningApplicationService {
             measures: revision.measures,
             effectiveDate: revision.revision.effectiveFrom,
           });
-          const employeeId = await this.activeEmployeeForUser(transaction, principal);
           const now = new Date();
+          const authorization = await authorizeProfessionalOperation(
+            transaction,
+            principal,
+            {
+              permission: 'care_plan.activate',
+              operation: 'care_plan.activate',
+              resource: professionalResource(plan),
+              effectiveAt: now,
+            },
+            this.competencyPolicies,
+          );
           const nextStatus = transitionCarePlanStatus(plan.status, 'active');
+          const professionalAuthorization = authorizationEvent(authorization, 'care_plan.activate');
           await this.repository.activateRevision(
             transaction,
             principal.tenantId,
             planId,
             revisionId,
-            employeeId,
+            authorization.employeeId,
             now,
           );
           await this.advancePlanVersion(
@@ -1126,6 +1179,7 @@ export class CarePlanningApplicationService {
               clientId: plan.clientId,
               revisionId,
               revisionNumber: revision.revision.revisionNumber,
+              professionalAuthorization,
             },
           });
           await this.recordLifecycle(transaction, principal, request, auditContext, event, {
@@ -1133,6 +1187,7 @@ export class CarePlanningApplicationService {
             clientId: plan.clientId,
             revisionId,
             revisionNumber: revision.revision.revisionNumber,
+            professionalAuthorization,
           });
           return (await this.repository.detail(transaction, principal.tenantId, planId))!;
         },
@@ -1173,14 +1228,25 @@ export class CarePlanningApplicationService {
       if (!revision) throw new CarePlanRevisionNotFoundError();
       if (revision.revision.status !== 'active') throw new CarePlanActiveRevisionRequiredError();
       this.assertEvaluationGoals(revision, input);
-      const employeeId = await this.activeEmployeeForUser(transaction, principal);
-      const now = new Date();
+      const authorization = await authorizeProfessionalOperation(
+        transaction,
+        principal,
+        {
+          permission: 'care_plan.evaluate',
+          operation: 'care_plan.evaluate',
+          resource: professionalResource(plan),
+          effectiveAt: new Date(),
+        },
+        this.competencyPolicies,
+      );
+      const now = authorization.evaluatedAt;
+      const professionalAuthorization = authorizationEvent(authorization, 'care_plan.evaluate');
       const evaluation: CarePlanEvaluation = {
         id: uuidv7(),
         tenantId: principal.tenantId,
         planId,
         revisionId: input.revisionId,
-        evaluatedByEmployeeId: employeeId,
+        evaluatedByEmployeeId: authorization.employeeId,
         evaluatedByEmployeeName: null,
         evaluatedAt: now,
         result: input.result,
@@ -1216,6 +1282,7 @@ export class CarePlanningApplicationService {
           evaluationId: evaluation.id,
           revisionId: evaluation.revisionId,
           result: evaluation.result,
+          professionalAuthorization,
         },
       });
       await this.recordLifecycle(transaction, principal, request, auditContext, event, {
@@ -1225,6 +1292,7 @@ export class CarePlanningApplicationService {
         revisionId: evaluation.revisionId,
         result: evaluation.result,
         planChange: evaluation.planChange,
+        professionalAuthorization,
       });
       return (await this.repository.detail(transaction, principal.tenantId, planId))!;
     });
@@ -1506,6 +1574,24 @@ function planResource(plan: CarePlan): ResourceContext {
     clientId: plan.clientId,
     organizationId: plan.organizationId,
     facilityId: plan.facilityId,
+  };
+}
+
+function professionalResource(plan: CarePlan): ResourceContext & { type: 'care_plan'; id: string } {
+  return { ...planResource(plan), type: 'care_plan', id: plan.id };
+}
+
+function authorizationEvent(
+  authorization: CompetencyAuthorizationMetadata,
+  operationKey: CompetencyOperation,
+) {
+  return {
+    operationKey,
+    policyId: authorization.policyId,
+    policyVersion: authorization.policyVersion,
+    employeeId: authorization.employeeId,
+    matchedQualificationIds: [...authorization.matchedQualificationIds],
+    evaluatedAt: authorization.evaluatedAt.toISOString(),
   };
 }
 

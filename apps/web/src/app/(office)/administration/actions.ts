@@ -337,6 +337,81 @@ export async function setTeamStatusAction(formData: FormData): Promise<void> {
   redirect(`/administration/teams/${id}?updated=${operation}`);
 }
 
+export async function createCompetencyPolicyDraftAction(formData: FormData): Promise<void> {
+  const operationKey = readCompetencyOperation(formData.get('operationKey'));
+  const expectedVersion = Number(readText(formData, 'expectedVersion'));
+  const name = readText(formData, 'name');
+  const description = readNullableText(formData, 'description');
+  const requirementMode = formData.get('requirementMode');
+  const qualificationDefinitionIds = formData.getAll('qualificationDefinitionId');
+  if (
+    !operationKey ||
+    !Number.isSafeInteger(expectedVersion) ||
+    expectedVersion < 0 ||
+    !name ||
+    name.length > 160 ||
+    (description?.length ?? 0) > 1000 ||
+    (requirementMode !== 'ANY' && requirementMode !== 'ALL') ||
+    qualificationDefinitionIds.length < 1 ||
+    qualificationDefinitionIds.length > 100 ||
+    !qualificationDefinitionIds.every((id) => typeof id === 'string' && uuidPattern.test(id)) ||
+    new Set(qualificationDefinitionIds).size !== qualificationDefinitionIds.length
+  ) {
+    redirect('/administration/competency-policies?error=INVALID_REQUEST');
+  }
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/competency-policies/{operationKey}/versions', {
+    params: { path: { operationKey }, header: await getTenantHeader() },
+    body: {
+      expectedVersion,
+      name,
+      description,
+      requirementMode,
+      qualificationDefinitionIds: qualificationDefinitionIds as string[],
+    },
+  });
+  if (error)
+    redirect(`/administration/competency-policies?error=${encodeURIComponent(error.code)}`);
+  revalidatePath('/administration/competency-policies');
+  redirect('/administration/competency-policies?updated=draft');
+}
+
+export async function activateCompetencyPolicyAction(formData: FormData): Promise<void> {
+  const operationKey = readCompetencyOperation(formData.get('operationKey'));
+  const version = Number(readText(formData, 'version'));
+  if (!operationKey || !Number.isSafeInteger(version) || version < 1) {
+    redirect('/administration/competency-policies?error=INVALID_REQUEST');
+  }
+  const api = await getApiClient();
+  const { error } = await api.POST(
+    '/api/v1/competency-policies/{operationKey}/versions/{version}/activate',
+    { params: { path: { operationKey, version }, header: await getTenantHeader() } },
+  );
+  if (error)
+    redirect(`/administration/competency-policies?error=${encodeURIComponent(error.code)}`);
+  revalidatePath('/administration/competency-policies');
+  redirect('/administration/competency-policies?updated=activated');
+}
+
+export async function deactivateCompetencyPolicyAction(formData: FormData): Promise<void> {
+  const operationKey = readCompetencyOperation(formData.get('operationKey'));
+  if (!operationKey) redirect('/administration/competency-policies?error=INVALID_REQUEST');
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/competency-policies/{operationKey}/deactivate', {
+    params: { path: { operationKey }, header: await getTenantHeader() },
+  });
+  if (error)
+    redirect(`/administration/competency-policies?error=${encodeURIComponent(error.code)}`);
+  revalidatePath('/administration/competency-policies');
+  redirect('/administration/competency-policies?updated=deactivated');
+}
+
+function readCompetencyOperation(
+  value: FormDataEntryValue | null,
+): 'care_plan.activate' | 'care_plan.evaluate' | null {
+  return value === 'care_plan.activate' || value === 'care_plan.evaluate' ? value : null;
+}
+
 function readText(formData: FormData, name: string): string {
   const value = formData.get(name);
   return typeof value === 'string' ? value.trim() : '';

@@ -27,7 +27,12 @@ import {
   InvalidCarePlanError,
 } from '@care/care-planning';
 import { ClinicalRecordAmendmentConflictError } from '@care/clinical-documentation';
-import { AuthorizationDeniedError } from '@care/permissions';
+import { AuthorizationDeniedError, ProfessionalCompetencyDeniedError } from '@care/permissions';
+import {
+  CompetencyPolicyNotFoundError,
+  CompetencyPolicyVersionConflictError,
+  InvalidCompetencyPolicyConfigurationError,
+} from '@care/competency-policies';
 import {
   ClientArchivedError,
   ClientAddressNotFoundError,
@@ -68,6 +73,7 @@ import {
   PrimaryFacilityRequiredError,
   QualificationArchivedError,
   QualificationNotFoundError,
+  QualificationRequiredByActivePolicyError,
   SkillArchivedError,
   SkillNotFoundError,
   UserAlreadyLinkedError,
@@ -285,6 +291,18 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     code = exception.code;
   } else if (exception instanceof AuthorizationDeniedError) {
     status = 403;
+    code = exception.code;
+  } else if (exception instanceof ProfessionalCompetencyDeniedError) {
+    status = 403;
+    code = exception.code;
+  } else if (exception instanceof CompetencyPolicyNotFoundError) {
+    status = 404;
+    code = exception.code;
+  } else if (exception instanceof CompetencyPolicyVersionConflictError) {
+    status = 409;
+    code = exception.code;
+  } else if (exception instanceof InvalidCompetencyPolicyConfigurationError) {
+    status = 400;
     code = exception.code;
   } else if (
     exception instanceof CarePlanNotFoundError ||
@@ -519,6 +537,7 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof UserAlreadyLinkedError ||
     exception instanceof PrimaryFacilityRequiredError ||
     exception instanceof QualificationArchivedError ||
+    exception instanceof QualificationRequiredByActivePolicyError ||
     exception instanceof SkillArchivedError ||
     exception instanceof OrganizationHasActiveChildrenError ||
     exception instanceof OrganizationHasActiveServiceAgreementsError ||

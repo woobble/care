@@ -664,7 +664,11 @@ function employeeDetailResponse(employee: EmployeeDetailSnapshot): EmployeeDetai
     ...employeeResponse(employee, employee.linkedUser !== null),
     facilityAssignments: employee.facilityAssignments,
     teamMemberships: employee.teamMemberships,
-    qualifications: employee.qualifications,
+    qualifications: employee.qualifications.map((qualification) => ({
+      ...qualification,
+      revokedAt: qualification.revokedAt?.toISOString() ?? null,
+      updatedAt: qualification.updatedAt.toISOString(),
+    })),
     skills: employee.skills,
     linkedUser: employee.linkedUser,
   };

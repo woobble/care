@@ -312,7 +312,8 @@ export class ClinicalDocumentationRepository {
     selectCandidates: () => Promise<{ id: string }[]>,
     selectTotal: () => Promise<{ total: number }[]>,
   ): Promise<HistoryCandidatePage> {
-    const [candidates, totals] = await Promise.all([selectCandidates(), selectTotal()]);
+    const candidates = await selectCandidates();
+    const totals = await selectTotal();
     return {
       ids: candidates.map((candidate) => candidate.id),
       total: Number(totals[0]?.total ?? 0),
@@ -338,36 +339,38 @@ export class ClinicalDocumentationRepository {
         ),
     );
     const riskTypes = riskType ? [riskType] : RISK_TYPES;
-    const result = await Promise.all(
-      riskTypes.map(async (type) => {
-        const [record] = await transaction
-          .select({ id: clinicalRecords.id })
-          .from(clinicalRecords)
-          .innerJoin(
-            riskAssessments,
-            and(
-              eq(riskAssessments.tenantId, clinicalRecords.tenantId),
-              eq(riskAssessments.recordId, clinicalRecords.id),
-            ),
-          )
-          .where(
-            and(
-              eq(clinicalRecords.tenantId, tenantId),
-              inArray(clinicalRecords.documentationId, documentationIds),
-              eq(clinicalRecords.kind, 'risk_assessment'),
-              eq(riskAssessments.riskType, type),
-              notCorrected,
-            ),
-          )
-          .orderBy(
-            desc(riskAssessments.assessedAt),
-            desc(clinicalRecords.createdAt),
-            desc(clinicalRecords.id),
-          )
-          .limit(1);
-        return record?.id;
-      }),
-    );
+    const result: Array<string | undefined> = [];
+    // A transaction owns one PostgreSQL connection, so risk-type reads must stay sequential.
+    // oxlint-disable no-await-in-loop
+    for (const type of riskTypes) {
+      const [record] = await transaction
+        .select({ id: clinicalRecords.id })
+        .from(clinicalRecords)
+        .innerJoin(
+          riskAssessments,
+          and(
+            eq(riskAssessments.tenantId, clinicalRecords.tenantId),
+            eq(riskAssessments.recordId, clinicalRecords.id),
+          ),
+        )
+        .where(
+          and(
+            eq(clinicalRecords.tenantId, tenantId),
+            inArray(clinicalRecords.documentationId, documentationIds),
+            eq(clinicalRecords.kind, 'risk_assessment'),
+            eq(riskAssessments.riskType, type),
+            notCorrected,
+          ),
+        )
+        .orderBy(
+          desc(riskAssessments.assessedAt),
+          desc(clinicalRecords.createdAt),
+          desc(clinicalRecords.id),
+        )
+        .limit(1);
+      result.push(record?.id);
+    }
+    // oxlint-enable no-await-in-loop
     return result.filter((id): id is string => id !== undefined);
   }
 
@@ -863,54 +866,51 @@ export class ClinicalDocumentationRepository {
   ): Promise<ClinicalRecordDetail[]> {
     if (records.length === 0) return [];
     const recordIds = records.map((record) => record.id);
-    const [measurementRows, observationRows, assessmentRows, riskRows, correctionRows] =
-      await Promise.all([
-        transaction
-          .select()
-          .from(measurements)
-          .where(
-            and(
-              eq(measurements.tenantId, records[0]!.tenantId),
-              inArray(measurements.recordId, recordIds),
-            ),
-          ),
-        transaction
-          .select()
-          .from(structuredObservations)
-          .where(
-            and(
-              eq(structuredObservations.tenantId, records[0]!.tenantId),
-              inArray(structuredObservations.recordId, recordIds),
-            ),
-          ),
-        transaction
-          .select()
-          .from(assessments)
-          .where(
-            and(
-              eq(assessments.tenantId, records[0]!.tenantId),
-              inArray(assessments.recordId, recordIds),
-            ),
-          ),
-        transaction
-          .select()
-          .from(riskAssessments)
-          .where(
-            and(
-              eq(riskAssessments.tenantId, records[0]!.tenantId),
-              inArray(riskAssessments.recordId, recordIds),
-            ),
-          ),
-        transaction
-          .select({ id: clinicalRecords.id, correctsRecordId: clinicalRecords.correctsRecordId })
-          .from(clinicalRecords)
-          .where(
-            and(
-              eq(clinicalRecords.tenantId, records[0]!.tenantId),
-              inArray(clinicalRecords.correctsRecordId, recordIds),
-            ),
-          ),
-      ]);
+    const measurementRows = await transaction
+      .select()
+      .from(measurements)
+      .where(
+        and(
+          eq(measurements.tenantId, records[0]!.tenantId),
+          inArray(measurements.recordId, recordIds),
+        ),
+      );
+    const observationRows = await transaction
+      .select()
+      .from(structuredObservations)
+      .where(
+        and(
+          eq(structuredObservations.tenantId, records[0]!.tenantId),
+          inArray(structuredObservations.recordId, recordIds),
+        ),
+      );
+    const assessmentRows = await transaction
+      .select()
+      .from(assessments)
+      .where(
+        and(
+          eq(assessments.tenantId, records[0]!.tenantId),
+          inArray(assessments.recordId, recordIds),
+        ),
+      );
+    const riskRows = await transaction
+      .select()
+      .from(riskAssessments)
+      .where(
+        and(
+          eq(riskAssessments.tenantId, records[0]!.tenantId),
+          inArray(riskAssessments.recordId, recordIds),
+        ),
+      );
+    const correctionRows = await transaction
+      .select({ id: clinicalRecords.id, correctsRecordId: clinicalRecords.correctsRecordId })
+      .from(clinicalRecords)
+      .where(
+        and(
+          eq(clinicalRecords.tenantId, records[0]!.tenantId),
+          inArray(clinicalRecords.correctsRecordId, recordIds),
+        ),
+      );
     const roots = new Map(records.map((record) => [record.id, record]));
     const correctedBy = new Map(
       correctionRows.map((correction) => [correction.correctsRecordId!, correction.id]),

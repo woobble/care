@@ -27,6 +27,7 @@
         "@care/care-planning": "workspace:*",
         "@care/clients": "workspace:*",
         "@care/clinical-documentation": "workspace:*",
+        "@care/competency-policies": "workspace:*",
         "@care/config": "workspace:*",
         "@care/contracts": "workspace:*",
         "@care/database": "workspace:*",
@@ -167,6 +168,21 @@
       "dependencies": {
         "@care/clients": "workspace:*",
         "@care/database": "workspace:*",
+        "drizzle-orm": "^0.45.3",
+        "uuid": "^14.0.2",
+      },
+    },
+    "modules/competency-policies": {
+      "name": "@care/competency-policies",
+      "dependencies": {
+        "@care/audit": "workspace:*",
+        "@care/contracts": "workspace:*",
+        "@care/database": "workspace:*",
+        "@care/employees": "workspace:*",
+        "@care/events": "workspace:*",
+        "@care/organizations": "workspace:*",
+        "@care/permissions": "workspace:*",
+        "@care/platform": "workspace:*",
         "drizzle-orm": "^0.45.3",
         "uuid": "^14.0.2",
       },
@@ -494,6 +510,8 @@
     "@care/clients": ["@care/clients@workspace:modules/clients"],
 
     "@care/clinical-documentation": ["@care/clinical-documentation@workspace:modules/clinical-documentation"],
+
+    "@care/competency-policies": ["@care/competency-policies@workspace:modules/competency-policies"],
 
     "@care/config": ["@care/config@workspace:packages/config"],
 

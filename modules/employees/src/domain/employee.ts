@@ -1,6 +1,7 @@
 export type EmployeeStatus = 'active' | 'inactive' | 'archived';
 export type DefinitionStatus = 'active' | 'archived';
 export type AssignmentStatus = 'active' | 'inactive';
+export type QualificationAssignmentStatus = 'active' | 'revoked';
 
 export interface EmployeeData {
   organizationId: string;
@@ -76,6 +77,9 @@ export interface EmployeeQualificationSnapshot {
   validUntil: string | null;
   issuer: string | null;
   status: DefinitionStatus;
+  assignmentStatus: QualificationAssignmentStatus;
+  revokedAt: Date | null;
+  updatedAt: Date;
 }
 
 export interface SkillDefinitionSnapshot {
@@ -250,6 +254,15 @@ export class QualificationArchivedError extends Error {
   constructor() {
     super('Qualification definition is archived');
     this.name = 'QualificationArchivedError';
+  }
+}
+
+export class QualificationRequiredByActivePolicyError extends Error {
+  readonly code = 'QUALIFICATION_REQUIRED_BY_ACTIVE_COMPETENCY_POLICY';
+
+  constructor() {
+    super('Qualification is required by an active competency policy');
+    this.name = 'QualificationRequiredByActivePolicyError';
   }
 }
 

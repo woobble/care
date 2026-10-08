@@ -417,6 +417,9 @@ export class EmployeeRepository {
         validUntil: employeeQualifications.validUntil,
         issuer: employeeQualifications.issuer,
         status: qualificationDefinitions.status,
+        assignmentStatus: employeeQualifications.status,
+        revokedAt: employeeQualifications.revokedAt,
+        updatedAt: employeeQualifications.updatedAt,
       })
       .from(employeeQualifications)
       .innerJoin(
@@ -432,7 +435,12 @@ export class EmployeeRepository {
           eq(employeeQualifications.employeeId, employeeId),
         ),
       )
-      .orderBy(asc(qualificationDefinitions.name), asc(qualificationDefinitions.id));
+      .orderBy(
+        asc(qualificationDefinitions.name),
+        asc(qualificationDefinitions.id),
+        asc(employeeQualifications.createdAt),
+        asc(employeeQualifications.id),
+      );
   }
 
   async skills(transaction: DatabaseTransaction, tenantId: string, employeeId: string) {
@@ -948,7 +956,19 @@ export class EmployeeRepository {
       now: Date;
     },
   ): Promise<void> {
-    await transaction.insert(employeeQualifications).values({ ...input, createdAt: input.now });
+    await transaction.insert(employeeQualifications).values({
+      id: input.id,
+      tenantId: input.tenantId,
+      employeeId: input.employeeId,
+      qualificationId: input.qualificationId,
+      validFrom: input.validFrom,
+      validUntil: input.validUntil,
+      issuer: input.issuer,
+      status: 'active',
+      revokedAt: null,
+      createdAt: input.now,
+      updatedAt: input.now,
+    });
   }
 
   async findEmployeeQualification(
@@ -966,6 +986,7 @@ export class EmployeeRepository {
           eq(employeeQualifications.tenantId, tenantId),
           eq(employeeQualifications.employeeId, employeeId),
           eq(employeeQualifications.qualificationId, qualificationId),
+          eq(employeeQualifications.status, 'active'),
         ),
       );
     const [row] = lock ? await query.for('update').limit(1) : await query.limit(1);
@@ -978,15 +999,17 @@ export class EmployeeRepository {
     employeeId: string,
     qualificationId: string,
     changes: { validFrom: string | null; validUntil: string | null; issuer: string | null },
+    now: Date,
   ): Promise<void> {
     await transaction
       .update(employeeQualifications)
-      .set(changes)
+      .set({ ...changes, updatedAt: now })
       .where(
         and(
           eq(employeeQualifications.tenantId, tenantId),
           eq(employeeQualifications.employeeId, employeeId),
           eq(employeeQualifications.qualificationId, qualificationId),
+          eq(employeeQualifications.status, 'active'),
         ),
       );
   }
@@ -996,14 +1019,17 @@ export class EmployeeRepository {
     tenantId: string,
     employeeId: string,
     qualificationId: string,
+    now: Date,
   ): Promise<boolean> {
     const rows = await transaction
-      .delete(employeeQualifications)
+      .update(employeeQualifications)
+      .set({ status: 'revoked', revokedAt: now, updatedAt: now })
       .where(
         and(
           eq(employeeQualifications.tenantId, tenantId),
           eq(employeeQualifications.employeeId, employeeId),
           eq(employeeQualifications.qualificationId, qualificationId),
+          eq(employeeQualifications.status, 'active'),
         ),
       )
       .returning({ id: employeeQualifications.id });
@@ -1133,6 +1159,7 @@ export class EmployeeRepository {
           eq(employeeQualifications.tenantId, tenantId),
           eq(employeeQualifications.employeeId, employeeId),
           eq(employeeQualifications.qualificationId, qualificationId),
+          eq(employeeQualifications.status, 'active'),
         ),
       )
       .limit(1);

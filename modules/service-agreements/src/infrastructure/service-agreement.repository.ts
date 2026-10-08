@@ -242,28 +242,26 @@ export class ServiceAgreementRepository {
       input.sortBy === 'status'
         ? [desc(agreements.createdAt), asc(agreements.id)]
         : [asc(agreements.id)];
-    const [rows, totals] = await Promise.all([
-      transaction
-        .select({ agreement: agreements, serviceCount: count(agreementServices.id) })
-        .from(agreements)
-        .leftJoin(
-          agreementServices,
-          and(
-            eq(agreementServices.tenantId, agreements.tenantId),
-            eq(agreementServices.agreementId, agreements.id),
-            eq(agreementServices.status, 'active'),
-          ),
-        )
-        .where(and(...filters))
-        .groupBy(agreements.id)
-        .orderBy(primary, ...secondary)
-        .limit(input.pageSize)
-        .offset((input.page - 1) * input.pageSize),
-      transaction
-        .select({ total: count() })
-        .from(agreements)
-        .where(and(...filters)),
-    ]);
+    const rows = await transaction
+      .select({ agreement: agreements, serviceCount: count(agreementServices.id) })
+      .from(agreements)
+      .leftJoin(
+        agreementServices,
+        and(
+          eq(agreementServices.tenantId, agreements.tenantId),
+          eq(agreementServices.agreementId, agreements.id),
+          eq(agreementServices.status, 'active'),
+        ),
+      )
+      .where(and(...filters))
+      .groupBy(agreements.id)
+      .orderBy(primary, ...secondary)
+      .limit(input.pageSize)
+      .offset((input.page - 1) * input.pageSize);
+    const totals = await transaction
+      .select({ total: count() })
+      .from(agreements)
+      .where(and(...filters));
     return {
       items: rows.map((row) => ({
         agreement: toAgreementSnapshot(row.agreement),

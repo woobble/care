@@ -12,6 +12,7 @@ import { careDocumentationSchema } from '@care/care-documentation';
 import { clinicalDocumentationSchema } from '@care/clinical-documentation';
 import { carePlanningSchema } from '@care/care-planning';
 import { serviceEvidenceSchema } from '@care/service-evidence';
+import { competencyPoliciesSchema } from '@care/competency-policies';
 
 export const databaseSchema = {
   ...identitySchema,
@@ -26,6 +27,7 @@ export const databaseSchema = {
   ...clinicalDocumentationSchema,
   ...carePlanningSchema,
   ...serviceEvidenceSchema,
+  ...competencyPoliciesSchema,
   ...auditSchema,
   ...platformSchema,
 };

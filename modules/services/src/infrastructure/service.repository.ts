@@ -251,44 +251,40 @@ export class ServiceRepository {
       ...(availabilityScope ? [availabilityScope] : []),
       ...(availabilityQueryFilter ? [availabilityQueryFilter] : []),
     ];
-    const [rows, totals] = await Promise.all([
-      transaction
-        .select({
-          service: serviceDefinitions,
-          categoryName: serviceCategories.name,
-          availabilityCount: count(serviceAvailability.id),
-        })
-        .from(serviceDefinitions)
-        .innerJoin(
-          serviceCategories,
-          and(
-            eq(serviceCategories.tenantId, serviceDefinitions.tenantId),
-            eq(serviceCategories.id, serviceDefinitions.categoryId),
-          ),
-        )
-        .leftJoin(serviceAvailability, and(...availabilityFilters))
-        .where(
-          and(...filters, ...(hasAvailabilityFilter ? [isNotNull(serviceAvailability.id)] : [])),
-        )
-        .groupBy(serviceDefinitions.id, serviceCategories.name)
-        .orderBy(asc(serviceDefinitions.code), asc(serviceDefinitions.id))
-        .limit(input.pageSize)
-        .offset((input.page - 1) * input.pageSize),
-      transaction
-        .select({ total: countDistinct(serviceDefinitions.id) })
-        .from(serviceDefinitions)
-        .innerJoin(
-          serviceCategories,
-          and(
-            eq(serviceCategories.tenantId, serviceDefinitions.tenantId),
-            eq(serviceCategories.id, serviceDefinitions.categoryId),
-          ),
-        )
-        .leftJoin(serviceAvailability, and(...availabilityFilters))
-        .where(
-          and(...filters, ...(hasAvailabilityFilter ? [isNotNull(serviceAvailability.id)] : [])),
+    const rows = await transaction
+      .select({
+        service: serviceDefinitions,
+        categoryName: serviceCategories.name,
+        availabilityCount: count(serviceAvailability.id),
+      })
+      .from(serviceDefinitions)
+      .innerJoin(
+        serviceCategories,
+        and(
+          eq(serviceCategories.tenantId, serviceDefinitions.tenantId),
+          eq(serviceCategories.id, serviceDefinitions.categoryId),
         ),
-    ]);
+      )
+      .leftJoin(serviceAvailability, and(...availabilityFilters))
+      .where(and(...filters, ...(hasAvailabilityFilter ? [isNotNull(serviceAvailability.id)] : [])))
+      .groupBy(serviceDefinitions.id, serviceCategories.name)
+      .orderBy(asc(serviceDefinitions.code), asc(serviceDefinitions.id))
+      .limit(input.pageSize)
+      .offset((input.page - 1) * input.pageSize);
+    const totals = await transaction
+      .select({ total: countDistinct(serviceDefinitions.id) })
+      .from(serviceDefinitions)
+      .innerJoin(
+        serviceCategories,
+        and(
+          eq(serviceCategories.tenantId, serviceDefinitions.tenantId),
+          eq(serviceCategories.id, serviceDefinitions.categoryId),
+        ),
+      )
+      .leftJoin(serviceAvailability, and(...availabilityFilters))
+      .where(
+        and(...filters, ...(hasAvailabilityFilter ? [isNotNull(serviceAvailability.id)] : [])),
+      );
     return {
       items: rows.map((row) => ({
         service: toDefinition(row.service),

@@ -58,6 +58,7 @@ import {
   CareMeasureInputDto,
   CareNeedInputDto,
   CarePlanDetailDto,
+  CarePlanEligibilityDto,
   CarePlanEvaluationDto,
   CarePlanEvaluationInputDto,
   CarePlanHistoryDto,
@@ -851,6 +852,42 @@ export class CarePlanningController {
         auditContext(request),
       ),
     );
+  }
+
+  @Get('care-plans/:planId/eligibility')
+  @ApiOperation({
+    operationId: 'previewCarePlanEligibility',
+    summary: 'Check permission scope and competency eligibility for a care plan action',
+  })
+  @ApiParam({ name: 'planId', format: 'uuid' })
+  @ApiQuery({ name: 'operation', enum: ['activate', 'evaluate'], required: true })
+  @ApiOkResponse({ type: CarePlanEligibilityDto })
+  async previewCarePlanEligibility(
+    @Req() request: ApiRequest,
+    @Param('planId') planId: string,
+    @Query('operation') operation: string,
+  ): Promise<CarePlanEligibilityDto> {
+    const parsed = z.enum(['activate', 'evaluate']).safeParse(operation);
+    if (!parsed.success) throw new BadRequestException();
+    const result = await this.carePlans.previewAuthorization(
+      this.principal(request),
+      parseId(planId),
+      `care_plan.${parsed.data}`,
+    );
+    return {
+      operation: result.operation,
+      permissionAllowed: result.permissionAllowed,
+      competency:
+        result.competency === null
+          ? null
+          : result.competency.allowed
+            ? {
+                ...result.competency,
+                matchedQualificationIds: [...result.competency.matchedQualificationIds],
+                evaluatedAt: result.competency.evaluatedAt.toISOString(),
+              }
+            : result.competency,
+    };
   }
 
   @Post('care-plans/:planId/evaluations')

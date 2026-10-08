@@ -1920,6 +1920,23 @@ describe('clients API', () => {
       );
       expect(linkCarePlanAuthor.status).toBe(200);
 
+      const carePlanQualificationResponse = await fetch(`${baseUrl}/api/v1/qualifications`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: 'Care Plan Author Qualification', code: 'CP-AUTH' }),
+      });
+      expect(carePlanQualificationResponse.status).toBe(201);
+      const carePlanQualification = (await carePlanQualificationResponse.json()) as { id: string };
+      const assignCarePlanQualification = await fetch(
+        `${baseUrl}/api/v1/employees/${carePlanAuthor.id}/qualifications/${carePlanQualification.id}`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ validFrom: dateInBerlin(-30), issuer: 'Integration test' }),
+        },
+      );
+      expect(assignCarePlanQualification.status).toBe(200);
+
       const carePlanValidFrom = dateInBerlin(-30);
       const createCarePlan = await fetch(
         `${baseUrl}/api/v1/clients/${executionClient.id}/care-plans`,
@@ -1939,6 +1956,77 @@ describe('clients API', () => {
       expect(createdCarePlan).toMatchObject({
         plan: { status: 'draft', version: 1 },
         draftRevision: { revision: { status: 'draft' } },
+      });
+
+      const unconfiguredCarePlanEligibility = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/eligibility?operation=activate`,
+        { headers },
+      );
+      expect(unconfiguredCarePlanEligibility.status).toBe(200);
+      expect(await unconfiguredCarePlanEligibility.json()).toMatchObject({
+        operation: 'care_plan.activate',
+        permissionAllowed: true,
+        competency: { allowed: false, reasonCode: 'COMPETENCY_POLICY_NOT_CONFIGURED' },
+      });
+
+      const configureCarePlanPolicy = async (
+        operationKey: 'care_plan.activate' | 'care_plan.evaluate',
+      ) => {
+        const draftResponse = await fetch(
+          `${baseUrl}/api/v1/competency-policies/${operationKey}/versions`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              expectedVersion: 0,
+              name: `${operationKey} policy`,
+              requirementMode: 'ALL',
+              qualificationDefinitionIds: [carePlanQualification.id],
+            }),
+          },
+        );
+        expect(draftResponse.status).toBe(201);
+        const draftView = (await draftResponse.json()) as {
+          operations: Array<{
+            operationKey: string;
+            policyId: string | null;
+            latestVersion: number;
+          }>;
+        };
+        const policyId = draftView.operations.find(
+          (operation) => operation.operationKey === operationKey,
+        )?.policyId;
+        expect(
+          draftView.operations.find((operation) => operation.operationKey === operationKey),
+        ).toMatchObject({ latestVersion: 1 });
+        expect(typeof policyId).toBe('string');
+        if (!policyId) throw new Error(`Missing policy ID for ${operationKey}`);
+
+        const activatePolicy = await fetch(
+          `${baseUrl}/api/v1/competency-policies/${operationKey}/versions/1/activate`,
+          { method: 'POST', headers },
+        );
+        expect(activatePolicy.status).toBe(200);
+        return policyId;
+      };
+      const activationPolicyId = await configureCarePlanPolicy('care_plan.activate');
+      let evaluationPolicyId: string;
+
+      const configuredCarePlanEligibility = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/eligibility?operation=activate`,
+        { headers },
+      );
+      expect(configuredCarePlanEligibility.status).toBe(200);
+      expect(await configuredCarePlanEligibility.json()).toMatchObject({
+        operation: 'care_plan.activate',
+        permissionAllowed: true,
+        competency: {
+          allowed: true,
+          policyId: activationPolicyId,
+          policyVersion: 1,
+          employeeId: carePlanAuthor.id,
+          matchedQualificationIds: [carePlanQualification.id],
+        },
       });
 
       const carePlansByClientName = await fetch(
@@ -2073,6 +2161,60 @@ describe('clients API', () => {
       );
       expect(staleCarePlanUpdate.status).toBe(409);
       expect((await staleCarePlanUpdate.json()).code).toBe('CARE_PLAN_VERSION_CONFLICT');
+
+      const wrongTenantCarePlanActivation = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/activate`,
+        {
+          method: 'POST',
+          headers: { ...headers, 'X-Tenant-Id': otherTenantId },
+          body: JSON.stringify({ expectedVersion: 5 }),
+        },
+      );
+      expect(wrongTenantCarePlanActivation.status).toBe(403);
+
+      const revokeCarePlanQualification = await fetch(
+        `${baseUrl}/api/v1/employees/${carePlanAuthor.id}/qualifications/${carePlanQualification.id}`,
+        { method: 'DELETE', headers },
+      );
+      expect(revokeCarePlanQualification.status).toBe(200);
+      const ineligibleCarePlanActivation = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/activate`,
+        { method: 'POST', headers, body: JSON.stringify({ expectedVersion: 5 }) },
+      );
+      expect(ineligibleCarePlanActivation.status).toBe(403);
+      expect((await ineligibleCarePlanActivation.json()).code).toBe(
+        'COMPETENCY_QUALIFICATION_MISSING',
+      );
+      const expireCarePlanQualification = await fetch(
+        `${baseUrl}/api/v1/employees/${carePlanAuthor.id}/qualifications/${carePlanQualification.id}`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            validFrom: carePlanValidFrom,
+            validUntil: dateInBerlin(-1),
+            issuer: 'Integration test',
+          }),
+        },
+      );
+      expect(expireCarePlanQualification.status).toBe(200);
+      const expiredCarePlanActivation = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/activate`,
+        { method: 'POST', headers, body: JSON.stringify({ expectedVersion: 5 }) },
+      );
+      expect(expiredCarePlanActivation.status).toBe(403);
+      expect((await expiredCarePlanActivation.json()).code).toBe(
+        'COMPETENCY_QUALIFICATION_EXPIRED',
+      );
+      const restoreCarePlanQualification = await fetch(
+        `${baseUrl}/api/v1/employees/${carePlanAuthor.id}/qualifications/${carePlanQualification.id}`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ validFrom: carePlanValidFrom, issuer: 'Integration test' }),
+        },
+      );
+      expect(restoreCarePlanQualification.status).toBe(200);
 
       const activateCarePlan = await fetch(
         `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/activate`,
@@ -2258,21 +2400,57 @@ describe('clients API', () => {
       );
       expect(caregiverCarePlanMutation.status).toBe(403);
 
-      const evaluateCarePlan = await fetch(
+      const evaluationInput = {
+        expectedVersion: 6,
+        revisionId: initialRevisionId,
+        result: 'effective',
+        planChange: 'none',
+        summary: 'Current interventions are effective.',
+        nextEvaluationDue: dateInBerlin(30),
+        goals: [{ goalId: careGoalId, outcome: 'partially_achieved' }],
+      };
+      const unconfiguredCarePlanEvaluation = await fetch(
         `${baseUrl}/api/v1/care-plans/${carePlanId}/evaluations`,
+        { method: 'POST', headers, body: JSON.stringify(evaluationInput) },
+      );
+      expect(unconfiguredCarePlanEvaluation.status).toBe(403);
+      expect((await unconfiguredCarePlanEvaluation.json()).code).toBe(
+        'COMPETENCY_POLICY_NOT_CONFIGURED',
+      );
+      evaluationPolicyId = await configureCarePlanPolicy('care_plan.evaluate');
+      const deactivateEvaluationPolicy = await fetch(
+        `${baseUrl}/api/v1/competency-policies/care_plan.evaluate/deactivate`,
+        { method: 'POST', headers },
+      );
+      expect(deactivateEvaluationPolicy.status).toBe(200);
+      const inactiveCarePlanEvaluation = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/evaluations`,
+        { method: 'POST', headers, body: JSON.stringify(evaluationInput) },
+      );
+      expect(inactiveCarePlanEvaluation.status).toBe(403);
+      expect((await inactiveCarePlanEvaluation.json()).code).toBe('COMPETENCY_POLICY_INACTIVE');
+      const evaluationPolicyDraft = await fetch(
+        `${baseUrl}/api/v1/competency-policies/care_plan.evaluate/versions`,
         {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            expectedVersion: 6,
-            revisionId: initialRevisionId,
-            result: 'effective',
-            planChange: 'none',
-            summary: 'Current interventions are effective.',
-            nextEvaluationDue: dateInBerlin(30),
-            goals: [{ goalId: careGoalId, outcome: 'partially_achieved' }],
+            expectedVersion: 1,
+            name: 'care_plan.evaluate replacement policy',
+            requirementMode: 'ALL',
+            qualificationDefinitionIds: [carePlanQualification.id],
           }),
         },
+      );
+      expect(evaluationPolicyDraft.status).toBe(201);
+      const activateEvaluationPolicyV2 = await fetch(
+        `${baseUrl}/api/v1/competency-policies/care_plan.evaluate/versions/2/activate`,
+        { method: 'POST', headers },
+      );
+      expect(activateEvaluationPolicyV2.status).toBe(200);
+      const evaluateCarePlan = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/evaluations`,
+        { method: 'POST', headers, body: JSON.stringify(evaluationInput) },
       );
       expect(evaluateCarePlan.status).toBe(201);
       expect(await evaluateCarePlan.json()).toMatchObject({
@@ -2499,13 +2677,54 @@ describe('clients API', () => {
           'care_plan.ended',
         ]),
       );
+      type CarePlanAuthorizationEvidence = {
+        operationKey: string;
+        policyId: string;
+        policyVersion: number;
+        employeeId: string;
+        matchedQualificationIds: string[];
+      };
+      const auditAuthorizationEvidence = carePlanAudit.rows
+        .filter(({ action }) =>
+          ['care_plan.revision_activated', 'care_plan.evaluated'].includes(action),
+        )
+        .map(({ action, metadata }) => ({
+          action,
+          ...(JSON.parse(metadata) as { professionalAuthorization: CarePlanAuthorizationEvidence })
+            .professionalAuthorization,
+        }));
+      expect(auditAuthorizationEvidence).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            action: 'care_plan.revision_activated',
+            operationKey: 'care_plan.activate',
+            policyId: activationPolicyId,
+            policyVersion: 1,
+            employeeId: carePlanAuthor.id,
+            matchedQualificationIds: [carePlanQualification.id],
+          }),
+          expect.objectContaining({
+            action: 'care_plan.evaluated',
+            operationKey: 'care_plan.evaluate',
+            policyId: evaluationPolicyId,
+            policyVersion: 2,
+            employeeId: carePlanAuthor.id,
+            matchedQualificationIds: [carePlanQualification.id],
+          }),
+        ]),
+      );
       const carePlanOutbox = await owner.query<{ event: string }>(
         `SELECT event::text AS event FROM platform.outbox_messages
          WHERE tenant_id = $1 AND event ->> 'aggregateId' = $2`,
         [tenantId, carePlanId],
       );
       const carePlanEvents = carePlanOutbox.rows.map(
-        ({ event }) => JSON.parse(event) as { type: string; version: number },
+        ({ event }) =>
+          JSON.parse(event) as {
+            type: string;
+            version: number;
+            payload: { professionalAuthorization?: CarePlanAuthorizationEvidence };
+          },
       );
       expect(carePlanEvents.map(({ type }) => type)).toEqual(
         expect.arrayContaining([
@@ -2517,6 +2736,34 @@ describe('clients API', () => {
         ]),
       );
       expect(carePlanEvents.every(({ version }) => version === 1)).toBe(true);
+      expect(carePlanEvents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'care_plan.revision_activated',
+            payload: expect.objectContaining({
+              professionalAuthorization: expect.objectContaining({
+                operationKey: 'care_plan.activate',
+                policyId: activationPolicyId,
+                policyVersion: 1,
+                employeeId: carePlanAuthor.id,
+                matchedQualificationIds: [carePlanQualification.id],
+              }),
+            }),
+          }),
+          expect.objectContaining({
+            type: 'care_plan.evaluated',
+            payload: expect.objectContaining({
+              professionalAuthorization: expect.objectContaining({
+                operationKey: 'care_plan.evaluate',
+                policyId: evaluationPolicyId,
+                policyVersion: 2,
+                employeeId: carePlanAuthor.id,
+                matchedQualificationIds: [carePlanQualification.id],
+              }),
+            }),
+          }),
+        ]),
+      );
       const privateCarePlanMetadata = JSON.stringify([carePlanAudit.rows, carePlanOutbox.rows]);
       expect(privateCarePlanMetadata).not.toContain('A private care planning narrative.');
       expect(privateCarePlanMetadata).not.toContain('A private professional planning rationale.');
@@ -4109,6 +4356,179 @@ describe('clients API', () => {
       );
       expect(riskHistoryBody.total).toBeGreaterThanOrEqual(4);
 
+      const referencedCarePlanResponse = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/care-plans`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ validFrom: dateInBerlin(-1) }),
+        },
+      );
+      expect(referencedCarePlanResponse.status).toBe(201);
+      const referencedCarePlanCreated = (await referencedCarePlanResponse.json()) as {
+        plan: { id: string };
+        draftRevision: { revision: { id: string } };
+      };
+      const referencedCarePlanId = referencedCarePlanCreated.plan.id;
+      const referencedRevisionId = referencedCarePlanCreated.draftRevision.revision.id;
+      const referencedPlanAssessment = await fetch(
+        `${baseUrl}/api/v1/care-plans/${referencedCarePlanId}/revisions/${referencedRevisionId}/assessment`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 1,
+            clientConcerns: 'Fall risk requires a documented prevention plan.',
+            professionalRationale: 'Use the current fall risk assessment to guide support.',
+          }),
+        },
+      );
+      expect(referencedPlanAssessment.status).toBe(200);
+      const referencedPlanNeedResponse = await fetch(
+        `${baseUrl}/api/v1/care-plans/${referencedCarePlanId}/revisions/${referencedRevisionId}/needs`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 2,
+            category: 'safety',
+            title: 'Reduce fall risk',
+            source: 'clinical_record',
+            priority: 'high',
+            status: 'active',
+          }),
+        },
+      );
+      expect(referencedPlanNeedResponse.status).toBe(201);
+      const referencedPlanNeedDetail = (await referencedPlanNeedResponse.json()) as {
+        draftRevision: { needs: Array<{ id: string }> };
+      };
+      const referencedPlanNeedId = referencedPlanNeedDetail.draftRevision.needs[0]!.id;
+      const referencedPlanGoalResponse = await fetch(
+        `${baseUrl}/api/v1/care-plans/${referencedCarePlanId}/revisions/${referencedRevisionId}/goals`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 3,
+            title: 'Maintain safety during mobility',
+            status: 'active',
+            priority: 'high',
+            needIds: [referencedPlanNeedId],
+          }),
+        },
+      );
+      expect(referencedPlanGoalResponse.status).toBe(201);
+      const referencedPlanGoalDetail = (await referencedPlanGoalResponse.json()) as {
+        draftRevision: { goals: Array<{ id: string }> };
+      };
+      const referencedPlanGoalId = referencedPlanGoalDetail.draftRevision.goals[0]!.id;
+      const referencedPlanMeasureResponse = await fetch(
+        `${baseUrl}/api/v1/care-plans/${referencedCarePlanId}/revisions/${referencedRevisionId}/measures`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 4,
+            title: 'Support safe transfers',
+            instruction: 'Assist the client during transfers and follow the fall prevention plan.',
+            category: 'monitoring',
+            needIds: [referencedPlanNeedId],
+            goalIds: [referencedPlanGoalId],
+            validFrom: dateInBerlin(-1),
+            validUntil: null,
+            status: 'active',
+          }),
+        },
+      );
+      expect(referencedPlanMeasureResponse.status).toBe(201);
+      const addClinicalRecordReference = await fetch(
+        `${baseUrl}/api/v1/care-plans/${referencedCarePlanId}/revisions/${referencedRevisionId}/source-references`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 5,
+            clinicalRecordId: clinicalRiskId,
+            recordKind: 'risk_assessment',
+            rationale: 'Supports fall risk planning.',
+          }),
+        },
+      );
+      expect(addClinicalRecordReference.status).toBe(201);
+      const activateReferencedCarePlan = await fetch(
+        `${baseUrl}/api/v1/care-plans/${referencedCarePlanId}/revisions/${referencedRevisionId}/activate`,
+        { method: 'POST', headers, body: JSON.stringify({ expectedVersion: 6 }) },
+      );
+      expect(activateReferencedCarePlan.status).toBe(200);
+      expect(await activateReferencedCarePlan.json()).toMatchObject({
+        plan: { id: referencedCarePlanId, status: 'active', version: 7 },
+        activeRevision: {
+          revision: { id: referencedRevisionId, revisionNumber: 1, status: 'active' },
+          sourceReferences: [expect.objectContaining({ clinicalRecordId: clinicalRiskId })],
+        },
+        draftRevision: null,
+      });
+
+      const referencedCarePlanBeforeCorrectionResponse = await fetch(
+        `${baseUrl}/api/v1/care-plans/${referencedCarePlanId}`,
+        { headers },
+      );
+      expect(referencedCarePlanBeforeCorrectionResponse.status).toBe(200);
+      const referencedCarePlanBeforeCorrection =
+        (await referencedCarePlanBeforeCorrectionResponse.json()) as {
+          plan: { id: string; tenantId: string; clientId: string; status: string; version: number };
+          activeRevision: {
+            revision: { id: string; revisionNumber: number; status: string };
+            sourceReferences: Array<{
+              clinicalRecordId: string;
+              recordKind: string;
+              rationale: string | null;
+            }>;
+          };
+          draftRevision: null;
+        };
+      expect(referencedCarePlanBeforeCorrection).toMatchObject({
+        plan: {
+          id: referencedCarePlanId,
+          tenantId,
+          clientId: executionClient.id,
+          status: 'active',
+        },
+        activeRevision: {
+          revision: { id: referencedRevisionId, revisionNumber: 1, status: 'active' },
+          sourceReferences: [
+            {
+              clinicalRecordId: clinicalRiskId,
+              recordKind: 'risk_assessment',
+              rationale: 'Supports fall risk planning.',
+            },
+          ],
+        },
+        draftRevision: null,
+      });
+      const referencedCarePlanHistoryBeforeCorrectionResponse = await fetch(
+        `${baseUrl}/api/v1/care-plans/${referencedCarePlanId}/revisions`,
+        { headers },
+      );
+      expect(referencedCarePlanHistoryBeforeCorrectionResponse.status).toBe(200);
+      const referencedCarePlanHistoryBeforeCorrection =
+        (await referencedCarePlanHistoryBeforeCorrectionResponse.json()) as {
+          revisions: Array<{
+            revision: { id: string; revisionNumber: number; status: string };
+            sourceReferences: Array<{
+              clinicalRecordId: string;
+              recordKind: string;
+              rationale: string | null;
+            }>;
+          }>;
+        };
+      expect(referencedCarePlanHistoryBeforeCorrection.revisions).toHaveLength(1);
+      expect(referencedCarePlanHistoryBeforeCorrection.revisions[0]).toMatchObject({
+        revision: { id: referencedRevisionId, revisionNumber: 1, status: 'active' },
+        sourceReferences: [expect.objectContaining({ clinicalRecordId: clinicalRiskId })],
+      });
+
       const mismatchedClinicalAmendment = await fetch(
         `${baseUrl}/api/v1/care-documentation/${documentationId}/clinical-records/${clinicalRiskId}/amendments`,
         {
@@ -4175,6 +4595,7 @@ describe('clients API', () => {
       const amendedRisk = amendedRiskDetail.records.find(
         (record) => record.correctsRecordId === clinicalRiskId,
       );
+      if (!amendedRisk) throw new Error('Clinical correction record was not returned');
       expect(amendedRisk).toMatchObject({
         kind: 'risk_assessment',
         correctsRecordId: clinicalRiskId,
@@ -4183,11 +4604,121 @@ describe('clients API', () => {
         recordedByEmployeeId: null,
         level: 'moderate',
       });
+      expect(amendedRisk.id).not.toBe(clinicalRiskId);
       expect(amendedRiskDetail.records).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ id: clinicalRiskId, correctedByRecordId: amendedRisk?.id }),
+          expect.objectContaining({
+            id: clinicalRiskId,
+            kind: 'risk_assessment',
+            level: 'high',
+            correctedByRecordId: amendedRisk.id,
+          }),
         ]),
       );
+      const referencedCarePlanAfterCorrectionResponse = await fetch(
+        `${baseUrl}/api/v1/care-plans/${referencedCarePlanId}`,
+        { headers },
+      );
+      expect(referencedCarePlanAfterCorrectionResponse.status).toBe(200);
+      const referencedCarePlanAfterCorrection =
+        (await referencedCarePlanAfterCorrectionResponse.json()) as {
+          plan: {
+            id: string;
+            tenantId: string;
+            clientId: string;
+            status: string;
+            version: number;
+          };
+          activeRevision: {
+            revision: { id: string; revisionNumber: number; status: string };
+            sourceReferences: Array<{
+              clinicalRecordId: string;
+              recordKind: string;
+              rationale: string | null;
+            }>;
+          };
+          draftRevision: null;
+        };
+      expect(referencedCarePlanAfterCorrection.plan).toMatchObject({
+        id: referencedCarePlanId,
+        tenantId,
+        clientId: executionClient.id,
+        status: 'active',
+        version: referencedCarePlanBeforeCorrection.plan.version,
+      });
+      expect(referencedCarePlanAfterCorrection.activeRevision).toEqual(
+        referencedCarePlanBeforeCorrection.activeRevision,
+      );
+      expect(referencedCarePlanAfterCorrection.activeRevision.sourceReferences).toEqual([
+        expect.objectContaining({ clinicalRecordId: clinicalRiskId }),
+      ]);
+      expect(referencedCarePlanAfterCorrection.draftRevision).toBeNull();
+      const referencedCarePlanHistoryAfterCorrectionResponse = await fetch(
+        `${baseUrl}/api/v1/care-plans/${referencedCarePlanId}/revisions`,
+        { headers },
+      );
+      expect(referencedCarePlanHistoryAfterCorrectionResponse.status).toBe(200);
+      const referencedCarePlanHistoryAfterCorrection =
+        (await referencedCarePlanHistoryAfterCorrectionResponse.json()) as {
+          revisions: Array<{
+            revision: { id: string; revisionNumber: number; status: string };
+            sourceReferences: Array<{
+              clinicalRecordId: string;
+              recordKind: string;
+              rationale: string | null;
+            }>;
+          }>;
+        };
+      expect(referencedCarePlanHistoryAfterCorrection.revisions).toEqual(
+        referencedCarePlanHistoryBeforeCorrection.revisions,
+      );
+      const clinicalCorrectionReferenceOwnership = await owner.query<{
+        reference_tenant_id: string;
+        reference_client_id: string;
+        referenced_record_id: string;
+        original_tenant_id: string;
+        original_client_id: string;
+        correction_record_id: string;
+        correction_tenant_id: string;
+        correction_client_id: string;
+        corrects_record_id: string;
+      }>(
+        `SELECT source_ref.tenant_id AS reference_tenant_id,
+                source_ref.client_id AS reference_client_id,
+                source_ref.clinical_record_id AS referenced_record_id,
+                original.tenant_id AS original_tenant_id,
+                original.client_id AS original_client_id,
+                correction.id AS correction_record_id,
+                correction.tenant_id AS correction_tenant_id,
+                correction.client_id AS correction_client_id,
+                correction.corrects_record_id AS corrects_record_id
+         FROM care_planning.source_references AS source_ref
+         JOIN clinical_documentation.records AS original
+           ON original.tenant_id = source_ref.tenant_id
+          AND original.client_id = source_ref.client_id
+          AND original.id = source_ref.clinical_record_id
+         JOIN clinical_documentation.records AS correction
+           ON correction.tenant_id = original.tenant_id
+          AND correction.client_id = original.client_id
+          AND correction.corrects_record_id = original.id
+         WHERE source_ref.tenant_id = $1
+           AND source_ref.plan_id = $2
+           AND source_ref.clinical_record_id = $3`,
+        [tenantId, referencedCarePlanId, clinicalRiskId],
+      );
+      expect(clinicalCorrectionReferenceOwnership.rows).toEqual([
+        {
+          reference_tenant_id: tenantId,
+          reference_client_id: executionClient.id,
+          referenced_record_id: clinicalRiskId,
+          original_tenant_id: tenantId,
+          original_client_id: executionClient.id,
+          correction_record_id: amendedRisk.id,
+          correction_tenant_id: tenantId,
+          correction_client_id: executionClient.id,
+          corrects_record_id: clinicalRiskId,
+        },
+      ]);
       await expect(
         owner.query(
           `INSERT INTO clinical_documentation.records

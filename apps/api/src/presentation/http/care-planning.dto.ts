@@ -785,6 +785,52 @@ export class CarePlanEvaluationDto {
   goals!: CarePlanGoalOutcomeDto[];
 }
 
+export class CarePlanCompetencyEligibilityDto {
+  @ApiProperty()
+  allowed!: boolean;
+
+  @ApiPropertyOptional({
+    enum: [
+      'COMPETENCY_POLICY_NOT_CONFIGURED',
+      'COMPETENCY_POLICY_INACTIVE',
+      'COMPETENCY_POLICY_INVALID',
+      'COMPETENCY_EMPLOYEE_LINK_REQUIRED',
+      'COMPETENCY_EMPLOYEE_INACTIVE',
+      'COMPETENCY_QUALIFICATION_MISSING',
+      'COMPETENCY_QUALIFICATION_EXPIRED',
+      'COMPETENCY_REQUIREMENTS_NOT_MET',
+      'COMPETENCY_POLICY_CHANGED',
+    ],
+  })
+  reasonCode?: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  policyId?: string;
+
+  @ApiPropertyOptional()
+  policyVersion?: number;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  employeeId?: string;
+
+  @ApiPropertyOptional({ type: [String], format: 'uuid' })
+  matchedQualificationIds?: string[];
+
+  @ApiPropertyOptional({ format: 'date-time' })
+  evaluatedAt?: string;
+}
+
+export class CarePlanEligibilityDto {
+  @ApiProperty({ enum: ['care_plan.activate', 'care_plan.evaluate'] })
+  operation!: 'care_plan.activate' | 'care_plan.evaluate';
+
+  @ApiProperty()
+  permissionAllowed!: boolean;
+
+  @ApiProperty({ type: CarePlanCompetencyEligibilityDto, nullable: true })
+  competency!: CarePlanCompetencyEligibilityDto | null;
+}
+
 export class CarePlanRevisionDetailDto {
   @ApiProperty({ type: CarePlanRevisionDto })
   revision!: CarePlanRevisionDto;

@@ -588,47 +588,57 @@ export default async function EmployeeDetailPage({
         </div>
         {employee.qualifications.length ? (
           <ul className="grid gap-2">
-            {employee.qualifications.map((qualification) => (
-              <li
-                key={qualification.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
-              >
-                <div>
-                  <p className="font-medium">
-                    {qualification.name}
-                    {qualification.code ? ` (${qualification.code})` : ''}
-                  </p>
-                  <p className="text-sm text-slate-600">
-                    {dateRange(
-                      qualification.validFrom,
-                      qualification.validUntil,
-                      locale,
-                      t('Employees.detail.open'),
-                      t('Employees.detail.unlimited'),
-                    )}
-                    {qualification.issuer ? ` · ${qualification.issuer}` : ''}
-                    {qualification.status === 'archived'
-                      ? ` · ${t('Employees.detail.archived')}`
-                      : ''}
-                  </p>
-                </div>
-                {qualification.status === 'active' ? (
-                  <form action={removeQualificationAction}>
-                    <input type="hidden" name="employeeId" value={id} />
-                    <input
-                      type="hidden"
-                      name="qualificationId"
-                      value={qualification.qualificationId}
-                    />
-                    <ConfirmSubmitButton
-                      confirmation={t('Employees.detail.removeQualificationConfirmation')}
-                    >
-                      {t('Employees.detail.remove')}
-                    </ConfirmSubmitButton>
-                  </form>
-                ) : null}
-              </li>
-            ))}
+            {employee.qualifications.map((qualification) => {
+              const revokedAt = qualification.revokedAt;
+              const revokedDate = revokedAt ? formatDate(revokedAt, locale) : null;
+              return (
+                <li
+                  key={qualification.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+                >
+                  <div>
+                    <p className="font-medium">
+                      {qualification.name}
+                      {qualification.code ? ` (${qualification.code})` : ''}
+                    </p>
+                    <p className="text-sm text-slate-600">
+                      {dateRange(
+                        qualification.validFrom,
+                        qualification.validUntil,
+                        locale,
+                        t('Employees.detail.open'),
+                        t('Employees.detail.unlimited'),
+                      )}
+                      {qualification.issuer ? ` · ${qualification.issuer}` : ''}
+                      {qualification.status === 'archived'
+                        ? ` · ${t('Employees.detail.archived')}`
+                        : ''}
+                      {qualification.assignmentStatus === 'revoked'
+                        ? ` · ${t('Employees.detail.qualificationRevoked')}`
+                        : ''}
+                      {revokedDate
+                        ? ` · ${t('Employees.detail.qualificationRevokedAt', { date: revokedDate })}`
+                        : ''}
+                    </p>
+                  </div>
+                  {qualification.assignmentStatus === 'active' ? (
+                    <form action={removeQualificationAction}>
+                      <input type="hidden" name="employeeId" value={id} />
+                      <input
+                        type="hidden"
+                        name="qualificationId"
+                        value={qualification.qualificationId}
+                      />
+                      <ConfirmSubmitButton
+                        confirmation={t('Employees.detail.removeQualificationConfirmation')}
+                      >
+                        {t('Employees.detail.remove')}
+                      </ConfirmSubmitButton>
+                    </form>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="text-sm text-slate-600">{t('Employees.detail.noQualifications')}</p>

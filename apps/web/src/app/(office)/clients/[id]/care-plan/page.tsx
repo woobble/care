@@ -33,6 +33,7 @@ type SearchParams = Promise<{
 }>;
 
 type CarePlanDetail = components['schemas']['CarePlanDetailDto'];
+type CarePlanEligibility = components['schemas']['CarePlanEligibilityDto'];
 type CarePlanRevisionDetail = components['schemas']['CarePlanRevisionDetailDto'];
 type CarePlanDiff = components['schemas']['CarePlanRevisionDiffDto'];
 type Need = CarePlanRevisionDetail['needs'][number];
@@ -138,6 +139,23 @@ const noticeKeys: Record<string, string> = {
   evaluationSaved: 'notices.evaluationSaved',
   planEnded: 'notices.planEnded',
 };
+const competencyDenialMessageKeys = {
+  COMPETENCY_POLICY_NOT_CONFIGURED: 'errors.competencyPolicyNotConfigured',
+  COMPETENCY_POLICY_INACTIVE: 'errors.competencyPolicyInactive',
+  COMPETENCY_POLICY_INVALID: 'errors.competencyPolicyInvalid',
+  COMPETENCY_POLICY_CHANGED: 'errors.competencyPolicyChanged',
+  COMPETENCY_EMPLOYEE_LINK_REQUIRED: 'errors.employeeLinkRequired',
+  COMPETENCY_EMPLOYEE_INACTIVE: 'errors.employeeInactive',
+  COMPETENCY_QUALIFICATION_MISSING: 'errors.qualificationMissing',
+  COMPETENCY_QUALIFICATION_EXPIRED: 'errors.qualificationExpired',
+  COMPETENCY_REQUIREMENTS_NOT_MET: 'errors.requirementsNotMet',
+} as const;
+
+function competencyDenialMessageKey(reasonCode: string | null | undefined) {
+  return reasonCode && reasonCode in competencyDenialMessageKeys
+    ? competencyDenialMessageKeys[reasonCode as keyof typeof competencyDenialMessageKeys]
+    : 'eligibility.unavailable';
+}
 const assessmentFields = [
   { key: 'clientConcerns', label: 'assessment.clientConcerns', group: 'client' },
   { key: 'clientWishes', label: 'assessment.clientWishes', group: 'client' },
@@ -270,6 +288,18 @@ export default async function ClientCarePlanPage({
       })
     : undefined;
   const detail = selectedPlanResult?.data;
+  const eligibilityResults = detail
+    ? await Promise.all([
+        get('/api/v1/care-plans/{planId}/eligibility', {
+          params: { path: { planId: detail.plan.id }, query: { operation: 'activate' }, header },
+        }),
+        get('/api/v1/care-plans/{planId}/eligibility', {
+          params: { path: { planId: detail.plan.id }, query: { operation: 'evaluate' }, header },
+        }),
+      ])
+    : undefined;
+  const activationEligibility = eligibilityResults?.[0].data ?? null;
+  const evaluationEligibility = eligibilityResults?.[1].data ?? null;
   const historyResult =
     selectedPlanId && canReviewHistory
       ? await get('/api/v1/care-plans/{planId}/revisions', {
@@ -527,16 +557,19 @@ export default async function ClientCarePlanPage({
               editable={editableDraft}
               canUpdate={canUpdate}
               canActivate={canActivate}
+              eligibility={activationEligibility}
               locale={locale}
               t={t}
             />
           ) : null}
 
-          {detail.activeRevision && canEvaluate ? (
+          {detail.activeRevision ? (
             <EvaluationForm
               clientId={client.id}
               detail={detail}
               revision={detail.activeRevision}
+              canEvaluate={canEvaluate}
+              eligibility={evaluationEligibility}
               locale={locale}
               t={t}
             />
@@ -690,6 +723,7 @@ async function RevisionEditor({
   editable,
   canUpdate,
   canActivate,
+  eligibility,
   locale,
   t,
 }: {
@@ -699,6 +733,7 @@ async function RevisionEditor({
   editable: boolean;
   canUpdate: boolean;
   canActivate: boolean;
+  eligibility: CarePlanEligibility | null;
   locale: Locale;
   t: Awaited<ReturnType<typeof getTranslations<'CarePlanning'>>>;
 }) {
@@ -978,7 +1013,13 @@ async function RevisionEditor({
         t={t}
       />
 
-      {canActivate && editable ? (
+      {revision.revision.status === 'draft' ? (
+        <EligibilityNotice eligibility={eligibility} t={t} />
+      ) : null}
+      {canActivate &&
+      editable &&
+      eligibility?.permissionAllowed &&
+      eligibility.competency?.allowed ? (
         <form action={activateCarePlanRevisionAction} className="flex flex-wrap items-end gap-3">
           <FormContext
             clientId={clientId}
@@ -998,6 +1039,51 @@ async function RevisionEditor({
         </p>
       ) : null}
     </div>
+  );
+}
+
+function EligibilityNotice({
+  eligibility,
+  t,
+}: Readonly<{
+  eligibility: CarePlanEligibility | null;
+  t: Awaited<ReturnType<typeof getTranslations<'CarePlanning'>>>;
+}>) {
+  if (!eligibility) {
+    return (
+      <p role="status" className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+        {t('eligibility.unavailable')}
+      </p>
+    );
+  }
+  if (!eligibility.permissionAllowed) {
+    return (
+      <p role="status" className="rounded-md bg-amber-50 p-3 text-sm text-amber-950">
+        {t('eligibility.permissionMissing')}
+      </p>
+    );
+  }
+  if (!eligibility.competency) {
+    return (
+      <p role="status" className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+        {t('eligibility.unavailable')}
+      </p>
+    );
+  }
+  if (!eligibility.competency.allowed) {
+    return (
+      <p
+        role="alert"
+        className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+      >
+        {t(competencyDenialMessageKey(eligibility.competency.reasonCode))}
+      </p>
+    );
+  }
+  return (
+    <p role="status" className="rounded-md bg-green-50 p-3 text-sm text-green-950">
+      {t('eligibility.allowed', { version: eligibility.competency.policyVersion ?? '?' })}
+    </p>
   );
 }
 
@@ -1873,12 +1959,16 @@ async function EvaluationForm({
   clientId,
   detail,
   revision,
+  canEvaluate,
+  eligibility,
   locale,
   t,
 }: {
   clientId: string;
   detail: CarePlanDetail;
   revision: CarePlanRevisionDetail;
+  canEvaluate: boolean;
+  eligibility: CarePlanEligibility | null;
   locale: Locale;
   t: Awaited<ReturnType<typeof getTranslations<'CarePlanning'>>>;
 }) {
@@ -1907,58 +1997,61 @@ async function EvaluationForm({
           {formatDateTime(detail.latestEvaluation.evaluatedAt, locale)}
         </p>
       ) : null}
-      <form action={evaluateCarePlanAction} className="grid gap-3 sm:grid-cols-2">
-        <FormContext
-          clientId={clientId}
-          planId={detail.plan.id}
-          revisionId={revision.revision.id}
-          version={detail.plan.version}
-        />
-        <SelectField
-          name="result"
-          label={t('evaluation.result')}
-          options={resultOptions}
-          required
-        />
-        <SelectField
-          name="planChange"
-          label={t('evaluation.planChange')}
-          options={[
-            { value: 'none', label: t('evaluation.noRevision') },
-            { value: 'revision_required', label: t('evaluation.revisionRequired') },
-          ]}
-          required
-        />
-        <TextareaField name="summary" label={t('evaluation.summary')} required maxLength={4000} />
-        <DateField name="nextEvaluationDue" label={t('evaluation.nextDue')} />
-        {revision.goals.length ? (
-          <fieldset className="grid gap-3 sm:col-span-2">
-            <legend className="font-semibold">{t('evaluation.goalOutcomes')}</legend>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {revision.goals.map((goal) => (
-                <div key={goal.id} className="grid gap-2 rounded-md border p-3">
-                  <input type="hidden" name="goalIds" value={goal.id} />
-                  <p className="font-medium">{goal.title}</p>
-                  <SelectField
-                    name={'outcome:' + goal.id}
-                    label={t('evaluation.outcome')}
-                    options={outcomeOptions}
-                    required
-                  />
-                  <TextField
-                    name={'note:' + goal.id}
-                    label={t('evaluation.note')}
-                    maxLength={1000}
-                  />
-                </div>
-              ))}
-            </div>
-          </fieldset>
-        ) : null}
-        <button className="w-fit rounded-md bg-blue-800 px-4 py-2 font-medium text-white">
-          {t('evaluation.save')}
-        </button>
-      </form>
+      <EligibilityNotice eligibility={eligibility} t={t} />
+      {canEvaluate && eligibility?.permissionAllowed && eligibility.competency?.allowed ? (
+        <form action={evaluateCarePlanAction} className="grid gap-3 sm:grid-cols-2">
+          <FormContext
+            clientId={clientId}
+            planId={detail.plan.id}
+            revisionId={revision.revision.id}
+            version={detail.plan.version}
+          />
+          <SelectField
+            name="result"
+            label={t('evaluation.result')}
+            options={resultOptions}
+            required
+          />
+          <SelectField
+            name="planChange"
+            label={t('evaluation.planChange')}
+            options={[
+              { value: 'none', label: t('evaluation.noRevision') },
+              { value: 'revision_required', label: t('evaluation.revisionRequired') },
+            ]}
+            required
+          />
+          <TextareaField name="summary" label={t('evaluation.summary')} required maxLength={4000} />
+          <DateField name="nextEvaluationDue" label={t('evaluation.nextDue')} />
+          {revision.goals.length ? (
+            <fieldset className="grid gap-3 sm:col-span-2">
+              <legend className="font-semibold">{t('evaluation.goalOutcomes')}</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {revision.goals.map((goal) => (
+                  <div key={goal.id} className="grid gap-2 rounded-md border p-3">
+                    <input type="hidden" name="goalIds" value={goal.id} />
+                    <p className="font-medium">{goal.title}</p>
+                    <SelectField
+                      name={'outcome:' + goal.id}
+                      label={t('evaluation.outcome')}
+                      options={outcomeOptions}
+                      required
+                    />
+                    <TextField
+                      name={'note:' + goal.id}
+                      label={t('evaluation.note')}
+                      maxLength={1000}
+                    />
+                  </div>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+          <button className="w-fit rounded-md bg-blue-800 px-4 py-2 font-medium text-white">
+            {t('evaluation.save')}
+          </button>
+        </form>
+      ) : null}
     </section>
   );
 }

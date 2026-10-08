@@ -40,6 +40,12 @@ export default async function AdministrationLayout({
         </Link>
         <Link
           className="rounded-md px-3 py-2 text-blue-900 underline-offset-4 hover:underline"
+          href="/administration/competency-policies"
+        >
+          {t('competencyPolicies')}
+        </Link>
+        <Link
+          className="rounded-md px-3 py-2 text-blue-900 underline-offset-4 hover:underline"
           href="/administration/audit"
         >
           {t('audit')}

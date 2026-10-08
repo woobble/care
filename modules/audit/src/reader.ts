@@ -29,16 +29,14 @@ export class DrizzleAuditReader {
     if (query.to) filters.push(lte(auditEntries.timestamp, query.to));
     const where = and(...filters);
     return this.unitOfWork.transaction({ tenantId }, async (transaction) => {
-      const [items, totals] = await Promise.all([
-        transaction
-          .select()
-          .from(auditEntries)
-          .where(where)
-          .orderBy(desc(auditEntries.timestamp), desc(auditEntries.id))
-          .limit(query.pageSize)
-          .offset((query.page - 1) * query.pageSize),
-        transaction.select({ total: count() }).from(auditEntries).where(where),
-      ]);
+      const items = await transaction
+        .select()
+        .from(auditEntries)
+        .where(where)
+        .orderBy(desc(auditEntries.timestamp), desc(auditEntries.id))
+        .limit(query.pageSize)
+        .offset((query.page - 1) * query.pageSize);
+      const totals = await transaction.select({ total: count() }).from(auditEntries).where(where);
       return { items, total: Number(totals[0]?.total ?? 0) };
     });
   }

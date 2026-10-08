@@ -4,11 +4,14 @@ import type { ClientApplicationService } from '@care/clients';
 import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
 import type { VisitExecutionApplicationService } from '@care/visit-execution';
+import type { CompetencyPolicyEvaluator } from '@care/permissions';
+import type { DatabaseTransaction } from '@care/database';
 import { CarePlanningApplicationService } from '@care/care-planning';
 import { DatabaseModule } from '../database/database.module';
 import {
   AUDIT_WRITER,
   CARE_PLANNING_APPLICATION,
+  COMPETENCY_POLICY_APPLICATION,
   CLIENT_APPLICATION,
   OUTBOX_WRITER,
   UNIT_OF_WORK,
@@ -21,6 +24,7 @@ import { ClientsModule } from './clients.module';
 import { IdentityModule } from './identity.module';
 import { PlatformModule } from './platform.module';
 import { VisitExecutionModule } from './visit-execution.module';
+import { CompetencyPoliciesModule } from './competency-policies.module';
 
 @Module({
   imports: [
@@ -30,6 +34,7 @@ import { VisitExecutionModule } from './visit-execution.module';
     PlatformModule,
     ClientsModule,
     VisitExecutionModule,
+    CompetencyPoliciesModule,
   ],
   controllers: [CarePlanningController],
   providers: [
@@ -43,6 +48,7 @@ import { VisitExecutionModule } from './visit-execution.module';
         VISIT_EXECUTION_APPLICATION,
         AUDIT_WRITER,
         OUTBOX_WRITER,
+        COMPETENCY_POLICY_APPLICATION,
       ],
       useFactory: (
         unitOfWork: UnitOfWork,
@@ -50,7 +56,16 @@ import { VisitExecutionModule } from './visit-execution.module';
         visits: VisitExecutionApplicationService,
         audit: AuditWriter,
         outbox: OutboxWriter,
-      ) => new CarePlanningApplicationService(unitOfWork, clients, visits, audit, outbox),
+        competencyPolicies: CompetencyPolicyEvaluator<DatabaseTransaction>,
+      ) =>
+        new CarePlanningApplicationService(
+          unitOfWork,
+          clients,
+          visits,
+          audit,
+          outbox,
+          competencyPolicies,
+        ),
     },
   ],
   exports: [CARE_PLANNING_APPLICATION],

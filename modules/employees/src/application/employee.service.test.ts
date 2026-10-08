@@ -7,6 +7,7 @@ import type { AuthorizationPrincipal, Permission } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
 import type {
   EmployeeDetailSnapshot,
+  EmployeeQualificationSnapshot,
   EmployeeSnapshot,
   QualificationDefinitionSnapshot,
   SkillDefinitionSnapshot,
@@ -17,6 +18,7 @@ import {
   InvalidTeamAssignmentError,
   PrimaryFacilityRequiredError,
   QualificationArchivedError,
+  QualificationRequiredByActivePolicyError,
   UserAlreadyLinkedError,
 } from '../domain/employee';
 import { EmployeeApplicationService } from './employee.service';
@@ -126,6 +128,41 @@ describe('employee application rules', () => {
         {},
       ),
     ).rejects.toBeInstanceOf(PrimaryFacilityRequiredError);
+  });
+
+  test('blocks qualification archival while an active policy references it', async () => {
+    let archived = false;
+    const qualification: QualificationDefinitionSnapshot = {
+      id: '5c48a02f-c8e8-4e59-9891-9fa2dbb0e81e',
+      tenantId,
+      name: 'Registered nurse',
+      code: 'RN',
+      description: null,
+      status: 'active',
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+    const service = createService(
+      {
+        getQualification: async () => qualification,
+        setQualificationStatus: async () => {
+          archived = true;
+          return { ...qualification, status: 'archived' };
+        },
+      },
+      true,
+    );
+
+    await expect(
+      service.service.archiveQualification(
+        principal('employee.manage_qualifications'),
+        qualification.id,
+        requestContext,
+        {},
+      ),
+    ).rejects.toBeInstanceOf(QualificationRequiredByActivePolicyError);
+    expect(archived).toBe(false);
+    expect(service.auditRecords).toHaveLength(0);
   });
 
   test('rejects links outside the tenant and users already linked to another employee', async () => {
@@ -252,6 +289,106 @@ describe('employee application rules', () => {
     ).rejects.toBeInstanceOf(QualificationArchivedError);
   });
 
+  test('creates a new qualification assignment when no active assignment exists', async () => {
+    let created: Parameters<EmployeeRepository['addQualification']>[1] | undefined;
+    let updated = false;
+    const qualification: QualificationDefinitionSnapshot = {
+      id: '3b6a8edb-868f-73aa-9fd2-3bf213760a18',
+      tenantId,
+      name: 'Registered Nurse',
+      code: 'RN',
+      description: null,
+      status: 'active',
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+    const service = createService({
+      getQualification: async () => qualification,
+      findEmployeeQualification: async () => null,
+      addQualification: async (_transaction, input) => {
+        created = input;
+      },
+      updateEmployeeQualification: async () => {
+        updated = true;
+      },
+    });
+
+    await service.service.assignQualification(
+      principal('employee.manage_qualifications'),
+      employeeId,
+      qualification.id,
+      { validFrom: '2026-05-01', issuer: 'State Board' },
+      requestContext,
+      {},
+    );
+
+    expect(created).toMatchObject({
+      employeeId,
+      qualificationId: qualification.id,
+      validFrom: '2026-05-01',
+      validUntil: null,
+      issuer: 'State Board',
+    });
+    expect(updated).toBe(false);
+  });
+
+  test('revokes a qualification assignment and records the same timestamp', async () => {
+    let revokedAt: Date | undefined;
+    const service = createService({
+      getQualification: async () => ({
+        id: '3b6a8edb-868f-73aa-9fd2-3bf213760a18',
+        tenantId,
+        name: 'Registered Nurse',
+        code: 'RN',
+        description: null,
+        status: 'active',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      }),
+      removeQualification: async (_transaction, _tenantId, _employeeId, _qualificationId, now) => {
+        revokedAt = now;
+        return true;
+      },
+    });
+
+    await service.service.removeQualification(
+      principal('employee.manage_qualifications'),
+      employeeId,
+      '3b6a8edb-868f-73aa-9fd2-3bf213760a18',
+      requestContext,
+      {},
+    );
+
+    expect(revokedAt).toBeInstanceOf(Date);
+    expect(service.auditRecords[0]?.timestamp).toBe(revokedAt);
+    expect(service.auditRecords.map((entry) => entry.action)).toContain(
+      'employee.qualification_removed',
+    );
+  });
+
+  test('retains revoked qualification assignments in employee detail', async () => {
+    const revoked: EmployeeQualificationSnapshot = {
+      id: '5fa83edc-7e95-7db9-9a27-34b38e8be881',
+      qualificationId: '3b6a8edb-868f-73aa-9fd2-3bf213760a18',
+      name: 'Registered Nurse',
+      code: 'RN',
+      description: null,
+      validFrom: '2025-01-01',
+      validUntil: null,
+      issuer: 'State Board',
+      status: 'active',
+      assignmentStatus: 'revoked',
+      revokedAt: new Date('2026-06-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-06-01T00:00:00.000Z'),
+    };
+    const detail = { ...employeeDetail(employee), qualifications: [revoked] };
+    const service = createService({ detail: async () => detail });
+
+    const result = await service.service.get(principal('employee.read'), employeeId);
+
+    expect(result.qualifications).toEqual([revoked]);
+  });
+
   test('records an active skill assignment', async () => {
     let assignedSkill: { employeeId: string; skillId: string } | undefined;
     const skill: SkillDefinitionSnapshot = {
@@ -286,7 +423,7 @@ describe('employee application rules', () => {
   });
 });
 
-function createService(overrides: Partial<EmployeeRepository> = {}) {
+function createService(overrides: Partial<EmployeeRepository> = {}, qualificationUsed = false) {
   const auditRecords: AuditRecord[] = [];
   const events: DomainEvent[] = [];
   const unitOfWork: UnitOfWork = {
@@ -313,6 +450,9 @@ function createService(overrides: Partial<EmployeeRepository> = {}) {
       unitOfWork,
       audit,
       outbox,
+      {
+        isQualificationUsedByActivePolicy: async () => qualificationUsed,
+      },
       repository as unknown as EmployeeRepository,
     ),
     auditRecords,

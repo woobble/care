@@ -63,6 +63,8 @@ export const PERMISSIONS = [
   'employee.assign_team',
   'employee.link_user',
   'employee.manage_qualifications',
+  'competency_policy.read',
+  'competency_policy.manage',
   'employee.manage_skills',
   'employee.manage_employment',
   'employee.manage',
@@ -114,6 +116,66 @@ export interface AuthorizationRequest {
   resource: ResourceContext;
 }
 
+export const COMPETENCY_OPERATIONS = ['care_plan.activate', 'care_plan.evaluate'] as const;
+export type CompetencyOperation = (typeof COMPETENCY_OPERATIONS)[number];
+
+export const COMPETENCY_DENIAL_CODES = [
+  'COMPETENCY_POLICY_NOT_CONFIGURED',
+  'COMPETENCY_POLICY_INACTIVE',
+  'COMPETENCY_POLICY_INVALID',
+  'COMPETENCY_EMPLOYEE_LINK_REQUIRED',
+  'COMPETENCY_EMPLOYEE_INACTIVE',
+  'COMPETENCY_QUALIFICATION_MISSING',
+  'COMPETENCY_QUALIFICATION_EXPIRED',
+  'COMPETENCY_REQUIREMENTS_NOT_MET',
+  'COMPETENCY_POLICY_CHANGED',
+] as const;
+export type CompetencyDenialCode = (typeof COMPETENCY_DENIAL_CODES)[number];
+
+export interface CompetencyResource {
+  type: string;
+  id: string;
+}
+
+export interface CompetencyPolicyEvaluationRequest {
+  tenantId: string;
+  userId: string;
+  operation: CompetencyOperation;
+  resource?: CompetencyResource;
+  effectiveAt?: Date;
+}
+
+export interface CompetencyAuthorizationMetadata {
+  policyId: string;
+  policyVersion: number;
+  employeeId: string;
+  matchedQualificationIds: readonly string[];
+  evaluatedAt: Date;
+}
+
+export type CompetencyPolicyEvaluationResult =
+  | ({ allowed: true } & CompetencyAuthorizationMetadata)
+  | {
+      allowed: false;
+      reasonCode: CompetencyDenialCode;
+      policyId?: string;
+      policyVersion?: number;
+    };
+
+export interface CompetencyPolicyEvaluator<TContext> {
+  evaluate(
+    context: TContext,
+    request: CompetencyPolicyEvaluationRequest,
+  ): Promise<CompetencyPolicyEvaluationResult>;
+}
+
+export interface ProfessionalOperationAuthorizationRequest {
+  permission: Permission;
+  operation: CompetencyOperation;
+  resource: ResourceContext & CompetencyResource;
+  effectiveAt?: Date;
+}
+
 export function can(principal: AuthorizationPrincipal, request: AuthorizationRequest): boolean {
   if (principal.tenantId !== request.resource.tenantId) return false;
 
@@ -137,6 +199,38 @@ export function canGrantPermissions(
 
 export function assertCan(principal: AuthorizationPrincipal, request: AuthorizationRequest): void {
   if (!can(principal, request)) throw new AuthorizationDeniedError(request.action);
+}
+
+export async function authorizeProfessionalOperation<TContext>(
+  context: TContext,
+  principal: AuthorizationPrincipal,
+  request: ProfessionalOperationAuthorizationRequest,
+  evaluator: CompetencyPolicyEvaluator<TContext>,
+): Promise<CompetencyAuthorizationMetadata> {
+  assertCan(principal, { action: request.permission, resource: request.resource });
+
+  const result = await evaluator.evaluate(context, {
+    tenantId: principal.tenantId,
+    userId: principal.userId,
+    operation: request.operation,
+    resource: { type: request.resource.type, id: request.resource.id },
+    ...(request.effectiveAt ? { effectiveAt: request.effectiveAt } : {}),
+  });
+  if (!result.allowed) {
+    throw new ProfessionalCompetencyDeniedError(
+      result.reasonCode,
+      result.policyId,
+      result.policyVersion,
+    );
+  }
+
+  return {
+    policyId: result.policyId,
+    policyVersion: result.policyVersion,
+    employeeId: result.employeeId,
+    matchedQualificationIds: result.matchedQualificationIds,
+    evaluatedAt: result.evaluatedAt,
+  };
 }
 
 function scopeMatches(grant: PermissionGrant, resource: ResourceContext, userId: string): boolean {
@@ -182,5 +276,19 @@ export class AuthorizationDeniedError extends Error {
   constructor(readonly action: Permission) {
     super('The requested action is not allowed');
     this.name = 'AuthorizationDeniedError';
+  }
+}
+
+export class ProfessionalCompetencyDeniedError extends Error {
+  readonly code: CompetencyDenialCode;
+
+  constructor(
+    readonly reasonCode: CompetencyDenialCode,
+    readonly policyId?: string,
+    readonly policyVersion?: number,
+  ) {
+    super('The professional competency requirements are not satisfied');
+    this.name = 'ProfessionalCompetencyDeniedError';
+    this.code = reasonCode;
   }
 }

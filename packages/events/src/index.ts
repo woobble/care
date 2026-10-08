@@ -205,6 +205,14 @@ export interface EventPayloadMap {
     clientId: string;
     revisionId: string;
     revisionNumber: number;
+    professionalAuthorization: {
+      operationKey: string;
+      policyId: string;
+      policyVersion: number;
+      employeeId: string;
+      matchedQualificationIds: string[];
+      evaluatedAt: string;
+    };
   };
   'care_plan.evaluated': {
     planId: string;
@@ -217,7 +225,19 @@ export interface EventPayloadMap {
       | 'not_effective'
       | 'changed_condition'
       | 'no_change';
+    professionalAuthorization: {
+      operationKey: string;
+      policyId: string;
+      policyVersion: number;
+      employeeId: string;
+      matchedQualificationIds: string[];
+      evaluatedAt: string;
+    };
   };
+  'competency_policy.created': { policyId: string; operationKey: string; version: number };
+  'competency_policy.updated': { policyId: string; operationKey: string; version: number };
+  'competency_policy.activated': { policyId: string; operationKey: string; version: number };
+  'competency_policy.deactivated': { policyId: string; operationKey: string; version: number };
   'care_plan.ended': { planId: string; clientId: string };
   'clinical.measurement_recorded': {
     documentationId: string;
@@ -435,6 +455,7 @@ export interface DomainEvent<T extends EventName = EventName> {
     | 'care_documentation'
     | 'care_plan'
     | 'clinical_documentation'
+    | 'competency_policy'
     | 'service_evidence'
     | 'schedule_generation'
     | 'employee_availability'

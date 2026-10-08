@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
-import { EmployeeApplicationService, type EmployeeSchedulingGuard } from '@care/employees';
+import {
+  EmployeeApplicationService,
+  type EmployeeQualificationPolicyGuard,
+  type EmployeeSchedulingGuard,
+} from '@care/employees';
 import type { VisitExecutionGuards } from '@care/visit-execution';
 import type { AuditWriter } from '@care/audit';
 import type { UnitOfWork } from '@care/database';
@@ -10,6 +14,7 @@ import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
 import {
   AUDIT_WRITER,
   EMPLOYEE_APPLICATION,
+  COMPETENCY_POLICY_APPLICATION,
   OUTBOX_WRITER,
   SCHEDULING_GUARDS,
   VISIT_EXECUTION_GUARDS,
@@ -20,6 +25,7 @@ import { AuditModule } from './audit.module';
 import { IdentityModule } from './identity.module';
 import { PlatformModule } from './platform.module';
 import { VisitExecutionModule } from './visit-execution.module';
+import { CompetencyPoliciesModule } from './competency-policies.module';
 
 @Module({
   imports: [
@@ -29,6 +35,7 @@ import { VisitExecutionModule } from './visit-execution.module';
     PlatformModule,
     ServiceAgreementProtectionModule,
     VisitExecutionModule,
+    CompetencyPoliciesModule,
   ],
   controllers: [EmployeesController],
   providers: [
@@ -42,6 +49,7 @@ import { VisitExecutionModule } from './visit-execution.module';
         OUTBOX_WRITER,
         SCHEDULING_GUARDS,
         VISIT_EXECUTION_GUARDS,
+        COMPETENCY_POLICY_APPLICATION,
       ],
       useFactory: (
         unitOfWork: UnitOfWork,
@@ -49,8 +57,17 @@ import { VisitExecutionModule } from './visit-execution.module';
         outbox: OutboxWriter,
         scheduling: EmployeeSchedulingGuard,
         execution: VisitExecutionGuards,
+        qualificationPolicies: EmployeeQualificationPolicyGuard,
       ) =>
-        new EmployeeApplicationService(unitOfWork, audit, outbox, undefined, scheduling, execution),
+        new EmployeeApplicationService(
+          unitOfWork,
+          audit,
+          outbox,
+          qualificationPolicies,
+          undefined,
+          scheduling,
+          execution,
+        ),
     },
   ],
   exports: [EMPLOYEE_APPLICATION],

@@ -841,6 +841,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/competency-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List tenant competency policies */
+        get: operations["listCompetencyPolicies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/competency-policies/{operationKey}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a draft competency policy version */
+        post: operations["createCompetencyPolicyDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/competency-policies/{operationKey}/versions/{version}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate a policy version */
+        post: operations["activateCompetencyPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/competency-policies/{operationKey}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate the active policy version */
+        post: operations["deactivateCompetencyPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -2324,6 +2392,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/care-plans/{planId}/eligibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check permission scope and competency eligibility for a care plan action */
+        get: operations["previewCarePlanEligibility"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/care-plans/{planId}/evaluations": {
         parameters: {
             query?: never;
@@ -3027,6 +3112,12 @@ export interface components {
             issuer: string | null;
             /** @enum {string} */
             status: "active" | "archived";
+            /** @enum {string} */
+            assignmentStatus: "active" | "revoked";
+            /** Format: date-time */
+            revokedAt: string | null;
+            /** Format: date-time */
+            updatedAt: string;
         };
         EmployeeSkillResponseDto: {
             /** Format: uuid */
@@ -3154,6 +3245,59 @@ export interface components {
             /** Format: date */
             validUntil?: string | null;
             issuer?: string | null;
+        };
+        CompetencyPolicyRequirementDto: {
+            /** Format: uuid */
+            qualificationDefinitionId: string;
+            code: string | null;
+            name: string;
+            /** @enum {string} */
+            status: "active" | "archived";
+        };
+        CompetencyPolicyVersionDto: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            name: string;
+            description: string | null;
+            /** @enum {string} */
+            requirementMode: "ANY" | "ALL";
+            /** @enum {string} */
+            status: "draft" | "active" | "inactive";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            activatedAt: string | null;
+            /** Format: date-time */
+            deactivatedAt: string | null;
+            requirements: components["schemas"]["CompetencyPolicyRequirementDto"][];
+        };
+        CompetencyPolicyOperationDto: {
+            /** @enum {string} */
+            operationKey: "care_plan.activate" | "care_plan.evaluate";
+            /** Format: uuid */
+            policyId: string | null;
+            latestVersion: number;
+            activeVersion: number | null;
+            versions: components["schemas"]["CompetencyPolicyVersionDto"][];
+        };
+        CompetencyPolicyQualificationDto: {
+            /** Format: uuid */
+            id: string;
+            code: string | null;
+            name: string;
+        };
+        CompetencyPolicyAdminDto: {
+            operations: components["schemas"]["CompetencyPolicyOperationDto"][];
+            qualificationDefinitions: components["schemas"]["CompetencyPolicyQualificationDto"][];
+        };
+        CompetencyPolicyDraftInputDto: {
+            expectedVersion: number;
+            name: string;
+            description?: string | null;
+            /** @enum {string} */
+            requirementMode: "ANY" | "ALL";
+            qualificationDefinitionIds: string[];
         };
         AuditEntryDto: {
             /** Format: uuid */
@@ -5153,6 +5297,25 @@ export interface components {
             rationale?: string | null;
             expectedVersion: number;
         };
+        CarePlanCompetencyEligibilityDto: {
+            allowed: boolean;
+            /** @enum {string} */
+            reasonCode?: "COMPETENCY_POLICY_NOT_CONFIGURED" | "COMPETENCY_POLICY_INACTIVE" | "COMPETENCY_POLICY_INVALID" | "COMPETENCY_EMPLOYEE_LINK_REQUIRED" | "COMPETENCY_EMPLOYEE_INACTIVE" | "COMPETENCY_QUALIFICATION_MISSING" | "COMPETENCY_QUALIFICATION_EXPIRED" | "COMPETENCY_REQUIREMENTS_NOT_MET" | "COMPETENCY_POLICY_CHANGED";
+            /** Format: uuid */
+            policyId?: string;
+            policyVersion?: number;
+            /** Format: uuid */
+            employeeId?: string;
+            matchedQualificationIds?: string[];
+            /** Format: date-time */
+            evaluatedAt?: string;
+        };
+        CarePlanEligibilityDto: {
+            /** @enum {string} */
+            operation: "care_plan.activate" | "care_plan.evaluate";
+            permissionAllowed: boolean;
+            competency: components["schemas"]["CarePlanCompetencyEligibilityDto"] | null;
+        };
         CarePlanGoalOutcomeInputDto: {
             /** Format: uuid */
             goalId: string;
@@ -5391,7 +5554,7 @@ export interface components {
         };
         PermissionGrantDto: {
             /** @enum {string} */
-            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "clinical_documentation.read" | "clinical_documentation.create" | "clinical_documentation.update" | "clinical_documentation.review" | "clinical_documentation.amend" | "care_plan.read" | "care_plan.create" | "care_plan.update" | "care_plan.activate" | "care_plan.evaluate" | "care_plan.end" | "care_plan.review_history" | "service_evidence.read" | "service_evidence.prepare" | "acknowledgement.read" | "acknowledgement.capture" | "acknowledgement.revoke" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
+            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "clinical_documentation.read" | "clinical_documentation.create" | "clinical_documentation.update" | "clinical_documentation.review" | "clinical_documentation.amend" | "care_plan.read" | "care_plan.create" | "care_plan.update" | "care_plan.activate" | "care_plan.evaluate" | "care_plan.end" | "care_plan.review_history" | "service_evidence.read" | "service_evidence.prepare" | "acknowledgement.read" | "acknowledgement.capture" | "acknowledgement.revoke" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "competency_policy.read" | "competency_policy.manage" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
             /** @enum {string} */
             scopeType: "assigned_clients" | "team" | "facility" | "organization" | "tenant";
             /** Format: uuid */
@@ -7532,6 +7695,142 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeDetailResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    listCompetencyPolicies: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetencyPolicyAdminDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    createCompetencyPolicyDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                operationKey: "care_plan.activate" | "care_plan.evaluate";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompetencyPolicyDraftInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetencyPolicyAdminDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    activateCompetencyPolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                operationKey: "care_plan.activate" | "care_plan.evaluate";
+                /** @description Version number, starting at 1 */
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetencyPolicyAdminDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    deactivateCompetencyPolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                operationKey: "care_plan.activate" | "care_plan.evaluate";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetencyPolicyAdminDto"];
                 };
             };
             /** @description Problem Details response */
@@ -11800,6 +12099,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    previewCarePlanEligibility: {
+        parameters: {
+            query: {
+                operation: "activate" | "evaluate";
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanEligibilityDto"];
                 };
             };
             /** @description Problem Details response */
