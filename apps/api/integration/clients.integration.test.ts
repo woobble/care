@@ -204,6 +204,9 @@ describe('clients API', () => {
            ($1, 'visit_execution.read'), ($1, 'visit_execution.correct'),
            ($1, 'care_documentation.read'), ($1, 'care_documentation.review'),
            ($1, 'care_documentation.amend'),
+           ($1, 'care_plan.read'),
+           ($1, 'clinical_documentation.read'), ($1, 'clinical_documentation.review'),
+           ($1, 'clinical_documentation.amend'),
            ($1, 'service_evidence.read'), ($1, 'service_evidence.prepare'),
            ($1, 'acknowledgement.read'), ($1, 'acknowledgement.revoke')`,
         [officeRoleId],
@@ -248,7 +251,10 @@ describe('clients API', () => {
                 ($1, 'visit_execution.start'), ($1, 'visit_execution.record_services'),
                 ($1, 'visit_execution.complete'), ($1, 'care_documentation.read'),
                 ($1, 'care_documentation.create'), ($1, 'care_documentation.update'),
-                ($1, 'care_documentation.finalize'), ($1, 'service_evidence.read'),
+                ($1, 'care_documentation.finalize'),
+                ($1, 'care_plan.read'),
+                ($1, 'clinical_documentation.read'), ($1, 'clinical_documentation.create'),
+                ($1, 'clinical_documentation.update'), ($1, 'service_evidence.read'),
                 ($1, 'acknowledgement.read'), ($1, 'acknowledgement.capture')`,
         [caregiverRoleId],
       );
@@ -305,7 +311,7 @@ describe('clients API', () => {
         (await appRole.query('SELECT membership_id FROM identity.membership_scopes')).rowCount,
       ).toBe(4);
       expect((await appRole.query('SELECT role_id FROM identity.role_permissions')).rowCount).toBe(
-        PERMISSIONS.length + 57,
+        PERMISSIONS.length + 65,
       );
       await appRole.query('COMMIT');
       expect((await appRole.query('SELECT id FROM identity.tenant_memberships')).rowCount).toBe(0);
@@ -696,21 +702,21 @@ describe('clients API', () => {
       });
       expect(timelineResponse.status).toBe(200);
       const timeline = (await timelineResponse.json()) as Array<{
-        summary: string;
         actorId: string;
         action: string;
       }>;
-      expect(timeline.map((entry) => entry.summary)).toEqual(
+      expect(timeline.map((entry) => entry.action)).toEqual(
         expect.arrayContaining([
-          'Klient angelegt',
-          'Adresse hinzugefügt',
-          'Kontakt hinzugefügt',
-          'Versicherungsverhältnis hinzugefügt',
-          'Pflegegradverlauf ergänzt',
-          'Versorgerkontext geändert',
+          'client.created',
+          'client.address_added',
+          'client.contact_added',
+          'client.insurance_added',
+          'client.pflegegrad_added',
+          'client.provider_context_changed',
         ]),
       );
       expect(timeline.every((entry) => entry.actorId && entry.action)).toBe(true);
+      expect(timeline.every((entry) => !('summary' in entry))).toBe(true);
       expect(JSON.stringify(timeline)).not.toContain(insuranceNumber);
 
       const clientAudit = await owner.query<{ metadata: string }>(
@@ -848,6 +854,10 @@ describe('clients API', () => {
         expect.objectContaining({ permission: 'care_documentation.create' }),
         expect.objectContaining({ permission: 'care_documentation.update' }),
         expect.objectContaining({ permission: 'care_documentation.finalize' }),
+        expect.objectContaining({ permission: 'care_plan.read' }),
+        expect.objectContaining({ permission: 'clinical_documentation.read' }),
+        expect.objectContaining({ permission: 'clinical_documentation.create' }),
+        expect.objectContaining({ permission: 'clinical_documentation.update' }),
         expect.objectContaining({ permission: 'service_evidence.read' }),
         expect.objectContaining({ permission: 'acknowledgement.read' }),
         expect.objectContaining({ permission: 'acknowledgement.capture' }),
@@ -1492,7 +1502,7 @@ describe('clients API', () => {
       expect(scheduleTimelineResponse.status).toBe(200);
       const scheduleTimeline = (await scheduleTimelineResponse.json()) as Array<{
         action: string;
-        summary: string;
+        actorId: string;
       }>;
       expect(scheduleTimeline.map((entry) => entry.action)).toEqual(
         expect.arrayContaining([
@@ -1503,7 +1513,7 @@ describe('clients API', () => {
           'visit.cancelled',
         ]),
       );
-      expect(scheduleTimeline.every((entry) => entry.summary.length > 0)).toBe(true);
+      expect(scheduleTimeline.every((entry) => entry.actorId && entry.action)).toBe(true);
       expect(JSON.stringify(scheduleTimeline)).not.toContain(manualMarker);
 
       const visitIds = generatedVisitPage.items.map((visit) => visit.id).concat(manualVisit.id);
@@ -1898,6 +1908,622 @@ describe('clients API', () => {
         ...headers,
         Authorization: `Bearer ${await issueToken(secondSubject)}`,
       };
+
+      const carePlanAuthor = await createSchedulingEmployee('Care Plan', 'Author');
+      const linkCarePlanAuthor = await fetch(
+        `${baseUrl}/api/v1/employees/${carePlanAuthor.id}/user`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ userId }),
+        },
+      );
+      expect(linkCarePlanAuthor.status).toBe(200);
+
+      const carePlanValidFrom = dateInBerlin(-30);
+      const createCarePlan = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/care-plans`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ validFrom: carePlanValidFrom }),
+        },
+      );
+      expect(createCarePlan.status).toBe(201);
+      const createdCarePlan = (await createCarePlan.json()) as {
+        plan: { id: string; status: string; version: number };
+        draftRevision: { revision: { id: string; status: string } };
+      };
+      const carePlanId = createdCarePlan.plan.id;
+      const initialRevisionId = createdCarePlan.draftRevision.revision.id;
+      expect(createdCarePlan).toMatchObject({
+        plan: { status: 'draft', version: 1 },
+        draftRevision: { revision: { status: 'draft' } },
+      });
+
+      const carePlansByClientName = await fetch(
+        `${baseUrl}/api/v1/care-plans?clientQuery=Execution`,
+        { headers },
+      );
+      expect(carePlansByClientName.status).toBe(200);
+      const carePlanSearch = (await carePlansByClientName.json()) as {
+        items: Array<{ id: string; clientDisplayName: string }>;
+      };
+      expect(
+        carePlanSearch.items.some(
+          (item) => item.id === carePlanId && item.clientDisplayName.includes('Execution'),
+        ),
+      ).toBe(true);
+      expect(JSON.stringify(carePlanSearch)).not.toContain('private care planning narrative');
+      const blankClientQuery = await fetch(`${baseUrl}/api/v1/care-plans?clientQuery=%20%20`, {
+        headers,
+      });
+      expect(blankClientQuery.status).toBe(400);
+
+      const incompleteCarePlanActivation = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/activate`,
+        { method: 'POST', headers, body: JSON.stringify({ expectedVersion: 1 }) },
+      );
+      expect(incompleteCarePlanActivation.status).toBe(409);
+      expect((await incompleteCarePlanActivation.json()).code).toBe(
+        'CARE_PLAN_REVISION_INCOMPLETE',
+      );
+
+      const updateCarePlanAssessment = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/assessment`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 1,
+            clientConcerns: 'A private care planning narrative.',
+            professionalRationale: 'A private professional planning rationale.',
+          }),
+        },
+      );
+      expect(updateCarePlanAssessment.status).toBe(200);
+
+      const addCarePlanNeed = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/needs`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 2,
+            category: 'personal_care',
+            title: 'Morning personal care',
+            source: 'client_report',
+            priority: 'normal',
+            status: 'active',
+          }),
+        },
+      );
+      expect(addCarePlanNeed.status).toBe(201);
+      const needDetail = (await addCarePlanNeed.json()) as {
+        draftRevision: { needs: Array<{ id: string }> };
+      };
+      const careNeedId = needDetail.draftRevision.needs[0]!.id;
+
+      const addCarePlanGoal = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/goals`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 3,
+            title: 'Maintain a safe morning routine',
+            status: 'active',
+            priority: 'normal',
+            needIds: [careNeedId],
+          }),
+        },
+      );
+      expect(addCarePlanGoal.status).toBe(201);
+      const goalDetail = (await addCarePlanGoal.json()) as {
+        draftRevision: { goals: Array<{ id: string }> };
+      };
+      const careGoalId = goalDetail.draftRevision.goals[0]!.id;
+
+      const addCarePlanMeasure = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/measures`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 4,
+            title: 'Morning hygiene support',
+            instruction: 'Support the client with their chosen hygiene routine.',
+            category: 'personal_care',
+            needIds: [careNeedId],
+            goalIds: [careGoalId],
+            validFrom: carePlanValidFrom,
+            validUntil: null,
+            status: 'active',
+          }),
+        },
+      );
+      expect(addCarePlanMeasure.status).toBe(201);
+      const measureDetail = (await addCarePlanMeasure.json()) as {
+        draftRevision: { measures: Array<{ id: string }> };
+      };
+      const careMeasureId = measureDetail.draftRevision.measures[0]!.id;
+
+      const missingClinicalReference = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/source-references`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 5,
+            clinicalRecordId: uuidv7(),
+            recordKind: 'observation',
+          }),
+        },
+      );
+      expect(missingClinicalReference.status).toBe(400);
+      expect((await missingClinicalReference.json()).code).toBe('CARE_PLAN_RELATIONSHIP_INVALID');
+
+      const staleCarePlanUpdate = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/assessment`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ expectedVersion: 1, clientConcerns: 'Stale write.' }),
+        },
+      );
+      expect(staleCarePlanUpdate.status).toBe(409);
+      expect((await staleCarePlanUpdate.json()).code).toBe('CARE_PLAN_VERSION_CONFLICT');
+
+      const activateCarePlan = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/activate`,
+        { method: 'POST', headers, body: JSON.stringify({ expectedVersion: 5 }) },
+      );
+      expect(activateCarePlan.status).toBe(200);
+      const activatedCarePlan = (await activateCarePlan.json()) as {
+        plan: { status: string; version: number };
+        activeRevision: {
+          revision: { id: string; status: string };
+          measures: Array<{ id: string }>;
+        };
+      };
+      expect(activatedCarePlan).toMatchObject({
+        plan: { status: 'active', version: 6 },
+        activeRevision: {
+          revision: { id: initialRevisionId, status: 'active' },
+          measures: [expect.objectContaining({ id: careMeasureId })],
+        },
+        draftRevision: null,
+      });
+
+      await expect(
+        owner.query(
+          `INSERT INTO care_planning.plans (
+             id, tenant_id, client_id, organization_id, facility_id, status,
+             valid_from, version, created_by_employee_id, created_at, updated_at
+           )
+           SELECT $1, tenant_id, client_id, organization_id, facility_id, 'active',
+                  valid_from, 1, created_by_employee_id, now(), now()
+           FROM care_planning.plans WHERE tenant_id = $2 AND id = $3`,
+          [uuidv7(), tenantId, carePlanId],
+        ),
+      ).rejects.toMatchObject({
+        code: '23505',
+        constraint: 'care_plans_one_current_per_client_uq',
+      });
+
+      const crossTenantCarePlanRead = await fetch(`${baseUrl}/api/v1/care-plans/${carePlanId}`, {
+        headers: { ...headers, 'X-Tenant-Id': otherTenantId },
+      });
+      expect(crossTenantCarePlanRead.status).toBe(403);
+      const otherClientCarePlanRead = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/care-plan`,
+        { headers },
+      );
+      expect(otherClientCarePlanRead.status).toBe(200);
+      expect(await otherClientCarePlanRead.json()).toBeNull();
+
+      await appRole.query('BEGIN');
+      await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+      expect(
+        (await appRole.query('SELECT id FROM care_planning.plans WHERE id = $1', [carePlanId]))
+          .rowCount,
+      ).toBe(1);
+      expect(
+        (
+          await appRole.query(
+            'SELECT id FROM care_planning.revisions WHERE tenant_id = $1 AND id = $2',
+            [tenantId, initialRevisionId],
+          )
+        ).rowCount,
+      ).toBe(1);
+      expect(
+        (
+          await appRole.query(
+            'SELECT id FROM care_planning.measures WHERE tenant_id = $1 AND id = $2',
+            [tenantId, careMeasureId],
+          )
+        ).rowCount,
+      ).toBe(1);
+      await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [otherTenantId]);
+      expect(
+        (await appRole.query('SELECT id FROM care_planning.plans WHERE id = $1', [carePlanId]))
+          .rowCount,
+      ).toBe(0);
+      expect(
+        (
+          await appRole.query(
+            'SELECT id FROM care_planning.revisions WHERE tenant_id = $1 AND id = $2',
+            [tenantId, initialRevisionId],
+          )
+        ).rowCount,
+      ).toBe(0);
+      expect(
+        (
+          await appRole.query(
+            'SELECT id FROM care_planning.measures WHERE tenant_id = $1 AND id = $2',
+            [tenantId, careMeasureId],
+          )
+        ).rowCount,
+      ).toBe(0);
+      await expect(
+        appRole.query(
+          `INSERT INTO care_planning.plans (
+             id, tenant_id, client_id, organization_id, facility_id, status,
+             valid_from, version, created_by_employee_id, created_at, updated_at
+           ) VALUES ($1, $2, $3, $4, $5, 'draft', $6, 1, $7, now(), now())`,
+          [
+            uuidv7(),
+            tenantId,
+            executionClient.id,
+            organizationId,
+            facilityId,
+            carePlanValidFrom,
+            carePlanAuthor.id,
+          ],
+        ),
+      ).rejects.toMatchObject({ code: '42501' });
+      await appRole.query('ROLLBACK');
+
+      await owner.query('DELETE FROM identity.membership_scopes WHERE membership_id = $1', [
+        secondMembershipId,
+      ]);
+      await owner.query(
+        `INSERT INTO identity.membership_scopes (membership_id, tenant_id, scope_type, scope_id)
+         VALUES ($1, $2, 'facility', $3)`,
+        [secondMembershipId, tenantId, facilityId],
+      );
+      const outOfProviderCarePlanRead = await fetch(`${baseUrl}/api/v1/care-plans/${carePlanId}`, {
+        headers: officeHeaders,
+      });
+      expect(outOfProviderCarePlanRead.status).toBe(404);
+      const outOfProviderCarePlanSearch = await fetch(
+        `${baseUrl}/api/v1/care-plans?clientQuery=Execution`,
+        { headers: officeHeaders },
+      );
+      expect(outOfProviderCarePlanSearch.status).toBe(200);
+      const scopedCarePlanSearch = (await outOfProviderCarePlanSearch.json()) as {
+        items: Array<{ id: string }>;
+      };
+      expect(scopedCarePlanSearch.items.some((item) => item.id === carePlanId)).toBe(false);
+      await owner.query('DELETE FROM identity.membership_scopes WHERE membership_id = $1', [
+        secondMembershipId,
+      ]);
+      await owner.query(
+        `INSERT INTO identity.membership_scopes (membership_id, tenant_id, scope_type, scope_id)
+         VALUES ($1, $2, 'tenant', $3)`,
+        [secondMembershipId, tenantId, tenantId],
+      );
+
+      const assignedCaregiverCarePlan = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/care-plan`,
+        { headers: caregiverHeaders },
+      );
+      expect(assignedCaregiverCarePlan.status).toBe(200);
+      const visitCarePlan = (await assignedCaregiverCarePlan.json()) as {
+        planId: string;
+        clientId: string;
+        status: string;
+        measures: Array<{ id: string; title: string; instruction: string }>;
+      };
+      expect(visitCarePlan).toMatchObject({
+        planId: carePlanId,
+        clientId: executionClient.id,
+        status: 'active',
+        measures: [
+          {
+            id: careMeasureId,
+            title: 'Morning hygiene support',
+            instruction: 'Support the client with their chosen hygiene routine.',
+          },
+        ],
+      });
+      expect(JSON.stringify(visitCarePlan)).not.toContain('private care planning narrative');
+      expect(JSON.stringify(visitCarePlan)).not.toContain(
+        'private professional planning rationale',
+      );
+      expect(
+        (
+          await fetch(`${baseUrl}/api/v1/visits/${executionVisit.id}/care-plan`, {
+            headers: unrelatedCaregiverHeaders,
+          })
+        ).status,
+      ).toBe(403);
+      const caregiverCarePlanMutation = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/assessment`,
+        {
+          method: 'PATCH',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ expectedVersion: 6, clientConcerns: 'Unauthorized edit.' }),
+        },
+      );
+      expect(caregiverCarePlanMutation.status).toBe(403);
+
+      const evaluateCarePlan = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/evaluations`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 6,
+            revisionId: initialRevisionId,
+            result: 'effective',
+            planChange: 'none',
+            summary: 'Current interventions are effective.',
+            nextEvaluationDue: dateInBerlin(30),
+            goals: [{ goalId: careGoalId, outcome: 'partially_achieved' }],
+          }),
+        },
+      );
+      expect(evaluateCarePlan.status).toBe(201);
+      expect(await evaluateCarePlan.json()).toMatchObject({
+        plan: { id: carePlanId, status: 'active', version: 7 },
+        latestEvaluation: { result: 'effective', planChange: 'none' },
+      });
+
+      const createCarePlanRevision = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 7,
+            effectiveFrom: carePlanValidFrom,
+            reason: 'Update the plan after evaluation.',
+          }),
+        },
+      );
+      expect(createCarePlanRevision.status).toBe(201);
+      const revisedCarePlan = (await createCarePlanRevision.json()) as {
+        plan: { version: number };
+        activeRevision: {
+          revision: { id: string; status: string };
+          measures: Array<{ id: string }>;
+        };
+        draftRevision: {
+          revision: { id: string; status: string };
+          assessment: { clientConcerns: string | null };
+        };
+      };
+      const newDraftRevisionId = revisedCarePlan.draftRevision.revision.id;
+      expect(revisedCarePlan).toMatchObject({
+        plan: { version: 8 },
+        activeRevision: {
+          revision: { id: initialRevisionId, status: 'active' },
+          measures: [expect.objectContaining({ id: careMeasureId })],
+        },
+        draftRevision: {
+          revision: { status: 'draft' },
+          assessment: { clientConcerns: 'A private care planning narrative.' },
+        },
+      });
+
+      const addCarePlanResource = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${newDraftRevisionId}/resources`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 8,
+            category: 'social_support',
+            description: 'Family provides support with the morning routine.',
+            status: 'available',
+          }),
+        },
+      );
+      expect(addCarePlanResource.status).toBe(201);
+      const resourceDetail = (await addCarePlanResource.json()) as {
+        draftRevision: { resources: Array<{ id: string; description: string }> };
+      };
+      const careResourceId = resourceDetail.draftRevision.resources[0]!.id;
+      expect(resourceDetail.draftRevision.resources).toContainEqual(
+        expect.objectContaining({
+          id: careResourceId,
+          description: 'Family provides support with the morning routine.',
+        }),
+      );
+
+      const activeRevisionApiMutation = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${initialRevisionId}/assessment`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ expectedVersion: 9, clientConcerns: 'Cannot rewrite history.' }),
+        },
+      );
+      expect(activeRevisionApiMutation.status).toBe(409);
+      expect((await activeRevisionApiMutation.json()).code).toBe('CARE_PLAN_DRAFT_REQUIRED');
+      await expect(
+        owner.query(
+          `UPDATE care_planning.measures SET instruction = $1
+           WHERE tenant_id = $2 AND revision_id = $3 AND id = $4`,
+          ['Corrupt active revision', tenantId, initialRevisionId, careMeasureId],
+        ),
+      ).rejects.toMatchObject({ code: '55000' });
+
+      const updateRevisedAssessment = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${newDraftRevisionId}/assessment`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ expectedVersion: 9, clientConcerns: 'Revised draft concern.' }),
+        },
+      );
+      expect(updateRevisedAssessment.status).toBe(200);
+
+      const carePlanRevisionDiff = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/diff?fromRevisionId=${initialRevisionId}&toRevisionId=${newDraftRevisionId}`,
+        { headers },
+      );
+      expect(carePlanRevisionDiff.status).toBe(200);
+      expect(await carePlanRevisionDiff.json()).toMatchObject({
+        resources: { added: [careResourceId] },
+        assessmentChanged: true,
+      });
+
+      const activateRevisedCarePlan = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${newDraftRevisionId}/activate`,
+        { method: 'POST', headers, body: JSON.stringify({ expectedVersion: 10 }) },
+      );
+      expect(activateRevisedCarePlan.status).toBe(200);
+      expect(await activateRevisedCarePlan.json()).toMatchObject({
+        plan: { status: 'active', version: 11 },
+        activeRevision: {
+          revision: { id: newDraftRevisionId, status: 'active' },
+          resources: [expect.objectContaining({ id: careResourceId })],
+        },
+        draftRevision: null,
+      });
+
+      const carePlanHistory = await fetch(`${baseUrl}/api/v1/care-plans/${carePlanId}/revisions`, {
+        headers,
+      });
+      expect(carePlanHistory.status).toBe(200);
+      const carePlanHistoryDetail = (await carePlanHistory.json()) as {
+        revisions: Array<{
+          revision: { id: string; status: string };
+          assessment: { clientConcerns: string | null };
+        }>;
+        evaluations: Array<{ result: string; planChange: string }>;
+      };
+      expect(carePlanHistoryDetail.revisions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            revision: expect.objectContaining({ id: newDraftRevisionId, status: 'active' }),
+            resources: [expect.objectContaining({ id: careResourceId })],
+          }),
+          expect.objectContaining({
+            revision: expect.objectContaining({ id: initialRevisionId, status: 'historical' }),
+            assessment: expect.objectContaining({
+              clientConcerns: 'A private care planning narrative.',
+            }),
+          }),
+        ]),
+      );
+      expect(carePlanHistoryDetail.evaluations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ result: 'effective', planChange: 'none' }),
+        ]),
+      );
+
+      const endCarePlan = await fetch(`${baseUrl}/api/v1/care-plans/${carePlanId}/end`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ expectedVersion: 11, reason: 'Care plan is no longer required.' }),
+      });
+      expect(endCarePlan.status).toBe(200);
+      expect(await endCarePlan.json()).toMatchObject({
+        plan: { status: 'ended', version: 12 },
+        activeRevision: null,
+        draftRevision: null,
+      });
+      const currentCarePlanAfterEnd = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/care-plan`,
+        { headers },
+      );
+      expect(currentCarePlanAfterEnd.status).toBe(200);
+      expect(await currentCarePlanAfterEnd.json()).toBeNull();
+
+      const endedCarePlanHistory = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions`,
+        { headers },
+      );
+      expect(endedCarePlanHistory.status).toBe(200);
+      expect(
+        (
+          (await endedCarePlanHistory.json()) as {
+            revisions: Array<{ revision: { status: string } }>;
+          }
+        ).revisions.map(({ revision }) => revision.status),
+      ).toEqual(['historical', 'historical']);
+
+      const carePlanTimelineResponse = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/timeline`,
+        { headers },
+      );
+      expect(carePlanTimelineResponse.status).toBe(200);
+      const carePlanTimeline = (await carePlanTimelineResponse.json()) as Array<{
+        action: string;
+        actorId: string;
+      }>;
+      const carePlanTimelineActions = carePlanTimeline
+        .filter((entry) => entry.action.startsWith('care_plan.'))
+        .map((entry) => entry.action);
+      expect(carePlanTimelineActions).toEqual(
+        expect.arrayContaining([
+          'care_plan.created',
+          'care_plan.revision_activated',
+          'care_plan.evaluated',
+          'care_plan.ended',
+        ]),
+      );
+      expect(carePlanTimelineActions).not.toContain('care_plan.revision_created');
+      expect(carePlanTimeline.every((entry) => entry.action && entry.actorId)).toBe(true);
+      expect(JSON.stringify(carePlanTimeline)).not.toContain('private care planning narrative');
+
+      const carePlanAudit = await owner.query<{ action: string; metadata: string }>(
+        `SELECT action, metadata::text AS metadata FROM audit.audit_entries
+         WHERE tenant_id = $1 AND resource_id = $2 ORDER BY timestamp`,
+        [tenantId, carePlanId],
+      );
+      expect(carePlanAudit.rows.map(({ action }) => action)).toEqual(
+        expect.arrayContaining([
+          'care_plan.created',
+          'care_plan.assessment_updated',
+          'care_plan.need_added',
+          'care_plan.goal_added',
+          'care_plan.measure_added',
+          'care_plan.resource_added',
+          'care_plan.revision_created',
+          'care_plan.revision_activated',
+          'care_plan.evaluated',
+          'care_plan.ended',
+        ]),
+      );
+      const carePlanOutbox = await owner.query<{ event: string }>(
+        `SELECT event::text AS event FROM platform.outbox_messages
+         WHERE tenant_id = $1 AND event ->> 'aggregateId' = $2`,
+        [tenantId, carePlanId],
+      );
+      const carePlanEvents = carePlanOutbox.rows.map(
+        ({ event }) => JSON.parse(event) as { type: string; version: number },
+      );
+      expect(carePlanEvents.map(({ type }) => type)).toEqual(
+        expect.arrayContaining([
+          'care_plan.created',
+          'care_plan.revision_created',
+          'care_plan.revision_activated',
+          'care_plan.evaluated',
+          'care_plan.ended',
+        ]),
+      );
+      expect(carePlanEvents.every(({ version }) => version === 1)).toBe(true);
+      const privateCarePlanMetadata = JSON.stringify([carePlanAudit.rows, carePlanOutbox.rows]);
+      expect(privateCarePlanMetadata).not.toContain('A private care planning narrative.');
+      expect(privateCarePlanMetadata).not.toContain('A private professional planning rationale.');
+      expect(privateCarePlanMetadata).not.toContain('Current interventions are effective.');
+      expect(privateCarePlanMetadata).not.toContain('Family provides support');
+      expect(privateCarePlanMetadata).not.toContain('Care plan is no longer required.');
+
       const executionRange = new URLSearchParams({
         from: new Date(`${executionDate}T00:00:00.000Z`).toISOString(),
         until: new Date(`${addCalendarDays(executionDate, 1)}T23:59:59.000Z`).toISOString(),
@@ -2364,6 +2990,458 @@ describe('clients API', () => {
       };
       let documentationVersion = concurrentDetail.documentation.version;
 
+      const assessmentAssessedAt = new Date(Date.now() - 60_000).toISOString();
+      const clinicalPrivateNote = `private-clinical-${uuidv7()}`;
+      const assessmentResponse = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/assessments`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            assessmentType: 'general_condition',
+            score: '2.5',
+            assessedAt: assessmentAssessedAt,
+            note: clinicalPrivateNote,
+          }),
+        },
+      );
+      expect(assessmentResponse.status).toBe(200);
+      const assessmentDetail = (await assessmentResponse.json()) as {
+        documentationVersion: number;
+        records: Array<{
+          id: string;
+          kind: string;
+          resultCode: string | null;
+          score: string | null;
+        }>;
+      };
+      documentationVersion = assessmentDetail.documentationVersion;
+      const clinicalAssessmentId = assessmentDetail.records.find(
+        (record) => record.kind === 'assessment',
+      )!.id;
+      expect(assessmentDetail.records).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: clinicalAssessmentId,
+            kind: 'assessment',
+            resultCode: null,
+            score: expect.any(String),
+          }),
+        ]),
+      );
+
+      const updateAssessmentResponse = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/assessments/${clinicalAssessmentId}`,
+        {
+          method: 'PATCH',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            expectedRecordVersion: 1,
+            assessmentType: 'general_condition',
+            resultCode: null,
+            score: '3.0',
+            assessedAt: assessmentAssessedAt,
+            note: clinicalPrivateNote,
+          }),
+        },
+      );
+      expect(updateAssessmentResponse.status).toBe(200);
+      const updatedAssessmentDetail = (await updateAssessmentResponse.json()) as {
+        documentationVersion: number;
+        records: Array<{ id: string; recordVersion: number; score: string | null }>;
+      };
+      documentationVersion = updatedAssessmentDetail.documentationVersion;
+      expect(updatedAssessmentDetail.records).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: clinicalAssessmentId,
+            recordVersion: 2,
+            score: expect.any(String),
+          }),
+        ]),
+      );
+      const staleClinicalAssessmentUpdate = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/assessments/${clinicalAssessmentId}`,
+        {
+          method: 'PATCH',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion - 1,
+            expectedRecordVersion: 1,
+            assessmentType: 'general_condition',
+            resultCode: null,
+            score: '3.5',
+            assessedAt: assessmentAssessedAt,
+            note: clinicalPrivateNote,
+          }),
+        },
+      );
+      expect(staleClinicalAssessmentUpdate.status).toBe(409);
+      expect((await staleClinicalAssessmentUpdate.json()).code).toBe(
+        'CLINICAL_RECORD_VERSION_CONFLICT',
+      );
+      await expect(
+        owner.query('UPDATE clinical_documentation.records SET version = version WHERE id = $1', [
+          clinicalAssessmentId,
+        ]),
+      ).rejects.toThrow();
+
+      const measurementAt = new Date(Date.now() - 60_000).toISOString();
+      const bloodPressureResponse = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/measurements`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            measurementType: 'blood_pressure',
+            value: null,
+            integerValue: null,
+            systolic: 128,
+            diastolic: 82,
+            unit: 'mmHg',
+            measuredAt: measurementAt,
+            source: 'manual',
+          }),
+        },
+      );
+      expect(bloodPressureResponse.status).toBe(200);
+      const bloodPressureDetail = (await bloodPressureResponse.json()) as {
+        documentationVersion: number;
+        records: Array<{
+          id: string;
+          kind: string;
+          measurementType?: string;
+          systolic?: number | null;
+          diastolic?: number | null;
+        }>;
+      };
+      documentationVersion = bloodPressureDetail.documentationVersion;
+      const bloodPressureId = bloodPressureDetail.records.find(
+        (record) => record.measurementType === 'blood_pressure',
+      )!.id;
+      expect(bloodPressureDetail.records).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: bloodPressureId,
+            kind: 'measurement',
+            measurementType: 'blood_pressure',
+            systolic: 128,
+            diastolic: 82,
+          }),
+        ]),
+      );
+
+      const temperatureResponse = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/measurements`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            measurementType: 'temperature',
+            value: '37.2',
+            integerValue: null,
+            systolic: null,
+            diastolic: null,
+            unit: 'Cel',
+            measuredAt: measurementAt,
+            source: 'device',
+          }),
+        },
+      );
+      expect(temperatureResponse.status).toBe(200);
+      const temperatureDetail = (await temperatureResponse.json()) as {
+        documentationVersion: number;
+        records: Array<{ id: string; measurementType?: string; value?: string | null }>;
+      };
+      documentationVersion = temperatureDetail.documentationVersion;
+      const temperatureId = temperatureDetail.records.find(
+        (record) => record.measurementType === 'temperature',
+      )!.id;
+      const storedTemperature = temperatureDetail.records.find(
+        (record) => record.id === temperatureId,
+      )!.value;
+      expect(storedTemperature).not.toBeNull();
+      expect(Number.parseFloat(storedTemperature!)).toBeCloseTo(37.2, 3);
+      const excessPrecisionMeasurement = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/measurements`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            measurementType: 'temperature',
+            value: '37.2001',
+            integerValue: null,
+            systolic: null,
+            diastolic: null,
+            unit: 'Cel',
+            measuredAt: measurementAt,
+            source: 'device',
+          }),
+        },
+      );
+      expect(excessPrecisionMeasurement.status).toBe(400);
+      expect((await excessPrecisionMeasurement.json()).code).toBe('MEASUREMENT_INVALID');
+
+      const unknownUnitMeasurement = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/measurements`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            measurementType: 'temperature',
+            value: '37.2',
+            integerValue: null,
+            systolic: null,
+            diastolic: null,
+            unit: 'fahrenheit',
+            measuredAt: measurementAt,
+            source: 'device',
+          }),
+        },
+      );
+      expect(unknownUnitMeasurement.status).toBe(400);
+      expect((await unknownUnitMeasurement.json()).code).toBe('MEASUREMENT_INVALID');
+
+      const clinicalObservationResponse = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/observations`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            category: 'mobility',
+            valueCode: 'assistance_required',
+            observedAt: measurementAt,
+          }),
+        },
+      );
+      expect(clinicalObservationResponse.status).toBe(200);
+      const clinicalObservationDetail = (await clinicalObservationResponse.json()) as {
+        documentationVersion: number;
+        records: Array<{
+          id: string;
+          kind: string;
+          category?: string;
+          valueCode?: string | null;
+        }>;
+      };
+      documentationVersion = clinicalObservationDetail.documentationVersion;
+      const clinicalObservationId = clinicalObservationDetail.records.find(
+        (record) => record.category === 'mobility',
+      )!.id;
+      expect(clinicalObservationDetail.records).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: clinicalObservationId,
+            kind: 'observation',
+            category: 'mobility',
+            valueCode: 'assistance_required',
+          }),
+        ]),
+      );
+      const persistedClinicalMeasurements = await owner.query<{
+        record_id: string;
+        measurement_type: string;
+        value: string | null;
+        systolic: number | null;
+        diastolic: number | null;
+      }>(
+        `SELECT record_id, measurement_type, value, systolic, diastolic
+         FROM clinical_documentation.measurements
+         WHERE tenant_id = $1 AND record_id = ANY($2::uuid[])`,
+        [tenantId, [bloodPressureId, temperatureId]],
+      );
+      expect(persistedClinicalMeasurements.rows).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            record_id: bloodPressureId,
+            measurement_type: 'blood_pressure',
+            value: null,
+            systolic: 128,
+            diastolic: 82,
+          }),
+          expect.objectContaining({
+            record_id: temperatureId,
+            measurement_type: 'temperature',
+            value: expect.stringMatching(/^37\.200$/),
+          }),
+        ]),
+      );
+      const persistedClinicalObservation = await owner.query<{
+        category: string;
+        value_code: string | null;
+      }>(
+        `SELECT category, value_code FROM clinical_documentation.observations
+         WHERE tenant_id = $1 AND record_id = $2`,
+        [tenantId, clinicalObservationId],
+      );
+      expect(persistedClinicalObservation.rows).toEqual([
+        { category: 'mobility', value_code: 'assistance_required' },
+      ]);
+
+      const riskAssessedAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+      const riskValidUntil = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      const riskResponse = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/risks`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            riskType: 'fall',
+            level: 'high',
+            assessedAt: riskAssessedAt.toISOString(),
+            validUntil: riskValidUntil.toISOString(),
+            source: 'integration assessment',
+          }),
+        },
+      );
+      expect(riskResponse.status).toBe(200);
+      const riskDetail = (await riskResponse.json()) as {
+        documentationVersion: number;
+        records: Array<{ id: string; kind: string; riskType?: string }>;
+      };
+      documentationVersion = riskDetail.documentationVersion;
+      const clinicalRiskId = riskDetail.records.find(
+        (record) => record.kind === 'risk_assessment',
+      )!.id;
+
+      const addRiskAssessment = async (input: {
+        riskType: 'fall' | 'pressure_ulcer';
+        level: 'low' | 'moderate' | 'high';
+        assessedAt: Date;
+        validUntil: Date;
+      }) => {
+        const response = await fetch(
+          `${baseUrl}/api/v1/care-documentation/${documentationId}/risks`,
+          {
+            method: 'POST',
+            headers: caregiverHeaders,
+            body: JSON.stringify({
+              expectedVersion: documentationVersion,
+              ...input,
+              assessedAt: input.assessedAt.toISOString(),
+              validUntil: input.validUntil.toISOString(),
+              source: `integration ${input.riskType} ${input.level}`,
+            }),
+          },
+        );
+        expect(response.status).toBe(200);
+        const detail = (await response.json()) as {
+          documentationVersion: number;
+          records: Array<{ id: string; riskType?: string; level?: string }>;
+        };
+        documentationVersion = detail.documentationVersion;
+        const record = detail.records.find(
+          (candidate) => candidate.riskType === input.riskType && candidate.level === input.level,
+        );
+        expect(record).toBeDefined();
+        return record!.id;
+      };
+
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+      const expiredOneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const supersedingFallRiskId = await addRiskAssessment({
+        riskType: 'fall',
+        level: 'moderate',
+        assessedAt: oneDayAgo,
+        validUntil: riskValidUntil,
+      });
+      const earlierPressureRiskId = await addRiskAssessment({
+        riskType: 'pressure_ulcer',
+        level: 'low',
+        assessedAt: threeDaysAgo,
+        validUntil: riskValidUntil,
+      });
+      const expiredPressureRiskId = await addRiskAssessment({
+        riskType: 'pressure_ulcer',
+        level: 'high',
+        assessedAt: twoDaysAgo,
+        validUntil: expiredOneHourAgo,
+      });
+
+      const wrongExecutionClinicalRecordId = uuidv7();
+      await expect(
+        owner.query(
+          `INSERT INTO clinical_documentation.records
+             (id, tenant_id, documentation_id, execution_id, kind, recorded_by_user_id,
+              recorded_by_employee_id, version, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'measurement', $5, $6, 1, now(), now())`,
+          [
+            wrongExecutionClinicalRecordId,
+            tenantId,
+            documentationId,
+            uuidv7(),
+            userId,
+            schedulingEmployee.id,
+          ],
+        ),
+      ).rejects.toMatchObject({ code: '23503' });
+      await expect(
+        owner.query(
+          `INSERT INTO clinical_documentation.records
+             (id, tenant_id, documentation_id, execution_id, kind, recorded_by_user_id,
+              recorded_by_employee_id, version, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'measurement', $5, $6, 1, now(), now())`,
+          [uuidv7(), otherTenantId, documentationId, executionId, userId, schedulingEmployee.id],
+        ),
+      ).rejects.toMatchObject({ code: '23503' });
+
+      const invalidMeasurementRecordId = uuidv7();
+      await owner.query('BEGIN');
+      await owner.query(
+        `INSERT INTO clinical_documentation.records
+           (id, tenant_id, documentation_id, execution_id, kind, recorded_by_user_id,
+            recorded_by_employee_id, version, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, 'measurement', $5, $6, 1, now(), now())`,
+        [
+          invalidMeasurementRecordId,
+          tenantId,
+          documentationId,
+          executionId,
+          userId,
+          schedulingEmployee.id,
+        ],
+      );
+      await expect(
+        owner.query(
+          `INSERT INTO clinical_documentation.measurements
+             (tenant_id, record_id, measurement_type, value, integer_value, systolic, diastolic,
+              unit, measured_at, source)
+           VALUES ($1, $2, 'temperature', 37.2, NULL, NULL, NULL, 'kg', now(), 'manual')`,
+          [tenantId, invalidMeasurementRecordId],
+        ),
+      ).rejects.toMatchObject({ code: '23514' });
+      await owner.query('ROLLBACK');
+
+      const unrelatedCaregiverClinicalRead = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/clinical-records`,
+        { headers: unrelatedCaregiverHeaders },
+      );
+      expect(unrelatedCaregiverClinicalRead.status).toBe(403);
+      expect((await unrelatedCaregiverClinicalRead.json()).code).toBe(
+        'CLINICAL_DOCUMENTATION_VISIT_REQUIRED',
+      );
+      const unrelatedCaregiverHistory = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/risks?${new URLSearchParams({
+          from: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+          until: new Date(Date.now() + 60_000).toISOString(),
+          page: '1',
+          pageSize: '20',
+        })}`,
+        { headers: unrelatedCaregiverHeaders },
+      );
+      expect(unrelatedCaregiverHistory.status).toBe(200);
+      expect(await unrelatedCaregiverHistory.json()).toMatchObject({ items: [], total: 0 });
+
       const sensitiveInvalidIncidentText = `private-invalid-incident-${uuidv7()}`;
       const invalidIncident = await fetch(
         `${baseUrl}/api/v1/care-documentation/${documentationId}/entries`,
@@ -2470,6 +3548,8 @@ describe('clients API', () => {
       );
       expect(JSON.stringify(officeDocumentationWorklistBody)).not.toContain(draftNoteOriginalText);
       expect(JSON.stringify(officeDocumentationWorklistBody)).not.toContain(draftNoteUpdatedText);
+      expect(JSON.stringify(officeDocumentationWorklistBody)).not.toContain(clinicalPrivateNote);
+      expect(JSON.stringify(officeDocumentationWorklistBody)).not.toContain('assistance_required');
       const clientFilteredDocumentationRange = new URLSearchParams(documentationRange);
       clientFilteredDocumentationRange.set('clientQuery', 'Execution Client-');
       const clientFilteredDocumentationWorklist = await fetch(
@@ -2839,6 +3919,287 @@ describe('clients API', () => {
       );
       expect(caregiverCannotAmendDocumentation.status).toBe(403);
 
+      const frozenClinicalWrite = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/assessments`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: documentationVersion,
+            assessmentType: 'pain',
+            score: '4',
+            assessedAt: new Date(Date.now() - 1_000).toISOString(),
+          }),
+        },
+      );
+      expect(frozenClinicalWrite.status).toBe(409);
+      expect((await frozenClinicalWrite.json()).code).toBe('CLINICAL_RECORD_FINALIZED');
+
+      const currentRiskRange = new URLSearchParams({
+        from: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        until: new Date(Date.now() + 60_000).toISOString(),
+        page: '1',
+        pageSize: '20',
+        currentOnly: 'true',
+      });
+      const currentRiskResponse = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/risks?${currentRiskRange}`,
+        { headers: officeHeaders },
+      );
+      expect(currentRiskResponse.status).toBe(200);
+      const currentRiskHistory = (await currentRiskResponse.json()) as {
+        items: Array<{
+          id: string;
+          kind: string;
+          riskType?: string;
+          level?: string;
+          recordedByEmployeeName: string | null;
+        }>;
+        total: number;
+      };
+      expect(currentRiskHistory.items).toEqual([
+        expect.objectContaining({
+          id: supersedingFallRiskId,
+          kind: 'risk_assessment',
+          riskType: 'fall',
+          level: 'moderate',
+          recordedByEmployeeName: expect.any(String),
+        }),
+      ]);
+      expect(currentRiskHistory.total).toBe(1);
+      expect(currentRiskHistory.items.map((item) => item.id)).not.toContain(clinicalRiskId);
+      expect(currentRiskHistory.items.map((item) => item.id)).not.toContain(earlierPressureRiskId);
+      expect(currentRiskHistory.items.map((item) => item.id)).not.toContain(expiredPressureRiskId);
+      const currentRiskWithoutDates = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/risks?${new URLSearchParams({
+          page: '1',
+          pageSize: '20',
+          currentOnly: 'true',
+        })}`,
+        { headers: officeHeaders },
+      );
+      expect(currentRiskWithoutDates.status).toBe(200);
+      expect(await currentRiskWithoutDates.json()).toMatchObject({
+        items: [expect.objectContaining({ id: supersedingFallRiskId })],
+        total: 1,
+      });
+
+      const restrictOfficeClinicalHistoryScope = await fetch(
+        `${baseUrl}/api/v1/admin/members/${secondMembershipId}/scopes`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ scopes: [{ scopeType: 'facility', scopeId: facilityId }] }),
+        },
+      );
+      expect(restrictOfficeClinicalHistoryScope.status).toBe(200);
+      const outOfScopeClinicalHistory = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/risks?${new URLSearchParams({
+          page: '1',
+          pageSize: '20',
+          currentOnly: 'true',
+        })}`,
+        { headers: officeHeaders },
+      );
+      expect(outOfScopeClinicalHistory.status).toBe(200);
+      expect(await outOfScopeClinicalHistory.json()).toMatchObject({ items: [], total: 0 });
+      const restoreOfficeClinicalHistoryScope = await fetch(
+        `${baseUrl}/api/v1/admin/members/${secondMembershipId}/scopes`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ scopes: [{ scopeType: 'tenant', scopeId: tenantId }] }),
+        },
+      );
+      expect(restoreOfficeClinicalHistoryScope.status).toBe(200);
+
+      const historyRange = {
+        from: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+        until: new Date(Date.now() + 60_000).toISOString(),
+        page: '1',
+        pageSize: '20',
+      };
+      const bloodPressureHistory = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/measurements?${new URLSearchParams({
+          ...historyRange,
+          type: 'blood_pressure',
+        })}`,
+        { headers: officeHeaders },
+      );
+      expect(bloodPressureHistory.status).toBe(200);
+      expect(await bloodPressureHistory.json()).toMatchObject({
+        items: [
+          expect.objectContaining({
+            id: bloodPressureId,
+            measurementType: 'blood_pressure',
+            systolic: 128,
+            diastolic: 82,
+            recordedByEmployeeName: expect.any(String),
+          }),
+        ],
+      });
+      const temperatureHistory = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/measurements?${new URLSearchParams({
+          ...historyRange,
+          type: 'temperature',
+        })}`,
+        { headers: officeHeaders },
+      );
+      expect(temperatureHistory.status).toBe(200);
+      const temperatureHistoryBody = (await temperatureHistory.json()) as {
+        items: Array<{ id: string; value: string | null; unit: string }>;
+      };
+      const historyTemperature = temperatureHistoryBody.items.find(
+        (record) => record.id === temperatureId,
+      );
+      expect(historyTemperature?.unit).toBe('Cel');
+      expect(Number.parseFloat(historyTemperature?.value ?? '')).toBeCloseTo(37.2, 3);
+      const observationHistory = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/observations?${new URLSearchParams({
+          ...historyRange,
+          category: 'mobility',
+        })}`,
+        { headers: officeHeaders },
+      );
+      expect(observationHistory.status).toBe(200);
+      expect(await observationHistory.json()).toMatchObject({
+        items: [
+          expect.objectContaining({
+            id: clinicalObservationId,
+            category: 'mobility',
+            valueCode: 'assistance_required',
+            recordedByEmployeeName: expect.any(String),
+          }),
+        ],
+      });
+      const assessmentHistory = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/assessments?${new URLSearchParams({
+          ...historyRange,
+          type: 'general_condition',
+        })}`,
+        { headers: officeHeaders },
+      );
+      expect(assessmentHistory.status).toBe(200);
+      expect(await assessmentHistory.json()).toMatchObject({
+        items: [
+          expect.objectContaining({
+            id: clinicalAssessmentId,
+            kind: 'assessment',
+            assessmentType: 'general_condition',
+            score: expect.any(String),
+          }),
+        ],
+      });
+      const riskHistory = await fetch(
+        `${baseUrl}/api/v1/clients/${executionClient.id}/risks?${new URLSearchParams(historyRange)}`,
+        { headers: officeHeaders },
+      );
+      expect(riskHistory.status).toBe(200);
+      const riskHistoryBody = (await riskHistory.json()) as {
+        items: Array<{ id: string }>;
+        total: number;
+      };
+      expect(riskHistoryBody.items.map((item) => item.id)).toEqual(
+        expect.arrayContaining([
+          clinicalRiskId,
+          supersedingFallRiskId,
+          earlierPressureRiskId,
+          expiredPressureRiskId,
+        ]),
+      );
+      expect(riskHistoryBody.total).toBeGreaterThanOrEqual(4);
+
+      const mismatchedClinicalAmendment = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/clinical-records/${clinicalRiskId}/amendments`,
+        {
+          method: 'POST',
+          headers: officeHeaders,
+          body: JSON.stringify({
+            reason: 'Reject mismatched record type',
+            replacement: {
+              assessmentType: 'general_condition',
+              score: '3.0',
+              assessedAt: new Date(Date.now() - 1_000).toISOString(),
+            },
+          }),
+        },
+      );
+      expect(mismatchedClinicalAmendment.status).toBe(400);
+      expect((await mismatchedClinicalAmendment.json()).code).toBe('RISK_ASSESSMENT_INVALID');
+
+      const invalidClinicalAmendment = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/clinical-records/${clinicalRiskId}/amendments`,
+        {
+          method: 'POST',
+          headers: officeHeaders,
+          body: JSON.stringify({
+            reason: 'Invalid correction payload',
+            replacement: { riskType: 'fall' },
+          }),
+        },
+      );
+      expect(invalidClinicalAmendment.status).toBe(400);
+      expect((await invalidClinicalAmendment.json()).code).toBe('CLINICAL_RECORD_INVALID');
+
+      const amendedRiskAssessedAt = new Date(Date.now() - 1_000).toISOString();
+      const amendedRiskResponse = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/clinical-records/${clinicalRiskId}/amendments`,
+        {
+          method: 'POST',
+          headers: officeHeaders,
+          body: JSON.stringify({
+            reason: 'Correct risk level after review',
+            replacement: {
+              riskType: 'fall',
+              level: 'moderate',
+              assessedAt: amendedRiskAssessedAt,
+              validUntil: riskValidUntil.toISOString(),
+              source: 'office review',
+            },
+          }),
+        },
+      );
+      expect(amendedRiskResponse.status).toBe(200);
+      const amendedRiskDetail = (await amendedRiskResponse.json()) as {
+        records: Array<{
+          id: string;
+          kind: string;
+          correctsRecordId: string | null;
+          correctedByRecordId: string | null;
+          correctionReason: string | null;
+          recordedByUserId: string;
+          recordedByEmployeeId: string | null;
+          level?: string;
+        }>;
+      };
+      const amendedRisk = amendedRiskDetail.records.find(
+        (record) => record.correctsRecordId === clinicalRiskId,
+      );
+      expect(amendedRisk).toMatchObject({
+        kind: 'risk_assessment',
+        correctsRecordId: clinicalRiskId,
+        correctionReason: 'Correct risk level after review',
+        recordedByUserId: secondUserId,
+        recordedByEmployeeId: null,
+        level: 'moderate',
+      });
+      expect(amendedRiskDetail.records).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: clinicalRiskId, correctedByRecordId: amendedRisk?.id }),
+        ]),
+      );
+      await expect(
+        owner.query(
+          `INSERT INTO clinical_documentation.records
+             (id, tenant_id, documentation_id, execution_id, kind, recorded_by_user_id,
+              recorded_by_employee_id, version, corrects_record_id, correction_reason,
+              created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'risk_assessment', $5, NULL, 1, $6,
+                   'Duplicate correction', now(), now())`,
+          [uuidv7(), tenantId, documentationId, executionId, secondUserId, clinicalRiskId],
+        ),
+      ).rejects.toMatchObject({ code: '23505' });
+
       const officeDocumentationReview = await fetch(
         `${baseUrl}/api/v1/visits/${executionVisit.id}/documentation`,
         { headers: officeHeaders },
@@ -2868,6 +4229,31 @@ describe('clients API', () => {
       };
       expect(initialPackage).toMatchObject({ version: 1, isCurrent: true, status: 'ready' });
       expect(initialPackage.snapshot.items.length).toBeGreaterThan(0);
+      const serializedEvidenceSnapshot = JSON.stringify(initialPackage.snapshot);
+      expect(serializedEvidenceSnapshot).not.toContain(clinicalPrivateNote);
+      expect(serializedEvidenceSnapshot).not.toContain('blood_pressure');
+      expect(serializedEvidenceSnapshot).not.toContain('128 / 82');
+      expect(serializedEvidenceSnapshot).not.toContain('assistance_required');
+      expect(serializedEvidenceSnapshot).not.toContain('moderate');
+      const postPackageClinicalCorrection = await fetch(
+        `${baseUrl}/api/v1/care-documentation/${documentationId}/clinical-records/${clinicalAssessmentId}/amendments`,
+        {
+          method: 'POST',
+          headers: officeHeaders,
+          body: JSON.stringify({
+            reason: 'Correct assessment after evidence package creation',
+            replacement: {
+              assessmentType: 'general_condition',
+              resultCode: null,
+              score: '4.0',
+              assessedAt: assessmentAssessedAt,
+              validUntil: null,
+              note: clinicalPrivateNote,
+            },
+          }),
+        },
+      );
+      expect(postPackageClinicalCorrection.status).toBe(200);
       const repeatedPackageResponse = await fetch(
         `${baseUrl}/api/v1/visits/${executionVisit.id}/evidence-package`,
         { method: 'POST', headers: officeHeaders },
@@ -2877,6 +4263,8 @@ describe('clients API', () => {
         id: initialPackage.id,
         version: initialPackage.version,
         snapshotHash: initialPackage.snapshotHash,
+        isCurrent: true,
+        status: 'ready',
       });
 
       const officeWorklistQuery = new URLSearchParams({
@@ -3399,7 +4787,7 @@ describe('clients API', () => {
       expect(executionTimelineResponse.status).toBe(200);
       const executionTimeline = (await executionTimelineResponse.json()) as Array<{
         action: string;
-        summary: string;
+        actorId: string;
       }>;
       expect(executionTimeline.map((entry) => entry.action)).toEqual(
         expect.arrayContaining([
@@ -3410,15 +4798,7 @@ describe('clients API', () => {
           'care_documentation.amended',
         ]),
       );
-      expect(executionTimeline.map((entry) => entry.summary)).toEqual(
-        expect.arrayContaining([
-          'Einsatz begonnen',
-          'Einsatz abgeschlossen',
-          'Vorfall dokumentiert',
-          'Besuchsdokumentation abgeschlossen',
-          'Besuchsdokumentation ergänzt',
-        ]),
-      );
+      expect(executionTimeline.every((entry) => entry.actorId && entry.action)).toBe(true);
       expect(
         executionTimeline.some((entry) =>
           [
@@ -3435,6 +4815,9 @@ describe('clients API', () => {
       expect(serializedExecutionTimeline).not.toContain(sensitiveCareText);
       expect(serializedExecutionTimeline).not.toContain(sensitiveIncidentText);
       expect(serializedExecutionTimeline).not.toContain(sensitiveEvidenceText);
+      expect(serializedExecutionTimeline).not.toContain(clinicalPrivateNote);
+      expect(serializedExecutionTimeline).not.toContain('assistance_required');
+      expect(serializedExecutionTimeline).not.toContain('128 / 82');
       expect(serializedExecutionTimeline).not.toContain(sensitiveAmendmentReason);
       expect(serializedExecutionTimeline).not.toContain(sensitiveAmendmentCorrection);
       expect(serializedExecutionTimeline).not.toContain(finalizationRaceText);
@@ -3461,6 +4844,10 @@ describe('clients API', () => {
           'incident.recorded',
           'service_evidence.recorded',
           'service_evidence.updated',
+          'clinical.assessment_recorded',
+          'clinical.assessment_updated',
+          'clinical.risk_recorded',
+          'clinical.record_amended',
           'care_documentation.finalized',
           'care_documentation.amended',
         ]),
@@ -3469,6 +4856,9 @@ describe('clients API', () => {
       expect(serializedDocumentationAudit).not.toContain(sensitiveCareText);
       expect(serializedDocumentationAudit).not.toContain(sensitiveIncidentText);
       expect(serializedDocumentationAudit).not.toContain(sensitiveEvidenceText);
+      expect(serializedDocumentationAudit).not.toContain(clinicalPrivateNote);
+      expect(serializedDocumentationAudit).not.toContain('assistance_required');
+      expect(serializedDocumentationAudit).not.toContain('128 / 82');
       expect(serializedDocumentationAudit).not.toContain(sensitiveAmendmentReason);
       expect(serializedDocumentationAudit).not.toContain(sensitiveAmendmentCorrection);
       expect(serializedDocumentationAudit).not.toContain(finalizationRaceText);
@@ -3497,6 +4887,10 @@ describe('clients API', () => {
           'incident.recorded',
           'service_evidence.recorded',
           'service_evidence.updated',
+          'clinical.assessment_recorded',
+          'clinical.assessment_updated',
+          'clinical.risk_recorded',
+          'clinical.record_amended',
           'care_documentation.finalized',
           'care_documentation.amended',
         ]),
@@ -3506,6 +4900,9 @@ describe('clients API', () => {
       expect(serializedDocumentationEvents).not.toContain(sensitiveCareText);
       expect(serializedDocumentationEvents).not.toContain(sensitiveIncidentText);
       expect(serializedDocumentationEvents).not.toContain(sensitiveEvidenceText);
+      expect(serializedDocumentationEvents).not.toContain(clinicalPrivateNote);
+      expect(serializedDocumentationEvents).not.toContain('assistance_required');
+      expect(serializedDocumentationEvents).not.toContain('128 / 82');
       expect(serializedDocumentationEvents).not.toContain(sensitiveAmendmentReason);
       expect(serializedDocumentationEvents).not.toContain(sensitiveAmendmentCorrection);
       expect(serializedDocumentationEvents).not.toContain(finalizationRaceText);
@@ -3527,6 +4924,39 @@ describe('clients API', () => {
           documentationId,
         ]),
       ).rejects.toThrow();
+      await expect(
+        owner.query(
+          'UPDATE clinical_documentation.records SET updated_at = now() WHERE tenant_id = $1 AND id = $2',
+          [tenantId, clinicalRiskId],
+        ),
+      ).rejects.toMatchObject({ code: '23514' });
+      await expect(
+        owner.query('DELETE FROM clinical_documentation.records WHERE tenant_id = $1 AND id = $2', [
+          tenantId,
+          clinicalRiskId,
+        ]),
+      ).rejects.toMatchObject({ code: '23514' });
+      await expect(
+        owner.query(
+          `UPDATE clinical_documentation.measurements SET value = '129'
+           WHERE tenant_id = $1 AND record_id = $2`,
+          [tenantId, bloodPressureId],
+        ),
+      ).rejects.toMatchObject({ code: '23514' });
+      await expect(
+        owner.query(
+          'DELETE FROM clinical_documentation.measurements WHERE tenant_id = $1 AND record_id = $2',
+          [tenantId, bloodPressureId],
+        ),
+      ).rejects.toMatchObject({ code: '23514' });
+      await expect(
+        owner.query(
+          `INSERT INTO clinical_documentation.assessments
+             (tenant_id, record_id, assessment_type, result_code, assessed_at)
+           VALUES ($1, $2, 'general_condition', 'stable', now())`,
+          [tenantId, clinicalRiskId],
+        ),
+      ).rejects.toMatchObject({ code: '23514' });
 
       const executionAudit = await owner.query<{ action: string; metadata: string }>(
         `SELECT action, metadata::text AS metadata FROM audit.audit_entries
@@ -3564,6 +4994,21 @@ describe('clients API', () => {
 
       await appRole.query('BEGIN');
       await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [otherTenantId]);
+      const documentationRlsTables = [
+        ['documents', 'id'],
+        ['entries', 'documentation_id'],
+        ['service_evidence', 'documentation_id'],
+        ['amendments', 'documentation_id'],
+        ['history', 'documentation_id'],
+      ] as const;
+      const clinicalRlsTables = [
+        ['records', 'id', clinicalRiskId],
+        ['assessments', 'record_id', clinicalAssessmentId],
+        ['measurements', 'record_id', bloodPressureId],
+        ['measurements', 'record_id', temperatureId],
+        ['observations', 'record_id', clinicalObservationId],
+        ['risk_assessments', 'record_id', clinicalRiskId],
+      ] as const;
       expect(
         (
           await appRole.query('SELECT id FROM visit_execution.executions WHERE id = $1', [
@@ -3589,6 +5034,28 @@ describe('clients API', () => {
         ),
       ).rejects.toMatchObject({ code: '42501' });
       await appRole.query('ROLLBACK TO SAVEPOINT before_documentation_cross_tenant_write');
+      for (const [table, referenceColumn] of documentationRlsTables) {
+        expect(
+          (
+            await appRole.query(
+              `SELECT id FROM care_documentation.${table}
+               WHERE ${referenceColumn} = $1`,
+              [documentationId],
+            )
+          ).rowCount,
+        ).toBe(0);
+      }
+      for (const [table, recordColumn, recordId] of clinicalRlsTables) {
+        expect(
+          (
+            await appRole.query(
+              `SELECT ${recordColumn} FROM clinical_documentation.${table}
+               WHERE ${recordColumn} = $1`,
+              [recordId],
+            )
+          ).rowCount,
+        ).toBe(0);
+      }
       await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
       expect(
         (
@@ -3597,29 +5064,24 @@ describe('clients API', () => {
           ])
         ).rowCount,
       ).toBe(1);
-      const documentationRlsTables = [
-        ['documents', 'id'],
-        ['entries', 'documentation_id'],
-        ['service_evidence', 'documentation_id'],
-        ['amendments', 'documentation_id'],
-        ['history', 'documentation_id'],
-      ] as const;
       for (const [table, referenceColumn] of documentationRlsTables) {
         expect(
           (
             await appRole.query(
               `SELECT id FROM care_documentation.${table}
-               WHERE tenant_id = $1 AND ${referenceColumn} = $2`,
-              [otherTenantId, documentationId],
+               WHERE ${referenceColumn} = $1`,
+              [documentationId],
             )
           ).rowCount,
-        ).toBe(0);
+        ).toBeGreaterThan(0);
+      }
+      for (const [table, recordColumn, recordId] of clinicalRlsTables) {
         expect(
           (
             await appRole.query(
-              `SELECT id FROM care_documentation.${table}
-               WHERE tenant_id = $1 AND ${referenceColumn} = $2`,
-              [tenantId, documentationId],
+              `SELECT ${recordColumn} FROM clinical_documentation.${table}
+               WHERE ${recordColumn} = $1`,
+              [recordId],
             )
           ).rowCount,
         ).toBeGreaterThan(0);
@@ -3690,7 +5152,6 @@ describe('clients API', () => {
       );
       expect(agreementTimelineResponse.status).toBe(200);
       const agreementTimeline = (await agreementTimelineResponse.json()) as Array<{
-        summary: string;
         action: string;
         actorId: string;
         occurredAt: string;
@@ -3720,7 +5181,7 @@ describe('clients API', () => {
       expect(timelineTimestamps).toEqual(
         [...timelineTimestamps].sort((left, right) => left - right),
       );
-      expect(agreementEntries.every((entry) => entry.actorId && entry.summary)).toBe(true);
+      expect(agreementEntries.every((entry) => entry.actorId && entry.action)).toBe(true);
       expect(JSON.stringify(agreementTimeline)).not.toContain(agreementNote);
 
       const agreementAudit = await owner.query<{ action: string; metadata: string }>(

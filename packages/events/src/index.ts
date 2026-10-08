@@ -193,6 +193,97 @@ export interface EventPayloadMap {
     clientId: string;
     amendmentId: string;
   };
+  'care_plan.created': { planId: string; clientId: string; revisionId: string };
+  'care_plan.revision_created': {
+    planId: string;
+    clientId: string;
+    revisionId: string;
+    revisionNumber: number;
+  };
+  'care_plan.revision_activated': {
+    planId: string;
+    clientId: string;
+    revisionId: string;
+    revisionNumber: number;
+  };
+  'care_plan.evaluated': {
+    planId: string;
+    clientId: string;
+    evaluationId: string;
+    revisionId: string;
+    result:
+      | 'effective'
+      | 'partially_effective'
+      | 'not_effective'
+      | 'changed_condition'
+      | 'no_change';
+  };
+  'care_plan.ended': { planId: string; clientId: string };
+  'clinical.measurement_recorded': {
+    documentationId: string;
+    recordId: string;
+    measurementType: string;
+    version: number;
+  };
+  'clinical.measurement_updated': {
+    documentationId: string;
+    recordId: string;
+    measurementType: string;
+    changedFields: string[];
+    version: number;
+  };
+  'clinical.observation_recorded': {
+    documentationId: string;
+    recordId: string;
+    category: string;
+    version: number;
+  };
+  'clinical.observation_updated': {
+    documentationId: string;
+    recordId: string;
+    category: string;
+    changedFields: string[];
+    version: number;
+  };
+  'clinical.assessment_recorded': {
+    documentationId: string;
+    recordId: string;
+    assessmentType: string;
+    version: number;
+  };
+  'clinical.assessment_updated': {
+    documentationId: string;
+    recordId: string;
+    assessmentType: string;
+    changedFields: string[];
+    version: number;
+  };
+  'clinical.risk_recorded': {
+    documentationId: string;
+    recordId: string;
+    riskType: string;
+    version: number;
+  };
+  'clinical.risk_updated': {
+    documentationId: string;
+    recordId: string;
+    riskType: string;
+    changedFields: string[];
+    version: number;
+  };
+  'clinical.record_amended': {
+    documentationId: string;
+    recordId: string;
+    replacementRecordId: string;
+    recordType: string;
+    version: number;
+  };
+  'clinical.record_deleted': {
+    documentationId: string;
+    recordId: string;
+    recordType: string;
+    version: number;
+  };
   'evidence_package.created': {
     evidencePackageId: string;
     documentationId: string;
@@ -342,6 +433,8 @@ export interface DomainEvent<T extends EventName = EventName> {
     | 'visit'
     | 'visit_execution'
     | 'care_documentation'
+    | 'care_plan'
+    | 'clinical_documentation'
     | 'service_evidence'
     | 'schedule_generation'
     | 'employee_availability'

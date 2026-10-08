@@ -1715,6 +1715,670 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/care-documentation/{id}/clinical-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read structured clinical records for care documentation */
+        get: operations["ClinicalDocumentationController_getRecords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a measurement in draft care documentation */
+        post: operations["ClinicalDocumentationController_addMeasurement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/measurements/{recordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a measurement from draft care documentation */
+        delete: operations["ClinicalDocumentationController_deleteMeasurement"];
+        options?: never;
+        head?: never;
+        /** Update a measurement in draft care documentation */
+        patch: operations["ClinicalDocumentationController_updateMeasurement"];
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a structured observation in draft care documentation */
+        post: operations["ClinicalDocumentationController_addObservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/observations/{recordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a structured observation from draft care documentation */
+        delete: operations["ClinicalDocumentationController_deleteObservation"];
+        options?: never;
+        head?: never;
+        /** Update a structured observation in draft care documentation */
+        patch: operations["ClinicalDocumentationController_updateObservation"];
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record an assessment in draft care documentation */
+        post: operations["ClinicalDocumentationController_addAssessment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/assessments/{recordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an assessment from draft care documentation */
+        delete: operations["ClinicalDocumentationController_deleteAssessment"];
+        options?: never;
+        head?: never;
+        /** Update an assessment in draft care documentation */
+        patch: operations["ClinicalDocumentationController_updateAssessment"];
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/risks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a risk assessment in draft care documentation */
+        post: operations["ClinicalDocumentationController_addRiskAssessment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/risks/{recordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a risk assessment from draft care documentation */
+        delete: operations["ClinicalDocumentationController_deleteRiskAssessment"];
+        options?: never;
+        head?: never;
+        /** Update a risk assessment in draft care documentation */
+        patch: operations["ClinicalDocumentationController_updateRiskAssessment"];
+        trace?: never;
+    };
+    "/api/v1/care-documentation/{id}/clinical-records/{recordId}/amendments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Append a typed correction to a finalized clinical record */
+        post: operations["ClinicalDocumentationController_amendRecord"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read scoped client measurement history */
+        get: operations["ClinicalDocumentationController_measurementHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read scoped client observation history */
+        get: operations["ClinicalDocumentationController_observationHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read scoped client assessment history */
+        get: operations["ClinicalDocumentationController_assessmentHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/risks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read scoped client risk assessment history and current projection */
+        get: operations["ClinicalDocumentationController_riskHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/care-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List care plans for a client */
+        get: operations["listClientCarePlans"];
+        put?: never;
+        /** Create a care plan */
+        post: operations["createClientCarePlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/care-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the current care plan for a client
+         * @description Office read. Caregiver access is visit-scoped.
+         */
+        get: operations["getClientCarePlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search care plans in provider scope */
+        get: operations["listCarePlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a care plan */
+        get: operations["getCarePlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List care plan revisions and evaluations */
+        get: operations["getCarePlanHistory"];
+        put?: never;
+        /** Create a draft plan revision */
+        post: operations["createCarePlanRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compare two care plan revisions */
+        get: operations["diffCarePlanRevisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a historical care plan revision */
+        get: operations["getCarePlanRevision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/assessment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a draft assessment */
+        patch: operations["updateCarePlanAssessment"];
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/needs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a need to a draft revision */
+        post: operations["addCarePlanNeed"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/needs/{needId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a need from a draft revision */
+        delete: operations["removeCarePlanNeed"];
+        options?: never;
+        head?: never;
+        /** Update a need in a draft revision */
+        patch: operations["updateCarePlanNeed"];
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a resource to a draft revision */
+        post: operations["addCarePlanResource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/resources/{resourceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a resource from a draft revision */
+        delete: operations["removeCarePlanResource"];
+        options?: never;
+        head?: never;
+        /** Update a resource in a draft revision */
+        patch: operations["updateCarePlanResource"];
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a goal to a draft revision */
+        post: operations["addCarePlanGoal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/goals/{goalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a goal from a draft revision */
+        delete: operations["removeCarePlanGoal"];
+        options?: never;
+        head?: never;
+        /** Update a goal in a draft revision */
+        patch: operations["updateCarePlanGoal"];
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/measures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a measure to a draft revision */
+        post: operations["addCarePlanMeasure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/measures/{measureId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a measure from a draft revision */
+        delete: operations["removeCarePlanMeasure"];
+        options?: never;
+        head?: never;
+        /** Update a measure in a draft revision */
+        patch: operations["updateCarePlanMeasure"];
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/risk-responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a risk response to a draft revision */
+        post: operations["addCarePlanRiskResponse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/risk-responses/{riskResponseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a risk response from a draft revision */
+        delete: operations["removeCarePlanRiskResponse"];
+        options?: never;
+        head?: never;
+        /** Update a risk response in a draft revision */
+        patch: operations["updateCarePlanRiskResponse"];
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/source-references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reference a clinical record */
+        post: operations["addCarePlanSourceReference"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/source-references/{clinicalRecordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a clinical record reference */
+        delete: operations["removeCarePlanSourceReference"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/revisions/{revisionId}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate a draft revision */
+        post: operations["activateCarePlanRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/evaluations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List care plan evaluations */
+        get: operations["listCarePlanEvaluations"];
+        put?: never;
+        /** Evaluate a care plan */
+        post: operations["createCarePlanEvaluation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/care-plans/{planId}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End a care plan */
+        post: operations["endCarePlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visits/{visitId}/care-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read active care measures for an assigned visit
+         * @description Caregiver view. The visit service verifies the caller is assigned to the visit.
+         */
+        get: operations["getVisitCarePlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/visits/{visitId}/evidence-package": {
         parameters: {
             query?: never;
@@ -2875,7 +3539,6 @@ export interface components {
             /** Format: uuid */
             actorId: string;
             action: string;
-            summary: string;
         };
         ServiceCategoryResponseDto: {
             /** Format: uuid */
@@ -3647,6 +4310,896 @@ export interface components {
             reason: string;
             correction: string;
         };
+        ClinicalMeasurementDto: {
+            /** @enum {string} */
+            kind: "measurement";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            documentationId: string;
+            recordVersion: number;
+            /** Format: uuid */
+            recordedByUserId: string;
+            /** Format: uuid */
+            recordedByEmployeeId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            correctsRecordId?: string | null;
+            /** Format: uuid */
+            correctedByRecordId?: string | null;
+            correctionReason?: string | null;
+            /** @enum {string} */
+            measurementType: "blood_pressure" | "pulse" | "temperature" | "weight" | "blood_glucose" | "oxygen_saturation" | "respiratory_rate";
+            value?: string | null;
+            integerValue?: number | null;
+            systolic?: number | null;
+            diastolic?: number | null;
+            /** @enum {string} */
+            unit: "mmHg" | "Cel" | "kg" | "bpm" | "/min" | "%" | "mg/dL" | "mmol/L";
+            /** Format: date-time */
+            measuredAt: string;
+            /** @enum {string} */
+            source: "manual" | "device";
+            note?: string | null;
+        };
+        ClinicalObservationDto: {
+            /** @enum {string} */
+            kind: "observation";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            documentationId: string;
+            recordVersion: number;
+            /** Format: uuid */
+            recordedByUserId: string;
+            /** Format: uuid */
+            recordedByEmployeeId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            correctsRecordId?: string | null;
+            /** Format: uuid */
+            correctedByRecordId?: string | null;
+            correctionReason?: string | null;
+            /** @enum {string} */
+            category: "mobility" | "orientation" | "pain" | "skin" | "nutrition" | "hydration" | "elimination" | "sleep" | "mood" | "general_condition";
+            valueCode?: string | null;
+            painScore?: number | null;
+            location?: string | null;
+            severity?: string | null;
+            /** Format: date-time */
+            observedAt: string;
+            note?: string | null;
+        };
+        ClinicalAssessmentDto: {
+            /** @enum {string} */
+            kind: "assessment";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            documentationId: string;
+            recordVersion: number;
+            /** Format: uuid */
+            recordedByUserId: string;
+            /** Format: uuid */
+            recordedByEmployeeId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            correctsRecordId?: string | null;
+            /** Format: uuid */
+            correctedByRecordId?: string | null;
+            correctionReason?: string | null;
+            /** @enum {string} */
+            assessmentType: "general_condition" | "pain";
+            resultCode: string | null;
+            score?: string | null;
+            /** Format: date-time */
+            assessedAt: string;
+            /** Format: date-time */
+            validUntil?: string | null;
+            note?: string | null;
+        };
+        ClinicalRiskAssessmentDto: {
+            /** @enum {string} */
+            kind: "risk_assessment";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            documentationId: string;
+            recordVersion: number;
+            /** Format: uuid */
+            recordedByUserId: string;
+            /** Format: uuid */
+            recordedByEmployeeId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            correctsRecordId?: string | null;
+            /** Format: uuid */
+            correctedByRecordId?: string | null;
+            correctionReason?: string | null;
+            /** @enum {string} */
+            riskType: "fall" | "pressure_ulcer" | "dehydration" | "malnutrition";
+            /** @enum {string} */
+            level: "none" | "low" | "moderate" | "high";
+            /** Format: date-time */
+            assessedAt: string;
+            /** Format: date-time */
+            validUntil?: string | null;
+            source: string;
+            note?: string | null;
+        };
+        ClinicalDocumentationDetailDto: {
+            /** Format: uuid */
+            documentationId: string;
+            /** @enum {string} */
+            documentationStatus: "draft" | "finalized";
+            documentationVersion: number;
+            records: (components["schemas"]["ClinicalMeasurementDto"] | components["schemas"]["ClinicalObservationDto"] | components["schemas"]["ClinicalAssessmentDto"] | components["schemas"]["ClinicalRiskAssessmentDto"])[];
+        };
+        AddMeasurementRequestDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            measurementType: "blood_pressure" | "pulse" | "temperature" | "weight" | "blood_glucose" | "oxygen_saturation" | "respiratory_rate";
+            value: string | null;
+            integerValue: number | null;
+            systolic: number | null;
+            diastolic: number | null;
+            /** @enum {string} */
+            unit: "mmHg" | "Cel" | "kg" | "bpm" | "/min" | "%" | "mg/dL" | "mmol/L";
+            /** Format: date-time */
+            measuredAt: string;
+            /** @enum {string} */
+            source: "manual" | "device";
+            note?: string | null;
+        };
+        UpdateMeasurementRequestDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            measurementType: "blood_pressure" | "pulse" | "temperature" | "weight" | "blood_glucose" | "oxygen_saturation" | "respiratory_rate";
+            value: string | null;
+            integerValue: number | null;
+            systolic: number | null;
+            diastolic: number | null;
+            /** @enum {string} */
+            unit: "mmHg" | "Cel" | "kg" | "bpm" | "/min" | "%" | "mg/dL" | "mmol/L";
+            /** Format: date-time */
+            measuredAt: string;
+            /** @enum {string} */
+            source: "manual" | "device";
+            note?: string | null;
+            expectedRecordVersion: number;
+        };
+        DeleteClinicalRecordRequestDto: {
+            expectedVersion: number;
+            expectedRecordVersion: number;
+        };
+        AddObservationRequestDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            category: "mobility" | "orientation" | "pain" | "skin" | "nutrition" | "hydration" | "elimination" | "sleep" | "mood" | "general_condition";
+            valueCode?: string | null;
+            painScore?: number | null;
+            location?: string | null;
+            severity?: string | null;
+            /** Format: date-time */
+            observedAt: string;
+            note?: string | null;
+        };
+        UpdateObservationRequestDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            category: "mobility" | "orientation" | "pain" | "skin" | "nutrition" | "hydration" | "elimination" | "sleep" | "mood" | "general_condition";
+            valueCode?: string | null;
+            painScore?: number | null;
+            location?: string | null;
+            severity?: string | null;
+            /** Format: date-time */
+            observedAt: string;
+            note?: string | null;
+            expectedRecordVersion: number;
+        };
+        AddAssessmentRequestDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            assessmentType: "general_condition" | "pain";
+            resultCode?: string | null;
+            score?: string | null;
+            /** Format: date-time */
+            assessedAt: string;
+            /** Format: date-time */
+            validUntil?: string | null;
+            note?: string | null;
+        };
+        UpdateAssessmentRequestDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            assessmentType: "general_condition" | "pain";
+            resultCode?: string | null;
+            score?: string | null;
+            /** Format: date-time */
+            assessedAt: string;
+            /** Format: date-time */
+            validUntil?: string | null;
+            note?: string | null;
+            expectedRecordVersion: number;
+        };
+        AddRiskAssessmentRequestDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            riskType: "fall" | "pressure_ulcer" | "dehydration" | "malnutrition";
+            /** @enum {string} */
+            level: "none" | "low" | "moderate" | "high";
+            /** Format: date-time */
+            assessedAt: string;
+            /** Format: date-time */
+            validUntil?: string | null;
+            source: string;
+            note?: string | null;
+        };
+        UpdateRiskAssessmentRequestDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            riskType: "fall" | "pressure_ulcer" | "dehydration" | "malnutrition";
+            /** @enum {string} */
+            level: "none" | "low" | "moderate" | "high";
+            /** Format: date-time */
+            assessedAt: string;
+            /** Format: date-time */
+            validUntil?: string | null;
+            source: string;
+            note?: string | null;
+            expectedRecordVersion: number;
+        };
+        ClinicalMeasurementReplacementDto: {
+            /** @enum {string} */
+            measurementType: "blood_pressure" | "pulse" | "temperature" | "weight" | "blood_glucose" | "oxygen_saturation" | "respiratory_rate";
+            value: string | null;
+            integerValue: number | null;
+            systolic: number | null;
+            diastolic: number | null;
+            /** @enum {string} */
+            unit: "mmHg" | "Cel" | "kg" | "bpm" | "/min" | "%" | "mg/dL" | "mmol/L";
+            /** Format: date-time */
+            measuredAt: string;
+            /** @enum {string} */
+            source: "manual" | "device";
+            note?: string | null;
+        };
+        ClinicalObservationReplacementDto: {
+            /** @enum {string} */
+            category: "mobility" | "orientation" | "pain" | "skin" | "nutrition" | "hydration" | "elimination" | "sleep" | "mood" | "general_condition";
+            valueCode?: string | null;
+            painScore?: number | null;
+            location?: string | null;
+            /** @enum {string|null} */
+            severity?: "mild" | "moderate" | "severe" | null;
+            /** Format: date-time */
+            observedAt: string;
+            note?: string | null;
+        };
+        ClinicalAssessmentReplacementDto: {
+            /** @enum {string} */
+            assessmentType: "general_condition" | "pain";
+            resultCode?: string | null;
+            score?: string | null;
+            /** Format: date-time */
+            assessedAt: string;
+            /** Format: date-time */
+            validUntil?: string | null;
+            note?: string | null;
+        };
+        ClinicalRiskReplacementDto: {
+            /** @enum {string} */
+            riskType: "fall" | "pressure_ulcer" | "dehydration" | "malnutrition";
+            /** @enum {string} */
+            level: "none" | "low" | "moderate" | "high";
+            /** Format: date-time */
+            assessedAt: string;
+            /** Format: date-time */
+            validUntil?: string | null;
+            source: string;
+            note?: string | null;
+        };
+        AmendClinicalRecordRequestDto: {
+            reason: string;
+            replacement: components["schemas"]["ClinicalMeasurementReplacementDto"] | components["schemas"]["ClinicalObservationReplacementDto"] | components["schemas"]["ClinicalAssessmentReplacementDto"] | components["schemas"]["ClinicalRiskReplacementDto"];
+        };
+        ClinicalMeasurementHistoryDto: {
+            /** @enum {string} */
+            kind: "measurement";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            documentationId: string;
+            recordVersion: number;
+            /** Format: uuid */
+            recordedByUserId: string;
+            /** Format: uuid */
+            recordedByEmployeeId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            correctsRecordId?: string | null;
+            /** Format: uuid */
+            correctedByRecordId?: string | null;
+            correctionReason?: string | null;
+            /** @enum {string} */
+            measurementType: "blood_pressure" | "pulse" | "temperature" | "weight" | "blood_glucose" | "oxygen_saturation" | "respiratory_rate";
+            value?: string | null;
+            integerValue?: number | null;
+            systolic?: number | null;
+            diastolic?: number | null;
+            /** @enum {string} */
+            unit: "mmHg" | "Cel" | "kg" | "bpm" | "/min" | "%" | "mg/dL" | "mmol/L";
+            /** Format: date-time */
+            measuredAt: string;
+            /** @enum {string} */
+            source: "manual" | "device";
+            note?: string | null;
+            recordedByEmployeeName: string | null;
+            /** Format: uuid */
+            visitId: string;
+            /** Format: date-time */
+            plannedStart: string;
+            timezone: string;
+            /** @enum {string} */
+            documentationStatus: "draft" | "finalized";
+        };
+        ClinicalObservationHistoryDto: {
+            /** @enum {string} */
+            kind: "observation";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            documentationId: string;
+            recordVersion: number;
+            /** Format: uuid */
+            recordedByUserId: string;
+            /** Format: uuid */
+            recordedByEmployeeId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            correctsRecordId?: string | null;
+            /** Format: uuid */
+            correctedByRecordId?: string | null;
+            correctionReason?: string | null;
+            /** @enum {string} */
+            category: "mobility" | "orientation" | "pain" | "skin" | "nutrition" | "hydration" | "elimination" | "sleep" | "mood" | "general_condition";
+            valueCode?: string | null;
+            painScore?: number | null;
+            location?: string | null;
+            severity?: string | null;
+            /** Format: date-time */
+            observedAt: string;
+            note?: string | null;
+            recordedByEmployeeName: string | null;
+            /** Format: uuid */
+            visitId: string;
+            /** Format: date-time */
+            plannedStart: string;
+            timezone: string;
+            /** @enum {string} */
+            documentationStatus: "draft" | "finalized";
+        };
+        ClinicalAssessmentHistoryDto: {
+            /** @enum {string} */
+            kind: "assessment";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            documentationId: string;
+            recordVersion: number;
+            /** Format: uuid */
+            recordedByUserId: string;
+            /** Format: uuid */
+            recordedByEmployeeId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            correctsRecordId?: string | null;
+            /** Format: uuid */
+            correctedByRecordId?: string | null;
+            correctionReason?: string | null;
+            /** @enum {string} */
+            assessmentType: "general_condition" | "pain";
+            resultCode: string | null;
+            score?: string | null;
+            /** Format: date-time */
+            assessedAt: string;
+            /** Format: date-time */
+            validUntil?: string | null;
+            note?: string | null;
+            recordedByEmployeeName: string | null;
+            /** Format: uuid */
+            visitId: string;
+            /** Format: date-time */
+            plannedStart: string;
+            timezone: string;
+            /** @enum {string} */
+            documentationStatus: "draft" | "finalized";
+        };
+        ClinicalRiskAssessmentHistoryDto: {
+            /** @enum {string} */
+            kind: "risk_assessment";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            documentationId: string;
+            recordVersion: number;
+            /** Format: uuid */
+            recordedByUserId: string;
+            /** Format: uuid */
+            recordedByEmployeeId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            correctsRecordId?: string | null;
+            /** Format: uuid */
+            correctedByRecordId?: string | null;
+            correctionReason?: string | null;
+            /** @enum {string} */
+            riskType: "fall" | "pressure_ulcer" | "dehydration" | "malnutrition";
+            /** @enum {string} */
+            level: "none" | "low" | "moderate" | "high";
+            /** Format: date-time */
+            assessedAt: string;
+            /** Format: date-time */
+            validUntil?: string | null;
+            source: string;
+            note?: string | null;
+            recordedByEmployeeName: string | null;
+            /** Format: uuid */
+            visitId: string;
+            /** Format: date-time */
+            plannedStart: string;
+            timezone: string;
+            /** @enum {string} */
+            documentationStatus: "draft" | "finalized";
+        };
+        ClinicalRecordHistoryPageDto: {
+            items: (components["schemas"]["ClinicalMeasurementHistoryDto"] | components["schemas"]["ClinicalObservationHistoryDto"] | components["schemas"]["ClinicalAssessmentHistoryDto"] | components["schemas"]["ClinicalRiskAssessmentHistoryDto"])[];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
+        CarePlanWorklistLatestEvaluationDto: {
+            /** Format: date-time */
+            evaluatedAt: string;
+            /** @enum {string} */
+            result: "effective" | "partially_effective" | "not_effective" | "changed_condition" | "no_change";
+            /** Format: date */
+            nextEvaluationDue: string | null;
+        };
+        CarePlanWorklistItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            clientId: string;
+            clientDisplayName: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId: string;
+            facilityName: string;
+            /** @enum {string} */
+            status: "draft" | "active" | "under_review" | "ended";
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil: string | null;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            latestEvaluation: components["schemas"]["CarePlanWorklistLatestEvaluationDto"] | null;
+        };
+        CarePlanListResponseDto: {
+            items: components["schemas"]["CarePlanWorklistItemDto"][];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
+        CreateCarePlanDto: {
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil?: string | null;
+        };
+        CarePlanPlanDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            clientId: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId: string;
+            /** @enum {string} */
+            status: "draft" | "active" | "under_review" | "ended";
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil: string | null;
+            version: number;
+            /** Format: uuid */
+            createdByEmployeeId: string;
+            createdByEmployeeName: string | null;
+            /** Format: uuid */
+            endedByEmployeeId?: string | null;
+            /** Format: date-time */
+            endedAt?: string | null;
+            endedReason?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CarePlanRevisionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            planId: string;
+            /** Format: uuid */
+            clientId: string;
+            revisionNumber: number;
+            /** @enum {string} */
+            status: "draft" | "active" | "historical";
+            /** Format: uuid */
+            authorEmployeeId: string;
+            authorEmployeeName: string | null;
+            reason?: string | null;
+            /** Format: date */
+            effectiveFrom: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            activatedByEmployeeId?: string | null;
+            activatedByEmployeeName?: string | null;
+            /** Format: date-time */
+            activatedAt?: string | null;
+            /** Format: date-time */
+            supersededAt?: string | null;
+        };
+        CarePlanAssessmentDto: {
+            /** Format: uuid */
+            revisionId: string;
+            clientConcerns: string | null;
+            clientWishes: string | null;
+            clientGoals: string | null;
+            clientHabits: string | null;
+            clientPreferences: string | null;
+            clientPriorities: string | null;
+            professionalObservedNeeds: string | null;
+            professionalResources: string | null;
+            professionalLimitations: string | null;
+            professionalRisks: string | null;
+            professionalRationale: string | null;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CarePlanSourceReferenceDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            clinicalRecordId: string;
+            /** @enum {string} */
+            recordKind: "measurement" | "observation" | "assessment" | "risk_assessment";
+            rationale: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CarePlanNeedDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            revisionId: string;
+            /** @enum {string} */
+            category: "personal_care" | "mobility" | "nutrition" | "hydration" | "communication" | "cognition" | "daily_living" | "social_participation" | "safety" | "other";
+            title: string;
+            description: string | null;
+            /** @enum {string} */
+            source: "client_report" | "professional_observation" | "representative_report" | "clinical_record";
+            /** @enum {string} */
+            priority: "low" | "normal" | "high";
+            /** @enum {string} */
+            status: "active" | "addressed" | "deferred";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CarePlanResourceDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            revisionId: string;
+            /** @enum {string} */
+            category: "self_care" | "mobility" | "communication" | "cognition" | "daily_routine" | "social_support" | "personal_interest" | "other";
+            description: string;
+            /** @enum {string} */
+            status: "available" | "needs_support" | "unavailable";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CarePlanRiskResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            revisionId: string;
+            /** Format: uuid */
+            clinicalRecordId: string;
+            /** @enum {string} */
+            status: "addressed" | "monitor" | "accepted";
+            plannedResponse: string;
+            needIds: string[];
+            measureIds: string[];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CarePlanGoalDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            revisionId: string;
+            title: string;
+            description: string | null;
+            /** Format: date */
+            targetDate: string | null;
+            /** @enum {string} */
+            status: "active" | "achieved" | "discontinued";
+            /** @enum {string} */
+            priority: "low" | "normal" | "high";
+            needIds: string[];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CarePlanMeasureDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            revisionId: string;
+            title: string;
+            instruction: string;
+            /** @enum {string} */
+            category: "personal_care" | "assistance" | "encouragement" | "monitoring" | "positioning" | "communication" | "other";
+            needIds: string[];
+            goalIds: string[];
+            /** Format: uuid */
+            serviceDefinitionId: string | null;
+            frequencyText: string | null;
+            responsibleRole: string | null;
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil: string | null;
+            /** @enum {string} */
+            status: "active" | "discontinued";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CarePlanRevisionDetailDto: {
+            revision: components["schemas"]["CarePlanRevisionDto"];
+            assessment: components["schemas"]["CarePlanAssessmentDto"];
+            sourceReferences: components["schemas"]["CarePlanSourceReferenceDto"][];
+            needs: components["schemas"]["CarePlanNeedDto"][];
+            resources: components["schemas"]["CarePlanResourceDto"][];
+            riskResponses: components["schemas"]["CarePlanRiskResponseDto"][];
+            goals: components["schemas"]["CarePlanGoalDto"][];
+            measures: components["schemas"]["CarePlanMeasureDto"][];
+        };
+        CarePlanGoalOutcomeDto: {
+            /** Format: uuid */
+            goalId: string;
+            /** @enum {string} */
+            outcome: "achieved" | "partially_achieved" | "not_achieved" | "not_applicable";
+            note: string | null;
+        };
+        CarePlanEvaluationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            planId: string;
+            /** Format: uuid */
+            revisionId: string;
+            /** Format: uuid */
+            evaluatedByEmployeeId: string;
+            evaluatedByEmployeeName: string | null;
+            /** Format: date-time */
+            evaluatedAt: string;
+            /** @enum {string} */
+            result: "effective" | "partially_effective" | "not_effective" | "changed_condition" | "no_change";
+            /** @enum {string} */
+            planChange: "none" | "revision_required";
+            summary: string;
+            /** Format: date */
+            nextEvaluationDue: string | null;
+            goals: components["schemas"]["CarePlanGoalOutcomeDto"][];
+        };
+        CarePlanDetailDto: {
+            plan: components["schemas"]["CarePlanPlanDto"];
+            activeRevision: components["schemas"]["CarePlanRevisionDetailDto"] | null;
+            draftRevision: components["schemas"]["CarePlanRevisionDetailDto"] | null;
+            latestEvaluation: components["schemas"]["CarePlanEvaluationDto"] | null;
+            /** Format: date */
+            nextEvaluationDue: string | null;
+        };
+        CarePlanHistoryDto: {
+            revisions: components["schemas"]["CarePlanRevisionDetailDto"][];
+            evaluations: components["schemas"]["CarePlanEvaluationDto"][];
+        };
+        CreateCarePlanRevisionDto: {
+            expectedVersion: number;
+            /** Format: date */
+            effectiveFrom: string;
+            reason: string;
+        };
+        CarePlanRevisionDiffGroupDto: {
+            added: string[];
+            changed: string[];
+            removed: string[];
+        };
+        CarePlanRevisionDiffDto: {
+            needs: components["schemas"]["CarePlanRevisionDiffGroupDto"];
+            resources: components["schemas"]["CarePlanRevisionDiffGroupDto"];
+            riskResponses: components["schemas"]["CarePlanRevisionDiffGroupDto"];
+            goals: components["schemas"]["CarePlanRevisionDiffGroupDto"];
+            measures: components["schemas"]["CarePlanRevisionDiffGroupDto"];
+            sourceReferences: components["schemas"]["CarePlanRevisionDiffGroupDto"];
+            assessmentChanged: boolean;
+        };
+        UpdateCarePlanAssessmentDto: {
+            expectedVersion: number;
+            clientConcerns?: string | null;
+            clientWishes?: string | null;
+            clientGoals?: string | null;
+            clientHabits?: string | null;
+            clientPreferences?: string | null;
+            clientPriorities?: string | null;
+            professionalObservedNeeds?: string | null;
+            professionalResources?: string | null;
+            professionalLimitations?: string | null;
+            professionalRisks?: string | null;
+            professionalRationale?: string | null;
+        };
+        CareNeedInputDto: {
+            /** @enum {string} */
+            category: "personal_care" | "mobility" | "nutrition" | "hydration" | "communication" | "cognition" | "daily_living" | "social_participation" | "safety" | "other";
+            title: string;
+            description?: string | null;
+            /** @enum {string} */
+            source: "client_report" | "professional_observation" | "representative_report" | "clinical_record";
+            /** @enum {string} */
+            priority: "low" | "normal" | "high";
+            /** @enum {string} */
+            status: "active" | "addressed" | "deferred";
+            expectedVersion: number;
+        };
+        ExpectedVersionDto: {
+            expectedVersion: number;
+        };
+        CareResourceInputDto: {
+            /** @enum {string} */
+            category: "self_care" | "mobility" | "communication" | "cognition" | "daily_routine" | "social_support" | "personal_interest" | "other";
+            description: string;
+            /** @enum {string} */
+            status: "available" | "needs_support" | "unavailable";
+            expectedVersion: number;
+        };
+        CareGoalInputDto: {
+            title: string;
+            description?: string | null;
+            /** Format: date */
+            targetDate?: string | null;
+            /** @enum {string} */
+            status: "active" | "achieved" | "discontinued";
+            /** @enum {string} */
+            priority: "low" | "normal" | "high";
+            needIds: string[];
+            expectedVersion: number;
+        };
+        CareMeasureInputDto: {
+            title: string;
+            instruction: string;
+            /** @enum {string} */
+            category: "personal_care" | "assistance" | "encouragement" | "monitoring" | "positioning" | "communication" | "other";
+            needIds: string[];
+            goalIds: string[];
+            /** Format: uuid */
+            serviceDefinitionId?: string | null;
+            frequencyText?: string | null;
+            responsibleRole?: string | null;
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil?: string | null;
+            /** @enum {string} */
+            status: "active" | "discontinued";
+            expectedVersion: number;
+        };
+        CareRiskResponseInputDto: {
+            /** Format: uuid */
+            clinicalRecordId: string;
+            /** @enum {string} */
+            status: "addressed" | "monitor" | "accepted";
+            plannedResponse: string;
+            needIds: string[];
+            measureIds: string[];
+            expectedVersion: number;
+        };
+        CarePlanSourceReferenceInputDto: {
+            /** Format: uuid */
+            clinicalRecordId: string;
+            /** @enum {string} */
+            recordKind: "measurement" | "observation" | "assessment" | "risk_assessment";
+            rationale?: string | null;
+            expectedVersion: number;
+        };
+        CarePlanGoalOutcomeInputDto: {
+            /** Format: uuid */
+            goalId: string;
+            /** @enum {string} */
+            outcome: "achieved" | "partially_achieved" | "not_achieved" | "not_applicable";
+            note?: string | null;
+        };
+        CarePlanEvaluationInputDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            revisionId: string;
+            /** @enum {string} */
+            result: "effective" | "partially_effective" | "not_effective" | "changed_condition" | "no_change";
+            /** @enum {string} */
+            planChange: "none" | "revision_required";
+            summary: string;
+            /** Format: date */
+            nextEvaluationDue?: string | null;
+            goals: components["schemas"]["CarePlanGoalOutcomeInputDto"][];
+        };
+        EndCarePlanDto: {
+            expectedVersion: number;
+            reason: string;
+        };
+        VisitCarePlanMeasureDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            instruction: string;
+            /** @enum {string} */
+            category: "personal_care" | "assistance" | "encouragement" | "monitoring" | "positioning" | "communication" | "other";
+            frequencyText: string | null;
+            responsibleRole: string | null;
+        };
+        VisitCarePlanDto: {
+            /** Format: uuid */
+            planId: string;
+            /** Format: uuid */
+            clientId: string;
+            /** @enum {string} */
+            status: "draft" | "active" | "under_review" | "ended";
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil: string | null;
+            measures: components["schemas"]["VisitCarePlanMeasureDto"][];
+        };
         EvidencePackageItemDto: {
             /** Format: uuid */
             performedServiceId: string;
@@ -3838,7 +5391,7 @@ export interface components {
         };
         PermissionGrantDto: {
             /** @enum {string} */
-            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "service_evidence.read" | "service_evidence.prepare" | "acknowledgement.read" | "acknowledgement.capture" | "acknowledgement.revoke" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
+            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "clinical_documentation.read" | "clinical_documentation.create" | "clinical_documentation.update" | "clinical_documentation.review" | "clinical_documentation.amend" | "care_plan.read" | "care_plan.create" | "care_plan.update" | "care_plan.activate" | "care_plan.evaluate" | "care_plan.end" | "care_plan.review_history" | "service_evidence.read" | "service_evidence.prepare" | "acknowledgement.read" | "acknowledgement.capture" | "acknowledgement.revoke" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
             /** @enum {string} */
             scopeType: "assigned_clients" | "team" | "facility" | "organization" | "tenant";
             /** Format: uuid */
@@ -8512,6 +10065,1881 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CareDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_getRecords: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_addMeasurement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMeasurementRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_deleteMeasurement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                recordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteClinicalRecordRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_updateMeasurement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                recordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMeasurementRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_addObservation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddObservationRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_deleteObservation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                recordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteClinicalRecordRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_updateObservation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                recordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateObservationRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_addAssessment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddAssessmentRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_deleteAssessment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                recordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteClinicalRecordRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_updateAssessment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                recordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAssessmentRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_addRiskAssessment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddRiskAssessmentRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_deleteRiskAssessment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                recordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteClinicalRecordRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_updateRiskAssessment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                recordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRiskAssessmentRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_amendRecord: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                recordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AmendClinicalRecordRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_measurementHistory: {
+        parameters: {
+            query: {
+                type?: "blood_pressure" | "pulse" | "temperature" | "weight" | "blood_glucose" | "oxygen_saturation" | "respiratory_rate";
+                pageSize: number;
+                page: number;
+                until: string;
+                from: string;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalRecordHistoryPageDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_observationHistory: {
+        parameters: {
+            query: {
+                category?: "mobility" | "orientation" | "pain" | "skin" | "nutrition" | "hydration" | "elimination" | "sleep" | "mood" | "general_condition";
+                pageSize: number;
+                page: number;
+                until: string;
+                from: string;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalRecordHistoryPageDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_assessmentHistory: {
+        parameters: {
+            query: {
+                type?: "general_condition" | "pain";
+                pageSize: number;
+                page: number;
+                until: string;
+                from: string;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalRecordHistoryPageDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClinicalDocumentationController_riskHistory: {
+        parameters: {
+            query: {
+                currentOnly?: boolean;
+                riskType?: "fall" | "pressure_ulcer" | "dehydration" | "malnutrition";
+                pageSize: number;
+                page: number;
+                /** @description Required for history reads. Ignored when currentOnly=true. */
+                until?: string;
+                /** @description Required for history reads. Ignored when currentOnly=true. */
+                from?: string;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalRecordHistoryPageDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    listClientCarePlans: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                status?: "draft" | "active" | "under_review" | "ended";
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    createClientCarePlan: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCarePlanDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    getClientCarePlan: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"] | null;
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    listCarePlans: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                evaluationDueBefore?: unknown;
+                evaluationOverdue?: boolean;
+                facilityId?: unknown;
+                clientQuery?: string;
+                clientId?: unknown;
+                status?: "draft" | "active" | "under_review" | "ended";
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    getCarePlan: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    getCarePlanHistory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanHistoryDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    createCarePlanRevision: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCarePlanRevisionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    diffCarePlanRevisions: {
+        parameters: {
+            query: {
+                toRevisionId: unknown;
+                fromRevisionId: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanRevisionDiffDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    getCarePlanRevision: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanRevisionDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    updateCarePlanAssessment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCarePlanAssessmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    addCarePlanNeed: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CareNeedInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    removeCarePlanNeed: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+                needId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpectedVersionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    updateCarePlanNeed: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+                needId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CareNeedInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    addCarePlanResource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CareResourceInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    removeCarePlanResource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+                resourceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpectedVersionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    updateCarePlanResource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+                resourceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CareResourceInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    addCarePlanGoal: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CareGoalInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    removeCarePlanGoal: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+                goalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpectedVersionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    updateCarePlanGoal: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+                goalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CareGoalInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    addCarePlanMeasure: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CareMeasureInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    removeCarePlanMeasure: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+                measureId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpectedVersionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    updateCarePlanMeasure: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+                measureId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CareMeasureInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    addCarePlanRiskResponse: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CareRiskResponseInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    removeCarePlanRiskResponse: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+                riskResponseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpectedVersionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    updateCarePlanRiskResponse: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+                riskResponseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CareRiskResponseInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    addCarePlanSourceReference: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CarePlanSourceReferenceInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    removeCarePlanSourceReference: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+                clinicalRecordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpectedVersionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    activateCarePlanRevision: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpectedVersionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    listCarePlanEvaluations: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanEvaluationDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    createCarePlanEvaluation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CarePlanEvaluationInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    endCarePlan: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndCarePlanDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlanDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    getVisitCarePlan: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                visitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitCarePlanDto"] | null;
                 };
             };
             /** @description Problem Details response */

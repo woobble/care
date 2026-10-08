@@ -1,9 +1,12 @@
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
 import { getApiClient, getTenantHeader } from '../../../lib/api';
 import { formatVisitTime, todayRange } from '../../../lib/care-date';
+import { formatLongDate } from '../../../i18n/format';
 
 export default async function CareTodayPage() {
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const range = todayRange();
   const api = await getApiClient();
   const get = api.GET;
@@ -34,19 +37,20 @@ export default async function CareTodayPage() {
   return (
     <div className="grid gap-5">
       <header>
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">Heute</p>
-        <h1 className="mt-1 text-3xl font-semibold">Meine Einsätze</h1>
+        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
+          {t('Caregiver.todayLabel')}
+        </p>
+        <h1 className="mt-1 text-3xl font-semibold">{t('Caregiver.visitsTitle')}</h1>
         <p className="mt-2 text-slate-600">
-          {new Intl.DateTimeFormat('de-DE', {
-            dateStyle: 'full',
-            timeZone: 'Europe/Berlin',
-          }).format(new Date(range.from))}
+          {t('Caregiver.visitsForDate', {
+            date: formatLongDate(range.from, locale, 'Europe/Berlin'),
+          })}
         </p>
       </header>
 
       {error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-          Einsätze konnten nicht geladen werden. ({error.code})
+          {t('Caregiver.loadFailed')}
         </p>
       ) : null}
 
@@ -59,21 +63,21 @@ export default async function CareTodayPage() {
                 className="grid min-h-24 gap-3 rounded-lg border bg-white p-4 shadow-sm transition hover:border-blue-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 sm:grid-cols-[5rem_1fr_auto] sm:items-center"
               >
                 <span className="text-xl font-semibold tabular-nums text-blue-900">
-                  {formatVisitTime(visit.plannedStart, visit.timezone)}
+                  {formatVisitTime(visit.plannedStart, visit.timezone, locale)}
                 </span>
                 <span className="grid gap-1">
                   <span className="text-lg font-semibold">{visit.clientDisplayName}</span>
                   <span className="text-sm text-slate-600">
                     {visit.services.map((service) => service.name).join(' · ') ||
-                      'Keine geplanten Leistungen'}
+                      t('Caregiver.noPlannedServices')}
                   </span>
                   {visit.executionStatus === 'completed' ? (
                     <span className="text-sm font-medium">
                       {documentationByVisit.get(visit.id)?.documentationStatus === 'finalized'
-                        ? `✓ Dokumentation finalisiert · ${acknowledgementStatusLabel(evidenceByVisit.get(visit.id)?.status)}`
+                        ? `✓ ${t('CareDocumentation.finalized')} · ${t(acknowledgementStatusKey(evidenceByVisit.get(visit.id)?.status))}`
                         : documentationByVisit.get(visit.id)?.documentationStatus === 'draft'
-                          ? '⚠ Dokumentation unvollständig'
-                          : '⚠ Dokumentation fehlt'}
+                          ? `⚠ ${t('CareDocumentation.incomplete')}`
+                          : `⚠ ${t('CareDocumentation.missing')}`}
                     </span>
                   ) : null}
                 </span>
@@ -83,7 +87,13 @@ export default async function CareTodayPage() {
                     statusClass(visit.executionStatus, visit.status)
                   }
                 >
-                  {statusLabel(visit.executionStatus, visit.status)}
+                  {visit.status === 'cancelled'
+                    ? t('Common.status.cancelled')
+                    : visit.executionStatus === 'completed'
+                      ? t('Common.status.completed')
+                      : visit.executionStatus === 'in_progress'
+                        ? t('Common.status.inProgress')
+                        : t('Common.status.upcoming')}
                 </span>
               </Link>
             </li>
@@ -91,22 +101,15 @@ export default async function CareTodayPage() {
         </ul>
       ) : (
         <section className="grid gap-2 rounded-lg border bg-white p-6">
-          <h2 className="text-lg font-semibold">Heute keine Einsätze</h2>
-          <p className="text-slate-600">Zugewiesene Einsätze erscheinen hier.</p>
+          <h2 className="text-lg font-semibold">{t('Caregiver.noVisitsTitle')}</h2>
+          <p className="text-slate-600">{t('Caregiver.noVisits')}</p>
           <Button asChild variant="secondary" className="mt-2 w-fit">
-            <Link href="/care/today">Aktualisieren</Link>
+            <Link href="/care/today">{t('Caregiver.refresh')}</Link>
           </Button>
         </section>
       )}
     </div>
   );
-}
-
-function statusLabel(executionStatus: string, visitStatus: string): string {
-  if (visitStatus === 'cancelled') return 'Abgesagt';
-  if (executionStatus === 'completed') return 'Abgeschlossen';
-  if (executionStatus === 'in_progress') return 'In Bearbeitung';
-  return 'Bevorstehend';
 }
 
 function statusClass(executionStatus: string, visitStatus: string): string {
@@ -116,10 +119,17 @@ function statusClass(executionStatus: string, visitStatus: string): string {
   return 'bg-amber-100 text-amber-900';
 }
 
-function acknowledgementStatusLabel(status: string | undefined): string {
-  if (status === 'acknowledged') return 'Bestätigung liegt vor';
-  if (status === 'declined') return 'Bestätigung abgelehnt';
-  if (status === 'outdated') return 'neue Bestätigung erforderlich';
-  if (status === 'revoked') return 'Bestätigung widerrufen';
-  return 'Bestätigung fehlt';
+function acknowledgementStatusKey(
+  status: string | undefined,
+):
+  | 'ServiceEvidence.acknowledgementStatus.acknowledged'
+  | 'ServiceEvidence.acknowledgementStatus.declined'
+  | 'ServiceEvidence.acknowledgementStatus.outdated'
+  | 'ServiceEvidence.acknowledgementStatus.revoked'
+  | 'ServiceEvidence.acknowledgementStatus.missing' {
+  if (status === 'acknowledged') return 'ServiceEvidence.acknowledgementStatus.acknowledged';
+  if (status === 'declined') return 'ServiceEvidence.acknowledgementStatus.declined';
+  if (status === 'outdated') return 'ServiceEvidence.acknowledgementStatus.outdated';
+  if (status === 'revoked') return 'ServiceEvidence.acknowledgementStatus.revoked';
+  return 'ServiceEvidence.acknowledgementStatus.missing';
 }

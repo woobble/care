@@ -41,6 +41,26 @@ export class CareDocumentationRepository {
     };
   }
 
+  async documentationsForClient(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    clientId: string,
+  ) {
+    return transaction
+      .select({
+        documentationId: careDocuments.id,
+        documentationStatus: careDocuments.status,
+        documentationVersion: careDocuments.version,
+        visit: visits,
+      })
+      .from(careDocuments)
+      .innerJoin(
+        visits,
+        and(eq(visits.tenantId, careDocuments.tenantId), eq(visits.id, careDocuments.visitId)),
+      )
+      .where(and(eq(careDocuments.tenantId, tenantId), eq(visits.clientId, clientId)));
+  }
+
   async employeeForUser(transaction: DatabaseTransaction, tenantId: string, userId: string) {
     const [employee] = await transaction
       .select({ id: employeeRecords.id })

@@ -1,5 +1,10 @@
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Label, StatusBadge } from '@care/ui';
+import { roleLabelKey, scopeTypeLabelKey } from '../../../../i18n/access';
+import { errorMessageKey } from '../../../../i18n/errors';
+import { formatDate } from '../../../../i18n/format';
+import { statusLabelKey } from '../../../../i18n/status';
 import { getApiClient, getTenantHeader } from '../../../../lib/api';
 import { inviteUserAction, revokeInvitationAction } from '../actions';
 import { ConfirmSubmitButton } from '../confirm-submit-button';
@@ -15,6 +20,7 @@ export default async function UsersAccessPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const params = await searchParams;
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const status = ['pending', 'active', 'inactive', 'revoked'].includes(params.status ?? '')
     ? (params.status as 'pending' | 'active' | 'inactive' | 'revoked')
     : undefined;
@@ -34,10 +40,10 @@ export default async function UsersAccessPage({
     <div className="grid gap-8">
       <header className="grid gap-1">
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration">Administration</Link>
+          <Link href="/administration">{t('Organizations.section')}</Link>
         </p>
-        <h1 className="text-3xl font-semibold">Users &amp; Access</h1>
-        <p className="text-slate-700">Manage tenant membership, roles, and access scopes.</p>
+        <h1 className="text-3xl font-semibold">{t('Users.title')}</h1>
+        <p className="text-slate-700">{t('Users.description')}</p>
       </header>
 
       {params.error ? <ErrorNotice code={params.error} /> : null}
@@ -46,8 +52,7 @@ export default async function UsersAccessPage({
           role="status"
           className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
         >
-          Invitation created. The user must sign in through Authentik before the membership can be
-          activated.
+          {t('Users.invitationCreated')}
         </p>
       ) : null}
       {params.updated ? (
@@ -55,22 +60,20 @@ export default async function UsersAccessPage({
           role="status"
           className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
         >
-          Access record updated.
+          {t('Users.accessUpdated')}
         </p>
       ) : null}
 
       <section aria-labelledby="invite-title" className="grid gap-4 rounded-lg border bg-white p-5">
         <div>
           <h2 id="invite-title" className="text-xl font-semibold">
-            Invite a user
+            {t('Users.inviteTitle')}
           </h2>
-          <p className="text-sm text-slate-600">
-            The address must be verified by Authentik. No password or local account is created.
-          </p>
+          <p className="text-sm text-slate-600">{t('Users.inviteDescription')}</p>
         </div>
         <form action={inviteUserAction} className="flex flex-wrap items-end gap-3">
           <div className="grid gap-2">
-            <Label htmlFor="invite-email">Email</Label>
+            <Label htmlFor="invite-email">{t('Users.email')}</Label>
             <input
               id="invite-email"
               className="h-10 rounded-md border px-3"
@@ -81,33 +84,33 @@ export default async function UsersAccessPage({
               required
             />
           </div>
-          <Button type="submit">Create invitation</Button>
+          <Button type="submit">{t('Users.createInvitation')}</Button>
         </form>
       </section>
 
       <section aria-labelledby="members-title" className="grid gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h2 id="members-title" className="text-xl font-semibold">
-            Tenant members
+            {t('Users.membersTitle')}
           </h2>
           <form method="get" className="flex items-end gap-2">
             <label className="grid gap-1 text-sm" htmlFor="member-status">
-              Status
+              {t('Users.status')}
               <select
                 id="member-status"
                 name="status"
                 defaultValue={status ?? ''}
                 className="h-10 rounded-md border bg-white px-3"
               >
-                <option value="">All statuses</option>
-                <option value="pending">Pending</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="revoked">Revoked</option>
+                <option value="">{t('Users.allStatuses')}</option>
+                <option value="pending">{t('Common.status.pending')}</option>
+                <option value="active">{t('Common.status.active')}</option>
+                <option value="inactive">{t('Common.status.inactive')}</option>
+                <option value="revoked">{t('Common.status.revoked')}</option>
               </select>
             </label>
             <Button variant="secondary" type="submit">
-              Filter
+              {t('Users.filter')}
             </Button>
           </form>
         </div>
@@ -116,23 +119,23 @@ export default async function UsersAccessPage({
         ) : membersResult.data?.items.length ? (
           <div className="overflow-x-auto rounded-lg border bg-white">
             <table className="w-full border-collapse text-left text-sm">
-              <caption className="sr-only">Tenant members and their assigned access</caption>
+              <caption className="sr-only">{t('Users.membersCaption')}</caption>
               <thead className="border-b bg-slate-100 text-slate-700">
                 <tr>
                   <th scope="col" className="px-4 py-3">
-                    Name
+                    {t('Users.name')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Email
+                    {t('Users.email')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Status
+                    {t('Users.status')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Roles
+                    {t('Users.roles')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Scope
+                    {t('Users.scope')}
                   </th>
                 </tr>
               </thead>
@@ -149,13 +152,25 @@ export default async function UsersAccessPage({
                     </td>
                     <td className="px-4 py-3">{member.email || '—'}</td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={member.status} />
+                      <StatusBadge
+                        status={member.status}
+                        label={t(statusLabelKey(member.status))}
+                      />
                     </td>
                     <td className="px-4 py-3">
-                      {member.roles.map((role) => role.name).join(', ') || '—'}
+                      {member.roles.map((role) => t(roleLabelKey(role.name))).join(', ') || '—'}
                     </td>
                     <td className="px-4 py-3">
-                      {member.scopes.map(scopeLabel).join(', ') || 'No scope'}
+                      {member.scopes
+                        .map((scope) =>
+                          scope.scopeType === 'tenant'
+                            ? t('Users.entireTenant')
+                            : t('Users.scopeLabel', {
+                                name: scope.name || scope.scopeId,
+                                scope: t(scopeTypeLabelKey(scope.scopeType)),
+                              }),
+                        )
+                        .join(', ') || t('Users.noScope')}
                     </td>
                   </tr>
                 ))}
@@ -163,35 +178,33 @@ export default async function UsersAccessPage({
             </table>
           </div>
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">
-            No members match this filter.
-          </p>
+          <p className="rounded-lg border bg-white p-5 text-slate-700">{t('Users.noMembers')}</p>
         )}
       </section>
 
       <section aria-labelledby="invitations-title" className="grid gap-4">
         <h2 id="invitations-title" className="text-xl font-semibold">
-          Invitations
+          {t('Users.invitationsTitle')}
         </h2>
         {invitationsResult.error ? (
           <ErrorNotice code={invitationsResult.error.code} />
         ) : invitationsResult.data?.length ? (
           <div className="overflow-x-auto rounded-lg border bg-white">
             <table className="w-full border-collapse text-left text-sm">
-              <caption className="sr-only">Tenant invitations</caption>
+              <caption className="sr-only">{t('Users.invitationsCaption')}</caption>
               <thead className="border-b bg-slate-100 text-slate-700">
                 <tr>
                   <th scope="col" className="px-4 py-3">
-                    Email
+                    {t('Users.email')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Status
+                    {t('Users.status')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Expires
+                    {t('Users.expires')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t('Users.actions')}</span>
                   </th>
                 </tr>
               </thead>
@@ -199,16 +212,16 @@ export default async function UsersAccessPage({
                 {invitationsResult.data.map((invitation) => (
                   <tr key={invitation.id} className="border-b last:border-0">
                     <td className="px-4 py-3">{invitation.email}</td>
-                    <td className="px-4 py-3">{invitation.status}</td>
-                    <td className="px-4 py-3">
-                      {new Date(invitation.expiresAt).toLocaleDateString()}
-                    </td>
+                    <td className="px-4 py-3">{t(statusLabelKey(invitation.status))}</td>
+                    <td className="px-4 py-3">{formatDate(invitation.expiresAt, locale)}</td>
                     <td className="px-4 py-3 text-right">
                       {invitation.status === 'pending' ? (
                         <form action={revokeInvitationAction}>
                           <input type="hidden" name="invitationId" value={invitation.id} />
-                          <ConfirmSubmitButton confirmation="Revoke this invitation?">
-                            Revoke invitation
+                          <ConfirmSubmitButton
+                            confirmation={t('Users.revokeInvitationConfirmation')}
+                          >
+                            {t('Users.revokeInvitation')}
                           </ConfirmSubmitButton>
                         </form>
                       ) : null}
@@ -219,22 +232,20 @@ export default async function UsersAccessPage({
             </table>
           </div>
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">No invitations.</p>
+          <p className="rounded-lg border bg-white p-5 text-slate-700">
+            {t('Users.noInvitations')}
+          </p>
         )}
       </section>
     </div>
   );
 }
 
-function ErrorNotice({ code }: Readonly<{ code: string }>) {
+async function ErrorNotice({ code }: Readonly<{ code: string }>) {
+  const t = await getTranslations();
   return (
     <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-      The request could not be completed ({code}).
+      {t(errorMessageKey(code))}
     </p>
   );
-}
-
-function scopeLabel(scope: { scopeType: string; name: string | null; scopeId: string }): string {
-  if (scope.scopeType === 'tenant') return 'Entire tenant';
-  return `${scope.name || scope.scopeId} (${scope.scopeType})`;
 }

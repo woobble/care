@@ -1,6 +1,16 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Badge, Button, Input, Label } from '@care/ui';
+import { errorMessageKey } from '../../../../../i18n/errors';
+import { auditActionKey } from '../../../../../i18n/audit';
+import { formatDate, formatDateTime, formatNumber } from '../../../../../i18n/format';
+import type { Locale } from '../../../../../i18n/config';
+import {
+  quantityUnitKey,
+  serviceAgreementStatusKey,
+  unitLabelKey,
+} from '../../../../../i18n/status';
 import { ConfirmSubmitButton } from '../../../administration/confirm-submit-button';
 import {
   getApiClient,
@@ -28,22 +38,31 @@ type SearchParams = Promise<{
   placement?: string;
 }>;
 
-const unitLabels = {
-  occurrence: 'Einsatz',
-  minute: 'Minute',
-  hour: 'Stunde',
-  day: 'Tag',
+const unitKeys = {
+  occurrence: 'Common.units.occurrence',
+  minute: 'Common.units.minute',
+  hour: 'Common.units.hour',
+  day: 'Common.units.day',
 } as const;
 
-const weekdayLabels = {
-  monday: 'Montag',
-  tuesday: 'Dienstag',
-  wednesday: 'Mittwoch',
-  thursday: 'Donnerstag',
-  friday: 'Freitag',
-  saturday: 'Samstag',
-  sunday: 'Sonntag',
+const weekdayKeys = {
+  monday: 'ServiceAgreements.weekdays.monday',
+  tuesday: 'ServiceAgreements.weekdays.tuesday',
+  wednesday: 'ServiceAgreements.weekdays.wednesday',
+  thursday: 'ServiceAgreements.weekdays.thursday',
+  friday: 'ServiceAgreements.weekdays.friday',
+  saturday: 'ServiceAgreements.weekdays.saturday',
+  sunday: 'ServiceAgreements.weekdays.sunday',
 } as const;
+
+type ServiceUnit = keyof typeof unitKeys;
+type Weekday = keyof typeof weekdayKeys;
+type ScheduleRule =
+  | { type: 'daily' }
+  | { type: 'on_demand' }
+  | { type: 'weekly'; weekdays: Weekday[] }
+  | { type: 'occurrences_per_week'; count: number }
+  | { type: 'interval_days'; intervalDays: number };
 
 export default async function ClientServiceAgreementsPage({
   params,
@@ -51,6 +70,7 @@ export default async function ClientServiceAgreementsPage({
 }: Readonly<{ params: Promise<{ id: string }>; searchParams: SearchParams }>) {
   const { id: clientId } = await params;
   const query = await searchParams;
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const api = await getApiClient();
   const get = api.GET;
   const header = await getTenantHeader();
@@ -69,7 +89,7 @@ export default async function ClientServiceAgreementsPage({
   if (!client) {
     return (
       <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-        Klient konnte nicht geladen werden.
+        {t('ServiceAgreements.loadClientFailed')}
       </p>
     );
   }
@@ -148,29 +168,51 @@ export default async function ClientServiceAgreementsPage({
   const error = query.error ?? agreementsResult.error?.code;
   const generationSummary =
     query.generated !== undefined
-      ? `Erzeugt: ${countLabel(query.generated)} · bereits vorhanden: ${countLabel(query.existing)} · manuelle Platzierung nötig: ${countLabel(query.placement)}`
+      ? t('ServiceAgreements.generationSummary', {
+          created: countLabel(query.generated, locale),
+          existing: countLabel(query.existing, locale),
+          manualPlacement: countLabel(query.placement, locale),
+        })
       : null;
+  const cadenceLabel = (rule: ScheduleRule | null | undefined): string => {
+    if (!rule) return t('ServiceAgreements.cadenceLabels.notSet');
+    if (rule.type === 'daily') return t('ServiceAgreements.cadenceLabels.daily');
+    if (rule.type === 'on_demand') return t('ServiceAgreements.cadenceLabels.onDemand');
+    if (rule.type === 'occurrences_per_week') {
+      return t('ServiceAgreements.cadenceLabels.occurrencesPerWeek', {
+        count: formatNumber(rule.count, locale),
+      });
+    }
+    if (rule.type === 'interval_days') {
+      return t('ServiceAgreements.cadenceLabels.intervalDays', {
+        count: formatNumber(rule.intervalDays, locale),
+      });
+    }
+    return t('ServiceAgreements.cadenceLabels.weekly', {
+      days: rule.weekdays.map((day) => t(weekdayKeys[day])).join(', '),
+    });
+  };
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="grid gap-2">
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            <Link href={`/clients/${client.id}`}>Klientendetails</Link>
+            <Link href={`/clients/${client.id}`}>{t('Clients.detail.detailTitle')}</Link>
           </p>
-          <h1 className="text-3xl font-semibold">Leistungsplanung</h1>
+          <h1 className="text-3xl font-semibold">{t('ServiceAgreements.title')}</h1>
           <p className="text-slate-700">
             {client.preferredName || client.firstName} {client.lastName}
           </p>
         </div>
         <Button asChild variant="secondary">
-          <Link href={`/clients/${client.id}`}>Zurück zum Klienten</Link>
+          <Link href={`/clients/${client.id}`}>{t('ServiceAgreements.backToClient')}</Link>
         </Button>
       </header>
 
       {error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-          Änderung konnte nicht gespeichert werden ({error}). Prüfen Sie Eingaben und Berechtigung.
+          {t(errorMessageKey(error))}
         </p>
       ) : null}
       {generationSummary ? (
@@ -178,68 +220,77 @@ export default async function ClientServiceAgreementsPage({
           role="status"
           className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
         >
-          Besuchserzeugung abgeschlossen. {generationSummary}
+          {t('ServiceAgreements.generationDone')} {generationSummary}
         </p>
       ) : null}
 
       <nav
-        aria-label="Leistungsplanung Bereiche"
+        aria-label={t('ServiceAgreements.navigationLabel')}
         className="flex flex-wrap gap-2 border-b pb-3 text-sm"
       >
         <a className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50" href="#agreements">
-          Vereinbarungen
+          {t('ServiceAgreements.agreementsTab')}
         </a>
         <a className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50" href="#history">
-          Verlauf
+          {t('ServiceAgreements.historyTab')}
         </a>
         <Link className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50" href="#overview">
-          Klientenübersicht
+          {t('ServiceAgreements.overviewTab')}
         </Link>
       </nav>
 
       <section id="overview" aria-labelledby="overview-title" className="grid gap-3 scroll-mt-6">
         <h2 id="overview-title" className="text-xl font-semibold">
-          Aktueller Versorgerkontext
+          {t('ServiceAgreements.providerContext')}
         </h2>
         <dl className="grid gap-3 rounded-lg border bg-white p-4 sm:grid-cols-2">
-          <Field label="Organisation" value={organizationName ?? client.organizationId} />
-          <Field label="Einrichtung" value={facilityName ?? client.primaryFacilityId} />
+          <Field
+            label={t('ServiceAgreements.organization')}
+            value={organizationName ?? client.organizationId}
+          />
+          <Field
+            label={t('ServiceAgreements.facility')}
+            value={facilityName ?? client.primaryFacilityId}
+          />
         </dl>
       </section>
 
       {canCreate ? (
         <details className="rounded-lg border bg-white p-5">
-          <summary className="cursor-pointer font-semibold">Leistungsplanung anlegen</summary>
+          <summary className="cursor-pointer font-semibold">
+            {t('ServiceAgreements.createTitle')}
+          </summary>
           <form action={createServiceAgreementAction} className="mt-4 grid gap-4">
             <input type="hidden" name="clientId" value={client.id} />
             <div className="grid gap-4 md:grid-cols-2">
               <DateField
                 id="new-agreement-from"
                 name="validFrom"
-                label="Gültig ab"
+                label={t('ServiceAgreements.validFrom')}
                 defaultValue={today()}
                 required
               />
-              <DateField id="new-agreement-until" name="validUntil" label="Gültig bis (optional)" />
+              <DateField
+                id="new-agreement-until"
+                name="validUntil"
+                label={t('ServiceAgreements.validUntilOptional')}
+              />
               <TextField
                 id="new-agreement-reference"
                 name="reference"
-                label="Referenz (optional)"
+                label={t('ServiceAgreements.referenceOptional')}
                 maxLength={120}
               />
               <TextAreaField
                 id="new-agreement-description"
                 name="description"
-                label="Hinweis zur Planung (optional)"
+                label={t('ServiceAgreements.planningNoteOptional')}
                 maxLength={2000}
               />
             </div>
-            <p className="text-sm text-slate-600">
-              Die Vereinbarung startet als Entwurf. Fügen Sie anschließend mindestens eine Leistung
-              hinzu.
-            </p>
+            <p className="text-sm text-slate-600">{t('ServiceAgreements.startsDraft')}</p>
             <Button type="submit" className="w-fit">
-              Entwurf anlegen
+              {t('ServiceAgreements.createDraft')}
             </Button>
           </form>
         </details>
@@ -252,13 +303,15 @@ export default async function ClientServiceAgreementsPage({
       >
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="agreements-title" className="text-xl font-semibold">
-            Vereinbarungen
+            {t('ServiceAgreements.agreementsTab')}
           </h2>
-          <p className="text-sm text-slate-600">{agreementsResult.data?.total ?? 0} Einträge</p>
+          <p className="text-sm text-slate-600">
+            {t('ServiceAgreements.agreementCount', { count: agreementsResult.data?.total ?? 0 })}
+          </p>
         </div>
         {agreementsResult.error ? (
           <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-            Leistungsplanungen konnten nicht geladen werden ({agreementsResult.error.code}).
+            {t(errorMessageKey(agreementsResult.error.code))}
           </p>
         ) : agreements.length ? (
           <div className="grid gap-4">
@@ -349,11 +402,15 @@ export default async function ClientServiceAgreementsPage({
                     <header className="flex flex-wrap items-start justify-between gap-3">
                       <div className="grid gap-1">
                         <h3 className="text-lg font-semibold">
-                          {agreement.reference || `Vereinbarung ${agreement.id.slice(0, 8)}`}
+                          {agreement.reference ||
+                            t('ServiceAgreements.fallbackAgreement', {
+                              id: agreement.id.slice(0, 8),
+                            })}
                         </h3>
                         <p className="text-sm text-slate-600">
-                          {formatDate(agreement.validFrom)} –{' '}
-                          {formatDate(agreement.validUntil ?? null) ?? 'unbegrenzt'}
+                          {formatDate(agreement.validFrom, locale)} –{' '}
+                          {formatDate(agreement.validUntil ?? null, locale) ??
+                            t('ServiceAgreements.unlimited')}
                         </p>
                         <p className="text-sm text-slate-600">
                           {providerOrganizationResult.data?.name ?? agreement.organizationId}
@@ -363,7 +420,9 @@ export default async function ClientServiceAgreementsPage({
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <AgreementStatusBadge status={agreement.status} />
-                        <Badge variant="outline">{services.length} Leistungen</Badge>
+                        <Badge variant="outline">
+                          {t('ServiceAgreements.serviceCount', { count: services.length })}
+                        </Badge>
                       </div>
                     </header>
 
@@ -379,7 +438,7 @@ export default async function ClientServiceAgreementsPage({
                           clientId={client.id}
                           agreementId={agreement.id}
                           operation="activate"
-                          label="Aktivieren"
+                          label={t('ServiceAgreements.activate')}
                         />
                       ) : null}
                       {agreement.status === 'active' && canSuspend ? (
@@ -387,7 +446,7 @@ export default async function ClientServiceAgreementsPage({
                           clientId={client.id}
                           agreementId={agreement.id}
                           operation="suspend"
-                          label="Pausieren"
+                          label={t('ServiceAgreements.suspend')}
                         />
                       ) : null}
                       {agreement.status === 'suspended' && canActivate ? (
@@ -395,7 +454,7 @@ export default async function ClientServiceAgreementsPage({
                           clientId={client.id}
                           agreementId={agreement.id}
                           operation="resume"
-                          label="Fortsetzen"
+                          label={t('ServiceAgreements.resume')}
                         />
                       ) : null}
                       {agreement.status !== 'ended' && canEnd ? (
@@ -403,8 +462,10 @@ export default async function ClientServiceAgreementsPage({
                           <input type="hidden" name="clientId" value={client.id} />
                           <input type="hidden" name="agreementId" value={agreement.id} />
                           <input type="hidden" name="operation" value="end" />
-                          <ConfirmSubmitButton confirmation="Die Leistungsplanung wird dauerhaft beendet.">
-                            Beenden
+                          <ConfirmSubmitButton
+                            confirmation={t('ServiceAgreements.endConfirmation')}
+                          >
+                            {t('ServiceAgreements.end')}
                           </ConfirmSubmitButton>
                         </form>
                       ) : null}
@@ -413,12 +474,10 @@ export default async function ClientServiceAgreementsPage({
                     {canGenerate && generationUntil >= generationFrom ? (
                       <details className="rounded-md border border-dashed p-4">
                         <summary className="cursor-pointer font-semibold text-blue-900">
-                          Besuche erzeugen
+                          {t('ServiceAgreements.generateVisits')}
                         </summary>
                         <p className="mt-2 text-sm text-slate-600">
-                          Wiederholungsregeln erzeugen geplante Einsätze. Bei Bedarf wird nichts
-                          automatisch erzeugt; Häufigkeiten pro Woche benötigen eine manuelle
-                          Platzierung.
+                          {t('ServiceAgreements.generateDescription')}
                         </p>
                         <form
                           action={generateAgreementVisitsAction}
@@ -429,19 +488,19 @@ export default async function ClientServiceAgreementsPage({
                           <DateField
                             id={`generate-${agreement.id}-from`}
                             name="from"
-                            label="Von"
+                            label={t('ServiceAgreements.from')}
                             defaultValue={generationFrom}
                             required
                           />
                           <DateField
                             id={`generate-${agreement.id}-until`}
                             name="until"
-                            label="Bis (maximal 28 Tage)"
+                            label={t('ServiceAgreements.untilMax')}
                             defaultValue={generationUntil}
                             required
                           />
                           <div className="flex items-end">
-                            <Button type="submit">Besuche erzeugen</Button>
+                            <Button type="submit">{t('ServiceAgreements.generateVisits')}</Button>
                           </div>
                         </form>
                       </details>
@@ -450,7 +509,7 @@ export default async function ClientServiceAgreementsPage({
                     {agreement.status !== 'ended' && canUpdate ? (
                       <details>
                         <summary className="cursor-pointer text-sm font-semibold text-blue-900">
-                          Vereinbarung bearbeiten
+                          {t('ServiceAgreements.editPlanning')}
                         </summary>
                         <form action={updateServiceAgreementAction} className="mt-3 grid gap-4">
                           <input type="hidden" name="clientId" value={client.id} />
@@ -459,33 +518,33 @@ export default async function ClientServiceAgreementsPage({
                             <DateField
                               id={`agreement-${agreement.id}-from`}
                               name="validFrom"
-                              label="Gültig ab"
+                              label={t('ServiceAgreements.validFrom')}
                               defaultValue={agreement.validFrom}
                               required
                             />
                             <DateField
                               id={`agreement-${agreement.id}-until`}
                               name="validUntil"
-                              label="Gültig bis (optional)"
+                              label={t('ServiceAgreements.validUntilOptional')}
                               defaultValue={agreement.validUntil ?? ''}
                             />
                             <TextField
                               id={`agreement-${agreement.id}-reference`}
                               name="reference"
-                              label="Referenz"
+                              label={t('ServiceAgreements.agreement')}
                               defaultValue={agreement.reference ?? ''}
                               maxLength={120}
                             />
                             <TextAreaField
                               id={`agreement-${agreement.id}-description`}
                               name="description"
-                              label="Hinweis zur Planung"
+                              label={t('ServiceAgreements.planningNoteOptional')}
                               defaultValue={agreement.description ?? ''}
                               maxLength={2000}
                             />
                           </div>
                           <Button type="submit" variant="secondary" className="w-fit">
-                            Änderungen speichern
+                            {t('ServiceAgreements.saveChanges')}
                           </Button>
                         </form>
                       </details>
@@ -493,11 +552,11 @@ export default async function ClientServiceAgreementsPage({
 
                     <section aria-labelledby={`services-${agreement.id}`} className="grid gap-3">
                       <h4 id={`services-${agreement.id}`} className="font-semibold">
-                        Geplante Leistungen
+                        {t('ServiceAgreements.plannedServices')}
                       </h4>
                       {serviceResult.error ? (
                         <p role="alert" className="text-sm text-red-800">
-                          Leistungen konnten nicht geladen werden ({serviceResult.error.code}).
+                          {t(errorMessageKey(serviceResult.error.code))}
                         </p>
                       ) : services.length ? (
                         <div className="grid gap-3">
@@ -507,24 +566,29 @@ export default async function ClientServiceAgreementsPage({
                                 <div>
                                   <h5 className="font-medium">{service.serviceName}</h5>
                                   <p className="text-sm text-slate-600">
-                                    {service.serviceCode} · {unitLabels[service.serviceUnit]}
-                                    {service.quantity
-                                      ? ` · ${service.quantity} ${unitLabels[service.serviceUnit]}`
+                                    {service.serviceCode} · {t(unitLabelKey(service.serviceUnit))}
+                                    {service.quantity !== null && service.quantity !== undefined
+                                      ? ` · ${t(quantityUnitKey(service.serviceUnit), { count: Number(service.quantity) })}`
                                       : ''}
                                   </p>
                                   <p className="text-sm text-slate-600">
                                     {cadenceLabel(service.scheduleRule)}
                                     {service.preferredTimeStart && service.preferredTimeEnd
-                                      ? ` · bevorzugt ${service.preferredTimeStart}–${service.preferredTimeEnd}`
+                                      ? ` · ${t('ServiceAgreements.preferred')} ${service.preferredTimeStart}–${service.preferredTimeEnd}`
                                       : ''}
                                   </p>
                                   <p className="text-sm text-slate-600">
-                                    {formatDate(service.validFrom ?? agreement.validFrom)} –{' '}
+                                    {formatDate(service.validFrom ?? agreement.validFrom, locale)} –{' '}
                                     {formatDate(
                                       service.validUntil ?? agreement.validUntil ?? null,
-                                    ) ?? 'unbegrenzt'}
+                                      locale,
+                                    ) ?? t('ServiceAgreements.unlimited')}
                                     {' · '}
-                                    {service.status === 'active' ? 'Aktiv' : 'Beendet'}
+                                    {t(
+                                      service.status === 'active'
+                                        ? 'ServiceAgreements.active'
+                                        : 'ServiceAgreements.ended',
+                                    )}
                                   </p>
                                   {service.note ? (
                                     <p className="mt-1 text-sm">{service.note}</p>
@@ -536,7 +600,7 @@ export default async function ClientServiceAgreementsPage({
                               agreement.status !== 'ended' ? (
                                 <details>
                                   <summary className="cursor-pointer text-sm font-semibold text-blue-900">
-                                    Planung bearbeiten
+                                    {t('ServiceAgreements.editPlanning')}
                                   </summary>
                                   <ServiceFields
                                     action={updateAgreementServiceAction}
@@ -551,7 +615,7 @@ export default async function ClientServiceAgreementsPage({
                                     preferredTimeStart={service.preferredTimeStart ?? ''}
                                     preferredTimeEnd={service.preferredTimeEnd ?? ''}
                                     idPrefix={`line-${service.id}`}
-                                    submitLabel="Planung speichern"
+                                    submitLabel={t('ServiceAgreements.savePlanning')}
                                   />
                                   {services.filter((item) => item.status === 'active').length >
                                   1 ? (
@@ -563,8 +627,10 @@ export default async function ClientServiceAgreementsPage({
                                         value={agreement.id}
                                       />
                                       <input type="hidden" name="serviceId" value={service.id} />
-                                      <ConfirmSubmitButton confirmation="Diese Leistung wird beendet und bleibt in der Historie erhalten.">
-                                        Leistung beenden
+                                      <ConfirmSubmitButton
+                                        confirmation={t('ServiceAgreements.endServiceConfirmation')}
+                                      >
+                                        {t('ServiceAgreements.endService')}
                                       </ConfirmSubmitButton>
                                     </form>
                                   ) : null}
@@ -575,13 +641,13 @@ export default async function ClientServiceAgreementsPage({
                         </div>
                       ) : (
                         <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
-                          Noch keine Leistungen hinzugefügt.
+                          {t('ServiceAgreements.noServices')}
                         </p>
                       )}
 
                       {canManageServices && agreement.status !== 'ended' ? (
                         <div className="grid gap-3 rounded-md border border-dashed p-4">
-                          <h5 className="font-medium">Leistung hinzufügen</h5>
+                          <h5 className="font-medium">{t('ServiceAgreements.addService')}</h5>
                           <form
                             method="get"
                             action={`/clients/${client.id}/service-agreements`}
@@ -591,7 +657,7 @@ export default async function ClientServiceAgreementsPage({
                             <DateField
                               id={`search-${agreement.id}-from`}
                               name="serviceValidFrom"
-                              label="Leistung gültig ab"
+                              label={t('ServiceAgreements.validFromForService')}
                               defaultValue={
                                 selectedAgreement?.id === agreement.id
                                   ? selectedServiceFrom
@@ -602,7 +668,7 @@ export default async function ClientServiceAgreementsPage({
                             <DateField
                               id={`search-${agreement.id}-until`}
                               name="serviceValidUntil"
-                              label="Leistung gültig bis"
+                              label={t('ServiceAgreements.validUntilForService')}
                               defaultValue={
                                 selectedAgreement?.id === agreement.id
                                   ? (selectedServiceUntil ?? '')
@@ -611,15 +677,14 @@ export default async function ClientServiceAgreementsPage({
                             />
                             <div className="flex items-end">
                               <Button type="submit" variant="secondary">
-                                Verfügbare Leistungen suchen
+                                {t('ServiceAgreements.searchAvailableServices')}
                               </Button>
                             </div>
                           </form>
                           {canSearchServices ? (
                             serviceOptionsResult?.error ? (
                               <p role="alert" className="text-sm text-red-800">
-                                Verfügbare Leistungen konnten nicht geladen werden (
-                                {serviceOptionsResult.error.code}).
+                                {t(errorMessageKey(serviceOptionsResult.error.code))}
                               </p>
                             ) : serviceOptions.length ? (
                               <ServiceFields
@@ -630,26 +695,24 @@ export default async function ClientServiceAgreementsPage({
                                 validFrom={selectedServiceFrom}
                                 validUntil={selectedServiceUntil ?? ''}
                                 idPrefix={`add-${agreement.id}`}
-                                submitLabel="Leistung hinzufügen"
+                                submitLabel={t('ServiceAgreements.addService')}
                               />
                             ) : (
                               <p className="text-sm text-slate-600">
-                                Für diesen Zeitraum wurden keine passenden aktiven Leistungen
-                                gefunden.
+                                {t('ServiceAgreements.noMatchingServices')}
                               </p>
                             )
                           ) : selectedAgreement?.id === agreement.id && !servicePeriodValid ? (
                             <p role="alert" className="text-sm text-red-800">
-                              Der Leistungszeitraum muss innerhalb der Vereinbarung liegen.
+                              {t('ServiceAgreements.servicePeriodInvalid')}
                             </p>
                           ) : selectedAgreement?.id === agreement.id ? (
                             <p className="text-sm text-slate-600">
-                              Keine Berechtigung zur Suche oder Verwaltung von Leistungen.
+                              {t('ServiceAgreements.serviceSearchDenied')}
                             </p>
                           ) : (
                             <p className="text-sm text-slate-600">
-                              Wählen Sie den Leistungszeitraum, um passende Katalogleistungen zu
-                              suchen.
+                              {t('ServiceAgreements.choosePeriod')}
                             </p>
                           )}
                         </div>
@@ -662,34 +725,35 @@ export default async function ClientServiceAgreementsPage({
           </div>
         ) : (
           <p className="rounded-lg border bg-white p-5 text-slate-700">
-            Für diesen Klienten gibt es noch keine Leistungsplanung.
+            {t('ServiceAgreements.noAgreements')}
           </p>
         )}
       </section>
 
       <section id="history" aria-labelledby="history-title" className="grid gap-3 scroll-mt-6">
         <h2 id="history-title" className="text-xl font-semibold">
-          Verlauf
+          {t('ServiceAgreements.history')}
         </h2>
         {timeline.length ? (
           <ol className="grid gap-3 border-l-2 border-blue-200 pl-5">
             {timeline.map((entry) => (
               <li key={entry.id} className="rounded-lg border bg-white p-4">
-                <p className="font-medium">{entry.summary}</p>
+                <p className="font-medium">{t(auditActionKey(entry.action))}</p>
                 <p className="mt-1 text-sm text-slate-600">
-                  {formatDateTime(entry.occurredAt)} · Bearbeitet von {entry.actorId}
+                  {formatDateTime(entry.occurredAt, locale)} ·{' '}
+                  {t('Clients.detail.editedBy', { actor: entry.actorId })}
                 </p>
               </li>
             ))}
           </ol>
         ) : (
           <p className="rounded-lg border bg-white p-5 text-slate-700">
-            Noch keine Einträge zur Leistungsplanung.
+            {t('ServiceAgreements.noHistory')}
           </p>
         )}
         <p className="text-sm">
           <Link className="text-blue-900 underline" href={`/clients/${client.id}#timeline`}>
-            Gesamten Klientenverlauf öffnen
+            {t('ServiceAgreements.openFullTimeline')}
           </Link>
         </p>
       </section>
@@ -697,7 +761,7 @@ export default async function ClientServiceAgreementsPage({
   );
 }
 
-function ServiceFields({
+async function ServiceFields({
   action,
   clientId,
   agreementId,
@@ -722,25 +786,20 @@ function ServiceFields({
     code: string;
     name: string;
     categoryName: string;
-    unit: keyof typeof unitLabels;
+    unit: ServiceUnit;
     defaultDurationMinutes: number | null;
   }>;
   validFrom: string | null | undefined;
   validUntil: string;
   quantity?: string;
   note?: string;
-  scheduleRule?:
-    | { type: 'daily' }
-    | { type: 'on_demand' }
-    | { type: 'weekly'; weekdays: (keyof typeof weekdayLabels)[] }
-    | { type: 'occurrences_per_week'; count: number }
-    | { type: 'interval_days'; intervalDays: number }
-    | null;
+  scheduleRule?: ScheduleRule | null;
   preferredTimeStart?: string;
   preferredTimeEnd?: string;
   idPrefix: string;
   submitLabel: string;
 }) {
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   return (
     <form action={action} className="grid gap-4">
       <input type="hidden" name="clientId" value={clientId} />
@@ -750,14 +809,16 @@ function ServiceFields({
         <SelectField
           id={`${idPrefix}-service`}
           name="serviceDefinitionId"
-          label="Leistung"
+          label={t('ServiceAgreements.service')}
           required
         >
-          <option value="">Leistung auswählen</option>
+          <option value="">{t('ServiceAgreements.selectService')}</option>
           {serviceOptions.map((service) => (
             <option key={service.id} value={service.id}>
-              {service.name} · {service.categoryName} · {unitLabels[service.unit]}
-              {service.defaultDurationMinutes ? ` · ${service.defaultDurationMinutes} Min.` : ''}
+              {service.name} · {service.categoryName} · {t(unitLabelKey(service.unit))}
+              {service.defaultDurationMinutes != null
+                ? ` · ${t('ServiceAgreements.duration', { count: formatNumber(service.defaultDurationMinutes, locale) })}`
+                : ''}
             </option>
           ))}
         </SelectField>
@@ -766,19 +827,19 @@ function ServiceFields({
         <DateField
           id={`${idPrefix}-from`}
           name="validFrom"
-          label="Leistung gültig ab"
+          label={t('ServiceAgreements.validFromForService')}
           defaultValue={validFrom ?? ''}
         />
         <DateField
           id={`${idPrefix}-until`}
           name="validUntil"
-          label="Leistung gültig bis"
+          label={t('ServiceAgreements.validUntilForService')}
           defaultValue={validUntil}
         />
         <TextField
           id={`${idPrefix}-quantity`}
           name="quantity"
-          label="Menge (optional)"
+          label={t('ServiceAgreements.quantityOptional')}
           defaultValue={quantity ?? ''}
           maxLength={13}
           inputMode="decimal"
@@ -786,20 +847,20 @@ function ServiceFields({
         <SelectField
           id={`${idPrefix}-cadence`}
           name="cadence"
-          label="Häufigkeit"
+          label={t('ServiceAgreements.cadence')}
           defaultValue={scheduleRule?.type ?? 'none'}
         >
-          <option value="none">Nicht festgelegt</option>
-          <option value="daily">Täglich</option>
-          <option value="weekly">Wochentage</option>
-          <option value="occurrences_per_week">Anzahl pro Woche</option>
-          <option value="interval_days">Alle N Tage</option>
-          <option value="on_demand">Bei Bedarf</option>
+          <option value="none">{t('ServiceAgreements.cadenceUnspecified')}</option>
+          <option value="daily">{t('ServiceAgreements.daily')}</option>
+          <option value="weekly">{t('ServiceAgreements.weekly')}</option>
+          <option value="occurrences_per_week">{t('ServiceAgreements.occurrencesPerWeek')}</option>
+          <option value="interval_days">{t('ServiceAgreements.intervalDays')}</option>
+          <option value="on_demand">{t('ServiceAgreements.onDemand')}</option>
         </SelectField>
         <TextField
           id={`${idPrefix}-count`}
           name="count"
-          label="Vorgänge pro Woche (bei passender Häufigkeit)"
+          label={t('ServiceAgreements.occurrencesPerWeekHelp')}
           type="number"
           min={1}
           max={14}
@@ -810,7 +871,7 @@ function ServiceFields({
         <TextField
           id={`${idPrefix}-interval`}
           name="intervalDays"
-          label="Abstand in Tagen (bei passender Häufigkeit)"
+          label={t('ServiceAgreements.intervalDaysHelp')}
           type="number"
           min={1}
           max={365}
@@ -821,38 +882,37 @@ function ServiceFields({
         <TimeField
           id={`${idPrefix}-preferred-start`}
           name="preferredTimeStart"
-          label="Bevorzugte Zeit ab"
+          label={t('ServiceAgreements.preferredTimeFrom')}
           defaultValue={preferredTimeStart ?? ''}
         />
         <TimeField
           id={`${idPrefix}-preferred-end`}
           name="preferredTimeEnd"
-          label="Bevorzugte Zeit bis"
+          label={t('ServiceAgreements.preferredTimeUntil')}
           defaultValue={preferredTimeEnd ?? ''}
         />
         <TextAreaField
           id={`${idPrefix}-note`}
           name="note"
-          label="Operativer Hinweis (optional)"
+          label={t('ServiceAgreements.operationalNote')}
           defaultValue={note ?? ''}
           maxLength={1000}
         />
       </div>
       <fieldset className="grid gap-2">
-        <legend className="text-sm font-medium">Wochentage (bei passender Häufigkeit)</legend>
+        <legend className="text-sm font-medium">{t('ServiceAgreements.weekdaysLegend')}</legend>
         <div className="flex flex-wrap gap-x-4 gap-y-2">
-          {Object.entries(weekdayLabels).map(([day, label]) => (
+          {(Object.keys(weekdayKeys) as Weekday[]).map((day) => (
             <label key={day} className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 name="weekdays"
                 value={day}
                 defaultChecked={
-                  scheduleRule?.type === 'weekly' &&
-                  scheduleRule.weekdays.includes(day as keyof typeof weekdayLabels)
+                  scheduleRule?.type === 'weekly' && scheduleRule.weekdays.includes(day)
                 }
               />
-              {label}
+              {t(weekdayKeys[day])}
             </label>
           ))}
         </div>
@@ -887,7 +947,12 @@ function StatusAction({
   );
 }
 
-function AgreementStatusBadge({ status }: { status: 'draft' | 'active' | 'suspended' | 'ended' }) {
+async function AgreementStatusBadge({
+  status,
+}: {
+  status: 'draft' | 'active' | 'suspended' | 'ended';
+}) {
+  const t = await getTranslations();
   const variant =
     status === 'active'
       ? 'success'
@@ -896,15 +961,7 @@ function AgreementStatusBadge({ status }: { status: 'draft' | 'active' | 'suspen
         : status === 'ended'
           ? 'secondary'
           : 'outline';
-  const label =
-    status === 'draft'
-      ? 'Entwurf'
-      : status === 'active'
-        ? 'Aktiv'
-        : status === 'suspended'
-          ? 'Pausiert'
-          : 'Beendet';
-  return <Badge variant={variant}>{label}</Badge>;
+  return <Badge variant={variant}>{t(serviceAgreementStatusKey(status))}</Badge>;
 }
 
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
@@ -1052,24 +1109,6 @@ function SelectField({
   );
 }
 
-function cadenceLabel(
-  rule:
-    | { type: 'daily' }
-    | { type: 'on_demand' }
-    | { type: 'weekly'; weekdays: (keyof typeof weekdayLabels)[] }
-    | { type: 'occurrences_per_week'; count: number }
-    | { type: 'interval_days'; intervalDays: number }
-    | null
-    | undefined,
-): string {
-  if (!rule) return 'Häufigkeit nicht festgelegt';
-  if (rule.type === 'daily') return 'Täglich';
-  if (rule.type === 'on_demand') return 'Bei Bedarf';
-  if (rule.type === 'occurrences_per_week') return `${rule.count}× pro Woche`;
-  if (rule.type === 'interval_days') return `Alle ${rule.intervalDays} Tage`;
-  return `Wöchentlich: ${rule.weekdays.map((day) => weekdayLabels[day]).join(', ')}`;
-}
-
 function validLineDate(value: string | undefined, fallback: string): string | undefined {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : fallback;
 }
@@ -1081,19 +1120,6 @@ function validLineEnd(
   if (value === undefined) return fallback;
   if (!value) return null;
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
-}
-
-function formatDate(value: string | null): string | null {
-  if (!value) return null;
-  return new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeZone: 'UTC' }).format(
-    new Date(`${value}T00:00:00.000Z`),
-  );
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(value),
-  );
 }
 
 function today(): string {
@@ -1121,7 +1147,7 @@ function earlierDate(candidate: string, upperBound: string | null): string {
   return upperBound !== null && upperBound < candidate ? upperBound : candidate;
 }
 
-function countLabel(value: string | undefined): string {
+function countLabel(value: string | undefined, locale: Locale): string {
   const count = Number(value);
-  return Number.isInteger(count) && count >= 0 ? String(count) : '0';
+  return formatNumber(Number.isInteger(count) && count >= 0 ? count : 0, locale);
 }

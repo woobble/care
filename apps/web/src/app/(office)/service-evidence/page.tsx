@@ -1,7 +1,11 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { components } from '@care/api-client';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
+import { acknowledgementCapacityKey, evidenceStatusKey } from '../../../i18n/evidence';
+import { errorMessageKey } from '../../../i18n/errors';
+import { formatNumber } from '../../../i18n/format';
 import { dateRange, shiftDate, todayDateKey, formatVisitDateTime } from '../../../lib/care-date';
 import {
   getApiClient,
@@ -29,6 +33,7 @@ export default async function ServiceEvidenceWorklistPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const today = todayDateKey();
   const fromDate = validDate(query.from) ? query.from : shiftDate(today, -30);
   const untilDate = validDate(query.until) ? query.until : today;
@@ -91,20 +96,20 @@ export default async function ServiceEvidenceWorklistPage({
     <div className="grid gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">Qualität</p>
-          <h1 className="mt-1 text-3xl font-semibold">Leistungsnachweise</h1>
-          <p className="mt-2 text-slate-600">
-            Prüfen Sie Bestätigungsstatus und historische Versionen der Leistungsnachweise.
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
+            {t('ServiceEvidence.office.section')}
           </p>
+          <h1 className="mt-1 text-3xl font-semibold">{t('ServiceEvidence.office.title')}</h1>
+          <p className="mt-2 text-slate-600">{t('ServiceEvidence.office.description')}</p>
         </div>
         <Button asChild variant="secondary">
-          <Link href="/documentation">Zur Dokumentation</Link>
+          <Link href="/documentation">{t('ServiceEvidence.office.documentationLink')}</Link>
         </Button>
       </header>
 
       {query.error || listResult.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-          Leistungsnachweise konnten nicht geladen werden ({query.error ?? listResult.error?.code}).
+          {t(errorMessageKey(query.error ?? listResult.error?.code ?? ''))}
         </p>
       ) : null}
 
@@ -113,7 +118,7 @@ export default async function ServiceEvidenceWorklistPage({
         className="grid gap-3 rounded-lg border bg-white p-4 sm:grid-cols-2 lg:grid-cols-4"
       >
         <label className="grid gap-1 text-sm">
-          <span>Von</span>
+          <span>{t('ServiceEvidence.office.from')}</span>
           <input
             name="from"
             type="date"
@@ -122,7 +127,7 @@ export default async function ServiceEvidenceWorklistPage({
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span>Bis</span>
+          <span>{t('ServiceEvidence.office.until')}</span>
           <input
             name="until"
             type="date"
@@ -131,7 +136,7 @@ export default async function ServiceEvidenceWorklistPage({
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span>Klientin oder Klient</span>
+          <span>{t('ServiceEvidence.office.clientSearch')}</span>
           <input
             name="clientQuery"
             defaultValue={filterValues.clientQuery}
@@ -140,29 +145,31 @@ export default async function ServiceEvidenceWorklistPage({
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span>Status</span>
+          <span>{t('ServiceEvidence.office.status')}</span>
           <select
             name="status"
             defaultValue={filterValues.status}
             className="min-h-11 rounded-md border bg-white px-3"
           >
-            <option value="">Alle Status</option>
-            <option value="awaiting_acknowledgement">Ausstehend</option>
-            <option value="acknowledged">Bestätigt</option>
-            <option value="declined">Abgelehnt</option>
-            <option value="revoked">Widerrufen</option>
-            <option value="outdated">Veraltet</option>
-            <option value="superseded">Ersetzt</option>
+            <option value="">{t('ServiceEvidence.office.allStatuses')}</option>
+            <option value="awaiting_acknowledgement">
+              {t(evidenceStatusKey('awaiting_acknowledgement'))}
+            </option>
+            <option value="acknowledged">{t(evidenceStatusKey('acknowledged'))}</option>
+            <option value="declined">{t(evidenceStatusKey('declined'))}</option>
+            <option value="revoked">{t(evidenceStatusKey('revoked'))}</option>
+            <option value="outdated">{t(evidenceStatusKey('outdated'))}</option>
+            <option value="superseded">{t(evidenceStatusKey('superseded'))}</option>
           </select>
         </label>
         <label className="grid gap-1 text-sm">
-          <span>Organisation</span>
+          <span>{t('ServiceEvidence.office.organization')}</span>
           <select
             name="organizationId"
             defaultValue={filterValues.organizationId}
             className="min-h-11 rounded-md border bg-white px-3"
           >
-            <option value="">Alle Organisationen</option>
+            <option value="">{t('ServiceEvidence.office.allOrganizations')}</option>
             {organizations.map((organization) => (
               <option key={organization.id} value={organization.id}>
                 {organization.name}
@@ -171,13 +178,13 @@ export default async function ServiceEvidenceWorklistPage({
           </select>
         </label>
         <label className="grid gap-1 text-sm">
-          <span>Einrichtung</span>
+          <span>{t('ServiceEvidence.office.facility')}</span>
           <select
             name="facilityId"
             defaultValue={filterValues.facilityId}
             className="min-h-11 rounded-md border bg-white px-3"
           >
-            <option value="">Alle Einrichtungen</option>
+            <option value="">{t('ServiceEvidence.office.allFacilities')}</option>
             {facilities.map((facility) => (
               <option key={facility.id} value={facility.id}>
                 {facility.name}
@@ -186,13 +193,13 @@ export default async function ServiceEvidenceWorklistPage({
           </select>
         </label>
         <label className="grid gap-1 text-sm">
-          <span>Mitarbeitende</span>
+          <span>{t('ServiceEvidence.office.employees')}</span>
           <select
             name="employeeId"
             defaultValue={filterValues.employeeId}
             className="min-h-11 rounded-md border bg-white px-3"
           >
-            <option value="">Alle Mitarbeitenden</option>
+            <option value="">{t('ServiceEvidence.office.allEmployees')}</option>
             {employees.map((employee) => (
               <option key={employee.id} value={employee.id}>
                 {employee.preferredName ?? `${employee.firstName} ${employee.lastName}`}
@@ -201,42 +208,49 @@ export default async function ServiceEvidenceWorklistPage({
           </select>
         </label>
         <label className="grid gap-1 text-sm">
-          <span>Bestätigende Person</span>
+          <span>{t('ServiceEvidence.office.signatory')}</span>
           <select
             name="signatoryType"
             defaultValue={filterValues.signatoryType}
             className="min-h-11 rounded-md border bg-white px-3"
           >
-            <option value="">Alle</option>
-            <option value="client">Klientin oder Klient</option>
-            <option value="representative">Vertretung</option>
-            <option value="other_authorized_person">Andere berechtigte Person</option>
+            <option value="">{t('ServiceEvidence.office.allSignatories')}</option>
+            <option value="client">{t('ServiceEvidence.office.signatoryTypes.client')}</option>
+            <option value="representative">
+              {t('ServiceEvidence.office.signatoryTypes.representative')}
+            </option>
+            <option value="other_authorized_person">
+              {t('ServiceEvidence.office.signatoryTypes.other')}
+            </option>
           </select>
         </label>
         <div className="flex items-end gap-2 lg:col-span-4">
           <Button type="submit" className="min-h-11">
-            Filtern
+            {t('ServiceEvidence.office.filter')}
           </Button>
           <Button asChild variant="secondary" className="min-h-11">
-            <Link href="/service-evidence">Zurücksetzen</Link>
+            <Link href="/service-evidence">{t('ServiceEvidence.office.reset')}</Link>
           </Button>
         </div>
       </form>
 
       <section className="grid gap-3">
         <p className="text-sm text-slate-600">
-          {result ? `${result.total} Einträge` : 'Keine Einträge'} · Seite {result?.page ?? page}
+          {result
+            ? t('ServiceEvidence.office.resultCount', { count: result.total })
+            : t('ServiceEvidence.office.noRecords')}{' '}
+          · {t('ServiceEvidence.office.page', { page: formatNumber(result?.page ?? page, locale) })}
         </p>
         {items.length ? (
           <div className="overflow-x-auto rounded-lg border bg-white">
             <table className="w-full min-w-[44rem] text-left text-sm">
               <thead className="border-b bg-slate-50 text-slate-700">
                 <tr>
-                  <th className="p-3 font-semibold">Einsatz</th>
-                  <th className="p-3 font-semibold">Klientin oder Klient</th>
-                  <th className="p-3 font-semibold">Status</th>
-                  <th className="p-3 font-semibold">Bestätigende Person</th>
-                  <th className="p-3 font-semibold">Version</th>
+                  <th className="p-3 font-semibold">{t('ServiceEvidence.office.visit')}</th>
+                  <th className="p-3 font-semibold">{t('ServiceEvidence.office.client')}</th>
+                  <th className="p-3 font-semibold">{t('ServiceEvidence.office.status')}</th>
+                  <th className="p-3 font-semibold">{t('ServiceEvidence.office.signatory')}</th>
+                  <th className="p-3 font-semibold">{t('ServiceEvidence.office.version')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -245,7 +259,9 @@ export default async function ServiceEvidenceWorklistPage({
                     key={`${item.evidencePackageId ?? item.visitId}-${item.packageVersion ?? 'none'}`}
                     className="border-b last:border-0"
                   >
-                    <td className="p-3">{formatVisitDateTime(item.plannedStart, item.timezone)}</td>
+                    <td className="p-3">
+                      {formatVisitDateTime(item.plannedStart, item.timezone, locale)}
+                    </td>
                     <td className="p-3 font-medium">
                       <Link
                         href={
@@ -258,13 +274,15 @@ export default async function ServiceEvidenceWorklistPage({
                         {item.clientName}
                       </Link>
                     </td>
-                    <td className="p-3">{statusLabel(item.status)}</td>
+                    <td className="p-3">{t(evidenceStatusKey(item.status))}</td>
                     <td className="p-3">
                       {item.signatoryName
-                        ? `${item.signatoryName} · ${capacityLabel(item.capacity ?? null)}`
+                        ? `${item.signatoryName} · ${item.capacity ? t(acknowledgementCapacityKey(item.capacity)) : ''}`
                         : '–'}
                     </td>
-                    <td className="p-3">{item.packageVersion ?? 'Noch nicht erstellt'}</td>
+                    <td className="p-3">
+                      {item.packageVersion ?? t('ServiceEvidence.office.notCreated')}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -272,20 +290,22 @@ export default async function ServiceEvidenceWorklistPage({
           </div>
         ) : (
           <p className="rounded-lg border bg-white p-5 text-slate-700">
-            Für diesen Zeitraum wurden keine Leistungsnachweise gefunden.
+            {t('ServiceEvidence.office.noResults')}
           </p>
         )}
         <div className="flex justify-between">
           {page > 1 ? (
             <Button asChild variant="secondary">
-              <Link href={pageUrl(filterValues, page - 1)}>Vorherige Seite</Link>
+              <Link href={pageUrl(filterValues, page - 1)}>
+                {t('ServiceEvidence.office.previous')}
+              </Link>
             </Button>
           ) : (
             <span />
           )}
           {result && page * result.pageSize < result.total ? (
             <Button asChild variant="secondary">
-              <Link href={pageUrl(filterValues, page + 1)}>Nächste Seite</Link>
+              <Link href={pageUrl(filterValues, page + 1)}>{t('ServiceEvidence.office.next')}</Link>
             </Button>
           ) : null}
         </div>
@@ -324,29 +344,6 @@ function validStatus(value: string | undefined): value is Status {
 
 function validSignatoryType(value: string | undefined): value is SignatoryType {
   return ['client', 'representative', 'other_authorized_person'].includes(value ?? '');
-}
-
-function statusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    awaiting_acknowledgement: 'Ausstehend',
-    acknowledged: 'Bestätigt',
-    declined: 'Abgelehnt',
-    revoked: 'Widerrufen',
-    outdated: 'Veraltet',
-    superseded: 'Ersetzt',
-  };
-  return labels[status] ?? status;
-}
-
-function capacityLabel(capacity: string | null): string {
-  const labels: Record<string, string> = {
-    client: 'Klientin oder Klient',
-    legal_guardian: 'gesetzliche Betreuung',
-    authorized_representative: 'bevollmächtigte Vertretung',
-    relative: 'Angehörige Person',
-    other: 'sonstige berechtigte Person',
-  };
-  return capacity ? (labels[capacity] ?? capacity) : '';
 }
 
 function pageUrl(

@@ -17,6 +17,7 @@
   "dependencies": {
     "@care/audit": "workspace:*",
     "@care/clients": "workspace:*",
+    "@care/clinical-documentation": "workspace:*",
     "@care/contracts": "workspace:*",
     "@care/database": "workspace:*",
     "@care/employees": "workspace:*",

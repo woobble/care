@@ -35,6 +35,8 @@ const migrations = {
   audit: ['0001_initial.sql', '0002_query_indexes.sql'],
   platform: ['0001_initial.sql', '0002_uuidv7_rekey.sql'],
   'care-documentation': ['0001_care_documentation.sql'],
+  'clinical-documentation': ['0001_clinical_documentation.sql', '0002_client_reference.sql'],
+  'care-planning': ['0001_care_planning.sql'],
   'service-evidence': ['0001_service_evidence.sql'],
 } as const;
 const migrationsRoot = resolve(import.meta.dirname, '../../../modules');

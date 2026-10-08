@@ -1,12 +1,23 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
+import type { components } from '@care/api-client';
+import { auditActionKey } from '../../../../i18n/audit';
+import { statusLabelKey } from '../../../../i18n/status';
+import { errorMessageKey } from '../../../../i18n/errors';
+import { formatDate, formatDateTime } from '../../../../i18n/format';
+import { formatVisitDateTime } from '../../../../lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
+  hasPermission,
   hasClientPermission,
 } from '../../../../lib/api';
+import { ClinicalHistorySection, clinicalRange } from './clinical-history';
+
+type ClinicalHistoryPage = components['schemas']['ClinicalRecordHistoryPageDto'];
 import {
   activateClientAction,
   addClientAddressAction,
@@ -24,12 +35,12 @@ import {
   updateFuturePflegegradAction,
 } from '../actions';
 
-const contactRoleLabels = {
-  primary_contact: 'Hauptkontakt',
-  emergency_contact: 'Notfallkontakt',
-  legal_representative: 'Gesetzliche Vertretung',
-  authorized_contact: 'Bevollmächtigter Kontakt',
-  invoice_recipient: 'Rechnungsempfänger',
+const contactRoleKeys = {
+  primary_contact: 'Clients.detail.contactRoles.primaryContact',
+  emergency_contact: 'Clients.detail.contactRoles.emergencyContact',
+  legal_representative: 'Clients.detail.contactRoles.legalRepresentative',
+  authorized_contact: 'Clients.detail.contactRoles.authorizedContact',
+  invoice_recipient: 'Clients.detail.contactRoles.invoiceRecipient',
 } as const;
 
 export default async function ClientDetailPage({
@@ -37,10 +48,16 @@ export default async function ClientDetailPage({
   searchParams,
 }: Readonly<{
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    clinicalFrom?: string;
+    clinicalUntil?: string;
+    clinicalPage?: string;
+  }>;
 }>) {
   const { id } = await params;
   const query = await searchParams;
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const api = await getApiClient();
   const get = api.GET;
   const header = await getTenantHeader();
@@ -141,7 +158,102 @@ export default async function ClientDetailPage({
   const organizations = organizationsResult.data ?? [];
   const facilities = facilitiesResult.data ?? [];
   const permissions = await getPermissionGrants(api);
+  const canReviewClinicalHistory = hasPermission(permissions, 'clinical_documentation.review');
+  const clinicalPeriod = clinicalRange(query.clinicalFrom, query.clinicalUntil);
+  const clinicalPage = parseClinicalPage(query.clinicalPage);
+  let clinicalMeasurements: ClinicalHistoryPage | undefined;
+  let clinicalObservations: ClinicalHistoryPage | undefined;
+  let clinicalAssessments: ClinicalHistoryPage | undefined;
+  let clinicalRiskHistory: ClinicalHistoryPage | undefined;
+  let clinicalCurrentRisks: ClinicalHistoryPage | undefined;
+  let clinicalHistoryLoadFailed = false;
+  if (client && canReviewClinicalHistory) {
+    const [
+      measurementsResult,
+      observationsResult,
+      assessmentsResult,
+      risksResult,
+      currentRisksResult,
+    ] = await Promise.all([
+      get('/api/v1/clients/{clientId}/measurements', {
+        params: {
+          path: { clientId: client.id },
+          query: {
+            page: clinicalPage,
+            pageSize: 25,
+            from: clinicalPeriod.fromInstant,
+            until: clinicalPeriod.untilInstant,
+          },
+          header,
+        },
+      }),
+      get('/api/v1/clients/{clientId}/observations', {
+        params: {
+          path: { clientId: client.id },
+          query: {
+            page: clinicalPage,
+            pageSize: 25,
+            from: clinicalPeriod.fromInstant,
+            until: clinicalPeriod.untilInstant,
+          },
+          header,
+        },
+      }),
+      get('/api/v1/clients/{clientId}/assessments', {
+        params: {
+          path: { clientId: client.id },
+          query: {
+            page: clinicalPage,
+            pageSize: 25,
+            from: clinicalPeriod.fromInstant,
+            until: clinicalPeriod.untilInstant,
+          },
+          header,
+        },
+      }),
+      get('/api/v1/clients/{clientId}/risks', {
+        params: {
+          path: { clientId: client.id },
+          query: {
+            page: clinicalPage,
+            pageSize: 25,
+            from: clinicalPeriod.fromInstant,
+            until: clinicalPeriod.untilInstant,
+          },
+          header,
+        },
+      }),
+      get('/api/v1/clients/{clientId}/risks', {
+        params: {
+          path: { clientId: client.id },
+          query: { page: 1, pageSize: 100, currentOnly: true },
+          header,
+        },
+      }),
+    ]);
+    clinicalHistoryLoadFailed = [
+      measurementsResult,
+      observationsResult,
+      assessmentsResult,
+      risksResult,
+      currentRisksResult,
+    ].some((result) => result.error !== undefined);
+    clinicalMeasurements = measurementsResult.data;
+    clinicalObservations = observationsResult.data;
+    clinicalAssessments = assessmentsResult.data;
+    clinicalRiskHistory = risksResult.data;
+    clinicalCurrentRisks = currentRisksResult.data;
+  }
   const tenantId = header['X-Tenant-Id'];
+  const canReadCarePlan = client
+    ? hasClientPermission(
+        permissions,
+        'care_plan.read',
+        tenantId,
+        client.organizationId,
+        client.primaryFacilityId,
+      )
+    : false;
   const canUpdateClient = client
     ? hasClientPermission(
         permissions,
@@ -177,47 +289,61 @@ export default async function ClientDetailPage({
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="grid gap-2">
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            <Link href="/clients">Klientinnen und Klienten</Link>
+            <Link href="/clients">{t('Clients.title')}</Link>
           </p>
           {client ? (
             <>
               <h1 className="text-3xl font-semibold">
                 {client.preferredName || client.firstName} {client.lastName}
               </h1>
-              <StatusBadge status={client.status} />
+              <StatusBadge status={client.status} label={t(statusLabelKey(client.status))} />
             </>
           ) : (
-            <h1 className="text-3xl font-semibold">Klientendetails</h1>
+            <h1 className="text-3xl font-semibold">{t('Clients.detail.detailTitle')}</h1>
           )}
         </div>
         <Button asChild variant="secondary">
-          <Link href="/clients">Zurück zur Liste</Link>
+          <Link href="/clients">{t('Clients.detail.backToList')}</Link>
         </Button>
       </header>
 
       {actionError ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-          Änderung konnte nicht gespeichert werden. Prüfen Sie die Eingaben und Ihre Berechtigung.
+          {t(errorMessageKey(actionError))}
         </p>
       ) : null}
       {!client ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-          Klient konnte nicht geladen werden.
+          {t('Clients.detail.loadFailed')}
         </p>
       ) : (
         <>
-          <nav aria-label="Klientenbereiche" className="flex flex-wrap gap-2 border-b pb-3 text-sm">
-            <SectionLink href="#overview">Übersicht</SectionLink>
-            <SectionLink href="#contacts">Kontakte</SectionLink>
-            <SectionLink href="#insurance">Versicherung & Pflegegrad</SectionLink>
+          <nav
+            aria-label={t('Clients.detail.navigationLabel')}
+            className="flex flex-wrap gap-2 border-b pb-3 text-sm"
+          >
+            <SectionLink href="#overview">{t('Clients.detail.overviewTab')}</SectionLink>
+            <SectionLink href="#contacts">{t('Clients.detail.contactsTab')}</SectionLink>
+            <SectionLink href="#insurance">{t('Clients.detail.insuranceTab')}</SectionLink>
             <Link
               className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
               href={`/clients/${client.id}/service-agreements`}
             >
-              Leistungsplanung
+              {t('Clients.detail.servicePlanningTab')}
             </Link>
-            <SectionLink href="#visits">Einsätze</SectionLink>
-            <SectionLink href="#timeline">Verlauf</SectionLink>
+            {canReadCarePlan ? (
+              <Link
+                className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
+                href={`/clients/${client.id}/care-plan`}
+              >
+                {t('Clients.detail.carePlanTab')}
+              </Link>
+            ) : null}
+            <SectionLink href="#visits">{t('Clients.detail.visitsTab')}</SectionLink>
+            {canReviewClinicalHistory ? (
+              <SectionLink href="#clinical">{t('Clients.detail.clinicalTab')}</SectionLink>
+            ) : null}
+            <SectionLink href="#timeline">{t('Clients.detail.timelineTab')}</SectionLink>
           </nav>
 
           <section
@@ -226,35 +352,51 @@ export default async function ClientDetailPage({
             className="grid gap-4 scroll-mt-6"
           >
             <h2 id="overview-title" className="text-xl font-semibold">
-              Übersicht
+              {t('Clients.detail.overview')}
             </h2>
             <dl className="grid gap-4 rounded-lg border bg-white p-5 sm:grid-cols-2 lg:grid-cols-3">
-              <Field label="Vorname" value={client.firstName} />
-              <Field label="Nachname" value={client.lastName} />
-              <Field label="Bevorzugter Name" value={client.preferredName} />
-              <Field label="Geburtsdatum" value={formatDate(client.dateOfBirth)} />
-              <Field label="Sterbedatum" value={formatDate(client.dateOfDeath)} />
-              <Field label="Geschlecht" value={genderLabel(client.gender)} />
-              <Field label="Anrede" value={salutationLabel(client.salutation)} />
-              <Field label="E-Mail" value={client.email} />
-              <Field label="Telefon" value={client.phone} />
-              <Field label="Mobiltelefon" value={client.mobile} />
+              <Field label={t('Clients.form.firstName')} value={client.firstName} />
+              <Field label={t('Clients.form.lastName')} value={client.lastName} />
+              <Field label={t('Clients.form.preferredName')} value={client.preferredName} />
               <Field
-                label="Primäre Adresse"
+                label={t('Clients.form.dateOfBirth')}
+                value={formatDate(client.dateOfBirth, locale)}
+              />
+              <Field
+                label={t('Clients.form.dateOfDeath')}
+                value={formatDate(client.dateOfDeath, locale)}
+              />
+              <Field
+                label={t('Clients.form.gender')}
+                value={client.gender ? t(genderKey(client.gender)) : null}
+              />
+              <Field
+                label={t('Clients.form.salutation')}
+                value={client.salutation ? t(salutationKey(client.salutation)) : null}
+              />
+              <Field label={t('Clients.form.email')} value={client.email} />
+              <Field label={t('Clients.form.phone')} value={client.phone} />
+              <Field label={t('Clients.form.mobilePhone')} value={client.mobile} />
+              <Field
+                label={t('Clients.detail.primaryAddress')}
                 value={primaryAddress ? formatAddress(primaryAddress) : null}
               />
               <Field
-                label="Aktueller Pflegegrad"
-                value={currentPflegegrad ? `Pflegegrad ${currentPflegegrad.grade}` : null}
+                label={t('Clients.detail.currentCareLevel')}
+                value={
+                  currentPflegegrad
+                    ? t('Clients.careLevelNumber', { grade: currentPflegegrad.grade })
+                    : null
+                }
               />
               <Field
-                label="Hauptkontakt"
+                label={t('Clients.detail.primaryContact')}
                 value={
                   primaryContact ? `${primaryContact.firstName} ${primaryContact.lastName}` : null
                 }
               />
               <Field
-                label="Notfallkontakt"
+                label={t('Clients.detail.emergencyContact')}
                 value={
                   emergencyContact
                     ? `${emergencyContact.firstName} ${emergencyContact.lastName}`
@@ -266,7 +408,7 @@ export default async function ClientDetailPage({
             {canUpdateClient ? (
               <details className="rounded-lg border bg-white p-5">
                 <summary className="cursor-pointer font-semibold">
-                  Persönliche Daten bearbeiten
+                  {t('Clients.detail.editPersonalData')}
                 </summary>
                 <form action={updateClientAction} className="mt-4 grid gap-4">
                   <input type="hidden" name="id" value={client.id} />
@@ -274,84 +416,84 @@ export default async function ClientDetailPage({
                     <TextField
                       id="edit-firstName"
                       name="firstName"
-                      label="Vorname"
+                      label={t('Clients.form.firstName')}
                       defaultValue={client.firstName}
                       required
                     />
                     <TextField
                       id="edit-lastName"
                       name="lastName"
-                      label="Nachname"
+                      label={t('Clients.form.lastName')}
                       defaultValue={client.lastName}
                       required
                     />
                     <TextField
                       id="edit-preferredName"
                       name="preferredName"
-                      label="Bevorzugter Name"
+                      label={t('Clients.form.preferredName')}
                       defaultValue={client.preferredName ?? ''}
                     />
                     <TextField
                       id="edit-dateOfBirth"
                       name="dateOfBirth"
-                      label="Geburtsdatum"
+                      label={t('Clients.form.dateOfBirth')}
                       type="date"
                       defaultValue={client.dateOfBirth ?? ''}
                     />
                     <TextField
                       id="edit-dateOfDeath"
                       name="dateOfDeath"
-                      label="Sterbedatum"
+                      label={t('Clients.form.dateOfDeath')}
                       type="date"
                       defaultValue={client.dateOfDeath ?? ''}
                     />
                     <SelectField
                       id="edit-gender"
                       name="gender"
-                      label="Geschlecht"
+                      label={t('Clients.form.gender')}
                       value={client.gender ?? ''}
                     >
-                      <option value="">Nicht angegeben</option>
-                      <option value="female">Weiblich</option>
-                      <option value="male">Männlich</option>
-                      <option value="diverse">Divers</option>
+                      <option value="">{t('Clients.form.notSpecified')}</option>
+                      <option value="female">{t('Clients.form.female')}</option>
+                      <option value="male">{t('Clients.form.male')}</option>
+                      <option value="diverse">{t('Clients.form.diverse')}</option>
                     </SelectField>
                     <SelectField
                       id="edit-salutation"
                       name="salutation"
-                      label="Anrede"
+                      label={t('Clients.form.salutation')}
                       value={client.salutation ?? ''}
                     >
-                      <option value="">Nicht angegeben</option>
-                      <option value="mr">Herr</option>
-                      <option value="ms">Frau</option>
-                      <option value="mx">Mx</option>
-                      <option value="other">Andere</option>
+                      <option value="">{t('Clients.form.notSpecified')}</option>
+                      <option value="mr">{t('Clients.form.mr')}</option>
+                      <option value="ms">{t('Clients.form.ms')}</option>
+                      <option value="mx">{t('Clients.form.mx')}</option>
+                      <option value="other">{t('Clients.form.other')}</option>
                     </SelectField>
                     <TextField
                       id="edit-email"
                       name="email"
-                      label="E-Mail"
+                      label={t('Clients.form.email')}
                       type="email"
                       defaultValue={client.email ?? ''}
                     />
                     <TextField
                       id="edit-phone"
                       name="phone"
-                      label="Telefon"
+                      label={t('Clients.form.phone')}
                       type="tel"
                       defaultValue={client.phone ?? ''}
                     />
                     <TextField
                       id="edit-mobile"
                       name="mobile"
-                      label="Mobiltelefon"
+                      label={t('Clients.form.mobilePhone')}
                       type="tel"
                       defaultValue={client.mobile ?? ''}
                     />
                   </div>
                   <Button type="submit" className="w-fit">
-                    Stammdaten speichern
+                    {t('Clients.detail.savePersonalData')}
                   </Button>
                 </form>
               </details>
@@ -361,11 +503,13 @@ export default async function ClientDetailPage({
               className="rounded-lg border bg-white p-5"
               open={!client.organizationId || !client.primaryFacilityId}
             >
-              <summary className="cursor-pointer font-semibold">Versorgerkontext</summary>
+              <summary className="cursor-pointer font-semibold">
+                {t('Clients.detail.providerContext')}
+              </summary>
               <p className="mt-2 text-sm text-slate-700">
                 {client.organizationId && client.primaryFacilityId
-                  ? `${organizationName(organizations, client.organizationId)} / ${facilityName(facilities, client.primaryFacilityId)}`
-                  : 'Dieser ältere Datensatz ist noch nicht zugeordnet.'}
+                  ? `${organizationName(organizations, client.organizationId, t('Clients.detail.unknownOrganization'))} / ${facilityName(facilities, client.primaryFacilityId, t('Clients.detail.unknownFacility'))}`
+                  : t('Clients.detail.legacyUnassigned')}
               </p>
               {canUpdateClient ? (
                 <form
@@ -376,11 +520,11 @@ export default async function ClientDetailPage({
                   <SelectField
                     id="organizationId"
                     name="organizationId"
-                    label="Organisation"
+                    label={t('Clients.form.organization')}
                     value={client.organizationId ?? ''}
                     required
                   >
-                    <option value="">Organisation auswählen</option>
+                    <option value="">{t('Clients.form.selectOrganization')}</option>
                     {organizations
                       .filter((organization) => organization.status === 'active')
                       .map((organization) => (
@@ -392,11 +536,11 @@ export default async function ClientDetailPage({
                   <SelectField
                     id="primaryFacilityId"
                     name="primaryFacilityId"
-                    label="Primäre Einrichtung"
+                    label={t('Clients.form.primaryFacility')}
                     value={client.primaryFacilityId ?? ''}
                     required
                   >
-                    <option value="">Einrichtung auswählen</option>
+                    <option value="">{t('Clients.form.selectFacility')}</option>
                     {facilities
                       .filter((facility) => facility.status === 'active')
                       .map((facility) => (
@@ -406,7 +550,7 @@ export default async function ClientDetailPage({
                       ))}
                   </SelectField>
                   <Button type="submit" className="w-fit md:col-span-2">
-                    Zuordnung speichern
+                    {t('Clients.detail.saveAssignment')}
                   </Button>
                 </form>
               ) : null}
@@ -416,14 +560,14 @@ export default async function ClientDetailPage({
               {canUpdateClient && client.status === 'pending' ? (
                 <form action={activateClientAction}>
                   <input type="hidden" name="id" value={client.id} />
-                  <Button type="submit">Aktivieren</Button>
+                  <Button type="submit">{t('Common.actions.activate')}</Button>
                 </form>
               ) : null}
               {canArchiveClient && client.status === 'active' ? (
                 <form action={archiveClientAction}>
                   <input type="hidden" name="id" value={client.id} />
                   <Button type="submit" variant="destructive">
-                    Archivieren
+                    {t('Common.actions.archive')}
                   </Button>
                 </form>
               ) : null}
@@ -436,14 +580,14 @@ export default async function ClientDetailPage({
             className="grid gap-4 scroll-mt-6"
           >
             <h2 id="contacts-title" className="text-xl font-semibold">
-              Adressen und Kontakte
+              {t('Clients.detail.addressesAndContacts')}
             </h2>
             <div className="grid gap-4">
               {addresses.map((address) => (
                 <article key={address.id} className="grid gap-3 rounded-lg border bg-white p-5">
                   <h3 className="font-semibold">
-                    {addressTypeLabel(address.addressType)}
-                    {address.isPrimary ? ' · Primär' : ''}
+                    {t(addressTypeKey(address.addressType))}
+                    {address.isPrimary ? ` · ${t('Clients.detail.primary')}` : ''}
                   </h3>
                   {canUpdateClient ? (
                     <form action={updateClientAddressAction} className="grid gap-4">
@@ -453,63 +597,65 @@ export default async function ClientDetailPage({
                         <SelectField
                           id={`address-type-${address.id}`}
                           name="addressType"
-                          label="Art"
+                          label={t('Clients.detail.addressType')}
                           value={address.addressType}
                         >
-                          <option value="home">Wohnadresse</option>
-                          <option value="billing">Rechnungsadresse</option>
-                          <option value="other">Weitere Adresse</option>
+                          <option value="home">{t('Clients.detail.addressTypes.home')}</option>
+                          <option value="billing">
+                            {t('Clients.detail.addressTypes.billing')}
+                          </option>
+                          <option value="other">{t('Clients.detail.addressTypes.other')}</option>
                         </SelectField>
                         <TextField
                           id={`address-street-${address.id}`}
                           name="street"
-                          label="Straße"
+                          label={t('Clients.form.street')}
                           defaultValue={address.street}
                           required
                         />
                         <TextField
                           id={`address-house-${address.id}`}
                           name="houseNumber"
-                          label="Hausnummer"
+                          label={t('Clients.form.houseNumber')}
                           defaultValue={address.houseNumber ?? ''}
                         />
                         <TextField
                           id={`address-addition-${address.id}`}
                           name="addressAddition"
-                          label="Adresszusatz"
+                          label={t('Clients.form.addressAddition')}
                           defaultValue={address.addressAddition ?? ''}
                         />
                         <TextField
                           id={`address-postal-${address.id}`}
                           name="postalCode"
-                          label="Postleitzahl"
+                          label={t('Clients.form.postalCode')}
                           defaultValue={address.postalCode ?? ''}
                         />
                         <TextField
                           id={`address-city-${address.id}`}
                           name="city"
-                          label="Ort"
+                          label={t('Clients.form.city')}
                           defaultValue={address.city}
                           required
                         />
                         <TextField
                           id={`address-country-${address.id}`}
                           name="countryCode"
-                          label="Ländercode"
+                          label={t('Clients.form.countryCode')}
                           defaultValue={address.countryCode}
                           maxLength={2}
                         />
                         <TextField
                           id={`address-from-${address.id}`}
                           name="validFrom"
-                          label="Gültig ab"
+                          label={t('Clients.detail.validFrom')}
                           type="date"
                           defaultValue={address.validFrom ?? ''}
                         />
                         <TextField
                           id={`address-until-${address.id}`}
                           name="validUntil"
-                          label="Gültig bis"
+                          label={t('Clients.detail.validUntil')}
                           type="date"
                           defaultValue={address.validUntil ?? ''}
                         />
@@ -520,14 +666,14 @@ export default async function ClientDetailPage({
                           name="isPrimary"
                           defaultChecked={address.isPrimary}
                         />{' '}
-                        Als primäre Adresse verwenden
+                        {t('Clients.detail.primaryAddressCheckbox')}
                       </label>
                       <div className="flex gap-2">
                         <Button type="submit" variant="secondary">
-                          Adresse speichern
+                          {t('Clients.detail.saveAddress')}
                         </Button>
                         <Button formAction={removeClientAddressAction} variant="destructive">
-                          Adresse entfernen
+                          {t('Clients.detail.removeAddress')}
                         </Button>
                       </div>
                     </form>
@@ -539,7 +685,9 @@ export default async function ClientDetailPage({
             </div>
             {canUpdateClient ? (
               <details className="rounded-lg border bg-white p-5">
-                <summary className="cursor-pointer font-semibold">Adresse hinzufügen</summary>
+                <summary className="cursor-pointer font-semibold">
+                  {t('Clients.detail.addAddress')}
+                </summary>
                 <AddressForm
                   action={addClientAddressAction}
                   clientId={client.id}
@@ -555,14 +703,14 @@ export default async function ClientDetailPage({
                     {contact.firstName} {contact.lastName}
                   </h3>
                   <p className="mt-1 text-sm text-slate-700">
-                    {relationshipLabel(contact.relationshipType)} ·{' '}
-                    {contact.roles.map((role) => contactRoleLabels[role]).join(', ') ||
-                      'Keine Rolle'}
+                    {t(relationshipKey(contact.relationshipType))} ·{' '}
+                    {contact.roles.map((role) => t(contactRoleKeys[role])).join(', ') ||
+                      t('Clients.detail.noContactRole')}
                   </p>
                   {!canUpdateClient ? (
                     <p className="mt-2 text-sm text-slate-700">
                       {[contact.phone, contact.mobile, contact.email].filter(Boolean).join(' · ') ||
-                        'Keine Kontaktdaten'}
+                        t('Clients.detail.noContactDetails')}
                     </p>
                   ) : null}
                   {canUpdateClient ? (
@@ -573,21 +721,21 @@ export default async function ClientDetailPage({
                         <TextField
                           id={`contact-first-${contact.id}`}
                           name="firstName"
-                          label="Vorname"
+                          label={t('Clients.form.firstName')}
                           defaultValue={contact.firstName}
                           required
                         />
                         <TextField
                           id={`contact-last-${contact.id}`}
                           name="lastName"
-                          label="Nachname"
+                          label={t('Clients.form.lastName')}
                           defaultValue={contact.lastName}
                           required
                         />
                         <SelectField
                           id={`contact-relation-${contact.id}`}
                           name="relationshipType"
-                          label="Beziehung"
+                          label={t('Clients.detail.relationship')}
                           value={contact.relationshipType}
                         >
                           <RelationshipOptions />
@@ -595,42 +743,42 @@ export default async function ClientDetailPage({
                         <TextField
                           id={`contact-phone-${contact.id}`}
                           name="phone"
-                          label="Telefon"
+                          label={t('Clients.form.phone')}
                           type="tel"
                           defaultValue={contact.phone ?? ''}
                         />
                         <TextField
                           id={`contact-mobile-${contact.id}`}
                           name="mobile"
-                          label="Mobiltelefon"
+                          label={t('Clients.form.mobilePhone')}
                           type="tel"
                           defaultValue={contact.mobile ?? ''}
                         />
                         <TextField
                           id={`contact-email-${contact.id}`}
                           name="email"
-                          label="E-Mail"
+                          label={t('Clients.form.email')}
                           type="email"
                           defaultValue={contact.email ?? ''}
                         />
                         <TextField
                           id={`contact-notes-${contact.id}`}
                           name="notes"
-                          label="Kontaktbezogene Hinweise"
+                          label={t('Clients.detail.contactNotes')}
                           defaultValue={contact.notes ?? ''}
                           maxLength={500}
                         />
                       </div>
                       <RoleChecks selected={contact.roles} />
                       <Button type="submit" variant="secondary" className="w-fit">
-                        Kontakt speichern
+                        {t('Clients.detail.saveContact')}
                       </Button>
                       <Button
                         formAction={removeClientContactAction}
                         variant="destructive"
                         className="w-fit"
                       >
-                        Kontakt entfernen
+                        {t('Clients.detail.removeContact')}
                       </Button>
                     </form>
                   ) : null}
@@ -639,71 +787,99 @@ export default async function ClientDetailPage({
             </div>
             {canUpdateClient ? (
               <details className="rounded-lg border bg-white p-5">
-                <summary className="cursor-pointer font-semibold">Kontakt hinzufügen</summary>
+                <summary className="cursor-pointer font-semibold">
+                  {t('Clients.detail.addContact')}
+                </summary>
                 <form action={addClientContactAction} className="mt-4 grid gap-4">
                   <input type="hidden" name="id" value={client.id} />
                   <div className="grid gap-4 md:grid-cols-2">
-                    <TextField id="new-contact-first" name="firstName" label="Vorname" required />
-                    <TextField id="new-contact-last" name="lastName" label="Nachname" required />
+                    <TextField
+                      id="new-contact-first"
+                      name="firstName"
+                      label={t('Clients.form.firstName')}
+                      required
+                    />
+                    <TextField
+                      id="new-contact-last"
+                      name="lastName"
+                      label={t('Clients.form.lastName')}
+                      required
+                    />
                     <SelectField
                       id="new-contact-relation"
                       name="relationshipType"
-                      label="Beziehung"
+                      label={t('Clients.detail.relationship')}
                       value="relative"
                       required
                     >
                       <RelationshipOptions />
                     </SelectField>
-                    <TextField id="new-contact-phone" name="phone" label="Telefon" type="tel" />
+                    <TextField
+                      id="new-contact-phone"
+                      name="phone"
+                      label={t('Clients.form.phone')}
+                      type="tel"
+                    />
                     <TextField
                       id="new-contact-mobile"
                       name="mobile"
-                      label="Mobiltelefon"
+                      label={t('Clients.form.mobilePhone')}
                       type="tel"
                     />
-                    <TextField id="new-contact-email" name="email" label="E-Mail" type="email" />
+                    <TextField
+                      id="new-contact-email"
+                      name="email"
+                      label={t('Clients.form.email')}
+                      type="email"
+                    />
                     <TextField
                       id="new-contact-representation-reference"
                       name="representationReference"
-                      label="Referenz zur Vertretung"
+                      label={t('Clients.detail.representationReference')}
                       maxLength={120}
                     />
                     <TextField
                       id="new-contact-representation-from"
                       name="representationValidFrom"
-                      label="Vertretung gültig ab"
+                      label={t('Clients.detail.representationValidFrom')}
                       type="date"
                     />
                     <TextField
                       id="new-contact-representation-until"
                       name="representationValidUntil"
-                      label="Vertretung gültig bis"
+                      label={t('Clients.detail.representationValidUntil')}
                       type="date"
                     />
                     <SelectField
                       id="new-contact-representation-type"
                       name="representationType"
-                      label="Vertretungsart"
+                      label={t('Clients.detail.representationType')}
                       value=""
                     >
-                      <option value="">Keine Vertretung</option>
-                      <option value="power_of_attorney">Vollmacht</option>
-                      <option value="legal_guardianship">Gesetzliche Betreuung</option>
-                      <option value="authorized_representative">Bevollmächtigte Person</option>
+                      <option value="">{t('Clients.detail.noRepresentation')}</option>
+                      <option value="power_of_attorney">
+                        {t('Clients.detail.powerOfAttorney')}
+                      </option>
+                      <option value="legal_guardianship">
+                        {t('Clients.detail.legalGuardianship')}
+                      </option>
+                      <option value="authorized_representative">
+                        {t('Clients.detail.authorizedRepresentative')}
+                      </option>
                     </SelectField>
                   </div>
                   <RoleChecks selected={[]} />
                   <TextField
                     id="new-contact-notes"
                     name="notes"
-                    label="Kontaktbezogene Hinweise"
+                    label={t('Clients.detail.contactNotes')}
                     maxLength={500}
                   />
                   <p className="text-sm text-slate-600">
-                    Bitte hier keine medizinischen Informationen eintragen.
+                    {t('Clients.detail.medicalInformationWarning')}
                   </p>
                   <Button type="submit" className="w-fit">
-                    Kontakt hinzufügen
+                    {t('Clients.detail.addContact')}
                   </Button>
                 </form>
               </details>
@@ -716,14 +892,14 @@ export default async function ClientDetailPage({
             className="grid gap-4 scroll-mt-6"
           >
             <h2 id="insurance-title" className="text-xl font-semibold">
-              Versicherung und Pflegegrad
+              {t('Clients.detail.insuranceAndCareLevel')}
             </h2>
             <div className="grid gap-4">
               {insurances.map((insurance) => (
                 <article key={insurance.id} className="rounded-lg border bg-white p-5">
                   <h3 className="font-semibold">
                     {insurance.insurerName}
-                    {insurance.isPrimary ? ' · Primär' : ''}
+                    {insurance.isPrimary ? ` · ${t('Clients.detail.primary')}` : ''}
                   </h3>
                   {canUpdateClient ? (
                     <form action={updateClientInsuranceAction} className="mt-4 grid gap-4">
@@ -733,7 +909,7 @@ export default async function ClientDetailPage({
                         <SelectField
                           id={`insurance-type-${insurance.id}`}
                           name="insuranceType"
-                          label="Versicherungsart"
+                          label={t('Clients.detail.insuranceType')}
                           value={insurance.insuranceType}
                         >
                           <InsuranceOptions />
@@ -741,33 +917,33 @@ export default async function ClientDetailPage({
                         <TextField
                           id={`insurer-name-${insurance.id}`}
                           name="insurerName"
-                          label="Versicherer"
+                          label={t('Clients.detail.insurer')}
                           defaultValue={insurance.insurerName}
                           required
                         />
                         <TextField
                           id={`insurance-number-${insurance.id}`}
                           name="insuranceNumber"
-                          label="Versicherungsnummer"
+                          label={t('Clients.detail.insuranceNumber')}
                           defaultValue={insurance.insuranceNumber ?? ''}
                         />
                         <TextField
                           id={`member-number-${insurance.id}`}
                           name="memberNumber"
-                          label="Mitgliedsnummer"
+                          label={t('Clients.detail.memberNumber')}
                           defaultValue={insurance.memberNumber ?? ''}
                         />
                         <TextField
                           id={`insurance-from-${insurance.id}`}
                           name="validFrom"
-                          label="Gültig ab"
+                          label={t('Clients.detail.validFrom')}
                           type="date"
                           defaultValue={insurance.validFrom ?? ''}
                         />
                         <TextField
                           id={`insurance-until-${insurance.id}`}
                           name="validUntil"
-                          label="Gültig bis"
+                          label={t('Clients.detail.validUntil')}
                           type="date"
                           defaultValue={insurance.validUntil ?? ''}
                         />
@@ -778,13 +954,13 @@ export default async function ClientDetailPage({
                           name="isPrimary"
                           defaultChecked={insurance.isPrimary}
                         />{' '}
-                        Primäres Versicherungsverhältnis
+                        {t('Clients.detail.primaryInsurance')}
                       </label>
                       <p className="text-sm text-slate-600">
-                        Versicherungsnummern werden nur in diesem geschützten Bereich angezeigt.
+                        {t('Clients.detail.protectedInsuranceNumber')}
                       </p>
                       <Button type="submit" variant="secondary" className="w-fit">
-                        Versicherung speichern
+                        {t('Clients.detail.saveInsurance')}
                       </Button>
                     </form>
                   ) : null}
@@ -794,7 +970,7 @@ export default async function ClientDetailPage({
             {canUpdateClient ? (
               <details className="rounded-lg border bg-white p-5">
                 <summary className="cursor-pointer font-semibold">
-                  Versicherungsverhältnis hinzufügen
+                  {t('Clients.detail.addInsurance')}
                 </summary>
                 <form action={addClientInsuranceAction} className="mt-4 grid gap-4">
                   <input type="hidden" name="id" value={client.id} />
@@ -802,7 +978,7 @@ export default async function ClientDetailPage({
                     <SelectField
                       id="new-insurance-type"
                       name="insuranceType"
-                      label="Versicherungsart"
+                      label={t('Clients.detail.insuranceType')}
                       value="pflegeversicherung"
                       required
                     >
@@ -811,52 +987,60 @@ export default async function ClientDetailPage({
                     <TextField
                       id="new-insurer-name"
                       name="insurerName"
-                      label="Versicherer"
+                      label={t('Clients.detail.insurer')}
                       required
                     />
                     <TextField
                       id="new-insurance-number"
                       name="insuranceNumber"
-                      label="Versicherungsnummer"
+                      label={t('Clients.detail.insuranceNumber')}
                     />
-                    <TextField id="new-member-number" name="memberNumber" label="Mitgliedsnummer" />
+                    <TextField
+                      id="new-member-number"
+                      name="memberNumber"
+                      label={t('Clients.detail.memberNumber')}
+                    />
                     <TextField
                       id="new-insurance-from"
                       name="validFrom"
-                      label="Gültig ab"
+                      label={t('Clients.detail.validFrom')}
                       type="date"
                     />
                     <TextField
                       id="new-insurance-until"
                       name="validUntil"
-                      label="Gültig bis"
+                      label={t('Clients.detail.validUntil')}
                       type="date"
                     />
                   </div>
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="isPrimary" /> Primäres Versicherungsverhältnis
+                    <input type="checkbox" name="isPrimary" />{' '}
+                    {t('Clients.detail.primaryInsurance')}
                   </label>
                   <Button type="submit" className="w-fit">
-                    Versicherung hinzufügen
+                    {t('Clients.detail.addInsurance')}
                   </Button>
                 </form>
               </details>
             ) : null}
 
             <div className="grid gap-3">
-              <h3 className="text-lg font-semibold">Pflegegradverlauf</h3>
+              <h3 className="text-lg font-semibold">{t('Clients.detail.careLevelHistory')}</h3>
               {grades.length ? (
                 grades.map((grade) => {
                   const editableFuture = grade.status === 'pending' && grade.validFrom > today;
                   return (
                     <article key={grade.id} className="grid gap-3 rounded-lg border bg-white p-5">
                       <h4 className="font-semibold">
-                        Pflegegrad {grade.grade} · {pflegegradStatusLabel(grade.status)}
+                        {t('Clients.careLevelNumber', { grade: grade.grade })} ·{' '}
+                        {t(statusLabelKey(grade.status))}
                       </h4>
                       <p className="text-sm text-slate-700">
-                        Gültig {formatDate(grade.validFrom)} bis {formatDate(grade.validUntil)}
+                        {t('Clients.detail.validFrom')} {formatDate(grade.validFrom, locale)}{' '}
+                        {t('Clients.detail.validUntil').toLowerCase()}{' '}
+                        {formatDate(grade.validUntil, locale)}
                         {grade.decisionDate
-                          ? ` · Entscheidung ${formatDate(grade.decisionDate)}`
+                          ? ` · ${t('Clients.detail.decisionDate')} ${formatDate(grade.decisionDate, locale)}`
                           : ''}
                       </p>
                       {editableFuture && canUpdateClient ? (
@@ -869,7 +1053,7 @@ export default async function ClientDetailPage({
                           <TextField
                             id={`grade-${grade.id}`}
                             name="grade"
-                            label="Pflegegrad"
+                            label={t('Clients.detail.careLevel')}
                             type="number"
                             min={1}
                             max={5}
@@ -879,7 +1063,7 @@ export default async function ClientDetailPage({
                           <TextField
                             id={`grade-from-${grade.id}`}
                             name="validFrom"
-                            label="Gültig ab"
+                            label={t('Clients.detail.validFrom')}
                             type="date"
                             defaultValue={grade.validFrom}
                             required
@@ -887,22 +1071,22 @@ export default async function ClientDetailPage({
                           <SelectField
                             id={`grade-status-${grade.id}`}
                             name="status"
-                            label="Status"
+                            label={t('Common.fields.status')}
                             value={grade.status}
                           >
-                            <option value="pending">Ausstehend</option>
-                            <option value="confirmed">Bestätigt</option>
-                            <option value="revoked">Widerrufen</option>
+                            <option value="pending">{t('Common.status.pending')}</option>
+                            <option value="confirmed">{t('Common.status.confirmed')}</option>
+                            <option value="revoked">{t('Common.status.revoked')}</option>
                           </SelectField>
                           <div className="flex items-end">
                             <Button type="submit" variant="secondary">
-                              Plan speichern
+                              {t('Clients.detail.gradePlanSave')}
                             </Button>
                           </div>
                         </form>
                       ) : (
                         <p className="text-sm text-slate-600">
-                          Historische und bestätigte Einträge bleiben unverändert.
+                          {t('Clients.detail.gradeHistoryPolicy')}
                         </p>
                       )}
                     </article>
@@ -910,12 +1094,14 @@ export default async function ClientDetailPage({
                 })
               ) : (
                 <p className="rounded-lg border bg-white p-5 text-slate-700">
-                  Kein Pflegegradverlauf vorhanden.
+                  {t('Clients.detail.noCareLevelHistory')}
                 </p>
               )}
               {canUpdateClient ? (
                 <details className="rounded-lg border bg-white p-5">
-                  <summary className="cursor-pointer font-semibold">Pflegegrad ergänzen</summary>
+                  <summary className="cursor-pointer font-semibold">
+                    {t('Clients.detail.addCareLevel')}
+                  </summary>
                   <form
                     action={addClientPflegegradAction}
                     className="mt-4 grid gap-4 md:grid-cols-3"
@@ -924,7 +1110,7 @@ export default async function ClientDetailPage({
                     <TextField
                       id="new-grade"
                       name="grade"
-                      label="Pflegegrad"
+                      label={t('Clients.detail.careLevel')}
                       type="number"
                       min={1}
                       max={5}
@@ -933,35 +1119,40 @@ export default async function ClientDetailPage({
                     <TextField
                       id="new-grade-from"
                       name="validFrom"
-                      label="Gültig ab"
+                      label={t('Clients.detail.validFrom')}
                       type="date"
                       required
                     />
-                    <SelectField id="new-grade-status" name="status" label="Status" value="pending">
-                      <option value="pending">Ausstehend</option>
-                      <option value="confirmed">Bestätigt</option>
-                      <option value="revoked">Widerrufen</option>
+                    <SelectField
+                      id="new-grade-status"
+                      name="status"
+                      label={t('Common.fields.status')}
+                      value="pending"
+                    >
+                      <option value="pending">{t('Common.status.pending')}</option>
+                      <option value="confirmed">{t('Common.status.confirmed')}</option>
+                      <option value="revoked">{t('Common.status.revoked')}</option>
                     </SelectField>
                     <TextField
                       id="new-grade-until"
                       name="validUntil"
-                      label="Gültig bis"
+                      label={t('Clients.detail.validUntil')}
                       type="date"
                     />
                     <TextField
                       id="new-grade-decision"
                       name="decisionDate"
-                      label="Entscheidungsdatum"
+                      label={t('Clients.detail.decisionDate')}
                       type="date"
                     />
                     <TextField
                       id="new-grade-reference"
                       name="insurerReference"
-                      label="Referenz des Versicherers"
+                      label={t('Clients.detail.insurerReference')}
                       maxLength={120}
                     />
                     <Button type="submit" className="w-fit md:col-span-3">
-                      Pflegegrad speichern
+                      {t('Clients.detail.saveCareLevel')}
                     </Button>
                   </form>
                 </details>
@@ -972,15 +1163,17 @@ export default async function ClientDetailPage({
           <section id="visits" aria-labelledby="visits-title" className="grid gap-4 scroll-mt-6">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 id="visits-title" className="text-xl font-semibold">
-                Kommende Einsätze
+                {t('Clients.detail.upcomingVisits')}
               </h2>
               <Button asChild variant="secondary" size="sm">
-                <Link href={`/planning?clientId=${client.id}`}>Im Kalender öffnen</Link>
+                <Link href={`/planning?clientId=${client.id}`}>
+                  {t('Clients.detail.openCalendar')}
+                </Link>
               </Button>
             </div>
             {upcomingVisitsResult.error ? (
               <p className="rounded-lg border bg-white p-4 text-sm text-slate-600">
-                Einsätze sind mit der aktuellen Berechtigung nicht verfügbar.
+                {t('Clients.detail.visitsUnavailable')}
               </p>
             ) : visitItems.length ? (
               <ol className="grid gap-2">
@@ -993,7 +1186,7 @@ export default async function ClientDetailPage({
                         href={`/visits/${visit.id}`}
                       >
                         <time dateTime={visit.plannedStart}>
-                          {formatVisitDateTime(visit.plannedStart, visit.timezone)}
+                          {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
                         </time>
                         <span>
                           <strong>
@@ -1004,38 +1197,42 @@ export default async function ClientDetailPage({
                               ? visit.assignments
                                   .map((assignment) => assignment.employeeDisplayName)
                                   .join(', ')
-                              : 'Noch nicht zugewiesen'}
+                              : t('Clients.detail.unassigned')}
                           </span>
                           {execution ? (
                             <span className="block text-sm text-slate-600">
-                              Ausführung:{' '}
+                              {t('Clients.detail.execution')}{' '}
                               {execution.executionStatus === 'completed'
-                                ? 'Abgeschlossen'
+                                ? t('Common.status.completed')
                                 : execution.executionStatus === 'in_progress'
-                                  ? 'In Bearbeitung'
-                                  : 'Noch nicht begonnen'}
+                                  ? t('Common.status.inProgress')
+                                  : t('VisitExecution.executionStatus.notStarted')}
                               {execution.actualStart ? (
                                 <>
-                                  {' · Tatsächlich '}
-                                  {formatVisitDateTime(execution.actualStart, visit.timezone)}
+                                  {` · ${t('Clients.detail.actual')} `}
+                                  {formatVisitDateTime(
+                                    execution.actualStart,
+                                    visit.timezone,
+                                    locale,
+                                  )}
                                   {execution.actualEnd
-                                    ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone)}`
+                                    ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone, locale)}`
                                     : ''}
                                 </>
                               ) : null}
                             </span>
                           ) : executionSummariesResult.error ? (
                             <span className="block text-sm text-slate-600">
-                              Ausführungsstatus nicht verfügbar.
+                              {t('Clients.detail.executionStatusUnavailable')}
                             </span>
                           ) : null}
                         </span>
                         <span className="text-sm">
                           {visit.status === 'cancelled'
-                            ? 'Abgesagt'
+                            ? t('Common.status.cancelled')
                             : visit.status === 'confirmed'
-                              ? 'Bestätigt'
-                              : 'Geplant'}
+                              ? t('Common.status.confirmed')
+                              : t('Common.status.planned')}
                         </span>
                       </Link>
                     </li>
@@ -1044,20 +1241,20 @@ export default async function ClientDetailPage({
               </ol>
             ) : (
               <p className="rounded-lg border bg-white p-4 text-slate-600">
-                Keine Einsätze in den nächsten 30 Tagen.
+                {t('Clients.detail.noUpcomingVisits')}
               </p>
             )}
             {recentVisitsResult.error ? (
               <p className="text-sm text-slate-600">
-                Vergangene Ausführungen sind nicht verfügbar.
+                {t('Clients.detail.pastExecutionsUnavailable')}
               </p>
             ) : recentExecutionSummariesResult.error ? (
               <p className="text-sm text-slate-600">
-                Ausführungsstatus vergangener Einsätze ist nicht verfügbar.
+                {t('Clients.detail.pastExecutionStatusUnavailable')}
               </p>
             ) : recentExecutionItems.length ? (
               <div className="grid gap-3">
-                <h3 className="font-semibold">Zuletzt ausgeführte Einsätze</h3>
+                <h3 className="font-semibold">{t('Clients.detail.recentVisits')}</h3>
                 <ol className="grid gap-2">
                   {recentExecutionItems.map((visit) => {
                     const execution = recentExecutionByVisitId.get(visit.id);
@@ -1069,21 +1266,21 @@ export default async function ClientDetailPage({
                           href={`/visits/${visit.id}`}
                         >
                           <time dateTime={visit.plannedStart}>
-                            {formatVisitDateTime(visit.plannedStart, visit.timezone)}
+                            {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
                           </time>
                           <strong>
                             {visit.services.map((service) => service.serviceName).join(' · ')}
                           </strong>
                           <span className="text-sm text-slate-600">
-                            Ausführung:{' '}
+                            {t('Clients.detail.execution')}{' '}
                             {execution.executionStatus === 'completed'
-                              ? 'Abgeschlossen'
-                              : 'In Bearbeitung'}
+                              ? t('Common.status.completed')
+                              : t('Common.status.inProgress')}
                             {execution.actualStart
-                              ? ` · Tatsächlich ${formatVisitDateTime(execution.actualStart, visit.timezone)}`
+                              ? ` · ${t('Clients.detail.actual')} ${formatVisitDateTime(execution.actualStart, visit.timezone, locale)}`
                               : ''}
                             {execution.actualEnd
-                              ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone)}`
+                              ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone, locale)}`
                               : ''}
                           </span>
                         </Link>
@@ -1096,13 +1293,15 @@ export default async function ClientDetailPage({
             {recentCancelledVisitsResult.data?.items.length ? (
               <details className="rounded-lg border bg-white p-4">
                 <summary className="cursor-pointer font-semibold">
-                  Kürzlich abgesagte Einsätze ({recentCancelledVisitsResult.data.items.length})
+                  {t('Clients.detail.recentlyCancelledVisits', {
+                    count: recentCancelledVisitsResult.data.items.length,
+                  })}
                 </summary>
                 <ul className="mt-3 grid gap-2">
                   {recentCancelledVisitsResult.data.items.map((visit) => (
                     <li key={visit.id}>
                       <Link className="text-blue-900 underline" href={`/visits/${visit.id}`}>
-                        {formatVisitDateTime(visit.plannedStart, visit.timezone)} ·{' '}
+                        {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)} ·{' '}
                         {visit.services.map((service) => service.serviceName).join(', ')}
                       </Link>
                     </li>
@@ -1112,28 +1311,44 @@ export default async function ClientDetailPage({
             ) : null}
           </section>
 
+          {canReviewClinicalHistory ? (
+            <ClinicalHistorySection
+              clientId={client.id}
+              locale={locale}
+              from={clinicalPeriod.from}
+              until={clinicalPeriod.until}
+              page={clinicalPage}
+              measurements={clinicalMeasurements}
+              observations={clinicalObservations}
+              assessments={clinicalAssessments}
+              riskHistory={clinicalRiskHistory}
+              currentRisksPage={clinicalCurrentRisks}
+              loadFailed={clinicalHistoryLoadFailed}
+            />
+          ) : null}
           <section
             id="timeline"
             aria-labelledby="timeline-title"
             className="grid gap-4 scroll-mt-6"
           >
             <h2 id="timeline-title" className="text-xl font-semibold">
-              Verlauf
+              {t('Clients.detail.timeline')}
             </h2>
             {timeline.length ? (
               <ol className="grid gap-3 border-l-2 border-blue-200 pl-5">
                 {timeline.map((entry) => (
                   <li key={entry.id} className="rounded-lg border bg-white p-4">
-                    <p className="font-medium">{entry.summary}</p>
+                    <p className="font-medium">{t(auditActionKey(entry.action))}</p>
                     <p className="mt-1 text-sm text-slate-600">
-                      {formatDateTime(entry.occurredAt)} · Bearbeitet von {entry.actorId}
+                      {formatDateTime(entry.occurredAt, locale)} ·{' '}
+                      {t('Clients.detail.editedBy', { actor: entry.actorId })}
                     </p>
                   </li>
                 ))}
               </ol>
             ) : (
               <p className="rounded-lg border bg-white p-5 text-slate-700">
-                Noch keine Verlaufseinträge.
+                {t('Clients.detail.noTimeline')}
               </p>
             )}
           </section>
@@ -1143,7 +1358,7 @@ export default async function ClientDetailPage({
   );
 }
 
-function AddressForm({
+async function AddressForm({
   action,
   clientId,
   idPrefix,
@@ -1152,87 +1367,125 @@ function AddressForm({
   clientId: string;
   idPrefix: string;
 }) {
+  const t = await getTranslations();
   return (
     <form action={action} className="mt-4 grid gap-4">
       <input type="hidden" name="id" value={clientId} />
       <div className="grid gap-4 md:grid-cols-3">
-        <SelectField id={`${idPrefix}-type`} name="addressType" label="Art" value="home">
-          <option value="home">Wohnadresse</option>
-          <option value="billing">Rechnungsadresse</option>
-          <option value="other">Weitere Adresse</option>
+        <SelectField
+          id={`${idPrefix}-type`}
+          name="addressType"
+          label={t('Clients.detail.addressType')}
+          value="home"
+        >
+          <option value="home">{t('Clients.detail.addressTypes.home')}</option>
+          <option value="billing">{t('Clients.detail.addressTypes.billing')}</option>
+          <option value="other">{t('Clients.detail.addressTypes.other')}</option>
         </SelectField>
-        <TextField id={`${idPrefix}-street`} name="street" label="Straße" required />
-        <TextField id={`${idPrefix}-house`} name="houseNumber" label="Hausnummer" />
-        <TextField id={`${idPrefix}-addition`} name="addressAddition" label="Adresszusatz" />
-        <TextField id={`${idPrefix}-postal`} name="postalCode" label="Postleitzahl" />
-        <TextField id={`${idPrefix}-city`} name="city" label="Ort" required />
+        <TextField
+          id={`${idPrefix}-street`}
+          name="street"
+          label={t('Clients.form.street')}
+          required
+        />
+        <TextField
+          id={`${idPrefix}-house`}
+          name="houseNumber"
+          label={t('Clients.form.houseNumber')}
+        />
+        <TextField
+          id={`${idPrefix}-addition`}
+          name="addressAddition"
+          label={t('Clients.form.addressAddition')}
+        />
+        <TextField
+          id={`${idPrefix}-postal`}
+          name="postalCode"
+          label={t('Clients.form.postalCode')}
+        />
+        <TextField id={`${idPrefix}-city`} name="city" label={t('Clients.form.city')} required />
         <TextField
           id={`${idPrefix}-country`}
           name="countryCode"
-          label="Ländercode"
+          label={t('Clients.form.countryCode')}
           defaultValue="DE"
           maxLength={2}
         />
-        <TextField id={`${idPrefix}-from`} name="validFrom" label="Gültig ab" type="date" />
-        <TextField id={`${idPrefix}-until`} name="validUntil" label="Gültig bis" type="date" />
+        <TextField
+          id={`${idPrefix}-from`}
+          name="validFrom"
+          label={t('Clients.detail.validFrom')}
+          type="date"
+        />
+        <TextField
+          id={`${idPrefix}-until`}
+          name="validUntil"
+          label={t('Clients.detail.validUntil')}
+          type="date"
+        />
       </div>
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="isPrimary" /> Als primäre Adresse verwenden
+        <input type="checkbox" name="isPrimary" /> {t('Clients.detail.primaryAddressCheckbox')}
       </label>
       <Button type="submit" className="w-fit">
-        Adresse hinzufügen
+        {t('Clients.detail.addAddress')}
       </Button>
     </form>
   );
 }
 
-function RoleChecks({ selected }: { selected: readonly string[] }) {
+async function RoleChecks({ selected }: { selected: readonly string[] }) {
+  const t = await getTranslations();
   return (
     <fieldset className="grid gap-2">
-      <legend className="text-sm font-medium">Kontaktrollen</legend>
+      <legend className="text-sm font-medium">{t('Clients.detail.contactRolesTitle')}</legend>
       <div className="flex flex-wrap gap-x-5 gap-y-2">
-        {(Object.entries(contactRoleLabels) as Array<[keyof typeof contactRoleLabels, string]>).map(
-          ([role, label]) => (
-            <label key={role} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                name="roles"
-                value={role}
-                defaultChecked={selected.includes(role)}
-              />{' '}
-              {label}
-            </label>
-          ),
-        )}
+        {(
+          Object.entries(contactRoleKeys) as Array<
+            [keyof typeof contactRoleKeys, (typeof contactRoleKeys)[keyof typeof contactRoleKeys]]
+          >
+        ).map(([role, key]) => (
+          <label key={role} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="roles"
+              value={role}
+              defaultChecked={selected.includes(role)}
+            />{' '}
+            {t(key)}
+          </label>
+        ))}
       </div>
-      <span className="text-sm text-slate-600">
-        Haupt- und Notfallkontakt werden je Klient eindeutig gehalten.
-      </span>
+      <span className="text-sm text-slate-600">{t('Clients.detail.roleUniqueness')}</span>
     </fieldset>
   );
 }
 
-function RelationshipOptions() {
+async function RelationshipOptions() {
+  const t = await getTranslations();
   return (
     <>
-      <option value="daughter">Tochter</option>
-      <option value="son">Sohn</option>
-      <option value="spouse">Ehepartner/in</option>
-      <option value="relative">Angehörige/r</option>
-      <option value="legal_representative">Gesetzliche Vertretung</option>
-      <option value="guardian">Betreuer/in</option>
-      <option value="other">Sonstige</option>
+      <option value="daughter">{t('Clients.detail.relationships.daughter')}</option>
+      <option value="son">{t('Clients.detail.relationships.son')}</option>
+      <option value="spouse">{t('Clients.detail.relationships.spouse')}</option>
+      <option value="relative">{t('Clients.detail.relationships.relative')}</option>
+      <option value="legal_representative">
+        {t('Clients.detail.relationships.legalRepresentative')}
+      </option>
+      <option value="guardian">{t('Clients.detail.relationships.guardian')}</option>
+      <option value="other">{t('Clients.detail.relationships.other')}</option>
     </>
   );
 }
 
-function InsuranceOptions() {
+async function InsuranceOptions() {
+  const t = await getTranslations();
   return (
     <>
-      <option value="pflegeversicherung">Pflegeversicherung</option>
-      <option value="krankenversicherung">Krankenversicherung</option>
-      <option value="private">Privat</option>
-      <option value="other">Sonstige</option>
+      <option value="pflegeversicherung">{t('Clients.detail.insuranceTypes.care')}</option>
+      <option value="krankenversicherung">{t('Clients.detail.insuranceTypes.health')}</option>
+      <option value="private">{t('Clients.detail.insuranceTypes.private')}</option>
+      <option value="other">{t('Clients.detail.insuranceTypes.other')}</option>
     </>
   );
 }
@@ -1323,27 +1576,6 @@ function SectionLink({ href, children }: { href: string; children: React.ReactNo
   );
 }
 
-function formatDate(value: string | null): string | null {
-  if (!value) return null;
-  return new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeZone: 'UTC' }).format(
-    new Date(`${value}T00:00:00.000Z`),
-  );
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(value),
-  );
-}
-
-function formatVisitDateTime(value: string, timeZone: string): string {
-  return new Intl.DateTimeFormat('de-DE', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone,
-  }).format(new Date(value));
-}
-
 function formatAddress(address: {
   street: string;
   houseNumber: string | null;
@@ -1373,60 +1605,97 @@ function clientVisitRange(): { visitNow: Date; visitFuture: Date; visitRecent: D
   };
 }
 
-function genderLabel(value: string | null): string | null {
+function genderKey(
+  value: string,
+):
+  | 'Clients.form.female'
+  | 'Clients.form.male'
+  | 'Clients.form.diverse'
+  | 'Clients.form.notSpecified' {
   return value === 'female'
-    ? 'Weiblich'
+    ? 'Clients.form.female'
     : value === 'male'
-      ? 'Männlich'
+      ? 'Clients.form.male'
       : value === 'diverse'
-        ? 'Divers'
-        : null;
+        ? 'Clients.form.diverse'
+        : 'Clients.form.notSpecified';
 }
 
-function salutationLabel(value: string | null): string | null {
+function salutationKey(
+  value: string,
+):
+  | 'Clients.form.mr'
+  | 'Clients.form.ms'
+  | 'Clients.form.mx'
+  | 'Clients.form.other'
+  | 'Clients.form.notSpecified' {
   return value === 'mr'
-    ? 'Herr'
+    ? 'Clients.form.mr'
     : value === 'ms'
-      ? 'Frau'
+      ? 'Clients.form.ms'
       : value === 'mx'
-        ? 'Mx'
+        ? 'Clients.form.mx'
         : value === 'other'
-          ? 'Andere'
-          : null;
+          ? 'Clients.form.other'
+          : 'Clients.form.notSpecified';
 }
 
-function addressTypeLabel(value: string): string {
+function addressTypeKey(
+  value: string,
+):
+  | 'Clients.detail.addressTypes.home'
+  | 'Clients.detail.addressTypes.billing'
+  | 'Clients.detail.addressTypes.other' {
   return value === 'home'
-    ? 'Wohnadresse'
+    ? 'Clients.detail.addressTypes.home'
     : value === 'billing'
-      ? 'Rechnungsadresse'
-      : 'Weitere Adresse';
+      ? 'Clients.detail.addressTypes.billing'
+      : 'Clients.detail.addressTypes.other';
 }
 
-function relationshipLabel(value: string): string {
+function relationshipKey(
+  value: string,
+):
+  | 'Clients.detail.relationships.daughter'
+  | 'Clients.detail.relationships.son'
+  | 'Clients.detail.relationships.spouse'
+  | 'Clients.detail.relationships.relative'
+  | 'Clients.detail.relationships.legalRepresentative'
+  | 'Clients.detail.relationships.guardian'
+  | 'Clients.detail.relationships.other' {
   return value === 'daughter'
-    ? 'Tochter'
+    ? 'Clients.detail.relationships.daughter'
     : value === 'son'
-      ? 'Sohn'
+      ? 'Clients.detail.relationships.son'
       : value === 'spouse'
-        ? 'Ehepartner/in'
+        ? 'Clients.detail.relationships.spouse'
         : value === 'relative'
-          ? 'Angehörige/r'
+          ? 'Clients.detail.relationships.relative'
           : value === 'legal_representative'
-            ? 'Gesetzliche Vertretung'
+            ? 'Clients.detail.relationships.legalRepresentative'
             : value === 'guardian'
-              ? 'Betreuer/in'
-              : 'Sonstige';
+              ? 'Clients.detail.relationships.guardian'
+              : 'Clients.detail.relationships.other';
 }
 
-function pflegegradStatusLabel(value: string): string {
-  return value === 'confirmed' ? 'Bestätigt' : value === 'pending' ? 'Ausstehend' : 'Widerrufen';
+function organizationName(
+  items: Array<{ id: string; name: string }>,
+  id: string,
+  fallback: string,
+): string {
+  return items.find((item) => item.id === id)?.name ?? fallback;
 }
 
-function organizationName(items: Array<{ id: string; name: string }>, id: string): string {
-  return items.find((item) => item.id === id)?.name ?? 'Unbekannte Organisation';
+function facilityName(
+  items: Array<{ id: string; name: string }>,
+  id: string,
+  fallback: string,
+): string {
+  return items.find((item) => item.id === id)?.name ?? fallback;
 }
 
-function facilityName(items: Array<{ id: string; name: string }>, id: string): string {
-  return items.find((item) => item.id === id)?.name ?? 'Unbekannte Einrichtung';
+function parseClinicalPage(value: string | undefined): number {
+  if (!value || !/^\d+$/.test(value)) return 1;
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page > 0 && page <= 10_000 ? page : 1;
 }

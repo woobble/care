@@ -35,55 +35,58 @@ import { ClientRepository } from '../infrastructure/persistence/client.repositor
 
 type AuditContext = { ip?: string; userAgent?: string };
 
-const TIMELINE_SUMMARIES: Record<string, string> = {
-  'client.created': 'Klient angelegt',
-  'client.updated': 'Stammdaten aktualisiert',
-  'client.activated': 'Klient aktiviert',
-  'client.archived': 'Klient archiviert',
-  'client.provider_context_changed': 'Versorgerkontext geändert',
-  'client.address_added': 'Adresse hinzugefügt',
-  'client.address_updated': 'Adresse geändert',
-  'client.address_removed': 'Adresse entfernt',
-  'client.contact_added': 'Kontakt hinzugefügt',
-  'client.contact_updated': 'Kontakt geändert',
-  'client.contact_removed': 'Kontakt entfernt',
-  'client.insurance_added': 'Versicherungsverhältnis hinzugefügt',
-  'client.insurance_updated': 'Versicherungsverhältnis geändert',
-  'client.pflegegrad_added': 'Pflegegradverlauf ergänzt',
-  'client.pflegegrad_updated': 'Pflegegradverlauf aktualisiert',
-  'service_agreement.created': 'Leistungsplanung angelegt',
-  'service_agreement.updated': 'Leistungsplanung geändert',
-  'service_agreement.activated': 'Leistungsplanung aktiviert',
-  'service_agreement.suspended': 'Leistungsplanung pausiert',
-  'service_agreement.resumed': 'Leistungsplanung fortgesetzt',
-  'service_agreement.ended': 'Leistungsplanung beendet',
-  'service_agreement.service_added': 'Leistung zur Planung hinzugefügt',
-  'service_agreement.service_updated': 'Geplante Leistung geändert',
-  'service_agreement.service_ended': 'Geplante Leistung beendet',
-  'visit.created': 'Einsatz geplant',
-  'visit.generated': 'Einsatz aus Leistungsplanung erzeugt',
-  'visit.rescheduled': 'Einsatz umgeplant',
-  'visit.confirmed': 'Einsatz bestätigt',
-  'visit.unconfirmed': 'Einsatzbestätigung zurückgenommen',
-  'visit.cancelled': 'Einsatz abgesagt',
-  'visit_execution.started': 'Einsatz begonnen',
-  'visit_execution.completed': 'Einsatz abgeschlossen',
-  'care_documentation.finalized': 'Besuchsdokumentation abgeschlossen',
-  'incident.recorded': 'Vorfall dokumentiert',
-  'care_documentation.amended': 'Besuchsdokumentation ergänzt',
-  'evidence_package.created': 'Leistungsnachweis erstellt',
-  'evidence_package.superseded': 'Leistungsbestätigung ersetzt',
-  'acknowledgement.created': 'Leistungsnachweis bestätigt',
-  'acknowledgement.declined': 'Leistungsnachweis nicht bestätigt',
-  'acknowledgement.revoked': 'Leistungsbestätigung widerrufen',
-};
+const TIMELINE_ACTIONS = [
+  'client.created',
+  'client.updated',
+  'client.activated',
+  'client.archived',
+  'client.provider_context_changed',
+  'client.address_added',
+  'client.address_updated',
+  'client.address_removed',
+  'client.contact_added',
+  'client.contact_updated',
+  'client.contact_removed',
+  'client.insurance_added',
+  'client.insurance_updated',
+  'client.pflegegrad_added',
+  'client.pflegegrad_updated',
+  'service_agreement.created',
+  'service_agreement.updated',
+  'service_agreement.activated',
+  'service_agreement.suspended',
+  'service_agreement.resumed',
+  'service_agreement.ended',
+  'service_agreement.service_added',
+  'service_agreement.service_updated',
+  'service_agreement.service_ended',
+  'visit.created',
+  'visit.generated',
+  'visit.rescheduled',
+  'visit.confirmed',
+  'visit.unconfirmed',
+  'visit.cancelled',
+  'visit_execution.started',
+  'visit_execution.completed',
+  'care_documentation.finalized',
+  'incident.recorded',
+  'care_documentation.amended',
+  'care_plan.created',
+  'care_plan.revision_activated',
+  'care_plan.evaluated',
+  'care_plan.ended',
+  'evidence_package.created',
+  'evidence_package.superseded',
+  'acknowledgement.created',
+  'acknowledgement.declined',
+  'acknowledgement.revoked',
+] as const;
 
 export interface ClientTimelineEntry {
   id: string;
   occurredAt: string;
   actorId: string;
   action: string;
-  summary: string;
 }
 
 export class ClientMasterDataApplicationService {
@@ -619,14 +622,13 @@ export class ClientMasterDataApplicationService {
         principal.tenantId,
         clientId,
         100,
-        Object.keys(TIMELINE_SUMMARIES),
+        TIMELINE_ACTIONS,
       );
       return records.reverse().map((record) => ({
         id: record.id,
         occurredAt: record.timestamp.toISOString(),
         actorId: record.actorId,
         action: record.action,
-        summary: timelineSummary(record.action),
       }));
     });
   }
@@ -985,10 +987,6 @@ function periodsOverlap(left: PflegegradSnapshot, right: PflegegradSnapshot): bo
 
 function today(date: Date): string {
   return date.toISOString().slice(0, 10);
-}
-
-function timelineSummary(action: string): string {
-  return TIMELINE_SUMMARIES[action] ?? 'Klientenstammdaten geändert';
 }
 
 export function createClientMasterDataApplicationService(

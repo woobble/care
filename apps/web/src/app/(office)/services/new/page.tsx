@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
 import {
   getApiClient,
@@ -12,6 +13,7 @@ import { createServiceAction } from '../actions';
 export default async function NewServicePage({
   searchParams,
 }: Readonly<{ searchParams: Promise<{ error?: string }> }>) {
+  const t = await getTranslations();
   const params = await searchParams;
   const api = await getApiClient();
   const header = await getTenantHeader();
@@ -28,22 +30,19 @@ export default async function NewServicePage({
     <div className="mx-auto grid max-w-3xl gap-6">
       <header className="grid gap-1">
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/services">Leistungskatalog</Link>
+          <Link href="/services">{t('Services.catalogTitle')}</Link>
         </p>
-        <h1 className="text-3xl font-semibold">Leistung anlegen</h1>
-        <p className="text-slate-700">
-          Preisangaben und Abrechnung gehören nicht zum Leistungskatalog.
-        </p>
+        <h1 className="text-3xl font-semibold">{t('Services.create')}</h1>
+        <p className="text-slate-700">{t('Services.form.newDescription')}</p>
       </header>
       {params.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-          Leistung konnte nicht gespeichert werden ({params.error}). Bitte Eingaben und Kategorie
-          prüfen.
+          {t('Services.form.saveFailed')}
         </p>
       ) : null}
       {error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-          Kategorien konnten nicht geladen werden ({error.code}).
+          {t('Errors.generic')}
         </p>
       ) : null}
       <form
@@ -51,26 +50,31 @@ export default async function NewServicePage({
         className="grid gap-5 rounded-lg border bg-white p-5 shadow-sm"
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <Field id="code" name="code" label="Code" required maxLength={64} />
-          <Field id="name" name="name" label="Name" required maxLength={160} />
-          <SelectField id="categoryId" name="categoryId" label="Kategorie" required>
-            <option value="">Kategorie auswählen</option>
+          <Field id="code" name="code" label={t('Services.form.code')} required maxLength={64} />
+          <Field id="name" name="name" label={t('Services.form.name')} required maxLength={160} />
+          <SelectField
+            id="categoryId"
+            name="categoryId"
+            label={t('Services.form.category')}
+            required
+          >
+            <option value="">{t('Services.form.selectCategory')}</option>
             {(categories ?? []).map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
               </option>
             ))}
           </SelectField>
-          <SelectField id="unit" name="unit" label="Einheit" required>
-            <option value="occurrence">Einsatz</option>
-            <option value="minute">Minute</option>
-            <option value="hour">Stunde</option>
-            <option value="day">Tag</option>
+          <SelectField id="unit" name="unit" label={t('Services.form.unit')} required>
+            <option value="occurrence">{t('Common.units.occurrence')}</option>
+            <option value="minute">{t('Common.units.minute')}</option>
+            <option value="hour">{t('Common.units.hour')}</option>
+            <option value="day">{t('Common.units.day')}</option>
           </SelectField>
           <Field
             id="defaultDurationMinutes"
             name="defaultDurationMinutes"
-            label="Standarddauer in Minuten (optional)"
+            label={t('Services.form.defaultDuration')}
             type="number"
             min={1}
             max={1440}
@@ -78,14 +82,19 @@ export default async function NewServicePage({
           <Field
             id="validFrom"
             name="validFrom"
-            label="Gültig ab"
+            label={t('Services.form.validFrom')}
             type="date"
             defaultValue={today()}
             required
           />
-          <Field id="validUntil" name="validUntil" label="Gültig bis (optional)" type="date" />
+          <Field
+            id="validUntil"
+            name="validUntil"
+            label={t('Services.form.validUntilOptional')}
+            type="date"
+          />
           <label className="grid gap-2 md:col-span-2">
-            <Label htmlFor="description">Beschreibung (optional)</Label>
+            <Label htmlFor="description">{t('Services.form.descriptionOptional')}</Label>
             <textarea
               id="description"
               name="description"
@@ -94,15 +103,13 @@ export default async function NewServicePage({
             />
           </label>
         </div>
-        <p className="text-sm text-slate-600">
-          Die organisatorische Verfügbarkeit wird nach dem Anlegen festgelegt.
-        </p>
+        <p className="text-sm text-slate-600">{t('Services.form.availabilityAfterCreate')}</p>
         <div className="flex flex-wrap gap-3">
           <Button type="submit" disabled={!categories?.length}>
-            Leistung anlegen
+            {t('Services.create')}
           </Button>
           <Button asChild variant="secondary">
-            <Link href="/services">Abbrechen</Link>
+            <Link href="/services">{t('Common.actions.cancel')}</Link>
           </Button>
         </div>
       </form>

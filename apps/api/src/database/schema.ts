@@ -9,6 +9,8 @@ import { serviceAgreementsSchema } from '@care/service-agreements';
 import { schedulingSchema } from '@care/scheduling';
 import { visitExecutionSchema } from '@care/visit-execution';
 import { careDocumentationSchema } from '@care/care-documentation';
+import { clinicalDocumentationSchema } from '@care/clinical-documentation';
+import { carePlanningSchema } from '@care/care-planning';
 import { serviceEvidenceSchema } from '@care/service-evidence';
 
 export const databaseSchema = {
@@ -21,6 +23,8 @@ export const databaseSchema = {
   ...schedulingSchema,
   ...visitExecutionSchema,
   ...careDocumentationSchema,
+  ...clinicalDocumentationSchema,
+  ...carePlanningSchema,
   ...serviceEvidenceSchema,
   ...auditSchema,
   ...platformSchema,

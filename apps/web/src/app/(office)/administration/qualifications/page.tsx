@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
+import { statusLabelKey } from '../../../../i18n/status';
 import { getApiClient, getTenantHeader } from '../../../../lib/api';
 import { ActionNotice } from '../action-notice';
 import { ConfirmSubmitButton } from '../confirm-submit-button';
@@ -26,6 +28,7 @@ export default async function QualificationsPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
+  const t = await getTranslations();
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
@@ -37,39 +40,49 @@ export default async function QualificationsPage({
     <div className="grid gap-8">
       <header className="grid gap-1">
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration">Administration</Link>
+          <Link href="/administration">{t('Organizations.section')}</Link>
         </p>
-        <h1 className="text-3xl font-semibold">Qualifications &amp; skills</h1>
-        <p className="text-slate-700">
-          Manage reusable qualification and skill definitions for this tenant.
-        </p>
+        <h1 className="text-3xl font-semibold">{t('Qualifications.title')}</h1>
+        <p className="text-slate-700">{t('Qualifications.description')}</p>
       </header>
       <ActionNotice error={query.error} updated={query.updated} />
       {qualificationsResult.error || skillsResult.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-          Definitions could not be loaded (
-          {qualificationsResult.error?.code || skillsResult.error?.code}).
+          {t('Qualifications.loadFailed')}
         </p>
       ) : null}
       <section aria-labelledby="qualifications-title" className="grid gap-4">
         <h2 id="qualifications-title" className="text-xl font-semibold">
-          Qualifications
+          {t('Qualifications.qualificationsTitle')}
         </h2>
         <form
           action={createQualificationAction}
           className="grid gap-4 rounded-lg border bg-white p-5 md:grid-cols-3"
         >
-          <h3 className="text-lg font-medium md:col-span-3">Create qualification</h3>
-          <Field id="qualification-name" name="name" label="Name" required maxLength={160} />
-          <Field id="qualification-code" name="code" label="Code" maxLength={40} />
+          <h3 className="text-lg font-medium md:col-span-3">
+            {t('Qualifications.createQualification')}
+          </h3>
+          <Field
+            id="qualification-name"
+            name="name"
+            label={t('Common.fields.name')}
+            required
+            maxLength={160}
+          />
+          <Field
+            id="qualification-code"
+            name="code"
+            label={t('Common.fields.code')}
+            maxLength={40}
+          />
           <Field
             id="qualification-description"
             name="description"
-            label="Description"
+            label={t('Common.fields.description')}
             maxLength={1000}
           />
           <div className="md:col-span-3">
-            <Button type="submit">Create qualification</Button>
+            <Button type="submit">{t('Qualifications.createQualification')}</Button>
           </div>
         </form>
         {qualificationsResult.data?.length ? (
@@ -86,24 +99,35 @@ export default async function QualificationsPage({
           </div>
         ) : (
           <p className="rounded-lg border bg-white p-5 text-slate-700">
-            No qualifications defined.
+            {t('Qualifications.noQualifications')}
           </p>
         )}
       </section>
       <section aria-labelledby="skills-title" className="grid gap-4">
         <h2 id="skills-title" className="text-xl font-semibold">
-          Skills
+          {t('Qualifications.skillsTitle')}
         </h2>
         <form
           action={createSkillAction}
           className="grid gap-4 rounded-lg border bg-white p-5 md:grid-cols-3"
         >
-          <h3 className="text-lg font-medium md:col-span-3">Create skill</h3>
-          <Field id="skill-name" name="name" label="Name" required maxLength={160} />
-          <Field id="skill-code" name="code" label="Code" maxLength={40} />
-          <Field id="skill-description" name="description" label="Description" maxLength={1000} />
+          <h3 className="text-lg font-medium md:col-span-3">{t('Qualifications.createSkill')}</h3>
+          <Field
+            id="skill-name"
+            name="name"
+            label={t('Common.fields.name')}
+            required
+            maxLength={160}
+          />
+          <Field id="skill-code" name="code" label={t('Common.fields.code')} maxLength={40} />
+          <Field
+            id="skill-description"
+            name="description"
+            label={t('Common.fields.description')}
+            maxLength={1000}
+          />
           <div className="md:col-span-3">
-            <Button type="submit">Create skill</Button>
+            <Button type="submit">{t('Qualifications.createSkill')}</Button>
           </div>
         </form>
         {skillsResult.data?.length ? (
@@ -119,14 +143,16 @@ export default async function QualificationsPage({
             ))}
           </div>
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">No skills defined.</p>
+          <p className="rounded-lg border bg-white p-5 text-slate-700">
+            {t('Qualifications.noSkills')}
+          </p>
         )}
       </section>
     </div>
   );
 }
 
-function DefinitionCard({
+async function DefinitionCard({
   definition,
   updateAction,
   archiveAction,
@@ -137,6 +163,15 @@ function DefinitionCard({
   archiveAction: FormAction;
   noun: 'qualification' | 'skill';
 }>) {
+  const t = await getTranslations();
+  const typeLabel =
+    noun === 'qualification'
+      ? t('Qualifications.types.qualification')
+      : t('Qualifications.types.skill');
+  const archiveConfirmation =
+    noun === 'qualification'
+      ? t('Qualifications.archiveQualificationConfirmation')
+      : t('Qualifications.archiveSkillConfirmation');
   return (
     <article className="grid gap-3 rounded-lg border bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -149,7 +184,7 @@ function DefinitionCard({
             <p className="text-sm text-slate-600">{definition.description}</p>
           ) : null}
         </div>
-        <StatusBadge status={definition.status} />
+        <StatusBadge status={definition.status} label={t(statusLabelKey(definition.status))} />
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         <form action={updateAction} className="grid gap-3 md:col-span-3 md:grid-cols-3">
@@ -157,7 +192,7 @@ function DefinitionCard({
           <Field
             id={`${noun}-name-${definition.id}`}
             name="name"
-            label="Name"
+            label={t('Common.fields.name')}
             defaultValue={definition.name}
             required
             maxLength={160}
@@ -165,28 +200,28 @@ function DefinitionCard({
           <Field
             id={`${noun}-code-${definition.id}`}
             name="code"
-            label="Code"
+            label={t('Common.fields.code')}
             defaultValue={definition.code ?? ''}
             maxLength={40}
           />
           <Field
             id={`${noun}-description-${definition.id}`}
             name="description"
-            label="Description"
+            label={t('Common.fields.description')}
             defaultValue={definition.description ?? ''}
             maxLength={1000}
           />
           <div className="md:col-span-3">
             <Button type="submit" variant="secondary" disabled={definition.status === 'archived'}>
-              Save changes
+              {t('Qualifications.save')}
             </Button>
           </div>
         </form>
         {definition.status === 'active' ? (
           <form action={archiveAction}>
             <input type="hidden" name="id" value={definition.id} />
-            <ConfirmSubmitButton confirmation={`Archive this ${noun}?`}>
-              Archive
+            <ConfirmSubmitButton confirmation={archiveConfirmation}>
+              {t('Qualifications.archive')} {typeLabel}
             </ConfirmSubmitButton>
           </form>
         ) : null}

@@ -30,6 +30,8 @@ test('Authentik users can be invited and administered from the office UI', async
   const caregiverEmail = `${caregiverUsername}@example.test`;
   const caregiverPassword = `Aa1!${uuidv7()}`;
   const executionMarker = `execution-note-${runId}`;
+  const carePlanMeasureTitle = `Fall-safe transfer support ${runId}`;
+  const carePlanNeedTitle = `Mobility support ${runId}`;
   let authentikUserId: number | undefined;
   let invitedAuthentikUserId: number | undefined;
   let caregiverAuthentikUserId: number | undefined;
@@ -59,12 +61,27 @@ test('Authentik users can be invited and administered from the office UI', async
   const workforceFacilityName = `E2E Facility ${runId}`;
   const workforceTeamName = `E2E Team ${runId}`;
   const workforcePersonnelNumber = `E2E-${runId}`;
+  const carePlanAuthorPersonnelNumber = `E2E-PLAN-${runId}`;
   let invitedContext: BrowserContext | undefined;
   let caregiverContext: BrowserContext | undefined;
 
   await database.connect();
   try {
     await waitForAuthentik(authentikOrigin, issuer);
+    await page.goto('/');
+    expect((await page.context().cookies()).some((cookie) => cookie.name === 'CARE_LOCALE')).toBe(
+      false,
+    );
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+    await page.getByRole('combobox', { name: 'Language' }).selectOption('de');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+    await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('combobox', { name: 'Sprache' })).toHaveValue('de');
+    await page.getByRole('combobox', { name: 'Sprache' }).selectOption('en');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+
     const createdUser = await createAuthentikUser(authentikOrigin, apiToken, {
       username,
       name: displayName,
@@ -75,7 +92,7 @@ test('Authentik users can be invited and administered from the office UI', async
     subject = createdUser.uuid;
     await signInWithAuthentik(page, username, password);
     await expect(
-      page.getByText('Ihr Benutzerkonto hat noch keinen aktiven Mandantenzugriff.'),
+      page.getByText('Your account does not have access to an active organization.'),
     ).toBeVisible();
 
     const provisioned = await waitForPlatformUser(database, issuer, subject);
@@ -117,69 +134,79 @@ test('Authentik users can be invited and administered from the office UI', async
     }
 
     await page.reload();
-    await page.getByLabel('Mandant').selectOption(tenantId);
-    await page.getByRole('button', { name: 'Weiter' }).click();
+    await page.locator('select[name="tenantId"]').selectOption(tenantId);
+    await page.getByRole('button', { name: 'Continue' }).click();
     await expect(page).toHaveURL(/\/clients$/);
+    await page.goto('/clients?localeCheck=1');
+    await expect(page).toHaveURL(/\/clients\?localeCheck=1$/);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible();
+    await page.getByRole('combobox', { name: 'Language' }).selectOption('de');
+    await expect(page).toHaveURL(/\/clients\?localeCheck=1$/);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'de');
     await expect(
       page.getByRole('heading', { name: 'Klientinnen und Klienten', exact: true }),
     ).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('combobox', { name: 'Sprache' })).toHaveValue('de');
+    await page.getByRole('combobox', { name: 'Sprache' }).selectOption('en');
+    await expect(page).toHaveURL(/\/clients\?localeCheck=1$/);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible();
 
-    await page.getByRole('link', { name: 'Klient anlegen' }).click();
+    await page.getByRole('link', { name: 'Create client' }).click();
     await expect(page).toHaveURL(/\/clients\/new$/);
     await page.locator('#firstName').fill('E2E');
     await page.locator('#lastName').fill(runId);
-    await page.getByLabel('Organisation').selectOption({ label: 'Demo Pflegedienst' });
-    await page.getByLabel('Primäre Einrichtung').selectOption({ label: 'Facility West' });
-    await page.getByRole('button', { name: 'Klient anlegen' }).click();
+    await page.getByLabel('Organization').selectOption({ label: 'Demo Pflegedienst' });
+    await page.getByLabel('Primary facility').selectOption({ label: 'Facility West' });
+    await page.getByRole('button', { name: 'Create client' }).click();
     await expect(page.getByRole('heading', { name: `E2E ${runId}` })).toBeVisible();
     clientId = new URL(page.url()).pathname.split('/').at(-1);
-    await expect(page.locator('span').filter({ hasText: /^Ausstehend$/ })).toBeVisible();
+    await expect(page.locator('span').filter({ hasText: /^Pending$/ })).toBeVisible();
 
-    await page.locator('summary').filter({ hasText: 'Adresse hinzufügen' }).click();
+    await page.locator('summary').filter({ hasText: 'Add address' }).click();
     await page.locator('#new-address-street').fill(`E2E Street ${runId}`);
     await page.locator('#new-address-house').fill('12');
     await page.locator('#new-address-postal').fill('10115');
     await page.locator('#new-address-city').fill('Berlin');
-    const addressForm = page
-      .locator('details')
-      .filter({ hasText: 'Adresse hinzufügen' })
-      .locator('form');
+    const addressForm = page.locator('details').filter({ hasText: 'Add address' }).locator('form');
     await addressForm.locator('input[name="isPrimary"]').check();
-    await addressForm.getByRole('button', { name: 'Adresse hinzufügen' }).click();
-    await expect(page.getByRole('heading', { name: 'Wohnadresse · Primär' })).toBeVisible();
+    await addressForm.getByRole('button', { name: 'Add address' }).click();
+    await expect(page.getByRole('heading', { name: 'Home address · Primary' })).toBeVisible();
 
-    await page.locator('summary').filter({ hasText: 'Kontakt hinzufügen' }).click();
+    await page.locator('summary').filter({ hasText: 'Add contact' }).click();
     await page.locator('#new-contact-first').fill('E2E');
     await page.locator('#new-contact-last').fill('Kontakt');
     await page.locator('input[name="roles"][value="primary_contact"]').check();
     await page.locator('input[name="roles"][value="emergency_contact"]').check();
-    await page.getByRole('button', { name: 'Kontakt hinzufügen' }).click();
+    await page.getByRole('button', { name: 'Add contact' }).click();
     await expect(page.getByRole('heading', { name: 'E2E Kontakt' })).toBeVisible();
-    await expect(page.getByRole('checkbox', { name: 'Notfallkontakt' })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Emergency contact' })).toBeChecked();
 
-    await page.locator('summary').filter({ hasText: 'Versicherungsverhältnis hinzufügen' }).click();
+    await page.locator('summary').filter({ hasText: 'Add insurance relationship' }).click();
     const insuranceForm = page
       .locator('details')
-      .filter({ hasText: 'Versicherungsverhältnis hinzufügen' })
+      .filter({ hasText: 'Add insurance relationship' })
       .locator('form');
     await insuranceForm.locator('#new-insurer-name').fill('E2E Demo Insurance');
     await insuranceForm.locator('#new-insurance-number').fill(`E2E-PRIVATE-${runId}`);
     await insuranceForm.locator('input[name="isPrimary"]').check();
-    await insuranceForm.getByRole('button', { name: 'Versicherung hinzufügen' }).click();
-    await expect(page.getByRole('heading', { name: 'E2E Demo Insurance · Primär' })).toBeVisible();
+    await insuranceForm.getByRole('button').click();
+    await expect(page.getByRole('heading', { name: 'E2E Demo Insurance · Primary' })).toBeVisible();
 
-    await page.locator('summary').filter({ hasText: 'Pflegegrad ergänzen' }).click();
+    await page.locator('summary').filter({ hasText: 'Add care level record' }).click();
     await page.locator('#new-grade').fill('3');
     await page.locator('#new-grade-from').fill('2000-01-01');
     await page.locator('#new-grade-status').selectOption('confirmed');
-    await page.getByRole('button', { name: 'Pflegegrad speichern' }).click();
-    await expect(page.getByText('Pflegegrad 3 · Bestätigt')).toBeVisible();
-    await expect(page.getByText('Pflegegradverlauf ergänzt', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Save care level' }).click();
+    await expect(page.getByText('Care level 3 · Confirmed')).toBeVisible();
+    await expect(page.getByText('Care level history added', { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Aktivieren' }).click();
-    await expect(page.locator('span').filter({ hasText: /^Aktiv$/ })).toBeVisible();
-    await page.getByRole('button', { name: 'Archivieren' }).click();
-    await expect(page.locator('span').filter({ hasText: /^Archiviert$/ })).toBeVisible();
+    await page.getByRole('button', { name: 'Activate' }).click();
+    await expect(page.locator('span').filter({ hasText: /^Active$/ })).toBeVisible();
+    await page.getByRole('button', { name: 'Archive' }).click();
+    await expect(page.locator('span').filter({ hasText: /^Archived$/ })).toBeVisible();
 
     await page.goto('/administration/organizations');
     await page.getByLabel('Name', { exact: true }).fill(workforceOrganizationName);
@@ -213,11 +240,11 @@ test('Authentik users can be invited and administered from the office UI', async
     if (!workforceTeamId) throw new Error('The office UI did not create the team');
 
     await page.goto('/employees/new');
-    await page.getByLabel('Organisation').selectOption(workforceOrganizationId);
-    await page.getByLabel('Vorname').fill('E2E');
-    await page.getByLabel('Nachname').fill(runId);
-    await page.getByLabel('Personalnummer').fill(workforcePersonnelNumber);
-    await page.getByRole('button', { name: 'Mitarbeiter anlegen' }).click();
+    await page.getByLabel('Organization').selectOption(workforceOrganizationId);
+    await page.getByLabel('First name').fill('E2E');
+    await page.getByLabel('Last name').fill(runId);
+    await page.getByLabel('Personnel number').fill(workforcePersonnelNumber);
+    await page.getByRole('button', { name: 'Create employee' }).click();
     await expect(page.getByRole('heading', { name: `E2E ${runId}` })).toBeVisible();
     const workforceEmployeeRow = await database.query<{ id: string }>(
       'SELECT id FROM employees.employees WHERE tenant_id = $1 AND personnel_number = $2',
@@ -226,20 +253,18 @@ test('Authentik users can be invited and administered from the office UI', async
     const workforceEmployeeId = workforceEmployeeRow.rows[0]?.id;
     if (!workforceEmployeeId) throw new Error('The office UI did not create the employee');
 
-    await page.getByLabel('Einrichtung zuweisen').selectOption(workforceFacilityId);
-    await page.getByRole('button', { name: 'Einrichtung zuweisen' }).click();
+    await page.getByLabel('Assign facility').selectOption(workforceFacilityId);
+    await page.getByRole('button', { name: 'Assign facility' }).click();
     await expect(
-      page.getByText(`${workforceFacilityName} · Hauptstandort`, { exact: true }),
+      page.getByText(`${workforceFacilityName} · Primary facility`, { exact: true }),
     ).toBeVisible();
-    await page.getByLabel('Team zuweisen').selectOption(workforceTeamId);
-    await page.getByRole('button', { name: 'Team zuweisen' }).click();
+    await page.getByLabel('Assign to team').selectOption(workforceTeamId);
+    await page.getByRole('button', { name: 'Assign to team' }).click();
     await expect(
       page.locator('#assignments article').filter({ hasText: workforceTeamName }),
     ).toBeVisible();
-    await page
-      .getByLabel('Qualifikation hinzufügen')
-      .selectOption({ label: 'Pflegefachkraft (PFK)' });
-    await page.getByRole('button', { name: 'Qualifikation speichern' }).click();
+    await page.getByLabel('Add qualification').selectOption({ label: 'Pflegefachkraft (PFK)' });
+    await page.getByRole('button', { name: 'Save qualification' }).click();
     await expect(
       page.locator('#qualifications li').filter({ hasText: 'Pflegefachkraft (PFK)' }),
     ).toBeVisible();
@@ -247,33 +272,33 @@ test('Authentik users can be invited and administered from the office UI', async
 
     await page.goto('/services');
     const categoryForm = page.locator('form').filter({
-      has: page.getByRole('button', { name: 'Kategorie anlegen' }),
+      has: page.getByRole('button', { name: 'Create category' }),
     });
     await categoryForm.locator('input[name="name"]').fill(serviceCategoryName);
     await categoryForm.locator('input[name="code"]').fill(serviceCategoryCode);
-    await page.getByRole('button', { name: 'Kategorie anlegen' }).click();
+    await page.getByRole('button', { name: 'Create category' }).click();
     await expect(page.locator(`input[name="code"][value="${serviceCategoryCode}"]`)).toBeVisible();
-    await page.getByRole('link', { name: 'Leistung anlegen' }).click();
+    await page.getByRole('link', { name: 'Create service' }).click();
     await page.locator('#code').fill(serviceCode);
     await page.locator('#name').fill(`E2E Service ${runId}`);
     await page.locator('#categoryId').selectOption({ label: serviceCategoryName });
     await page.locator('#unit').selectOption('occurrence');
     await page.locator('#defaultDurationMinutes').fill('30');
     await page.locator('#validFrom').fill(serviceValidFrom);
-    await page.getByRole('button', { name: 'Leistung anlegen' }).click();
+    await page.getByRole('button', { name: 'Create service' }).click();
     await expect(page.getByRole('heading', { name: `E2E Service ${runId}` })).toBeVisible();
     serviceId = new URL(page.url()).pathname.split('/').at(-1);
     await page.locator(`input[name="organizationIds"][value="${workforceOrganizationId}"]`).check();
     await page.locator(`input[name="facilityIds"][value="${workforceFacilityId}"]`).check();
-    await page.getByRole('button', { name: 'Verfügbarkeit speichern' }).click();
+    await page.getByRole('button', { name: 'Save availability' }).click();
     await expect(page.getByRole('table').getByText(workforceFacilityName)).toBeVisible();
 
     await page.goto('/clients/new');
-    await page.getByLabel('Organisation').selectOption(workforceOrganizationId);
-    await page.getByLabel('Primäre Einrichtung').selectOption(workforceFacilityId);
-    await page.getByLabel('Vorname').fill('Agreement E2E');
-    await page.getByLabel('Nachname').fill(runId);
-    await page.getByRole('button', { name: 'Klient anlegen' }).click();
+    await page.getByLabel('Organization').selectOption(workforceOrganizationId);
+    await page.getByLabel('Primary facility').selectOption(workforceFacilityId);
+    await page.getByLabel('First name').fill('Agreement E2E');
+    await page.getByLabel('Last name').fill(runId);
+    await page.getByRole('button', { name: 'Create client' }).click();
     await expect(page.getByRole('heading', { name: `Agreement E2E ${runId}` })).toBeVisible();
     agreementClientId = new URL(page.url()).pathname.split('/').at(-1);
     if (!agreementClientId) throw new Error('The client detail page did not expose its ID');
@@ -292,19 +317,94 @@ test('Authentik users can be invited and administered from the office UI', async
        VALUES ($1, $2, $3, 'legal_representative')`,
       [tenantId, agreementClientId, representativeContactId],
     );
-    await page.getByRole('button', { name: 'Aktivieren' }).click();
-    await expect(page.locator('span').filter({ hasText: /^Aktiv$/ })).toBeVisible();
-    await page.getByRole('link', { name: 'Leistungsplanung' }).click();
-    await expect(page.getByRole('heading', { name: 'Leistungsplanung' })).toBeVisible();
+    await page.getByRole('button', { name: 'Activate' }).click();
+    await expect(page.locator('span').filter({ hasText: /^Active$/ })).toBeVisible();
 
-    await page.locator('summary').filter({ hasText: 'Leistungsplanung anlegen' }).click();
+    await page.goto('/employees/new');
+    await page.getByLabel('Organization').selectOption(workforceOrganizationId);
+    await page.getByLabel('First name').fill('Plan');
+    await page.getByLabel('Last name').fill(`Author ${runId}`);
+    await page.getByLabel('Personnel number').fill(carePlanAuthorPersonnelNumber);
+    await page.getByRole('button', { name: 'Create employee' }).click();
+    await expect(page.getByRole('heading', { name: `Plan Author ${runId}` })).toBeVisible();
+    await page.getByLabel('Link an active user').selectOption(platformUserId!);
+    await page.getByRole('button', { name: 'Link user' }).click();
+    await expect(page.getByText(displayName, { exact: true })).toBeVisible();
+
+    await page.goto(`/clients/${agreementClientId}/care-plan`);
+    const createCarePlanForm = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Create care plan', exact: true }),
+    });
+    const carePlanEffectiveDate = dateInBerlin();
+    await createCarePlanForm.locator('input[name="validFrom"]').fill(carePlanEffectiveDate);
+    await createCarePlanForm.getByRole('button', { name: 'Create care plan' }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/clients/${agreementClientId}/care-plan\\?planId=[0-9a-f-]+&notice=planCreated`),
+    );
+    const carePlanId = new URL(page.url()).searchParams.get('planId');
+    if (!carePlanId) throw new Error('The Office UI did not create a care plan');
+    await expect(page.getByRole('heading', { name: 'Care-planning assessment' })).toBeVisible();
+
+    const planAssessmentForm = page.locator('form').filter({
+      has: page.locator('textarea[name="clientConcerns"]'),
+    });
+    await planAssessmentForm
+      .locator('textarea[name="clientConcerns"]')
+      .fill('The client is concerned about falling during transfers.');
+    await planAssessmentForm.getByRole('button', { name: 'Save assessment' }).click();
+    await expect(page.getByRole('status')).toContainText('Assessment saved.');
+
+    const needDetails = page.locator('details').filter({
+      has: page.locator('input[name="kind"][value="need"]'),
+    });
+    await needDetails.locator('summary').click();
+    const needForm = needDetails.locator('form');
+    await needForm.locator('select[name="category"]').selectOption('mobility');
+    await needForm.locator('input[name="title"]').fill(carePlanNeedTitle);
+    await needForm.locator('textarea[name="description"]').fill('Needs support during transfers.');
+    await needForm.locator('select[name="source"]').selectOption('professional_observation');
+    await needForm.locator('select[name="priority"]').selectOption('normal');
+    await needForm.locator('select[name="status"]').selectOption('active');
+    await needForm.getByRole('button', { name: 'Save care need' }).click();
+    await expect(page.getByRole('heading', { name: carePlanNeedTitle, exact: true })).toBeVisible();
+
+    const measureDetails = page.locator('details').filter({
+      has: page.locator('input[name="kind"][value="measure"]'),
+    });
+    await measureDetails.locator('summary').click();
+    const measureForm = measureDetails.locator('form');
+    await measureForm.locator('input[name="title"]').fill(carePlanMeasureTitle);
+    await measureForm
+      .locator('textarea[name="instruction"]')
+      .fill('Assist the client with safe transfers during each visit.');
+    await measureForm.locator('select[name="category"]').selectOption('assistance');
+    await measureForm.locator('select[name="status"]').selectOption('active');
+    await measureForm.locator('select[name="needIds"]').selectOption({ label: carePlanNeedTitle });
+    await measureForm.locator('input[name="frequencyText"]').fill('During each visit');
+    await measureForm.locator('input[name="responsibleRole"]').fill('Caregiver');
+    await measureForm.locator('input[name="validFrom"]').fill(carePlanEffectiveDate);
+    await measureForm.getByRole('button', { name: 'Save measure' }).click();
+    await expect(
+      page.getByRole('heading', { name: carePlanMeasureTitle, exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Activate revision' }).click();
+    await expect(
+      page.getByRole('heading', { name: carePlanMeasureTitle, exact: true }),
+    ).toBeVisible();
+
+    await page.getByRole('link', { name: 'Back to client' }).click();
+    await expect(page).toHaveURL(new RegExp(`/clients/${agreementClientId}$`));
+    await page.getByRole('link', { name: 'Service planning' }).click();
+    await expect(page.getByRole('heading', { name: 'Service planning' })).toBeVisible();
+
+    await page.locator('summary').filter({ hasText: 'Create service planning' }).click();
     await page.locator('#new-agreement-from').fill(serviceValidFrom);
     await page.locator('#new-agreement-reference').fill(`E2E-${runId}`);
-    await page.getByRole('button', { name: 'Entwurf anlegen' }).click();
+    await page.getByRole('button', { name: 'Create draft' }).click();
     await expect(page.getByRole('heading', { name: `E2E-${runId}` })).toBeVisible();
     const agreementCard = page.locator('article[id^="agreement-"]');
 
-    await page.getByRole('button', { name: 'Verfügbare Leistungen suchen' }).click();
+    await page.getByRole('button', { name: 'Search available services' }).click();
     const servicePicker = page.locator('select[name="serviceDefinitionId"]');
     const serviceOption = servicePicker.locator('option').filter({
       hasText: `E2E Service ${runId}`,
@@ -320,27 +420,27 @@ test('Authentik users can be invited and administered from the office UI', async
     await agreementServiceForm.locator('input[name="weekdays"][value="wednesday"]').check();
     await agreementServiceForm.locator('input[name="preferredTimeStart"]').fill('08:00');
     await agreementServiceForm.locator('input[name="preferredTimeEnd"]').fill('09:00');
-    await agreementServiceForm.getByRole('button', { name: 'Leistung hinzufügen' }).click();
+    await agreementServiceForm.getByRole('button', { name: 'Add service' }).click();
     await expect(page.getByRole('heading', { name: `E2E Service ${runId}` })).toBeVisible();
-    await expect(page.getByText('Wöchentlich: Montag, Mittwoch')).toBeVisible();
+    await expect(page.getByText('Weekly: Monday, Wednesday')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Aktivieren', exact: true }).click();
-    await expect(page.getByText('Leistungsplanung aktiviert', { exact: true })).toBeVisible();
-    await expect(agreementCard.getByText('Aktiv', { exact: true }).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Activate', exact: true }).click();
+    await expect(page.getByText('Service planning activated', { exact: true })).toBeVisible();
+    await expect(agreementCard.getByText('Active', { exact: true }).first()).toBeVisible();
 
     const generationFrom = addCalendarDays(dateInBerlin(), 1);
     const generationUntil = addCalendarDays(generationFrom, 6);
     const generationDetails = page
       .locator('details')
-      .filter({ hasText: 'Besuche erzeugen' })
+      .filter({ hasText: 'Generate visits' })
       .first();
     await generationDetails.locator('summary').click();
     const generationForm = generationDetails.locator('form');
     await generationForm.locator('input[name="from"]').fill(generationFrom);
     await generationForm.locator('input[name="until"]').fill(generationUntil);
-    await generationForm.getByRole('button', { name: 'Besuche erzeugen' }).click();
+    await generationForm.getByRole('button', { name: 'Generate visits' }).click();
     await expect(
-      page.getByRole('status').filter({ hasText: 'Besuchserzeugung abgeschlossen.' }),
+      page.getByRole('status').filter({ hasText: 'Visit generation is complete.' }),
     ).toBeVisible();
     const generatedRows = await database.query<{ id: string; planned_start: Date }>(
       `SELECT id, planned_start FROM scheduling.visits
@@ -352,38 +452,38 @@ test('Authentik users can be invited and administered from the office UI', async
     if (!generatedVisit) throw new Error('The agreement UI did not generate a visit');
     const generatedDate = dateInTimezone(generatedVisit.planned_start, 'Europe/Berlin');
     await page.goto(`/planning?clientId=${agreementClientId}&date=${generatedDate}`);
-    await expect(page.getByRole('heading', { name: 'Einsatzplanung' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Planning' })).toBeVisible();
     const generatedVisitLink = page.locator(`a[href="/visits/${generatedVisit.id}"]`);
     await expect(generatedVisitLink).toContainText(`Agreement E2E ${runId}`);
     await generatedVisitLink.click();
     await expect(page.getByRole('heading', { name: `Agreement E2E ${runId}` })).toBeVisible();
-    await page.getByLabel('Mitarbeitende zuweisen').selectOption(workforceEmployeeId);
-    await page.getByRole('button', { name: 'Zuweisen' }).click();
+    await page.getByLabel('Assign employee').selectOption(workforceEmployeeId);
+    await page.getByRole('button', { name: 'Assign' }).click();
     await expect(
       page
-        .getByRole('region', { name: 'Mitarbeitende' })
+        .getByRole('region', { name: 'Employees' })
         .getByRole('listitem')
         .filter({ hasText: `E2E ${runId}` }),
     ).toBeVisible();
 
-    await page.getByLabel('Beginn', { exact: true }).fill('08:15');
-    await page.getByLabel('Ende', { exact: true }).fill('08:45');
-    await page.getByRole('button', { name: 'Speichern' }).click();
-    await expect(page.getByText('Ja', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Bestätigen' }).click();
-    await expect(page.getByText('Bestätigt', { exact: true })).toBeVisible();
+    await page.getByLabel('Start', { exact: true }).fill('08:15');
+    await page.getByLabel('End', { exact: true }).fill('08:45');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('Yes', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Confirm' }).click();
+    await expect(page.getByText('Confirmed', { exact: true })).toBeVisible();
 
     await page.goto(`/clients/${agreementClientId}`);
-    await expect(page.getByRole('heading', { name: 'Kommende Einsätze' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Upcoming visits' })).toBeVisible();
     await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true })).toBeVisible();
     await page.goto(`/employees/${workforceEmployeeId}`);
-    await expect(page.getByRole('heading', { name: 'Kommende Einsätze' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Upcoming visits' })).toBeVisible();
     await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true })).toBeVisible();
 
     await page.goto(`/visits/${generatedVisit.id}`);
     page.once('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Einsatz absagen' }).click();
-    await expect(page.getByText('Abgesagt', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel visit' }).click();
+    await expect(page.getByText('Cancelled', { exact: true })).toBeVisible();
     const remainingVisits = await database.query<{ id: string; status: string }>(
       `SELECT id, status FROM scheduling.visits
        WHERE tenant_id = $1 AND client_id = $2 AND service_agreement_id IS NOT NULL
@@ -394,20 +494,20 @@ test('Authentik users can be invited and administered from the office UI', async
     for (const visit of remainingVisits.rows) {
       await page.goto(`/visits/${visit.id}`);
       page.once('dialog', (dialog) => dialog.accept());
-      await page.getByRole('button', { name: 'Einsatz absagen' }).click();
-      await expect(page.getByText('Abgesagt', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Cancel visit' }).click();
+      await expect(page.getByText('Cancelled', { exact: true })).toBeVisible();
     }
 
     await page.goto(`/clients/${agreementClientId}/service-agreements`);
-    await expect(page.getByRole('heading', { name: 'Leistungsplanung' })).toBeVisible();
-    await page.getByRole('button', { name: 'Pausieren' }).click();
-    await expect(agreementCard.getByText('Pausiert', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Fortsetzen' }).click();
-    await expect(agreementCard.getByText('Aktiv', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Service planning' })).toBeVisible();
+    await page.getByRole('button', { name: 'Suspend' }).click();
+    await expect(agreementCard.getByText('Suspended', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Resume' }).click();
+    await expect(agreementCard.getByText('Active', { exact: true }).first()).toBeVisible();
     page.once('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Beenden', exact: true }).click();
-    await expect(agreementCard.getByText('Beendet', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('Leistungsplanung beendet', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'End', exact: true }).click();
+    await expect(agreementCard.getByText('Ended', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Service planning ended', { exact: true })).toBeVisible();
 
     const caregiver = await createAuthentikUser(authentikOrigin, apiToken, {
       username: caregiverUsername,
@@ -422,7 +522,7 @@ test('Authentik users can be invited and administered from the office UI', async
     const caregiverPage = await caregiverContext.newPage();
     await signInWithAuthentik(caregiverPage, caregiverUsername, caregiverPassword);
     await expect(
-      caregiverPage.getByText('Ihr Benutzerkonto hat noch keinen aktiven Mandantenzugriff.'),
+      caregiverPage.getByText('Your account does not have access to an active organization.'),
     ).toBeVisible();
     const caregiverProvision = await waitForPlatformUser(database, issuer, caregiverSubject);
     caregiverPlatformUserId = caregiverProvision.id;
@@ -460,8 +560,8 @@ test('Authentik users can be invited and administered from the office UI', async
     }
 
     await page.goto(`/employees/${workforceEmployeeId}`);
-    await page.getByLabel('Aktiven Benutzer verknüpfen').selectOption(caregiverPlatformUserId);
-    await page.getByRole('button', { name: 'Benutzer verknüpfen' }).click();
+    await page.getByLabel('Link an active user').selectOption(caregiverPlatformUserId);
+    await page.getByRole('button', { name: 'Link user' }).click();
     await expect(page.getByText(caregiverName, { exact: true })).toBeVisible();
 
     if (!serviceId || !agreementClientId) {
@@ -470,18 +570,27 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.goto(`/services/${serviceId}`);
     await expect(page.getByRole('heading', { name: `E2E Service ${runId}` })).toBeVisible();
     const executionDate = dateInBerlin();
+    const executionDateAtNoonUtc = new Date(`${executionDate}T12:00:00.000Z`);
+    const englishCareDate = new Intl.DateTimeFormat('en', {
+      dateStyle: 'full',
+      timeZone: 'Europe/Berlin',
+    }).format(executionDateAtNoonUtc);
+    const germanCareDate = new Intl.DateTimeFormat('de', {
+      dateStyle: 'full',
+      timeZone: 'Europe/Berlin',
+    }).format(executionDateAtNoonUtc);
     await page.goto(`/planning?date=${executionDate}`);
     const manualVisitForm = page.locator('form').filter({
-      has: page.getByRole('button', { name: 'Einsatz anlegen' }),
+      has: page.getByRole('button', { name: 'Create visit' }),
     });
-    await manualVisitForm.getByLabel('Klientin oder Klient').selectOption(agreementClientId);
+    await manualVisitForm.getByLabel('Client').selectOption(agreementClientId);
     await manualVisitForm.locator('input[name="localDate"]').fill(executionDate);
     await manualVisitForm.locator('input[name="localStartTime"]').fill('08:00');
     await manualVisitForm.locator('input[name="localEndTime"]').fill('08:30');
     await manualVisitForm.locator('select[name="serviceDefinitionIds"]').selectOption(serviceId);
     await manualVisitForm.locator('select[name="employeeId"]').selectOption(workforceEmployeeId);
     await manualVisitForm.locator('textarea[name="note"]').fill(executionMarker);
-    await manualVisitForm.getByRole('button', { name: 'Einsatz anlegen' }).click();
+    await manualVisitForm.getByRole('button', { name: 'Create visit' }).click();
     await expect(page).toHaveURL(/(?:\?|&)updated=visit(?:&|$)/);
     const executionVisit = await database.query<{ id: string }>(
       'SELECT id FROM scheduling.visits WHERE tenant_id = $1 AND note = $2',
@@ -493,124 +602,273 @@ test('Authentik users can be invited and administered from the office UI', async
     }
 
     await caregiverPage.goto('/');
-    await caregiverPage.getByLabel('Mandant').selectOption(tenantId);
-    await caregiverPage.getByRole('button', { name: 'Weiter' }).click();
+    await caregiverPage.locator('select[name="tenantId"]').selectOption(tenantId);
+    await caregiverPage.getByRole('button', { name: 'Continue' }).click();
     await expect(caregiverPage).toHaveURL(/\/clients$/);
     await caregiverPage.goto('/care/today');
     await expect(caregiverPage).toHaveURL(/\/care\/today$/);
-    await expect(caregiverPage.getByRole('heading', { name: 'Meine Einsätze' })).toBeVisible();
+    await expect(caregiverPage.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(caregiverPage.getByRole('heading', { name: 'My visits' })).toBeVisible();
     const mobileVisitLink = caregiverPage.locator(`a[href="/care/visits/${executionVisitId}"]`);
+    await expect(
+      caregiverPage.getByText(`Visits for ${englishCareDate}`, { exact: true }),
+    ).toBeVisible();
+    await expect(mobileVisitLink).toContainText('Upcoming');
+    await caregiverPage.getByRole('combobox', { name: 'Language' }).selectOption('de');
+    await expect(caregiverPage.locator('html')).toHaveAttribute('lang', 'de');
+    await expect(caregiverPage.getByRole('heading', { name: 'Meine Einsätze' })).toBeVisible();
+    await expect(
+      caregiverPage.getByText(`Einsätze am ${germanCareDate}`, { exact: true }),
+    ).toBeVisible();
+    await expect(mobileVisitLink).toContainText('Bevorstehend');
+    await caregiverPage.reload();
+    await expect(caregiverPage.getByRole('combobox', { name: 'Sprache' })).toHaveValue('de');
+    await expect(
+      caregiverPage.getByText(`Einsätze am ${germanCareDate}`, { exact: true }),
+    ).toBeVisible();
+    await caregiverPage.getByRole('combobox', { name: 'Sprache' }).selectOption('en');
+    await expect(caregiverPage.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(caregiverPage.getByRole('heading', { name: 'My visits' })).toBeVisible();
+    await expect(
+      caregiverPage.getByText(`Visits for ${englishCareDate}`, { exact: true }),
+    ).toBeVisible();
     await expect(mobileVisitLink).toContainText(`Agreement E2E ${runId}`);
     await mobileVisitLink.click();
     await expect(
       caregiverPage.getByRole('heading', { name: `Agreement E2E ${runId}` }),
     ).toBeVisible();
+    const visitCarePlan = caregiverPage.getByRole('region', { name: 'Care plan for this visit' });
+    await expect(visitCarePlan).toBeVisible();
+    await expect(visitCarePlan.getByText(carePlanMeasureTitle, { exact: true })).toBeVisible();
+    await expect(
+      visitCarePlan.getByText('Assist the client with safe transfers during each visit.', {
+        exact: true,
+      }),
+    ).toBeVisible();
     expect(
       await caregiverPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
-    await caregiverPage.getByRole('button', { name: 'Einsatz starten' }).click();
-    await expect(caregiverPage.getByText('In Bearbeitung', { exact: true })).toBeVisible();
-    await expect(caregiverPage.getByRole('heading', { name: 'Geplante Leistungen' })).toBeVisible();
-    await caregiverPage.getByRole('button', { name: 'Ergebnis speichern' }).click();
-    await expect(caregiverPage.getByRole('status')).toContainText('Leistungsergebnis gespeichert.');
+    await caregiverPage.getByRole('button', { name: 'Start visit' }).click();
+    await expect(caregiverPage.getByText('In progress', { exact: true })).toBeVisible();
+    await expect(caregiverPage.getByRole('heading', { name: 'Planned services' })).toBeVisible();
+    await caregiverPage.getByRole('button', { name: 'Save outcome' }).click();
+    await expect(caregiverPage.getByRole('status')).toContainText('Service outcome saved.');
 
     const unplannedForm = caregiverPage.locator('form').filter({
-      has: caregiverPage.getByRole('button', { name: 'Leistung erfassen' }),
+      has: caregiverPage.getByRole('button', { name: 'Record service' }),
     });
     await unplannedForm.locator('select[name="serviceDefinitionId"]').selectOption(serviceId);
-    await unplannedForm.getByRole('button', { name: 'Leistung erfassen' }).click();
+    await unplannedForm.getByRole('button', { name: 'Record service' }).click();
     await expect(
-      caregiverPage.getByRole('heading', { name: 'Zusätzlich erfasste Leistungen' }),
+      caregiverPage.getByRole('heading', { name: 'Additional services recorded' }),
     ).toBeVisible();
-    await caregiverPage.getByRole('button', { name: 'Dokumentation beginnen' }).click();
+    await caregiverPage.getByRole('button', { name: 'Start documentation' }).click();
     await expect(
-      caregiverPage.getByRole('heading', { name: 'Leistungsdokumentation' }),
+      caregiverPage.getByRole('heading', { name: 'Service documentation' }),
     ).toBeVisible();
+
+    const clinicalSection = caregiverPage.getByRole('region', {
+      name: 'Structured care documentation',
+    });
+    const measurementDetails = clinicalSection
+      .locator('details')
+      .filter({ hasText: 'Add measurement' });
+    await measurementDetails.locator('summary').click();
+    const measurementForm = measurementDetails.locator('form');
+    await measurementForm.getByLabel('Measurement type').selectOption('blood_pressure');
+    await measurementForm.getByLabel('Systolic pressure').fill('120');
+    await measurementForm.getByLabel('Diastolic pressure').fill('80');
+    await measurementForm.getByRole('button', { name: 'Save record' }).click();
+    await expect(clinicalSection.getByText('120/80 mmHg', { exact: true })).toBeVisible();
+    const bloodPressureRecord = clinicalSection.locator('li').filter({ hasText: '120/80 mmHg' });
+    await bloodPressureRecord.locator('summary').filter({ hasText: 'Edit record' }).click();
+    const bloodPressureEditForm = bloodPressureRecord.locator('form').first();
+    await bloodPressureEditForm.getByLabel('Systolic pressure').fill('121');
+    await bloodPressureEditForm.getByRole('button', { name: 'Save changes' }).click();
+    await expect(clinicalSection.getByText('121/80 mmHg', { exact: true })).toBeVisible();
+
+    const observationDetails = clinicalSection
+      .locator('details')
+      .filter({ hasText: 'Add observation' });
+    await observationDetails.locator('summary').click();
+    const observationForm = observationDetails.locator('form');
+    await observationForm.getByLabel('Category').selectOption('mobility');
+    await observationForm.getByLabel('Observed value').selectOption('assistance_required');
+    await observationForm.getByRole('button', { name: 'Save record' }).click();
+    const assistanceObservation = clinicalSection
+      .locator('li')
+      .filter({ hasText: 'Assistance required' });
+    await expect(assistanceObservation).toBeVisible();
+
+    await observationDetails.locator('summary').click();
+    const painForm = observationDetails.locator('form');
+    await painForm.getByLabel('Category').selectOption('pain');
+    await painForm.getByLabel('Pain score (0–10)').fill('4');
+    await painForm.getByRole('button', { name: 'Save record' }).click();
+    await expect(clinicalSection.getByText('Pain score (0–10): 4', { exact: true })).toBeVisible();
+    const painRecord = clinicalSection.locator('li').filter({ hasText: 'Pain score (0–10): 4' });
+    await painRecord.getByRole('button', { name: 'Delete record Pain' }).click();
+    await expect(clinicalSection.getByText('Pain score (0–10): 4', { exact: true })).toHaveCount(0);
+
+    const assessmentDetails = clinicalSection
+      .locator('details')
+      .filter({ hasText: 'Add assessment' });
+    await assessmentDetails.locator('summary').click();
+    const assessmentForm = assessmentDetails.locator('form');
+    await assessmentForm.getByLabel('Assessment type').selectOption('general_condition');
+    await assessmentForm.getByLabel('Score (optional)').fill('3.5');
+    await assessmentForm.getByRole('button', { name: 'Save record' }).click();
+    const scoreOnlyAssessment = clinicalSection
+      .locator('li')
+      .filter({ hasText: 'Score (optional): 3.5' });
+    await expect(scoreOnlyAssessment).toBeVisible();
+
+    const riskDetails = clinicalSection
+      .locator('details')
+      .filter({ hasText: 'Add risk assessment' });
+    await riskDetails.locator('summary').click();
+    const riskForm = riskDetails.locator('form');
+    await riskForm.getByLabel('Risk type').selectOption('fall');
+    await riskForm.getByLabel('Risk level').selectOption('moderate');
+    const expectedVersionBeforeRisk = await riskForm
+      .locator('input[name="expectedVersion"]')
+      .inputValue();
+    const visitPath = new URL(caregiverPage.url()).pathname;
+    const riskSaveResponse = caregiverPage.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.headers()['content-type']?.startsWith('text/x-component') === true &&
+        new URL(response.url()).pathname === visitPath,
+    );
+    await Promise.all([
+      riskForm.getByRole('button', { name: 'Save record' }).click(),
+      riskSaveResponse,
+    ]);
+    const moderateRisk = clinicalSection.locator('li').filter({ hasText: 'Moderate' });
+    await expect(moderateRisk).toBeVisible();
+
+    if (!tenantId || !executionVisitId) {
+      throw new Error('The clinical risk record needs a tenant and execution visit');
+    }
+    const clinicalRiskRecord = await database.query<{ id: string }>(
+      `SELECT clinical_record.id
+       FROM clinical_documentation.records AS clinical_record
+       JOIN clinical_documentation.risk_assessments AS risk_assessment
+         ON risk_assessment.tenant_id = clinical_record.tenant_id
+        AND risk_assessment.record_id = clinical_record.id
+       JOIN care_documentation.documents AS documentation
+         ON documentation.tenant_id = clinical_record.tenant_id
+        AND documentation.id = clinical_record.documentation_id
+       WHERE clinical_record.tenant_id = $1
+         AND documentation.visit_id = $2
+         AND clinical_record.kind = 'risk_assessment'
+         AND risk_assessment.risk_type = 'fall'
+       ORDER BY clinical_record.created_at DESC, clinical_record.id
+       LIMIT 1`,
+      [tenantId, executionVisitId],
+    );
+    const clinicalRiskRecordId = clinicalRiskRecord.rows[0]?.id;
+    if (!clinicalRiskRecordId) {
+      throw new Error('The caregiver UI did not persist the fall risk assessment');
+    }
 
     const observationText = `E2E observation ${runId}`;
     const observationSection = caregiverPage
-      .getByRole('heading', { name: 'Beobachtungen' })
+      .getByRole('heading', { name: 'Observations', level: 3 })
       .locator('..');
+    const observationComposer = caregiverPage.locator('form').filter({
+      has: caregiverPage.locator('#new-observation'),
+    });
+    await expect(observationComposer.locator('input[name="expectedVersion"]')).not.toHaveValue(
+      expectedVersionBeforeRisk,
+    );
     await observationSection.locator('textarea[name="content"]').fill(observationText);
-    await observationSection.getByRole('button', { name: 'Eintrag speichern' }).click();
+    const observationSaveResponse = caregiverPage.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.headers()['content-type']?.startsWith('text/x-component') === true &&
+        new URL(response.url()).pathname === visitPath,
+    );
+    await Promise.all([
+      observationSection.getByRole('button', { name: 'Save changes' }).click(),
+      observationSaveResponse,
+    ]);
     await expect(
       observationSection.locator('li > p').filter({ hasText: observationText }),
     ).toBeVisible();
 
     const deviationText = `E2E deviation ${runId}`;
     const deviationSection = caregiverPage
-      .getByRole('heading', { name: 'Abweichungen' })
+      .getByRole('heading', { name: 'Deviations' })
       .locator('..');
     await deviationSection.locator('textarea[name="content"]').fill(deviationText);
-    await deviationSection.getByRole('button', { name: 'Eintrag speichern' }).click();
+    await deviationSection.getByRole('button', { name: 'Save changes' }).click();
     await expect(
       deviationSection.locator('li > p').filter({ hasText: deviationText }),
     ).toBeVisible();
 
     const incidentText = `E2E incident ${runId}`;
-    const incidentSection = caregiverPage.getByRole('heading', { name: 'Vorfälle' }).locator('..');
+    const incidentSection = caregiverPage.getByRole('heading', { name: 'Incidents' }).locator('..');
     await incidentSection.locator('textarea[name="content"]').fill(incidentText);
     await incidentSection.locator('select[name="severity"]').selectOption('low');
-    await incidentSection.getByRole('button', { name: 'Eintrag speichern' }).click();
+    await incidentSection.getByRole('button', { name: 'Save changes' }).click();
     await expect(incidentSection.locator('li > p').filter({ hasText: incidentText })).toBeVisible();
     await expect(
       caregiverPage
-        .getByRole('heading', { name: 'Dokumentation finalisieren' })
+        .getByRole('heading', { name: 'Finalize documentation' })
         .locator('..')
-        .getByText(/Leistungsnachweis fehlt/)
+        .getByText(/Service evidence is missing/)
         .first(),
     ).toBeVisible();
 
-    await caregiverPage.getByRole('button', { name: 'Einsatz abschließen' }).click();
-    await expect(caregiverPage.getByText('Abgeschlossen', { exact: true })).toBeVisible();
+    await caregiverPage.getByRole('button', { name: 'Complete visit' }).click();
+    await expect(caregiverPage.getByText('Completed', { exact: true })).toBeVisible();
 
     await caregiverPage.goto('/care/today');
     await expect(
-      caregiverPage.getByText('⚠ Dokumentation unvollständig', { exact: true }),
+      caregiverPage.getByText('⚠ Documentation incomplete', { exact: true }),
     ).toBeVisible();
     await page.goto('/documentation');
-    await expect(page.getByRole('heading', { name: 'Unvollständige Dokumentation' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Incomplete documentation' })).toBeVisible();
     await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true })).toBeVisible();
-    const documentationClientFilter = page.getByLabel('Klient');
+    const documentationClientFilter = page.getByLabel('Client');
     await documentationClientFilter.fill(`Agreement E2E ${runId}`);
-    await page.getByRole('button', { name: 'Filter anwenden' }).click();
-    await expect(page.getByText('1 Einsätze', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Apply filters' }).click();
+    await expect(page.getByText('1 visit', { exact: true })).toBeVisible();
     await documentationClientFilter.fill('Unknown client');
-    await page.getByRole('button', { name: 'Filter anwenden' }).click();
-    await expect(page.getByText('0 Einsätze', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Apply filters' }).click();
+    await expect(page.getByText('0 visits', { exact: true })).toBeVisible();
 
     await caregiverPage.goto(`/care/visits/${executionVisitId}`);
     const evidenceSection = caregiverPage
-      .getByRole('heading', { name: 'Leistungsdokumentation' })
+      .getByRole('heading', { name: 'Service documentation' })
       .locator('..');
     const evidenceRows = evidenceSection.locator('li');
     await expect(evidenceRows).toHaveCount(2);
     for (let index = 0; index < (await evidenceRows.count()); index += 1) {
       const row = evidenceRows.nth(index);
       await row.locator('textarea[name="note"]').fill(`E2E service evidence ${index + 1} ${runId}`);
-      await row.getByRole('button', { name: 'Nachweis speichern' }).click();
-      await expect(row.getByText('Nachweis erfasst', { exact: true })).toBeVisible();
+      await row.getByRole('button', { name: 'Save evidence' }).click();
+      await expect(row.getByText('Evidence recorded', { exact: true })).toBeVisible();
     }
     await expect(
-      caregiverPage.getByRole('button', { name: 'Dokumentation finalisieren' }),
+      caregiverPage.getByRole('button', { name: 'Finalize documentation' }),
     ).toBeVisible();
-    await caregiverPage.getByRole('button', { name: 'Dokumentation finalisieren' }).click();
-    await expect(caregiverPage.getByText('Finalisiert', { exact: true })).toBeVisible();
-    await expect(caregiverPage.getByRole('button', { name: 'Eintrag speichern' })).toHaveCount(0);
-    await expect(caregiverPage.getByRole('button', { name: 'Nachweis speichern' })).toHaveCount(0);
+    await caregiverPage.getByRole('button', { name: 'Finalize documentation' }).click();
+    await expect(caregiverPage.getByText('Finalized', { exact: true })).toBeVisible();
+    await expect(caregiverPage.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
+    await expect(caregiverPage.getByRole('button', { name: 'Save evidence' })).toHaveCount(0);
 
     await caregiverPage.goto(`/care/visits/${executionVisitId}/evidence`);
     await expect(
-      caregiverPage.getByRole('heading', { name: 'Leistungsnachweis prüfen' }),
+      caregiverPage.getByRole('heading', { name: 'Review service evidence' }),
     ).toBeVisible();
-    await caregiverPage.getByRole('button', { name: 'Leistungsnachweis erstellen' }).click();
+    await caregiverPage.getByRole('button', { name: 'Create service evidence' }).click();
     await expect(caregiverPage.getByText('Version 1', { exact: true })).toBeVisible();
     await expect(
       caregiverPage.getByText(`E2E Service ${runId}`, { exact: true }).first(),
     ).toBeVisible();
-    const firstSignaturePad = caregiverPage.getByRole('img', {
-      name: /Unterschriftsfeld/,
-    });
+    const firstSignaturePad = caregiverPage.locator('#acknowledge-evidence').getByRole('img');
     await firstSignaturePad.scrollIntoViewIfNeeded();
     const signatureBounds = await firstSignaturePad.boundingBox();
     if (!signatureBounds) throw new Error('The mobile signature pad is not visible');
@@ -631,11 +889,11 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     await caregiverPage.mouse.up();
     await caregiverPage.once('dialog', (dialog) => dialog.accept());
-    const signatureSubmit = caregiverPage.getByRole('button', { name: 'Unterschrift bestätigen' });
+    const signatureSubmit = caregiverPage.getByRole('button', { name: 'Confirm signature' });
     await expect(signatureSubmit).toBeEnabled();
     await signatureSubmit.click();
     await expect(
-      caregiverPage.getByRole('status').filter({ hasText: 'Leistungsnachweis bestätigt' }),
+      caregiverPage.getByRole('status').filter({ hasText: 'Service evidence acknowledged' }),
     ).toBeVisible();
     expect(
       await caregiverPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
@@ -652,48 +910,100 @@ test('Authentik users can be invited and administered from the office UI', async
     initialEvidencePackageId = firstPackage.rows[0]?.id;
     if (!initialEvidencePackageId) throw new Error('The first evidence package was not persisted');
 
+    await page.goto(`/clients/${agreementClientId}/care-plan?planId=${carePlanId}`);
+    const evaluationForm = page.locator('form').filter({
+      has: page.locator('select[name="result"]'),
+    });
+    await evaluationForm.locator('select[name="result"]').selectOption('partially_effective');
+    await evaluationForm.locator('select[name="planChange"]').selectOption('revision_required');
+    const evaluationSummary = `Fall risk requires a care-plan update ${runId}`;
+    await evaluationForm.locator('textarea[name="summary"]').fill(evaluationSummary);
+    await evaluationForm
+      .locator('input[name="nextEvaluationDue"]')
+      .fill(addCalendarDays(dateInBerlin(), 30));
+    await evaluationForm.getByRole('button', { name: 'Record evaluation' }).click();
+    await expect(
+      page.getByRole('region', { name: 'Plan overview' }).getByText(evaluationSummary, {
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    const createRevisionForm = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Create draft revision' }),
+    });
+    await createRevisionForm.locator('input[name="effectiveFrom"]').fill(dateInBerlin());
+    await createRevisionForm.locator('input[name="reason"]').fill(`Fall risk review ${runId}`);
+    await createRevisionForm.getByRole('button', { name: 'Create draft revision' }).click();
+
+    const sourceReferenceForm = page.locator('form').filter({
+      has: page.locator('input[name="kind"][value="sourceReference"]'),
+    });
+    await sourceReferenceForm.locator('input[name="clinicalRecordId"]').fill(clinicalRiskRecordId);
+    await sourceReferenceForm.locator('select[name="recordKind"]').selectOption('risk_assessment');
+    await sourceReferenceForm
+      .locator('input[name="rationale"]')
+      .fill('The latest fall risk assessment informs this plan.');
+    await sourceReferenceForm.getByRole('button', { name: 'Add clinical reference' }).click();
+    const draftReferenceCard = page.locator('section[aria-labelledby="source-references-title"]');
+    const draftReferenceRow = draftReferenceCard
+      .getByRole('listitem')
+      .filter({ hasText: clinicalRiskRecordId });
+    await expect(draftReferenceRow.getByText('Risk assessment', { exact: true })).toBeVisible();
+    await expect(
+      draftReferenceRow.getByText(`Clinical record ID: ${clinicalRiskRecordId}`, { exact: true }),
+    ).toBeVisible();
+
+    await page.getByRole('button', { name: 'Activate revision' }).click();
+    const revisionRows = page.locator('section[aria-labelledby="history-title"] > ol > li');
+    await expect(revisionRows).toHaveCount(2);
+    const revisionWithReference = revisionRows.filter({ hasText: clinicalRiskRecordId });
+    await expect(revisionWithReference.getByText('Risk assessment', { exact: true })).toBeVisible();
+    await expect(
+      revisionWithReference.getByText(`Clinical record ID: ${clinicalRiskRecordId}`, {
+        exact: true,
+      }),
+    ).toBeVisible();
+
     await page.goto(`/visits/${executionVisitId}`);
-    await expect(page.getByRole('heading', { name: 'Ausführung' })).toBeVisible();
-    await expect(page.getByText('Einsatz abgeschlossen', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Execution' })).toBeVisible();
+    await expect(page.getByText('Visit completed', { exact: true })).toBeVisible();
     await expect(page.getByText(`E2E Service ${runId}`, { exact: true }).first()).toBeVisible();
     await expect(page.getByText(observationText, { exact: true })).toBeVisible();
     await expect(page.getByText(deviationText, { exact: true })).toBeVisible();
     await expect(page.getByText(incidentText, { exact: true })).toBeVisible();
-    const amendmentDetails = page.locator('details').filter({ hasText: 'Dokumentation ergänzen' });
+    const amendmentDetails = page.locator('details').filter({ hasText: 'Amend documentation' });
     await amendmentDetails.locator('summary').click();
     await amendmentDetails.locator('input[name="reason"]').fill(`E2E correction reason ${runId}`);
     await amendmentDetails.locator('textarea[name="correction"]').fill(`E2E amendment ${runId}`);
-    await amendmentDetails.getByRole('button', { name: 'Ergänzung speichern' }).click();
+    await amendmentDetails.getByRole('button', { name: 'Save addition' }).click();
     await expect(page.getByText(`E2E amendment ${runId}`, { exact: true })).toBeVisible();
     const correctionDetails = page
       .locator('details')
-      .filter({ hasText: 'Ausführungszeiten korrigieren' });
+      .filter({ hasText: 'Correct execution times' });
     await correctionDetails.locator('summary').click();
     const actualStartInput = correctionDetails.locator('input[name="actualStart"]');
     await actualStartInput.fill(shiftDateTimeLocal(await actualStartInput.inputValue(), -1));
     await correctionDetails.locator('textarea[name="reason"]').fill('E2E correction reason');
-    await correctionDetails.getByRole('button', { name: 'Zeiten korrigieren' }).click();
-    await expect(page.getByText('Einsatzzeiten korrigiert', { exact: true })).toBeVisible();
+    await correctionDetails.getByRole('button', { name: 'Correct times' }).click();
+    await expect(page.getByText('Visit times corrected', { exact: true })).toBeVisible();
 
     await caregiverPage.goto(`/care/visits/${executionVisitId}/evidence`);
     await expect(
-      caregiverPage.getByText('Neue Version erforderlich', { exact: true }),
+      caregiverPage.getByText('A new version is required', { exact: true }),
     ).toBeVisible();
     await expect(
-      caregiverPage.getByText('Die frühere Bestätigung bleibt erhalten', { exact: false }),
+      caregiverPage.getByText('The earlier acknowledgement remains recorded', { exact: false }),
     ).toBeVisible();
-    await caregiverPage
-      .getByRole('button', { name: 'Aktuellen Leistungsnachweis erstellen' })
-      .click();
+    await caregiverPage.getByRole('button', { name: 'Create current service evidence' }).click();
     await expect(caregiverPage.getByText('Version 2', { exact: true })).toBeVisible();
-    const signatoryPicker = caregiverPage.getByLabel('Unterzeichnende Person auswählen');
+    const signatoryPicker = caregiverPage.getByLabel('Select the person acknowledging');
     await signatoryPicker.selectOption(`representative:${representativeContactId}`);
     await caregiverPage.locator('input[name="method-choice"][value="typed_confirmation"]').check();
     await caregiverPage.locator('input[name="confirmationName"]').fill('E2E Representative');
     await caregiverPage.once('dialog', (dialog) => dialog.accept());
-    await caregiverPage.getByRole('button', { name: 'Bestätigung erfassen' }).click();
+    await caregiverPage.getByRole('button', { name: 'Record acknowledgement' }).click();
     await expect(
-      caregiverPage.getByRole('status').filter({ hasText: 'Leistungsnachweis bestätigt' }),
+      caregiverPage.getByRole('status').filter({ hasText: 'Service evidence acknowledged' }),
     ).toBeVisible();
     const replacementPackage = await database.query<{ id: string; version: number }>(
       `SELECT package.id, package.version
@@ -712,11 +1022,11 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.goto(
       `/service-evidence?clientQuery=${encodeURIComponent(`Agreement E2E ${runId}`)}`,
     );
-    await expect(page.getByRole('heading', { name: 'Leistungsnachweise' })).toBeVisible();
-    const acknowledgedRow = page
-      .getByRole('row')
-      .filter({ hasText: `Agreement E2E ${runId}` })
-      .filter({ hasText: 'Bestätigt' });
+    await expect(page.getByRole('heading', { name: 'Service evidence' })).toBeVisible();
+    const acknowledgedRow = page.getByRole('row').filter({
+      has: page.locator(`a[href="/service-evidence/${replacementEvidencePackageId}"]`),
+    });
+    await expect(acknowledgedRow).toContainText('Acknowledged');
     await expect(acknowledgedRow).toContainText('E2E Representative');
     await expect(acknowledgedRow.getByRole('link')).toHaveAttribute(
       'href',
@@ -724,74 +1034,87 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     await acknowledgedRow.getByRole('link').click();
     await expect(page.getByText('E2E Representative', { exact: true })).toBeVisible();
-    await expect(page.getByText('bevollmächtigte Vertretung', { exact: true })).toBeVisible();
-    await expect(page.getByText('Namensbestätigung', { exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Version 1 · Ersetzt' })).toHaveAttribute(
-      'href',
-      `/service-evidence/${initialEvidencePackageId}`,
+    await expect(page.getByText('authorized representative', { exact: true })).toBeVisible();
+    await expect(page.getByText('Name confirmation', { exact: true })).toBeVisible();
+    const initialVersionLink = page.locator(
+      `a[href="/service-evidence/${initialEvidencePackageId}"]`,
     );
-    await page.getByRole('link', { name: 'Version 1 · Ersetzt' }).click();
-    await expect(page.getByRole('img', { name: 'Gespeicherte Unterschrift' })).toBeVisible();
+    await expect(initialVersionLink).toBeVisible();
+    await initialVersionLink.click();
+    await expect(page.getByRole('img', { name: 'Saved signature' })).toBeVisible();
     await page.goto(`/service-evidence/${replacementEvidencePackageId}`);
     const revokeForm = page.locator('form').filter({
-      has: page.getByRole('button', { name: 'Bestätigung widerrufen' }),
+      has: page.getByRole('button', { name: 'Revoke acknowledgement' }),
     });
     await revokeForm.locator('input[name="reason"]').fill(`E2E revocation ${runId}`);
     await page.once('dialog', (dialog) => dialog.accept());
-    await revokeForm.getByRole('button', { name: 'Bestätigung widerrufen' }).click();
-    await expect(page.getByRole('status')).toContainText('Bestätigung wurde widerrufen');
-    await expect(page.getByText('Widerrufen', { exact: true }).first()).toBeVisible();
+    await revokeForm.getByRole('button', { name: 'Revoke acknowledgement' }).click();
+    await expect(page.getByRole('status')).toContainText('The acknowledgement was revoked.');
+    await expect(page.getByText('Revoked', { exact: true }).first()).toBeVisible();
 
     await caregiverPage.goto(`/care/visits/${executionVisitId}/evidence`);
     await caregiverPage
-      .getByLabel('Unterzeichnende Person auswählen')
+      .getByLabel('Select the person acknowledging')
       .selectOption(`representative:${representativeContactId}`);
     await caregiverPage
       .locator('details')
       .filter({
-        hasText: 'Bestätigung abgelehnt oder nicht möglich',
+        hasText: 'Acknowledgement declined or unavailable',
       })
       .locator('summary')
       .click();
     const declineForm = caregiverPage.locator('form').filter({
-      has: caregiverPage.getByRole('button', { name: 'Ablehnung erfassen' }),
+      has: caregiverPage.getByRole('button', { name: 'Record decline' }),
     });
     await declineForm.locator('select[name="reasonCode"]').selectOption('disagrees_with_record');
     await declineForm.locator('textarea[name="note"]').fill(`E2E decline note ${runId}`);
     await caregiverPage.once('dialog', (dialog) => dialog.accept());
-    await declineForm.getByRole('button', { name: 'Ablehnung erfassen' }).click();
+    await declineForm.getByRole('button', { name: 'Record decline' }).click();
     await expect(
       caregiverPage
         .getByRole('status')
-        .filter({ hasText: 'Die Ablehnung wurde für diese Version festgehalten' }),
+        .filter({ hasText: 'The decline is recorded for this version' }),
     ).toBeVisible();
     expect(
       await caregiverPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
 
     await page.goto(`/clients/${agreementClientId}`);
-    await expect(page.getByText('Einsatz begonnen', { exact: true })).toBeVisible();
-    await expect(page.getByText('Einsatz abgeschlossen', { exact: true })).toBeVisible();
-    await expect(
-      page.getByText('Besuchsdokumentation abgeschlossen', { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByText('Vorfall dokumentiert', { exact: true })).toBeVisible();
-    await expect(page.getByText('Besuchsdokumentation ergänzt', { exact: true })).toBeVisible();
+    await expect(page.getByText('Visit started', { exact: true })).toBeVisible();
+    await expect(page.getByText('Visit completed', { exact: true })).toBeVisible();
+    await expect(page.getByText('Documentation finalized', { exact: true })).toBeVisible();
+    await expect(page.getByText('Incident documented', { exact: true })).toBeVisible();
+    await expect(page.getByText('Documentation amended', { exact: true })).toBeVisible();
+    const clinicalHistory = page.getByRole('region', { name: 'Clinical history' });
+    await expect(clinicalHistory.getByText('121/80 mmHg', { exact: true })).toBeVisible();
+    await expect(clinicalHistory.getByText('Assistance required', { exact: true })).toBeVisible();
+    await expect(clinicalHistory.getByText('Clinical history', { exact: true })).toBeVisible();
+    await expect(clinicalHistory.getByText('Current risks', { exact: true })).toBeVisible();
+    const currentRisks = clinicalHistory.getByRole('region', { name: 'Current risks' });
+    await expect(currentRisks.getByText('Fall risk', { exact: true })).toBeVisible();
     const clientExecutionRow = page.locator(`a[href="/visits/${executionVisitId}"]`);
-    await expect(clientExecutionRow).toContainText('Ausführung: Abgeschlossen');
-    await expect(clientExecutionRow).toContainText('Tatsächlich');
+    await expect(clientExecutionRow).toContainText('Execution: Completed');
+    await expect(clientExecutionRow).toContainText('Actual');
     await page.goto(`/employees/${workforceEmployeeId}`);
     const employeeExecutionRow = page.locator(`a[href="/visits/${executionVisitId}"]`);
-    await expect(employeeExecutionRow).toContainText('Ausführung: Abgeschlossen');
-    await expect(employeeExecutionRow).toContainText('Tatsächlich');
+    await expect(employeeExecutionRow).toContainText('Execution: Completed');
+    await expect(employeeExecutionRow).toContainText('Actual');
 
     if (!serviceId) throw new Error('The service detail page did not expose its ID');
     await page.goto(`/services/${serviceId}`);
-    await page.getByRole('button', { name: 'Leistung archivieren' }).click();
-    await expect(page.locator('span').filter({ hasText: /^Archiviert$/ })).toBeVisible();
+    await page.getByRole('button', { name: 'Archive service' }).click();
+    await expect(page.locator('span').filter({ hasText: /^Archived$/ })).toBeVisible();
     if (executionVisitId) {
       await page.goto(`/visits/${executionVisitId}`);
       await expect(page.getByText(`E2E Service ${runId}`, { exact: true }).first()).toBeVisible();
+      const visitClinicalRecords = page.getByRole('region', {
+        name: 'Structured care documentation',
+      });
+      await expect(visitClinicalRecords.getByText('121/80 mmHg', { exact: true })).toBeVisible();
+      await expect(
+        visitClinicalRecords.getByText('Assistance required', { exact: true }),
+      ).toBeVisible();
+      await expect(visitClinicalRecords.getByText('Fall risk', { exact: true })).toBeVisible();
     }
 
     await page.goto('/administration/users');
@@ -819,7 +1142,7 @@ test('Authentik users can be invited and administered from the office UI', async
     const invitedPage = await invitedContext.newPage();
     await signInWithAuthentik(invitedPage, invitedUsername, invitedPassword);
     await expect(
-      invitedPage.getByText('Ihr Benutzerkonto hat noch keinen aktiven Mandantenzugriff.'),
+      invitedPage.getByText('Your account does not have access to an active organization.'),
     ).toBeVisible();
     const invitedProvision = await waitForPlatformUser(database, issuer, invitedSubject);
     invitedPlatformUserId = invitedProvision.id;
@@ -850,40 +1173,40 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page.getByRole('heading', { name: invitedName })).toBeVisible();
     await page.locator(`input[name="roleId"][value="${officeRoleId}"]`).check();
     await page.getByRole('button', { name: 'Save roles' }).click();
-    await expect(page.getByText('Member access updated.')).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Access record updated.');
     await page.locator(`input[name="roleId"][value="${officeRoleId}"]`).uncheck();
     await page.getByRole('button', { name: 'Save roles' }).click();
-    await expect(page.getByText('Member access updated.')).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Access record updated.');
     await expect(page.locator(`input[name="roleId"][value="${officeRoleId}"]`)).not.toBeChecked();
     await page.locator(`input[name="roleId"][value="${officeRoleId}"]`).check();
     await page.getByRole('button', { name: 'Save roles' }).click();
-    await expect(page.getByText('Member access updated.')).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Access record updated.');
 
     await page.locator('input[name="scopeMode"][value="scoped"]').check();
     const facilityScope = page.locator(`input[name="scope"][value="facility:${facilityWestId}"]`);
     await facilityScope.check();
     await page.getByRole('button', { name: 'Save scopes' }).click();
-    await expect(page.getByText('Member access updated.')).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Access record updated.');
     await facilityScope.uncheck();
     await page.getByRole('button', { name: 'Save scopes' }).click();
-    await expect(page.getByText('Member access updated.')).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Access record updated.');
     await expect(facilityScope).not.toBeChecked();
     await facilityScope.check();
     await page.getByRole('button', { name: 'Save scopes' }).click();
-    await expect(page.getByText('Member access updated.')).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Access record updated.');
     await page.getByRole('button', { name: 'Activate membership' }).click();
-    await expect(page.getByText('Aktiv', { exact: true })).toBeVisible();
+    await expect(page.getByText('Active', { exact: true })).toBeVisible();
     await expect(page.getByText('Office', { exact: true })).toBeVisible();
     await expect(
       page.locator(`input[name="scope"][value="facility:${facilityWestId}"]`),
     ).toBeChecked();
 
     await page.goto('/administration/audit');
-    await expect(page.getByText('tenant.member.activated')).toBeVisible();
+    await expect(page.getByText('Membership activated', { exact: true })).toBeVisible();
 
     await invitedPage.goto('/');
-    await invitedPage.getByLabel('Mandant').selectOption(tenantId);
-    await invitedPage.getByRole('button', { name: 'Weiter' }).click();
+    await invitedPage.locator('select[name="tenantId"]').selectOption(tenantId);
+    await invitedPage.getByRole('button', { name: 'Continue' }).click();
     await expect(invitedPage).toHaveURL(/\/clients$/);
     await invitedPage.goto('/administration/facilities');
     await expect(invitedPage.getByText('Facility West', { exact: true })).toBeVisible();
@@ -891,12 +1214,12 @@ test('Authentik users can be invited and administered from the office UI', async
 
     await page.goto(`/administration/users/${invitedMembershipId}`);
     await page.getByRole('button', { name: 'Deactivate membership' }).click();
-    await expect(page.getByText('Inaktiv', { exact: true })).toBeVisible();
+    await expect(page.getByText('Inactive', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Activate membership' }).click();
-    await expect(page.getByText('Aktiv', { exact: true })).toBeVisible();
+    await expect(page.getByText('Active', { exact: true })).toBeVisible();
     page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Revoke access' }).click();
-    await expect(page.getByText('Widerrufen', { exact: true })).toBeVisible();
+    await expect(page.getByText('Revoked', { exact: true })).toBeVisible();
     await expect(page.getByText('Revoked memberships cannot be reactivated.')).toBeVisible();
   } finally {
     try {
@@ -906,6 +1229,12 @@ test('Authentik users can be invited and administered from the office UI', async
           .map((context) => context.close().catch(() => undefined)),
       );
       if (tenantId) {
+        const carePlanClientIds = [clientId, agreementClientId].filter(
+          (id): id is string => id !== undefined,
+        );
+        if (carePlanClientIds.length) {
+          await cleanupCarePlanningRecords(database, tenantId, carePlanClientIds);
+        }
         const agreementClientIds = [agreementClientId].filter(
           (id): id is string => id !== undefined,
         );
@@ -922,8 +1251,8 @@ test('Authentik users can be invited and administered from the office UI', async
           serviceCategoryCode,
         });
         await database.query(
-          'UPDATE employees.employees SET user_id = NULL WHERE tenant_id = $1 AND personnel_number = $2',
-          [tenantId, workforcePersonnelNumber],
+          'UPDATE employees.employees SET user_id = NULL WHERE tenant_id = $1 AND personnel_number = ANY($2::text[])',
+          [tenantId, [workforcePersonnelNumber, carePlanAuthorPersonnelNumber]],
         );
       }
       await cleanup(database, {
@@ -961,7 +1290,7 @@ test('Authentik users can be invited and administered from the office UI', async
           organizationName: workforceOrganizationName,
           facilityName: workforceFacilityName,
           teamName: workforceTeamName,
-          personnelNumber: workforcePersonnelNumber,
+          personnelNumbers: [workforcePersonnelNumber, carePlanAuthorPersonnelNumber],
         });
       }
     } finally {
@@ -1101,6 +1430,94 @@ async function cleanupServiceCatalogRecords(
   }
 }
 
+async function cleanupCarePlanningRecords(
+  database: Client,
+  tenantId: string,
+  clientIds: string[],
+): Promise<void> {
+  await database.query('BEGIN');
+  try {
+    await database.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+    const planRows = await database.query<{ id: string }>(
+      'SELECT id FROM care_planning.plans WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      [tenantId, clientIds],
+    );
+    const planIds = planRows.rows.map((row) => row.id);
+    if (planIds.length) {
+      const revisionRows = await database.query<{ id: string }>(
+        'SELECT id FROM care_planning.revisions WHERE tenant_id = $1 AND plan_id = ANY($2::uuid[])',
+        [tenantId, planIds],
+      );
+      const revisionIds = revisionRows.rows.map((row) => row.id);
+      const carePlanningTables = [
+        'plans',
+        'revisions',
+        'assessments',
+        'needs',
+        'resources',
+        'risk_responses',
+        'source_references',
+        'goals',
+        'goal_needs',
+        'measures',
+        'risk_response_needs',
+        'risk_response_measures',
+        'measure_needs',
+        'measure_goals',
+        'evaluations',
+        'evaluation_goals',
+      ] as const;
+      await database.query(
+        'DELETE FROM audit.audit_entries WHERE tenant_id = $1 AND resource_id = ANY($2::uuid[])',
+        [tenantId, planIds],
+      );
+      await database.query(
+        "DELETE FROM platform.outbox_messages WHERE tenant_id = $1 AND event ->> 'aggregateId' = ANY($2::text[])",
+        [tenantId, planIds],
+      );
+      for (const table of carePlanningTables) {
+        await database.query(`ALTER TABLE care_planning.${table} DISABLE TRIGGER USER`);
+      }
+      for (const table of [
+        'evaluation_goals',
+        'evaluations',
+        'source_references',
+        'risk_response_measures',
+        'risk_response_needs',
+        'measure_goals',
+        'measure_needs',
+        'goal_needs',
+        'risk_responses',
+        'measures',
+        'goals',
+        'resources',
+        'needs',
+        'assessments',
+      ] as const) {
+        await database.query(
+          `DELETE FROM care_planning.${table} WHERE tenant_id = $1 AND revision_id = ANY($2::uuid[])`,
+          [tenantId, revisionIds],
+        );
+      }
+      await database.query(
+        'DELETE FROM care_planning.revisions WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+        [tenantId, revisionIds],
+      );
+      await database.query(
+        'DELETE FROM care_planning.plans WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+        [tenantId, planIds],
+      );
+      for (const table of carePlanningTables) {
+        await database.query(`ALTER TABLE care_planning.${table} ENABLE TRIGGER USER`);
+      }
+    }
+    await database.query('COMMIT');
+  } catch (error) {
+    await database.query('ROLLBACK');
+    throw error;
+  }
+}
+
 async function cleanupServiceAgreementRecords(
   database: Client,
   tenantId: string,
@@ -1204,6 +1621,102 @@ async function cleanupServiceAgreementRecords(
         );
         await database.query(
           'ALTER TABLE service_evidence.acknowledgements ENABLE TRIGGER acknowledgements_append_only',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.records DISABLE TRIGGER clinical_records_write_guard',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.measurements DISABLE TRIGGER clinical_measurements_write_guard',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.observations DISABLE TRIGGER clinical_observations_write_guard',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.assessments DISABLE TRIGGER clinical_assessments_write_guard',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.risk_assessments DISABLE TRIGGER clinical_risk_assessments_write_guard',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.records DISABLE TRIGGER clinical_records_typed_payload_required',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.measurements DISABLE TRIGGER clinical_measurements_typed_payload_required',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.observations DISABLE TRIGGER clinical_observations_typed_payload_required',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.assessments DISABLE TRIGGER clinical_assessments_typed_payload_required',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.risk_assessments DISABLE TRIGGER clinical_risk_assessments_typed_payload_required',
+        );
+        await database.query(
+          `DELETE FROM clinical_documentation.measurements
+           WHERE tenant_id = $1 AND record_id IN (
+             SELECT id FROM clinical_documentation.records
+             WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])
+           )`,
+          [tenantId, documentationIds],
+        );
+        await database.query(
+          `DELETE FROM clinical_documentation.observations
+           WHERE tenant_id = $1 AND record_id IN (
+             SELECT id FROM clinical_documentation.records
+             WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])
+           )`,
+          [tenantId, documentationIds],
+        );
+        await database.query(
+          `DELETE FROM clinical_documentation.assessments
+           WHERE tenant_id = $1 AND record_id IN (
+             SELECT id FROM clinical_documentation.records
+             WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])
+           )`,
+          [tenantId, documentationIds],
+        );
+        await database.query(
+          `DELETE FROM clinical_documentation.risk_assessments
+           WHERE tenant_id = $1 AND record_id IN (
+             SELECT id FROM clinical_documentation.records
+             WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])
+           )`,
+          [tenantId, documentationIds],
+        );
+        await database.query(
+          'DELETE FROM clinical_documentation.records WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])',
+          [tenantId, documentationIds],
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.risk_assessments ENABLE TRIGGER clinical_risk_assessments_typed_payload_required',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.assessments ENABLE TRIGGER clinical_assessments_typed_payload_required',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.observations ENABLE TRIGGER clinical_observations_typed_payload_required',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.measurements ENABLE TRIGGER clinical_measurements_typed_payload_required',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.records ENABLE TRIGGER clinical_records_typed_payload_required',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.risk_assessments ENABLE TRIGGER clinical_risk_assessments_write_guard',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.assessments ENABLE TRIGGER clinical_assessments_write_guard',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.observations ENABLE TRIGGER clinical_observations_write_guard',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.measurements ENABLE TRIGGER clinical_measurements_write_guard',
+        );
+        await database.query(
+          'ALTER TABLE clinical_documentation.records ENABLE TRIGGER clinical_records_write_guard',
         );
         await database.query(
           'ALTER TABLE care_documentation.entries DISABLE TRIGGER documentation_entries_draft_only',
@@ -1347,7 +1860,7 @@ async function cleanupWorkforceRecords(
     organizationName: string;
     facilityName: string;
     teamName: string;
-    personnelNumber: string;
+    personnelNumbers: readonly string[];
   },
 ): Promise<void> {
   await database.query('BEGIN');
@@ -1366,8 +1879,8 @@ async function cleanupWorkforceRecords(
       [tenantId, names.teamName],
     );
     const employees = await database.query<{ id: string }>(
-      'SELECT id FROM employees.employees WHERE tenant_id = $1 AND personnel_number = $2',
-      [tenantId, names.personnelNumber],
+      'SELECT id FROM employees.employees WHERE tenant_id = $1 AND personnel_number = ANY($2::text[])',
+      [tenantId, names.personnelNumbers],
     );
     const resourceIds = [
       ...organizations.rows.map((row) => row.id),
@@ -1460,7 +1973,7 @@ async function createAuthentikUser(
 
 async function signInWithAuthentik(page: Page, username: string, password: string): Promise<void> {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Mit Authentik anmelden' }).click();
+  await page.getByRole('button', { name: 'Sign in with Authentik' }).click();
   await page.locator('input[name="uidField"]').fill(username);
   await page
     .getByRole('button', { name: /continue|log in|sign in/i })

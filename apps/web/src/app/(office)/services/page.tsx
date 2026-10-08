@@ -1,5 +1,8 @@
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
+import { formatDate, formatNumber } from '../../../i18n/format';
+import { statusLabelKey, unitLabelKey } from '../../../i18n/status';
 import { ActionNotice } from '../administration/action-notice';
 import {
   archiveServiceCategoryAction,
@@ -27,16 +30,10 @@ type SearchParams = Promise<{
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-const units: Record<string, string> = {
-  occurrence: 'Einsatz',
-  minute: 'Minute',
-  hour: 'Stunde',
-  day: 'Tag',
-};
-
 export default async function ServicesPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const query = await searchParams;
   const q = query.q?.trim().slice(0, 120) || undefined;
   const status = query.status === 'archived' ? 'archived' : 'active';
@@ -89,16 +86,15 @@ export default async function ServicesPage({
     <div className="grid gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="grid gap-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">Office</p>
-          <h1 className="text-3xl font-semibold">Leistungskatalog</h1>
-          <p className="max-w-2xl text-slate-700">
-            Leistungen und ihre organisatorische Verfügbarkeit verwalten. Preise und Abrechnung sind
-            hier nicht hinterlegt.
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
+            {t('Services.section')}
           </p>
+          <h1 className="text-3xl font-semibold">{t('Services.catalogTitle')}</h1>
+          <p className="max-w-2xl text-slate-700">{t('Services.catalogDescription')}</p>
         </div>
         {canCreateService ? (
           <Button asChild>
-            <Link href="/services/new">Leistung anlegen</Link>
+            <Link href="/services/new">{t('Services.create')}</Link>
           </Button>
         ) : null}
       </header>
@@ -106,25 +102,29 @@ export default async function ServicesPage({
       <ActionNotice error={query.error} updated={query.updated} />
       {servicesResult.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-          Leistungen konnten nicht geladen werden ({servicesResult.error.code}).
+          {t('Errors.generic')}
         </p>
       ) : null}
 
       <section aria-labelledby="service-search-title" className="grid gap-3">
         <h2 id="service-search-title" className="text-lg font-semibold">
-          Suche und Filter
+          {t('Services.searchAndFilter')}
         </h2>
         <form
           method="get"
           className="grid gap-3 rounded-lg border bg-white p-4 md:grid-cols-3 lg:grid-cols-4"
         >
-          <Field label="Name oder Code" name="q" defaultValue={q ?? ''} maxLength={120} />
-          <SelectField label="Status" name="status" defaultValue={status}>
-            <option value="active">Aktiv</option>
-            <option value="archived">Archiviert</option>
+          <Field label={t('Services.nameOrCode')} name="q" defaultValue={q ?? ''} maxLength={120} />
+          <SelectField label={t('Common.fields.status')} name="status" defaultValue={status}>
+            <option value="active">{t('Common.status.active')}</option>
+            <option value="archived">{t('Common.status.archived')}</option>
           </SelectField>
-          <SelectField label="Kategorie" name="categoryId" defaultValue={categoryId ?? ''}>
-            <option value="">Alle Kategorien</option>
+          <SelectField
+            label={t('Services.category')}
+            name="categoryId"
+            defaultValue={categoryId ?? ''}
+          >
+            <option value="">{t('Services.allCategories')}</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -132,30 +132,34 @@ export default async function ServicesPage({
             ))}
           </SelectField>
           <SelectField
-            label="Organisation"
+            label={t('Common.fields.organization')}
             name="organizationId"
             defaultValue={organizationId ?? ''}
           >
-            <option value="">Alle Organisationen</option>
+            <option value="">{t('Common.filters.allOrganizations')}</option>
             {organizations.map((organization) => (
               <option key={organization.id} value={organization.id}>
                 {organization.name}
               </option>
             ))}
           </SelectField>
-          <SelectField label="Einrichtung" name="facilityId" defaultValue={facilityId ?? ''}>
-            <option value="">Alle Einrichtungen</option>
+          <SelectField
+            label={t('Common.fields.facility')}
+            name="facilityId"
+            defaultValue={facilityId ?? ''}
+          >
+            <option value="">{t('Common.filters.allFacilities')}</option>
             {facilities.map((facility) => (
               <option key={facility.id} value={facility.id}>
                 {facility.organizationName} — {facility.name}
               </option>
             ))}
           </SelectField>
-          <Field label="Gültig am" name="validAt" type="date" defaultValue={validAt} />
+          <Field label={t('Services.validOn')} name="validAt" type="date" defaultValue={validAt} />
           <div className="flex items-end gap-2">
-            <Button type="submit">Anwenden</Button>
+            <Button type="submit">{t('Common.actions.apply')}</Button>
             <Button asChild variant="secondary">
-              <Link href="/services">Zurücksetzen</Link>
+              <Link href="/services">{t('Common.actions.reset')}</Link>
             </Button>
           </div>
         </form>
@@ -164,36 +168,36 @@ export default async function ServicesPage({
       {services?.items.length ? (
         <section aria-labelledby="service-list-title" className="grid gap-3">
           <h2 id="service-list-title" className="text-lg font-semibold">
-            {services.total} Leistungen
+            {t('Services.resultCount', { count: services.total })}
           </h2>
           <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
             <table className="w-full border-collapse text-left text-sm">
-              <caption className="sr-only">Leistungskatalog</caption>
+              <caption className="sr-only">{t('Services.listCaption')}</caption>
               <thead className="border-b bg-slate-100 text-slate-700">
                 <tr>
                   <th scope="col" className="px-4 py-3">
-                    Code
+                    {t('Services.code')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Name
+                    {t('Services.name')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Kategorie
+                    {t('Services.category')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Einheit
+                    {t('Services.unit')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Dauer
+                    {t('Services.duration')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Verfügbarkeit
+                    {t('Services.availability')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Gültigkeit
+                    {t('Services.validity')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Status
+                    {t('Common.fields.status')}
                   </th>
                 </tr>
               </thead>
@@ -210,18 +214,22 @@ export default async function ServicesPage({
                       </Link>
                     </td>
                     <td className="px-4 py-3">{service.categoryName}</td>
-                    <td className="px-4 py-3">{units[service.unit]}</td>
+                    <td className="px-4 py-3">{t(unitLabelKey(service.unit))}</td>
                     <td className="px-4 py-3">
                       {service.defaultDurationMinutes
-                        ? `${service.defaultDurationMinutes} Min.`
+                        ? t('Common.units.minutes', { count: service.defaultDurationMinutes })
                         : '—'}
                     </td>
-                    <td className="px-4 py-3">{service.availabilityCount}</td>
+                    <td className="px-4 py-3">{formatNumber(service.availabilityCount, locale)}</td>
                     <td className="px-4 py-3">
-                      {service.validFrom} – {service.validUntil ?? 'offen'}
+                      {formatDate(service.validFrom, locale)} –{' '}
+                      {formatDate(service.validUntil, locale) ?? t('Services.openEnded')}
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={service.status} />
+                      <StatusBadge
+                        status={service.status}
+                        label={t(statusLabelKey(service.status))}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -230,26 +238,34 @@ export default async function ServicesPage({
           </div>
           <div className="flex items-center justify-between">
             <p className="text-sm text-slate-600">
-              Seite {services.page} von {Math.max(1, Math.ceil(services.total / services.pageSize))}
+              {t('Common.pagination', {
+                page: formatNumber(services.page, locale),
+                pages: formatNumber(
+                  Math.max(1, Math.ceil(services.total / services.pageSize)),
+                  locale,
+                ),
+              })}
             </p>
             <div className="flex gap-2">
               {services.page > 1 ? (
                 <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(filters, services.page - 1)}>Zurück</Link>
+                  <Link href={pageHref(filters, services.page - 1)}>
+                    {t('Common.actions.previous')}
+                  </Link>
                 </Button>
               ) : null}
               {services.page * services.pageSize < services.total ? (
                 <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(filters, services.page + 1)}>Weiter</Link>
+                  <Link href={pageHref(filters, services.page + 1)}>
+                    {t('Common.actions.next')}
+                  </Link>
                 </Button>
               ) : null}
             </div>
           </div>
         </section>
       ) : !servicesResult.error ? (
-        <p className="rounded-lg border bg-white p-6 text-slate-700">
-          Keine Leistungen für diese Suche gefunden.
-        </p>
+        <p className="rounded-lg border bg-white p-6 text-slate-700">{t('Services.noResults')}</p>
       ) : null}
 
       <section
@@ -258,29 +274,27 @@ export default async function ServicesPage({
       >
         <div>
           <h2 id="service-categories-title" className="text-xl font-semibold">
-            Kategorien
+            {t('Services.categories')}
           </h2>
-          <p className="text-sm text-slate-600">
-            Kategorien ordnen den Leistungskatalog und können archiviert werden.
-          </p>
+          <p className="text-sm text-slate-600">{t('Services.categoriesDescription')}</p>
         </div>
         {canManageCategories ? (
           <form
             action={createServiceCategoryAction}
             className="grid gap-3 rounded-md bg-slate-50 p-4 md:grid-cols-4"
           >
-            <Field label="Name" name="name" required maxLength={120} />
-            <Field label="Code (optional)" name="code" maxLength={40} />
+            <Field label={t('Common.fields.name')} name="name" required maxLength={120} />
+            <Field label={t('Services.optionalCode')} name="code" maxLength={40} />
             <Field
-              label="Sortierung (optional)"
+              label={t('Services.optionalSortOrder')}
               name="sortOrder"
               type="number"
               min={0}
               max={10000}
             />
-            <Field label="Beschreibung (optional)" name="description" maxLength={1000} />
+            <Field label={t('Services.optionalDescription')} name="description" maxLength={1000} />
             <div className="md:col-span-4">
-              <Button type="submit">Kategorie anlegen</Button>
+              <Button type="submit">{t('Services.categoryCreate')}</Button>
             </div>
           </form>
         ) : null}
@@ -296,20 +310,20 @@ export default async function ServicesPage({
                     >
                       <input type="hidden" name="categoryId" value={category.id} />
                       <Field
-                        label="Name"
+                        label={t('Common.fields.name')}
                         name="name"
                         defaultValue={category.name}
                         required
                         maxLength={120}
                       />
                       <Field
-                        label="Code"
+                        label={t('Services.code')}
                         name="code"
                         defaultValue={category.code ?? ''}
                         maxLength={40}
                       />
                       <Field
-                        label="Sortierung"
+                        label={t('Services.sortOrder')}
                         name="sortOrder"
                         type="number"
                         min={0}
@@ -317,15 +331,18 @@ export default async function ServicesPage({
                         defaultValue={category.sortOrder?.toString() ?? ''}
                       />
                       <Field
-                        label="Beschreibung"
+                        label={t('Common.fields.description')}
                         name="description"
                         defaultValue={category.description ?? ''}
                         maxLength={1000}
                       />
                       <div className="flex items-center gap-3 md:col-span-4">
-                        <StatusBadge status={category.status} />
+                        <StatusBadge
+                          status={category.status}
+                          label={t(statusLabelKey(category.status))}
+                        />
                         <Button type="submit" size="sm" variant="secondary">
-                          Kategorie speichern
+                          {t('Services.categorySave')}
                         </Button>
                       </div>
                     </form>
@@ -333,7 +350,7 @@ export default async function ServicesPage({
                       <form action={archiveServiceCategoryAction}>
                         <input type="hidden" name="categoryId" value={category.id} />
                         <Button type="submit" size="sm" variant="link">
-                          Kategorie archivieren
+                          {t('Services.categoryArchive')}
                         </Button>
                       </form>
                     ) : null}
@@ -346,7 +363,10 @@ export default async function ServicesPage({
                         <p className="text-sm text-slate-600">{category.description}</p>
                       ) : null}
                     </div>
-                    <StatusBadge status={category.status} />
+                    <StatusBadge
+                      status={category.status}
+                      label={t(statusLabelKey(category.status))}
+                    />
                   </div>
                 )}
               </li>
@@ -354,10 +374,10 @@ export default async function ServicesPage({
           </ul>
         ) : categoriesResult.error ? (
           <p role="alert" className="text-sm text-red-800">
-            Kategorien konnten nicht geladen werden ({categoriesResult.error.code}).
+            {t('Services.categoryLoadFailed')}
           </p>
         ) : (
-          <p className="text-sm text-slate-600">Noch keine Kategorien angelegt.</p>
+          <p className="text-sm text-slate-600">{t('Services.noCategories')}</p>
         )}
       </section>
     </div>

@@ -3,8 +3,14 @@ import { notFound } from 'next/navigation';
 import { v7 as uuidv7 } from 'uuid';
 import type { components } from '@care/api-client';
 import { Button, Input, Label } from '@care/ui';
+import { getLocale, getTranslations } from 'next-intl/server';
+import { errorMessageKey } from '../../../../i18n/errors';
+import { formatNumber } from '../../../../i18n/format';
+import { CarePlanSection } from './care-plan-section';
+import { ClinicalSection } from './clinical-section';
 import { getApiClient, getTenantHeader } from '../../../../lib/api';
 import { formatVisitDateTime, formatVisitTime } from '../../../../lib/care-date';
+import type { Locale } from '../../../../i18n/config';
 import {
   addDocumentationEntryAction,
   completeVisitAction,
@@ -24,6 +30,7 @@ export default async function CareVisitPage({
 }: Readonly<{ params: Promise<{ id: string }>; searchParams: SearchParams }>) {
   const { id } = await params;
   const query = await searchParams;
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const api = await getApiClient();
   const get = api.GET;
   const header = await getTenantHeader();
@@ -34,15 +41,28 @@ export default async function CareVisitPage({
   if (!data) {
     return (
       <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-        Einsatz konnte nicht geladen werden. {error?.code}
+        {t('VisitExecution.loadFailed')} {error?.code ? t(errorMessageKey(error.code)) : null}
       </p>
     );
   }
 
   const { visit, execution, services } = data;
-  const documentationResult = await get('/api/v1/visits/{visitId}/documentation', {
-    params: { path: { visitId: id }, header },
-  });
+  const [documentationResult, carePlanResult] = await Promise.all([
+    get('/api/v1/visits/{visitId}/documentation', {
+      params: { path: { visitId: id }, header },
+    }),
+    get('/api/v1/visits/{visitId}/care-plan', {
+      params: { path: { visitId: id }, header },
+    }),
+  ]);
+  const clinicalResult = documentationResult.data?.documentation?.id
+    ? await get('/api/v1/care-documentation/{id}/clinical-records', {
+        params: {
+          path: { id: documentationResult.data.documentation.id },
+          header,
+        },
+      })
+    : null;
   const evidencePackageResult =
     documentationResult.data?.documentation?.status === 'finalized'
       ? await get('/api/v1/visits/{visitId}/evidence-package', {
@@ -63,24 +83,32 @@ export default async function CareVisitPage({
     <div className="mx-auto grid max-w-3xl gap-5">
       <header className="grid gap-3">
         <Link className="w-fit text-sm font-semibold text-blue-800 underline" href="/care/today">
-          Zurück zu Heute
+          {t('VisitExecution.backToToday')}
         </Link>
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">Einsatz</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
+            {t('VisitExecution.section')}
+          </p>
           <h1 className="mt-1 text-3xl font-semibold">{visit.clientDisplayName}</h1>
         </div>
         <p className="text-slate-700">
-          {formatVisitDateTime(visit.plannedStart, visit.timezone)}–
-          {formatVisitTime(visit.plannedEnd, visit.timezone)}
+          {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}–
+          {formatVisitTime(visit.plannedEnd, visit.timezone, locale)}
         </p>
         {visit.address ? <p className="text-slate-700">{visit.address}</p> : null}
       </header>
 
+      <CarePlanSection
+        plan={carePlanResult.data ?? null}
+        loadFailed={carePlanResult.error !== undefined}
+        locale={locale}
+      />
+
       {query.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-          Änderung fehlgeschlagen ({query.error}).
+          {t('VisitExecution.changeFailed')} {t(errorMessageKey(query.error))}
           {query.error === 'VISIT_EXECUTION_VERSION_CONFLICT'
-            ? ' Bitte laden Sie den Einsatz neu und versuchen Sie es erneut.'
+            ? ` ${t('VisitExecution.retryAfterConflict')}`
             : ''}
         </p>
       ) : null}
@@ -89,52 +117,64 @@ export default async function CareVisitPage({
           role="status"
           className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
         >
-          {noticeText(query.notice)}
+          {t(noticeKey(query.notice))}
         </p>
       ) : null}
 
       <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-xl font-semibold">Ausführung</h2>
+          <h2 className="text-xl font-semibold">{t('VisitExecution.execution')}</h2>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium">
-            {executionStatus(execution.status)}
+            {t(executionStatusKey(execution.status))}
           </span>
         </div>
         {execution.actualStart ? (
           <dl className="grid gap-2 text-sm sm:grid-cols-2">
-            <Time label="Ankunft" value={execution.actualStart} timezone={visit.timezone} />
+            <Time
+              label={t('VisitExecution.arrival')}
+              value={execution.actualStart}
+              timezone={visit.timezone}
+              locale={locale}
+            />
             {execution.actualEnd ? (
-              <Time label="Abfahrt" value={execution.actualEnd} timezone={visit.timezone} />
+              <Time
+                label={t('VisitExecution.departure')}
+                value={execution.actualEnd}
+                timezone={visit.timezone}
+                locale={locale}
+              />
             ) : null}
           </dl>
         ) : (
-          <p className="text-slate-600">Ankunftszeit wird beim Start serverseitig erfasst.</p>
+          <p className="text-slate-600">{t('VisitExecution.arrivalCaptured')}</p>
         )}
         {startAllowed ? (
           <form action={startVisitAction}>
             <input type="hidden" name="visitId" value={visit.id} />
             <Button type="submit" className="min-h-12 w-full text-base sm:w-fit">
-              Einsatz starten
+              {t('VisitExecution.start')}
             </Button>
           </form>
         ) : null}
         {visit.status === 'cancelled' ? (
           <p className="rounded-md bg-slate-100 p-3 text-slate-700">
-            Dieser Einsatz wurde abgesagt.
+            {t('VisitExecution.cancelled')}
           </p>
         ) : null}
         {execution.startedByEmployeeName ? (
-          <p className="text-sm text-slate-600">Gestartet von {execution.startedByEmployeeName}</p>
+          <p className="text-sm text-slate-600">
+            {t('VisitExecution.startedBy', { employee: execution.startedByEmployeeName })}
+          </p>
         ) : null}
         {execution.completedByEmployeeName ? (
           <p className="text-sm text-slate-600">
-            Abgeschlossen von {execution.completedByEmployeeName}
+            {t('VisitExecution.completedBy', { employee: execution.completedByEmployeeName })}
           </p>
         ) : null}
       </section>
 
       <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
-        <h2 className="text-xl font-semibold">Geplante Leistungen</h2>
+        <h2 className="text-xl font-semibold">{t('VisitExecution.plannedServices')}</h2>
         {services.filter((service) => !service.unplanned).length ? (
           <ul className="grid gap-4">
             {services
@@ -147,16 +187,17 @@ export default async function CareVisitPage({
                     service={service}
                     performedServiceId={service.id ?? uuidv7()}
                     editable={execution.status === 'in_progress'}
+                    locale={locale}
                   />
                 </li>
               ))}
           </ul>
         ) : (
-          <p className="text-slate-600">Für diesen Einsatz sind keine Leistungen geplant.</p>
+          <p className="text-slate-600">{t('VisitExecution.noPlannedServices')}</p>
         )}
         {services.some((service) => service.unplanned) ? (
           <div className="grid gap-3 border-t pt-4">
-            <h3 className="font-semibold">Zusätzlich erfasste Leistungen</h3>
+            <h3 className="font-semibold">{t('VisitExecution.additionalServices')}</h3>
             {services
               .filter((service) => service.unplanned)
               .map((service) => (
@@ -167,6 +208,7 @@ export default async function CareVisitPage({
                   service={service}
                   performedServiceId={service.id ?? uuidv7()}
                   editable={execution.status === 'in_progress'}
+                  locale={locale}
                 />
               ))}
           </div>
@@ -176,24 +218,24 @@ export default async function CareVisitPage({
       {execution.status === 'in_progress' ? (
         <>
           <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
-            <h2 className="text-xl font-semibold">Ungeplante Leistung</h2>
+            <h2 className="text-xl font-semibold">{t('VisitExecution.unplannedService')}</h2>
             {availableServices.length ? (
               <form action={recordPerformedServiceAction} className="grid gap-4">
                 <input type="hidden" name="visitId" value={visit.id} />
                 <input type="hidden" name="performedServiceId" value={uuidv7()} />
                 <input type="hidden" name="expectedVersion" value={execution.version} />
                 <div className="grid gap-2">
-                  <Label htmlFor="serviceDefinitionId">Leistung</Label>
+                  <Label htmlFor="serviceDefinitionId">{t('VisitExecution.service')}</Label>
                   <select
                     id="serviceDefinitionId"
                     name="serviceDefinitionId"
                     required
                     className="min-h-12 rounded-md border bg-white px-3"
                   >
-                    <option value="">Bitte auswählen</option>
+                    <option value="">{t('VisitExecution.selectService')}</option>
                     {availableServices.map((service) => (
                       <option key={service.id} value={service.id}>
-                        {service.code} · {service.name} ({unitLabel(service.unit)})
+                        {service.code} · {service.name} ({t(unitKey(service.unit))})
                       </option>
                     ))}
                   </select>
@@ -202,26 +244,22 @@ export default async function CareVisitPage({
                   status="performed"
                   actualQuantity="1"
                   reasonCode={null}
-                  unit="Einheit"
+                  unit="unknown"
                   prefix="unplanned"
                 />
                 <Button type="submit" variant="secondary" className="min-h-12 w-full sm:w-fit">
-                  Leistung erfassen
+                  {t('VisitExecution.recordService')}
                 </Button>
               </form>
             ) : (
-              <p className="text-slate-600">
-                Keine weiteren Leistungen sind für diesen Anbieter verfügbar.
-              </p>
+              <p className="text-slate-600">{t('VisitExecution.noMoreServices')}</p>
             )}
           </section>
 
           <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
-            <h2 className="text-xl font-semibold">Einsatz abschließen</h2>
+            <h2 className="text-xl font-semibold">{t('VisitExecution.completeVisit')}</h2>
             {unresolved ? (
-              <p className="text-slate-600">
-                Erfassen Sie zuerst ein Ergebnis für jede geplante Leistung.
-              </p>
+              <p className="text-slate-600">{t('VisitExecution.completeVisitHint')}</p>
             ) : null}
             <form action={completeVisitAction}>
               <input type="hidden" name="visitId" value={visit.id} />
@@ -231,7 +269,7 @@ export default async function CareVisitPage({
                 disabled={unresolved}
                 className="min-h-12 w-full text-base sm:w-fit"
               >
-                Einsatz abschließen
+                {t('VisitExecution.completeVisit')}
               </Button>
             </form>
           </section>
@@ -241,53 +279,67 @@ export default async function CareVisitPage({
       <DocumentationSection
         detail={documentationResult.data}
         {...(documentationResult.error?.code ? { errorCode: documentationResult.error.code } : {})}
+        clinicalDetail={clinicalResult?.data}
+        clinicalErrorCode={clinicalResult?.error?.code}
         evidenceStatus={evidencePackageResult?.data?.status ?? null}
         visitId={visit.id}
         executionStatus={execution.status}
+        timezone={visit.timezone}
+        defaultTime={execution.actualStart ?? visit.plannedStart}
+        locale={locale}
       />
     </div>
   );
 }
 
-function ServiceCard({
+async function ServiceCard({
   visitId,
   version,
   service,
   performedServiceId,
   editable,
+  locale,
 }: {
   visitId: string;
   version: number;
   service: components['schemas']['PerformedServiceResponseDto'];
   performedServiceId: string;
   editable: boolean;
+  locale: Locale;
 }) {
+  const t = await getTranslations();
   return (
     <section className="grid gap-3 rounded-md border p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="font-semibold">{service.serviceName}</h3>
           <p className="text-sm text-slate-600">
-            {service.serviceCode} · Geplant: {service.plannedQuantity ?? '–'}{' '}
-            {unitLabel(service.unit)}
+            {service.serviceCode} · {t('VisitExecution.planned')}{' '}
+            {service.plannedQuantity == null
+              ? '–'
+              : formatNumber(Number(service.plannedQuantity), locale)}{' '}
+            {t(unitKey(service.unit))}
           </p>
         </div>
         <span className="rounded-full bg-slate-100 px-3 py-1 text-sm">
-          {serviceStatus(service.status)}
+          {t(serviceStatusKey(service.status))}
         </span>
       </div>
       {service.status !== 'not_recorded' ? (
         <dl className="grid gap-2 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-slate-600">Tatsächlich</dt>
+            <dt className="text-slate-600">{t('VisitExecution.actual')}</dt>
             <dd className="font-medium">
-              {service.actualQuantity ?? '–'} {unitLabel(service.unit)}
+              {service.actualQuantity == null
+                ? '–'
+                : formatNumber(Number(service.actualQuantity), locale)}{' '}
+              {t(unitKey(service.unit))}
             </dd>
           </div>
           {service.reasonCode ? (
             <div>
-              <dt className="text-slate-600">Grund</dt>
-              <dd className="font-medium">{reasonLabel(service.reasonCode)}</dd>
+              <dt className="text-slate-600">{t('VisitExecution.reason')}</dt>
+              <dd className="font-medium">{t(reasonKey(service.reasonCode))}</dd>
             </div>
           ) : null}
         </dl>
@@ -308,7 +360,7 @@ function ServiceCard({
             prefix={service.visitServiceId ?? performedServiceId}
           />
           <Button type="submit" variant="secondary" className="min-h-12 w-full sm:w-fit">
-            Ergebnis speichern
+            {t('VisitExecution.saveOutcome')}
           </Button>
         </form>
       ) : null}
@@ -316,7 +368,7 @@ function ServiceCard({
   );
 }
 
-function DecisionFields({
+async function DecisionFields({
   status,
   actualQuantity,
   reasonCode,
@@ -329,26 +381,29 @@ function DecisionFields({
   unit: string;
   prefix: string;
 }) {
+  const t = await getTranslations();
   const quantityId = 'quantity-' + prefix;
   const reasonId = 'reason-' + prefix;
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="grid gap-2">
-          <Label htmlFor={'status-' + prefix}>Ergebnis</Label>
+          <Label htmlFor={'status-' + prefix}>{t('VisitExecution.outcome')}</Label>
           <select
             id={'status-' + prefix}
             name="status"
             defaultValue={status}
             className="min-h-12 rounded-md border bg-white px-3"
           >
-            <option value="performed">Erbracht</option>
-            <option value="partially_performed">Teilweise erbracht</option>
-            <option value="not_performed">Nicht erbracht</option>
+            <option value="performed">{t('VisitExecution.performed')}</option>
+            <option value="partially_performed">{t('VisitExecution.partiallyPerformed')}</option>
+            <option value="not_performed">{t('VisitExecution.notPerformed')}</option>
           </select>
         </div>
         <div className="grid gap-2">
-          <Label htmlFor={quantityId}>Tatsächliche Menge ({unitLabel(unit)})</Label>
+          <Label htmlFor={quantityId}>
+            {t('VisitExecution.actualQuantity', { unit: t(unitKey(unit)) })}
+          </Label>
           <Input
             id={quantityId}
             name="actualQuantity"
@@ -361,45 +416,58 @@ function DecisionFields({
         </div>
       </div>
       <div className="grid gap-2">
-        <Label htmlFor={reasonId}>Grund (erforderlich, wenn nicht erbracht)</Label>
+        <Label htmlFor={reasonId}>{t('VisitExecution.reasonRequired')}</Label>
         <select
           id={reasonId}
           name="reasonCode"
           defaultValue={reasonCode ?? ''}
           className="min-h-12 rounded-md border bg-white px-3"
         >
-          <option value="">Kein Grund</option>
-          <option value="client_declined">Klient lehnte ab</option>
-          <option value="client_not_present">Klient nicht angetroffen</option>
-          <option value="service_not_required">Leistung nicht erforderlich</option>
-          <option value="time_constraint">Zeitliche Einschränkung</option>
-          <option value="provider_decision">Entscheidung des Dienstes</option>
-          <option value="other">Sonstiger Grund</option>
+          <option value="">{t('VisitExecution.noReason')}</option>
+          <option value="client_declined">{t('VisitExecution.reasons.clientDeclined')}</option>
+          <option value="client_not_present">{t('VisitExecution.reasons.clientNotPresent')}</option>
+          <option value="service_not_required">
+            {t('VisitExecution.reasons.serviceNotRequired')}
+          </option>
+          <option value="time_constraint">{t('VisitExecution.reasons.timeConstraint')}</option>
+          <option value="provider_decision">{t('VisitExecution.reasons.providerDecision')}</option>
+          <option value="other">{t('VisitExecution.reasons.other')}</option>
         </select>
       </div>
     </>
   );
 }
 
-function DocumentationSection({
+async function DocumentationSection({
   detail,
   errorCode,
+  clinicalDetail,
+  clinicalErrorCode,
   evidenceStatus,
   visitId,
   executionStatus: visitExecutionStatus,
+  timezone,
+  defaultTime,
+  locale,
 }: {
   detail: components['schemas']['CareDocumentationDetailDto'] | undefined;
   errorCode?: string;
+  clinicalDetail: components['schemas']['ClinicalDocumentationDetailDto'] | undefined;
+  clinicalErrorCode: string | undefined;
   evidenceStatus: 'ready' | 'acknowledged' | 'declined' | 'revoked' | 'outdated' | null;
   visitId: string;
   executionStatus: 'not_started' | 'in_progress' | 'completed';
+  timezone: string;
+  defaultTime: string;
+  locale: Locale;
 }) {
+  const t = await getTranslations();
   if (errorCode || !detail) {
     return (
       <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
-        <h2 className="text-xl font-semibold">Dokumentation</h2>
+        <h2 className="text-xl font-semibold">{t('CareDocumentation.visit.title')}</h2>
         <p role="alert" className="text-red-800">
-          Dokumentation konnte nicht geladen werden{errorCode ? ` (${errorCode})` : ''}.
+          {t('CareDocumentation.visit.unavailable')}
         </p>
       </section>
     );
@@ -416,18 +484,24 @@ function DocumentationSection({
     <section className="grid gap-4 rounded-lg border bg-white p-4 sm:p-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Dokumentation</h2>
+          <h2 className="text-xl font-semibold">{t('CareDocumentation.visit.title')}</h2>
           <p className="mt-1 text-sm text-slate-600">
             {finalized
-              ? `Finalisiert${document.finalizedAt ? ` am ${formatVisitDateTime(document.finalizedAt, detail.visit.timezone)}` : ''}`
+              ? t('CareDocumentation.visit.finalizedAt', {
+                  date: document.finalizedAt
+                    ? formatVisitDateTime(document.finalizedAt, detail.visit.timezone, locale)
+                    : '',
+                })
               : editable
-                ? `Entwurf · erstellt von ${document.createdByEmployeeName ?? 'Mitarbeiter'}`
-                : 'Noch nicht angelegt'}
+                ? t('CareDocumentation.visit.draftBy', {
+                    employee: document.createdByEmployeeName ?? t('Common.fields.employee'),
+                  })
+                : t('CareDocumentation.visit.notCreated')}
           </p>
         </div>
         {finalized ? (
           <span className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-900">
-            Finalisiert
+            {t('CareDocumentation.visit.finalized')}
           </span>
         ) : null}
       </header>
@@ -435,22 +509,22 @@ function DocumentationSection({
       {finalized ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-slate-50 p-3">
           <span className="text-sm font-medium">
-            Bestätigung:{' '}
+            {t('CareDocumentation.visit.acknowledgement')}{' '}
             {evidenceStatus === 'acknowledged'
-              ? 'Bestätigt'
+              ? t('CareDocumentation.visit.acknowledged')
               : evidenceStatus === 'declined'
-                ? 'Abgelehnt'
+                ? t('CareDocumentation.visit.declined')
                 : evidenceStatus === 'outdated'
-                  ? 'Neue Bestätigung erforderlich'
+                  ? t('CareDocumentation.visit.newAcknowledgementRequired')
                   : evidenceStatus === 'revoked'
-                    ? 'Widerrufen'
-                    : 'Ausstehend'}
+                    ? t('CareDocumentation.visit.revoked')
+                    : t('CareDocumentation.visit.pending')}
           </span>
           <Link
             href={`/care/visits/${visitId}/evidence`}
             className="min-h-10 rounded-md border border-slate-400 px-3 py-2 text-sm font-semibold text-blue-900 underline"
           >
-            Leistungsnachweis prüfen
+            {t('CareDocumentation.visit.reviewEvidence')}
           </Link>
         </div>
       ) : null}
@@ -458,21 +532,20 @@ function DocumentationSection({
       {!document ? (
         visitExecutionStatus === 'not_started' ? (
           <p className="rounded-md bg-slate-50 p-3 text-slate-700">
-            Nach dem Start des Einsatzes können Sie die Dokumentation während oder nach der
-            Ausführung beginnen.
+            {t('CareDocumentation.visit.startBeforeDocumentation')}
           </p>
         ) : (
           <form action={createDocumentationAction}>
             <input type="hidden" name="visitId" value={visitId} />
             <Button type="submit" className="min-h-12 w-full sm:w-fit">
-              Dokumentation beginnen
+              {t('CareDocumentation.visit.startDocumentation')}
             </Button>
           </form>
         )
       ) : (
         <>
           <section className="grid gap-3 border-t pt-4">
-            <h3 className="text-lg font-semibold">Leistungsdokumentation</h3>
+            <h3 className="text-lg font-semibold">{t('CareDocumentation.visit.services')}</h3>
             {detail.services.length ? (
               <ul className="grid gap-3">
                 {detail.services.map((service) => (
@@ -481,8 +554,8 @@ function DocumentationSection({
                       <div>
                         <h4 className="font-medium">{service.serviceName}</h4>
                         <p className="text-sm text-slate-600">
-                          {serviceStatus(service.status)} · {service.actualQuantity ?? '–'}{' '}
-                          {unitLabel(service.unit)}
+                          {t(serviceStatusKey(service.status))} · {service.actualQuantity ?? '–'}{' '}
+                          {t(unitKey(service.unit))}
                         </p>
                       </div>
                       <span
@@ -492,7 +565,9 @@ function DocumentationSection({
                             : 'text-sm font-medium text-amber-900'
                         }
                       >
-                        {service.evidence ? 'Nachweis erfasst' : 'Nachweis fehlt'}
+                        {service.evidence
+                          ? t('CareDocumentation.visit.evidenceRecorded')
+                          : t('CareDocumentation.visit.evidenceMissing')}
                       </span>
                     </div>
                     {service.evidence?.note ? (
@@ -500,7 +575,9 @@ function DocumentationSection({
                     ) : null}
                     {service.evidence?.documentedByEmployeeName ? (
                       <p className="text-xs text-slate-500">
-                        Dokumentiert von {service.evidence.documentedByEmployeeName}
+                        {t('CareDocumentation.visit.documentedBy', {
+                          employee: service.evidence.documentedByEmployeeName,
+                        })}
                       </p>
                     ) : null}
                     {editable ? (
@@ -517,7 +594,7 @@ function DocumentationSection({
                         />
                         <input type="hidden" name="expectedVersion" value={document.version} />
                         <Label htmlFor={`evidence-${service.performedServiceId}`}>
-                          Leistungsnachweis
+                          {t('CareDocumentation.visit.evidenceLabel')}
                         </Label>
                         <textarea
                           id={`evidence-${service.performedServiceId}`}
@@ -525,14 +602,14 @@ function DocumentationSection({
                           defaultValue={service.evidence?.note ?? ''}
                           maxLength={1000}
                           className="min-h-20 rounded-md border px-3 py-2"
-                          placeholder="Kurzer Nachweis oder eine Erläuterung"
+                          placeholder={t('CareDocumentation.visit.evidencePlaceholder')}
                         />
                         <Button
                           type="submit"
                           variant="secondary"
                           className="min-h-11 w-full sm:w-fit"
                         >
-                          Nachweis speichern
+                          {t('CareDocumentation.visit.saveEvidence')}
                         </Button>
                       </form>
                     ) : null}
@@ -540,15 +617,22 @@ function DocumentationSection({
                 ))}
               </ul>
             ) : (
-              <p className="text-slate-600">
-                Für diesen Einsatz wurden noch keine Leistungen erfasst.
-              </p>
+              <p className="text-slate-600">{t('CareDocumentation.visit.noServices')}</p>
             )}
           </section>
 
+          <ClinicalSection
+            detail={clinicalDetail}
+            errorCode={clinicalErrorCode}
+            visitId={visitId}
+            timezone={timezone}
+            defaultTime={defaultTime}
+            locale={locale}
+          />
+
           {(['care_note', 'observation', 'deviation', 'incident'] as const).map((type) => {
             const entries = detail.entries.filter((entry) => entry.type === type);
-            const title = entryTypeLabel(type);
+            const title = t(entryTypeKey(type));
             return (
               <section key={type} className="grid gap-3 border-t pt-4">
                 <h3 className="text-lg font-semibold">{title}</h3>
@@ -558,9 +642,9 @@ function DocumentationSection({
                       <li key={entry.id} className="rounded-md border p-3">
                         <p className="whitespace-pre-wrap">{entry.content}</p>
                         <p className="mt-2 text-xs text-slate-500">
-                          {entry.authorEmployeeName ?? 'Mitarbeiter'} ·{' '}
-                          {formatVisitDateTime(entry.createdAt, detail.visit.timezone)}
-                          {entry.severity ? ` · ${severityLabel(entry.severity)}` : ''}
+                          {entry.authorEmployeeName ?? t('Common.fields.employee')} ·{' '}
+                          {formatVisitDateTime(entry.createdAt, detail.visit.timezone, locale)}
+                          {entry.severity ? ` · ${t(severityKey(entry.severity))}` : ''}
                         </p>
                         {editable ? (
                           <form
@@ -571,7 +655,9 @@ function DocumentationSection({
                             <input type="hidden" name="documentationId" value={document.id} />
                             <input type="hidden" name="entryId" value={entry.id} />
                             <input type="hidden" name="expectedVersion" value={document.version} />
-                            <Label htmlFor={`entry-${entry.id}`}>Eintrag bearbeiten</Label>
+                            <Label htmlFor={`entry-${entry.id}`}>
+                              {t('CareDocumentation.visit.editEntry')}
+                            </Label>
                             <textarea
                               id={`entry-${entry.id}`}
                               name="content"
@@ -585,7 +671,7 @@ function DocumentationSection({
                               variant="secondary"
                               className="min-h-11 w-full sm:w-fit"
                             >
-                              Änderung speichern
+                              {t('CareDocumentation.visit.saveAmendment')}
                             </Button>
                           </form>
                         ) : null}
@@ -593,7 +679,7 @@ function DocumentationSection({
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-sm text-slate-600">Noch keine Einträge.</p>
+                  <p className="text-sm text-slate-600">{t('CareDocumentation.visit.noEntries')}</p>
                 )}
                 {editable ? (
                   <EntryComposer
@@ -609,7 +695,9 @@ function DocumentationSection({
 
           {editable ? (
             <section className="grid gap-3 border-t pt-4">
-              <h3 className="text-lg font-semibold">Dokumentation finalisieren</h3>
+              <h3 className="text-lg font-semibold">
+                {t('CareDocumentation.visit.finalizeTitle')}
+              </h3>
               {detail.completeness.isComplete ? (
                 visitExecutionStatus === 'completed' ? (
                   <form action={finalizeDocumentationAction}>
@@ -617,12 +705,12 @@ function DocumentationSection({
                     <input type="hidden" name="documentationId" value={document.id} />
                     <input type="hidden" name="expectedVersion" value={document.version} />
                     <Button type="submit" className="min-h-12 w-full sm:w-fit">
-                      Dokumentation finalisieren
+                      {t('CareDocumentation.visit.finalize')}
                     </Button>
                   </form>
                 ) : (
                   <p className="text-slate-600">
-                    Finalisieren ist nach Abschluss der Ausführung möglich.
+                    {t('CareDocumentation.visit.finalizeAfterCompletion')}
                   </p>
                 )
               ) : (
@@ -630,9 +718,9 @@ function DocumentationSection({
                   {detail.completeness.missing.map((missing, index) => (
                     <li key={`${missing.code}-${missing.performedServiceId ?? index}`}>
                       {missing.performedServiceId
-                        ? `${serviceNames.get(missing.performedServiceId) ?? 'Leistung'}: `
+                        ? `${serviceNames.get(missing.performedServiceId) ?? t('VisitExecution.service')}: `
                         : ''}
-                      {missingRequirementLabel(missing.code)}
+                      {t(missingRequirementKey(missing.code))}
                     </li>
                   ))}
                 </ul>
@@ -642,7 +730,7 @@ function DocumentationSection({
 
           {finalized && detail.amendments.length ? (
             <section className="grid gap-3 border-t pt-4">
-              <h3 className="text-lg font-semibold">Ergänzungen</h3>
+              <h3 className="text-lg font-semibold">{t('CareDocumentation.visit.amendments')}</h3>
               {detail.amendments.map((amendment) => (
                 <article key={amendment.id} className="rounded-md bg-slate-50 p-3">
                   <p className="text-sm font-semibold">{amendment.reason}</p>
@@ -657,7 +745,7 @@ function DocumentationSection({
   );
 }
 
-function EntryComposer({
+async function EntryComposer({
   visitId,
   documentationId,
   version,
@@ -668,13 +756,14 @@ function EntryComposer({
   version: number;
   type: 'care_note' | 'observation' | 'deviation' | 'incident';
 }) {
+  const t = await getTranslations();
   return (
     <form action={addDocumentationEntryAction} className="grid gap-3 rounded-md bg-slate-50 p-3">
       <input type="hidden" name="visitId" value={visitId} />
       <input type="hidden" name="documentationId" value={documentationId} />
       <input type="hidden" name="expectedVersion" value={version} />
       <input type="hidden" name="type" value={type} />
-      <Label htmlFor={`new-${type}`}>Neuer Eintrag</Label>
+      <Label htmlFor={`new-${type}`}>{t('CareDocumentation.visit.newEntry')}</Label>
       <textarea
         id={`new-${type}`}
         name="content"
@@ -684,115 +773,190 @@ function EntryComposer({
       />
       {type === 'incident' ? (
         <div className="grid gap-2">
-          <Label htmlFor="incident-severity">Schweregrad</Label>
+          <Label htmlFor="incident-severity">{t('CareDocumentation.visit.severity')}</Label>
           <select
             id="incident-severity"
             name="severity"
             required
             className="min-h-11 rounded-md border bg-white px-3"
           >
-            <option value="">Bitte auswählen</option>
-            <option value="low">Niedrig</option>
-            <option value="moderate">Mittel</option>
-            <option value="high">Hoch</option>
-            <option value="critical">Kritisch</option>
+            <option value="">{t('CareDocumentation.visit.selectOption')}</option>
+            <option value="low">{t('CareDocumentation.visit.severityLow')}</option>
+            <option value="moderate">{t('CareDocumentation.visit.severityModerate')}</option>
+            <option value="high">{t('CareDocumentation.visit.severityHigh')}</option>
+            <option value="critical">{t('CareDocumentation.visit.severityCritical')}</option>
           </select>
         </div>
       ) : null}
       <Button type="submit" variant="secondary" className="min-h-11 w-full sm:w-fit">
-        Eintrag speichern
+        {t('Common.actions.save')}
       </Button>
     </form>
   );
 }
 
-function entryTypeLabel(type: string): string {
-  const labels: Record<string, string> = {
-    care_note: 'Verlaufsnotizen',
-    observation: 'Beobachtungen',
-    deviation: 'Abweichungen',
-    incident: 'Vorfälle',
-  };
-  return labels[type] ?? type;
-}
-
-function severityLabel(value: string): string {
-  const labels: Record<string, string> = {
-    low: 'niedrig',
-    moderate: 'mittel',
-    high: 'hoch',
-    critical: 'kritisch',
-  };
-  return labels[value] ?? value;
-}
-
-function missingRequirementLabel(code: string): string {
-  const labels: Record<string, string> = {
-    DOCUMENTATION_REQUIRED: 'Dokumentation fehlt.',
-    VISIT_EXECUTION_REQUIRED: 'Ausführung fehlt.',
-    SERVICE_EVIDENCE_REQUIRED: 'Leistungsnachweis fehlt.',
-    NOT_PERFORMED_REASON_REQUIRED: 'Grund für die nicht erbrachte Leistung fehlt.',
-    PARTIAL_SERVICE_EXPLANATION_REQUIRED: 'Erklärung für die teilweise erbrachte Leistung fehlt.',
-  };
-  return labels[code] ?? code;
-}
-
-function Time({ label, value, timezone }: { label: string; value: string; timezone: string }) {
+function Time({
+  label,
+  value,
+  timezone,
+  locale,
+}: {
+  label: string;
+  value: string;
+  timezone: string;
+  locale: Locale;
+}) {
   return (
     <div>
       <dt className="text-slate-600">{label}</dt>
-      <dd className="font-medium">{formatVisitDateTime(value, timezone)}</dd>
+      <dd className="font-medium">{formatVisitDateTime(value, timezone, locale)}</dd>
     </div>
   );
 }
 
-function unitLabel(unit: string): string {
-  const labels: Record<string, string> = {
-    occurrence: 'Vorkommen',
-    minute: 'Minuten',
-    hour: 'Stunden',
-    day: 'Tage',
-  };
-  return labels[unit] ?? unit;
+function unitKey(
+  unit: string,
+):
+  | 'Common.units.occurrence'
+  | 'Common.units.minute'
+  | 'Common.units.hour'
+  | 'Common.units.day'
+  | 'Common.units.unknown' {
+  const keys = {
+    occurrence: 'Common.units.occurrence',
+    minute: 'Common.units.minute',
+    hour: 'Common.units.hour',
+    day: 'Common.units.day',
+  } as const;
+  return unit in keys ? keys[unit as keyof typeof keys] : 'Common.units.unknown';
 }
 
-function serviceStatus(status: string): string {
-  const labels: Record<string, string> = {
-    not_recorded: 'Noch nicht erfasst',
-    performed: 'Erbracht',
-    partially_performed: 'Teilweise erbracht',
-    not_performed: 'Nicht erbracht',
-  };
-  return labels[status] ?? status;
+function serviceStatusKey(
+  status: string,
+):
+  | 'VisitExecution.serviceStatus.notRecorded'
+  | 'VisitExecution.serviceStatus.performed'
+  | 'VisitExecution.serviceStatus.partiallyPerformed'
+  | 'VisitExecution.serviceStatus.notPerformed'
+  | 'VisitExecution.serviceStatus.unknown' {
+  const keys = {
+    not_recorded: 'VisitExecution.serviceStatus.notRecorded',
+    performed: 'VisitExecution.serviceStatus.performed',
+    partially_performed: 'VisitExecution.serviceStatus.partiallyPerformed',
+    not_performed: 'VisitExecution.serviceStatus.notPerformed',
+  } as const;
+  return status in keys
+    ? keys[status as keyof typeof keys]
+    : 'VisitExecution.serviceStatus.unknown';
 }
 
-function executionStatus(status: string): string {
-  const labels: Record<string, string> = {
-    not_started: 'Nicht gestartet',
-    in_progress: 'In Bearbeitung',
-    completed: 'Abgeschlossen',
-  };
-  return labels[status] ?? status;
+function executionStatusKey(
+  status: string,
+):
+  | 'VisitExecution.executionStatus.notStarted'
+  | 'VisitExecution.executionStatus.inProgress'
+  | 'VisitExecution.executionStatus.completed'
+  | 'VisitExecution.executionStatus.unknown' {
+  const keys = {
+    not_started: 'VisitExecution.executionStatus.notStarted',
+    in_progress: 'VisitExecution.executionStatus.inProgress',
+    completed: 'VisitExecution.executionStatus.completed',
+  } as const;
+  return status in keys
+    ? keys[status as keyof typeof keys]
+    : 'VisitExecution.executionStatus.unknown';
 }
 
-function reasonLabel(reason: string): string {
-  const labels: Record<string, string> = {
-    client_declined: 'Klient lehnte ab',
-    client_not_present: 'Klient nicht angetroffen',
-    service_not_required: 'Leistung nicht erforderlich',
-    time_constraint: 'Zeitliche Einschränkung',
-    provider_decision: 'Entscheidung des Dienstes',
-    other: 'Sonstiger Grund',
-  };
-  return labels[reason] ?? reason;
+function reasonKey(
+  reason: string,
+):
+  | 'VisitExecution.reasons.clientDeclined'
+  | 'VisitExecution.reasons.clientNotPresent'
+  | 'VisitExecution.reasons.serviceNotRequired'
+  | 'VisitExecution.reasons.timeConstraint'
+  | 'VisitExecution.reasons.providerDecision'
+  | 'VisitExecution.reasons.other' {
+  const keys = {
+    client_declined: 'VisitExecution.reasons.clientDeclined',
+    client_not_present: 'VisitExecution.reasons.clientNotPresent',
+    service_not_required: 'VisitExecution.reasons.serviceNotRequired',
+    time_constraint: 'VisitExecution.reasons.timeConstraint',
+    provider_decision: 'VisitExecution.reasons.providerDecision',
+    other: 'VisitExecution.reasons.other',
+  } as const;
+  return reason in keys ? keys[reason as keyof typeof keys] : 'VisitExecution.reasons.other';
 }
 
-function noticeText(notice: string): string {
-  const labels: Record<string, string> = {
-    started: 'Einsatz gestartet.',
-    'service-saved': 'Leistungsergebnis gespeichert.',
-    'note-saved': 'Hinweis gespeichert.',
-    completed: 'Einsatz abgeschlossen.',
-  };
-  return labels[notice] ?? notice;
+function entryTypeKey(
+  type: 'care_note' | 'observation' | 'deviation' | 'incident',
+):
+  | 'CareDocumentation.visit.entryTypes.careNote'
+  | 'CareDocumentation.visit.entryTypes.observation'
+  | 'CareDocumentation.visit.entryTypes.deviation'
+  | 'CareDocumentation.visit.entryTypes.incident' {
+  const keys = {
+    care_note: 'CareDocumentation.visit.entryTypes.careNote',
+    observation: 'CareDocumentation.visit.entryTypes.observation',
+    deviation: 'CareDocumentation.visit.entryTypes.deviation',
+    incident: 'CareDocumentation.visit.entryTypes.incident',
+  } as const;
+  return keys[type];
+}
+
+function severityKey(
+  value: string,
+):
+  | 'CareDocumentation.visit.severityValues.low'
+  | 'CareDocumentation.visit.severityValues.moderate'
+  | 'CareDocumentation.visit.severityValues.high'
+  | 'CareDocumentation.visit.severityValues.critical' {
+  const keys = {
+    low: 'CareDocumentation.visit.severityValues.low',
+    moderate: 'CareDocumentation.visit.severityValues.moderate',
+    high: 'CareDocumentation.visit.severityValues.high',
+    critical: 'CareDocumentation.visit.severityValues.critical',
+  } as const;
+  return value in keys
+    ? keys[value as keyof typeof keys]
+    : 'CareDocumentation.visit.severityValues.critical';
+}
+
+function missingRequirementKey(
+  code: string,
+):
+  | 'CareDocumentation.visit.missing.documentation'
+  | 'CareDocumentation.visit.missing.execution'
+  | 'CareDocumentation.visit.missing.serviceEvidence'
+  | 'CareDocumentation.visit.missing.reason'
+  | 'CareDocumentation.visit.missing.explanation'
+  | 'CareDocumentation.visit.missing.unknown' {
+  const keys = {
+    DOCUMENTATION_REQUIRED: 'CareDocumentation.visit.missing.documentation',
+    VISIT_EXECUTION_REQUIRED: 'CareDocumentation.visit.missing.execution',
+    SERVICE_EVIDENCE_REQUIRED: 'CareDocumentation.visit.missing.serviceEvidence',
+    NOT_PERFORMED_REASON_REQUIRED: 'CareDocumentation.visit.missing.reason',
+    PARTIAL_SERVICE_EXPLANATION_REQUIRED: 'CareDocumentation.visit.missing.explanation',
+  } as const;
+  return code in keys ? keys[code as keyof typeof keys] : 'CareDocumentation.visit.missing.unknown';
+}
+
+function noticeKey(
+  notice: string,
+):
+  | 'VisitExecution.notices.started'
+  | 'VisitExecution.notices.serviceSaved'
+  | 'VisitExecution.notices.noteSaved'
+  | 'VisitExecution.notices.completed'
+  | 'CareDocumentation.clinical.notices.saved'
+  | 'CareDocumentation.clinical.notices.deleted'
+  | 'VisitExecution.notices.unknown' {
+  const keys = {
+    started: 'VisitExecution.notices.started',
+    'service-saved': 'VisitExecution.notices.serviceSaved',
+    'note-saved': 'VisitExecution.notices.noteSaved',
+    completed: 'VisitExecution.notices.completed',
+    'clinical-saved': 'CareDocumentation.clinical.notices.saved',
+    'clinical-deleted': 'CareDocumentation.clinical.notices.deleted',
+  } as const;
+  return notice in keys ? keys[notice as keyof typeof keys] : 'VisitExecution.notices.unknown';
 }

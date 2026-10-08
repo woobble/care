@@ -5,6 +5,32 @@ import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent, type DomainEvent } from '@care/events';
 import {
+  ASSESSMENT_TYPES,
+  ClinicalDocumentationRepository,
+  InvalidClinicalRecordError,
+  MEASUREMENT_TYPES,
+  OBSERVATION_CATEGORIES,
+  RISK_TYPES,
+  validateAssessment,
+  validateAmendmentTarget,
+  validateMeasurement,
+  validateRiskAssessment,
+  validateStructuredObservation,
+  type Assessment,
+  type AssessmentInput,
+  type ClinicalHistoryFilters,
+  type ClinicalHistoryPage,
+  type ClinicalRecordDetail,
+  type ClinicalRecordKind,
+  type Measurement,
+  type MeasurementInput,
+  type NewClinicalRecord,
+  type RiskAssessment,
+  type RiskAssessmentInput,
+  type StructuredObservation,
+  type StructuredObservationInput,
+} from '@care/clinical-documentation';
+import {
   assertCan,
   can,
   type AuthorizationPrincipal,
@@ -174,12 +200,132 @@ export interface DocumentationWorklist {
   total: number;
 }
 
+export type AddClinicalMeasurementInput = MeasurementInput & { expectedVersion: number };
+export type UpdateClinicalMeasurementInput = MeasurementInput & {
+  expectedVersion: number;
+  expectedRecordVersion: number;
+};
+export type AddClinicalObservationInput = StructuredObservationInput & { expectedVersion: number };
+export type UpdateClinicalObservationInput = StructuredObservationInput & {
+  expectedVersion: number;
+  expectedRecordVersion: number;
+};
+export type AddClinicalAssessmentInput = AssessmentInput & { expectedVersion: number };
+export type UpdateClinicalAssessmentInput = AssessmentInput & {
+  expectedVersion: number;
+  expectedRecordVersion: number;
+};
+export type AddClinicalRiskAssessmentInput = RiskAssessmentInput & { expectedVersion: number };
+export type UpdateClinicalRiskAssessmentInput = RiskAssessmentInput & {
+  expectedVersion: number;
+  expectedRecordVersion: number;
+};
+export interface DeleteClinicalRecordInput {
+  expectedVersion: number;
+  expectedRecordVersion: number;
+}
+export type ClinicalRecordReplacementInput =
+  | MeasurementInput
+  | StructuredObservationInput
+  | AssessmentInput
+  | RiskAssessmentInput;
+export type ClinicalRecordInput = ClinicalRecordReplacementInput;
+export interface AddClinicalRecordAmendmentInput {
+  reason: string;
+  replacement: ClinicalRecordReplacementInput;
+}
+export interface ClinicalHistoryQuery {
+  from?: Date;
+  until?: Date;
+  page: number;
+  pageSize: number;
+  type?: string;
+  category?: StructuredObservation['category'];
+  riskType?: string;
+  currentOnly?: boolean;
+}
+
+export interface ClinicalRecordCoreDto {
+  id: string;
+  documentationId: string;
+  recordVersion: number;
+  recordedByUserId: string;
+  recordedByEmployeeId: string | null;
+  createdAt: string;
+  correctsRecordId: string | null;
+  correctedByRecordId: string | null;
+  correctionReason: string | null;
+}
+export type ClinicalRecordDto = ClinicalRecordCoreDto &
+  (
+    | {
+        kind: 'measurement';
+        measurementType: Measurement['measurementType'];
+        value: string | null;
+        integerValue: number | null;
+        systolic: number | null;
+        diastolic: number | null;
+        unit: Measurement['unit'];
+        measuredAt: string;
+        source: Measurement['source'];
+        note: string | null;
+      }
+    | {
+        kind: 'observation';
+        category: StructuredObservation['category'];
+        valueCode: string | null;
+        painScore: number | null;
+        location: string | null;
+        severity: string | null;
+        observedAt: string;
+        note: string | null;
+      }
+    | {
+        kind: 'assessment';
+        assessmentType: Assessment['assessmentType'];
+        resultCode: string | null;
+        score: string | null;
+        assessedAt: string;
+        validUntil: string | null;
+        note: string | null;
+      }
+    | {
+        kind: 'risk_assessment';
+        riskType: RiskAssessment['riskType'];
+        level: RiskAssessment['level'];
+        assessedAt: string;
+        validUntil: string | null;
+        source: string;
+        note: string | null;
+      }
+  );
+export interface ClinicalDocumentationDetail {
+  documentationId: string;
+  documentationStatus: 'draft' | 'finalized';
+  documentationVersion: number;
+  records: ClinicalRecordDto[];
+}
+export type ClinicalRecordHistoryDto = ClinicalRecordDto & {
+  recordedByEmployeeName: string | null;
+  visitId: string;
+  plannedStart: string;
+  timezone: string;
+  documentationStatus: 'draft' | 'finalized';
+};
+export interface ClinicalRecordHistoryPage {
+  items: ClinicalRecordHistoryDto[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
 export class CareDocumentationApplicationService {
   constructor(
     private readonly unitOfWork: UnitOfWork,
     private readonly audit: AuditWriter,
     private readonly outbox: OutboxWriter,
     private readonly repository = new CareDocumentationRepository(),
+    private readonly clinicalRepository = new ClinicalDocumentationRepository(),
   ) {}
 
   async getForVisit(
@@ -216,6 +362,433 @@ export class CareDocumentationApplicationService {
       );
       await this.authorizeVisit(principal, transaction, context, 'care_documentation.read');
       return this.detail(transaction, principal.tenantId, context, document);
+    });
+  }
+
+  async getClinicalRecords(
+    principal: AuthorizationPrincipal,
+    documentId: string,
+  ): Promise<ClinicalDocumentationDetail> {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const document = await this.repository.documentById(
+        transaction,
+        principal.tenantId,
+        documentId,
+      );
+      if (!document) throw new ClinicalRecordDocumentationNotFoundError();
+      const context = await this.requireVisitContext(
+        transaction,
+        principal.tenantId,
+        document.visitId,
+      );
+      await this.authorizeClinicalVisit(
+        principal,
+        transaction,
+        context,
+        'clinical_documentation.read',
+      );
+      return this.clinicalDetail(transaction, principal.tenantId, document);
+    });
+  }
+
+  async addClinicalRecord(
+    principal: AuthorizationPrincipal,
+    documentId: string,
+    kind: ClinicalRecordKind,
+    expectedVersion: number,
+    input: ClinicalRecordInput,
+    request: RequestContext,
+    auditContext: AuditContext,
+  ): Promise<ClinicalDocumentationDetail> {
+    validateClinicalInput(kind, input);
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const { document, context, employee } = await this.mutableClinicalDocument(
+        transaction,
+        principal,
+        documentId,
+        'clinical_documentation.create',
+        expectedVersion,
+      );
+      const now = new Date();
+      const root: NewClinicalRecord = {
+        id: uuidv7(),
+        tenantId: principal.tenantId,
+        clientId: context.visit.clientId,
+        documentationId: document.id,
+        executionId: document.executionId,
+        kind,
+        recordedByUserId: principal.userId,
+        recordedByEmployeeId: employee.id,
+      };
+      const record = await this.insertClinicalRecord(transaction, root, kind, input);
+      const next = await this.bumpVersion(transaction, document, now);
+      const { eventType, typeName } = clinicalRecordedEvent(record);
+      const event = this.clinicalEvent({
+        type: eventType,
+        principal,
+        request,
+        document: next,
+        payload: {
+          documentationId: document.id,
+          recordId: record.id,
+          [typeName.key]: typeName.value,
+          version: record.version,
+        },
+      });
+      await this.record(transaction, principal, request, auditContext, {
+        event,
+        action: eventType,
+        document: next,
+        context,
+        employeeId: employee.id,
+        metadata: {
+          documentationId: document.id,
+          visitId: context.visit.id,
+          recordId: record.id,
+          recordType: kind,
+          [typeName.key]: typeName.value,
+          version: record.version,
+        },
+      });
+      return this.clinicalDetail(transaction, principal.tenantId, next);
+    });
+  }
+
+  async updateClinicalRecord(
+    principal: AuthorizationPrincipal,
+    documentId: string,
+    recordId: string,
+    kind: ClinicalRecordKind,
+    expectedVersion: number,
+    expectedRecordVersion: number,
+    input: ClinicalRecordInput,
+    request: RequestContext,
+    auditContext: AuditContext,
+  ): Promise<ClinicalDocumentationDetail> {
+    validateClinicalInput(kind, input);
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const { document, context, employee } = await this.mutableClinicalDocument(
+        transaction,
+        principal,
+        documentId,
+        'clinical_documentation.update',
+        expectedVersion,
+      );
+      const existing = await this.clinicalRepository.recordForUpdate(
+        transaction,
+        principal.tenantId,
+        document.id,
+        recordId,
+        true,
+      );
+      if (!existing || existing.kind !== kind) throw new ClinicalRecordNotFoundError();
+      if (existing.version !== expectedRecordVersion)
+        throw new ClinicalRecordVersionConflictError();
+      const changedFields = changedClinicalFields(existing, input);
+      if (changedFields.length === 0) {
+        return this.clinicalDetail(transaction, principal.tenantId, document);
+      }
+      const updated = await this.updateClinicalRecordRow(
+        transaction,
+        principal.tenantId,
+        document.id,
+        recordId,
+        expectedRecordVersion,
+        kind,
+        input,
+      );
+      if (!updated) throw new ClinicalRecordVersionConflictError();
+      const next = await this.bumpVersion(transaction, document, new Date());
+      const eventType = clinicalUpdatedEvent(kind);
+      const event = this.clinicalEvent({
+        type: eventType,
+        principal,
+        request,
+        document: next,
+        payload: {
+          documentationId: document.id,
+          recordId,
+          ...clinicalRecordTypePayload(updated),
+          changedFields,
+          version: updated.version,
+        },
+      });
+      await this.record(transaction, principal, request, auditContext, {
+        event,
+        action: eventType,
+        document: next,
+        context,
+        employeeId: employee.id,
+        metadata: {
+          documentationId: document.id,
+          visitId: context.visit.id,
+          recordId,
+          recordType: kind,
+          changedFields,
+          version: updated.version,
+        },
+      });
+      return this.clinicalDetail(transaction, principal.tenantId, next);
+    });
+  }
+
+  async deleteClinicalRecord(
+    principal: AuthorizationPrincipal,
+    documentId: string,
+    recordId: string,
+    kind: ClinicalRecordKind,
+    input: DeleteClinicalRecordInput,
+    request: RequestContext,
+    auditContext: AuditContext,
+  ): Promise<ClinicalDocumentationDetail> {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const { document, context, employee } = await this.mutableClinicalDocument(
+        transaction,
+        principal,
+        documentId,
+        'clinical_documentation.update',
+        input.expectedVersion,
+      );
+      const existing = await this.clinicalRepository.recordForUpdate(
+        transaction,
+        principal.tenantId,
+        document.id,
+        recordId,
+        true,
+      );
+      if (!existing || existing.kind !== kind) throw new ClinicalRecordNotFoundError();
+      if (existing.version !== input.expectedRecordVersion) {
+        throw new ClinicalRecordVersionConflictError();
+      }
+      const deleted = await this.clinicalRepository.delete(
+        transaction,
+        principal.tenantId,
+        document.id,
+        recordId,
+        input.expectedRecordVersion,
+      );
+      if (!deleted) throw new ClinicalRecordVersionConflictError();
+      const next = await this.bumpVersion(transaction, document, new Date());
+      const eventType = 'clinical.record_deleted';
+      const event = this.clinicalEvent({
+        type: eventType,
+        principal,
+        request,
+        document: next,
+        payload: {
+          documentationId: document.id,
+          recordId,
+          recordType: kind,
+          version: existing.version,
+        },
+      });
+      await this.record(transaction, principal, request, auditContext, {
+        event,
+        action: eventType,
+        document: next,
+        context,
+        employeeId: employee.id,
+        metadata: {
+          documentationId: document.id,
+          visitId: context.visit.id,
+          recordId,
+          recordType: kind,
+          version: existing.version,
+        },
+      });
+      return this.clinicalDetail(transaction, principal.tenantId, next);
+    });
+  }
+
+  async amendClinicalRecord(
+    principal: AuthorizationPrincipal,
+    documentId: string,
+    recordId: string,
+    input: AddClinicalRecordAmendmentInput,
+    request: RequestContext,
+    auditContext: AuditContext,
+  ): Promise<ClinicalDocumentationDetail> {
+    const reason = input.reason.trim();
+    if (!reason || reason.length > 1000) throw new ClinicalRecordInvalidError();
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const document = await this.repository.documentById(
+        transaction,
+        principal.tenantId,
+        documentId,
+        true,
+      );
+      if (!document) throw new ClinicalRecordDocumentationNotFoundError();
+      const context = await this.requireVisitContext(
+        transaction,
+        principal.tenantId,
+        document.visitId,
+      );
+      await this.authorizeClinicalVisit(
+        principal,
+        transaction,
+        context,
+        'clinical_documentation.amend',
+      );
+      if (document.status !== 'finalized') throw new ClinicalRecordNotFinalizedError();
+      const original = await this.clinicalRepository.recordForUpdate(
+        transaction,
+        principal.tenantId,
+        document.id,
+        recordId,
+        true,
+      );
+      if (!original) throw new ClinicalRecordNotFoundError();
+      validateAmendmentTarget(original);
+      validateClinicalInput(original.kind, input.replacement);
+      const amendingEmployee = await this.repository.employeeForUser(
+        transaction,
+        principal.tenantId,
+        principal.userId,
+      );
+      const replacement = await this.insertClinicalRecord(
+        transaction,
+        {
+          id: uuidv7(),
+          tenantId: principal.tenantId,
+          clientId: context.visit.clientId,
+          documentationId: document.id,
+          executionId: document.executionId,
+          kind: original.kind,
+          recordedByUserId: principal.userId,
+          recordedByEmployeeId: amendingEmployee?.id ?? null,
+          correctsRecordId: original.id,
+          correctionReason: reason,
+        },
+        original.kind,
+        input.replacement,
+      );
+      const eventType = 'clinical.record_amended';
+      const event = this.clinicalEvent({
+        type: eventType,
+        principal,
+        request,
+        document,
+        payload: {
+          documentationId: document.id,
+          recordId: original.id,
+          replacementRecordId: replacement.id,
+          recordType: original.kind,
+          version: replacement.version,
+        },
+      });
+      await this.record(transaction, principal, request, auditContext, {
+        event,
+        action: eventType,
+        document,
+        context,
+        employeeId: amendingEmployee?.id ?? null,
+        metadata: {
+          documentationId: document.id,
+          visitId: context.visit.id,
+          recordId: original.id,
+          replacementRecordId: replacement.id,
+          recordType: original.kind,
+          version: replacement.version,
+        },
+      });
+      return this.clinicalDetail(transaction, principal.tenantId, document);
+    });
+  }
+
+  async clientClinicalHistory(
+    principal: AuthorizationPrincipal,
+    clientId: string,
+    kind: ClinicalRecordKind,
+    query: ClinicalHistoryQuery,
+  ): Promise<ClinicalRecordHistoryPage> {
+    validateClinicalHistoryQuery(query, kind);
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const documentations = await this.repository.documentationsForClient(
+        transaction,
+        principal.tenantId,
+        clientId,
+      );
+      const caregiver = principal.roles?.includes('Caregiver') === true;
+      const employee = caregiver
+        ? await this.clinicalEmployeeForUser(transaction, principal)
+        : null;
+      const action = caregiver ? 'clinical_documentation.read' : 'clinical_documentation.review';
+      const allowed = [] as typeof documentations;
+      // Keep scope reads serial on the transaction's PostgreSQL connection.
+      // oxlint-disable no-await-in-loop
+      for (const documentation of documentations) {
+        const resource = await this.resourceForVisit(transaction, documentation.visit);
+        if (!can(principal, { action, resource })) continue;
+        if (
+          employee &&
+          !(await this.repository.hasCaregiverRelationship(
+            transaction,
+            principal.tenantId,
+            documentation.visit.id,
+            employee.id,
+          ))
+        ) {
+          continue;
+        }
+        allowed.push(documentation);
+      }
+
+      const filters: ClinicalHistoryFilters = {
+        kind,
+        ...(kind === 'risk_assessment' && query.currentOnly
+          ? {}
+          : { from: query.from, until: query.until }),
+        page: query.page,
+        pageSize: query.pageSize,
+        ...(kind === 'measurement' && query.type
+          ? { measurementType: query.type as Measurement['measurementType'] }
+          : {}),
+        ...(kind === 'observation' && query.category
+          ? { observationCategory: query.category }
+          : {}),
+        ...(kind === 'assessment' && query.type
+          ? { assessmentType: query.type as Assessment['assessmentType'] }
+          : {}),
+        ...(kind === 'risk_assessment' && query.riskType
+          ? { riskType: query.riskType as RiskAssessment['riskType'] }
+          : {}),
+        ...(kind === 'risk_assessment' ? { currentOnly: query.currentOnly ?? false } : {}),
+      };
+      const page: ClinicalHistoryPage = await this.clinicalRepository.clientHistory(
+        transaction,
+        principal.tenantId,
+        allowed.map((documentation) => documentation.documentationId),
+        filters,
+      );
+      const contexts = new Map(
+        allowed.map((documentation) => [documentation.documentationId, documentation]),
+      );
+      const employeeNames = await this.repository.employeeNames(transaction, principal.tenantId, [
+        ...new Set(
+          page.items
+            .map((record) => record.recordedByEmployeeId)
+            .filter((employeeId): employeeId is string => employeeId !== null),
+        ),
+      ]);
+      return {
+        items: page.items.map((record) => {
+          const documentation = contexts.get(record.documentationId);
+          if (!documentation) throw new ClinicalRecordNotFoundError();
+          return {
+            ...clinicalRecordDto(record),
+            recordedByEmployeeName: record.recordedByEmployeeId
+              ? (employeeNames.get(record.recordedByEmployeeId) ?? null)
+              : null,
+            visitId: documentation.visit.id,
+            plannedStart: documentation.visit.plannedStart.toISOString(),
+            timezone: documentation.visit.timezone,
+            documentationStatus: documentation.documentationStatus,
+          };
+        }),
+        page: page.page,
+        pageSize: page.pageSize,
+        total: page.total,
+      };
     });
   }
 
@@ -1006,6 +1579,198 @@ export class CareDocumentationApplicationService {
     };
   }
 
+  private async mutableClinicalDocument(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    documentId: string,
+    permission: Permission,
+    expectedVersion: number,
+  ) {
+    const document = await this.repository.documentById(
+      transaction,
+      principal.tenantId,
+      documentId,
+      true,
+    );
+    if (!document) throw new ClinicalRecordDocumentationNotFoundError();
+    const context = await this.requireVisitContext(
+      transaction,
+      principal.tenantId,
+      document.visitId,
+    );
+    const employee = await this.authorizeClinicalVisit(
+      principal,
+      transaction,
+      context,
+      permission,
+      true,
+    );
+    if (!context.execution || context.execution.id !== document.executionId) {
+      throw new ClinicalDocumentationVisitRequiredError();
+    }
+    if (document.status !== 'draft') throw new ClinicalRecordFinalizedError();
+    if (document.version !== expectedVersion) throw new ClinicalRecordVersionConflictError();
+    if (!employee) throw new ClinicalDocumentationVisitRequiredError();
+    return { document, context, employee };
+  }
+
+  private async authorizeClinicalVisit(
+    principal: AuthorizationPrincipal,
+    transaction: DatabaseTransaction,
+    context: NonNullable<Awaited<ReturnType<CareDocumentationRepository['visitContext']>>>,
+    permission: Permission,
+    requireRelationship = false,
+  ) {
+    const resource = await this.resourceForVisit(transaction, context.visit);
+    if (!can(principal, { action: permission, resource })) {
+      throw new ClinicalDocumentationNotAuthorizedError();
+    }
+    if (requireRelationship || principal.roles?.includes('Caregiver')) {
+      const employee = await this.clinicalEmployeeForUser(transaction, principal);
+      const related = await this.repository.hasCaregiverRelationship(
+        transaction,
+        principal.tenantId,
+        context.visit.id,
+        employee.id,
+      );
+      if (!related) throw new ClinicalDocumentationVisitRequiredError();
+      return employee;
+    }
+    return null;
+  }
+
+  private async clinicalEmployeeForUser(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+  ) {
+    const employee = await this.repository.employeeForUser(
+      transaction,
+      principal.tenantId,
+      principal.userId,
+    );
+    if (!employee) throw new ClinicalDocumentationVisitRequiredError();
+    return employee;
+  }
+
+  private async insertClinicalRecord(
+    transaction: DatabaseTransaction,
+    root: NewClinicalRecord,
+    kind: ClinicalRecordKind,
+    input: ClinicalRecordInput,
+  ): Promise<ClinicalRecordDetail> {
+    switch (kind) {
+      case 'measurement':
+        return this.clinicalRepository.insertMeasurement(
+          transaction,
+          { ...root, kind },
+          input as MeasurementInput,
+        );
+      case 'observation':
+        return this.clinicalRepository.insertObservation(
+          transaction,
+          { ...root, kind },
+          input as StructuredObservationInput,
+        );
+      case 'assessment':
+        return this.clinicalRepository.insertAssessment(
+          transaction,
+          { ...root, kind },
+          input as AssessmentInput,
+        );
+      case 'risk_assessment':
+        return this.clinicalRepository.insertRiskAssessment(
+          transaction,
+          { ...root, kind },
+          input as RiskAssessmentInput,
+        );
+    }
+  }
+
+  private async updateClinicalRecordRow(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    documentId: string,
+    recordId: string,
+    expectedRecordVersion: number,
+    kind: ClinicalRecordKind,
+    input: ClinicalRecordInput,
+  ): Promise<ClinicalRecordDetail | null> {
+    switch (kind) {
+      case 'measurement':
+        return this.clinicalRepository.updateMeasurement(
+          transaction,
+          tenantId,
+          documentId,
+          recordId,
+          expectedRecordVersion,
+          input as MeasurementInput,
+        );
+      case 'observation':
+        return this.clinicalRepository.updateObservation(
+          transaction,
+          tenantId,
+          documentId,
+          recordId,
+          expectedRecordVersion,
+          input as StructuredObservationInput,
+        );
+      case 'assessment':
+        return this.clinicalRepository.updateAssessment(
+          transaction,
+          tenantId,
+          documentId,
+          recordId,
+          expectedRecordVersion,
+          input as AssessmentInput,
+        );
+      case 'risk_assessment':
+        return this.clinicalRepository.updateRiskAssessment(
+          transaction,
+          tenantId,
+          documentId,
+          recordId,
+          expectedRecordVersion,
+          input as RiskAssessmentInput,
+        );
+    }
+  }
+
+  private async clinicalDetail(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    document: typeof careDocuments.$inferSelect,
+  ): Promise<ClinicalDocumentationDetail> {
+    const records = await this.clinicalRepository.recordsForDocumentation(
+      transaction,
+      tenantId,
+      document.id,
+    );
+    return {
+      documentationId: document.id,
+      documentationStatus: document.status,
+      documentationVersion: document.version,
+      records: records.map(clinicalRecordDto),
+    };
+  }
+
+  private clinicalEvent(input: {
+    type: DomainEvent['type'];
+    principal: AuthorizationPrincipal;
+    request: RequestContext;
+    document: typeof careDocuments.$inferSelect;
+    payload: unknown;
+  }): DomainEvent {
+    return createDomainEvent({
+      type: input.type,
+      tenantId: input.principal.tenantId,
+      aggregateType: 'clinical_documentation',
+      aggregateId: input.document.id,
+      actor: { type: 'user', id: input.principal.userId },
+      correlationId: input.request.correlationId,
+      payload: input.payload,
+    } as never) as DomainEvent;
+  }
+
   private async mutableDocument(
     transaction: DatabaseTransaction,
     principal: AuthorizationPrincipal,
@@ -1170,6 +1935,110 @@ export class CareDocumentationApplicationService {
   }
 }
 
+export class ClinicalRecordDocumentationNotFoundError extends Error {
+  readonly code = 'CLINICAL_RECORD_DOCUMENTATION_NOT_FOUND';
+  constructor() {
+    super('Care documentation was not found');
+    this.name = 'ClinicalRecordDocumentationNotFoundError';
+  }
+}
+
+export class ClinicalRecordNotFoundError extends Error {
+  readonly code = 'CLINICAL_RECORD_NOT_FOUND';
+  constructor() {
+    super('Clinical record was not found');
+    this.name = 'ClinicalRecordNotFoundError';
+  }
+}
+
+export class ClinicalRecordVersionConflictError extends Error {
+  readonly code = 'CLINICAL_RECORD_VERSION_CONFLICT';
+  constructor() {
+    super('Clinical record or care documentation changed since it was loaded');
+    this.name = 'ClinicalRecordVersionConflictError';
+  }
+}
+
+export class ClinicalRecordFinalizedError extends Error {
+  readonly code = 'CLINICAL_RECORD_FINALIZED';
+  constructor() {
+    super('Clinical records cannot be changed after care documentation is finalized');
+    this.name = 'ClinicalRecordFinalizedError';
+  }
+}
+
+export class ClinicalRecordNotFinalizedError extends Error {
+  readonly code = 'CLINICAL_RECORD_NOT_FINALIZED';
+  constructor() {
+    super('Care documentation must be finalized before a clinical record can be amended');
+    this.name = 'ClinicalRecordNotFinalizedError';
+  }
+}
+
+export class ClinicalDocumentationVisitRequiredError extends Error {
+  readonly code = 'CLINICAL_DOCUMENTATION_VISIT_REQUIRED';
+  constructor() {
+    super('An active employee relationship to the visit is required');
+    this.name = 'ClinicalDocumentationVisitRequiredError';
+  }
+}
+
+export class ClinicalDocumentationNotAuthorizedError extends Error {
+  readonly code = 'CLINICAL_DOCUMENTATION_NOT_AUTHORIZED';
+  constructor() {
+    super('Clinical documentation is outside the authorized scope');
+    this.name = 'ClinicalDocumentationNotAuthorizedError';
+  }
+}
+
+export class ClinicalRecordInvalidError extends Error {
+  readonly code = 'CLINICAL_RECORD_INVALID';
+  constructor() {
+    super('Clinical record input is invalid');
+    this.name = 'ClinicalRecordInvalidError';
+  }
+}
+
+export class MeasurementInvalidError extends Error {
+  readonly code = 'MEASUREMENT_INVALID';
+  constructor() {
+    super('Measurement input is invalid');
+    this.name = 'MeasurementInvalidError';
+  }
+}
+
+export class ObservationInvalidError extends Error {
+  readonly code = 'OBSERVATION_INVALID';
+  constructor() {
+    super('Observation input is invalid');
+    this.name = 'ObservationInvalidError';
+  }
+}
+
+export class AssessmentInvalidError extends Error {
+  readonly code = 'ASSESSMENT_INVALID';
+  constructor() {
+    super('Assessment input is invalid');
+    this.name = 'AssessmentInvalidError';
+  }
+}
+
+export class RiskAssessmentInvalidError extends Error {
+  readonly code = 'RISK_ASSESSMENT_INVALID';
+  constructor() {
+    super('Risk assessment input is invalid');
+    this.name = 'RiskAssessmentInvalidError';
+  }
+}
+
+export class ClinicalHistoryInvalidQueryError extends Error {
+  readonly code = 'CLINICAL_RECORD_INVALID_QUERY';
+  constructor() {
+    super('Clinical history query is invalid');
+    this.name = 'ClinicalHistoryInvalidQueryError';
+  }
+}
+
 export class CareDocumentationNotFoundError extends Error {
   readonly code = 'CARE_DOCUMENTATION_NOT_FOUND';
   constructor() {
@@ -1279,6 +2148,230 @@ export class CareDocumentationVisitRelationshipRequiredError extends Error {
   constructor() {
     super('A caregiver relationship to the visit is required');
     this.name = 'CareDocumentationVisitRelationshipRequiredError';
+  }
+}
+
+function clinicalRecordDto(record: ClinicalRecordDetail): ClinicalRecordDto {
+  const core: ClinicalRecordCoreDto = {
+    id: record.id,
+    documentationId: record.documentationId,
+    recordVersion: record.version,
+    recordedByUserId: record.recordedByUserId,
+    recordedByEmployeeId: record.recordedByEmployeeId,
+    createdAt: record.createdAt.toISOString(),
+    correctsRecordId: record.correctsRecordId,
+    correctedByRecordId: record.correctedByRecordId,
+    correctionReason: record.correctionReason,
+  };
+  switch (record.kind) {
+    case 'measurement':
+      return {
+        ...core,
+        kind: record.kind,
+        measurementType: record.measurementType,
+        value: record.value,
+        integerValue: record.integerValue,
+        systolic: record.systolic,
+        diastolic: record.diastolic,
+        unit: record.unit,
+        measuredAt: record.measuredAt.toISOString(),
+        source: record.source,
+        note: record.note,
+      };
+    case 'observation':
+      return {
+        ...core,
+        kind: record.kind,
+        category: record.category,
+        valueCode: record.valueCode,
+        painScore: record.painScore,
+        location: record.location,
+        severity: record.severity,
+        observedAt: record.observedAt.toISOString(),
+        note: record.note,
+      };
+    case 'assessment':
+      return {
+        ...core,
+        kind: record.kind,
+        assessmentType: record.assessmentType,
+        resultCode: record.resultCode,
+        score: record.score,
+        assessedAt: record.assessedAt.toISOString(),
+        validUntil: record.validUntil?.toISOString() ?? null,
+        note: record.note,
+      };
+    case 'risk_assessment':
+      return {
+        ...core,
+        kind: record.kind,
+        riskType: record.riskType,
+        level: record.level,
+        assessedAt: record.assessedAt.toISOString(),
+        validUntil: record.validUntil?.toISOString() ?? null,
+        source: record.source,
+        note: record.note,
+      };
+  }
+}
+
+function clinicalRecordedEvent(record: ClinicalRecordDetail): {
+  eventType: DomainEvent['type'];
+  typeName: { key: string; value: string };
+} {
+  switch (record.kind) {
+    case 'measurement':
+      return {
+        eventType: 'clinical.measurement_recorded',
+        typeName: { key: 'measurementType', value: record.measurementType },
+      };
+    case 'observation':
+      return {
+        eventType: 'clinical.observation_recorded',
+        typeName: { key: 'category', value: record.category },
+      };
+    case 'assessment':
+      return {
+        eventType: 'clinical.assessment_recorded',
+        typeName: { key: 'assessmentType', value: record.assessmentType },
+      };
+    case 'risk_assessment':
+      return {
+        eventType: 'clinical.risk_recorded',
+        typeName: { key: 'riskType', value: record.riskType },
+      };
+  }
+}
+
+function clinicalRecordTypePayload(record: ClinicalRecordDetail): Record<string, string> {
+  switch (record.kind) {
+    case 'measurement':
+      return { measurementType: record.measurementType };
+    case 'observation':
+      return { category: record.category };
+    case 'assessment':
+      return { assessmentType: record.assessmentType };
+    case 'risk_assessment':
+      return { riskType: record.riskType };
+  }
+}
+
+function clinicalUpdatedEvent(kind: ClinicalRecordKind): DomainEvent['type'] {
+  switch (kind) {
+    case 'measurement':
+      return 'clinical.measurement_updated';
+    case 'observation':
+      return 'clinical.observation_updated';
+    case 'assessment':
+      return 'clinical.assessment_updated';
+    case 'risk_assessment':
+      return 'clinical.risk_updated';
+  }
+}
+
+function changedClinicalFields(
+  existing: ClinicalRecordDetail,
+  input: ClinicalRecordInput,
+): string[] {
+  const current = existing as unknown as Record<string, unknown>;
+  const next = input as unknown as Record<string, unknown>;
+  return Object.keys(next)
+    .filter((field) => {
+      const before = current[field] ?? null;
+      const after = next[field] ?? null;
+      if (before instanceof Date && after instanceof Date) {
+        return before.getTime() !== after.getTime();
+      }
+      return before !== after;
+    })
+    .sort();
+}
+
+function validateClinicalInput(kind: ClinicalRecordKind, input: ClinicalRecordInput): void {
+  try {
+    if (!clinicalInputMatchesKind(kind, input)) throw new InvalidClinicalRecordError();
+    switch (kind) {
+      case 'measurement':
+        validateMeasurement(input as MeasurementInput);
+        return;
+      case 'observation':
+        validateStructuredObservation(input as StructuredObservationInput);
+        return;
+      case 'assessment':
+        validateAssessment(input as AssessmentInput);
+        return;
+      case 'risk_assessment':
+        validateRiskAssessment(input as RiskAssessmentInput);
+        return;
+    }
+  } catch (error) {
+    if (!(error instanceof InvalidClinicalRecordError)) throw error;
+    switch (kind) {
+      case 'measurement':
+        throw new MeasurementInvalidError();
+      case 'observation':
+        throw new ObservationInvalidError();
+      case 'assessment':
+        throw new AssessmentInvalidError();
+      case 'risk_assessment':
+        throw new RiskAssessmentInvalidError();
+    }
+  }
+}
+
+function clinicalInputMatchesKind(kind: ClinicalRecordKind, input: ClinicalRecordInput): boolean {
+  if (typeof input !== 'object' || input === null) return false;
+  switch (kind) {
+    case 'measurement':
+      return 'measurementType' in input;
+    case 'observation':
+      return 'category' in input;
+    case 'assessment':
+      return 'assessmentType' in input;
+    case 'risk_assessment':
+      return 'riskType' in input;
+  }
+}
+
+function validateClinicalHistoryQuery(query: ClinicalHistoryQuery, kind: ClinicalRecordKind): void {
+  const maxRange = 366 * 24 * 60 * 60 * 1000;
+  const ignoreDateRange = kind === 'risk_assessment' && query.currentOnly === true;
+  const validDateRange =
+    ignoreDateRange ||
+    (query.from !== undefined &&
+      query.until !== undefined &&
+      Number.isFinite(query.from.getTime()) &&
+      Number.isFinite(query.until.getTime()) &&
+      query.until > query.from &&
+      query.until.getTime() - query.from.getTime() <= maxRange);
+  if (
+    !validDateRange ||
+    !Number.isInteger(query.page) ||
+    query.page < 1 ||
+    !Number.isInteger(query.pageSize) ||
+    query.pageSize < 1 ||
+    query.pageSize > 100 ||
+    (query.type !== undefined &&
+      ((kind === 'measurement' &&
+        !MEASUREMENT_TYPES.includes(query.type as (typeof MEASUREMENT_TYPES)[number])) ||
+        (kind !== 'measurement' && kind !== 'assessment'))) ||
+    (query.category !== undefined &&
+      (kind !== 'observation' ||
+        !OBSERVATION_CATEGORIES.includes(query.category) ||
+        query.category.trim().length < 1 ||
+        query.category.trim().length > 128)) ||
+    (query.riskType !== undefined &&
+      (kind !== 'risk_assessment' ||
+        !RISK_TYPES.includes(query.riskType as (typeof RISK_TYPES)[number]))) ||
+    (query.currentOnly !== undefined && kind !== 'risk_assessment')
+  ) {
+    throw new ClinicalHistoryInvalidQueryError();
+  }
+  if (kind === 'assessment' && query.type !== undefined) {
+    const assessmentType = query.type.trim();
+    if (!ASSESSMENT_TYPES.includes(assessmentType as Assessment['assessmentType'])) {
+      throw new ClinicalHistoryInvalidQueryError();
+    }
   }
 }
 

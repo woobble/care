@@ -1,0 +1,33 @@
+{
+  "name": "@care/care-planning",
+  "private": true,
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target bun --packages external",
+    "lint": "oxlint src",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "typecheck": "tsc --noEmit --pretty false -p tsconfig.json",
+    "test": "bun test src"
+  },
+  "dependencies": {
+    "@care/audit": "workspace:*",
+    "@care/clients": "workspace:*",
+    "@care/clinical-documentation": "workspace:*",
+    "@care/contracts": "workspace:*",
+    "@care/database": "workspace:*",
+    "@care/employees": "workspace:*",
+    "@care/events": "workspace:*",
+    "@care/organizations": "workspace:*",
+    "@care/permissions": "workspace:*",
+    "@care/platform": "workspace:*",
+    "@care/services": "workspace:*",
+    "@care/visit-execution": "workspace:*",
+    "drizzle-orm": "^0.45.3",
+    "uuid": "^14.0.2"
+  }
+}

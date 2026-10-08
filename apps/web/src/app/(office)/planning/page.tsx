@@ -1,5 +1,10 @@
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
+import { errorMessageKey } from '../../../i18n/errors';
+import { formatLongDate, formatTime } from '../../../i18n/format';
+import type { Locale } from '../../../i18n/config';
+import { visitStatusKey } from '../../../i18n/status';
 import {
   getApiClient,
   getPermissionGrants,
@@ -31,6 +36,7 @@ export default async function PlanningPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const view = query.view === 'day' ? 'day' : 'week';
   const selectedDate = validDate(query.date) ?? todayInBerlin();
   const page = positivePage(query.page);
@@ -131,19 +137,21 @@ export default async function PlanningPage({
     <div className="grid gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="grid gap-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">Office</p>
-          <h1 className="text-3xl font-semibold">Einsatzplanung</h1>
-          <p className="text-slate-700">Geplante Besuche nach lokaler Einrichtungszeit.</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
+            {t('Navigation.office')}
+          </p>
+          <h1 className="text-3xl font-semibold">{t('Planning.title')}</h1>
+          <p className="text-slate-700">{t('Planning.description')}</p>
         </div>
         <div className="flex gap-2">
           <Button asChild variant={view === 'week' ? 'default' : 'secondary'} size="sm">
             <Link href={viewHref({ ...query, date: selectedDate, view: 'week', page: '1' })}>
-              Woche
+              {t('Planning.week')}
             </Link>
           </Button>
           <Button asChild variant={view === 'day' ? 'default' : 'secondary'} size="sm">
             <Link href={viewHref({ ...query, date: selectedDate, view: 'day', page: '1' })}>
-              Tag
+              {t('Planning.day')}
             </Link>
           </Button>
         </div>
@@ -151,7 +159,7 @@ export default async function PlanningPage({
 
       {error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-          Planung konnte nicht geladen oder gespeichert werden ({error}).
+          {t(errorMessageKey(error))}
         </p>
       ) : null}
       {query.updated ? (
@@ -159,12 +167,12 @@ export default async function PlanningPage({
           role="status"
           className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
         >
-          Einsatz wurde gespeichert.
+          {t('Planning.saved')}
         </p>
       ) : null}
 
       <section
-        aria-label="Kalendernavigation"
+        aria-label={t('Planning.calendarNavigation')}
         className="flex flex-wrap items-center justify-between gap-3"
       >
         <Button asChild variant="secondary">
@@ -175,13 +183,13 @@ export default async function PlanningPage({
               page: '1',
             })}
           >
-            Zurück
+            {t('Planning.previous')}
           </Link>
         </Button>
         <h2 className="text-lg font-semibold">
           {view === 'day'
-            ? formatDay(period.start)
-            : `${formatDay(period.start)} – ${formatDay(addDays(period.endExclusive, -1))}`}
+            ? formatDay(period.start, locale)
+            : `${formatDay(period.start, locale)} – ${formatDay(addDays(period.endExclusive, -1), locale)}`}
         </h2>
         <Button asChild variant="secondary">
           <Link
@@ -191,7 +199,7 @@ export default async function PlanningPage({
               page: '1',
             })}
           >
-            Weiter
+            {t('Planning.next')}
           </Link>
         </Button>
       </section>
@@ -201,56 +209,68 @@ export default async function PlanningPage({
         className="grid gap-3 rounded-lg border bg-white p-4 md:grid-cols-3 lg:grid-cols-4"
       >
         <input type="hidden" name="view" value={view} />
-        <Field label="Datum" name="date" type="date" defaultValue={selectedDate} />
-        <SelectField label="Organisation" name="organizationId" defaultValue={organizationId ?? ''}>
-          <option value="">Alle Organisationen</option>
+        <Field label={t('Planning.date')} name="date" type="date" defaultValue={selectedDate} />
+        <SelectField
+          label={t('Planning.organization')}
+          name="organizationId"
+          defaultValue={organizationId ?? ''}
+        >
+          <option value="">{t('Planning.allOrganizations')}</option>
           {organizations.map((organization) => (
             <option key={organization.id} value={organization.id}>
               {organization.name}
             </option>
           ))}
         </SelectField>
-        <SelectField label="Einrichtung" name="facilityId" defaultValue={facilityId ?? ''}>
-          <option value="">Alle Einrichtungen</option>
+        <SelectField
+          label={t('Planning.facility')}
+          name="facilityId"
+          defaultValue={facilityId ?? ''}
+        >
+          <option value="">{t('Planning.allFacilities')}</option>
           {facilities.map((facility) => (
             <option key={facility.id} value={facility.id}>
               {facility.name}
             </option>
           ))}
         </SelectField>
-        <SelectField label="Team" name="teamId" defaultValue={teamId ?? ''}>
-          <option value="">Alle Teams</option>
+        <SelectField label={t('Common.fields.team')} name="teamId" defaultValue={teamId ?? ''}>
+          <option value="">{t('Planning.allTeams')}</option>
           {teams.map((team) => (
             <option key={team.id} value={team.id}>
               {team.name}
             </option>
           ))}
         </SelectField>
-        <SelectField label="Mitarbeitende" name="employeeId" defaultValue={employeeId ?? ''}>
-          <option value="">Alle Mitarbeitenden</option>
+        <SelectField
+          label={t('Planning.employees')}
+          name="employeeId"
+          defaultValue={employeeId ?? ''}
+        >
+          <option value="">{t('Planning.allEmployees')}</option>
           {employees.map((employee) => (
             <option key={employee.id} value={employee.id}>
               {employee.preferredName || employee.firstName} {employee.lastName}
             </option>
           ))}
         </SelectField>
-        <SelectField label="Status" name="status" defaultValue={status ?? ''}>
-          <option value="">Alle Status</option>
-          <option value="planned">Geplant</option>
-          <option value="confirmed">Bestätigt</option>
-          <option value="cancelled">Abgesagt</option>
+        <SelectField label={t('Planning.status')} name="status" defaultValue={status ?? ''}>
+          <option value="">{t('Planning.allStatuses')}</option>
+          <option value="planned">{t('Common.status.planned')}</option>
+          <option value="confirmed">{t('Common.status.confirmed')}</option>
+          <option value="cancelled">{t('Common.status.cancelled')}</option>
         </SelectField>
-        <SelectField label="Zuweisung" name="assigned" defaultValue={assigned}>
-          <option value="all">Alle Einsätze</option>
-          <option value="unassigned">Offene Einsätze</option>
-          <option value="assigned">Zugewiesen</option>
+        <SelectField label={t('Planning.assignment')} name="assigned" defaultValue={assigned}>
+          <option value="all">{t('Planning.allVisits')}</option>
+          <option value="unassigned">{t('Planning.openVisits')}</option>
+          <option value="assigned">{t('Planning.assigned')}</option>
         </SelectField>
         <SelectField
-          label="Leistung"
+          label={t('Planning.service')}
           name="serviceDefinitionId"
           defaultValue={serviceDefinitionId ?? ''}
         >
-          <option value="">Alle Leistungen</option>
+          <option value="">{t('Planning.allServices')}</option>
           {services.map((service) => (
             <option key={service.id} value={service.id}>
               {service.code} · {service.name}
@@ -260,10 +280,10 @@ export default async function PlanningPage({
         {clientId ? <input type="hidden" name="clientId" value={clientId} /> : null}
         <div className="flex items-end gap-2">
           <Button type="submit" variant="secondary">
-            Filter anwenden
+            {t('Planning.applyFilters')}
           </Button>
           <Button asChild variant="link">
-            <Link href="/planning">Zurücksetzen</Link>
+            <Link href="/planning">{t('Planning.resetFilters')}</Link>
           </Button>
         </div>
       </form>
@@ -271,15 +291,16 @@ export default async function PlanningPage({
       <section aria-labelledby="calendar-title" className="grid gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="calendar-title" className="text-xl font-semibold">
-            {view === 'week' ? 'Wochenübersicht' : 'Tagesübersicht'}
+            {t(view === 'week' ? 'Planning.weekOverview' : 'Planning.dayOverview')}
           </h2>
           <p className="text-sm text-slate-600">
-            {visitResult.data?.total ?? 0} Einsätze · {openCount} offen in dieser Ansicht
+            {t('Planning.visitCount', { count: visitResult.data?.total ?? 0 })} ·{' '}
+            {t('Planning.openCount', { count: openCount })}
           </p>
         </div>
         {visitResult.error ? (
           <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-            Einsätze konnten nicht geladen werden ({visitResult.error.code}).
+            {t(errorMessageKey(visitResult.error.code))}
           </p>
         ) : (
           days.map((day) => {
@@ -291,7 +312,7 @@ export default async function PlanningPage({
                 className="grid gap-2 rounded-lg border bg-white p-4"
               >
                 <h3 id={`day-${day}`} className="font-semibold">
-                  {formatDay(day)}
+                  {formatDay(day, locale)}
                 </h3>
                 {dayVisits.length ? (
                   <ol className="grid gap-2">
@@ -302,8 +323,8 @@ export default async function PlanningPage({
                           href={`/visits/${visit.id}`}
                         >
                           <span className="font-medium">
-                            {formatTime(visit.plannedStart, visit.timezone)}–
-                            {formatTime(visit.plannedEnd, visit.timezone)}
+                            {formatTime(visit.plannedStart, locale, visit.timezone)}–
+                            {formatTime(visit.plannedEnd, locale, visit.timezone)}
                           </span>
                           <span>
                             <strong>{visit.clientDisplayName}</strong>
@@ -317,17 +338,19 @@ export default async function PlanningPage({
                                 ? visit.assignments
                                     .map((item) => item.employeeDisplayName)
                                     .join(', ')
-                                : 'Offen'}{' '}
+                                : t('Planning.open')}{' '}
                               · {visit.facilityName}
                             </span>
                           </span>
-                          <StatusLabel status={visit.status} />
+                          <span className="self-start rounded-full border px-2 py-1 text-xs">
+                            {t(visitStatusKey(visit.status))}
+                          </span>
                         </Link>
                       </li>
                     ))}
                   </ol>
                 ) : (
-                  <p className="text-sm text-slate-600">Keine Einsätze geplant.</p>
+                  <p className="text-sm text-slate-600">{t('Planning.noVisits')}</p>
                 )}
               </section>
             );
@@ -338,13 +361,13 @@ export default async function PlanningPage({
             {page > 1 ? (
               <Button asChild variant="secondary">
                 <Link href={viewHref({ ...query, date: selectedDate, page: String(page - 1) })}>
-                  Vorherige Seite
+                  {t('Planning.previousPage')}
                 </Link>
               </Button>
             ) : null}
             <Button asChild variant="secondary">
               <Link href={viewHref({ ...query, date: selectedDate, page: String(page + 1) })}>
-                Weitere Einsätze
+                {t('Planning.moreVisits')}
               </Link>
             </Button>
           </div>
@@ -357,12 +380,12 @@ export default async function PlanningPage({
           className="grid gap-3 rounded-lg border bg-white p-5"
         >
           <h2 id="create-title" className="text-xl font-semibold">
-            Einsatz manuell planen
+            {t('Planning.createTitle')}
           </h2>
           {clients.length && services.length ? (
             <form action={createVisitAction} className="grid gap-4 md:grid-cols-2">
-              <SelectField label="Klientin oder Klient" name="clientId" required>
-                <option value="">Bitte auswählen</option>
+              <SelectField label={t('Planning.client')} name="clientId" required>
+                <option value="">{t('Planning.selectClient')}</option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.preferredName || client.firstName} {client.lastName}
@@ -370,22 +393,28 @@ export default async function PlanningPage({
                 ))}
               </SelectField>
               <Field
-                label="Datum"
+                label={t('Planning.date')}
                 name="localDate"
                 type="date"
                 defaultValue={selectedDate}
                 required
               />
               <Field
-                label="Beginn"
+                label={t('Planning.start')}
                 name="localStartTime"
                 type="time"
                 defaultValue="08:00"
                 required
               />
-              <Field label="Ende" name="localEndTime" type="time" defaultValue="09:00" required />
+              <Field
+                label={t('Planning.end')}
+                name="localEndTime"
+                type="time"
+                defaultValue="09:00"
+                required
+              />
               <SelectField
-                label="Leistungen (Mehrfachauswahl möglich)"
+                label={t('Planning.services')}
                 name="serviceDefinitionIds"
                 multiple
                 required
@@ -397,8 +426,8 @@ export default async function PlanningPage({
                 ))}
               </SelectField>
               {canAssign ? (
-                <SelectField label="Mitarbeitende (optional)" name="employeeId">
-                  <option value="">Noch nicht zuweisen</option>
+                <SelectField label={t('Planning.employeesOptional')} name="employeeId">
+                  <option value="">{t('Planning.doNotAssign')}</option>
                   {employees.map((employee) => (
                     <option key={employee.id} value={employee.id}>
                       {employee.preferredName || employee.firstName} {employee.lastName}
@@ -407,7 +436,7 @@ export default async function PlanningPage({
                 </SelectField>
               ) : null}
               <div className="grid gap-2 md:col-span-2">
-                <Label htmlFor="visit-note">Hinweis für die Einsatzplanung</Label>
+                <Label htmlFor="visit-note">{t('Planning.planningNote')}</Label>
                 <textarea
                   id="visit-note"
                   name="note"
@@ -416,13 +445,11 @@ export default async function PlanningPage({
                 />
               </div>
               <Button type="submit" className="w-fit">
-                Einsatz anlegen
+                {t('Planning.createVisit')}
               </Button>
             </form>
           ) : (
-            <p className="text-sm text-slate-600">
-              Zum Anlegen werden zugängliche Klienten und aktive Leistungen benötigt.
-            </p>
+            <p className="text-sm text-slate-600">{t('Planning.createRequirements')}</p>
           )}
         </section>
       ) : null}
@@ -484,12 +511,6 @@ function SelectField({
   );
 }
 
-function StatusLabel({ status }: { status: 'planned' | 'confirmed' | 'cancelled' }) {
-  const label =
-    status === 'planned' ? 'Geplant' : status === 'confirmed' ? 'Bestätigt' : 'Abgesagt';
-  return <span className="self-start rounded-full border px-2 py-1 text-xs">{label}</span>;
-}
-
 function validDate(value: string | undefined): string | undefined {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -522,19 +543,8 @@ function dateAtZone(value: string, timeZone: string): string {
   return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
-function formatTime(value: string, timeZone: string): string {
-  return new Intl.DateTimeFormat('de-DE', { timeZone, hour: '2-digit', minute: '2-digit' }).format(
-    new Date(value),
-  );
-}
-
-function formatDay(value: string): string {
-  return new Intl.DateTimeFormat('de-DE', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  }).format(new Date(`${value}T12:00:00Z`));
+function formatDay(value: string, locale: Locale): string {
+  return formatLongDate(new Date(`${value}T12:00:00Z`), locale);
 }
 
 function dayPeriod(date: string): { start: string; endExclusive: string } {

@@ -37,20 +37,67 @@ export function shiftDate(value: string, days: number): string {
   return shiftDateKey(value, days);
 }
 
-export function formatVisitTime(value: string, timezone: string): string {
-  return new Intl.DateTimeFormat('de-DE', {
+export function formatVisitTime(value: string, timezone: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: timezone,
-    hour: '2-digit',
-    minute: '2-digit',
+    timeStyle: 'short',
   }).format(new Date(value));
 }
 
-export function formatVisitDateTime(value: string, timezone: string): string {
-  return new Intl.DateTimeFormat('de-DE', {
+export function formatVisitDateTime(value: string, timezone: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: timezone,
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
+}
+
+export function visitDateTimeInputValue(value: string | Date, timezone: string): string {
+  const parts = localParts(value instanceof Date ? value : new Date(value), timezone);
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+export function visitDateTimeFromInput(value: string, timezone: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, yearText, monthText, dayText, hourText, minuteText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const target = Date.UTC(year, month - 1, day, hour, minute);
+  const calendar = new Date(target);
+  if (
+    calendar.getUTCFullYear() !== year ||
+    calendar.getUTCMonth() + 1 !== month ||
+    calendar.getUTCDate() !== day ||
+    hour > 23 ||
+    minute > 59
+  ) {
+    return null;
+  }
+
+  let guess = target;
+  try {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const parts = localParts(new Date(guess), timezone);
+      const represented = Date.UTC(
+        Number(parts.year),
+        Number(parts.month) - 1,
+        Number(parts.day),
+        Number(parts.hour),
+        Number(parts.minute),
+      );
+      const difference = target - represented;
+      if (difference === 0) break;
+      guess += difference;
+    }
+    if (visitDateTimeInputValue(new Date(guess), timezone) !== value) return null;
+    return new Date(guess).toISOString();
+  } catch {
+    return null;
+  }
 }
 
 function dateKey(value: Date, timezone: string): string {
@@ -110,3 +157,4 @@ function localParts(value: Date, timezone: string): Record<string, string> {
       .map((part) => [part.type, part.value]),
   );
 }
+import type { Locale } from '../i18n/config';

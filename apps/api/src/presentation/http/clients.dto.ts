@@ -783,7 +783,4 @@ export class ClientTimelineEntryDto {
 
   @ApiProperty()
   action!: string;
-
-  @ApiProperty()
-  summary!: string;
 }

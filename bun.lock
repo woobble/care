@@ -24,7 +24,9 @@
         "@care/audit": "workspace:*",
         "@care/auth": "workspace:*",
         "@care/care-documentation": "workspace:*",
+        "@care/care-planning": "workspace:*",
         "@care/clients": "workspace:*",
+        "@care/clinical-documentation": "workspace:*",
         "@care/config": "workspace:*",
         "@care/contracts": "workspace:*",
         "@care/database": "workspace:*",
@@ -113,6 +115,7 @@
       "dependencies": {
         "@care/audit": "workspace:*",
         "@care/clients": "workspace:*",
+        "@care/clinical-documentation": "workspace:*",
         "@care/contracts": "workspace:*",
         "@care/database": "workspace:*",
         "@care/employees": "workspace:*",
@@ -121,6 +124,25 @@
         "@care/permissions": "workspace:*",
         "@care/platform": "workspace:*",
         "@care/scheduling": "workspace:*",
+        "@care/visit-execution": "workspace:*",
+        "drizzle-orm": "^0.45.3",
+        "uuid": "^14.0.2",
+      },
+    },
+    "modules/care-planning": {
+      "name": "@care/care-planning",
+      "dependencies": {
+        "@care/audit": "workspace:*",
+        "@care/clients": "workspace:*",
+        "@care/clinical-documentation": "workspace:*",
+        "@care/contracts": "workspace:*",
+        "@care/database": "workspace:*",
+        "@care/employees": "workspace:*",
+        "@care/events": "workspace:*",
+        "@care/organizations": "workspace:*",
+        "@care/permissions": "workspace:*",
+        "@care/platform": "workspace:*",
+        "@care/services": "workspace:*",
         "@care/visit-execution": "workspace:*",
         "drizzle-orm": "^0.45.3",
         "uuid": "^14.0.2",
@@ -136,6 +158,15 @@
         "@care/organizations": "workspace:*",
         "@care/permissions": "workspace:*",
         "@care/platform": "workspace:*",
+        "drizzle-orm": "^0.45.3",
+        "uuid": "^14.0.2",
+      },
+    },
+    "modules/clinical-documentation": {
+      "name": "@care/clinical-documentation",
+      "dependencies": {
+        "@care/clients": "workspace:*",
+        "@care/database": "workspace:*",
         "drizzle-orm": "^0.45.3",
         "uuid": "^14.0.2",
       },
@@ -458,7 +489,11 @@
 
     "@care/care-documentation": ["@care/care-documentation@workspace:modules/care-documentation"],
 
+    "@care/care-planning": ["@care/care-planning@workspace:modules/care-planning"],
+
     "@care/clients": ["@care/clients@workspace:modules/clients"],
+
+    "@care/clinical-documentation": ["@care/clinical-documentation@workspace:modules/clinical-documentation"],
 
     "@care/config": ["@care/config@workspace:packages/config"],
 

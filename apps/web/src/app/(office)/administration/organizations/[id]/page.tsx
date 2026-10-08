@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
+import { statusLabelKey } from '../../../../../i18n/status';
 import { getApiClient, getTenantHeader } from '../../../../../lib/api';
 import { ActionNotice } from '../../action-notice';
 import {
@@ -19,6 +21,7 @@ export default async function OrganizationDetailPage({
 }: Readonly<{ params: Params; searchParams: SearchParams }>) {
   const { id } = await params;
   const query = await searchParams;
+  const t = await getTranslations();
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
@@ -34,11 +37,14 @@ export default async function OrganizationDetailPage({
     <div className="grid gap-8">
       <header className="grid gap-2">
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration/organizations">Organizations</Link>
+          <Link href="/administration/organizations">{t('Organizations.title')}</Link>
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-3xl font-semibold">{organization.name}</h1>
-          <StatusBadge status={organization.status} />
+          <StatusBadge
+            status={organization.status}
+            label={t(statusLabelKey(organization.status))}
+          />
         </div>
       </header>
       <ActionNotice error={query.error} updated={query.updated} />
@@ -48,13 +54,13 @@ export default async function OrganizationDetailPage({
         className="grid gap-4 rounded-lg border bg-white p-5"
       >
         <h2 id="organization-edit-title" className="text-xl font-semibold">
-          Organization details
+          {t('Organizations.detailsTitle')}
         </h2>
         <form action={updateOrganizationAction} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="id" value={organization.id} />
           <Field
             id="name"
-            label="Name"
+            label={t('Common.fields.name')}
             name="name"
             defaultValue={organization.name}
             required
@@ -62,21 +68,21 @@ export default async function OrganizationDetailPage({
           />
           <Field
             id="legalName"
-            label="Legal name"
+            label={t('Common.fields.legalName')}
             name="legalName"
             defaultValue={organization.legalName ?? ''}
             maxLength={200}
           />
           <Field
             id="code"
-            label="Code"
+            label={t('Common.fields.code')}
             name="code"
             defaultValue={organization.code ?? ''}
             maxLength={40}
           />
           <Field
             id="email"
-            label="Email"
+            label={t('Common.fields.email')}
             name="email"
             type="email"
             defaultValue={organization.email ?? ''}
@@ -84,7 +90,7 @@ export default async function OrganizationDetailPage({
           />
           <Field
             id="phone"
-            label="Phone"
+            label={t('Common.fields.phone')}
             name="phone"
             type="tel"
             defaultValue={organization.phone ?? ''}
@@ -92,21 +98,21 @@ export default async function OrganizationDetailPage({
           />
           <Field
             id="address"
-            label="Address"
+            label={t('Common.fields.address')}
             name="address"
             defaultValue={organization.address ?? ''}
             maxLength={500}
           />
           <Field
             id="timezone"
-            label="Zeitzone"
+            label={t('Common.fields.timezone')}
             name="timezone"
             defaultValue={organization.timezone}
             required
             maxLength={100}
           />
           <div className="md:col-span-2">
-            <Button type="submit">Save changes</Button>
+            <Button type="submit">{t('Common.actions.save')}</Button>
           </div>
         </form>
         <div className="flex flex-wrap items-center gap-3">
@@ -115,15 +121,15 @@ export default async function OrganizationDetailPage({
               <input type="hidden" name="id" value={id} />
               <input type="hidden" name="operation" value="activate" />
               <Button variant="secondary" type="submit">
-                Activate organization
+                {t('Organizations.activate')}
               </Button>
             </form>
           ) : (
             <form action={setOrganizationStatusAction}>
               <input type="hidden" name="id" value={id} />
               <input type="hidden" name="operation" value="archive" />
-              <ConfirmSubmitButton confirmation="Archive this organization?">
-                Archive organization
+              <ConfirmSubmitButton confirmation={t('Organizations.archiveConfirmation')}>
+                {t('Organizations.archive')}
               </ConfirmSubmitButton>
             </form>
           )}
@@ -136,28 +142,51 @@ export default async function OrganizationDetailPage({
       >
         <div>
           <h2 id="facility-create-title" className="text-xl font-semibold">
-            Facilities
+            {t('Organizations.facilitiesTitle')}
           </h2>
-          <p className="text-sm text-slate-600">Facilities belong to this organization.</p>
+          <p className="text-sm text-slate-600">{t('Organizations.facilitiesDescription')}</p>
         </div>
         <form action={createFacilityAction} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="organizationId" value={organization.id} />
-          <Field id="facility-name" label="Name" name="name" required maxLength={160} />
-          <Field id="facility-code" label="Code" name="code" maxLength={40} />
-          <Field id="facility-email" label="Email" name="email" type="email" maxLength={320} />
-          <Field id="facility-phone" label="Phone" name="phone" type="tel" maxLength={40} />
-          <Field id="facility-address" label="Address" name="address" maxLength={500} />
+          <Field
+            id="facility-name"
+            label={t('Common.fields.name')}
+            name="name"
+            required
+            maxLength={160}
+          />
+          <Field id="facility-code" label={t('Common.fields.code')} name="code" maxLength={40} />
+          <Field
+            id="facility-email"
+            label={t('Common.fields.email')}
+            name="email"
+            type="email"
+            maxLength={320}
+          />
+          <Field
+            id="facility-phone"
+            label={t('Common.fields.phone')}
+            name="phone"
+            type="tel"
+            maxLength={40}
+          />
+          <Field
+            id="facility-address"
+            label={t('Common.fields.address')}
+            name="address"
+            maxLength={500}
+          />
           <Field
             id="facility-timezone"
-            label="Zeitzone (optional überschreiben)"
+            label={t('Organizations.facilityTimezoneLabel')}
             name="timezone"
             maxLength={100}
           />
           <p className="text-sm text-slate-600 md:col-span-2">
-            Leer lassen, um die Zeitzone der Organisation zu übernehmen.
+            {t('Organizations.facilityTimezoneHint')}
           </p>
           <div className="md:col-span-2">
-            <Button type="submit">Create facility</Button>
+            <Button type="submit">{t('Organizations.createFacility')}</Button>
           </div>
         </form>
         {facilitiesResult.data?.length ? (
@@ -173,18 +202,18 @@ export default async function OrganizationDetailPage({
                 >
                   {facility.name}
                 </Link>
-                <StatusBadge status={facility.status} />
+                <StatusBadge status={facility.status} label={t(statusLabelKey(facility.status))} />
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-600">No facilities yet.</p>
+          <p className="text-sm text-slate-600">{t('Organizations.noFacilities')}</p>
         )}
       </section>
 
       <section aria-labelledby="teams-title" className="grid gap-3">
         <h2 id="teams-title" className="text-xl font-semibold">
-          Teams
+          {t('Organizations.teamsTitle')}
         </h2>
         {teamsResult.data?.length ? (
           <ul className="grid gap-2">
@@ -200,13 +229,15 @@ export default async function OrganizationDetailPage({
                   {team.name}
                 </Link>
                 <span className="text-sm text-slate-600">
-                  {team.facilityName ?? 'Organization-wide'}
+                  {team.facilityName ?? t('Organizations.organizationWide')}
                 </span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="rounded-lg border bg-white p-4 text-slate-700">No teams yet.</p>
+          <p className="rounded-lg border bg-white p-4 text-slate-700">
+            {t('Organizations.noTeams')}
+          </p>
         )}
       </section>
     </div>

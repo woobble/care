@@ -1,7 +1,18 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { components } from '@care/api-client';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
+import {
+  acknowledgementCapacityKey,
+  acknowledgementMethodKey,
+  declineReasonKey,
+  evidenceOutcomeKey,
+  evidenceStatusKey,
+} from '../../../../i18n/evidence';
+import { errorMessageKey } from '../../../../i18n/errors';
+import { formatNumber } from '../../../../i18n/format';
+import { quantityUnitKey } from '../../../../i18n/status';
 import {
   getApiClient,
   getPermissionGrants,
@@ -22,6 +33,7 @@ export default async function ServiceEvidenceDetailPage({
 }: Readonly<{ params: Promise<{ id: string }>; searchParams: SearchParams }>) {
   const { id } = await params;
   const query = await searchParams;
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const api = await getApiClient();
   const get = api.GET;
   const header = await getTenantHeader();
@@ -35,7 +47,7 @@ export default async function ServiceEvidenceDetailPage({
   if (!packageData) {
     return (
       <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-        Leistungsnachweis konnte nicht geladen werden ({packageResult.error?.code}).
+        {t(errorMessageKey(packageResult.error?.code ?? ''))}
       </p>
     );
   }
@@ -80,14 +92,20 @@ export default async function ServiceEvidenceDetailPage({
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <Link className="text-sm font-semibold text-blue-800 underline" href="/service-evidence">
-            Zurück zur Leistungsnachweisliste
+            {t('ServiceEvidence.office.detail.backToList')}
           </Link>
           <p className="mt-4 text-sm font-semibold uppercase tracking-wide text-blue-800">
-            Leistungsnachweis · Version {packageData.version}
+            {t('ServiceEvidence.office.detail.title', {
+              version: formatNumber(packageData.version, locale),
+            })}
           </p>
           <h1 className="mt-1 text-3xl font-semibold">{packageData.snapshot.clientName}</h1>
           <p className="mt-2 text-slate-600">
-            {formatVisitDateTime(packageData.snapshot.plannedStart, packageData.snapshot.timezone)}
+            {formatVisitDateTime(
+              packageData.snapshot.plannedStart,
+              packageData.snapshot.timezone,
+              locale,
+            )}
           </p>
         </div>
         <span
@@ -97,7 +115,11 @@ export default async function ServiceEvidenceDetailPage({
               : 'rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-950'
           }
         >
-          {packageData.isCurrent ? statusLabel(packageData.status) : 'Veraltet'}
+          {t(
+            packageData.isCurrent
+              ? evidenceStatusKey(packageData.status)
+              : 'ServiceEvidence.office.detail.outdated',
+          )}
         </span>
       </header>
 
@@ -107,24 +129,40 @@ export default async function ServiceEvidenceDetailPage({
           className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
         >
           {query.notice === 'acknowledgement-revoked'
-            ? 'Bestätigung wurde widerrufen.'
-            : query.notice}
+            ? t('ServiceEvidence.office.detail.revokedNotice')
+            : t('Errors.saved')}
         </p>
       ) : null}
 
       <section className="grid gap-4 rounded-lg border bg-white p-4 sm:p-5">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold">Angezeigte Leistungen</h2>
+            <h2 className="text-xl font-semibold">
+              {t('ServiceEvidence.office.detail.servicesTitle')}
+            </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Tatsächlicher Einsatz:{' '}
-              {formatVisitDateTime(packageData.snapshot.actualStart, packageData.snapshot.timezone)}
-              –{formatVisitDateTime(packageData.snapshot.actualEnd, packageData.snapshot.timezone)}
+              {t('ServiceEvidence.office.detail.actualVisit')}{' '}
+              {formatVisitDateTime(
+                packageData.snapshot.actualStart,
+                packageData.snapshot.timezone,
+                locale,
+              )}
+              –
+              {formatVisitDateTime(
+                packageData.snapshot.actualEnd,
+                packageData.snapshot.timezone,
+                locale,
+              )}
             </p>
           </div>
           <span className="text-sm text-slate-600">
-            Dokumentationsversion {packageData.snapshot.documentationVersion} · Änderung{' '}
-            {packageData.snapshot.amendmentCount}
+            {t('ServiceEvidence.office.detail.documentationVersion', {
+              version: formatNumber(packageData.snapshot.documentationVersion, locale),
+            })}{' '}
+            ·{' '}
+            {t('ServiceEvidence.office.detail.amendmentCount', {
+              count: formatNumber(packageData.snapshot.amendmentCount, locale),
+            })}
           </span>
         </header>
         {packageData.snapshot.items.length ? (
@@ -139,31 +177,42 @@ export default async function ServiceEvidenceDetailPage({
                   <p className="text-sm text-slate-600">{item.serviceCode}</p>
                 </div>
                 <div className="text-right text-sm">
-                  <p>{outcomeLabel(item.outcome)}</p>
+                  <p>{t(evidenceOutcomeKey(item.outcome))}</p>
                   <p className="text-slate-600">
-                    Tatsächlich: {item.actualQuantity ?? '–'} {unitLabel(item.unit)}
+                    {t('ServiceEvidence.care.actualQuantity', {
+                      quantity:
+                        item.actualQuantity == null
+                          ? '–'
+                          : t(quantityUnitKey(item.unit), { count: item.actualQuantity }),
+                    })}
                   </p>
                 </div>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="rounded-md border p-3 text-slate-700">Keine Leistungen im Paket.</p>
+          <p className="rounded-md border p-3 text-slate-700">
+            {t('ServiceEvidence.office.detail.noServices')}
+          </p>
         )}
         <dl className="grid gap-2 border-t pt-3 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-slate-600">Prüfsumme</dt>
+            <dt className="text-slate-600">{t('ServiceEvidence.office.detail.checksum')}</dt>
             <dd className="break-all font-mono">{packageData.snapshotHash}</dd>
           </div>
           <div>
-            <dt className="text-slate-600">Erstellt</dt>
-            <dd>{formatVisitDateTime(packageData.generatedAt, packageData.snapshot.timezone)}</dd>
+            <dt className="text-slate-600">{t('ServiceEvidence.office.detail.created')}</dt>
+            <dd>
+              {formatVisitDateTime(packageData.generatedAt, packageData.snapshot.timezone, locale)}
+            </dd>
           </div>
         </dl>
       </section>
 
       <section className="grid gap-4 rounded-lg border bg-white p-4 sm:p-5">
-        <h2 className="text-xl font-semibold">Bestätigungen und Verlauf</h2>
+        <h2 className="text-xl font-semibold">
+          {t('ServiceEvidence.office.detail.acknowledgementsTitle')}
+        </h2>
         {packageData.acknowledgements.length ? (
           <ul className="grid gap-4">
             {packageData.acknowledgements.map((acknowledgement) => {
@@ -177,44 +226,60 @@ export default async function ServiceEvidenceDetailPage({
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <h3 className="font-semibold">{acknowledgement.signatoryName}</h3>
                     <span className="rounded-full bg-slate-100 px-2 py-1 text-sm">
-                      {statusLabel(acknowledgement.status)}
+                      {t(evidenceStatusKey(acknowledgement.status))}
                     </span>
                   </div>
                   <dl className="grid gap-2 text-sm sm:grid-cols-2">
-                    <Detail label="Kapazität" value={capacityLabel(acknowledgement.capacity)} />
-                    <Detail label="Methode" value={methodLabel(acknowledgement.method)} />
                     <Detail
-                      label={acknowledgement.status === 'declined' ? 'Erfasst am' : 'Bestätigt am'}
+                      label={t('ServiceEvidence.office.detail.capacity')}
+                      value={t(acknowledgementCapacityKey(acknowledgement.capacity))}
+                    />
+                    <Detail
+                      label={t('ServiceEvidence.office.detail.method')}
+                      value={t(acknowledgementMethodKey(acknowledgement.method))}
+                    />
+                    <Detail
+                      label={t(
+                        acknowledgement.status === 'declined'
+                          ? 'ServiceEvidence.office.detail.capturedAt'
+                          : 'ServiceEvidence.office.detail.confirmedAt',
+                      )}
                       value={formatVisitDateTime(
                         acknowledgement.acknowledgedAt ??
                           acknowledgement.declinedAt ??
-                          acknowledgement.createdAt,
+                          acknowledgement.createdAt ??
+                          packageData.generatedAt,
                         packageData.snapshot.timezone,
+                        locale,
                       )}
                     />
-                    <Detail label="Aussageversion" value={acknowledgement.statementVersion} />
+                    <Detail
+                      label={t('ServiceEvidence.office.detail.statementVersion')}
+                      value={acknowledgement.statementVersion}
+                    />
                     {acknowledgement.status === 'declined' ? (
                       <Detail
-                        label="Grund"
-                        value={`${declineReasonLabel(acknowledgement.declineReasonCode ?? null)}${acknowledgement.declineNote ? ` · ${acknowledgement.declineNote}` : ''}`}
+                        label={t('ServiceEvidence.office.detail.reason')}
+                        value={`${t(declineReasonKey(acknowledgement.declineReasonCode))}${acknowledgement.declineNote ? ` · ${acknowledgement.declineNote}` : ''}`}
                       />
                     ) : null}
                     {acknowledgement.revokedAt ? (
                       <Detail
-                        label="Widerrufen am"
-                        value={`${formatVisitDateTime(acknowledgement.revokedAt, packageData.snapshot.timezone)} · ${acknowledgement.revocationReason ?? ''}`}
+                        label={t('ServiceEvidence.office.detail.revokedAt')}
+                        value={`${formatVisitDateTime(acknowledgement.revokedAt, packageData.snapshot.timezone, locale)} · ${acknowledgement.revocationReason ?? ''}`}
                       />
                     ) : null}
                   </dl>
                   {acknowledgement.signatureSha256 ? (
                     <p className="break-all text-xs text-slate-500">
-                      Signatur-Prüfsumme: {acknowledgement.signatureSha256}
+                      {t('ServiceEvidence.office.detail.signatureChecksum')}{' '}
+                      {acknowledgement.signatureSha256}
                     </p>
                   ) : null}
                   {signature ? <SignatureView signature={signature} /> : null}
                   {acknowledgement.signatureAvailable && !signature ? (
                     <p className="text-sm text-amber-900">
-                      Unterschrift konnte nicht geladen werden.
+                      {t('ServiceEvidence.office.detail.signatureUnavailable')}
                     </p>
                   ) : null}
                   {canRevoke ? (
@@ -225,7 +290,7 @@ export default async function ServiceEvidenceDetailPage({
                       <input type="hidden" name="acknowledgementId" value={acknowledgement.id} />
                       <input type="hidden" name="evidencePackageId" value={packageData.id} />
                       <label className="grid gap-1 text-sm font-medium sm:col-span-2">
-                        <span>Grund für den Widerruf</span>
+                        <span>{t('ServiceEvidence.office.detail.revocationReason')}</span>
                         <input
                           name="reason"
                           required
@@ -234,8 +299,10 @@ export default async function ServiceEvidenceDetailPage({
                         />
                       </label>
                       <div />
-                      <ConfirmSubmitButton confirmation="Diese Bestätigung mit Begründung widerrufen?">
-                        Bestätigung widerrufen
+                      <ConfirmSubmitButton
+                        confirmation={t('ServiceEvidence.office.detail.revokeConfirmation')}
+                      >
+                        {t('ServiceEvidence.office.detail.revokeAction')}
                       </ConfirmSubmitButton>
                     </form>
                   ) : null}
@@ -244,18 +311,21 @@ export default async function ServiceEvidenceDetailPage({
             })}
           </ul>
         ) : (
-          <p className="text-slate-700">
-            Für diese Paketversion wurde noch keine Bestätigung erfasst.
-          </p>
+          <p className="text-slate-700">{t('ServiceEvidence.office.detail.noAcknowledgement')}</p>
         )}
         <p className="text-xs text-slate-500">
-          Aussage ({packageData.statementVersion}): {packageData.statementText}
+          {t('ServiceEvidence.office.detail.statementLabel', {
+            version: packageData.statementVersion,
+          })}{' '}
+          {packageData.statementText}
         </p>
       </section>
 
       {packageHistory.length > 1 ? (
         <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
-          <h2 className="text-xl font-semibold">Paketversionen für diesen Einsatz</h2>
+          <h2 className="text-xl font-semibold">
+            {t('ServiceEvidence.office.detail.packageVersions')}
+          </h2>
           <ul className="grid gap-2">
             {packageHistory.map((item) => (
               <li
@@ -266,10 +336,13 @@ export default async function ServiceEvidenceDetailPage({
                   href={`/service-evidence/${item.evidencePackageId}`}
                   className="font-medium text-blue-900 underline"
                 >
-                  Version {item.packageVersion} · {statusLabel(item.status)}
+                  {t('ServiceEvidence.office.detail.title', {
+                    version: formatNumber(item.packageVersion ?? 0, locale),
+                  })}{' '}
+                  · {t(evidenceStatusKey(item.status))}
                 </Link>
                 <span className="text-sm text-slate-600">
-                  {formatVisitDateTime(item.plannedStart, item.timezone)}
+                  {formatVisitDateTime(item.plannedStart, item.timezone, locale)}
                 </span>
               </li>
             ))}
@@ -278,7 +351,9 @@ export default async function ServiceEvidenceDetailPage({
       ) : null}
 
       <Button asChild variant="secondary" className="w-fit">
-        <Link href={`/visits/${packageData.snapshot.visitId}`}>Einsatzdetails öffnen</Link>
+        <Link href={`/visits/${packageData.snapshot.visitId}`}>
+          {t('ServiceEvidence.office.detail.openVisit')}
+        </Link>
       </Button>
     </div>
   );
@@ -293,15 +368,18 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SignatureView({ signature }: { signature: Signature }) {
+async function SignatureView({ signature }: { signature: Signature }) {
+  const t = await getTranslations();
   return (
     <figure className="grid gap-2 rounded-md bg-slate-50 p-3">
-      <figcaption className="text-sm font-medium">Gespeicherte Unterschrift</figcaption>
+      <figcaption className="text-sm font-medium">
+        {t('ServiceEvidence.office.detail.savedSignature')}
+      </figcaption>
       <svg
         viewBox="0 0 1000 300"
         preserveAspectRatio="none"
         role="img"
-        aria-label="Gespeicherte Unterschrift"
+        aria-label={t('ServiceEvidence.office.detail.savedSignature')}
         className="h-32 w-full border bg-white"
       >
         {signature.strokes.map((stroke) => (
@@ -325,63 +403,4 @@ function SignatureView({ signature }: { signature: Signature }) {
       </svg>
     </figure>
   );
-}
-
-function statusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    ready: 'Ausstehend',
-    acknowledged: 'Bestätigt',
-    declined: 'Abgelehnt',
-    revoked: 'Widerrufen',
-    outdated: 'Veraltet',
-    superseded: 'Ersetzt',
-  };
-  return labels[status] ?? status;
-}
-
-function capacityLabel(capacity: string): string {
-  const labels: Record<string, string> = {
-    client: 'Klientin oder Klient',
-    legal_guardian: 'gesetzliche Betreuung',
-    authorized_representative: 'bevollmächtigte Vertretung',
-    relative: 'Angehörige Person',
-    other: 'sonstige berechtigte Person',
-  };
-  return labels[capacity] ?? capacity;
-}
-
-function methodLabel(method: string): string {
-  if (method === 'touch_signature') return 'Unterschrift';
-  if (method === 'typed_confirmation') return 'Namensbestätigung';
-  return 'Ablehnung';
-}
-
-function declineReasonLabel(reason: string | null): string {
-  const labels: Record<string, string> = {
-    declined_without_reason: 'Ohne Angabe abgelehnt',
-    disagrees_with_record: 'Mit Dokumentation nicht einverstanden',
-    unable_to_sign: 'Unterschrift nicht möglich',
-    signatory_not_available: 'Bestätigende Person nicht anwesend',
-    other: 'Anderer Grund',
-  };
-  return reason ? (labels[reason] ?? reason) : '–';
-}
-
-function outcomeLabel(outcome: string): string {
-  const labels: Record<string, string> = {
-    performed: 'Erbracht',
-    partially_performed: 'Teilweise erbracht',
-    not_performed: 'Nicht erbracht',
-  };
-  return labels[outcome] ?? outcome;
-}
-
-function unitLabel(unit: string): string {
-  const labels: Record<string, string> = {
-    occurrence: 'Einheit',
-    minute: 'Minuten',
-    hour: 'Stunden',
-    day: 'Tage',
-  };
-  return labels[unit] ?? unit;
 }

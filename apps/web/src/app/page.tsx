@@ -1,7 +1,9 @@
 import { headers } from 'next/headers';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { auth } from '../auth';
 import { getApiClient } from '../lib/api';
 import { Button, Label } from '@care/ui';
+import { LanguageSwitcher } from '../components/language-switcher';
 import { signOutAction } from './actions/auth';
 import { selectTenantAction } from './actions/tenant';
 import { SignInButton } from './sign-in-button';
@@ -12,20 +14,25 @@ export default async function TenantSelectionPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const params = await searchParams;
+  const locale = await getLocale();
+  const [authT, tenantT] = await Promise.all([getTranslations('Auth'), getTranslations('Tenant')]);
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
     return (
       <main className="mx-auto grid min-h-screen w-full max-w-xl content-center gap-6 px-4 py-10">
+        <div className="flex justify-end">
+          <LanguageSwitcher locale={locale} />
+        </div>
         <div className="grid gap-2">
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
             Care Platform
           </p>
-          <h1 className="text-3xl font-semibold">Anmelden</h1>
-          <p className="text-slate-600">Melden Sie sich mit Ihrem Organisationskonto an.</p>
+          <h1 className="text-3xl font-semibold">{authT('signIn')}</h1>
+          <p className="text-slate-600">{authT('signInDescription')}</p>
         </div>
         {params.error === 'auth' ? (
           <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-            Anmeldung ist abgelaufen. Bitte melden Sie sich erneut an.
+            {authT('sessionExpired')}
           </p>
         ) : null}
         <SignInButton />
@@ -35,11 +42,14 @@ export default async function TenantSelectionPage({
   if (params.error === 'auth') {
     return (
       <main className="mx-auto grid min-h-screen w-full max-w-xl content-center gap-6 px-4 py-10">
+        <div className="flex justify-end">
+          <LanguageSwitcher locale={locale} />
+        </div>
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-          Anmeldung ist abgelaufen. Bitte melden Sie sich erneut an.
+          {authT('sessionExpired')}
         </p>
         <form action={signOutAction}>
-          <Button type="submit">Erneut anmelden</Button>
+          <Button type="submit">{authT('signInAgain')}</Button>
         </form>
       </main>
     );
@@ -50,21 +60,24 @@ export default async function TenantSelectionPage({
 
   return (
     <main className="mx-auto grid min-h-screen w-full max-w-xl content-center gap-6 px-4 py-10">
+      <div className="flex justify-end">
+        <LanguageSwitcher locale={locale} />
+      </div>
       <div className="grid gap-2">
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">Care Platform</p>
-        <h1 className="text-3xl font-semibold">Mandant auswählen</h1>
-        <p className="text-slate-600">Wählen Sie den Mandanten für Ihre Arbeitssitzung.</p>
+        <h1 className="text-3xl font-semibold">{tenantT('selectTitle')}</h1>
+        <p className="text-slate-600">{tenantT('selectDescription')}</p>
       </div>
       {error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-          Mandantenzugriff konnte nicht geladen werden.
+          {tenantT('loadFailed')}
         </p>
       ) : tenants?.length ? (
         <form
           action={selectTenantAction}
           className="grid gap-3 rounded-lg border bg-white p-5 shadow-sm"
         >
-          <Label htmlFor="tenantId">Mandant</Label>
+          <Label htmlFor="tenantId">{tenantT('label')}</Label>
           <select
             id="tenantId"
             name="tenantId"
@@ -79,15 +92,13 @@ export default async function TenantSelectionPage({
           </select>
           {params.error ? (
             <p role="alert" className="text-sm text-red-800">
-              Auswahl ist ungültig.
+              {tenantT('invalidSelection')}
             </p>
           ) : null}
-          <Button type="submit">Weiter</Button>
+          <Button type="submit">{tenantT('continue')}</Button>
         </form>
       ) : (
-        <p className="rounded-md border bg-white p-5 text-slate-700">
-          Ihr Benutzerkonto hat noch keinen aktiven Mandantenzugriff.
-        </p>
+        <p className="rounded-md border bg-white p-5 text-slate-700">{tenantT('noAccess')}</p>
       )}
     </main>
   );

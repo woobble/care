@@ -10,16 +10,11 @@ export { cn } from './lib/utils';
 
 export function StatusBadge({
   status,
+  label,
 }: {
   status: 'pending' | 'active' | 'inactive' | 'revoked' | 'archived';
+  label: string;
 }) {
-  const labels = {
-    pending: 'Ausstehend',
-    active: 'Aktiv',
-    inactive: 'Inaktiv',
-    revoked: 'Widerrufen',
-    archived: 'Archiviert',
-  };
   const variants = {
     pending: 'warning',
     active: 'success',
@@ -27,5 +22,5 @@ export function StatusBadge({
     revoked: 'destructive',
     archived: 'secondary',
   } as const;
-  return <Badge variant={variants[status]}>{labels[status]}</Badge>;
+  return <Badge variant={variants[status]}>{label}</Badge>;
 }

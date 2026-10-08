@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
+import { statusLabelKey } from '../../../../../i18n/status';
 import { getApiClient, getTenantHeader } from '../../../../../lib/api';
 import { ActionNotice } from '../../action-notice';
 import { setTeamStatusAction, updateTeamAction } from '../../actions';
@@ -15,6 +17,7 @@ export default async function TeamDetailPage({
 }: Readonly<{ params: Params; searchParams: SearchParams }>) {
   const { id } = await params;
   const query = await searchParams;
+  const t = await getTranslations();
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
@@ -33,11 +36,11 @@ export default async function TeamDetailPage({
     <div className="grid gap-8">
       <header className="grid gap-2">
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration/teams">Teams</Link> · {team.organizationName}
+          <Link href="/administration/teams">{t('Teams.title')}</Link> · {team.organizationName}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-3xl font-semibold">{team.name}</h1>
-          <StatusBadge status={team.status} />
+          <StatusBadge status={team.status} label={t(statusLabelKey(team.status))} />
         </div>
       </header>
       <ActionNotice error={query.error} updated={query.updated} />
@@ -46,23 +49,23 @@ export default async function TeamDetailPage({
         className="grid gap-4 rounded-lg border bg-white p-5"
       >
         <h2 id="team-edit-title" className="text-xl font-semibold">
-          Team details
+          {t('Teams.detailsTitle')}
         </h2>
         <form action={updateTeamAction} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="id" value={team.id} />
           <div className="grid gap-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">{t('Common.fields.name')}</Label>
             <Input id="name" name="name" defaultValue={team.name} required maxLength={160} />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="facilityId">Facility</Label>
+            <Label htmlFor="facilityId">{t('Teams.facility')}</Label>
             <select
               id="facilityId"
               name="facilityId"
               className="h-10 rounded-md border bg-white px-3"
               defaultValue={team.facilityId ?? ''}
             >
-              <option value="">Organization-wide</option>
+              <option value="">{t('Teams.organizationWide')}</option>
               {facilities.map((facility) => (
                 <option key={facility.id} value={facility.id}>
                   {facility.name}
@@ -71,7 +74,7 @@ export default async function TeamDetailPage({
             </select>
           </div>
           <div className="md:col-span-2">
-            <Button type="submit">Save changes</Button>
+            <Button type="submit">{t('Common.actions.save')}</Button>
           </div>
         </form>
         {team.status === 'archived' ? (
@@ -79,26 +82,26 @@ export default async function TeamDetailPage({
             <input type="hidden" name="id" value={id} />
             <input type="hidden" name="operation" value="activate" />
             <Button variant="secondary" type="submit">
-              Activate team
+              {t('Teams.activate')}
             </Button>
           </form>
         ) : (
           <form action={setTeamStatusAction}>
             <input type="hidden" name="id" value={id} />
             <input type="hidden" name="operation" value="archive" />
-            <ConfirmSubmitButton confirmation="Archive this team?">
-              Archive team
+            <ConfirmSubmitButton confirmation={t('Teams.archiveConfirmation')}>
+              {t('Teams.archive')}
             </ConfirmSubmitButton>
           </form>
         )}
       </section>
       <section aria-labelledby="team-employees-title" className="grid gap-3">
         <h2 id="team-employees-title" className="text-xl font-semibold">
-          Assigned employees
+          {t('Teams.employeesTitle')}
         </h2>
         {employeesResult.error ? (
           <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-            Employee list unavailable ({employeesResult.error.code}).
+            {t('Teams.employeeLoadFailed')}
           </p>
         ) : employeesResult.data?.items.length ? (
           <ul className="grid gap-2">
@@ -113,12 +116,12 @@ export default async function TeamDetailPage({
                 >
                   {employee.firstName} {employee.lastName}
                 </Link>
-                <StatusBadge status={employee.status} />
+                <StatusBadge status={employee.status} label={t(statusLabelKey(employee.status))} />
               </li>
             ))}
           </ul>
         ) : (
-          <p className="rounded-lg border bg-white p-4 text-slate-700">No employees assigned.</p>
+          <p className="rounded-lg border bg-white p-4 text-slate-700">{t('Teams.noEmployees')}</p>
         )}
       </section>
     </div>

@@ -2,7 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import type { components } from '@care/api-client';
 import { getApiClient, getTenantHeader } from '../../lib/api';
+import { visitDateTimeFromInput } from '../../lib/care-date';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const serviceStatuses = ['performed', 'partially_performed', 'not_performed'] as const;
@@ -14,6 +16,60 @@ const reasonCodes = [
   'provider_decision',
   'other',
 ] as const;
+
+type ClinicalMeasurementType = components['schemas']['ClinicalMeasurementDto']['measurementType'];
+type ClinicalMeasurementUnit = components['schemas']['ClinicalMeasurementDto']['unit'];
+type ClinicalMeasurementSource = components['schemas']['AddMeasurementRequestDto']['source'];
+type ClinicalObservationCategory = components['schemas']['AddObservationRequestDto']['category'];
+type ClinicalAssessmentType = components['schemas']['AddAssessmentRequestDto']['assessmentType'];
+type ClinicalRiskType = components['schemas']['ClinicalRiskAssessmentDto']['riskType'];
+type ClinicalRiskLevel = components['schemas']['ClinicalRiskAssessmentDto']['level'];
+
+const measurementTypes = [
+  'blood_pressure',
+  'pulse',
+  'temperature',
+  'weight',
+  'blood_glucose',
+  'oxygen_saturation',
+  'respiratory_rate',
+] as const satisfies readonly ClinicalMeasurementType[];
+const observationCategories = [
+  'mobility',
+  'orientation',
+  'pain',
+  'skin',
+  'nutrition',
+  'hydration',
+  'elimination',
+  'sleep',
+  'mood',
+  'general_condition',
+] as const satisfies readonly ClinicalObservationCategory[];
+const riskTypes = [
+  'fall',
+  'pressure_ulcer',
+  'dehydration',
+  'malnutrition',
+] as const satisfies readonly ClinicalRiskType[];
+const riskLevels = [
+  'none',
+  'low',
+  'moderate',
+  'high',
+] as const satisfies readonly ClinicalRiskLevel[];
+const observationCodes: Record<(typeof observationCategories)[number], readonly string[]> = {
+  mobility: ['independent', 'assistance_required', 'bedbound'],
+  orientation: ['oriented', 'disoriented'],
+  pain: [],
+  skin: ['intact', 'redness', 'altered'],
+  nutrition: ['adequate', 'reduced', 'declined'],
+  hydration: ['adequate', 'reduced', 'declined'],
+  elimination: ['unchanged', 'changed', 'incontinence'],
+  sleep: ['restful', 'disturbed'],
+  mood: ['calm', 'anxious', 'low', 'agitated'],
+  general_condition: ['stable', 'changed', 'declined'],
+};
 
 export async function startVisitAction(formData: FormData): Promise<void> {
   const visitId = readUuid(formData.get('visitId'));
@@ -212,6 +268,283 @@ export async function finalizeDocumentationAction(formData: FormData): Promise<v
   redirect(visitPath(visitId, 'documentation-finalized'));
 }
 
+export async function saveClinicalRecordAction(formData: FormData): Promise<void> {
+  const visitId = readUuid(formData.get('visitId'));
+  const documentationId = readUuid(formData.get('documentationId'));
+  const recordId = readUuid(formData.get('recordId'));
+  const expectedVersion = readPositiveInteger(formData.get('expectedVersion'));
+  const expectedRecordVersion = recordId
+    ? readPositiveInteger(formData.get('expectedRecordVersion'))
+    : null;
+  const timezone = readString(formData, 'timezone');
+  const kind = readString(formData, 'kind');
+  if (
+    !visitId ||
+    !documentationId ||
+    !expectedVersion ||
+    !isTimezone(timezone) ||
+    (recordId && !expectedRecordVersion)
+  ) {
+    redirect(visitPath(visitId, 'CLINICAL_RECORD_INVALID'));
+  }
+
+  const api = await getApiClient();
+  const header = await getTenantHeader();
+  let errorCode: string | undefined;
+
+  if (kind === 'measurement') {
+    const measurementType = readString(formData, 'measurementType');
+    const measuredAt = readClinicalTimestamp(formData, 'measuredAt', timezone);
+    const source = readString(formData, 'source');
+    const rawValue = readNullableString(formData, 'value');
+    const integerValue = readOptionalInteger(formData.get('integerValue'));
+    const systolic = readOptionalInteger(formData.get('systolic'));
+    const diastolic = readOptionalInteger(formData.get('diastolic'));
+    const glucoseUnit = readString(formData, 'glucoseUnit');
+    if (
+      !(measurementTypes as readonly string[]).includes(measurementType) ||
+      !measuredAt ||
+      (source !== 'manual' && source !== 'device')
+    ) {
+      redirect(visitPath(visitId, 'CLINICAL_RECORD_INVALID'));
+    }
+    const typedMeasurementType = measurementType as ClinicalMeasurementType;
+    const typedSource = source as ClinicalMeasurementSource;
+    const value = ['temperature', 'weight', 'blood_glucose', 'oxygen_saturation'].includes(
+      typedMeasurementType,
+    )
+      ? rawValue
+      : null;
+    const typedIntegerValue =
+      typedMeasurementType === 'pulse' || typedMeasurementType === 'respiratory_rate'
+        ? integerValue
+        : null;
+    const typedSystolic = typedMeasurementType === 'blood_pressure' ? systolic : null;
+    const typedDiastolic = typedMeasurementType === 'blood_pressure' ? diastolic : null;
+    const unit: ClinicalMeasurementUnit | null =
+      typedMeasurementType === 'blood_pressure'
+        ? 'mmHg'
+        : typedMeasurementType === 'pulse'
+          ? 'bpm'
+          : typedMeasurementType === 'temperature'
+            ? 'Cel'
+            : typedMeasurementType === 'weight'
+              ? 'kg'
+              : typedMeasurementType === 'oxygen_saturation'
+                ? '%'
+                : typedMeasurementType === 'respiratory_rate'
+                  ? '/min'
+                  : glucoseUnit === 'mmol/L'
+                    ? 'mmol/L'
+                    : glucoseUnit === 'mg/dL'
+                      ? 'mg/dL'
+                      : null;
+    if (
+      unit === null ||
+      (value !== null && !/^-?\d+(?:\.\d{1,3})?$/.test(value)) ||
+      ((typedMeasurementType === 'pulse' || typedMeasurementType === 'respiratory_rate') &&
+        integerValue === null) ||
+      (typedMeasurementType === 'blood_pressure' && (systolic === null || diastolic === null)) ||
+      (['temperature', 'weight', 'blood_glucose', 'oxygen_saturation'].includes(
+        typedMeasurementType,
+      ) &&
+        value === null)
+    ) {
+      redirect(visitPath(visitId, 'CLINICAL_RECORD_INVALID'));
+    }
+    const body = {
+      expectedVersion,
+      measurementType: typedMeasurementType,
+      value,
+      integerValue: typedIntegerValue,
+      systolic: typedSystolic,
+      diastolic: typedDiastolic,
+      unit,
+      measuredAt,
+      source: typedSource,
+      note: readNullableString(formData, 'note'),
+    };
+    const result = recordId
+      ? await api.PATCH('/api/v1/care-documentation/{id}/measurements/{recordId}', {
+          params: { path: { id: documentationId, recordId }, header },
+          body: { ...body, expectedRecordVersion: expectedRecordVersion! },
+        })
+      : await api.POST('/api/v1/care-documentation/{id}/measurements', {
+          params: { path: { id: documentationId }, header },
+          body,
+        });
+    errorCode = result.error?.code;
+  } else if (kind === 'observation') {
+    const category = readString(formData, 'category');
+    const observedAt = readClinicalTimestamp(formData, 'observedAt', timezone);
+    const valueCode = readNullableString(formData, 'valueCode');
+    const painScore = readOptionalInteger(formData.get('painScore'));
+    const severity = readNullableString(formData, 'severity');
+    if (
+      !(observationCategories as readonly string[]).includes(category) ||
+      !observedAt ||
+      (category === 'pain'
+        ? painScore === null || painScore < 0 || painScore > 10
+        : !valueCode ||
+          !observationCodes[category as (typeof observationCategories)[number]].includes(
+            valueCode,
+          )) ||
+      (severity !== null && !['mild', 'moderate', 'severe'].includes(severity))
+    ) {
+      redirect(visitPath(visitId, 'CLINICAL_RECORD_INVALID'));
+    }
+    const typedCategory = category as ClinicalObservationCategory;
+    const body = {
+      expectedVersion,
+      category: typedCategory,
+      valueCode: typedCategory === 'pain' ? null : valueCode,
+      painScore: typedCategory === 'pain' ? painScore : null,
+      location: typedCategory === 'pain' ? readNullableString(formData, 'location') : null,
+      severity,
+      observedAt,
+      note: readNullableString(formData, 'note'),
+    };
+    const result = recordId
+      ? await api.PATCH('/api/v1/care-documentation/{id}/observations/{recordId}', {
+          params: { path: { id: documentationId, recordId }, header },
+          body: { ...body, expectedRecordVersion: expectedRecordVersion! },
+        })
+      : await api.POST('/api/v1/care-documentation/{id}/observations', {
+          params: { path: { id: documentationId }, header },
+          body,
+        });
+    errorCode = result.error?.code;
+  } else if (kind === 'assessment') {
+    const assessmentType = readString(formData, 'assessmentType');
+    const assessedAt = readClinicalTimestamp(formData, 'assessedAt', timezone);
+    const validUntilInput = readString(formData, 'validUntil');
+    const validUntil = validUntilInput ? visitDateTimeFromInput(validUntilInput, timezone) : null;
+    const score = readNullableString(formData, 'score');
+    const resultCode = readNullableString(formData, 'resultCode');
+    if (
+      (assessmentType !== 'general_condition' && assessmentType !== 'pain') ||
+      !assessedAt ||
+      (validUntilInput && !validUntil) ||
+      (assessmentType === 'general_condition'
+        ? !resultCode && !score
+        : !score || !/^(?:0|[1-9]|10)$/.test(score)) ||
+      (score !== null && !/^-?\d+(?:\.\d{1,3})?$/.test(score))
+    ) {
+      redirect(visitPath(visitId, 'CLINICAL_RECORD_INVALID'));
+    }
+    if (
+      assessmentType === 'general_condition' &&
+      resultCode !== null &&
+      !['stable', 'changed', 'declined'].includes(resultCode)
+    ) {
+      redirect(visitPath(visitId, 'CLINICAL_RECORD_INVALID'));
+    }
+    const typedAssessmentType = assessmentType as ClinicalAssessmentType;
+    const body = {
+      expectedVersion,
+      assessmentType: typedAssessmentType,
+      resultCode: typedAssessmentType === 'general_condition' ? resultCode : null,
+      score,
+      assessedAt,
+      validUntil,
+      note: readNullableString(formData, 'note'),
+    };
+    const result = recordId
+      ? await api.PATCH('/api/v1/care-documentation/{id}/assessments/{recordId}', {
+          params: { path: { id: documentationId, recordId }, header },
+          body: { ...body, expectedRecordVersion: expectedRecordVersion! },
+        })
+      : await api.POST('/api/v1/care-documentation/{id}/assessments', {
+          params: { path: { id: documentationId }, header },
+          body,
+        });
+    errorCode = result.error?.code;
+  } else if (kind === 'risk_assessment') {
+    const riskType = readString(formData, 'riskType');
+    const level = readString(formData, 'level');
+    const assessedAt = readClinicalTimestamp(formData, 'assessedAt', timezone);
+    const validUntilInput = readString(formData, 'validUntil');
+    const validUntil = validUntilInput ? visitDateTimeFromInput(validUntilInput, timezone) : null;
+    if (
+      !(riskTypes as readonly string[]).includes(riskType) ||
+      !(riskLevels as readonly string[]).includes(level) ||
+      !assessedAt ||
+      (validUntilInput && !validUntil)
+    ) {
+      redirect(visitPath(visitId, 'CLINICAL_RECORD_INVALID'));
+    }
+    const body = {
+      expectedVersion,
+      riskType: riskType as ClinicalRiskType,
+      level: level as ClinicalRiskLevel,
+      assessedAt,
+      validUntil,
+      source: readString(formData, 'source'),
+      note: readNullableString(formData, 'note'),
+    };
+    const result = recordId
+      ? await api.PATCH('/api/v1/care-documentation/{id}/risks/{recordId}', {
+          params: { path: { id: documentationId, recordId }, header },
+          body: { ...body, expectedRecordVersion: expectedRecordVersion! },
+        })
+      : await api.POST('/api/v1/care-documentation/{id}/risks', {
+          params: { path: { id: documentationId }, header },
+          body,
+        });
+    errorCode = result.error?.code;
+  } else {
+    redirect(visitPath(visitId, 'CLINICAL_RECORD_INVALID'));
+  }
+
+  if (errorCode) redirect(visitPath(visitId, errorCode));
+  refresh(visitId);
+  redirect(visitPath(visitId, 'clinical-saved'));
+}
+
+export async function deleteClinicalRecordAction(formData: FormData): Promise<void> {
+  const visitId = readUuid(formData.get('visitId'));
+  const documentationId = readUuid(formData.get('documentationId'));
+  const recordId = readUuid(formData.get('recordId'));
+  const expectedVersion = readPositiveInteger(formData.get('expectedVersion'));
+  const expectedRecordVersion = readPositiveInteger(formData.get('expectedRecordVersion'));
+  const kind = readString(formData, 'kind');
+  if (!visitId || !documentationId || !recordId || !expectedVersion || !expectedRecordVersion) {
+    redirect(visitPath(visitId, 'CLINICAL_RECORD_INVALID'));
+  }
+  const api = await getApiClient();
+  const params = {
+    path: { id: documentationId, recordId },
+    header: await getTenantHeader(),
+  };
+  const body = { expectedVersion, expectedRecordVersion };
+  const result =
+    kind === 'measurement'
+      ? await api.DELETE('/api/v1/care-documentation/{id}/measurements/{recordId}', {
+          params,
+          body,
+        })
+      : kind === 'observation'
+        ? await api.DELETE('/api/v1/care-documentation/{id}/observations/{recordId}', {
+            params,
+            body,
+          })
+        : kind === 'assessment'
+          ? await api.DELETE('/api/v1/care-documentation/{id}/assessments/{recordId}', {
+              params,
+              body,
+            })
+          : kind === 'risk_assessment'
+            ? await api.DELETE('/api/v1/care-documentation/{id}/risks/{recordId}', {
+                params,
+                body,
+              })
+            : null;
+  if (!result) redirect(visitPath(visitId, 'CLINICAL_RECORD_INVALID'));
+  if (result.error) redirect(visitPath(visitId, result.error.code));
+  refresh(visitId);
+  redirect(visitPath(visitId, 'clinical-deleted'));
+}
+
 export async function prepareEvidencePackageAction(formData: FormData): Promise<void> {
   const visitId = readUuid(formData.get('visitId'));
   if (!visitId) redirect('/care/today?error=INVALID_REQUEST');
@@ -323,6 +656,25 @@ function readPositiveInteger(value: FormDataEntryValue | null): number | null {
   if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) return null;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function readOptionalInteger(value: FormDataEntryValue | null): number | null {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  if (!/^(?:0|[1-9]\d*)$/.test(value.trim())) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function readClinicalTimestamp(formData: FormData, name: string, timezone: string): string | null {
+  return visitDateTimeFromInput(readString(formData, name), timezone);
+}
+
+function isTimezone(value: string): boolean {
+  try {
+    return Boolean(new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone);
+  } catch {
+    return false;
+  }
 }
 
 function readSignatory(

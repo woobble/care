@@ -1,6 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
+import { statusLabelKey } from '../../../../i18n/status';
+import { errorMessageKey } from '../../../../i18n/errors';
+import { formatDate } from '../../../../i18n/format';
+import type { Locale } from '../../../../i18n/config';
+import { formatVisitDateTime } from '../../../../lib/care-date';
 import { getApiClient, getTenantHeader } from '../../../../lib/api';
 import { ActionNotice } from '../../administration/action-notice';
 import { ConfirmSubmitButton } from '../../administration/confirm-submit-button';
@@ -28,6 +34,7 @@ export default async function EmployeeDetailPage({
 }: Readonly<{ params: Params; searchParams: SearchParams }>) {
   const { id } = await params;
   const query = await searchParams;
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
@@ -124,31 +131,31 @@ export default async function EmployeeDetailPage({
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="grid gap-2">
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            <Link href="/employees">Mitarbeitende</Link>
+            <Link href="/employees">{t('Employees.title')}</Link>
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold">
               {employee.preferredName || employee.firstName} {employee.lastName}
             </h1>
-            <StatusBadge status={employee.status} />
+            <StatusBadge status={employee.status} label={t(statusLabelKey(employee.status))} />
           </div>
           <p className="text-slate-600">
-            {employee.organizationName ?? 'Keine Organisation'}
+            {employee.organizationName ?? t('Employees.detail.noOrganization')}
             {employee.personnelNumber ? ` · ${employee.personnelNumber}` : ''}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {employee.status === 'active' ? (
-            <StatusForm id={id} operation="deactivate" label="Deaktivieren" />
+            <StatusForm id={id} operation="deactivate" label={t('Employees.detail.deactivate')} />
           ) : employee.status === 'inactive' ? (
-            <StatusForm id={id} operation="activate" label="Aktivieren" />
+            <StatusForm id={id} operation="activate" label={t('Employees.detail.activate')} />
           ) : null}
           {writable ? (
             <form action={changeEmployeeStatusAction}>
               <input type="hidden" name="id" value={id} />
               <input type="hidden" name="operation" value="archive" />
-              <ConfirmSubmitButton confirmation="Diese Person archivieren?">
-                Archivieren
+              <ConfirmSubmitButton confirmation={t('Employees.detail.archiveConfirmation')}>
+                {t('Employees.detail.archive')}
               </ConfirmSubmitButton>
             </form>
           ) : null}
@@ -162,16 +169,16 @@ export default async function EmployeeDetailPage({
       >
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="schedule-title" className="text-xl font-semibold">
-            Kommende Einsätze
+            {t('Employees.detail.upcomingVisits')}
           </h2>
           <Button asChild variant="secondary" size="sm">
-            <Link href={`/planning?employeeId=${employee.id}`}>In der Einsatzplanung öffnen</Link>
+            <Link href={`/planning?employeeId=${employee.id}`}>
+              {t('Employees.detail.openPlanning')}
+            </Link>
           </Button>
         </div>
         {visitsResult.error ? (
-          <p className="text-sm text-slate-600">
-            Einsätze sind mit der aktuellen Berechtigung nicht verfügbar.
-          </p>
+          <p className="text-sm text-slate-600">{t('Employees.detail.visitsUnavailable')}</p>
         ) : visitItems.length ? (
           <ol className="grid gap-2">
             {visitItems.map((visit) => {
@@ -183,7 +190,7 @@ export default async function EmployeeDetailPage({
                     href={`/visits/${visit.id}`}
                   >
                     <time dateTime={visit.plannedStart}>
-                      {formatVisitDateTime(visit.plannedStart, visit.timezone)}
+                      {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
                     </time>
                     <span>
                       <strong>{visit.clientDisplayName}</strong>
@@ -192,34 +199,34 @@ export default async function EmployeeDetailPage({
                       </span>
                       {execution ? (
                         <span className="block text-sm text-slate-600">
-                          Ausführung:{' '}
+                          {t('Employees.detail.execution')}{' '}
                           {execution.executionStatus === 'completed'
-                            ? 'Abgeschlossen'
+                            ? t('Common.status.completed')
                             : execution.executionStatus === 'in_progress'
-                              ? 'In Bearbeitung'
-                              : 'Noch nicht begonnen'}
+                              ? t('Common.status.inProgress')
+                              : t('VisitExecution.executionStatus.notStarted')}
                           {execution.actualStart ? (
                             <>
-                              {' · Tatsächlich '}
-                              {formatVisitDateTime(execution.actualStart, visit.timezone)}
+                              {` · ${t('Employees.detail.actual')} `}
+                              {formatVisitDateTime(execution.actualStart, visit.timezone, locale)}
                               {execution.actualEnd
-                                ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone)}`
+                                ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone, locale)}`
                                 : ''}
                             </>
                           ) : null}
                         </span>
                       ) : executionSummariesResult.error ? (
                         <span className="block text-sm text-slate-600">
-                          Ausführungsstatus nicht verfügbar.
+                          {t('Employees.detail.executionStatusUnavailable')}
                         </span>
                       ) : null}
                     </span>
                     <span className="text-sm">
                       {visit.status === 'cancelled'
-                        ? 'Abgesagt'
+                        ? t('Common.status.cancelled')
                         : visit.status === 'confirmed'
-                          ? 'Bestätigt'
-                          : 'Geplant'}
+                          ? t('Common.status.confirmed')
+                          : t('Common.status.planned')}
                     </span>
                   </Link>
                 </li>
@@ -227,19 +234,19 @@ export default async function EmployeeDetailPage({
             })}
           </ol>
         ) : (
-          <p className="text-sm text-slate-600">
-            Keine zugewiesenen Einsätze in den nächsten 30 Tagen.
-          </p>
+          <p className="text-sm text-slate-600">{t('Employees.detail.noAssignedVisits')}</p>
         )}
         {recentVisitsResult.error ? (
-          <p className="text-sm text-slate-600">Vergangene Ausführungen sind nicht verfügbar.</p>
+          <p className="text-sm text-slate-600">
+            {t('Employees.detail.pastExecutionsUnavailable')}
+          </p>
         ) : recentExecutionSummariesResult.error ? (
           <p className="text-sm text-slate-600">
-            Ausführungsstatus vergangener Einsätze ist nicht verfügbar.
+            {t('Employees.detail.pastExecutionStatusUnavailable')}
           </p>
         ) : recentExecutionItems.length ? (
           <div className="grid gap-3">
-            <h3 className="font-semibold">Zuletzt ausgeführte Einsätze</h3>
+            <h3 className="font-semibold">{t('Employees.detail.recentVisits')}</h3>
             <ol className="grid gap-2">
               {recentExecutionItems.map((visit) => {
                 const execution = recentExecutionByVisitId.get(visit.id);
@@ -251,22 +258,22 @@ export default async function EmployeeDetailPage({
                       href={`/visits/${visit.id}`}
                     >
                       <time dateTime={visit.plannedStart}>
-                        {formatVisitDateTime(visit.plannedStart, visit.timezone)}
+                        {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
                       </time>
                       <strong>{visit.clientDisplayName}</strong>
                       <span className="text-sm text-slate-600">
                         {visit.services.map((service) => service.serviceName).join(' · ')}
                       </span>
                       <span className="text-sm text-slate-600">
-                        Ausführung:{' '}
+                        {t('Employees.detail.execution')}{' '}
                         {execution.executionStatus === 'completed'
-                          ? 'Abgeschlossen'
-                          : 'In Bearbeitung'}
+                          ? t('Common.status.completed')
+                          : t('Common.status.inProgress')}
                         {execution.actualStart
-                          ? ` · Tatsächlich ${formatVisitDateTime(execution.actualStart, visit.timezone)}`
+                          ? ` · ${t('Employees.detail.actual')} ${formatVisitDateTime(execution.actualStart, visit.timezone, locale)}`
                           : ''}
                         {execution.actualEnd
-                          ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone)}`
+                          ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone, locale)}`
                           : ''}
                       </span>
                     </Link>
@@ -285,16 +292,16 @@ export default async function EmployeeDetailPage({
       >
         <div>
           <h2 id="overview-title" className="text-xl font-semibold">
-            Overview
+            {t('Employees.detail.overview')}
           </h2>
-          <p className="text-sm text-slate-600">Stammdaten und Beschäftigungsgrundlagen.</p>
+          <p className="text-sm text-slate-600">{t('Employees.detail.overviewDescription')}</p>
         </div>
         <form action={updateEmployeeAction} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="id" value={employee.id} />
           <Field
             id="firstName"
             name="firstName"
-            label="Vorname"
+            label={t('Employees.detail.firstName')}
             defaultValue={employee.firstName}
             required
             maxLength={120}
@@ -302,7 +309,7 @@ export default async function EmployeeDetailPage({
           <Field
             id="lastName"
             name="lastName"
-            label="Nachname"
+            label={t('Employees.detail.lastName')}
             defaultValue={employee.lastName}
             required
             maxLength={120}
@@ -310,21 +317,21 @@ export default async function EmployeeDetailPage({
           <Field
             id="preferredName"
             name="preferredName"
-            label="Bevorzugter Name"
+            label={t('Employees.detail.preferredName')}
             defaultValue={employee.preferredName ?? ''}
             maxLength={120}
           />
           <Field
             id="personnelNumber"
             name="personnelNumber"
-            label="Personalnummer"
+            label={t('Employees.detail.personnelNumber')}
             defaultValue={employee.personnelNumber ?? ''}
             maxLength={64}
           />
           <Field
             id="email"
             name="email"
-            label="E-Mail"
+            label={t('Employees.detail.email')}
             type="email"
             defaultValue={employee.email ?? ''}
             maxLength={320}
@@ -332,7 +339,7 @@ export default async function EmployeeDetailPage({
           <Field
             id="phone"
             name="phone"
-            label="Telefon"
+            label={t('Employees.detail.phone')}
             type="tel"
             defaultValue={employee.phone ?? ''}
             maxLength={40}
@@ -340,28 +347,28 @@ export default async function EmployeeDetailPage({
           <Field
             id="employmentType"
             name="employmentType"
-            label="Beschäftigungsart"
+            label={t('Employees.detail.employmentType')}
             defaultValue={employee.employmentType ?? ''}
             maxLength={80}
           />
           <Field
             id="startDate"
             name="startDate"
-            label="Beginn"
+            label={t('Employees.detail.startDate')}
             type="date"
             defaultValue={employee.startDate ?? ''}
           />
           <Field
             id="endDate"
             name="endDate"
-            label="Ende"
+            label={t('Employees.detail.endDate')}
             type="date"
             defaultValue={employee.endDate ?? ''}
           />
           <Field
             id="weeklyHours"
             name="weeklyHours"
-            label="Wochenstunden"
+            label={t('Employees.detail.weeklyHours')}
             type="number"
             defaultValue={employee.weeklyHours?.toString() ?? ''}
             min="0"
@@ -370,7 +377,7 @@ export default async function EmployeeDetailPage({
           />
           <div className="md:col-span-2">
             <Button type="submit" disabled={!writable}>
-              Stammdaten speichern
+              {t('Employees.detail.saveMasterData')}
             </Button>
           </div>
         </form>
@@ -383,16 +390,14 @@ export default async function EmployeeDetailPage({
       >
         <div>
           <h2 id="assignments-title" className="text-xl font-semibold">
-            Assignments
+            {t('Employees.detail.assignments')}
           </h2>
-          <p className="text-sm text-slate-600">
-            Facility and team membership are operational assignments, separate from platform roles.
-          </p>
+          <p className="text-sm text-slate-600">{t('Employees.detail.assignmentsDescription')}</p>
         </div>
         {employee.organizationId ? (
           <div className="grid gap-5 lg:grid-cols-2">
             <div className="grid content-start gap-3">
-              <h3 className="font-semibold">Facilities</h3>
+              <h3 className="font-semibold">{t('Employees.detail.facilities')}</h3>
               {assignments.length ? (
                 assignments.map((assignment) => (
                   <article
@@ -402,29 +407,37 @@ export default async function EmployeeDetailPage({
                     <div>
                       <p className="font-medium">
                         {assignment.facilityName}
-                        {assignment.isPrimary ? ' · Hauptstandort' : ''}
+                        {assignment.isPrimary ? ` · ${t('Employees.detail.primaryFacility')}` : ''}
                       </p>
                       <p className="text-sm text-slate-600">
-                        {dateRange(assignment.validFrom, assignment.validUntil)}
+                        {dateRange(
+                          assignment.validFrom,
+                          assignment.validUntil,
+                          locale,
+                          t('Employees.detail.open'),
+                          t('Employees.detail.unlimited'),
+                        )}
                       </p>
                     </div>
                     <form action={unassignFacilityAction}>
                       <input type="hidden" name="employeeId" value={id} />
                       <input type="hidden" name="facilityId" value={assignment.facilityId} />
-                      <ConfirmSubmitButton confirmation="Facility assignment entfernen?">
-                        Entfernen
+                      <ConfirmSubmitButton
+                        confirmation={t('Employees.detail.removeFacilityConfirmation')}
+                      >
+                        {t('Employees.detail.remove')}
                       </ConfirmSubmitButton>
                     </form>
                   </article>
                 ))
               ) : (
-                <p className="text-sm text-slate-600">Noch keiner Einrichtung zugewiesen.</p>
+                <p className="text-sm text-slate-600">{t('Employees.detail.noFacility')}</p>
               )}
               {facilities.length ? (
                 <form action={assignFacilityAction} className="grid gap-3 rounded-md border p-3">
                   <input type="hidden" name="employeeId" value={id} />
                   <div className="grid gap-2">
-                    <Label htmlFor="facilityId">Einrichtung zuweisen</Label>
+                    <Label htmlFor="facilityId">{t('Employees.detail.assignFacility')}</Label>
                     <select
                       id="facilityId"
                       name="facilityId"
@@ -433,7 +446,7 @@ export default async function EmployeeDetailPage({
                       defaultValue=""
                     >
                       <option value="" disabled>
-                        Einrichtung auswählen
+                        {t('Employees.detail.selectFacility')}
                       </option>
                       {facilities.map((facility) => (
                         <option key={facility.id} value={facility.id}>
@@ -443,30 +456,31 @@ export default async function EmployeeDetailPage({
                     </select>
                   </div>
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="isPrimary" /> Als Hauptstandort festlegen
+                    <input type="checkbox" name="isPrimary" />{' '}
+                    {t('Employees.detail.setPrimaryFacility')}
                   </label>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field
                       id="facility-valid-from"
                       name="validFrom"
-                      label="Gültig ab"
+                      label={t('Employees.detail.validFrom')}
                       type="date"
                     />
                     <Field
                       id="facility-valid-until"
                       name="validUntil"
-                      label="Gültig bis"
+                      label={t('Employees.detail.validUntil')}
                       type="date"
                     />
                   </div>
                   <Button type="submit" disabled={!writable || employee.status !== 'active'}>
-                    Einrichtung zuweisen
+                    {t('Employees.detail.assignFacilityAction')}
                   </Button>
                 </form>
               ) : null}
             </div>
             <div className="grid content-start gap-3">
-              <h3 className="font-semibold">Teams</h3>
+              <h3 className="font-semibold">{t('Employees.detail.teams')}</h3>
               {teamMemberships.length ? (
                 teamMemberships.map((membership) => (
                   <article
@@ -476,27 +490,35 @@ export default async function EmployeeDetailPage({
                     <div>
                       <p className="font-medium">{membership.teamName}</p>
                       <p className="text-sm text-slate-600">
-                        {membership.role || 'Mitglied'} ·{' '}
-                        {dateRange(membership.validFrom, membership.validUntil)}
+                        {membership.role || t('Employees.detail.member')} ·{' '}
+                        {dateRange(
+                          membership.validFrom,
+                          membership.validUntil,
+                          locale,
+                          t('Employees.detail.open'),
+                          t('Employees.detail.unlimited'),
+                        )}
                       </p>
                     </div>
                     <form action={unassignTeamAction}>
                       <input type="hidden" name="employeeId" value={id} />
                       <input type="hidden" name="teamId" value={membership.teamId} />
-                      <ConfirmSubmitButton confirmation="Teammitgliedschaft entfernen?">
-                        Entfernen
+                      <ConfirmSubmitButton
+                        confirmation={t('Employees.detail.removeTeamConfirmation')}
+                      >
+                        {t('Employees.detail.remove')}
                       </ConfirmSubmitButton>
                     </form>
                   </article>
                 ))
               ) : (
-                <p className="text-sm text-slate-600">Noch keinem Team zugewiesen.</p>
+                <p className="text-sm text-slate-600">{t('Employees.detail.noTeam')}</p>
               )}
               {teams.length ? (
                 <form action={assignTeamAction} className="grid gap-3 rounded-md border p-3">
                   <input type="hidden" name="employeeId" value={id} />
                   <div className="grid gap-2">
-                    <Label htmlFor="teamId">Team zuweisen</Label>
+                    <Label htmlFor="teamId">{t('Employees.detail.assignTeam')}</Label>
                     <select
                       id="teamId"
                       name="teamId"
@@ -505,7 +527,7 @@ export default async function EmployeeDetailPage({
                       defaultValue=""
                     >
                       <option value="" disabled>
-                        Team auswählen
+                        {t('Employees.detail.selectTeam')}
                       </option>
                       {teams.map((team) => (
                         <option key={team.id} value={team.id}>
@@ -517,15 +539,25 @@ export default async function EmployeeDetailPage({
                   <Field
                     id="team-role"
                     name="role"
-                    label="Teamfunktion (optional)"
+                    label={t('Employees.detail.teamRoleOptional')}
                     maxLength={80}
                   />
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <Field id="team-valid-from" name="validFrom" label="Gültig ab" type="date" />
-                    <Field id="team-valid-until" name="validUntil" label="Gültig bis" type="date" />
+                    <Field
+                      id="team-valid-from"
+                      name="validFrom"
+                      label={t('Employees.detail.validFrom')}
+                      type="date"
+                    />
+                    <Field
+                      id="team-valid-until"
+                      name="validUntil"
+                      label={t('Employees.detail.validUntil')}
+                      type="date"
+                    />
                   </div>
                   <Button type="submit" disabled={!writable || employee.status !== 'active'}>
-                    Team zuweisen
+                    {t('Employees.detail.assignTeamAction')}
                   </Button>
                 </form>
               ) : null}
@@ -536,7 +568,7 @@ export default async function EmployeeDetailPage({
             role="alert"
             className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900"
           >
-            Für diese Person fehlt eine Organisation; Zuweisungen sind daher nicht verfügbar.
+            {t('Employees.detail.organizationRequired')}
           </p>
         )}
       </section>
@@ -548,10 +580,10 @@ export default async function EmployeeDetailPage({
       >
         <div>
           <h2 id="qualifications-title" className="text-xl font-semibold">
-            Qualifications
+            {t('Employees.detail.qualifications')}
           </h2>
           <p className="text-sm text-slate-600">
-            Formale Qualifikationen mit optionaler Gültigkeitsdauer.
+            {t('Employees.detail.qualificationsDescription')}
           </p>
         </div>
         {employee.qualifications.length ? (
@@ -567,9 +599,17 @@ export default async function EmployeeDetailPage({
                     {qualification.code ? ` (${qualification.code})` : ''}
                   </p>
                   <p className="text-sm text-slate-600">
-                    {dateRange(qualification.validFrom, qualification.validUntil)}
+                    {dateRange(
+                      qualification.validFrom,
+                      qualification.validUntil,
+                      locale,
+                      t('Employees.detail.open'),
+                      t('Employees.detail.unlimited'),
+                    )}
                     {qualification.issuer ? ` · ${qualification.issuer}` : ''}
-                    {qualification.status === 'archived' ? ' · archiviert' : ''}
+                    {qualification.status === 'archived'
+                      ? ` · ${t('Employees.detail.archived')}`
+                      : ''}
                   </p>
                 </div>
                 {qualification.status === 'active' ? (
@@ -580,8 +620,10 @@ export default async function EmployeeDetailPage({
                       name="qualificationId"
                       value={qualification.qualificationId}
                     />
-                    <ConfirmSubmitButton confirmation="Qualifikation entfernen?">
-                      Entfernen
+                    <ConfirmSubmitButton
+                      confirmation={t('Employees.detail.removeQualificationConfirmation')}
+                    >
+                      {t('Employees.detail.remove')}
                     </ConfirmSubmitButton>
                   </form>
                 ) : null}
@@ -589,13 +631,13 @@ export default async function EmployeeDetailPage({
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-600">Keine Qualifikationen zugeordnet.</p>
+          <p className="text-sm text-slate-600">{t('Employees.detail.noQualifications')}</p>
         )}
         {qualifications.length ? (
           <form action={assignQualificationAction} className="grid gap-3 rounded-md border p-3">
             <input type="hidden" name="employeeId" value={id} />
             <div className="grid gap-2">
-              <Label htmlFor="qualificationId">Qualifikation hinzufügen</Label>
+              <Label htmlFor="qualificationId">{t('Employees.detail.addQualification')}</Label>
               <select
                 id="qualificationId"
                 name="qualificationId"
@@ -604,7 +646,7 @@ export default async function EmployeeDetailPage({
                 defaultValue=""
               >
                 <option value="" disabled>
-                  Qualifikation auswählen
+                  {t('Employees.detail.selectQualification')}
                 </option>
                 {qualifications.map((qualification) => (
                   <option key={qualification.id} value={qualification.id}>
@@ -615,23 +657,33 @@ export default async function EmployeeDetailPage({
               </select>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <Field id="qualification-valid-from" name="validFrom" label="Gültig ab" type="date" />
+              <Field
+                id="qualification-valid-from"
+                name="validFrom"
+                label={t('Employees.detail.validFrom')}
+                type="date"
+              />
               <Field
                 id="qualification-valid-until"
                 name="validUntil"
-                label="Gültig bis"
+                label={t('Employees.detail.validUntil')}
                 type="date"
               />
-              <Field id="qualification-issuer" name="issuer" label="Aussteller" maxLength={160} />
+              <Field
+                id="qualification-issuer"
+                name="issuer"
+                label={t('Employees.detail.issuer')}
+                maxLength={160}
+              />
             </div>
             <Button type="submit" disabled={!writable}>
-              Qualifikation speichern
+              {t('Employees.detail.saveQualification')}
             </Button>
           </form>
         ) : (
           <p className="text-sm text-slate-600">
             <Link className="underline" href="/administration/qualifications">
-              Qualifikationen verwalten
+              {t('Employees.detail.manageQualifications')}
             </Link>
           </p>
         )}
@@ -644,11 +696,9 @@ export default async function EmployeeDetailPage({
       >
         <div>
           <h2 id="skills-title" className="text-xl font-semibold">
-            Skills
+            {t('Employees.detail.skills')}
           </h2>
-          <p className="text-sm text-slate-600">
-            Zusätzliche Fähigkeiten getrennt von formalen Qualifikationen.
-          </p>
+          <p className="text-sm text-slate-600">{t('Employees.detail.skillsDescription')}</p>
         </div>
         {employee.skills.length ? (
           <ul className="grid gap-2">
@@ -660,14 +710,16 @@ export default async function EmployeeDetailPage({
                 <span className="font-medium">
                   {skill.name}
                   {skill.code ? ` (${skill.code})` : ''}
-                  {skill.status === 'archived' ? ' · archiviert' : ''}
+                  {skill.status === 'archived' ? ` · ${t('Employees.detail.archived')}` : ''}
                 </span>
                 {skill.status === 'active' ? (
                   <form action={removeSkillAction}>
                     <input type="hidden" name="employeeId" value={id} />
                     <input type="hidden" name="skillId" value={skill.skillId} />
-                    <ConfirmSubmitButton confirmation="Fähigkeit entfernen?">
-                      Entfernen
+                    <ConfirmSubmitButton
+                      confirmation={t('Employees.detail.removeSkillConfirmation')}
+                    >
+                      {t('Employees.detail.remove')}
                     </ConfirmSubmitButton>
                   </form>
                 ) : null}
@@ -675,7 +727,7 @@ export default async function EmployeeDetailPage({
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-600">Keine Fähigkeiten zugeordnet.</p>
+          <p className="text-sm text-slate-600">{t('Employees.detail.noSkills')}</p>
         )}
         {skills.length ? (
           <form
@@ -684,7 +736,7 @@ export default async function EmployeeDetailPage({
           >
             <input type="hidden" name="employeeId" value={id} />
             <div className="grid gap-2">
-              <Label htmlFor="skillId">Fähigkeit hinzufügen</Label>
+              <Label htmlFor="skillId">{t('Employees.detail.addSkill')}</Label>
               <select
                 id="skillId"
                 name="skillId"
@@ -693,7 +745,7 @@ export default async function EmployeeDetailPage({
                 defaultValue=""
               >
                 <option value="" disabled>
-                  Fähigkeit auswählen
+                  {t('Employees.detail.selectSkill')}
                 </option>
                 {skills.map((skill) => (
                   <option key={skill.id} value={skill.id}>
@@ -704,13 +756,13 @@ export default async function EmployeeDetailPage({
               </select>
             </div>
             <Button type="submit" disabled={!writable}>
-              Fähigkeit zuweisen
+              {t('Employees.detail.assignSkill')}
             </Button>
           </form>
         ) : (
           <p className="text-sm text-slate-600">
             <Link className="underline" href="/administration/qualifications">
-              Fähigkeiten verwalten
+              {t('Employees.detail.manageSkills')}
             </Link>
           </p>
         )}
@@ -724,14 +776,12 @@ export default async function EmployeeDetailPage({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 id="access-title" className="text-xl font-semibold">
-              Access
+              {t('Employees.detail.access')}
             </h2>
-            <p className="text-sm text-slate-600">
-              An employee record is separate from a platform user account.
-            </p>
+            <p className="text-sm text-slate-600">{t('Employees.detail.accessDescription')}</p>
           </div>
           <Link className="text-sm text-blue-900 underline" href="/administration/users">
-            Users &amp; Access verwalten
+            {t('Employees.detail.manageAccess')}
           </Link>
         </div>
         {employee.linkedUser ? (
@@ -742,25 +792,26 @@ export default async function EmployeeDetailPage({
                 employee.linkedUser.id}
             </p>
             <p className="text-sm text-slate-600">
-              {employee.linkedUser.email ?? 'Keine E-Mail'} · Tenant membership:{' '}
-              {employee.linkedUser.membershipStatus}
+              {employee.linkedUser.email ?? t('Employees.detail.noEmail')} ·{' '}
+              {t('Employees.detail.tenantMembership')}{' '}
+              {t(statusLabelKey(employee.linkedUser.membershipStatus))}
             </p>
             <form action={unlinkEmployeeUserAction}>
               <input type="hidden" name="employeeId" value={id} />
-              <ConfirmSubmitButton confirmation="Die Benutzerverknüpfung lösen?">
-                Benutzer lösen
+              <ConfirmSubmitButton confirmation={t('Employees.detail.unlinkConfirmation')}>
+                {t('Employees.detail.unlinkUser')}
               </ConfirmSubmitButton>
             </form>
           </div>
         ) : linkableUsersResult.error ? (
           <p className="text-sm text-slate-600">
-            Benutzerverknüpfung kann nicht angezeigt werden ({linkableUsersResult.error.code}).
+            {t(errorMessageKey(linkableUsersResult.error.code))}
           </p>
         ) : linkableUsersResult.data?.length ? (
           <form action={linkEmployeeUserAction} className="flex flex-wrap items-end gap-3">
             <input type="hidden" name="employeeId" value={id} />
             <div className="grid gap-2">
-              <Label htmlFor="userId">Aktiven Benutzer verknüpfen</Label>
+              <Label htmlFor="userId">{t('Employees.detail.linkActiveUser')}</Label>
               <select
                 id="userId"
                 name="userId"
@@ -769,7 +820,7 @@ export default async function EmployeeDetailPage({
                 defaultValue=""
               >
                 <option value="" disabled>
-                  Benutzer auswählen
+                  {t('Employees.detail.selectUser')}
                 </option>
                 {linkableUsersResult.data.map((user) => (
                   <option key={user.id} value={user.id}>
@@ -780,13 +831,11 @@ export default async function EmployeeDetailPage({
               </select>
             </div>
             <Button type="submit" disabled={!writable}>
-              Benutzer verknüpfen
+              {t('Employees.detail.linkUser')}
             </Button>
           </form>
         ) : (
-          <p className="text-sm text-slate-600">
-            Kein aktiver Benutzer ohne bestehende Mitarbeiterverknüpfung verfügbar.
-          </p>
+          <p className="text-sm text-slate-600">{t('Employees.detail.noLinkableUser')}</p>
         )}
       </section>
     </div>
@@ -850,17 +899,15 @@ function StatusForm({
   );
 }
 
-function dateRange(from: string | null, until: string | null): string {
-  if (!from && !until) return 'Unbefristet';
-  return `${from ?? 'Offen'} — ${until ?? 'Offen'}`;
-}
-
-function formatVisitDateTime(value: string, timeZone: string): string {
-  return new Intl.DateTimeFormat('de-DE', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone,
-  }).format(new Date(value));
+function dateRange(
+  from: string | null,
+  until: string | null,
+  locale: Locale,
+  open: string,
+  unlimited: string,
+): string {
+  if (!from && !until) return unlimited;
+  return `${formatDate(from, locale) ?? open} — ${formatDate(until, locale) ?? open}`;
 }
 
 function employeeVisitRange(): { scheduleNow: Date; scheduleFrom: Date; scheduleUntil: Date } {

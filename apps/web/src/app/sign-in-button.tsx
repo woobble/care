@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import { createAuthClient } from 'better-auth/react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@care/ui';
 
 const authClient = createAuthClient({ basePath: '/api/auth' });
 
 export function SignInButton() {
+  const t = useTranslations('Auth');
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -26,11 +28,11 @@ export function SignInButton() {
   return (
     <div className="grid gap-3">
       <Button type="button" onClick={signIn} disabled={pending}>
-        {pending ? 'Weiterleitung …' : 'Mit Authentik anmelden'}
+        {pending ? t('redirecting') : t('signInWithAuthentik')}
       </Button>
       {failed ? (
         <p role="alert" className="text-sm text-red-800">
-          Anmeldung konnte nicht gestartet werden.
+          {t('signInFailed')}
         </p>
       ) : null}
     </div>

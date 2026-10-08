@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
+import { statusLabelKey } from '../../../../i18n/status';
 import { getApiClient, getTenantHeader } from '../../../../lib/api';
 import { ActionNotice } from '../action-notice';
 import { createFacilityAction } from '../actions';
@@ -10,6 +12,7 @@ export default async function FacilitiesPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
+  const t = await getTranslations();
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
@@ -23,15 +26,14 @@ export default async function FacilitiesPage({
     <div className="grid gap-8">
       <header className="grid gap-1">
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration/organizations">Organization structure</Link>
+          <Link href="/administration/organizations">{t('Facilities.section')}</Link>
         </p>
-        <h1 className="text-3xl font-semibold">Facilities</h1>
+        <h1 className="text-3xl font-semibold">{t('Facilities.title')}</h1>
       </header>
       <ActionNotice error={query.error} updated={query.updated} />
       {organizationsResult.error || facilitiesResult.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-          Facility data could not be loaded (
-          {organizationsResult.error?.code || facilitiesResult.error?.code}).
+          {t('Facilities.loadFailed')}
         </p>
       ) : null}
       <section
@@ -39,11 +41,11 @@ export default async function FacilitiesPage({
         className="grid gap-4 rounded-lg border bg-white p-5"
       >
         <h2 id="facility-create-title" className="text-xl font-semibold">
-          Create facility
+          {t('Facilities.createTitle')}
         </h2>
         <form action={createFacilityAction} className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
-            <Label htmlFor="organizationId">Organization</Label>
+            <Label htmlFor="organizationId">{t('Facilities.organization')}</Label>
             <select
               id="organizationId"
               name="organizationId"
@@ -52,7 +54,7 @@ export default async function FacilitiesPage({
               defaultValue=""
             >
               <option value="" disabled>
-                Select organization
+                {t('Facilities.selectOrganization')}
               </option>
               {organizations
                 .filter((organization) => organization.status === 'active')
@@ -63,43 +65,53 @@ export default async function FacilitiesPage({
                 ))}
             </select>
           </div>
-          <Field id="name" name="name" label="Name" required maxLength={160} />
-          <Field id="code" name="code" label="Code" maxLength={40} />
-          <Field id="email" name="email" label="Email" type="email" maxLength={320} />
-          <Field id="phone" name="phone" label="Phone" type="tel" maxLength={40} />
-          <Field id="address" name="address" label="Address" maxLength={500} />
+          <Field id="name" name="name" label={t('Common.fields.name')} required maxLength={160} />
+          <Field id="code" name="code" label={t('Common.fields.code')} maxLength={40} />
+          <Field
+            id="email"
+            name="email"
+            label={t('Common.fields.email')}
+            type="email"
+            maxLength={320}
+          />
+          <Field
+            id="phone"
+            name="phone"
+            label={t('Common.fields.phone')}
+            type="tel"
+            maxLength={40}
+          />
+          <Field id="address" name="address" label={t('Common.fields.address')} maxLength={500} />
           <Field
             id="timezone"
             name="timezone"
-            label="Zeitzone (optional überschreiben)"
+            label={t('Facilities.timezoneLabel')}
             maxLength={100}
           />
-          <p className="text-sm text-slate-600 md:col-span-2">
-            Leer lassen, um die Zeitzone der Organisation zu übernehmen.
-          </p>
+          <p className="text-sm text-slate-600 md:col-span-2">{t('Facilities.timezoneHint')}</p>
           <div className="md:col-span-2">
-            <Button type="submit">Create facility</Button>
+            <Button type="submit">{t('Facilities.createTitle')}</Button>
           </div>
         </form>
       </section>
       <section aria-labelledby="facility-list-title" className="grid gap-3">
         <h2 id="facility-list-title" className="text-xl font-semibold">
-          All facilities
+          {t('Facilities.listTitle')}
         </h2>
         {facilitiesResult.data?.length ? (
           <div className="overflow-x-auto rounded-lg border bg-white">
             <table className="w-full border-collapse text-left text-sm">
-              <caption className="sr-only">Facilities in visible organizations</caption>
+              <caption className="sr-only">{t('Facilities.listCaption')}</caption>
               <thead className="border-b bg-slate-100 text-slate-700">
                 <tr>
                   <th scope="col" className="px-4 py-3">
-                    Facility
+                    {t('Facilities.facility')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Organization
+                    {t('Facilities.organizationField')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Status
+                    {t('Common.fields.status')}
                   </th>
                 </tr>
               </thead>
@@ -116,7 +128,10 @@ export default async function FacilitiesPage({
                     </td>
                     <td className="px-4 py-3">{facility.organizationName}</td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={facility.status} />
+                      <StatusBadge
+                        status={facility.status}
+                        label={t(statusLabelKey(facility.status))}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -124,7 +139,7 @@ export default async function FacilitiesPage({
             </table>
           </div>
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">No visible facilities.</p>
+          <p className="rounded-lg border bg-white p-5 text-slate-700">{t('Facilities.empty')}</p>
         )}
       </section>
     </div>

@@ -14,6 +14,7 @@ import { ServiceAgreementsModule } from './modules/service-agreements.module';
 import { SchedulingModule } from './modules/scheduling.module';
 import { VisitExecutionModule } from './modules/visit-execution.module';
 import { CareDocumentationModule } from './modules/care-documentation.module';
+import { CarePlanningModule } from './modules/care-planning.module';
 import { ServiceEvidenceModule } from './modules/service-evidence.module';
 import { HealthController } from './presentation/http/health.controller';
 import { ProblemDetailsFilter } from './presentation/http/problem-details.filter';
@@ -33,6 +34,7 @@ import { ProblemDetailsFilter } from './presentation/http/problem-details.filter
     SchedulingModule,
     VisitExecutionModule,
     CareDocumentationModule,
+    CarePlanningModule,
     ServiceEvidenceModule,
     MeModule,
   ],

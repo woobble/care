@@ -1,15 +1,17 @@
 import type { MetadataRoute } from 'next';
+import { getLocale, getTranslations } from 'next-intl/server';
 
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const [locale, t] = await Promise.all([getLocale(), getTranslations('Metadata')]);
   return {
-    name: 'Care Platform',
+    name: t('title'),
     short_name: 'Care',
-    description: 'Care management workspace',
+    description: t('manifestDescription'),
     start_url: '/',
     display: 'standalone',
     background_color: '#f8fafc',
     theme_color: '#1e40af',
-    lang: 'de-DE',
+    lang: locale,
     icons: [
       { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
       { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },

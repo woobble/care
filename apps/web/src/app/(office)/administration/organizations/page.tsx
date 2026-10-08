@@ -1,5 +1,8 @@
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
+import { formatNumber } from '../../../../i18n/format';
+import { statusLabelKey } from '../../../../i18n/status';
 import { getApiClient, getTenantHeader } from '../../../../lib/api';
 import { ActionNotice } from '../action-notice';
 import { createOrganizationAction } from '../actions';
@@ -10,6 +13,7 @@ export default async function OrganizationsPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
@@ -23,19 +27,15 @@ export default async function OrganizationsPage({
     <div className="grid gap-8">
       <header className="grid gap-1">
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration">Administration</Link>
+          <Link href="/administration">{t('Organizations.section')}</Link>
         </p>
-        <h1 className="text-3xl font-semibold">Organizations</h1>
-        <p className="text-slate-700">Manage the provider structure for this tenant.</p>
+        <h1 className="text-3xl font-semibold">{t('Organizations.title')}</h1>
+        <p className="text-slate-700">{t('Organizations.description')}</p>
       </header>
       <ActionNotice error={query.error} updated={query.updated} />
       {organizationsResult.error || facilitiesResult.error || teamsResult.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-          Organization data could not be loaded (
-          {organizationsResult.error?.code ||
-            facilitiesResult.error?.code ||
-            teamsResult.error?.code}
-          ).
+          {t('Organizations.loadFailed')}
         </p>
       ) : null}
 
@@ -45,32 +45,61 @@ export default async function OrganizationsPage({
       >
         <div>
           <h2 id="organization-create-title" className="text-xl font-semibold">
-            Create organization
+            {t('Organizations.createTitle')}
           </h2>
-          <p className="text-sm text-slate-600">
-            An organization is the legal or operational owner of facilities and employees.
-          </p>
+          <p className="text-sm text-slate-600">{t('Organizations.createDescription')}</p>
         </div>
         <form action={createOrganizationAction} className="grid gap-4 md:grid-cols-2">
-          <Field id="organization-name" name="name" label="Name" required maxLength={160} />
-          <Field id="organization-legal-name" name="legalName" label="Legal name" maxLength={200} />
-          <Field id="organization-code" name="code" label="Code" maxLength={40} />
-          <Field id="organization-email" name="email" label="Email" type="email" maxLength={320} />
-          <Field id="organization-phone" name="phone" label="Phone" type="tel" maxLength={40} />
-          <Field id="organization-address" name="address" label="Address" maxLength={500} />
+          <Field
+            id="organization-name"
+            name="name"
+            label={t('Common.fields.name')}
+            required
+            maxLength={160}
+          />
+          <Field
+            id="organization-legal-name"
+            name="legalName"
+            label={t('Common.fields.legalName')}
+            maxLength={200}
+          />
+          <Field
+            id="organization-code"
+            name="code"
+            label={t('Common.fields.code')}
+            maxLength={40}
+          />
+          <Field
+            id="organization-email"
+            name="email"
+            label={t('Common.fields.email')}
+            type="email"
+            maxLength={320}
+          />
+          <Field
+            id="organization-phone"
+            name="phone"
+            label={t('Common.fields.phone')}
+            type="tel"
+            maxLength={40}
+          />
+          <Field
+            id="organization-address"
+            name="address"
+            label={t('Common.fields.address')}
+            maxLength={500}
+          />
           <Field
             id="organization-timezone"
             name="timezone"
-            label="Zeitzone"
+            label={t('Common.fields.timezone')}
             defaultValue="Europe/Berlin"
             required
             maxLength={100}
           />
-          <p className="text-sm text-slate-600 md:col-span-2">
-            IANA-Zeitzone für Termine, zum Beispiel Europe/Berlin.
-          </p>
+          <p className="text-sm text-slate-600 md:col-span-2">{t('Organizations.timezoneHint')}</p>
           <div className="md:col-span-2">
-            <Button type="submit">Create organization</Button>
+            <Button type="submit">{t('Organizations.createTitle')}</Button>
           </div>
         </form>
       </section>
@@ -78,14 +107,14 @@ export default async function OrganizationsPage({
       <section aria-labelledby="organization-list-title" className="grid gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="organization-list-title" className="text-xl font-semibold">
-            Organizations
+            {t('Organizations.listTitle')}
           </h2>
           <div className="flex gap-3 text-sm">
             <Link className="text-blue-900 underline" href="/administration/facilities">
-              Facilities
+              {t('Organizations.facilitiesLink')}
             </Link>
             <Link className="text-blue-900 underline" href="/administration/teams">
-              Teams
+              {t('Organizations.teamsLink')}
             </Link>
           </div>
         </div>
@@ -113,16 +142,24 @@ export default async function OrganizationsPage({
                       <p className="text-sm text-slate-600">{organization.legalName}</p>
                     ) : null}
                     <p className="text-sm text-slate-600">
-                      {facilities.length} facilities · {teams.length} teams
+                      {t('Organizations.facilityAndTeamCount', {
+                        facilities: formatNumber(facilities.length, locale),
+                        teams: formatNumber(teams.length, locale),
+                      })}
                     </p>
                   </div>
-                  <StatusBadge status={organization.status} />
+                  <StatusBadge
+                    status={organization.status}
+                    label={t(statusLabelKey(organization.status))}
+                  />
                 </div>
               </article>
             );
           })
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">No visible organizations.</p>
+          <p className="rounded-lg border bg-white p-5 text-slate-700">
+            {t('Organizations.empty')}
+          </p>
         )}
       </section>
     </div>

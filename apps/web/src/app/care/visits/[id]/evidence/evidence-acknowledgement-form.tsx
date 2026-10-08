@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent, type PointerEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import type { components } from '@care/api-client';
 import { acknowledgeEvidenceAction, declineEvidenceAction } from '../../../actions';
 
@@ -25,6 +26,8 @@ export function EvidenceAcknowledgementForm({
   acknowledgementIdempotencyKey: string;
   declineIdempotencyKey: string;
 }) {
+  const t = useTranslations('ServiceEvidence.care.form');
+  const careT = useTranslations('ServiceEvidence.care');
   const [signatory, setSignatory] = useState('client');
   const [method, setMethod] = useState<'touch_signature' | 'typed_confirmation'>('touch_signature');
   const [strokes, setStrokes] = useState<SignatureStrokes>([]);
@@ -37,24 +40,24 @@ export function EvidenceAcknowledgementForm({
   return (
     <section className="grid gap-5 rounded-lg border bg-white p-4 sm:p-5">
       <header className="grid gap-2">
-        <h2 className="text-xl font-semibold">Bestätigung einholen</h2>
+        <h2 className="text-xl font-semibold">{t('title')}</h2>
         <p className="text-slate-700">{statementText}</p>
       </header>
 
       <label className="grid gap-1 text-sm font-medium">
-        <span>Wer bestätigt?</span>
+        <span>{t('signatory')}</span>
         <select
           name="signatory"
           form="acknowledge-evidence"
           value={signatory}
           onChange={(event) => setSignatory(event.currentTarget.value)}
           className="min-h-12 rounded-md border bg-white px-3"
-          aria-label="Unterzeichnende Person auswählen"
+          aria-label={t('selectSignatory')}
         >
-          <option value="client">Klientin oder Klient</option>
+          <option value="client">{t('client')}</option>
           {eligibleSignatories.map((person) => (
             <option key={person.contactId} value={`${person.signatoryType}:${person.contactId}`}>
-              {person.displayName} · {capacityLabel(person.capacity)}
+              {person.displayName} · {careT(capacityKey(person.capacity))}
             </option>
           ))}
         </select>
@@ -63,7 +66,7 @@ export function EvidenceAcknowledgementForm({
       <form
         id="acknowledge-evidence"
         action={acknowledgeEvidenceAction}
-        onSubmit={confirmAcknowledgement}
+        onSubmit={(event) => confirmAcknowledgement(event, t('confirmPrompt'))}
         className="grid gap-4"
       >
         <input type="hidden" name="visitId" value={visitId} />
@@ -74,7 +77,7 @@ export function EvidenceAcknowledgementForm({
         <input type="hidden" name="strokes" value={JSON.stringify(strokes)} />
 
         <fieldset className="grid gap-2">
-          <legend className="mb-2 text-sm font-medium">Bestätigungsmethode</legend>
+          <legend className="mb-2 text-sm font-medium">{t('method')}</legend>
           <label className="flex min-h-11 items-center gap-3 rounded-md border px-3">
             <input
               type="radio"
@@ -83,7 +86,7 @@ export function EvidenceAcknowledgementForm({
               checked={method === 'touch_signature'}
               onChange={() => setMethod('touch_signature')}
             />
-            <span>Unterschrift zeichnen</span>
+            <span>{t('drawSignature')}</span>
           </label>
           <label className="flex min-h-11 items-center gap-3 rounded-md border px-3">
             <input
@@ -93,7 +96,7 @@ export function EvidenceAcknowledgementForm({
               checked={method === 'typed_confirmation'}
               onChange={() => setMethod('typed_confirmation')}
             />
-            <span>Name zur Bestätigung eingeben</span>
+            <span>{t('enterName')}</span>
           </label>
         </fieldset>
 
@@ -101,7 +104,7 @@ export function EvidenceAcknowledgementForm({
           <SignaturePad strokes={strokes} onChange={setStrokes} />
         ) : (
           <label className="grid gap-1 text-sm font-medium">
-            <span>Vollständiger Name der bestätigenden Person</span>
+            <span>{t('fullName')}</span>
             <input
               name="confirmationName"
               required
@@ -111,9 +114,7 @@ export function EvidenceAcknowledgementForm({
               key={signatory}
               className="min-h-12 rounded-md border px-3"
             />
-            <span className="font-normal text-slate-600">
-              Der eingegebene Name muss mit der ausgewählten Person übereinstimmen.
-            </span>
+            <span className="font-normal text-slate-600">{t('nameMustMatch')}</span>
           </label>
         )}
 
@@ -122,35 +123,35 @@ export function EvidenceAcknowledgementForm({
           disabled={method === 'touch_signature' && strokes.length === 0}
           className="min-h-12 rounded-md bg-blue-800 px-4 font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {method === 'touch_signature' ? 'Unterschrift bestätigen' : 'Bestätigung erfassen'}
+          {method === 'touch_signature' ? t('confirmSignature') : t('recordConfirmation')}
         </button>
       </form>
 
       <details className="rounded-md border p-3">
         <summary className="min-h-8 cursor-pointer font-medium">
-          Bestätigung abgelehnt oder nicht möglich
+          {t('declinedOrUnavailable')}
         </summary>
-        <form action={declineEvidenceAction} onSubmit={confirmDecline} className="mt-4 grid gap-3">
+        <form
+          action={declineEvidenceAction}
+          onSubmit={(event) => confirmDecline(event, t('declinePrompt'))}
+          className="mt-4 grid gap-3"
+        >
           <input type="hidden" name="visitId" value={visitId} />
           <input type="hidden" name="evidencePackageId" value={evidencePackageId} />
           <input type="hidden" name="idempotencyKey" value={declineIdempotencyKey} />
           <input type="hidden" name="signatory" value={signatory} />
           <label className="grid gap-1 text-sm font-medium">
-            <span>Grund</span>
+            <span>{t('reason')}</span>
             <select name="reasonCode" required className="min-h-12 rounded-md border bg-white px-3">
-              <option value="declined_without_reason">Ohne Angabe eines Grundes abgelehnt</option>
-              <option value="disagrees_with_record">
-                Ist mit der Dokumentation nicht einverstanden
-              </option>
-              <option value="unable_to_sign">Kann nicht unterschreiben</option>
-              <option value="signatory_not_available">
-                Bestätigende Person ist nicht anwesend
-              </option>
-              <option value="other">Anderer Grund</option>
+              <option value="declined_without_reason">{t('reasons.declinedWithoutReason')}</option>
+              <option value="disagrees_with_record">{t('reasons.disagreesWithRecord')}</option>
+              <option value="unable_to_sign">{t('reasons.unableToSign')}</option>
+              <option value="signatory_not_available">{t('reasons.signatoryNotAvailable')}</option>
+              <option value="other">{t('reasons.other')}</option>
             </select>
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            <span>Notiz (optional)</span>
+            <span>{t('noteOptional')}</span>
             <textarea
               name="note"
               maxLength={500}
@@ -161,7 +162,7 @@ export function EvidenceAcknowledgementForm({
             type="submit"
             className="min-h-12 rounded-md border border-slate-400 px-4 font-semibold text-slate-800"
           >
-            Ablehnung erfassen
+            {t('recordDecline')}
           </button>
         </form>
       </details>
@@ -176,6 +177,7 @@ function SignaturePad({
   strokes: SignatureStrokes;
   onChange: (strokes: SignatureStrokes) => void;
 }) {
+  const t = useTranslations('ServiceEvidence.care.form');
   const [activeStroke, setActiveStroke] = useState<SignaturePoint[]>([]);
   const allStrokes = activeStroke.length ? [...strokes, activeStroke] : strokes;
 
@@ -210,12 +212,12 @@ function SignaturePad({
 
   return (
     <div className="grid gap-2">
-      <p className="text-sm font-medium">Unterschrift</p>
+      <p className="text-sm font-medium">{t('signature')}</p>
       <svg
         viewBox="0 0 1000 300"
         preserveAspectRatio="none"
         role="img"
-        aria-label="Unterschriftsfeld. Mit Finger, Stift oder Maus zeichnen. Alternativ den Namen eingeben."
+        aria-label={t('signatureField')}
         onPointerDown={start}
         onPointerMove={move}
         onPointerUp={finish}
@@ -246,7 +248,7 @@ function SignaturePad({
           }}
           className="min-h-11 rounded-md border px-3 font-medium disabled:text-slate-400"
         >
-          Zurücksetzen
+          {t('clearSignature')}
         </button>
         <button
           type="button"
@@ -254,12 +256,10 @@ function SignaturePad({
           onClick={() => onChange(strokes.slice(0, -1))}
           className="min-h-11 rounded-md border px-3 font-medium disabled:text-slate-400"
         >
-          Letzten Strich entfernen
+          {t('removeLastStroke')}
         </button>
       </div>
-      <p className="text-sm text-slate-600">
-        Die Unterschrift wird erst nach der Bestätigung gespeichert.
-      </p>
+      <p className="text-sm text-slate-600">{t('signatureSavedAfterConfirmation')}</p>
     </div>
   );
 }
@@ -274,28 +274,29 @@ function clamp(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function confirmAcknowledgement(event: FormEvent<HTMLFormElement>) {
-  if (
-    !window.confirm(
-      'Die bestätigende Person hat die angezeigten Leistungen geprüft und möchte bestätigen?',
-    )
-  ) {
+function confirmAcknowledgement(event: FormEvent<HTMLFormElement>, prompt: string) {
+  if (!window.confirm(prompt)) {
     event.preventDefault();
   }
 }
 
-function confirmDecline(event: FormEvent<HTMLFormElement>) {
-  if (!window.confirm('Ablehnung als Ergebnis für diesen Leistungsnachweis festhalten?')) {
+function confirmDecline(event: FormEvent<HTMLFormElement>, prompt: string) {
+  if (!window.confirm(prompt)) {
     event.preventDefault();
   }
 }
 
-function capacityLabel(capacity: string): string {
-  const labels: Record<string, string> = {
-    legal_guardian: 'gesetzliche Betreuung',
-    authorized_representative: 'bevollmächtigte Vertretung',
-    relative: 'Angehörige Person',
-    other: 'sonstige berechtigte Person',
-  };
-  return labels[capacity] ?? capacity;
+function capacityKey(
+  capacity: string,
+):
+  | 'capacities.legalGuardian'
+  | 'capacities.authorizedRepresentative'
+  | 'capacities.relative'
+  | 'capacities.other'
+  | 'capacities.unknown' {
+  if (capacity === 'legal_guardian') return 'capacities.legalGuardian';
+  if (capacity === 'authorized_representative') return 'capacities.authorizedRepresentative';
+  if (capacity === 'relative') return 'capacities.relative';
+  if (capacity === 'other') return 'capacities.other';
+  return 'capacities.unknown';
 }

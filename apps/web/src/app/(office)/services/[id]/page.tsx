@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
+import { formatDate } from '../../../../i18n/format';
+import { statusLabelKey, unitLabelKey } from '../../../../i18n/status';
 import { ActionNotice } from '../../administration/action-notice';
 import {
   archiveServiceAction,
@@ -15,13 +18,6 @@ import {
 } from '../../../../lib/api';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const unitLabels: Record<'occurrence' | 'minute' | 'hour' | 'day', string> = {
-  occurrence: 'Einsatz',
-  minute: 'Minute',
-  hour: 'Stunde',
-  day: 'Tag',
-};
-
 export default async function ServiceDetailPage({
   params,
   searchParams,
@@ -29,6 +25,7 @@ export default async function ServiceDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string; updated?: string }>;
 }>) {
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const { id } = await params;
   if (!uuidPattern.test(id)) notFound();
   const query = await searchParams;
@@ -78,18 +75,18 @@ export default async function ServiceDetailPage({
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="grid gap-1">
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            <Link href="/services">Leistungskatalog</Link>
+            <Link href="/services">{t('Services.catalogTitle')}</Link>
           </p>
           <h1 className="text-3xl font-semibold">{service.name}</h1>
           <p className="font-mono text-sm text-slate-600">{service.code}</p>
         </div>
-        <StatusBadge status={service.status} />
+        <StatusBadge status={service.status} label={t(statusLabelKey(service.status))} />
       </header>
 
       <ActionNotice error={query.error} updated={query.updated} />
       {categoriesResult.error || organizationsResult.error || facilitiesResult.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-          Kategorien oder Verfügbarkeit konnten nicht vollständig geladen werden.
+          {t('Services.detail.categoriesUnavailable')}
         </p>
       ) : null}
 
@@ -97,12 +94,12 @@ export default async function ServiceDetailPage({
         {canUpdate ? (
           <form action={updateServiceAction} className="grid gap-5">
             <input type="hidden" name="id" value={service.id} />
-            <h2 className="text-xl font-semibold">Leistungsdefinition</h2>
+            <h2 className="text-xl font-semibold">{t('Services.detail.definition')}</h2>
             <div className="grid gap-4 md:grid-cols-2">
               <Field
                 id="code"
                 name="code"
-                label="Code"
+                label={t('Services.form.code')}
                 defaultValue={service.code}
                 required
                 maxLength={64}
@@ -110,7 +107,7 @@ export default async function ServiceDetailPage({
               <Field
                 id="name"
                 name="name"
-                label="Name"
+                label={t('Services.form.name')}
                 defaultValue={service.name}
                 required
                 maxLength={160}
@@ -118,7 +115,7 @@ export default async function ServiceDetailPage({
               <SelectField
                 id="categoryId"
                 name="categoryId"
-                label="Kategorie"
+                label={t('Services.form.category')}
                 defaultValue={service.categoryId}
                 required
               >
@@ -129,26 +126,28 @@ export default async function ServiceDetailPage({
                     disabled={category.status === 'archived' && category.id !== service.categoryId}
                   >
                     {category.name}
-                    {category.status === 'archived' ? ' (archiviert)' : ''}
+                    {category.status === 'archived'
+                      ? ` ${t('Services.detail.archivedSuffix')}`
+                      : ''}
                   </option>
                 ))}
               </SelectField>
               <SelectField
                 id="unit"
                 name="unit"
-                label="Einheit"
+                label={t('Services.form.unit')}
                 defaultValue={service.unit}
                 required
               >
-                <option value="occurrence">Einsatz</option>
-                <option value="minute">Minute</option>
-                <option value="hour">Stunde</option>
-                <option value="day">Tag</option>
+                <option value="occurrence">{t('Common.units.occurrence')}</option>
+                <option value="minute">{t('Common.units.minute')}</option>
+                <option value="hour">{t('Common.units.hour')}</option>
+                <option value="day">{t('Common.units.day')}</option>
               </SelectField>
               <Field
                 id="defaultDurationMinutes"
                 name="defaultDurationMinutes"
-                label="Standarddauer in Minuten (optional)"
+                label={t('Services.form.defaultDuration')}
                 type="number"
                 min={1}
                 max={1440}
@@ -157,7 +156,7 @@ export default async function ServiceDetailPage({
               <Field
                 id="validFrom"
                 name="validFrom"
-                label="Gültig ab"
+                label={t('Services.form.validFrom')}
                 type="date"
                 defaultValue={service.validFrom}
                 required
@@ -165,12 +164,12 @@ export default async function ServiceDetailPage({
               <Field
                 id="validUntil"
                 name="validUntil"
-                label="Gültig bis (optional)"
+                label={t('Services.form.validUntilOptional')}
                 type="date"
                 defaultValue={service.validUntil ?? ''}
               />
               <label className="grid gap-2 md:col-span-2">
-                <Label htmlFor="description">Beschreibung (optional)</Label>
+                <Label htmlFor="description">{t('Services.form.descriptionOptional')}</Label>
                 <textarea
                   id="description"
                   name="description"
@@ -180,31 +179,39 @@ export default async function ServiceDetailPage({
                 />
               </label>
             </div>
-            <Button type="submit">Änderungen speichern</Button>
+            <Button type="submit">{t('Common.actions.save')}</Button>
           </form>
         ) : (
           <div className="grid gap-3">
-            <h2 className="text-xl font-semibold">Leistungsdefinition</h2>
+            <h2 className="text-xl font-semibold">{t('Services.detail.definition')}</h2>
             <dl className="grid gap-3 sm:grid-cols-2">
-              <ReadOnlyField label="Name" value={service.name} />
+              <ReadOnlyField label={t('Services.form.name')} value={service.name} />
               <ReadOnlyField
-                label="Kategorie"
+                label={t('Services.form.category')}
                 value={
                   categories.find((category) => category.id === service.categoryId)?.name ?? '—'
                 }
               />
-              <ReadOnlyField label="Einheit" value={unitLabels[service.unit]} />
               <ReadOnlyField
-                label="Standarddauer"
+                label={t('Services.form.unit')}
+                value={t(unitLabelKey(service.unit))}
+              />
+              <ReadOnlyField
+                label={t('Services.detail.standardDuration')}
                 value={
-                  service.defaultDurationMinutes ? `${service.defaultDurationMinutes} Minuten` : '—'
+                  service.defaultDurationMinutes
+                    ? t('Common.units.minutes', { count: service.defaultDurationMinutes })
+                    : '—'
                 }
               />
               <ReadOnlyField
-                label="Gültigkeit"
-                value={`${service.validFrom} – ${service.validUntil ?? 'offen'}`}
+                label={t('Services.validity')}
+                value={`${formatDate(service.validFrom, locale)} – ${formatDate(service.validUntil, locale) ?? t('Services.openEnded')}`}
               />
-              <ReadOnlyField label="Beschreibung" value={service.description ?? '—'} />
+              <ReadOnlyField
+                label={t('Common.fields.description')}
+                value={service.description ?? '—'}
+              />
             </dl>
           </div>
         )}
@@ -213,13 +220,11 @@ export default async function ServiceDetailPage({
             <form action={archiveServiceAction}>
               <input type="hidden" name="id" value={service.id} />
               <Button type="submit" variant="secondary">
-                Leistung archivieren
+                {t('Services.detail.archive')}
               </Button>
             </form>
           ) : null}
-          <span className="text-sm text-slate-600">
-            Archivierte Leistungen bleiben historisch abrufbar.
-          </span>
+          <span className="text-sm text-slate-600">{t('Services.detail.archiveHistory')}</span>
         </div>
       </section>
 
@@ -229,15 +234,13 @@ export default async function ServiceDetailPage({
       >
         <div>
           <h2 id="availability-title" className="text-xl font-semibold">
-            Organisatorische Verfügbarkeit
+            {t('Services.detail.organizationalAvailability')}
           </h2>
-          <p className="text-sm text-slate-600">
-            Wählen Sie ganze Organisationen oder einzelne Einrichtungen aus.
-          </p>
+          <p className="text-sm text-slate-600">{t('Services.detail.availabilityDescription')}</p>
         </div>
         {availabilityResult.error ? (
           <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-            Verfügbarkeit konnte nicht geladen werden ({availabilityResult.error.code}).
+            {t('Services.detail.availabilityLoadFailed')}
           </p>
         ) : null}
         {canManageAvailability ? (
@@ -247,18 +250,18 @@ export default async function ServiceDetailPage({
               <Field
                 id="availabilityValidFrom"
                 name="validFrom"
-                label="Gültig ab (optional)"
+                label={t('Services.form.validFromOptional')}
                 type="date"
               />
               <Field
                 id="availabilityValidUntil"
                 name="validUntil"
-                label="Gültig bis (optional)"
+                label={t('Services.form.validUntilOptional')}
                 type="date"
               />
             </div>
             <fieldset className="grid gap-3">
-              <legend className="font-medium">Organisationen</legend>
+              <legend className="font-medium">{t('Services.detail.organizations')}</legend>
               {organizations.length ? (
                 organizations.map((organization) => (
                   <label key={organization.id} className="flex items-center gap-2 text-sm">
@@ -272,11 +275,11 @@ export default async function ServiceDetailPage({
                   </label>
                 ))
               ) : (
-                <p className="text-sm text-slate-600">Keine Organisationen verfügbar.</p>
+                <p className="text-sm text-slate-600">{t('Services.detail.noOrganizations')}</p>
               )}
             </fieldset>
             <fieldset className="grid gap-3">
-              <legend className="font-medium">Einrichtungen</legend>
+              <legend className="font-medium">{t('Services.detail.facilities')}</legend>
               {facilities.length ? (
                 facilities.map((facility) => (
                   <label key={facility.id} className="flex items-center gap-2 text-sm">
@@ -290,29 +293,27 @@ export default async function ServiceDetailPage({
                   </label>
                 ))
               ) : (
-                <p className="text-sm text-slate-600">Keine Einrichtungen verfügbar.</p>
+                <p className="text-sm text-slate-600">{t('Services.detail.noFacilities')}</p>
               )}
             </fieldset>
             <div>
               <Button type="submit" disabled={service.status === 'archived'}>
-                Verfügbarkeit speichern
+                {t('Services.detail.saveAvailability')}
               </Button>
             </div>
           </form>
         ) : (
-          <p className="text-sm text-slate-600">
-            Sie haben Leseberechtigung für diese Verfügbarkeit.
-          </p>
+          <p className="text-sm text-slate-600">{t('Services.detail.readAvailability')}</p>
         )}
         {activeAvailability.length ? (
           <div className="overflow-x-auto rounded-md border">
             <table className="w-full text-left text-sm">
-              <caption className="sr-only">Aktuelle Verfügbarkeitszuordnungen</caption>
+              <caption className="sr-only">{t('Services.detail.currentAssignments')}</caption>
               <thead className="border-b bg-slate-100">
                 <tr>
-                  <th className="px-3 py-2">Bereich</th>
-                  <th className="px-3 py-2">Gültig ab</th>
-                  <th className="px-3 py-2">Gültig bis</th>
+                  <th className="px-3 py-2">{t('Services.detail.area')}</th>
+                  <th className="px-3 py-2">{t('Services.form.validFrom')}</th>
+                  <th className="px-3 py-2">{t('Services.form.validUntil')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -325,14 +326,16 @@ export default async function ServiceDetailPage({
                     <tr key={item.id} className="border-b last:border-0">
                       <td className="px-3 py-2">
                         {item.facilityId
-                          ? (facility?.name ?? 'Einrichtung')
-                          : (organization?.name ?? 'Organisation')}
+                          ? (facility?.name ?? t('Services.detail.defaultFacility'))
+                          : (organization?.name ?? t('Services.detail.defaultOrganization'))}
                         {item.facilityId
                           ? ` (${organization?.name ?? ''})`
-                          : ' — alle Einrichtungen'}
+                          : ` — ${t('Services.detail.allFacilities')}`}
                       </td>
-                      <td className="px-3 py-2">{item.validFrom ?? '—'}</td>
-                      <td className="px-3 py-2">{item.validUntil ?? 'offen'}</td>
+                      <td className="px-3 py-2">{formatDate(item.validFrom, locale) ?? '—'}</td>
+                      <td className="px-3 py-2">
+                        {formatDate(item.validUntil, locale) ?? t('Services.openEnded')}
+                      </td>
                     </tr>
                   );
                 })}
@@ -340,7 +343,7 @@ export default async function ServiceDetailPage({
             </table>
           </div>
         ) : (
-          <p className="text-sm text-slate-600">Noch keine Verfügbarkeit definiert.</p>
+          <p className="text-sm text-slate-600">{t('Services.detail.noAvailability')}</p>
         )}
       </section>
     </div>

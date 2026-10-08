@@ -380,7 +380,7 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# Custom
+.caveman/
 .vscode/
 .turbo/
 .agents/

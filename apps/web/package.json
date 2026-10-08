@@ -10,6 +10,8 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "typecheck": "tsc --noEmit --pretty false -p tsconfig.json",
+    "test": "bun test src/i18n",
+    "i18n:check": "bun run scripts/check-i18n.ts",
     "test:e2e": "playwright test --config=playwright.config.ts"
   },
   "dependencies": {

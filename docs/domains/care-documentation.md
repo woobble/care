@@ -26,7 +26,9 @@ Completeness returns structured missing requirements, including missing evidence
 
 Generic entries use `care_note`, `observation`, `deviation`, or `incident`. Entries retain employee attribution, occurrence time when supplied, and their narrative content. Incidents require an occurrence time and an operational severity classification (`low`, `moderate`, `high`, or `critical`). These labels are operational metadata, not a validated clinical severity scale. The module does not infer diagnoses or clinical conclusions.
 
-Medication, wounds, vital signs, SIS, risk assessments, and care planning remain future specialized domains. They should attach typed records to clients, visits, executions, or documentation rather than using an untyped JSON catch-all.
+Medication, wound management, SIS, and care planning remain future specialized domains. They should attach typed records to clients, visits, executions, or documentation rather than using an untyped JSON catch-all.
+
+Structured measurements, coded observations, assessments, and risk assessments are now owned by the separate `clinical_documentation` module and linked to the visit's Care Documentation. They have their own permissions and typed history queries, while Care Documentation remains responsible for the shared draft/version/finalization lifecycle. See [Structured clinical documentation](clinical-documentation.md).
 
 ## Authorization and worklists
 

@@ -387,7 +387,7 @@ export class ClientMasterDataRepository {
     tenantId: string,
     clientId: string,
     limit: number,
-    allowedActions: string[],
+    allowedActions: readonly string[],
   ): Promise<ClientTimelineRecord[]> {
     return transaction
       .select({
@@ -418,6 +418,16 @@ export class ClientMasterDataRepository {
                 'visit.confirmed',
                 'visit.unconfirmed',
                 'visit.cancelled',
+              ]),
+            ),
+            and(
+              eq(auditEntries.resourceType, 'care_plan'),
+              sql`${auditEntries.metadata}->>'clientId' = ${clientId}`,
+              inArray(auditEntries.action, [
+                'care_plan.created',
+                'care_plan.revision_activated',
+                'care_plan.evaluated',
+                'care_plan.ended',
               ]),
             ),
           ),

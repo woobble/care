@@ -15,13 +15,14 @@ import {
   UNIT_OF_WORK,
 } from '../tokens';
 import { CareDocumentationController } from '../presentation/http/care-documentation.controller';
+import { ClinicalDocumentationController } from '../presentation/http/clinical-documentation.controller';
 import { AuditModule } from './audit.module';
 import { PlatformModule } from './platform.module';
 import { IdentityModule } from './identity.module';
 
 @Module({
   imports: [DatabaseModule, IdentityModule, AuditModule, PlatformModule],
-  controllers: [CareDocumentationController],
+  controllers: [CareDocumentationController, ClinicalDocumentationController],
   providers: [
     OidcGuard,
     TenantContextGuard,

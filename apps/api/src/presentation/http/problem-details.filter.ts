@@ -3,6 +3,30 @@ import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 import type { Response } from 'express';
 import { ZodError } from 'zod';
 import type { ProblemDetails } from '@care/contracts';
+import {
+  CarePlanActiveRevisionRequiredError,
+  CarePlanActivationIncompleteError,
+  CarePlanAlreadyEndedError,
+  CarePlanClientInactiveError,
+  CarePlanCurrentPlanExistsError,
+  CarePlanDraftAlreadyExistsError,
+  CarePlanDraftRequiredError,
+  CarePlanEmployeeRequiredError,
+  CarePlanGoalNotFoundError,
+  CarePlanItemConflictError,
+  CarePlanItemNotFoundError,
+  CarePlanLifecycleTransitionError,
+  CarePlanNotFoundError,
+  CarePlanProviderContextRequiredError,
+  CarePlanRelationshipConflictError,
+  CarePlanRelationshipInvalidError,
+  CarePlanRevisionNotFoundError,
+  CarePlanVersionConflictError,
+  CarePlanVisitNotFoundError,
+  CarePlanInvalidQueryError,
+  InvalidCarePlanError,
+} from '@care/care-planning';
+import { ClinicalRecordAmendmentConflictError } from '@care/clinical-documentation';
 import { AuthorizationDeniedError } from '@care/permissions';
 import {
   ClientArchivedError,
@@ -131,6 +155,7 @@ import {
 } from '@care/visit-execution';
 import {
   AmendmentReasonRequiredError,
+  AssessmentInvalidError,
   CareDocumentationAlreadyFinalizedError,
   CareDocumentationEmployeeLinkRequiredError,
   CareDocumentationIncompleteError,
@@ -139,10 +164,22 @@ import {
   CareDocumentationNotFoundError,
   CareDocumentationVersionConflictError,
   CareDocumentationVisitRelationshipRequiredError,
+  ClinicalDocumentationNotAuthorizedError,
+  ClinicalDocumentationVisitRequiredError,
+  ClinicalHistoryInvalidQueryError,
+  ClinicalRecordDocumentationNotFoundError,
+  ClinicalRecordFinalizedError,
+  ClinicalRecordInvalidError,
+  ClinicalRecordNotFinalizedError,
+  ClinicalRecordNotFoundError,
+  ClinicalRecordVersionConflictError,
   DocumentationEntryNotFoundError,
   InvalidDocumentationWorklistQueryError,
   InvalidDocumentationEntryError,
   InvalidServiceEvidenceError,
+  MeasurementInvalidError,
+  ObservationInvalidError,
+  RiskAssessmentInvalidError,
   ServiceEvidenceNotFoundError,
   VisitExecutionNotCompletedError,
   VisitExecutionRequiredError,
@@ -250,6 +287,44 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     status = 403;
     code = exception.code;
   } else if (
+    exception instanceof CarePlanNotFoundError ||
+    exception instanceof CarePlanRevisionNotFoundError ||
+    exception instanceof CarePlanItemNotFoundError ||
+    exception instanceof CarePlanGoalNotFoundError ||
+    exception instanceof CarePlanVisitNotFoundError
+  ) {
+    status = 404;
+    code = exception.code;
+  } else if (exception instanceof CarePlanEmployeeRequiredError) {
+    status = 403;
+    code = exception.code;
+  } else if (
+    exception instanceof CarePlanActivationIncompleteError ||
+    exception instanceof CarePlanAlreadyEndedError ||
+    exception instanceof CarePlanClientInactiveError ||
+    exception instanceof CarePlanCurrentPlanExistsError ||
+    exception instanceof CarePlanDraftAlreadyExistsError ||
+    exception instanceof CarePlanDraftRequiredError ||
+    exception instanceof CarePlanActiveRevisionRequiredError ||
+    exception instanceof CarePlanLifecycleTransitionError ||
+    exception instanceof CarePlanItemConflictError ||
+    exception instanceof CarePlanProviderContextRequiredError ||
+    exception instanceof CarePlanRelationshipConflictError ||
+    exception instanceof CarePlanVersionConflictError
+  ) {
+    status = 409;
+    code = exception.code;
+  } else if (isCarePlanClinicalReferenceForeignKeyViolation(exception)) {
+    status = 400;
+    code = 'CARE_PLAN_RELATIONSHIP_INVALID';
+  } else if (
+    exception instanceof InvalidCarePlanError ||
+    exception instanceof CarePlanInvalidQueryError ||
+    exception instanceof CarePlanRelationshipInvalidError
+  ) {
+    status = 400;
+    code = exception.code;
+  } else if (
     exception instanceof ServiceNotFoundError ||
     exception instanceof ServiceCategoryNotFoundError
   ) {
@@ -325,6 +400,8 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
   } else if (
     exception instanceof VisitExecutionNotFoundError ||
     exception instanceof PerformedServiceNotFoundError ||
+    exception instanceof ClinicalRecordDocumentationNotFoundError ||
+    exception instanceof ClinicalRecordNotFoundError ||
     exception instanceof CareDocumentationNotFoundError ||
     exception instanceof DocumentationEntryNotFoundError ||
     exception instanceof ServiceEvidenceNotFoundError ||
@@ -343,6 +420,8 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
   } else if (
     exception instanceof CareDocumentationEmployeeLinkRequiredError ||
     exception instanceof CareDocumentationVisitRelationshipRequiredError ||
+    exception instanceof ClinicalDocumentationVisitRequiredError ||
+    exception instanceof ClinicalDocumentationNotAuthorizedError ||
     exception instanceof ServiceEvidenceEmployeeLinkRequiredError ||
     exception instanceof ServiceEvidenceVisitRelationshipRequiredError ||
     exception instanceof AcknowledgementSignatoryInvalidError
@@ -355,6 +434,10 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof CareDocumentationIncompleteError ||
     exception instanceof CareDocumentationInvalidStateError ||
     exception instanceof CareDocumentationVersionConflictError ||
+    exception instanceof ClinicalRecordAmendmentConflictError ||
+    exception instanceof ClinicalRecordFinalizedError ||
+    exception instanceof ClinicalRecordNotFinalizedError ||
+    exception instanceof ClinicalRecordVersionConflictError ||
     exception instanceof VisitExecutionRequiredError ||
     exception instanceof VisitExecutionNotCompletedError ||
     exception instanceof DocumentationNotFinalizedError ||
@@ -370,6 +453,12 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof AmendmentReasonRequiredError ||
     exception instanceof InvalidDocumentationWorklistQueryError ||
     exception instanceof InvalidDocumentationEntryError ||
+    exception instanceof ClinicalRecordInvalidError ||
+    exception instanceof MeasurementInvalidError ||
+    exception instanceof ObservationInvalidError ||
+    exception instanceof AssessmentInvalidError ||
+    exception instanceof RiskAssessmentInvalidError ||
+    exception instanceof ClinicalHistoryInvalidQueryError ||
     exception instanceof InvalidServiceEvidenceError ||
     exception instanceof AcknowledgementConfirmationNameMismatchError ||
     exception instanceof AcknowledgementConfirmationRequiredError ||
@@ -482,6 +571,28 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     traceId,
     ...(conflictingInterval ? { conflictingInterval } : {}),
   };
+}
+
+function isCarePlanClinicalReferenceForeignKeyViolation(exception: unknown): boolean {
+  const visited = new Set<object>();
+  let current = exception;
+  for (
+    let depth = 0;
+    depth < 8 && typeof current === 'object' && current !== null && !visited.has(current);
+    depth += 1
+  ) {
+    visited.add(current);
+    const candidate = current as { code?: unknown; constraint?: unknown; cause?: unknown };
+    if (
+      candidate.code === '23503' &&
+      (candidate.constraint === 'care_plan_risk_responses_clinical_record_fk' ||
+        candidate.constraint === 'care_plan_source_refs_clinical_record_fk')
+    ) {
+      return true;
+    }
+    current = candidate.cause;
+  }
+  return false;
 }
 
 function statusCode(status: number): string {

@@ -1,6 +1,8 @@
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
 import { getApiClient, getTenantHeader } from '../../../lib/api';
+import { statusLabelKey } from '../../../i18n/status';
 
 type SearchParams = Promise<{
   q?: string;
@@ -19,6 +21,7 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}
 export default async function EmployeesPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const query = await searchParams;
   const status = ['active', 'inactive', 'archived'].includes(query.status ?? '')
     ? (query.status as 'active' | 'inactive' | 'archived')
@@ -69,21 +72,23 @@ export default async function EmployeesPage({
     <div className="grid gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="grid gap-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">Office</p>
-          <h1 className="text-3xl font-semibold">Mitarbeitende</h1>
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
+            {t('Employees.section')}
+          </p>
+          <h1 className="text-3xl font-semibold">{t('Employees.title')}</h1>
         </div>
         <Button asChild>
-          <Link href="/employees/new">Mitarbeiter anlegen</Link>
+          <Link href="/employees/new">{t('Employees.create')}</Link>
         </Button>
       </div>
       {query.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-          Aktion fehlgeschlagen ({query.error}).
+          {t('Errors.generic')}
         </p>
       ) : null}
       {employeesResult.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-          Mitarbeitende konnten nicht geladen werden ({employeesResult.error.code}).
+          {t('Employees.loadFailed')}
         </p>
       ) : null}
 
@@ -92,11 +97,11 @@ export default async function EmployeesPage({
         className="grid gap-3 rounded-lg border bg-white p-5"
       >
         <h2 id="employee-filter-title" className="text-lg font-semibold">
-          Suche und Filter
+          {t('Employees.searchAndFilter')}
         </h2>
         <form method="get" className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
           <label className="grid gap-1 text-sm">
-            Name oder Personalnummer
+            {t('Employees.searchNameOrNumber')}
             <input
               className="h-10 rounded-md border px-3"
               name="q"
@@ -104,47 +109,55 @@ export default async function EmployeesPage({
               maxLength={120}
             />
           </label>
-          <SelectFilter name="status" label="Status" value={status ?? ''}>
-            <option value="">Alle Status</option>
-            <option value="active">Aktiv</option>
-            <option value="inactive">Inaktiv</option>
-            <option value="archived">Archiviert</option>
+          <SelectFilter name="status" label={t('Common.fields.status')} value={status ?? ''}>
+            <option value="">{t('Common.filters.allStatuses')}</option>
+            <option value="active">{t('Common.status.active')}</option>
+            <option value="inactive">{t('Common.status.inactive')}</option>
+            <option value="archived">{t('Common.status.archived')}</option>
           </SelectFilter>
-          <SelectFilter name="organizationId" label="Organisation" value={organizationId ?? ''}>
-            <option value="">Alle Organisationen</option>
+          <SelectFilter
+            name="organizationId"
+            label={t('Common.fields.organization')}
+            value={organizationId ?? ''}
+          >
+            <option value="">{t('Common.filters.allOrganizations')}</option>
             {(organizationsResult.data ?? []).map((organization) => (
               <option key={organization.id} value={organization.id}>
                 {organization.name}
               </option>
             ))}
           </SelectFilter>
-          <SelectFilter name="facilityId" label="Einrichtung" value={facilityId ?? ''}>
-            <option value="">Alle Einrichtungen</option>
+          <SelectFilter
+            name="facilityId"
+            label={t('Common.fields.facility')}
+            value={facilityId ?? ''}
+          >
+            <option value="">{t('Common.filters.allFacilities')}</option>
             {(facilitiesResult.data ?? []).map((facility) => (
               <option key={facility.id} value={facility.id}>
                 {facility.organizationName} — {facility.name}
               </option>
             ))}
           </SelectFilter>
-          <SelectFilter name="teamId" label="Team" value={teamId ?? ''}>
-            <option value="">Alle Teams</option>
+          <SelectFilter name="teamId" label={t('Common.fields.team')} value={teamId ?? ''}>
+            <option value="">{t('Common.filters.allTeams')}</option>
             {(teamsResult.data ?? []).map((team) => (
               <option key={team.id} value={team.id}>
                 {team.organizationName} — {team.name}
               </option>
             ))}
           </SelectFilter>
-          <SelectFilter name="sortBy" label="Sortieren nach" value={sortBy}>
-            <option value="lastName">Nachname</option>
-            <option value="firstName">Vorname</option>
-            <option value="createdAt">Erstellt</option>
+          <SelectFilter name="sortBy" label={t('Common.fields.sortBy')} value={sortBy}>
+            <option value="lastName">{t('Common.fields.lastName')}</option>
+            <option value="firstName">{t('Common.fields.firstName')}</option>
+            <option value="createdAt">{t('Common.fields.created')}</option>
           </SelectFilter>
-          <SelectFilter name="sortOrder" label="Reihenfolge" value={sortOrder}>
-            <option value="asc">Aufsteigend</option>
-            <option value="desc">Absteigend</option>
+          <SelectFilter name="sortOrder" label={t('Common.fields.order')} value={sortOrder}>
+            <option value="asc">{t('Common.filters.ascending')}</option>
+            <option value="desc">{t('Common.filters.descending')}</option>
           </SelectFilter>
           <div className="flex items-end">
-            <Button type="submit">Anwenden</Button>
+            <Button type="submit">{t('Common.actions.apply')}</Button>
           </div>
         </form>
       </section>
@@ -152,24 +165,24 @@ export default async function EmployeesPage({
       {employees?.items.length ? (
         <section aria-labelledby="employee-list-title" className="grid gap-3">
           <h2 id="employee-list-title" className="text-lg font-semibold">
-            {employees.total} Mitarbeitende
+            {t('Employees.resultCount', { count: employees.total })}
           </h2>
           <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
             <table className="w-full border-collapse text-left text-sm">
-              <caption className="sr-only">Mitarbeitendenliste</caption>
+              <caption className="sr-only">{t('Employees.listCaption')}</caption>
               <thead className="border-b bg-slate-100 text-slate-700">
                 <tr>
                   <th scope="col" className="px-4 py-3">
-                    Name
+                    {t('Common.fields.name')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Organisation
+                    {t('Common.fields.organization')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Personalnummer
+                    {t('Employees.personnelNumber')}
                   </th>
                   <th scope="col" className="px-4 py-3">
-                    Status
+                    {t('Common.fields.status')}
                   </th>
                 </tr>
               </thead>
@@ -187,7 +200,10 @@ export default async function EmployeesPage({
                     <td className="px-4 py-3">{employee.organizationName ?? '—'}</td>
                     <td className="px-4 py-3">{employee.personnelNumber ?? '—'}</td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={employee.status} />
+                      <StatusBadge
+                        status={employee.status}
+                        label={t(statusLabelKey(employee.status))}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -196,27 +212,33 @@ export default async function EmployeesPage({
           </div>
           <div className="flex items-center justify-between">
             <p className="text-sm text-slate-600">
-              Seite {employees.page} von{' '}
-              {Math.max(1, Math.ceil(employees.total / employees.pageSize))}
+              {t('Common.pagination', {
+                page: new Intl.NumberFormat(locale).format(employees.page),
+                pages: new Intl.NumberFormat(locale).format(
+                  Math.max(1, Math.ceil(employees.total / employees.pageSize)),
+                ),
+              })}
             </p>
             <div className="flex gap-2">
               {employees.page > 1 ? (
                 <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(filters, employees.page - 1)}>Zurück</Link>
+                  <Link href={pageHref(filters, employees.page - 1)}>
+                    {t('Common.actions.previous')}
+                  </Link>
                 </Button>
               ) : null}
               {employees.page * employees.pageSize < employees.total ? (
                 <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(filters, employees.page + 1)}>Weiter</Link>
+                  <Link href={pageHref(filters, employees.page + 1)}>
+                    {t('Common.actions.next')}
+                  </Link>
                 </Button>
               ) : null}
             </div>
           </div>
         </section>
       ) : !employeesResult.error ? (
-        <p className="rounded-lg border bg-white p-6 text-slate-700">
-          Keine Mitarbeitenden für diese Suche gefunden.
-        </p>
+        <p className="rounded-lg border bg-white p-6 text-slate-700">{t('Employees.notFound')}</p>
       ) : null}
     </div>
   );

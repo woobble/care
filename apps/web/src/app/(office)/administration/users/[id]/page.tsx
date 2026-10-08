@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
+import { permissionLabelKeys, roleLabelKey } from '../../../../../i18n/access';
+import { errorMessageKey } from '../../../../../i18n/errors';
+import { statusLabelKey } from '../../../../../i18n/status';
 import { getApiClient, getTenantHeader } from '../../../../../lib/api';
 import {
   activateMemberAction,
@@ -20,6 +24,7 @@ export default async function MemberDetailPage({
 }: Readonly<{ params: Params; searchParams: SearchParams }>) {
   const { id } = await params;
   const query = await searchParams;
+  const t = await getTranslations();
   const api = await getApiClient();
   const get = api.GET;
   const [memberResult, rolesResult, organizationsResult, facilitiesResult, teamsResult] =
@@ -36,7 +41,7 @@ export default async function MemberDetailPage({
   if (!memberResult.data) {
     return (
       <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-        Member details could not be loaded ({memberResult.error?.code}).
+        {t('Users.loadFailed')}
       </p>
     );
   }
@@ -55,22 +60,22 @@ export default async function MemberDetailPage({
     <div className="grid gap-8">
       <header className="grid gap-2">
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration/users">Users &amp; Access</Link>
+          <Link href="/administration/users">{t('Users.title')}</Link>
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-3xl font-semibold">
             {member.displayName || member.email || member.userId}
           </h1>
-          <StatusBadge status={member.status} />
+          <StatusBadge status={member.status} label={t(statusLabelKey(member.status))} />
         </div>
         <p className="text-slate-700">
-          {member.email || 'No verified email'} · User {member.userId}
+          {member.email || t('Users.noVerifiedEmail')} · {t('Users.userId', { id: member.userId })}
         </p>
       </header>
 
       {query.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-          Update failed ({query.error}).
+          {t(errorMessageKey(query.error))}
         </p>
       ) : null}
       {query.updated ? (
@@ -78,7 +83,7 @@ export default async function MemberDetailPage({
           role="status"
           className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
         >
-          Member access updated.
+          {t('Users.accessUpdated')}
         </p>
       ) : null}
       {rolesResult.error ||
@@ -86,12 +91,7 @@ export default async function MemberDetailPage({
       facilitiesResult.error ||
       teamsResult.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-          Roles or scope targets could not be loaded (
-          {rolesResult.error?.code ||
-            organizationsResult.error?.code ||
-            facilitiesResult.error?.code ||
-            teamsResult.error?.code}
-          ).
+          {t('Users.targetsLoadFailed')}
         </p>
       ) : null}
 
@@ -100,32 +100,32 @@ export default async function MemberDetailPage({
         className="grid gap-3 rounded-lg border bg-white p-5"
       >
         <h2 id="lifecycle-title" className="text-xl font-semibold">
-          Membership lifecycle
+          {t('Users.membershipLifecycle')}
         </h2>
         <div className="flex flex-wrap gap-3">
           {member.status === 'pending' || member.status === 'inactive' ? (
             <form action={activateMemberAction}>
               <input type="hidden" name="membershipId" value={member.id} />
-              <Button type="submit">Activate membership</Button>
+              <Button type="submit">{t('Users.activateMembership')}</Button>
             </form>
           ) : null}
           {member.status === 'active' ? (
             <form action={deactivateMemberAction}>
               <input type="hidden" name="membershipId" value={member.id} />
               <Button type="submit" variant="secondary">
-                Deactivate membership
+                {t('Users.deactivateMembership')}
               </Button>
             </form>
           ) : null}
           {member.status !== 'revoked' ? (
             <form action={revokeMemberAction}>
               <input type="hidden" name="membershipId" value={member.id} />
-              <ConfirmSubmitButton confirmation="Revoking tenant access is permanent. Continue?">
-                Revoke access
+              <ConfirmSubmitButton confirmation={t('Users.revokeConfirmation')}>
+                {t('Users.revokeAccess')}
               </ConfirmSubmitButton>
             </form>
           ) : (
-            <p className="text-sm text-slate-600">Revoked memberships cannot be reactivated.</p>
+            <p className="text-sm text-slate-600">{t('Users.revokedCannotReactivate')}</p>
           )}
         </div>
       </section>
@@ -133,16 +133,14 @@ export default async function MemberDetailPage({
       <section aria-labelledby="roles-title" className="grid gap-4 rounded-lg border bg-white p-5">
         <div>
           <h2 id="roles-title" className="text-xl font-semibold">
-            Roles
+            {t('Users.roles')}
           </h2>
-          <p className="text-sm text-slate-600">
-            Selecting a role grants every permission shown for that role at the assigned scopes.
-          </p>
+          <p className="text-sm text-slate-600">{t('Users.roleHelp')}</p>
         </div>
         <form action={replaceMemberRolesAction} className="grid gap-4">
           <input type="hidden" name="membershipId" value={member.id} />
           <fieldset className="grid gap-4">
-            <legend className="sr-only">Available system roles</legend>
+            <legend className="sr-only">{t('Users.availableRoles')}</legend>
             {roles.map((role) => (
               <label key={role.id} className="grid gap-1 rounded-md border p-3">
                 <span className="flex items-center gap-2 font-medium">
@@ -152,16 +150,25 @@ export default async function MemberDetailPage({
                     value={role.id}
                     defaultChecked={assignedRoleIds.has(role.id)}
                   />
-                  {role.name}
+                  {t(roleLabelKey(role.name))}
                 </span>
                 <span className="text-sm text-slate-600">
-                  Permissions: {role.permissions.join(', ') || 'none'}
+                  {t('Users.permissions')}:{' '}
+                  {role.permissions
+                    .map((permission) => {
+                      const keys = permissionLabelKeys(permission);
+                      return t('Users.permissionLabel', {
+                        resource: t(keys.resource),
+                        action: t(keys.action),
+                      });
+                    })
+                    .join(', ') || t('Users.noPermissions')}
                 </span>
               </label>
             ))}
           </fieldset>
           <Button type="submit" disabled={member.status === 'revoked'}>
-            Save roles
+            {t('Users.saveRoles')}
           </Button>
         </form>
       </section>
@@ -169,27 +176,25 @@ export default async function MemberDetailPage({
       <section aria-labelledby="scopes-title" className="grid gap-4 rounded-lg border bg-white p-5">
         <div>
           <h2 id="scopes-title" className="text-xl font-semibold">
-            Access scopes
+            {t('Users.scopesTitle')}
           </h2>
-          <p className="text-sm text-slate-600">
-            A tenant scope cannot be combined with organization, facility, or team scopes.
-          </p>
+          <p className="text-sm text-slate-600">{t('Users.scopeHelp')}</p>
         </div>
         <form action={replaceMemberScopesAction} className="grid gap-4">
           <input type="hidden" name="membershipId" value={member.id} />
           <fieldset className="grid gap-3">
-            <legend className="font-medium">Scope</legend>
+            <legend className="font-medium">{t('Users.scope')}</legend>
             <label className="flex items-center gap-2">
               <input type="radio" name="scopeMode" value="tenant" defaultChecked={tenantScope} />
-              Entire tenant
+              {t('Users.entireTenant')}
             </label>
             <label className="flex items-center gap-2">
               <input type="radio" name="scopeMode" value="scoped" defaultChecked={!tenantScope} />
-              Selected organizations, facilities, and teams
+              {t('Users.selectedScopes')}
             </label>
           </fieldset>
           <fieldset className="grid gap-3">
-            <legend className="font-medium">Teams</legend>
+            <legend className="font-medium">{t('Teams.title')}</legend>
             {teams.map((team) => (
               <label key={team.id} className="flex items-center gap-2">
                 <input
@@ -202,11 +207,11 @@ export default async function MemberDetailPage({
               </label>
             ))}
             {teams.length === 0 ? (
-              <p className="text-sm text-slate-600">No visible teams.</p>
+              <p className="text-sm text-slate-600">{t('Users.noVisibleTeams')}</p>
             ) : null}
           </fieldset>
           <fieldset className="grid gap-3">
-            <legend className="font-medium">Organizations</legend>
+            <legend className="font-medium">{t('Organizations.title')}</legend>
             {organizations.map((organization) => (
               <label key={organization.id} className="flex items-center gap-2">
                 <input
@@ -219,11 +224,11 @@ export default async function MemberDetailPage({
               </label>
             ))}
             {organizations.length === 0 ? (
-              <p className="text-sm text-slate-600">No visible organizations.</p>
+              <p className="text-sm text-slate-600">{t('Users.noVisibleOrganizations')}</p>
             ) : null}
           </fieldset>
           <fieldset className="grid gap-3">
-            <legend className="font-medium">Facilities</legend>
+            <legend className="font-medium">{t('Facilities.title')}</legend>
             {facilities.map((facility) => (
               <label key={facility.id} className="flex items-center gap-2">
                 <input
@@ -236,11 +241,11 @@ export default async function MemberDetailPage({
               </label>
             ))}
             {facilities.length === 0 ? (
-              <p className="text-sm text-slate-600">No visible facilities.</p>
+              <p className="text-sm text-slate-600">{t('Users.noVisibleFacilities')}</p>
             ) : null}
           </fieldset>
           <Button type="submit" disabled={member.status === 'revoked'}>
-            Save scopes
+            {t('Users.saveScopes')}
           </Button>
         </form>
       </section>
@@ -250,10 +255,20 @@ export default async function MemberDetailPage({
         className="grid gap-2 rounded-lg border bg-white p-5"
       >
         <h2 id="effective-title" className="text-xl font-semibold">
-          Effective permissions
+          {t('Users.effectivePermissions')}
         </h2>
         <p className="text-sm text-slate-700">
-          {member.permissions.join(', ') || 'No permissions assigned.'}
+          {member.permissions.length
+            ? member.permissions
+                .map((permission) => {
+                  const keys = permissionLabelKeys(permission);
+                  return t('Users.permissionLabel', {
+                    resource: t(keys.resource),
+                    action: t(keys.action),
+                  });
+                })
+                .join(', ')
+            : t('Users.noPermissions')}
         </p>
       </section>
     </div>
