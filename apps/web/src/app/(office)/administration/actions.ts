@@ -408,8 +408,11 @@ export async function deactivateCompetencyPolicyAction(formData: FormData): Prom
 
 function readCompetencyOperation(
   value: FormDataEntryValue | null,
-): 'care_plan.activate' | 'care_plan.evaluate' | null {
-  return value === 'care_plan.activate' || value === 'care_plan.evaluate' ? value : null;
+): 'care_plan.activate' | 'care_plan.evaluate' | 'medication.administer' | 'medication.administration.correct' | null {
+  return value === 'care_plan.activate' || value === 'care_plan.evaluate' ||
+    value === 'medication.administer' || value === 'medication.administration.correct'
+    ? value
+    : null;
 }
 
 function readText(formData: FormData, name: string): string {

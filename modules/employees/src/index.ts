@@ -15,6 +15,8 @@ export {
   EmployeeHasFutureVisitsError,
   EmployeeHasInProgressExecutionError,
 } from './application/employee.service';
+export { employeeVisibilityPredicate } from './infrastructure/persistence/employee-visibility';
+export type { EmployeeVisibilityGrant } from './infrastructure/persistence/employee-visibility';
 export {
   CrossTenantReferenceError,
   EmployeeAlreadyLinkedError,

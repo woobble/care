@@ -159,6 +159,10 @@ export default async function ClientDetailPage({
   const facilities = facilitiesResult.data ?? [];
   const permissions = await getPermissionGrants(api);
   const canReviewClinicalHistory = hasPermission(permissions, 'clinical_documentation.review');
+  const canReadMedication = client
+    ? hasClientPermission(permissions, 'medication.read', client.tenantId, client.organizationId, client.primaryFacilityId) ||
+      hasClientPermission(permissions, 'medication.order.manage', client.tenantId, client.organizationId, client.primaryFacilityId)
+    : false;
   const clinicalPeriod = clinicalRange(query.clinicalFrom, query.clinicalUntil);
   const clinicalPage = parseClinicalPage(query.clinicalPage);
   let clinicalMeasurements: ClinicalHistoryPage | undefined;
@@ -337,6 +341,14 @@ export default async function ClientDetailPage({
                 href={`/clients/${client.id}/care-plan`}
               >
                 {t('Clients.detail.carePlanTab')}
+              </Link>
+            ) : null}
+            {canReadMedication ? (
+              <Link
+                className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
+                href={`/clients/${client.id}/medications`}
+              >
+                {t('Clients.detail.medicationsTab')}
               </Link>
             ) : null}
             <SectionLink href="#visits">{t('Clients.detail.visitsTab')}</SectionLink>

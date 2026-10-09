@@ -229,6 +229,9 @@ export const employeeQualifications = employees.table(
       table.employeeId,
       table.qualificationId,
     ),
+    index('employee_qualification_tenant_valid_until_idx')
+      .on(table.tenantId, table.validUntil)
+      .where(sql`${table.validUntil} IS NOT NULL`),
     check(
       'employee_qualification_dates_check',
       sql`${table.validUntil} IS NULL OR ${table.validFrom} IS NULL OR ${table.validUntil} >= ${table.validFrom}`,

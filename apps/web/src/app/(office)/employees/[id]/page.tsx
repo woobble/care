@@ -34,7 +34,11 @@ export default async function EmployeeDetailPage({
 }: Readonly<{ params: Params; searchParams: SearchParams }>) {
   const { id } = await params;
   const query = await searchParams;
-  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
+  const [t, locale, workforceT] = await Promise.all([
+    getTranslations(),
+    getLocale(),
+    getTranslations('WorkforceCompliance'),
+  ]);
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
@@ -42,26 +46,35 @@ export default async function EmployeeDetailPage({
   if (!employeeResult.data) notFound();
   const employee = employeeResult.data;
   const { scheduleNow, scheduleFrom, scheduleUntil } = employeeVisitRange();
-  const [facilitiesResult, teamsResult, qualificationsResult, skillsResult, linkableUsersResult] =
-    await Promise.all([
-      get('/api/v1/facilities', {
-        params: {
-          query: employee.organizationId ? { organizationId: employee.organizationId } : {},
-          header,
-        },
-      }),
-      get('/api/v1/teams', {
-        params: {
-          query: employee.organizationId ? { organizationId: employee.organizationId } : {},
-          header,
-        },
-      }),
-      get('/api/v1/qualifications', { params: { query: { status: 'active' }, header } }),
-      get('/api/v1/skills', { params: { query: { status: 'active' }, header } }),
-      employee.linkedUser
-        ? Promise.resolve({ data: undefined, error: undefined })
-        : get('/api/v1/employees/{id}/linkable-users', { params: { path: { id }, header } }),
-    ]);
+  const [
+    facilitiesResult,
+    teamsResult,
+    qualificationsResult,
+    skillsResult,
+    linkableUsersResult,
+    workforceComplianceResult,
+  ] = await Promise.all([
+    get('/api/v1/facilities', {
+      params: {
+        query: employee.organizationId ? { organizationId: employee.organizationId } : {},
+        header,
+      },
+    }),
+    get('/api/v1/teams', {
+      params: {
+        query: employee.organizationId ? { organizationId: employee.organizationId } : {},
+        header,
+      },
+    }),
+    get('/api/v1/qualifications', { params: { query: { status: 'active' }, header } }),
+    get('/api/v1/skills', { params: { query: { status: 'active' }, header } }),
+    employee.linkedUser
+      ? Promise.resolve({ data: undefined, error: undefined })
+      : get('/api/v1/employees/{id}/linkable-users', { params: { path: { id }, header } }),
+    get('/api/v1/workforce-compliance/employees/{employeeId}', {
+      params: { path: { employeeId: id }, header },
+    }),
+  ]);
   const visitsResult = await get('/api/v1/visits', {
     params: {
       query: {
@@ -117,6 +130,13 @@ export default async function EmployeeDetailPage({
   );
   const teams = (teamsResult.data ?? []).filter((team) => team.status === 'active');
   const qualifications = qualificationsResult.data ?? [];
+  const workforceCompliance = workforceComplianceResult.data;
+  const workforceQualificationByAssignmentId = new Map(
+    (workforceCompliance?.qualifications ?? []).map((qualification) => [
+      qualification.assignmentId,
+      qualification,
+    ]),
+  );
   const skills = skillsResult.data ?? [];
   const assignments = employee.facilityAssignments.filter(
     (assignment) => assignment.status === 'active',
@@ -162,6 +182,96 @@ export default async function EmployeeDetailPage({
         </div>
       </header>
       <ActionNotice error={query.error} updated={query.updated} />
+
+      <section className="grid gap-4 rounded-lg border bg-white p-5">
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div className="grid gap-1">
+            <h2 className="text-xl font-semibold">
+              {t('WorkforceCompliance.employeeDetailTitle')}
+            </h2>
+            <p className="text-sm text-slate-600">
+              {t('WorkforceCompliance.employeeDetailDescription')}
+            </p>
+          </div>
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/administration/workforce-compliance">
+              {t('WorkforceCompliance.openDashboard')}
+            </Link>
+          </Button>
+        </header>
+        {workforceComplianceResult.error || !workforceCompliance ? (
+          <p className="text-sm text-slate-600">
+            {t('WorkforceCompliance.employeeDetailUnavailable')}
+          </p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {workforceCompliance.operations.map((operation) => {
+              const operationFindings = operation.findings;
+              const operationName =
+                operation.operationKey === 'care_plan.activate'
+                  ? t('WorkforceCompliance.operationActivate')
+                  : t('WorkforceCompliance.operationEvaluate');
+              const readinessName =
+                operation.readiness === 'ready'
+                  ? t('WorkforceCompliance.statusReady')
+                  : operation.readiness === 'at_risk'
+                    ? t('WorkforceCompliance.statusAtRisk')
+                    : operation.readiness === null
+                      ? t('WorkforceCompliance.statusNotEvaluated')
+                      : t('WorkforceCompliance.statusNotReady');
+              return (
+                <article
+                  key={operation.operationKey}
+                  className="grid content-start gap-3 rounded-md border p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-semibold">{operationName}</h3>
+                    <CompliancePill status={operation.readiness} label={readinessName} />
+                  </div>
+                  {operation.projectedEligibilityEnd ? (
+                    <p className="text-sm text-slate-600">
+                      {t('WorkforceCompliance.projectedEligibilityEnd', {
+                        date: formatDate(operation.projectedEligibilityEnd, locale as Locale) ?? '',
+                      })}
+                    </p>
+                  ) : null}
+                  {operationFindings.length ? (
+                    <ul className="grid gap-2 border-t pt-3">
+                      {operationFindings.map((finding) => (
+                        <li
+                          key={`${finding.code}-${finding.effectiveDate}`}
+                          className="grid gap-1 text-sm"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <CompliancePill
+                              status={finding.severity}
+                              label={
+                                finding.severity === 'critical'
+                                  ? t('WorkforceCompliance.severityCritical')
+                                  : t('WorkforceCompliance.severityWarning')
+                              }
+                            />
+                            <span>{workforceFindingLabel(workforceT, finding.code)}</span>
+                          </div>
+                          <span className="text-slate-600">
+                            {t('WorkforceCompliance.findingEffectiveDate', {
+                              date: formatDate(finding.effectiveDate, locale as Locale) ?? '',
+                            })}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-slate-600">
+                      {t('WorkforceCompliance.noReadinessFindings')}
+                    </p>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <section
         aria-labelledby="schedule-title"
@@ -591,6 +701,12 @@ export default async function EmployeeDetailPage({
             {employee.qualifications.map((qualification) => {
               const revokedAt = qualification.revokedAt;
               const revokedDate = revokedAt ? formatDate(revokedAt, locale) : null;
+              const complianceQualification = workforceQualificationByAssignmentId.get(
+                qualification.id,
+              );
+              const complianceStatusLabel = complianceQualification
+                ? qualificationComplianceLabel(workforceT, complianceQualification.complianceStatus)
+                : null;
               return (
                 <li
                   key={qualification.id}
@@ -620,6 +736,22 @@ export default async function EmployeeDetailPage({
                         ? ` · ${t('Employees.detail.qualificationRevokedAt', { date: revokedDate })}`
                         : ''}
                     </p>
+                    {complianceQualification ? (
+                      <p className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+                        <span>{t('WorkforceCompliance.qualificationComplianceStatus')}</span>
+                        <CompliancePill
+                          status={complianceQualification.complianceStatus}
+                          label={complianceStatusLabel ?? ''}
+                        />
+                        <span className="text-slate-600">
+                          {t('WorkforceCompliance.assignmentCreatedAt', {
+                            date:
+                              formatDate(complianceQualification.createdAt, locale) ??
+                              complianceQualification.createdAt,
+                          })}
+                        </span>
+                      </p>
+                    ) : null}
                   </div>
                   {qualification.assignmentStatus === 'active' ? (
                     <form action={removeQualificationAction}>
@@ -906,6 +1038,69 @@ function StatusForm({
         {label}
       </Button>
     </form>
+  );
+}
+
+function workforceFindingLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'WorkforceCompliance'>>>,
+  code: string,
+) {
+  switch (code) {
+    case 'COMPETENCY_POLICY_MISSING':
+      return t('findingPolicyMissing');
+    case 'COMPETENCY_POLICY_INACTIVE':
+      return t('findingPolicyInactive');
+    case 'COMPETENCY_POLICY_INVALID':
+      return t('findingPolicyInvalid');
+    case 'EMPLOYEE_INACTIVE':
+      return t('findingEmployeeInactive');
+    case 'EMPLOYEE_LINK_MISSING':
+      return t('findingEmployeeLinkMissing');
+    case 'COMPETENCY_REQUIREMENT_UNMET':
+      return t('findingRequirementUnmet');
+    case 'COMPETENCY_ELIGIBILITY_EXPIRING':
+      return t('findingEligibilityExpiring');
+    default:
+      return code;
+  }
+}
+
+function qualificationComplianceLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'WorkforceCompliance'>>>,
+  status: string,
+) {
+  switch (status) {
+    case 'valid':
+      return t('statusValid');
+    case 'expiring_soon':
+      return t('statusExpiringSoon');
+    case 'expired':
+      return t('statusExpired');
+    case 'not_yet_valid':
+      return t('statusNotYetValid');
+    case 'revoked':
+      return t('statusRevoked');
+    default:
+      return status;
+  }
+}
+
+function CompliancePill({ status, label }: Readonly<{ status: string | null; label: string }>) {
+  const color =
+    status === 'ready' || status === 'valid'
+      ? 'bg-green-100 text-green-900'
+      : status === null ||
+          status === 'at_risk' ||
+          status === 'expiring_soon' ||
+          status === 'not_yet_valid'
+        ? 'bg-amber-100 text-amber-950'
+        : status === 'warning'
+          ? 'bg-amber-100 text-amber-950'
+          : 'bg-red-100 text-red-900';
+  return (
+    <span className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${color}`}>
+      {label}
+    </span>
   );
 }
 

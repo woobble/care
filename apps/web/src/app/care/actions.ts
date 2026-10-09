@@ -83,6 +83,63 @@ export async function startVisitAction(formData: FormData): Promise<void> {
   redirect(visitPath(visitId, 'started'));
 }
 
+export async function recordMedicationOccurrenceAction(formData: FormData): Promise<void> {
+  await recordMedicationAction(formData, false);
+}
+
+export async function recordPrnMedicationAction(formData: FormData): Promise<void> {
+  await recordMedicationAction(formData, true);
+}
+
+async function recordMedicationAction(formData: FormData, prn: boolean): Promise<void> {
+  const visitId = readUuid(formData.get('visitId'));
+  const occurrenceId = prn ? null : readUuid(formData.get('occurrenceId'));
+  const orderId = prn ? readUuid(formData.get('orderId')) : null;
+  const outcome = readChoice(formData, 'outcome', ['administered', 'not_administered', 'refused', 'withheld'] as const);
+  const actualDoseAmount = readString(formData, 'actualDoseAmount');
+  const actualDoseUnit = readChoice(formData, 'actualDoseUnit', ['mg', 'g', 'mL', 'tablet', 'capsule', 'drop', 'puff', 'patch'] as const);
+  const reasonCode = readChoice(formData, 'reasonCode', ['client_refused', 'client_unavailable', 'medication_unavailable', 'held_per_instruction', 'administration_not_possible', 'other'] as const);
+  const administrationReason = readNullableString(formData, 'administrationReason');
+  const note = readNullableString(formData, 'note');
+  const confirmed = formData.get('confirm') === 'on';
+  if (!visitId || (!occurrenceId && !prn) || (!orderId && prn) || !outcome || note && note.length > 2000) {
+    redirect(visitPath(visitId, 'MEDICATION_ADMINISTRATION_INVALID_OUTCOME'));
+  }
+  if (outcome === 'administered' && (!confirmed || !actualDoseAmount || !actualDoseUnit)) {
+    redirect(visitPath(visitId, 'MEDICATION_ADMINISTRATION_INVALID_DOSE'));
+  }
+  if (outcome !== 'administered' && !reasonCode) {
+    redirect(visitPath(visitId, 'MEDICATION_ADMINISTRATION_INVALID_OUTCOME'));
+  }
+  if (outcome !== 'administered' && reasonCode === 'other' && !administrationReason) {
+    redirect(visitPath(visitId, 'MEDICATION_ADMINISTRATION_INVALID_OUTCOME'));
+  }
+  if (prn && !administrationReason) redirect(visitPath(visitId, 'MEDICATION_PRN_REASON_REQUIRED'));
+  const body = {
+    visitId,
+    outcome,
+    actualDoseAmount: outcome === 'administered' ? actualDoseAmount : null,
+    actualDoseUnit: outcome === 'administered' ? actualDoseUnit : null,
+    reasonCode: outcome === 'administered' ? null : reasonCode,
+    administrationReason,
+    note,
+  };
+  const api = await getApiClient();
+  const header = await getTenantHeader();
+  const result = prn
+    ? await api.POST('/api/v1/medication-orders/{orderId}/prn-administrations', {
+        params: { path: { orderId: orderId! }, header },
+        body,
+      })
+    : await api.POST('/api/v1/medication-administrations/{occurrenceId}/record', {
+        params: { path: { occurrenceId: occurrenceId! }, header },
+        body,
+      });
+  if (result.error) redirect(visitPath(visitId, result.error.code));
+  refresh(visitId);
+  redirect(visitPath(visitId, 'medication-recorded'));
+}
+
 export async function recordPerformedServiceAction(formData: FormData): Promise<void> {
   const visitId = readUuid(formData.get('visitId'));
   const performedServiceId = readUuid(formData.get('performedServiceId'));
@@ -646,6 +703,11 @@ function readUuid(value: FormDataEntryValue | null): string | null {
 function readString(formData: FormData, name: string): string {
   const value = formData.get(name);
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function readChoice<const Values extends readonly string[]>(formData: FormData, name: string, values: Values): Values[number] | null {
+  const value = readString(formData, name);
+  return values.includes(value) ? value as Values[number] : null;
 }
 
 function readNullableString(formData: FormData, name: string): string | null {

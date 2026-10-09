@@ -199,7 +199,8 @@ describe('clients API', () => {
            ($1, 'schedule.generate'),
            ($1, 'employee.update'), ($1, 'employee.assign_facility'),
            ($1, 'employee.assign_team'), ($1, 'employee.link_user'),
-           ($1, 'employee.manage_qualifications'), ($1, 'employee.manage_skills'),
+           ($1, 'employee.manage_qualifications'), ($1, 'workforce_compliance.read'),
+           ($1, 'workforce_compliance.read_details'), ($1, 'employee.manage_skills'),
            ($1, 'employee.manage_employment'),
            ($1, 'visit_execution.read'), ($1, 'visit_execution.correct'),
            ($1, 'care_documentation.read'), ($1, 'care_documentation.review'),
@@ -311,7 +312,7 @@ describe('clients API', () => {
         (await appRole.query('SELECT membership_id FROM identity.membership_scopes')).rowCount,
       ).toBe(4);
       expect((await appRole.query('SELECT role_id FROM identity.role_permissions')).rowCount).toBe(
-        PERMISSIONS.length + 65,
+        PERMISSIONS.length + 67,
       );
       await appRole.query('COMMIT');
       expect((await appRole.query('SELECT id FROM identity.tenant_memberships')).rowCount).toBe(0);
@@ -6116,6 +6117,34 @@ describe('clients API', () => {
           })
         ).status,
       ).toBe(403);
+      const facilityScopedSummary = await fetch(`${baseUrl}/api/v1/workforce-compliance/summary`, {
+        headers: workforceOfficeHeaders,
+      });
+      expect(facilityScopedSummary.status).toBe(200);
+      expect(await facilityScopedSummary.json()).toMatchObject({ employeeCount: 1 });
+      const facilityScopedEmployees = await fetch(
+        `${baseUrl}/api/v1/workforce-compliance/employees?organizationId=${workforceOrganization.id}&facilityId=${workforceFacilityA.id}&page=1&pageSize=100`,
+        { headers: workforceOfficeHeaders },
+      );
+      expect(facilityScopedEmployees.status).toBe(200);
+      expect(await facilityScopedEmployees.json()).toMatchObject({
+        total: 1,
+        items: [expect.objectContaining({ employeeId: workforceEmployee.id })],
+      });
+      const facilityScopedQualifications = await fetch(
+        `${baseUrl}/api/v1/workforce-compliance/qualifications?organizationId=${workforceOrganization.id}&facilityId=${workforceFacilityA.id}&page=1&pageSize=100`,
+        { headers: workforceOfficeHeaders },
+      );
+      expect(facilityScopedQualifications.status).toBe(200);
+      expect(await facilityScopedQualifications.json()).toMatchObject({
+        total: 1,
+        items: [expect.objectContaining({ employeeId: workforceEmployee.id })],
+      });
+      const outOfScopeComplianceDetail = await fetch(
+        `${baseUrl}/api/v1/workforce-compliance/employees/${otherWorkforceEmployee.id}`,
+        { headers: workforceOfficeHeaders },
+      );
+      expect(outOfScopeComplianceDetail.status).toBe(404);
       const setOfficeTeamScope = await fetch(
         `${baseUrl}/api/v1/admin/members/${secondMembershipId}/scopes`,
         {
@@ -6139,6 +6168,15 @@ describe('clients API', () => {
           })
         ).status,
       ).toBe(403);
+      const teamScopedEmployees = await fetch(
+        `${baseUrl}/api/v1/workforce-compliance/employees?organizationId=${workforceOrganization.id}&teamId=${workforceTeam.id}&page=1&pageSize=100`,
+        { headers: workforceOfficeHeaders },
+      );
+      expect(teamScopedEmployees.status).toBe(200);
+      expect(await teamScopedEmployees.json()).toMatchObject({
+        total: 1,
+        items: [expect.objectContaining({ employeeId: workforceEmployee.id })],
+      });
       const setOfficeOrganizationScope = await fetch(
         `${baseUrl}/api/v1/admin/members/${secondMembershipId}/scopes`,
         {
@@ -6150,6 +6188,18 @@ describe('clients API', () => {
         },
       );
       expect(setOfficeOrganizationScope.status).toBe(200);
+      const organizationScopedEmployees = await fetch(
+        `${baseUrl}/api/v1/workforce-compliance/employees?organizationId=${workforceOrganization.id}&page=1&pageSize=100`,
+        { headers: workforceOfficeHeaders },
+      );
+      expect(organizationScopedEmployees.status).toBe(200);
+      expect(await organizationScopedEmployees.json()).toMatchObject({
+        total: 2,
+        items: expect.arrayContaining([
+          expect.objectContaining({ employeeId: workforceEmployee.id }),
+          expect.objectContaining({ employeeId: otherWorkforceEmployee.id }),
+        ]),
+      });
       expect(
         (
           await fetch(`${baseUrl}/api/v1/employees/${otherWorkforceEmployee.id}`, {
@@ -6173,6 +6223,11 @@ describe('clients API', () => {
         { headers: { ...headers, Authorization: `Bearer ${await issueToken(caregiverSubject)}` } },
       );
       expect(caregiverCannotReadEmployee.status).toBe(403);
+      const caregiverCannotReadWorkforceCompliance = await fetch(
+        `${baseUrl}/api/v1/workforce-compliance/summary`,
+        { headers: { ...headers, Authorization: `Bearer ${await issueToken(caregiverSubject)}` } },
+      );
+      expect(caregiverCannotReadWorkforceCompliance.status).toBe(403);
 
       const unassignTeam = await fetch(
         `${baseUrl}/api/v1/employees/${workforceEmployee.id}/teams/${workforceTeam.id}`,
@@ -6863,6 +6918,367 @@ describe('clients API', () => {
       await closeServer(oidc.server);
       await workerDatabase.close();
       await appRole.end();
+      await owner.end();
+      await database.container.stop();
+    }
+  }, 240_000);
+
+  test('serializes Care Plan activation with HTTP competency policy rotation', async () => {
+    const database = await startCareTestDatabase();
+    const owner = new Client({ connectionString: database.migrationUrl });
+    let app: Awaited<ReturnType<typeof NestFactory.create>> | undefined;
+    let oidc: Awaited<ReturnType<typeof startOidcServer>> | undefined;
+
+    try {
+      await owner.connect();
+      const { privateKey, publicKey } = await generateKeyPair('RS256', { modulusLength: 2048 });
+      const keyId = uuidv7();
+      const publicJwk = await exportJWK(publicKey);
+      publicJwk.kid = keyId;
+      publicJwk.alg = 'RS256';
+      publicJwk.use = 'sig';
+      oidc = await startOidcServer(publicJwk);
+
+      const tenantId = uuidv7();
+      const userId = uuidv7();
+      const subject = uuidv7();
+      const membershipId = uuidv7();
+      const roleId = uuidv7();
+      const organizationId = uuidv7();
+      const facilityId = uuidv7();
+      const clientId = uuidv7();
+
+      process.env.NODE_ENV = 'test';
+      process.env.DATABASE_URL = database.appUrl;
+      process.env.OIDC_ISSUER = oidc.issuer;
+      process.env.OIDC_CLIENT_ID = 'care-integration-test';
+      process.env.WEB_ORIGIN = 'http://localhost:3000';
+      process.env.S3_ENDPOINT = 'http://127.0.0.1:8333';
+      process.env.S3_REGION = 'us-east-1';
+      process.env.S3_BUCKET = 'care-test-private';
+      process.env.S3_ACCESS_KEY = 'care-test-access';
+      process.env.S3_SECRET_KEY = 'care-test-secret';
+      process.env.S3_FORCE_PATH_STYLE = 'true';
+
+      await owner.query('INSERT INTO organizations.tenants (id, name, slug) VALUES ($1, $2, $3)', [
+        tenantId,
+        'Policy race integration tenant',
+        `policy-race-${tenantId}`,
+      ]);
+      await owner.query(
+        `INSERT INTO organizations.organizations (id, tenant_id, name)
+         VALUES ($1, $2, 'Policy Race Organization')`,
+        [organizationId, tenantId],
+      );
+      await owner.query(
+        `INSERT INTO organizations.facilities (id, tenant_id, organization_id, name)
+         VALUES ($1, $2, $3, 'Policy Race Facility')`,
+        [facilityId, tenantId, organizationId],
+      );
+      await owner.query(
+        `INSERT INTO clients.clients
+           (id, tenant_id, organization_id, primary_facility_id, first_name, last_name, status, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, 'Policy', 'Race', 'active', now(), now())`,
+        [clientId, tenantId, organizationId, facilityId],
+      );
+      await owner.query(
+        'INSERT INTO identity.users (id, email, display_name) VALUES ($1, $2, $3)',
+        [userId, 'policy-race@integration.test', 'Policy Race Author'],
+      );
+      await owner.query(
+        'INSERT INTO identity.external_identities (id, user_id, issuer, subject) VALUES ($1, $2, $3, $4)',
+        [uuidv7(), userId, oidc.issuer, subject],
+      );
+      await owner.query(
+        "INSERT INTO identity.tenant_memberships (id, user_id, tenant_id, status) VALUES ($1, $2, $3, 'active')",
+        [membershipId, userId, tenantId],
+      );
+      await owner.query('INSERT INTO identity.roles (id, tenant_id, name) VALUES ($1, $2, $3)', [
+        roleId,
+        tenantId,
+        'Policy Race Administrator',
+      ]);
+      await owner.query(
+        `INSERT INTO identity.role_permissions (role_id, permission)
+         SELECT $1, permission FROM unnest($2::text[]) AS permission`,
+        [roleId, [...PERMISSIONS]],
+      );
+      await owner.query(
+        'INSERT INTO identity.membership_roles (membership_id, tenant_id, role_id) VALUES ($1, $2, $3)',
+        [membershipId, tenantId, roleId],
+      );
+      await owner.query(
+        `INSERT INTO identity.membership_scopes (membership_id, tenant_id, scope_type, scope_id)
+         VALUES ($1, $2, 'tenant', $3)`,
+        [membershipId, tenantId, tenantId],
+      );
+
+      app = await NestFactory.create(AppModule, { logger: false });
+      const contextMiddleware = new RequestContextMiddleware();
+      app.use((request: Request, response: Response, next: NextFunction) =>
+        contextMiddleware.use(request as ApiRequest, response, next),
+      );
+      await app.listen(0, '127.0.0.1');
+      const address = app.getHttpServer().address() as AddressInfo;
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const token = await new SignJWT({})
+        .setProtectedHeader({ alg: 'RS256', kid: keyId })
+        .setIssuer(oidc.issuer)
+        .setAudience('care-integration-test')
+        .setSubject(subject)
+        .setIssuedAt()
+        .setExpirationTime('10 minutes')
+        .sign(privateKey);
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'X-Tenant-Id': tenantId,
+        'Content-Type': 'application/json',
+      };
+
+      const employeeResponse = await fetch(`${baseUrl}/api/v1/employees`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ organizationId, firstName: 'Rae', lastName: 'Policy' }),
+      });
+      expect(employeeResponse.status).toBe(201);
+      const employee = (await employeeResponse.json()) as { id: string };
+      const linkEmployee = await fetch(`${baseUrl}/api/v1/employees/${employee.id}/user`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ userId }),
+      });
+      expect(linkEmployee.status).toBe(200);
+
+      const initialQualificationResponse = await fetch(`${baseUrl}/api/v1/qualifications`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: 'Policy Race Qualification', code: 'PR-Q1' }),
+      });
+      expect(initialQualificationResponse.status).toBe(201);
+      const initialQualification = (await initialQualificationResponse.json()) as { id: string };
+      const assignInitialQualification = await fetch(
+        `${baseUrl}/api/v1/employees/${employee.id}/qualifications/${initialQualification.id}`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ validFrom: dateInBerlin(-30) }),
+        },
+      );
+      expect(assignInitialQualification.status).toBe(200);
+
+      const replacementQualificationResponse = await fetch(`${baseUrl}/api/v1/qualifications`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: 'Policy Race Replacement Qualification', code: 'PR-Q2' }),
+      });
+      expect(replacementQualificationResponse.status).toBe(201);
+      const replacementQualification = (await replacementQualificationResponse.json()) as {
+        id: string;
+      };
+      const assignReplacementQualification = await fetch(
+        `${baseUrl}/api/v1/employees/${employee.id}/qualifications/${replacementQualification.id}`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ validFrom: dateInBerlin(-30) }),
+        },
+      );
+      expect(assignReplacementQualification.status).toBe(200);
+
+      const carePlanValidFrom = dateInBerlin(-30);
+      const carePlanResponse = await fetch(`${baseUrl}/api/v1/clients/${clientId}/care-plans`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ validFrom: carePlanValidFrom }),
+      });
+      expect(carePlanResponse.status).toBe(201);
+      const carePlan = (await carePlanResponse.json()) as {
+        plan: { id: string };
+        draftRevision: { revision: { id: string } };
+      };
+      const carePlanId = carePlan.plan.id;
+      const revisionId = carePlan.draftRevision.revision.id;
+
+      const configureInitialPolicy = await fetch(
+        `${baseUrl}/api/v1/competency-policies/care_plan.activate/versions`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 0,
+            name: 'Initial policy race version',
+            requirementMode: 'ALL',
+            qualificationDefinitionIds: [initialQualification.id],
+          }),
+        },
+      );
+      expect(configureInitialPolicy.status).toBe(201);
+      const initialPolicyView = (await configureInitialPolicy.json()) as {
+        operations: Array<{ operationKey: string; policyId: string | null }>;
+      };
+      const activationPolicyId = initialPolicyView.operations.find(
+        (operation) => operation.operationKey === 'care_plan.activate',
+      )?.policyId;
+      expect(activationPolicyId).toBeTruthy();
+      const activateInitialPolicy = await fetch(
+        `${baseUrl}/api/v1/competency-policies/care_plan.activate/versions/1/activate`,
+        { method: 'POST', headers },
+      );
+      expect(activateInitialPolicy.status).toBe(200);
+
+      const updateAssessment = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${revisionId}/assessment`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ expectedVersion: 1, clientConcerns: 'Needs morning support.' }),
+        },
+      );
+      expect(updateAssessment.status).toBe(200);
+      const addNeed = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${revisionId}/needs`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 2,
+            category: 'personal_care',
+            title: 'Morning support',
+            source: 'client_report',
+            priority: 'normal',
+            status: 'active',
+          }),
+        },
+      );
+      expect(addNeed.status).toBe(201);
+      const needDetail = (await addNeed.json()) as {
+        draftRevision: { needs: Array<{ id: string }> };
+      };
+      const needId = needDetail.draftRevision.needs[0]!.id;
+      const addGoal = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${revisionId}/goals`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 3,
+            title: 'Maintain a safe routine',
+            status: 'active',
+            priority: 'normal',
+            needIds: [needId],
+          }),
+        },
+      );
+      expect(addGoal.status).toBe(201);
+      const goalDetail = (await addGoal.json()) as {
+        draftRevision: { goals: Array<{ id: string }> };
+      };
+      const goalId = goalDetail.draftRevision.goals[0]!.id;
+      const addMeasure = await fetch(
+        `${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${revisionId}/measures`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 4,
+            title: 'Morning hygiene support',
+            instruction: 'Support the client with the morning routine.',
+            category: 'personal_care',
+            needIds: [needId],
+            goalIds: [goalId],
+            validFrom: carePlanValidFrom,
+            validUntil: null,
+            status: 'active',
+          }),
+        },
+      );
+      expect(addMeasure.status).toBe(201);
+
+      const configureReplacementPolicy = await fetch(
+        `${baseUrl}/api/v1/competency-policies/care_plan.activate/versions`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 1,
+            name: 'Replacement policy race version',
+            requirementMode: 'ALL',
+            qualificationDefinitionIds: [replacementQualification.id],
+          }),
+        },
+      );
+      expect(configureReplacementPolicy.status).toBe(201);
+
+      const [activationResponse, rotationResponse] = await Promise.all([
+        fetch(`${baseUrl}/api/v1/care-plans/${carePlanId}/revisions/${revisionId}/activate`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ expectedVersion: 5 }),
+        }),
+        fetch(`${baseUrl}/api/v1/competency-policies/care_plan.activate/versions/2/activate`, {
+          method: 'POST',
+          headers,
+        }),
+      ]);
+      expect(activationResponse.status).toBe(200);
+      const activatedPlan = (await activationResponse.json()) as { plan: { status: string } };
+      expect(activatedPlan.plan.status).toBe('active');
+
+      expect(rotationResponse.status).toBe(200);
+      const rotatedPolicyView = (await rotationResponse.json()) as {
+        operations: Array<{
+          operationKey: string;
+          latestVersion: number;
+          activeVersion: number | null;
+          versions: Array<{
+            version: number;
+            requirements: Array<{ qualificationDefinitionId: string }>;
+          }>;
+        }>;
+      };
+      const rotatedActivationPolicy = rotatedPolicyView.operations.find(
+        (operation) => operation.operationKey === 'care_plan.activate',
+      );
+      expect(rotatedActivationPolicy).toMatchObject({ latestVersion: 2, activeVersion: 2 });
+      expect(
+        rotatedActivationPolicy?.versions.find((version) => version.version === 2)?.requirements,
+      ).toEqual([
+        expect.objectContaining({ qualificationDefinitionId: replacementQualification.id }),
+      ]);
+
+      const activationAudit = await owner.query<{ metadata: string }>(
+        `SELECT metadata::text AS metadata FROM audit.audit_entries
+         WHERE tenant_id = $1 AND resource_id = $2 AND action = 'care_plan.revision_activated'`,
+        [tenantId, carePlanId],
+      );
+      expect(activationAudit.rows).toHaveLength(1);
+      const professionalAuthorization = (
+        JSON.parse(activationAudit.rows[0]!.metadata) as {
+          professionalAuthorization: {
+            operationKey: string;
+            policyId: string;
+            policyVersion: number;
+            employeeId: string;
+            matchedQualificationIds: string[];
+          };
+        }
+      ).professionalAuthorization;
+      expect(professionalAuthorization).toEqual(
+        expect.objectContaining({
+          operationKey: 'care_plan.activate',
+          policyId: activationPolicyId,
+          employeeId: employee.id,
+        }),
+      );
+      expect([1, 2]).toContain(professionalAuthorization.policyVersion);
+      expect(professionalAuthorization.matchedQualificationIds).toEqual(
+        professionalAuthorization.policyVersion === 1
+          ? [initialQualification.id]
+          : [replacementQualification.id],
+      );
+    } finally {
+      await app?.close();
+      if (oidc) await closeServer(oidc.server);
       await owner.end();
       await database.container.stop();
     }

@@ -17,6 +17,8 @@ import { CareDocumentationModule } from './modules/care-documentation.module';
 import { CarePlanningModule } from './modules/care-planning.module';
 import { ServiceEvidenceModule } from './modules/service-evidence.module';
 import { CompetencyPoliciesModule } from './modules/competency-policies.module';
+import { WorkforceComplianceModule } from './modules/workforce-compliance.module';
+import { MedicationModule } from './modules/medication.module';
 import { HealthController } from './presentation/http/health.controller';
 import { ProblemDetailsFilter } from './presentation/http/problem-details.filter';
 
@@ -38,6 +40,8 @@ import { ProblemDetailsFilter } from './presentation/http/problem-details.filter
     CarePlanningModule,
     ServiceEvidenceModule,
     CompetencyPoliciesModule,
+    WorkforceComplianceModule,
+    MedicationModule,
     MeModule,
   ],
   controllers: [HealthController],

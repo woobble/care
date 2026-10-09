@@ -16,6 +16,6 @@
   "dependencies": {
     "@care/contracts": "workspace:*",
     "@care/database": "workspace:*",
-    "drizzle-orm": "^0.45.3"
+    "drizzle-orm": "^0.45.4"
   }
 }

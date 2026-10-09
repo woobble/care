@@ -23,6 +23,6 @@
     "tailwind-merge": "^3.7.0"
   },
   "peerDependencies": {
-    "react": ">=19"
+    "react": "^19.3.0"
   }
 }

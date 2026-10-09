@@ -43,6 +43,11 @@ export const PERMISSIONS = [
   'clinical_documentation.update',
   'clinical_documentation.review',
   'clinical_documentation.amend',
+  'medication.read',
+  'medication.order.manage',
+  'medication.administration.read',
+  'medication.administer',
+  'medication.administration.correct',
   'care_plan.read',
   'care_plan.create',
   'care_plan.update',
@@ -68,6 +73,9 @@ export const PERMISSIONS = [
   'employee.manage_skills',
   'employee.manage_employment',
   'employee.manage',
+  'workforce_compliance.read',
+  'workforce_compliance.read_details',
+  'workforce_compliance.manage_settings',
   'organization.read',
   'organization.create',
   'organization.update',
@@ -85,6 +93,7 @@ export const PERMISSIONS = [
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
+export type MedicationPermission = Extract<Permission, `medication.${string}`>;
 export type ScopeType = 'assigned_clients' | 'team' | 'facility' | 'organization' | 'tenant';
 
 export interface PermissionGrant {
@@ -116,7 +125,12 @@ export interface AuthorizationRequest {
   resource: ResourceContext;
 }
 
-export const COMPETENCY_OPERATIONS = ['care_plan.activate', 'care_plan.evaluate'] as const;
+export const COMPETENCY_OPERATIONS = [
+  'care_plan.activate',
+  'care_plan.evaluate',
+  'medication.administer',
+  'medication.administration.correct',
+] as const;
 export type CompetencyOperation = (typeof COMPETENCY_OPERATIONS)[number];
 
 export const COMPETENCY_DENIAL_CODES = [
@@ -259,6 +273,9 @@ function scopeMatches(grant: PermissionGrant, resource: ResourceContext, userId:
 
 function permissionMatches(granted: Permission, requested: Permission): boolean {
   if (granted === requested) return true;
+  if (granted === 'medication.order.manage' && requested === 'medication.read') return true;
+  if (granted === 'medication.administer' && requested === 'medication.administration.read') return true;
+  if (granted === 'medication.administration.correct' && requested === 'medication.administration.read') return true;
   if (granted === 'employee.manage') return requested.startsWith('employee.');
   if (granted === 'organization.manage') {
     return (

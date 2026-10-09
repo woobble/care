@@ -23,6 +23,7 @@ import type {
   SkillDefinitionSnapshot,
   TeamMembershipSnapshot,
 } from '../../domain/employee';
+import { employeeVisibilityPredicate } from './employee-visibility';
 
 export interface EmployeeSearch {
   tenantId: string;
@@ -1205,68 +1206,15 @@ export class EmployeeRepository {
   }
 
   private searchFilters(transaction: DatabaseTransaction, input: EmployeeSearch) {
-    const filters = [eq(employeeRecords.tenantId, input.tenantId)];
-    const visibleScopes = input.principal.grants.filter(
-      (grant) => grant.permission === 'employee.read' || grant.permission === 'employee.manage',
-    );
-    const scoped: ReturnType<typeof eq>[] = [];
-    let tenantWide = false;
-    for (const grant of visibleScopes) {
-      if (grant.scopeType === 'tenant' && grant.scopeId === input.tenantId) {
-        tenantWide = true;
-      } else if (grant.scopeType === 'organization') {
-        scoped.push(eq(employeeRecords.organizationId, grant.scopeId));
-      } else if (grant.scopeType === 'facility') {
-        scoped.push(
-          exists(
-            transaction
-              .select({ id: employeeFacilityAssignments.id })
-              .from(employeeFacilityAssignments)
-              .innerJoin(
-                facilities,
-                and(
-                  eq(facilities.tenantId, employeeFacilityAssignments.tenantId),
-                  eq(facilities.id, employeeFacilityAssignments.facilityId),
-                ),
-              )
-              .where(
-                and(
-                  eq(employeeFacilityAssignments.tenantId, input.tenantId),
-                  eq(employeeFacilityAssignments.employeeId, employeeRecords.id),
-                  eq(employeeFacilityAssignments.facilityId, grant.scopeId),
-                  eq(employeeFacilityAssignments.status, 'active'),
-                  eq(facilities.status, 'active'),
-                ),
-              ),
-          ),
-        );
-      } else if (grant.scopeType === 'team') {
-        scoped.push(
-          exists(
-            transaction
-              .select({ id: employeeTeamMemberships.id })
-              .from(employeeTeamMemberships)
-              .innerJoin(
-                teams,
-                and(
-                  eq(teams.tenantId, employeeTeamMemberships.tenantId),
-                  eq(teams.id, employeeTeamMemberships.teamId),
-                ),
-              )
-              .where(
-                and(
-                  eq(employeeTeamMemberships.tenantId, input.tenantId),
-                  eq(employeeTeamMemberships.employeeId, employeeRecords.id),
-                  eq(employeeTeamMemberships.teamId, grant.scopeId),
-                  eq(employeeTeamMemberships.status, 'active'),
-                  eq(teams.status, 'active'),
-                ),
-              ),
-          ),
-        );
-      }
-    }
-    if (!tenantWide) filters.push(scoped.length ? or(...scoped)! : sql`false`);
+    const visibleScopes = input.principal.grants
+      .filter(
+        (grant) => grant.permission === 'employee.read' || grant.permission === 'employee.manage',
+      )
+      .map(({ scopeType, scopeId }) => ({ scopeType, scopeId }));
+    const filters = [
+      eq(employeeRecords.tenantId, input.tenantId),
+      employeeVisibilityPredicate(transaction, input.tenantId, visibleScopes),
+    ];
     if (input.status) filters.push(eq(employeeRecords.status, input.status));
     if (input.organizationId) {
       filters.push(eq(employeeRecords.organizationId, input.organizationId));

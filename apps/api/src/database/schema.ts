@@ -13,6 +13,8 @@ import { clinicalDocumentationSchema } from '@care/clinical-documentation';
 import { carePlanningSchema } from '@care/care-planning';
 import { serviceEvidenceSchema } from '@care/service-evidence';
 import { competencyPoliciesSchema } from '@care/competency-policies';
+import { workforceComplianceSchema } from '@care/workforce-compliance';
+import { medicationSchema } from '@care/medication';
 
 export const databaseSchema = {
   ...identitySchema,
@@ -28,6 +30,8 @@ export const databaseSchema = {
   ...carePlanningSchema,
   ...serviceEvidenceSchema,
   ...competencyPoliciesSchema,
+  ...workforceComplianceSchema,
+  ...medicationSchema,
   ...auditSchema,
   ...platformSchema,
 };

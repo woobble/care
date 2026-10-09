@@ -6,8 +6,12 @@ export function formatDate(
   timeZone = 'UTC',
 ): string | null {
   if (!value) return null;
+  const dateOnly = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
   const date = asDate(value);
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone }).format(date);
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: 'medium',
+    timeZone: dateOnly ? 'UTC' : timeZone,
+  }).format(date);
 }
 
 export function formatDateTime(

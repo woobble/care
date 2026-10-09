@@ -39,7 +39,7 @@ export const professionalCompetencyPolicies = authorization.table(
     ),
     check(
       'professional_competency_policies_operation_check',
-      sql`${table.operationKey} IN ('care_plan.activate', 'care_plan.evaluate')`,
+      sql`${table.operationKey} IN ('care_plan.activate', 'care_plan.evaluate', 'medication.administer', 'medication.administration.correct')`,
     ),
     check(
       'professional_competency_policies_latest_version_check',
@@ -92,7 +92,7 @@ export const professionalCompetencyPolicyVersions = authorization.table(
     check('professional_competency_policy_versions_version_check', sql`${table.version} > 0`),
     check(
       'professional_competency_policy_versions_operation_check',
-      sql`${table.operationKey} IN ('care_plan.activate', 'care_plan.evaluate')`,
+      sql`${table.operationKey} IN ('care_plan.activate', 'care_plan.evaluate', 'medication.administer', 'medication.administration.correct')`,
     ),
     check(
       'professional_competency_policy_versions_requirement_mode_check',

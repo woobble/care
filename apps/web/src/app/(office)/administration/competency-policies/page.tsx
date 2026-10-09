@@ -15,6 +15,7 @@ type SearchParams = Promise<{ error?: string; updated?: string }>;
 type PolicyAdmin = components['schemas']['CompetencyPolicyAdminDto'];
 type Operation = PolicyAdmin['operations'][number];
 type PolicyVersion = Operation['versions'][number];
+type CompliancePolicy = components['schemas']['WorkforceCompliancePolicyDetailDto'];
 
 const policyStatusKeys = {
   draft: 'status.draft',
@@ -32,12 +33,30 @@ export default async function CompetencyPoliciesPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
-  const t = await getTranslations('CompetencyPolicies');
+  const [t, workforceT] = await Promise.all([
+    getTranslations('CompetencyPolicies'),
+    getTranslations('WorkforceCompliance'),
+  ]);
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
   const result = await get('/api/v1/competency-policies', { params: { header } });
   const policies = result.data;
+  const complianceResults = policies
+    ? await Promise.all(
+        policies.operations.map((operation) =>
+          get('/api/v1/workforce-compliance/policies/{operationKey}', {
+            params: { path: { operationKey: operation.operationKey }, header },
+          }),
+        ),
+      )
+    : [];
+  const complianceByOperation = new Map(
+    (policies?.operations ?? []).map((operation, index) => [
+      operation.operationKey,
+      complianceResults[index]?.data,
+    ]),
+  );
   return (
     <div className="grid gap-8">
       <header className="grid gap-1">
@@ -60,7 +79,9 @@ export default async function CompetencyPoliciesPage({
               key={operation.operationKey}
               operation={operation}
               qualifications={policies.qualificationDefinitions}
+              compliance={complianceByOperation.get(operation.operationKey)}
               t={t}
+              workforceT={workforceT}
             />
           ))}
         </div>
@@ -72,15 +93,23 @@ export default async function CompetencyPoliciesPage({
 async function PolicyOperationCard({
   operation,
   qualifications,
+  compliance,
   t,
+  workforceT,
 }: Readonly<{
   operation: Operation;
   qualifications: PolicyAdmin['qualificationDefinitions'];
+  compliance: CompliancePolicy | undefined;
   t: Awaited<ReturnType<typeof getTranslations<'CompetencyPolicies'>>>;
+  workforceT: Awaited<ReturnType<typeof getTranslations<'WorkforceCompliance'>>>;
 }>) {
   const activeVersion = operation.versions.find((version) => version.status === 'active');
-  const operationTitle =
-    operation.operationKey === 'care_plan.activate' ? t('activateTitle') : t('evaluateTitle');
+  const operationTitle = {
+    'care_plan.activate': t('activateTitle'),
+    'care_plan.evaluate': t('evaluateTitle'),
+    'medication.administer': t('medicationAdministerTitle'),
+    'medication.administration.correct': t('medicationCorrectionTitle'),
+  }[operation.operationKey];
   return (
     <section className="grid gap-4 rounded-lg border bg-white p-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -99,6 +128,59 @@ async function PolicyOperationCard({
           </span>
         </div>
       </header>
+      {compliance ? (
+        <section className="grid gap-3 border-t pt-4">
+          <div>
+            <h3 className="font-semibold">{workforceT('policyImpactTitle')}</h3>
+            <p className="text-sm text-slate-600">{workforceT('policyImpactDescription')}</p>
+            <p className="text-sm text-slate-600">{workforceT('responsibilityNotice')}</p>
+          </div>
+          <div className="grid gap-2 text-center text-sm sm:grid-cols-3">
+            <PolicyReadinessCount
+              status="ready"
+              label={workforceT('statusReady')}
+              count={compliance.readiness.ready}
+            />
+            <PolicyReadinessCount
+              status="at_risk"
+              label={workforceT('statusAtRisk')}
+              count={compliance.readiness.atRisk}
+            />
+            <PolicyReadinessCount
+              status="not_ready"
+              label={workforceT('statusNotReady')}
+              count={compliance.readiness.notReady}
+            />
+          </div>
+          {compliance.policy.status === 'active' && compliance.policy.requirements.length ? (
+            <div className="grid gap-2 border-t pt-3">
+              <h4 className="font-medium">{workforceT('requirementImpactTitle')}</h4>
+              <ul className="grid gap-2 text-sm">
+                {compliance.policy.requirements.map((requirement) => (
+                  <li
+                    key={requirement.qualificationId}
+                    className="grid gap-1 rounded-md bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                  >
+                    <span>
+                      {requirement.name ?? requirement.qualificationId}
+                      {requirement.code ? ` · ${requirement.code}` : ''}
+                    </span>
+                    <span className="text-slate-600">
+                      {workforceT('requirementMissingEmployees', {
+                        count: requirement.missingEmployeeCount,
+                      })}
+                      {' · '}
+                      {workforceT('requirementExpiringEmployees', {
+                        count: requirement.expiringEmployeeCount,
+                      })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
       <form action={createCompetencyPolicyDraftAction} className="grid gap-4 border-t pt-4">
         <input type="hidden" name="operationKey" value={operation.operationKey} />
         <input type="hidden" name="expectedVersion" value={operation.latestVersion} />
@@ -257,5 +339,24 @@ async function PolicyVersionCard({
         </form>
       ) : null}
     </article>
+  );
+}
+
+function PolicyReadinessCount({
+  status,
+  label,
+  count,
+}: Readonly<{ status: 'ready' | 'at_risk' | 'not_ready'; label: string; count: number }>) {
+  const color =
+    status === 'ready'
+      ? 'text-green-900'
+      : status === 'at_risk'
+        ? 'text-amber-950'
+        : 'text-red-900';
+  return (
+    <div className={`grid gap-1 rounded-md border px-2 py-2 ${color}`}>
+      <span>{label}</span>
+      <span className="text-lg font-semibold tabular-nums">{count}</span>
+    </div>
   );
 }

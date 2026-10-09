@@ -4000,7 +4000,9 @@
             "schema": {
               "enum": [
                 "care_plan.activate",
-                "care_plan.evaluate"
+                "care_plan.evaluate",
+                "medication.administer",
+                "medication.administration.correct"
               ],
               "type": "string"
             }
@@ -4069,7 +4071,9 @@
             "schema": {
               "enum": [
                 "care_plan.activate",
-                "care_plan.evaluate"
+                "care_plan.evaluate",
+                "medication.administer",
+                "medication.administration.correct"
               ],
               "type": "string"
             }
@@ -4137,7 +4141,9 @@
             "schema": {
               "enum": [
                 "care_plan.activate",
-                "care_plan.evaluate"
+                "care_plan.evaluate",
+                "medication.administer",
+                "medication.administration.correct"
               ],
               "type": "string"
             }
@@ -13651,6 +13657,1807 @@
         ]
       }
     },
+    "/api/v1/workforce-compliance/summary": {
+      "get": {
+        "operationId": "getWorkforceComplianceSummary",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "horizonDays",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 365,
+              "type": "number"
+            }
+          },
+          {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceComplianceSummaryDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get scoped workforce qualification readiness and findings",
+        "tags": [
+          "workforce compliance"
+        ]
+      }
+    },
+    "/api/v1/workforce-compliance/qualifications": {
+      "get": {
+        "operationId": "listWorkforceComplianceQualifications",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "priority",
+                "qualificationName",
+                "employeeName",
+                "validUntil",
+                "status"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "horizonDays",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 365,
+              "type": "number"
+            }
+          },
+          {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "expiresWithinDays",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 365,
+              "type": "number"
+            }
+          },
+          {
+            "name": "expiresBefore",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "teamId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "employeeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "qualificationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "assignmentStatus",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "revoked"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "valid",
+                "expiring_soon",
+                "expired",
+                "not_yet_valid",
+                "revoked"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceComplianceQualificationPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List scoped employee qualification validity facts",
+        "tags": [
+          "workforce compliance"
+        ]
+      }
+    },
+    "/api/v1/workforce-compliance/qualifications/{qualificationDefinitionId}/impact": {
+      "get": {
+        "operationId": "getWorkforceQualificationImpact",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "qualificationDefinitionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "operationKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "care_plan.activate",
+                "care_plan.evaluate",
+                "medication.administer",
+                "medication.administration.correct"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "horizonDays",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 365,
+              "type": "number"
+            }
+          },
+          {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceComplianceQualificationImpactPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Preview how a qualification affects scoped employee readiness",
+        "tags": [
+          "workforce compliance"
+        ]
+      }
+    },
+    "/api/v1/workforce-compliance/employees": {
+      "get": {
+        "operationId": "listWorkforceComplianceEmployees",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "lastName",
+                "firstName"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "horizonDays",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 365,
+              "type": "number"
+            }
+          },
+          {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "teamId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "inactive",
+                "archived"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceComplianceEmployeePageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List scoped employees with workforce readiness",
+        "tags": [
+          "workforce compliance"
+        ]
+      }
+    },
+    "/api/v1/workforce-compliance/employees/{employeeId}": {
+      "get": {
+        "operationId": "getWorkforceComplianceEmployee",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "employeeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "horizonDays",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 365,
+              "type": "number"
+            }
+          },
+          {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceComplianceEmployeeDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get scoped employee readiness, findings, and qualification history",
+        "tags": [
+          "workforce compliance"
+        ]
+      }
+    },
+    "/api/v1/workforce-compliance/policies/{operationKey}": {
+      "get": {
+        "operationId": "getWorkforceCompliancePolicy",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "operationKey",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "care_plan.activate",
+                "care_plan.evaluate",
+                "medication.administer",
+                "medication.administration.correct"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "horizonDays",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 365,
+              "type": "number"
+            }
+          },
+          {
+            "name": "asOf",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceCompliancePolicyDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get an operation policy and scoped readiness impact",
+        "tags": [
+          "workforce compliance"
+        ]
+      }
+    },
+    "/api/v1/workforce-compliance/settings": {
+      "get": {
+        "operationId": "getWorkforceComplianceSettings",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceComplianceSettingsReadDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get workforce compliance monitoring settings",
+        "tags": [
+          "workforce compliance"
+        ]
+      },
+      "put": {
+        "operationId": "updateWorkforceComplianceSettings",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkforceComplianceSettingsUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceComplianceSettingsDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update workforce compliance monitoring settings",
+        "tags": [
+          "workforce compliance"
+        ]
+      }
+    },
+    "/api/v1/medications": {
+      "get": {
+        "operationId": "listMedicationDefinitions",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "description": "Apply client resource scope for catalog use while managing this client",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MedicationDefinitionDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List tenant medication definitions",
+        "tags": [
+          "medication"
+        ]
+      },
+      "post": {
+        "operationId": "createMedicationDefinition",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationDefinitionRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationDefinitionDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a local medication catalog definition",
+        "tags": [
+          "medication"
+        ]
+      }
+    },
+    "/api/v1/medications/{id}": {
+      "get": {
+        "operationId": "getMedicationDefinition",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationDefinitionDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read a tenant medication definition",
+        "tags": [
+          "medication"
+        ]
+      },
+      "patch": {
+        "operationId": "updateMedicationDefinition",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationDefinitionPatchRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationDefinitionDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update or archive a local medication definition",
+        "tags": [
+          "medication"
+        ]
+      }
+    },
+    "/api/v1/clients/{clientId}/medication-orders": {
+      "get": {
+        "operationId": "listClientMedicationOrders",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MedicationOrderListDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List medication orders for a client",
+        "tags": [
+          "medication"
+        ]
+      },
+      "post": {
+        "operationId": "createClientMedicationOrder",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationOrderRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationOrderListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a draft medication order from documented source information",
+        "tags": [
+          "medication"
+        ]
+      }
+    },
+    "/api/v1/medication-orders/{orderId}": {
+      "get": {
+        "operationId": "getMedicationOrderHistory",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationOrderHistoryDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read an order and its immutable revisions",
+        "tags": [
+          "medication"
+        ]
+      },
+      "patch": {
+        "operationId": "reviseMedicationOrder",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationOrderRevisionRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationOrderListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new medication order revision",
+        "tags": [
+          "medication"
+        ]
+      }
+    },
+    "/api/v1/medication-orders/{orderId}/activate": {
+      "post": {
+        "operationId": "activateMedicationOrder",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationOrderListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Explicitly activate a sourced draft medication order",
+        "tags": [
+          "medication"
+        ]
+      }
+    },
+    "/api/v1/medication-orders/{orderId}/pause": {
+      "post": {
+        "operationId": "pauseMedicationOrder",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Pause an active medication order",
+        "tags": [
+          "medication"
+        ]
+      }
+    },
+    "/api/v1/medication-orders/{orderId}/resume": {
+      "post": {
+        "operationId": "resumeMedicationOrder",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Resume a paused medication order",
+        "tags": [
+          "medication"
+        ]
+      }
+    },
+    "/api/v1/medication-orders/{orderId}/discontinue": {
+      "post": {
+        "operationId": "discontinueMedicationOrder",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Discontinue a medication order",
+        "tags": [
+          "medication"
+        ]
+      }
+    },
+    "/api/v1/clients/{clientId}/medication-administrations": {
+      "get": {
+        "operationId": "getClientMedicationAdministrationHistory",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationAdministrationResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read a bounded client medication record",
+        "tags": [
+          "medication"
+        ]
+      }
+    },
+    "/api/v1/visits/{visitId}/medication-administrations": {
+      "get": {
+        "operationId": "getVisitMedicationAdministrations",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitMedicationAdministrationDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read medication due during an assigned visit",
+        "tags": [
+          "medication"
+        ]
+      }
+    },
+    "/api/v1/medication-administrations/{occurrenceId}/record": {
+      "post": {
+        "operationId": "recordMedicationAdministration",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "occurrenceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationAdministrationRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Record an outcome for a pending medication occurrence",
+        "tags": [
+          "medication"
+        ]
+      }
+    },
+    "/api/v1/medication-orders/{orderId}/prn-administrations": {
+      "post": {
+        "operationId": "recordPrnMedicationAdministration",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationAdministrationRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Record an explicitly indicated PRN administration during an assigned visit",
+        "tags": [
+          "medication"
+        ]
+      }
+    },
+    "/api/v1/medication-administrations/{recordId}/corrections": {
+      "post": {
+        "operationId": "correctMedicationAdministration",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recordId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationCorrectionRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Append an attributable correction to finalized administration history",
+        "tags": [
+          "medication"
+        ]
+      }
+    },
     "/api/v1/me": {
       "get": {
         "operationId": "MeController_me",
@@ -15957,7 +17764,9 @@
             "type": "string",
             "enum": [
               "care_plan.activate",
-              "care_plan.evaluate"
+              "care_plan.evaluate",
+              "medication.administer",
+              "medication.administration.correct"
             ]
           },
           "policyId": {
@@ -24265,6 +26074,2312 @@
           "total"
         ]
       },
+      "WorkforceCompliancePolicyRequirementDto": {
+        "type": "object",
+        "properties": {
+          "qualificationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive",
+              "missing"
+            ]
+          },
+          "missingEmployeeCount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "expiringEmployeeCount": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "qualificationId",
+          "name",
+          "code",
+          "status",
+          "missingEmployeeCount",
+          "expiringEmployeeCount"
+        ]
+      },
+      "WorkforceCompliancePolicySummaryDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "missing",
+              "inactive",
+              "invalid",
+              "active"
+            ]
+          },
+          "policyId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "policyVersion": {
+            "type": "number",
+            "minimum": 1,
+            "nullable": true
+          },
+          "requirementMode": {
+            "type": "string",
+            "enum": [
+              "ANY",
+              "ALL"
+            ],
+            "nullable": true
+          },
+          "requirementCount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceCompliancePolicyRequirementDto"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "policyId",
+          "policyVersion",
+          "requirementMode",
+          "requirementCount",
+          "requirements"
+        ]
+      },
+      "WorkforceComplianceReadinessCountsDto": {
+        "type": "object",
+        "properties": {
+          "ready": {
+            "type": "number",
+            "minimum": 0
+          },
+          "atRisk": {
+            "type": "number",
+            "minimum": 0
+          },
+          "notReady": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "ready",
+          "atRisk",
+          "notReady"
+        ]
+      },
+      "WorkforceComplianceOperationSummaryDto": {
+        "type": "object",
+        "properties": {
+          "operationKey": {
+            "type": "string",
+            "enum": [
+              "care_plan.activate",
+              "care_plan.evaluate",
+              "medication.administer",
+              "medication.administration.correct"
+            ]
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "horizonDays": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "policy": {
+            "$ref": "#/components/schemas/WorkforceCompliancePolicySummaryDto"
+          },
+          "readiness": {
+            "$ref": "#/components/schemas/WorkforceComplianceReadinessCountsDto"
+          },
+          "findingCounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "required": [
+          "operationKey",
+          "asOf",
+          "horizonDays",
+          "policy",
+          "readiness",
+          "findingCounts"
+        ]
+      },
+      "WorkforceComplianceSummaryDto": {
+        "type": "object",
+        "properties": {
+          "asOf": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "horizonDays": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "employeeCount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "employeesWithMissingRequirements": {
+            "type": "number",
+            "minimum": 0
+          },
+          "expiredQualifications": {
+            "type": "number",
+            "minimum": 0
+          },
+          "expiringQualifications": {
+            "type": "number",
+            "minimum": 0
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceComplianceOperationSummaryDto"
+            }
+          },
+          "historyLimitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "asOf",
+          "horizonDays",
+          "employeeCount",
+          "employeesWithMissingRequirements",
+          "expiredQualifications",
+          "expiringQualifications",
+          "operations",
+          "historyLimitations"
+        ]
+      },
+      "WorkforceComplianceQualificationDto": {
+        "type": "object",
+        "properties": {
+          "assignmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "employeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "employeeFirstName": {
+            "type": "string"
+          },
+          "employeeLastName": {
+            "type": "string"
+          },
+          "employeeStatus": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive",
+              "archived"
+            ]
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "organizationName": {
+            "type": "string",
+            "nullable": true
+          },
+          "qualificationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "qualificationName": {
+            "type": "string"
+          },
+          "qualificationCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "assignmentStatus": {
+            "type": "string",
+            "enum": [
+              "active",
+              "revoked"
+            ]
+          },
+          "complianceStatus": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "expiring_soon",
+              "expired",
+              "not_yet_valid",
+              "revoked"
+            ]
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "assignmentId",
+          "employeeId",
+          "employeeFirstName",
+          "employeeLastName",
+          "employeeStatus",
+          "organizationId",
+          "organizationName",
+          "qualificationId",
+          "qualificationName",
+          "qualificationCode",
+          "assignmentStatus",
+          "complianceStatus",
+          "validFrom",
+          "validUntil",
+          "createdAt",
+          "revokedAt",
+          "asOf"
+        ]
+      },
+      "WorkforceComplianceQualificationPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceComplianceQualificationDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "WorkforceComplianceAffectedOperationDto": {
+        "type": "object",
+        "properties": {
+          "operationKey": {
+            "type": "string",
+            "enum": [
+              "care_plan.activate",
+              "care_plan.evaluate",
+              "medication.administer",
+              "medication.administration.correct"
+            ]
+          },
+          "readiness": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "at_risk",
+              "not_ready"
+            ],
+            "nullable": true
+          },
+          "projectedEligibilityEnd": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "findingCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "operationKey",
+          "readiness",
+          "projectedEligibilityEnd",
+          "findingCodes"
+        ]
+      },
+      "WorkforceComplianceQualificationImpactEmployeeDto": {
+        "type": "object",
+        "properties": {
+          "employeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "organizationName": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive",
+              "archived"
+            ]
+          },
+          "readiness": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "at_risk",
+              "not_ready"
+            ],
+            "nullable": true
+          },
+          "affectedOperations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceComplianceAffectedOperationDto"
+            }
+          }
+        },
+        "required": [
+          "employeeId",
+          "firstName",
+          "lastName",
+          "organizationId",
+          "organizationName",
+          "status",
+          "readiness",
+          "affectedOperations"
+        ]
+      },
+      "WorkforceComplianceQualificationImpactPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceComplianceQualificationImpactEmployeeDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "WorkforceComplianceOperationReadinessDto": {
+        "type": "object",
+        "properties": {
+          "operationKey": {
+            "type": "string",
+            "enum": [
+              "care_plan.activate",
+              "care_plan.evaluate",
+              "medication.administer",
+              "medication.administration.correct"
+            ]
+          },
+          "readiness": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "at_risk",
+              "not_ready"
+            ],
+            "nullable": true
+          },
+          "projectedEligibilityEnd": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "findingCodes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "COMPETENCY_POLICY_MISSING",
+                "COMPETENCY_POLICY_INACTIVE",
+                "COMPETENCY_POLICY_INVALID",
+                "EMPLOYEE_INACTIVE",
+                "EMPLOYEE_LINK_MISSING",
+                "COMPETENCY_REQUIREMENT_UNMET",
+                "COMPETENCY_ELIGIBILITY_EXPIRING"
+              ]
+            }
+          }
+        },
+        "required": [
+          "operationKey",
+          "readiness",
+          "projectedEligibilityEnd",
+          "findingCodes"
+        ]
+      },
+      "WorkforceComplianceEmployeeDto": {
+        "type": "object",
+        "properties": {
+          "employeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "organizationName": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive",
+              "archived"
+            ]
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date"
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceComplianceOperationReadinessDto"
+            }
+          },
+          "findingCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "employeeId",
+          "firstName",
+          "lastName",
+          "organizationId",
+          "organizationName",
+          "status",
+          "asOf",
+          "operations",
+          "findingCodes"
+        ]
+      },
+      "WorkforceComplianceEmployeePageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceComplianceEmployeeDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "WorkforceComplianceFindingDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "COMPETENCY_POLICY_MISSING",
+              "COMPETENCY_POLICY_INACTIVE",
+              "COMPETENCY_POLICY_INVALID",
+              "EMPLOYEE_INACTIVE",
+              "EMPLOYEE_LINK_MISSING",
+              "COMPETENCY_REQUIREMENT_UNMET",
+              "COMPETENCY_ELIGIBILITY_EXPIRING"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "warning",
+              "critical"
+            ]
+          },
+          "blocking": {
+            "type": "boolean"
+          },
+          "effectiveDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "operationKey": {
+            "type": "string",
+            "enum": [
+              "care_plan.activate",
+              "care_plan.evaluate",
+              "medication.administer",
+              "medication.administration.correct"
+            ]
+          },
+          "policyId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "policyVersion": {
+            "type": "number",
+            "minimum": 1,
+            "nullable": true
+          },
+          "qualificationIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "assignmentIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "blocking",
+          "effectiveDate",
+          "operationKey",
+          "policyId",
+          "policyVersion",
+          "qualificationIds",
+          "assignmentIds"
+        ]
+      },
+      "WorkforceComplianceOperationDetailDto": {
+        "type": "object",
+        "properties": {
+          "operationKey": {
+            "type": "string",
+            "enum": [
+              "care_plan.activate",
+              "care_plan.evaluate",
+              "medication.administer",
+              "medication.administration.correct"
+            ]
+          },
+          "readiness": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "at_risk",
+              "not_ready"
+            ],
+            "nullable": true
+          },
+          "projectedEligibilityEnd": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "findingCodes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "COMPETENCY_POLICY_MISSING",
+                "COMPETENCY_POLICY_INACTIVE",
+                "COMPETENCY_POLICY_INVALID",
+                "EMPLOYEE_INACTIVE",
+                "EMPLOYEE_LINK_MISSING",
+                "COMPETENCY_REQUIREMENT_UNMET",
+                "COMPETENCY_ELIGIBILITY_EXPIRING"
+              ]
+            }
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceComplianceFindingDto"
+            }
+          }
+        },
+        "required": [
+          "operationKey",
+          "readiness",
+          "projectedEligibilityEnd",
+          "findingCodes",
+          "findings"
+        ]
+      },
+      "WorkforceComplianceEmployeeDetailDto": {
+        "type": "object",
+        "properties": {
+          "employeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "organizationName": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive",
+              "archived"
+            ]
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date"
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceComplianceOperationDetailDto"
+            }
+          },
+          "findingCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "qualifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceComplianceQualificationDto"
+            }
+          },
+          "historyLimitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "employeeId",
+          "firstName",
+          "lastName",
+          "organizationId",
+          "organizationName",
+          "status",
+          "asOf",
+          "operations",
+          "findingCodes",
+          "qualifications",
+          "historyLimitations"
+        ]
+      },
+      "WorkforceCompliancePolicyDetailDto": {
+        "type": "object",
+        "properties": {
+          "operationKey": {
+            "type": "string",
+            "enum": [
+              "care_plan.activate",
+              "care_plan.evaluate",
+              "medication.administer",
+              "medication.administration.correct"
+            ]
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "horizonDays": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "policy": {
+            "$ref": "#/components/schemas/WorkforceCompliancePolicySummaryDto"
+          },
+          "readiness": {
+            "$ref": "#/components/schemas/WorkforceComplianceReadinessCountsDto"
+          },
+          "findingCounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "required": [
+          "operationKey",
+          "asOf",
+          "horizonDays",
+          "policy",
+          "readiness",
+          "findingCounts"
+        ]
+      },
+      "WorkforceComplianceSettingsReadDto": {
+        "type": "object",
+        "properties": {
+          "criticalDays": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "warningDays": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "reportingTimezone": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number",
+            "minimum": 0
+          },
+          "canManage": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "criticalDays",
+          "warningDays",
+          "reportingTimezone",
+          "version",
+          "canManage"
+        ]
+      },
+      "WorkforceComplianceSettingsUpdateDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 0
+          },
+          "criticalDays": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "warningDays": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "reportingTimezone": {
+            "type": "string",
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ]
+      },
+      "WorkforceComplianceSettingsDto": {
+        "type": "object",
+        "properties": {
+          "criticalDays": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "warningDays": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "reportingTimezone": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "criticalDays",
+          "warningDays",
+          "reportingTimezone",
+          "version"
+        ]
+      },
+      "MedicationDefinitionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "activeIngredient": {
+            "type": "string",
+            "nullable": true
+          },
+          "strength": {
+            "type": "string",
+            "nullable": true
+          },
+          "dosageForm": {
+            "type": "string"
+          },
+          "route": {
+            "type": "string"
+          },
+          "manufacturer": {
+            "type": "string",
+            "nullable": true
+          },
+          "externalCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "name",
+          "dosageForm",
+          "route",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "MedicationDefinitionRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "activeIngredient": {
+            "type": "string",
+            "nullable": true
+          },
+          "strength": {
+            "type": "string",
+            "nullable": true
+          },
+          "dosageForm": {
+            "type": "string",
+            "enum": [
+              "tablet",
+              "capsule",
+              "drops",
+              "solution",
+              "injection",
+              "cream",
+              "patch",
+              "inhalation",
+              "other"
+            ]
+          },
+          "route": {
+            "type": "string",
+            "enum": [
+              "oral",
+              "topical",
+              "subcutaneous",
+              "intramuscular",
+              "inhalation",
+              "transdermal",
+              "other"
+            ]
+          },
+          "manufacturer": {
+            "type": "string",
+            "nullable": true
+          },
+          "externalCode": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "name",
+          "dosageForm",
+          "route"
+        ]
+      },
+      "MedicationDefinitionPatchRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "activeIngredient": {
+            "type": "string",
+            "nullable": true
+          },
+          "strength": {
+            "type": "string",
+            "nullable": true
+          },
+          "dosageForm": {
+            "type": "string",
+            "enum": [
+              "tablet",
+              "capsule",
+              "drops",
+              "solution",
+              "injection",
+              "cream",
+              "patch",
+              "inhalation",
+              "other"
+            ]
+          },
+          "route": {
+            "type": "string",
+            "enum": [
+              "oral",
+              "topical",
+              "subcutaneous",
+              "intramuscular",
+              "inhalation",
+              "transdermal",
+              "other"
+            ]
+          },
+          "manufacturer": {
+            "type": "string",
+            "nullable": true
+          },
+          "externalCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          }
+        }
+      },
+      "MedicationOrderSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "active",
+              "paused",
+              "discontinued"
+            ]
+          },
+          "version": {
+            "type": "number"
+          },
+          "createdByUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "clientId",
+          "status",
+          "version",
+          "createdByUserId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "MedicationSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "activeIngredient": {
+            "type": "string",
+            "nullable": true
+          },
+          "strength": {
+            "type": "string",
+            "nullable": true
+          },
+          "dosageForm": {
+            "type": "string"
+          },
+          "manufacturer": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "name",
+          "dosageForm"
+        ]
+      },
+      "MedicationOrderRevisionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "active",
+              "paused",
+              "discontinued"
+            ]
+          },
+          "medicationDefinitionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "medicationSnapshot": {
+            "$ref": "#/components/schemas/MedicationSnapshotDto"
+          },
+          "doseAmount": {
+            "type": "string"
+          },
+          "doseUnit": {
+            "type": "string"
+          },
+          "route": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "indication": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescriberName": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceType": {
+            "type": "string"
+          },
+          "sourceReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescribedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "nullable": true,
+            "format": "date"
+          },
+          "schedule": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "times",
+                  "timezone"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "fixed_times"
+                    ]
+                  },
+                  "times": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "timezone": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "anchorAt",
+                  "intervalMinutes",
+                  "timezone"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "interval"
+                    ]
+                  },
+                  "anchorAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "intervalMinutes": {
+                    "type": "integer"
+                  },
+                  "timezone": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "indication",
+                  "timezone"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "as_needed"
+                    ]
+                  },
+                  "indication": {
+                    "type": "string"
+                  },
+                  "timezone": {
+                    "type": "string"
+                  },
+                  "maximumDoseAmount": {
+                    "type": "string"
+                  },
+                  "maximumAdministrations": {
+                    "type": "integer"
+                  },
+                  "frequencyWindowMinutes": {
+                    "type": "integer"
+                  },
+                  "minimumIntervalMinutes": {
+                    "type": "integer"
+                  }
+                }
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "version",
+          "status",
+          "medicationDefinitionId",
+          "medicationSnapshot",
+          "doseAmount",
+          "doseUnit",
+          "route",
+          "sourceType",
+          "validFrom",
+          "schedule",
+          "createdAt"
+        ]
+      },
+      "MedicationOrderListDto": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "$ref": "#/components/schemas/MedicationOrderSummaryDto"
+          },
+          "currentRevision": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MedicationOrderRevisionDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "order",
+          "currentRevision"
+        ]
+      },
+      "MedicationOrderRequestDto": {
+        "type": "object",
+        "properties": {
+          "medicationDefinitionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "doseAmount": {
+            "type": "string",
+            "example": "1"
+          },
+          "doseUnit": {
+            "type": "string",
+            "enum": [
+              "mg",
+              "g",
+              "mL",
+              "tablet",
+              "capsule",
+              "drop",
+              "puff",
+              "patch"
+            ]
+          },
+          "route": {
+            "type": "string",
+            "enum": [
+              "oral",
+              "topical",
+              "subcutaneous",
+              "intramuscular",
+              "inhalation",
+              "transdermal",
+              "other"
+            ]
+          },
+          "instructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "indication": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescriberName": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceType": {
+            "type": "string",
+            "enum": [
+              "prescriber",
+              "care_authorizing_source",
+              "staff_transcription"
+            ]
+          },
+          "sourceReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescribedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "nullable": true,
+            "format": "date"
+          },
+          "schedule": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "times"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "fixed_times"
+                    ]
+                  },
+                  "times": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 24,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "anchorAt",
+                  "intervalMinutes"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "interval"
+                    ]
+                  },
+                  "anchorAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "intervalMinutes": {
+                    "type": "integer",
+                    "minimum": 30,
+                    "maximum": 10080
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "indication"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "as_needed"
+                    ]
+                  },
+                  "indication": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "maximumDoseAmount": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9]\\d{0,8})(?:\\.\\d{1,3})?$"
+                  },
+                  "maximumAdministrations": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "frequencyWindowMinutes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "minimumIntervalMinutes": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "required": [
+          "medicationDefinitionId",
+          "doseAmount",
+          "doseUnit",
+          "route",
+          "sourceType",
+          "validFrom",
+          "schedule"
+        ]
+      },
+      "MedicationOrderHistoryDto": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "$ref": "#/components/schemas/MedicationOrderSummaryDto"
+          },
+          "revisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MedicationOrderRevisionDto"
+            }
+          }
+        },
+        "required": [
+          "order",
+          "revisions"
+        ]
+      },
+      "MedicationOrderRevisionRequestDto": {
+        "type": "object",
+        "properties": {
+          "medicationDefinitionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "doseAmount": {
+            "type": "string",
+            "example": "1"
+          },
+          "doseUnit": {
+            "type": "string",
+            "enum": [
+              "mg",
+              "g",
+              "mL",
+              "tablet",
+              "capsule",
+              "drop",
+              "puff",
+              "patch"
+            ]
+          },
+          "route": {
+            "type": "string",
+            "enum": [
+              "oral",
+              "topical",
+              "subcutaneous",
+              "intramuscular",
+              "inhalation",
+              "transdermal",
+              "other"
+            ]
+          },
+          "instructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "indication": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescriberName": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceType": {
+            "type": "string",
+            "enum": [
+              "prescriber",
+              "care_authorizing_source",
+              "staff_transcription"
+            ]
+          },
+          "sourceReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescribedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "nullable": true,
+            "format": "date"
+          },
+          "schedule": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "times"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "fixed_times"
+                    ]
+                  },
+                  "times": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 24,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "anchorAt",
+                  "intervalMinutes"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "interval"
+                    ]
+                  },
+                  "anchorAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "intervalMinutes": {
+                    "type": "integer",
+                    "minimum": 30,
+                    "maximum": 10080
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "indication"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "as_needed"
+                    ]
+                  },
+                  "indication": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "maximumDoseAmount": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9]\\d{0,8})(?:\\.\\d{1,3})?$"
+                  },
+                  "maximumAdministrations": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "frequencyWindowMinutes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "minimumIntervalMinutes": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            ]
+          },
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "medicationDefinitionId",
+          "doseAmount",
+          "doseUnit",
+          "route",
+          "sourceType",
+          "validFrom",
+          "schedule",
+          "expectedVersion"
+        ]
+      },
+      "MedicationDoseDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "mg",
+              "g",
+              "mL",
+              "tablet",
+              "capsule",
+              "drop",
+              "puff",
+              "patch"
+            ]
+          }
+        },
+        "required": [
+          "amount",
+          "unit"
+        ]
+      },
+      "MedicationDueOccurrenceDto": {
+        "type": "object",
+        "properties": {
+          "occurrenceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderVersion": {
+            "type": "number"
+          },
+          "scheduledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "localDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "localTime": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "due",
+              "overdue_not_documented"
+            ]
+          },
+          "medication": {
+            "$ref": "#/components/schemas/MedicationSnapshotDto"
+          },
+          "orderedDose": {
+            "$ref": "#/components/schemas/MedicationDoseDto"
+          },
+          "route": {
+            "type": "string",
+            "enum": [
+              "oral",
+              "topical",
+              "subcutaneous",
+              "intramuscular",
+              "inhalation",
+              "transdermal",
+              "other"
+            ]
+          },
+          "instructions": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "occurrenceId",
+          "orderId",
+          "orderVersion",
+          "scheduledAt",
+          "timezone",
+          "localDate",
+          "localTime",
+          "status",
+          "medication",
+          "orderedDose",
+          "route"
+        ]
+      },
+      "MedicationCorrectionSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "number"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "administered",
+              "not_administered",
+              "refused",
+              "withheld"
+            ]
+          },
+          "actualDoseAmount": {
+            "type": "string",
+            "nullable": true
+          },
+          "actualDoseUnit": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "mg",
+              "g",
+              "mL",
+              "tablet",
+              "capsule",
+              "drop",
+              "puff",
+              "patch"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "administrationReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "correctionReason": {
+            "type": "string"
+          },
+          "correctedByEmployeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "correctedByEmployeeName": {
+            "type": "string"
+          },
+          "correctedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "outcome",
+          "correctionReason",
+          "correctedByEmployeeId",
+          "correctedByEmployeeName",
+          "correctedAt"
+        ]
+      },
+      "MedicationAdministrationRecordDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderVersion": {
+            "type": "number"
+          },
+          "occurrenceId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "visitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "administered",
+              "not_administered",
+              "refused",
+              "withheld"
+            ]
+          },
+          "orderedDose": {
+            "$ref": "#/components/schemas/MedicationDoseDto"
+          },
+          "actualDose": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MedicationDoseDto"
+              }
+            ]
+          },
+          "route": {
+            "type": "string",
+            "enum": [
+              "oral",
+              "topical",
+              "subcutaneous",
+              "intramuscular",
+              "inhalation",
+              "transdermal",
+              "other"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "administrationReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "administeredByEmployeeName": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "capturedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "scheduledAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "scheduledTimezone": {
+            "type": "string",
+            "nullable": true
+          },
+          "medication": {
+            "$ref": "#/components/schemas/MedicationSnapshotDto"
+          },
+          "currentCorrection": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MedicationCorrectionSummaryDto"
+              }
+            ]
+          },
+          "corrections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MedicationCorrectionSummaryDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "orderVersion",
+          "visitId",
+          "outcome",
+          "orderedDose",
+          "route",
+          "administeredByEmployeeName",
+          "occurredAt",
+          "capturedAt",
+          "medication",
+          "corrections"
+        ]
+      },
+      "MedicationAdministrationResponseDto": {
+        "type": "object",
+        "properties": {
+          "due": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MedicationDueOccurrenceDto"
+            }
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MedicationAdministrationRecordDto"
+            }
+          }
+        },
+        "required": [
+          "due",
+          "history"
+        ]
+      },
+      "MedicationPrnOrderDto": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderVersion": {
+            "type": "number"
+          },
+          "medication": {
+            "$ref": "#/components/schemas/MedicationSnapshotDto"
+          },
+          "orderedDose": {
+            "$ref": "#/components/schemas/MedicationDoseDto"
+          },
+          "route": {
+            "type": "string",
+            "enum": [
+              "oral",
+              "topical",
+              "subcutaneous",
+              "intramuscular",
+              "inhalation",
+              "transdermal",
+              "other"
+            ]
+          },
+          "instructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "indication": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "orderId",
+          "orderVersion",
+          "medication",
+          "orderedDose",
+          "route",
+          "indication"
+        ]
+      },
+      "VisitMedicationAdministrationDto": {
+        "type": "object",
+        "properties": {
+          "visitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "employeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "due": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MedicationDueOccurrenceDto"
+            }
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MedicationAdministrationRecordDto"
+            }
+          },
+          "prn": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MedicationPrnOrderDto"
+            }
+          }
+        },
+        "required": [
+          "visitId",
+          "clientId",
+          "employeeId",
+          "due",
+          "history",
+          "prn"
+        ]
+      },
+      "MedicationAdministrationRequestDto": {
+        "type": "object",
+        "properties": {
+          "visitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "administered",
+              "not_administered",
+              "refused",
+              "withheld"
+            ]
+          },
+          "actualDoseAmount": {
+            "type": "string",
+            "nullable": true,
+            "example": "1"
+          },
+          "actualDoseUnit": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "mg",
+              "g",
+              "mL",
+              "tablet",
+              "capsule",
+              "drop",
+              "puff",
+              "patch"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "client_refused",
+              "client_unavailable",
+              "medication_unavailable",
+              "held_per_instruction",
+              "administration_not_possible",
+              "other"
+            ]
+          },
+          "administrationReason": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "visitId",
+          "outcome"
+        ]
+      },
+      "MedicationCorrectionRequestDto": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "administered",
+              "not_administered",
+              "refused",
+              "withheld"
+            ]
+          },
+          "actualDoseAmount": {
+            "type": "string",
+            "nullable": true,
+            "example": "1"
+          },
+          "actualDoseUnit": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "mg",
+              "g",
+              "mL",
+              "tablet",
+              "capsule",
+              "drop",
+              "puff",
+              "patch"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "client_refused",
+              "client_unavailable",
+              "medication_unavailable",
+              "held_per_instruction",
+              "administration_not_possible",
+              "other"
+            ]
+          },
+          "administrationReason": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
+          },
+          "correctionReason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "outcome",
+          "correctionReason"
+        ]
+      },
       "MeResponseDto": {
         "type": "object",
         "properties": {
@@ -24351,6 +28466,11 @@
               "clinical_documentation.update",
               "clinical_documentation.review",
               "clinical_documentation.amend",
+              "medication.read",
+              "medication.order.manage",
+              "medication.administration.read",
+              "medication.administer",
+              "medication.administration.correct",
               "care_plan.read",
               "care_plan.create",
               "care_plan.update",
@@ -24376,6 +28496,9 @@
               "employee.manage_skills",
               "employee.manage_employment",
               "employee.manage",
+              "workforce_compliance.read",
+              "workforce_compliance.read_details",
+              "workforce_compliance.manage_settings",
               "organization.read",
               "organization.create",
               "organization.update",

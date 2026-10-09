@@ -77,9 +77,10 @@ type DraftItemType =
   | 'measure';
 type DraftItemOperation = 'added' | 'updated' | 'removed';
 type CarePlanAction = Extract<Permission, `care_plan.${string}`>;
+type CarePlanCompetencyOperation = Extract<CompetencyOperation, 'care_plan.activate' | 'care_plan.evaluate'>;
 
 export interface CarePlanEligibilityView {
-  operation: CompetencyOperation;
+  operation: CarePlanCompetencyOperation;
   permissionAllowed: boolean;
   competency: CompetencyPolicyEvaluationResult | null;
 }
@@ -213,7 +214,7 @@ export class CarePlanningApplicationService {
   async previewAuthorization(
     principal: AuthorizationPrincipal,
     planId: string,
-    operation: CompetencyOperation,
+    operation: CarePlanCompetencyOperation,
   ): Promise<CarePlanEligibilityView> {
     this.denyCaregiver(principal);
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
@@ -1583,7 +1584,7 @@ function professionalResource(plan: CarePlan): ResourceContext & { type: 'care_p
 
 function authorizationEvent(
   authorization: CompetencyAuthorizationMetadata,
-  operationKey: CompetencyOperation,
+  operationKey: CarePlanCompetencyOperation,
 ) {
   return {
     operationKey,

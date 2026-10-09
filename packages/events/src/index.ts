@@ -41,6 +41,24 @@ export interface EventPayloadMap {
   'qualification.created': { qualificationId: string };
   'qualification.updated': { qualificationId: string; changedFields: string[] };
   'qualification.archived': { qualificationId: string };
+  'workforce_compliance.settings_updated': {
+    settingsVersion: number;
+    changedFields: string[];
+  };
+  'medication_order.created': { orderId: string; clientId: string; version: number };
+  'medication_order.activated': { orderId: string; clientId: string; version: number };
+  'medication_order.changed': { orderId: string; clientId: string; version: number };
+  'medication_order.paused': { orderId: string; clientId: string; version: number };
+  'medication_order.resumed': { orderId: string; clientId: string; version: number };
+  'medication_order.discontinued': { orderId: string; clientId: string; version: number };
+  'medication_administration.recorded': { recordId: string; clientId: string; orderId: string };
+  'medication_administration.corrected': {
+    recordId: string;
+    correctionId: string;
+    clientId: string;
+    orderId: string;
+    version: number;
+  };
   'skill.created': { skillId: string };
   'skill.updated': { skillId: string; changedFields: string[] };
   'skill.archived': { skillId: string };
@@ -456,6 +474,9 @@ export interface DomainEvent<T extends EventName = EventName> {
     | 'care_plan'
     | 'clinical_documentation'
     | 'competency_policy'
+    | 'workforce_compliance'
+    | 'medication_order'
+    | 'medication_administration'
     | 'service_evidence'
     | 'schedule_generation'
     | 'employee_availability'

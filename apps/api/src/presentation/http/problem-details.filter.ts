@@ -34,6 +34,16 @@ import {
   InvalidCompetencyPolicyConfigurationError,
 } from '@care/competency-policies';
 import {
+  InvalidWorkforceComplianceInputError,
+  InvalidWorkforceComplianceQueryError,
+  InvalidWorkforceComplianceSettingsError,
+  WorkforceComplianceAccessDeniedError,
+  WorkforceComplianceEmployeeNotFoundError,
+  WorkforceComplianceSettingsNotFoundError,
+  WorkforceComplianceSettingsVersionConflictError,
+} from '@care/workforce-compliance';
+import { MedicationError } from '@care/medication';
+import {
   ClientArchivedError,
   ClientAddressNotFoundError,
   ClientContactNotFoundError,
@@ -302,6 +312,28 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     status = 409;
     code = exception.code;
   } else if (exception instanceof InvalidCompetencyPolicyConfigurationError) {
+    status = 400;
+    code = exception.code;
+  } else if (exception instanceof WorkforceComplianceAccessDeniedError) {
+    status = 403;
+    code = exception.code;
+  } else if (exception instanceof MedicationError) {
+    status = exception.status;
+    code = exception.code;
+  } else if (
+    exception instanceof WorkforceComplianceEmployeeNotFoundError ||
+    exception instanceof WorkforceComplianceSettingsNotFoundError
+  ) {
+    status = 404;
+    code = exception.code;
+  } else if (exception instanceof WorkforceComplianceSettingsVersionConflictError) {
+    status = 409;
+    code = exception.code;
+  } else if (
+    exception instanceof InvalidWorkforceComplianceInputError ||
+    exception instanceof InvalidWorkforceComplianceQueryError ||
+    exception instanceof InvalidWorkforceComplianceSettingsError
+  ) {
     status = 400;
     code = exception.code;
   } else if (

@@ -22,7 +22,7 @@
     "@care/organizations": "workspace:*",
     "@care/permissions": "workspace:*",
     "@care/platform": "workspace:*",
-    "drizzle-orm": "^0.45.3",
+    "drizzle-orm": "^0.45.4",
     "uuid": "^14.0.2"
   }
 }

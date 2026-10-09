@@ -22,6 +22,14 @@ Successful activation and evaluation record the operation, policy ID and version
 
 Qualification revocation preserves the assignment row with its revocation timestamp. A later assignment creates a new active row, keeping the prior grant history available to authorized employee readers.
 
+## Relationship to Workforce Compliance
+
+Workforce Compliance uses the competency-policy module's pure `evaluateRequirements` matcher and `qualificationIsValidAt` date rule. It evaluates the complete current active policy for expiry impact and projected readiness, so `ANY` alternatives and `ALL` requirements keep the same meaning in both reporting and authorization. It does not call the transactional evaluator as a worklist decision or copy its caller, permission, resource-scope, and employee-link checks into an employee-wide classification.
+
+The projection is advisory and assumes the current active policy remains unchanged through its configured warning horizon. A missing or inactive policy is a separate blocking configuration finding, not `not_applicable` and not evidence that an employee is noncompliant. No employee-to-operation responsibility mapping exists. Workforce Compliance does not snapshot historical readiness; policy versions and revoked assignments remain reviewable, but a past projection cannot be reconstructed from current assignment facts and the active policy.
+
+Care Plan activation and evaluation continue to run the authoritative evaluator inside the mutation transaction. A compliance result never grants an action, replaces the current policy check, or removes its row locks. See [Workforce qualification compliance](workforce-compliance.md) and [ADR 0020](../adr/0020-advisory-workforce-readiness-projections.md).
+
 ## Boundaries
 
-This slice gates Care Plan activation and evaluation. It does not make licensing claims, infer qualifications from job titles, grant action permissions, or evaluate other workflows. Tenant policy administrators remain responsible for configuring accurate requirements and maintaining qualification assignments.
+This authorization slice gates Care Plan activation and evaluation. It does not make licensing claims, infer qualifications from job titles, grant action permissions, or evaluate other workflows. Workforce Compliance adds administrative monitoring only; tenant policy administrators remain responsible for configuring accurate requirements and maintaining qualification assignments.

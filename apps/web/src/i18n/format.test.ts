@@ -5,6 +5,8 @@ describe('locale formatting', () => {
   it('formats dates and numbers for English and German', () => {
     expect(formatDate('2026-10-07', 'en')).toBe('Oct 7, 2026');
     expect(formatDate('2026-10-07', 'de')).toBe('07.10.2026');
+    expect(formatDate('2026-10-07', 'en', 'America/Los_Angeles')).toBe('Oct 7, 2026');
+    expect(formatDate('2026-10-07', 'de', 'Pacific/Kiritimati')).toBe('07.10.2026');
     expect(formatNumber(1234.5, 'en')).toBe('1,234.5');
     expect(formatNumber(1234.5, 'de')).toBe('1.234,5');
   });

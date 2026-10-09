@@ -8,6 +8,7 @@ import { errorMessageKey } from '../../../../i18n/errors';
 import { formatNumber } from '../../../../i18n/format';
 import { CarePlanSection } from './care-plan-section';
 import { ClinicalSection } from './clinical-section';
+import { MedicationVisitSection } from './medication-section';
 import { getApiClient, getTenantHeader } from '../../../../lib/api';
 import { formatVisitDateTime, formatVisitTime } from '../../../../lib/care-date';
 import type { Locale } from '../../../../i18n/config';
@@ -47,7 +48,10 @@ export default async function CareVisitPage({
   }
 
   const { visit, execution, services } = data;
-  const [documentationResult, carePlanResult] = await Promise.all([
+  const [medicationResult, documentationResult, carePlanResult] = await Promise.all([
+    get('/api/v1/visits/{visitId}/medication-administrations', {
+      params: { path: { visitId: id }, header },
+    }),
     get('/api/v1/visits/{visitId}/documentation', {
       params: { path: { visitId: id }, header },
     }),
@@ -102,6 +106,14 @@ export default async function CareVisitPage({
         plan={carePlanResult.data ?? null}
         loadFailed={carePlanResult.error !== undefined}
         locale={locale}
+      />
+
+      <MedicationVisitSection
+        visitId={visit.id}
+        timezone={visit.timezone}
+        locale={locale}
+        data={medicationResult.data ?? null}
+        errorCode={medicationResult.error?.code}
       />
 
       {query.error ? (
@@ -949,6 +961,7 @@ function noticeKey(
   | 'VisitExecution.notices.completed'
   | 'CareDocumentation.clinical.notices.saved'
   | 'CareDocumentation.clinical.notices.deleted'
+  | 'Medication.recordedNotice'
   | 'VisitExecution.notices.unknown' {
   const keys = {
     started: 'VisitExecution.notices.started',
@@ -957,6 +970,7 @@ function noticeKey(
     completed: 'VisitExecution.notices.completed',
     'clinical-saved': 'CareDocumentation.clinical.notices.saved',
     'clinical-deleted': 'CareDocumentation.clinical.notices.deleted',
+    'medication-recorded': 'Medication.recordedNotice',
   } as const;
   return notice in keys ? keys[notice as keyof typeof keys] : 'VisitExecution.notices.unknown';
 }

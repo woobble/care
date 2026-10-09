@@ -17,6 +17,8 @@ test('Authentik users can be invited and administered from the office UI', async
   const database = new Client({ connectionString: required('MIGRATION_DATABASE_URL') });
   const runId = uuidv7();
   const serviceValidFrom = new Date().toISOString().slice(0, 10);
+  const medicationName = `Medication E2E ${runId}`;
+  const medicationSourceReference = `medication-e2e-${runId}`;
   const username = `care-e2e-${runId}`;
   const displayName = `Care E2E ${runId}`;
   const email = `${username}@example.test`;
@@ -52,6 +54,7 @@ test('Authentik users can be invited and administered from the office UI', async
   let carePlanAuthorEmployeeId: string | undefined;
   let carePlanQualificationId: string | undefined;
   let executionVisitId: string | undefined;
+  let medicationOrderId: string | undefined;
   let initialEvidencePackageId: string | undefined;
   let replacementEvidencePackageId: string | undefined;
   let representativeContactId: string | undefined;
@@ -349,6 +352,40 @@ test('Authentik users can be invited and administered from the office UI', async
       page,
       database,
       tenantId,
+      'medication.administer',
+      carePlanQualificationId,
+    );
+
+    await database.query(
+      `UPDATE "authorization".professional_competency_policy_versions
+       SET status = 'inactive', deactivated_at = now()
+       WHERE tenant_id = $1
+         AND operation_key = ANY($2::text[])
+         AND status = 'active'`,
+      [tenantId, ['care_plan.activate', 'care_plan.evaluate']],
+    );
+
+    const workforceDashboardUrl = `/administration/workforce-compliance?employeeQ=${encodeURIComponent(runId)}`;
+    await page.goto(workforceDashboardUrl);
+    for (const operation of ['Care-plan activation', 'Care-plan evaluation']) {
+      const operationCard = page
+        .getByRole('heading', { name: operation, exact: true })
+        .first()
+        .locator('xpath=ancestor::section[1]');
+      await expect(operationCard).toContainText(/No policy configured|Policy inactive/);
+    }
+    const unconfiguredEmployeeRow = page
+      .getByRole('row')
+      .filter({ hasText: `Plan Author ${runId}` });
+    await expect(unconfiguredEmployeeRow).toContainText('Not evaluated');
+    await expect(unconfiguredEmployeeRow).toContainText(
+      /No active competency policy is configured for this operation\.|The competency policy for this operation is inactive\./,
+    );
+
+    await ensureCompetencyPolicy(
+      page,
+      database,
+      tenantId,
       'care_plan.activate',
       carePlanQualificationId,
     );
@@ -442,6 +479,69 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(
       page.locator('#qualifications li').filter({ hasText: 'Pflegefachkraft (PFK)' }).last(),
     ).toBeVisible();
+    const employeeDetailReadiness = page
+      .getByRole('heading', { name: 'Workforce readiness', exact: true })
+      .locator('xpath=ancestor::section[1]');
+    await expect(employeeDetailReadiness.getByText('Ready', { exact: true })).toHaveCount(3);
+    await expect(
+      page.locator('#qualifications li').filter({ hasText: 'Pflegefachkraft (PFK)' }).last(),
+    ).toContainText('Valid');
+
+    await page.goto(workforceDashboardUrl);
+    const employeeReadinessSection = page
+      .getByRole('heading', { name: 'Employee readiness', exact: true })
+      .locator('xpath=ancestor::section[1]');
+    const configuredEmployeeRow = employeeReadinessSection
+      .getByRole('row')
+      .filter({ hasText: `Plan Author ${runId}` });
+    await expect(configuredEmployeeRow.getByText('Ready', { exact: true })).toHaveCount(3);
+    await expect(configuredEmployeeRow).toContainText('Care-plan activation');
+    await expect(configuredEmployeeRow).toContainText('Care-plan evaluation');
+
+    const expiringSoonDate = addCalendarDays(dateInBerlin(), 20);
+    await database.query(
+      `UPDATE employees.employee_qualifications
+       SET valid_until = $4, updated_at = now()
+       WHERE tenant_id = $1 AND employee_id = $2 AND qualification_id = $3 AND status = 'active'`,
+      [tenantId, carePlanAuthorEmployeeId, carePlanQualificationId, expiringSoonDate],
+    );
+    await page.goto(workforceDashboardUrl);
+    const atRiskEmployeeRow = page
+      .getByRole('heading', { name: 'Employee readiness', exact: true })
+      .locator('xpath=ancestor::section[1]')
+      .getByRole('row')
+      .filter({ hasText: `Plan Author ${runId}` });
+    await expect(atRiskEmployeeRow.getByText('At risk', { exact: true })).toHaveCount(3);
+
+    await page.goto(
+      `${workforceDashboardUrl}&qualificationEmployeeId=${carePlanAuthorEmployeeId}&qualificationId=${carePlanQualificationId}`,
+    );
+    const qualificationWorklist = page
+      .getByRole('heading', { name: 'Qualification expiry worklist', exact: true })
+      .locator('xpath=ancestor::section[1]');
+    const expiringQualificationRow = qualificationWorklist
+      .getByRole('row')
+      .filter({ hasText: `Plan Author ${runId}` });
+    await expect(expiringQualificationRow).toContainText('Expiring soon');
+    await expiringQualificationRow.getByRole('link', { name: 'Review policy impact' }).click();
+    const qualificationImpact = page
+      .getByRole('heading', { name: 'Policy impact if this qualification were removed' })
+      .locator('xpath=ancestor::section[1]');
+    await qualificationImpact.getByLabel('Operation').selectOption('care_plan.evaluate');
+    await qualificationImpact.getByRole('button', { name: 'Apply filters' }).click();
+    const impactedEmployee = qualificationImpact
+      .getByRole('row')
+      .filter({ hasText: `Plan Author ${runId}` });
+    await expect(impactedEmployee).toContainText('Care-plan evaluation');
+    await expect(impactedEmployee).toContainText('Not ready');
+
+    await database.query(
+      `UPDATE employees.employee_qualifications
+       SET valid_until = NULL, updated_at = now()
+       WHERE tenant_id = $1 AND employee_id = $2 AND qualification_id = $3 AND status = 'active'`,
+      [tenantId, carePlanAuthorEmployeeId, carePlanQualificationId],
+    );
+
     await page.goto(`/clients/${agreementClientId}/care-plan?planId=${carePlanId}`);
     await expect(
       page.getByText(/Eligible under active competency policy version/).first(),
@@ -623,12 +723,105 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.getByRole('button', { name: 'Link user' }).click();
     await expect(page.getByText(caregiverName, { exact: true })).toBeVisible();
 
+    await page.goto('/');
+    if (await page.getByRole('button', { name: 'Sign in with Authentik' }).isVisible()) {
+      await signInWithAuthentik(page, username, password);
+    }
+    await page.locator('select[name="tenantId"]').selectOption(tenantId);
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page).toHaveURL(/\/clients$/);
+
     if (!serviceId || !agreementClientId) {
       throw new Error('The E2E service and client must exist before execution');
     }
     await page.goto(`/services/${serviceId}`);
     await expect(page.getByRole('heading', { name: `E2E Service ${runId}` })).toBeVisible();
     const executionDate = dateInBerlin();
+    await page.goto(`/clients/${agreementClientId}/medications`);
+    const medicationCatalog = page.locator('details').filter({ hasText: 'Medication catalog' });
+    await medicationCatalog.locator('summary').click();
+    const definitionForm = page.locator('form').filter({ has: page.locator('#definition-name') });
+    await definitionForm.locator('#definition-name').fill(medicationName);
+    await definitionForm.locator('#definition-activeIngredient').fill('E2E ingredient');
+    await definitionForm.locator('#definition-strength').fill('10 mg');
+    await definitionForm.locator('#definition-dosageForm').selectOption('tablet');
+    await definitionForm.locator('#definition-route').selectOption('oral');
+    const definitionResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === `/clients/${agreementClientId}/medications`,
+    );
+    await definitionForm
+      .getByRole('button', { name: 'Add a definition to the medication catalog' })
+      .click();
+    expect((await definitionResponse).ok()).toBe(true);
+    await page.reload();
+    await expect(
+      page
+        .locator('select[name="medicationDefinitionId"] option')
+        .filter({ hasText: medicationName }),
+    ).toHaveCount(1);
+    const medicationDefinition = await database.query<{ id: string }>(
+      'SELECT id FROM medication.definitions WHERE tenant_id = $1 AND name = $2',
+      [tenantId, medicationName],
+    );
+    const medicationDefinitionId = medicationDefinition.rows[0]?.id;
+    if (!medicationDefinitionId) {
+      throw new Error('The Office UI did not create the medication definition');
+    }
+    await reauthenticateOffice(page, username, password, tenantId);
+    await page.goto(`/clients/${agreementClientId}/medications`);
+
+    const newOrderDetails = page.locator('#new-order');
+    await newOrderDetails.locator('summary').click();
+    const draftMedicationForm = newOrderDetails.locator('form');
+    await draftMedicationForm
+      .locator('select[name="medicationDefinitionId"]')
+      .selectOption(medicationDefinitionId);
+    await draftMedicationForm.locator('input[name="doseAmount"]').fill('1');
+    await draftMedicationForm.locator('select[name="doseUnit"]').selectOption('tablet');
+    await draftMedicationForm.locator('select[name="route"]').selectOption('oral');
+    await draftMedicationForm.locator('select[name="sourceType"]').selectOption('prescriber');
+    await draftMedicationForm.locator('input[name="prescriberName"]').fill('Dr E2E');
+    await draftMedicationForm
+      .locator('input[name="sourceReference"]')
+      .fill(medicationSourceReference);
+    await draftMedicationForm.locator('input[name="validFrom"]').fill(executionDate);
+    await draftMedicationForm.locator('select[name="scheduleType"]').selectOption('fixed_times');
+    await draftMedicationForm.locator('input[name="times"]').fill('00:01');
+    const orderResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === `/clients/${agreementClientId}/medications`,
+    );
+    await draftMedicationForm.getByRole('button', { name: 'Save draft order' }).click();
+    const orderActionResponse = await orderResponse;
+    expect(orderActionResponse.headers()['x-action-redirect'] ?? '').not.toContain('?error=');
+    const medicationOrder = await database.query<{ id: string; version: number }>(
+      `SELECT medication_order.id, medication_order.version
+       FROM medication.orders AS medication_order
+       JOIN medication.order_revisions AS revision
+         ON revision.tenant_id = medication_order.tenant_id
+        AND revision.order_id = medication_order.id
+        AND revision.version = medication_order.version
+       WHERE medication_order.tenant_id = $1
+         AND medication_order.client_id = $2
+         AND revision.source_reference = $3`,
+      [tenantId, agreementClientId, medicationSourceReference],
+    );
+    medicationOrderId = medicationOrder.rows[0]?.id;
+    if (!medicationOrderId || medicationOrder.rows[0]?.version !== 1) {
+      throw new Error('The Office UI did not create the medication draft');
+    }
+    const medicationOrderCard = page.locator('article').filter({ hasText: medicationName }).first();
+    await medicationOrderCard.getByRole('button', { name: 'Review and activate' }).click();
+    await expect(medicationOrderCard).toContainText('Active');
+    const activatedMedicationOrder = await database.query<{ status: string; version: number }>(
+      'SELECT status, version FROM medication.orders WHERE tenant_id = $1 AND id = $2',
+      [tenantId, medicationOrderId],
+    );
+    expect(activatedMedicationOrder.rows[0]).toMatchObject({ status: 'active', version: 2 });
+
     const executionDateAtNoonUtc = new Date(`${executionDate}T12:00:00.000Z`);
     const englishCareDate = new Intl.DateTimeFormat('en', {
       dateStyle: 'full',
@@ -710,6 +903,33 @@ test('Authentik users can be invited and administered from the office UI', async
     await caregiverPage.getByRole('button', { name: 'Start visit' }).click();
     await expect(caregiverPage.getByText('In progress', { exact: true })).toBeVisible();
     await expect(caregiverPage.getByRole('heading', { name: 'Planned services' })).toBeVisible();
+    const medicationSection = caregiverPage.getByRole('region', { name: 'Medications' });
+    const dueMedication = medicationSection.locator('article').filter({ hasText: medicationName });
+    await expect(dueMedication).toBeVisible();
+    await dueMedication.getByLabel('Outcome').selectOption('administered');
+    await dueMedication
+      .getByLabel(
+        'I reviewed the ordered medication, dose, and route and confirm the recorded quantity.',
+      )
+      .check();
+    await dueMedication.getByRole('button', { name: 'Record outcome' }).click();
+    await expect(
+      caregiverPage.getByRole('status').filter({ hasText: 'Medication outcome recorded.' }),
+    ).toBeVisible();
+    const recordedMedication = medicationSection.locator('li').filter({ hasText: medicationName });
+    await expect(recordedMedication).toContainText('Administered');
+
+    await reauthenticateOffice(page, username, password, tenantId);
+    await page.goto(
+      `/clients/${agreementClientId}/medications?from=${executionDate}&until=${executionDate}`,
+    );
+    await expect(
+      page.getByRole('heading', { name: 'Medication administration record' }),
+    ).toBeVisible();
+    await expect(page.locator('article').filter({ hasText: medicationName }).last()).toContainText(
+      'Administered',
+    );
+
     await caregiverPage.getByRole('button', { name: 'Save outcome' }).click();
     await expect(caregiverPage.getByRole('status')).toContainText('Service outcome saved.');
 
@@ -1044,6 +1264,18 @@ test('Authentik users can be invited and administered from the office UI', async
     page.once('dialog', (dialog) => dialog.accept());
     await planAuthorQualification.getByRole('button', { name: 'Remove' }).click();
     await expect(planAuthorQualification).toContainText('Assignment revoked');
+    await page.goto(workforceDashboardUrl);
+    const revokedReadinessRow = page
+      .getByRole('heading', { name: 'Employee readiness', exact: true })
+      .locator('xpath=ancestor::section[1]')
+      .getByRole('row')
+      .filter({ hasText: `Plan Author ${runId}` });
+    await expect(revokedReadinessRow.getByText('Not ready', { exact: true })).toHaveCount(3);
+    await page.goto(`/employees/${carePlanAuthorEmployeeId}`);
+    const revokedEmployeeReadiness = page
+      .getByRole('heading', { name: 'Workforce readiness', exact: true })
+      .locator('xpath=ancestor::section[1]');
+    await expect(revokedEmployeeReadiness.getByText('Not ready', { exact: true })).toHaveCount(3);
     await page.goto(`/clients/${agreementClientId}/care-plan?planId=${carePlanId}`);
     await expect(
       page
@@ -1334,6 +1566,9 @@ test('Authentik users can be invited and administered from the office UI', async
           .map((context) => context.close().catch(() => undefined)),
       );
       if (tenantId) {
+        if (agreementClientId) {
+          await cleanupMedicationRecords(database, tenantId, agreementClientId, medicationName);
+        }
         const carePlanClientIds = [clientId, agreementClientId].filter(
           (id): id is string => id !== undefined,
         );
@@ -1433,7 +1668,7 @@ test('Authentik users can be invited and administered from the office UI', async
 
 async function configureCompetencyPolicy(
   page: Page,
-  operationKey: 'care_plan.activate' | 'care_plan.evaluate',
+  operationKey: 'care_plan.activate' | 'care_plan.evaluate' | 'medication.administer',
   qualificationId: string,
 ): Promise<void> {
   await page.goto('/administration/competency-policies');
@@ -1460,7 +1695,7 @@ async function ensureCompetencyPolicy(
   page: Page,
   database: Client,
   tenantId: string,
-  operationKey: 'care_plan.activate' | 'care_plan.evaluate',
+  operationKey: 'care_plan.activate' | 'care_plan.evaluate' | 'medication.administer',
   qualificationId: string,
 ): Promise<void> {
   const activePolicy = await database.query<{
@@ -1589,6 +1824,119 @@ async function cleanupServiceCatalogRecords(
         'DELETE FROM services.service_categories WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
         [tenantId, categoryRows.rows.map((row) => row.id)],
       );
+    }
+    await database.query('COMMIT');
+  } catch (error) {
+    await database.query('ROLLBACK');
+    throw error;
+  }
+}
+
+async function cleanupMedicationRecords(
+  database: Client,
+  tenantId: string,
+  clientId: string,
+  definitionName: string,
+): Promise<void> {
+  await database.query('BEGIN');
+  try {
+    await database.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+    const orderRows = await database.query<{ id: string }>(
+      `SELECT DISTINCT medication_order.id
+       FROM medication.orders AS medication_order
+       JOIN medication.order_revisions AS revision
+         ON revision.tenant_id = medication_order.tenant_id
+        AND revision.order_id = medication_order.id
+       JOIN medication.definitions AS definition
+         ON definition.tenant_id = revision.tenant_id
+        AND definition.id = revision.medication_definition_id
+       WHERE medication_order.tenant_id = $1
+         AND medication_order.client_id = $2
+         AND definition.name = $3`,
+      [tenantId, clientId, definitionName],
+    );
+    const orderIds = orderRows.rows.map((row) => row.id);
+    const occurrences = orderIds.length
+      ? await database.query<{ id: string }>(
+          'SELECT id FROM medication.administration_occurrences WHERE tenant_id = $1 AND order_id = ANY($2::uuid[])',
+          [tenantId, orderIds],
+        )
+      : { rows: [] as Array<{ id: string }> };
+    const records = orderIds.length
+      ? await database.query<{ id: string }>(
+          'SELECT id FROM medication.administration_records WHERE tenant_id = $1 AND order_id = ANY($2::uuid[])',
+          [tenantId, orderIds],
+        )
+      : { rows: [] as Array<{ id: string }> };
+    const recordIds = records.rows.map((row) => row.id);
+    const corrections = recordIds.length
+      ? await database.query<{ id: string }>(
+          'SELECT id FROM medication.administration_corrections WHERE tenant_id = $1 AND record_id = ANY($2::uuid[])',
+          [tenantId, recordIds],
+        )
+      : { rows: [] as Array<{ id: string }> };
+    const definitions = await database.query<{ id: string }>(
+      'SELECT id FROM medication.definitions WHERE tenant_id = $1 AND name = $2',
+      [tenantId, definitionName],
+    );
+    const resourceIds = [
+      ...orderIds,
+      ...occurrences.rows.map((row) => row.id),
+      ...recordIds,
+      ...corrections.rows.map((row) => row.id),
+    ];
+    await database.query(
+      'DELETE FROM audit.audit_entries WHERE tenant_id = $1 AND resource_id = ANY($2::uuid[])',
+      [tenantId, resourceIds],
+    );
+    await database.query(
+      `DELETE FROM platform.outbox_messages
+       WHERE tenant_id = $1
+         AND (event ->> 'aggregateId' = ANY($2::text[])
+           OR event -> 'payload' ->> 'orderId' = ANY($3::text[])
+           OR event -> 'payload' ->> 'recordId' = ANY($4::text[])
+           OR event -> 'payload' ->> 'correctionId' = ANY($5::text[]))`,
+      [tenantId, resourceIds, orderIds, recordIds, corrections.rows.map((row) => row.id)],
+    );
+    for (const table of [
+      'order_revisions',
+      'administration_occurrences',
+      'administration_records',
+      'administration_corrections',
+    ]) {
+      await database.query(`ALTER TABLE medication.${table} DISABLE TRIGGER USER`);
+    }
+    await database.query(
+      'DELETE FROM medication.administration_corrections WHERE tenant_id = $1 AND record_id = ANY($2::uuid[])',
+      [tenantId, recordIds],
+    );
+    await database.query(
+      'DELETE FROM medication.administration_records WHERE tenant_id = $1 AND order_id = ANY($2::uuid[])',
+      [tenantId, orderIds],
+    );
+    await database.query(
+      'DELETE FROM medication.administration_occurrences WHERE tenant_id = $1 AND order_id = ANY($2::uuid[])',
+      [tenantId, orderIds],
+    );
+    await database.query(
+      'DELETE FROM medication.order_revisions WHERE tenant_id = $1 AND order_id = ANY($2::uuid[])',
+      [tenantId, orderIds],
+    );
+    await database.query(
+      'DELETE FROM medication.orders WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+      [tenantId, orderIds],
+    );
+    await database.query(
+      'DELETE FROM medication.definitions WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+      [tenantId, definitions.rows.map((row) => row.id)],
+    );
+    for (const table of [
+      'administration_corrections',
+      'administration_records',
+      'administration_occurrences',
+      'order_revisions',
+    ]) {
+      await database.query(`ALTER TABLE medication.${table} ENABLE TRIGGER USER`);
     }
     await database.query('COMMIT');
   } catch (error) {
@@ -2157,6 +2505,19 @@ async function signInWithAuthentik(page: Page, username: string, password: strin
       .last()
       .click(),
   ]);
+}
+
+async function reauthenticateOffice(
+  page: Page,
+  username: string,
+  password: string,
+  tenantId: string,
+): Promise<void> {
+  await page.context().clearCookies();
+  await signInWithAuthentik(page, username, password);
+  await page.locator('select[name="tenantId"]').selectOption(tenantId);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page).toHaveURL(/\/clients$/);
 }
 
 async function authentikRequest<T = unknown>(
