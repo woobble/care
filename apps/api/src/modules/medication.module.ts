@@ -2,18 +2,23 @@ import { Module } from '@nestjs/common';
 import type { AuditWriter } from '@care/audit';
 import type { CompetencyPolicyEvaluator } from '@care/permissions';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
-import { MedicationApplicationService } from '@care/medication';
+import {
+  MedicationApplicationService,
+  MedicationReconciliationApplicationService,
+} from '@care/medication';
 import type { OutboxWriter } from '@care/platform';
 import { DatabaseModule } from '../database/database.module';
 import {
   AUDIT_WRITER,
   COMPETENCY_POLICY_APPLICATION,
   MEDICATION_APPLICATION,
+  MEDICATION_RECONCILIATION_APPLICATION,
   OUTBOX_WRITER,
   UNIT_OF_WORK,
 } from '../tokens';
 import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
 import { MedicationController } from '../presentation/http/medication.controller';
+import { MedicationReconciliationController } from '../presentation/http/medication-reconciliation.controller';
 import { AuditModule } from './audit.module';
 import { CompetencyPoliciesModule } from './competency-policies.module';
 import { IdentityModule } from './identity.module';
@@ -21,7 +26,7 @@ import { PlatformModule } from './platform.module';
 
 @Module({
   imports: [DatabaseModule, IdentityModule, AuditModule, PlatformModule, CompetencyPoliciesModule],
-  controllers: [MedicationController],
+  controllers: [MedicationController, MedicationReconciliationController],
   providers: [
     OidcGuard,
     TenantContextGuard,
@@ -34,6 +39,17 @@ import { PlatformModule } from './platform.module';
         outbox: OutboxWriter,
         competency: CompetencyPolicyEvaluator<DatabaseTransaction>,
       ) => new MedicationApplicationService(unitOfWork, audit, outbox, competency),
+    },
+    {
+      provide: MEDICATION_RECONCILIATION_APPLICATION,
+      inject: [UNIT_OF_WORK, AUDIT_WRITER, OUTBOX_WRITER, COMPETENCY_POLICY_APPLICATION, MEDICATION_APPLICATION],
+      useFactory: (
+        unitOfWork: UnitOfWork,
+        audit: AuditWriter,
+        outbox: OutboxWriter,
+        competency: CompetencyPolicyEvaluator<DatabaseTransaction>,
+        medication: MedicationApplicationService,
+      ) => new MedicationReconciliationApplicationService(unitOfWork, audit, outbox, competency, medication),
     },
   ],
 })

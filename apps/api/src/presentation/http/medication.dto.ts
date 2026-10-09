@@ -1,6 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { z } from 'zod';
 import { DOSAGE_FORMS, DOSAGE_UNITS, MEDICATION_ROUTES } from '@care/medication';
+import {
+  EXTERNAL_MEDICATION_SOURCE_TYPES,
+  MEDICATION_DISCREPANCY_TYPES,
+  MEDICATION_RECONCILIATION_DECISIONS,
+  MEDICATION_RECONCILIATION_REASONS,
+  REPORTED_MEDICATION_STATUSES,
+} from '@care/medication';
 
 const decimal = z.string().regex(/^(?:0|[1-9]\d{0,8})(?:\.\d{1,3})?$/);
 const nullableText = (max: number) => z.string().max(max).nullable();
@@ -70,6 +77,233 @@ export const medicationDateRangeSchema = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 }).strict();
+
+const reconciliationNullableText = (max: number) => z.string().max(max).nullable();
+const externalFixedTimesSchedule = fixedTimesSchedule.extend({
+  timezone: z.string().trim().min(1).max(100),
+}).strict();
+const externalIntervalSchedule = intervalSchedule.extend({
+  timezone: z.string().trim().min(1).max(100),
+}).strict();
+const externalPrnSchedule = prnSchedule.extend({
+  timezone: z.string().trim().min(1).max(100),
+}).strict();
+export const externalMedicationScheduleSchema = z.discriminatedUnion('type', [
+  externalFixedTimesSchedule,
+  externalIntervalSchedule,
+  externalPrnSchedule,
+]);
+
+export const medicationReconciliationStartSchema = z.object({
+  reason: z.enum(MEDICATION_RECONCILIATION_REASONS),
+}).strict();
+export const medicationReconciliationSourceSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  sourceType: z.enum(EXTERNAL_MEDICATION_SOURCE_TYPES),
+  sourceName: reconciliationNullableText(200),
+  sourceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  reference: reconciliationNullableText(1000),
+}).strict();
+export const medicationReconciliationEntrySchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  sourceId: z.string().uuid(),
+  supersedesEntryId: z.string().uuid().nullable(),
+  correctionReason: reconciliationNullableText(1000),
+  medicationName: z.string().trim().min(1).max(200),
+  activeIngredient: reconciliationNullableText(200),
+  strength: reconciliationNullableText(120),
+  dosageForm: z.enum(DOSAGE_FORMS).nullable(),
+  doseAmount: decimal.nullable(),
+  doseUnit: z.enum(DOSAGE_UNITS).nullable(),
+  route: z.enum(MEDICATION_ROUTES).nullable(),
+  scheduleDescription: reconciliationNullableText(1000),
+  structuredSchedule: externalMedicationScheduleSchema.nullable(),
+  reportedStatus: z.enum(REPORTED_MEDICATION_STATUSES),
+  note: reconciliationNullableText(2000),
+}).strict().refine((entry) => (entry.doseAmount === null) === (entry.doseUnit === null));
+export const medicationReconciliationExpectedVersionSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+}).strict();
+export const medicationReconciliationMatchSchema = medicationReconciliationExpectedVersionSchema.extend({
+  entryId: z.string().uuid(),
+  baselineId: z.string().uuid().nullable(),
+}).strict();
+export const medicationReconciliationDecisionSchema = medicationReconciliationExpectedVersionSchema.extend({
+  discrepancyId: z.string().uuid(),
+  decision: z.enum(MEDICATION_RECONCILIATION_DECISIONS),
+  reason: reconciliationNullableText(1000),
+  clarificationOutcome: reconciliationNullableText(2000),
+}).strict();
+export const medicationReconciliationApplySchema = medicationReconciliationExpectedVersionSchema.extend({
+  actionId: z.string().uuid(),
+  items: z.array(z.object({
+    discrepancyId: z.string().uuid(),
+    disposition: z.enum(['apply_external', 'not_applied']),
+    reason: reconciliationNullableText(1000),
+  }).strict()).min(1).max(100),
+}).strict();
+export const medicationReconciliationCancelSchema = medicationReconciliationExpectedVersionSchema.extend({
+  reason: reconciliationNullableText(1000),
+}).strict();
+
+export class MedicationReconciliationStartRequestDto {
+  @ApiProperty({ enum: MEDICATION_RECONCILIATION_REASONS }) reason!: string;
+}
+export class MedicationReconciliationSourceRequestDto {
+  @ApiProperty({ minimum: 1 }) expectedVersion!: number;
+  @ApiProperty({ enum: EXTERNAL_MEDICATION_SOURCE_TYPES }) sourceType!: string;
+  @ApiPropertyOptional({ nullable: true, maxLength: 200 }) sourceName!: string | null;
+  @ApiPropertyOptional({ nullable: true, format: 'date' }) sourceDate!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 1000 }) reference!: string | null;
+}
+export class MedicationReconciliationEntryRequestDto {
+  @ApiProperty({ minimum: 1 }) expectedVersion!: number;
+  @ApiProperty({ format: 'uuid' }) sourceId!: string;
+  @ApiPropertyOptional({ format: 'uuid', nullable: true }) supersedesEntryId!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 1000 }) correctionReason!: string | null;
+  @ApiProperty({ minLength: 1, maxLength: 200 }) medicationName!: string;
+  @ApiPropertyOptional({ nullable: true, maxLength: 200 }) activeIngredient!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 120 }) strength!: string | null;
+  @ApiPropertyOptional({ nullable: true, enum: DOSAGE_FORMS }) dosageForm!: string | null;
+  @ApiPropertyOptional({ nullable: true, example: '1' }) doseAmount!: string | null;
+  @ApiPropertyOptional({ nullable: true, enum: DOSAGE_UNITS }) doseUnit!: string | null;
+  @ApiPropertyOptional({ nullable: true, enum: MEDICATION_ROUTES }) route!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 1000 }) scheduleDescription!: string | null;
+  @ApiPropertyOptional({ nullable: true, type: Object }) structuredSchedule!: Record<string, unknown> | null;
+  @ApiProperty({ enum: REPORTED_MEDICATION_STATUSES }) reportedStatus!: string;
+  @ApiPropertyOptional({ nullable: true, maxLength: 2000 }) note!: string | null;
+}
+export class MedicationReconciliationMatchRequestDto {
+  @ApiProperty({ minimum: 1 }) expectedVersion!: number;
+  @ApiProperty({ format: 'uuid' }) entryId!: string;
+  @ApiPropertyOptional({ format: 'uuid', nullable: true }) baselineId!: string | null;
+}
+export class MedicationReconciliationDecisionRequestDto {
+  @ApiProperty({ minimum: 1 }) expectedVersion!: number;
+  @ApiProperty({ format: 'uuid' }) discrepancyId!: string;
+  @ApiProperty({ enum: MEDICATION_RECONCILIATION_DECISIONS }) decision!: string;
+  @ApiPropertyOptional({ nullable: true, maxLength: 1000 }) reason!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 2000 }) clarificationOutcome!: string | null;
+}
+export class MedicationReconciliationApplyItemDto {
+  @ApiProperty({ format: 'uuid' }) discrepancyId!: string;
+  @ApiProperty({ enum: ['apply_external', 'not_applied'] }) disposition!: string;
+  @ApiPropertyOptional({ nullable: true, maxLength: 1000 }) reason!: string | null;
+}
+export class MedicationReconciliationApplyRequestDto {
+  @ApiProperty({ minimum: 1 }) expectedVersion!: number;
+  @ApiProperty({ format: 'uuid', description: 'Stable key reused when retrying this apply request' }) actionId!: string;
+  @ApiProperty({ type: [MedicationReconciliationApplyItemDto], minItems: 1 }) items!: MedicationReconciliationApplyItemDto[];
+}
+export class MedicationReconciliationCancelRequestDto {
+  @ApiProperty({ minimum: 1 }) expectedVersion!: number;
+  @ApiProperty({ nullable: true, maxLength: 1000 }) reason!: string | null;
+}
+export class MedicationReconciliationExpectedVersionRequestDto {
+  @ApiProperty({ minimum: 1 }) expectedVersion!: number;
+}
+
+export class MedicationReconciliationSummaryDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) clientId!: string;
+  @ApiProperty({ enum: ['draft', 'in_review', 'completed', 'cancelled'] }) status!: string;
+  @ApiProperty({ enum: MEDICATION_RECONCILIATION_REASONS }) reason!: string;
+  @ApiProperty() version!: number;
+  @ApiProperty() inputVersion!: number;
+  @ApiPropertyOptional({ nullable: true }) comparedInputVersion!: number | null;
+  @ApiProperty() comparisonVersion!: number;
+  @ApiProperty({ format: 'uuid' }) startedByEmployeeId!: string;
+  @ApiPropertyOptional({ format: 'uuid', nullable: true }) reviewedByEmployeeId!: string | null;
+  @ApiProperty({ format: 'date-time' }) startedAt!: string;
+  @ApiPropertyOptional({ format: 'date-time', nullable: true }) completedAt!: string | null;
+  @ApiPropertyOptional({ nullable: true }) cancellationReason!: string | null;
+  @ApiProperty({ format: 'date-time' }) createdAt!: string;
+  @ApiProperty({ format: 'date-time' }) updatedAt!: string;
+}
+export class MedicationReconciliationCreatedDto {
+  @ApiProperty({ type: MedicationReconciliationSummaryDto }) reconciliation!: MedicationReconciliationSummaryDto;
+  @ApiProperty() baselineCount!: number;
+}
+export class MedicationReconciliationSourceDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) reconciliationId!: string;
+  @ApiProperty({ format: 'uuid' }) clientId!: string;
+  @ApiProperty({ enum: EXTERNAL_MEDICATION_SOURCE_TYPES }) sourceType!: string;
+  @ApiProperty({ enum: ['clinician_instruction', 'pharmacy_record', 'client_report', 'representative_report', 'other'] }) provenanceClass!: string;
+  @ApiPropertyOptional({ nullable: true }) sourceName!: string | null;
+  @ApiPropertyOptional({ nullable: true, format: 'date' }) sourceDate!: string | null;
+  @ApiProperty({ format: 'date-time' }) receivedAt!: string;
+  @ApiProperty({ format: 'uuid' }) recordedByEmployeeId!: string;
+  @ApiPropertyOptional({ nullable: true }) reference!: string | null;
+}
+export class MedicationReconciliationBaselineDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) orderId!: string;
+  @ApiProperty({ format: 'uuid' }) orderRevisionId!: string;
+  @ApiProperty() orderVersion!: number;
+  @ApiProperty({ type: Object }) snapshot!: Record<string, unknown>;
+}
+export class MedicationReconciliationEntryDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) sourceId!: string;
+  @ApiPropertyOptional({ format: 'uuid', nullable: true }) supersedesEntryId!: string | null;
+  @ApiPropertyOptional({ nullable: true }) correctionReason!: string | null;
+  @ApiProperty() medicationName!: string;
+  @ApiPropertyOptional({ nullable: true }) activeIngredient!: string | null;
+  @ApiPropertyOptional({ nullable: true }) strength!: string | null;
+  @ApiPropertyOptional({ nullable: true }) dosageForm!: string | null;
+  @ApiPropertyOptional({ nullable: true }) doseAmount!: string | null;
+  @ApiPropertyOptional({ nullable: true }) doseUnit!: string | null;
+  @ApiPropertyOptional({ nullable: true }) route!: string | null;
+  @ApiPropertyOptional({ nullable: true }) scheduleDescription!: string | null;
+  @ApiPropertyOptional({ nullable: true, type: Object }) structuredSchedule!: Record<string, unknown> | null;
+  @ApiProperty({ enum: REPORTED_MEDICATION_STATUSES }) reportedStatus!: string;
+  @ApiPropertyOptional({ nullable: true }) note!: string | null;
+  @ApiProperty() isCurrent!: boolean;
+  @ApiPropertyOptional({ nullable: true, type: Object }) currentMatch!: Record<string, unknown> | null;
+}
+export class MedicationReconciliationDecisionDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) discrepancyId!: string;
+  @ApiProperty() version!: number;
+  @ApiProperty({ enum: MEDICATION_RECONCILIATION_DECISIONS }) decision!: string;
+  @ApiPropertyOptional({ nullable: true }) reason!: string | null;
+  @ApiPropertyOptional({ nullable: true }) clarificationOutcome!: string | null;
+  @ApiProperty({ format: 'uuid' }) reviewedByEmployeeId!: string;
+  @ApiProperty({ format: 'date-time' }) reviewedAt!: string;
+}
+export class MedicationReconciliationApplicationDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) discrepancyId!: string;
+  @ApiProperty({ format: 'uuid' }) actionId!: string;
+  @ApiProperty({ enum: ['applied', 'not_applied'] }) disposition!: string;
+  @ApiPropertyOptional({ nullable: true }) reason!: string | null;
+  @ApiPropertyOptional({ format: 'uuid', nullable: true }) orderId!: string | null;
+  @ApiPropertyOptional({ format: 'uuid', nullable: true }) orderRevisionId!: string | null;
+  @ApiPropertyOptional({ nullable: true }) orderVersion!: number | null;
+}
+export class MedicationReconciliationDiscrepancyDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() comparisonVersion!: number;
+  @ApiProperty({ enum: MEDICATION_DISCREPANCY_TYPES }) type!: string;
+  @ApiProperty() field!: string;
+  @ApiPropertyOptional({ format: 'uuid', nullable: true }) entryId!: string | null;
+  @ApiPropertyOptional({ format: 'uuid', nullable: true }) baselineId!: string | null;
+  @ApiPropertyOptional({ nullable: true, type: Object }) externalValue!: unknown;
+  @ApiPropertyOptional({ nullable: true, type: Object }) internalValue!: unknown;
+  @ApiProperty() isCurrent!: boolean;
+  @ApiPropertyOptional({ nullable: true, type: MedicationReconciliationDecisionDto }) latestDecision!: MedicationReconciliationDecisionDto | null;
+  @ApiProperty({ type: [MedicationReconciliationDecisionDto] }) decisions!: MedicationReconciliationDecisionDto[];
+  @ApiPropertyOptional({ nullable: true, type: MedicationReconciliationApplicationDto }) application!: MedicationReconciliationApplicationDto | null;
+}
+export class MedicationReconciliationDetailDto {
+  @ApiProperty({ type: MedicationReconciliationSummaryDto }) reconciliation!: MedicationReconciliationSummaryDto;
+  @ApiProperty({ type: [MedicationReconciliationSourceDto] }) sources!: MedicationReconciliationSourceDto[];
+  @ApiProperty({ type: [MedicationReconciliationEntryDto] }) entries!: MedicationReconciliationEntryDto[];
+  @ApiProperty({ type: [MedicationReconciliationBaselineDto] }) baselines!: MedicationReconciliationBaselineDto[];
+  @ApiProperty({ type: [MedicationReconciliationDiscrepancyDto] }) discrepancies!: MedicationReconciliationDiscrepancyDto[];
+  @ApiProperty() comparisonCurrent!: boolean;
+}
 
 export class MedicationDefinitionRequestDto {
   @ApiProperty({ maxLength: 200 }) name!: string;
@@ -320,6 +554,7 @@ export class VisitMedicationAdministrationDto {
   @ApiProperty({ format: 'uuid' }) visitId!: string;
   @ApiProperty({ format: 'uuid' }) clientId!: string;
   @ApiProperty({ format: 'uuid' }) employeeId!: string;
+  @ApiProperty({ description: 'A review is pending; this does not block medication administration' }) reconciliationReviewPending!: boolean;
   @ApiProperty({ type: [MedicationDueOccurrenceDto] }) due!: MedicationDueOccurrenceDto[];
   @ApiProperty({ type: [MedicationAdministrationRecordDto] }) history!: MedicationAdministrationRecordDto[];
   @ApiProperty({ type: [MedicationPrnOrderDto] }) prn!: MedicationPrnOrderDto[];

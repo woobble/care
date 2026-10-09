@@ -4002,7 +4002,8 @@
                 "care_plan.activate",
                 "care_plan.evaluate",
                 "medication.administer",
-                "medication.administration.correct"
+                "medication.administration.correct",
+                "medication.reconciliation.complete"
               ],
               "type": "string"
             }
@@ -4073,7 +4074,8 @@
                 "care_plan.activate",
                 "care_plan.evaluate",
                 "medication.administer",
-                "medication.administration.correct"
+                "medication.administration.correct",
+                "medication.reconciliation.complete"
               ],
               "type": "string"
             }
@@ -4143,7 +4145,8 @@
                 "care_plan.activate",
                 "care_plan.evaluate",
                 "medication.administer",
-                "medication.administration.correct"
+                "medication.administration.correct",
+                "medication.reconciliation.complete"
               ],
               "type": "string"
             }
@@ -13960,7 +13963,8 @@
                 "care_plan.activate",
                 "care_plan.evaluate",
                 "medication.administer",
-                "medication.administration.correct"
+                "medication.administration.correct",
+                "medication.reconciliation.complete"
               ],
               "type": "string"
             }
@@ -14288,7 +14292,8 @@
                 "care_plan.activate",
                 "care_plan.evaluate",
                 "medication.administer",
-                "medication.administration.correct"
+                "medication.administration.correct",
+                "medication.reconciliation.complete"
               ],
               "type": "string"
             }
@@ -15455,6 +15460,722 @@
         "summary": "Append an attributable correction to finalized administration history",
         "tags": [
           "medication"
+        ]
+      }
+    },
+    "/api/v1/clients/{clientId}/medication-reconciliations": {
+      "get": {
+        "operationId": "listMedicationReconciliations",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MedicationReconciliationSummaryDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List reconciliation history for a client",
+        "tags": [
+          "medication reconciliation"
+        ]
+      },
+      "post": {
+        "operationId": "startMedicationReconciliation",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationReconciliationStartRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationReconciliationCreatedDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Start a reconciliation and snapshot the current medication orders",
+        "tags": [
+          "medication reconciliation"
+        ]
+      }
+    },
+    "/api/v1/medication-reconciliations/{reconciliationId}": {
+      "get": {
+        "operationId": "getMedicationReconciliation",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconciliationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationReconciliationDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read sources, snapshots, comparisons, decisions, and applied changes",
+        "tags": [
+          "medication reconciliation"
+        ]
+      }
+    },
+    "/api/v1/medication-reconciliations/{reconciliationId}/sources": {
+      "post": {
+        "operationId": "addMedicationReconciliationSource",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconciliationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationReconciliationSourceRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Record an external source with its provenance",
+        "tags": [
+          "medication reconciliation"
+        ]
+      }
+    },
+    "/api/v1/medication-reconciliations/{reconciliationId}/entries": {
+      "post": {
+        "operationId": "addMedicationReconciliationEntry",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconciliationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationReconciliationEntryRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Record an external medication statement or append a correction",
+        "tags": [
+          "medication reconciliation"
+        ]
+      }
+    },
+    "/api/v1/medication-reconciliations/{reconciliationId}/matches": {
+      "post": {
+        "operationId": "matchMedicationReconciliationEntry",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconciliationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationReconciliationMatchRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Manually link an external entry to an immutable internal baseline",
+        "tags": [
+          "medication reconciliation"
+        ]
+      }
+    },
+    "/api/v1/medication-reconciliations/{reconciliationId}/compare": {
+      "post": {
+        "operationId": "compareMedicationReconciliation",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconciliationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationReconciliationExpectedVersionRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a versioned deterministic comparison",
+        "tags": [
+          "medication reconciliation"
+        ]
+      }
+    },
+    "/api/v1/medication-reconciliations/{reconciliationId}/decisions": {
+      "post": {
+        "operationId": "recordMedicationReconciliationDecision",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconciliationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationReconciliationDecisionRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Append an explicit reviewer decision",
+        "tags": [
+          "medication reconciliation"
+        ]
+      }
+    },
+    "/api/v1/medication-reconciliations/{reconciliationId}/apply": {
+      "post": {
+        "operationId": "applyMedicationReconciliationChanges",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconciliationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationReconciliationApplyRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Apply accepted external facts through the medication order lifecycle",
+        "tags": [
+          "medication reconciliation"
+        ]
+      }
+    },
+    "/api/v1/medication-reconciliations/{reconciliationId}/complete": {
+      "post": {
+        "operationId": "completeMedicationReconciliation",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconciliationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationReconciliationSummaryDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Complete a resolved reconciliation with competency authorization",
+        "tags": [
+          "medication reconciliation"
+        ]
+      }
+    },
+    "/api/v1/medication-reconciliations/{reconciliationId}/cancel": {
+      "post": {
+        "operationId": "cancelMedicationReconciliation",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconciliationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicationReconciliationCancelRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicationReconciliationSummaryDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancel an unfinished reconciliation",
+        "tags": [
+          "medication reconciliation"
         ]
       }
     },
@@ -17766,7 +18487,8 @@
               "care_plan.activate",
               "care_plan.evaluate",
               "medication.administer",
-              "medication.administration.correct"
+              "medication.administration.correct",
+              "medication.reconciliation.complete"
             ]
           },
           "policyId": {
@@ -26196,7 +26918,8 @@
               "care_plan.activate",
               "care_plan.evaluate",
               "medication.administer",
-              "medication.administration.correct"
+              "medication.administration.correct",
+              "medication.reconciliation.complete"
             ]
           },
           "asOf": {
@@ -26430,7 +27153,8 @@
               "care_plan.activate",
               "care_plan.evaluate",
               "medication.administer",
-              "medication.administration.correct"
+              "medication.administration.correct",
+              "medication.reconciliation.complete"
             ]
           },
           "readiness": {
@@ -26557,7 +27281,8 @@
               "care_plan.activate",
               "care_plan.evaluate",
               "medication.administer",
-              "medication.administration.correct"
+              "medication.administration.correct",
+              "medication.reconciliation.complete"
             ]
           },
           "readiness": {
@@ -26721,7 +27446,8 @@
               "care_plan.activate",
               "care_plan.evaluate",
               "medication.administer",
-              "medication.administration.correct"
+              "medication.administration.correct",
+              "medication.reconciliation.complete"
             ]
           },
           "policyId": {
@@ -26770,7 +27496,8 @@
               "care_plan.activate",
               "care_plan.evaluate",
               "medication.administer",
-              "medication.administration.correct"
+              "medication.administration.correct",
+              "medication.reconciliation.complete"
             ]
           },
           "readiness": {
@@ -26899,7 +27626,8 @@
               "care_plan.activate",
               "care_plan.evaluate",
               "medication.administer",
-              "medication.administration.correct"
+              "medication.administration.correct",
+              "medication.reconciliation.complete"
             ]
           },
           "asOf": {
@@ -28225,6 +28953,10 @@
             "type": "string",
             "format": "uuid"
           },
+          "reconciliationReviewPending": {
+            "type": "boolean",
+            "description": "A review is pending; this does not block medication administration"
+          },
           "due": {
             "type": "array",
             "items": {
@@ -28248,6 +28980,7 @@
           "visitId",
           "clientId",
           "employeeId",
+          "reconciliationReviewPending",
           "due",
           "history",
           "prn"
@@ -28380,6 +29113,825 @@
           "correctionReason"
         ]
       },
+      "MedicationReconciliationSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "in_review",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "initial_intake",
+              "hospital_discharge",
+              "physician_update",
+              "periodic_review",
+              "reported_change",
+              "other"
+            ]
+          },
+          "version": {
+            "type": "number"
+          },
+          "inputVersion": {
+            "type": "number"
+          },
+          "comparedInputVersion": {
+            "type": "number",
+            "nullable": true
+          },
+          "comparisonVersion": {
+            "type": "number"
+          },
+          "startedByEmployeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reviewedByEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cancellationReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "status",
+          "reason",
+          "version",
+          "inputVersion",
+          "comparisonVersion",
+          "startedByEmployeeId",
+          "startedAt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "MedicationReconciliationStartRequestDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "initial_intake",
+              "hospital_discharge",
+              "physician_update",
+              "periodic_review",
+              "reported_change",
+              "other"
+            ]
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "MedicationReconciliationCreatedDto": {
+        "type": "object",
+        "properties": {
+          "reconciliation": {
+            "$ref": "#/components/schemas/MedicationReconciliationSummaryDto"
+          },
+          "baselineCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "reconciliation",
+          "baselineCount"
+        ]
+      },
+      "MedicationReconciliationSourceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reconciliationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceType": {
+            "type": "string",
+            "enum": [
+              "physician",
+              "hospital_discharge",
+              "pharmacy",
+              "client",
+              "representative",
+              "other"
+            ]
+          },
+          "provenanceClass": {
+            "type": "string",
+            "enum": [
+              "clinician_instruction",
+              "pharmacy_record",
+              "client_report",
+              "representative_report",
+              "other"
+            ]
+          },
+          "sourceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceDate": {
+            "type": "string",
+            "nullable": true,
+            "format": "date"
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recordedByEmployeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reference": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "reconciliationId",
+          "clientId",
+          "sourceType",
+          "provenanceClass",
+          "receivedAt",
+          "recordedByEmployeeId"
+        ]
+      },
+      "MedicationReconciliationEntryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "supersedesEntryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "correctionReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "medicationName": {
+            "type": "string"
+          },
+          "activeIngredient": {
+            "type": "string",
+            "nullable": true
+          },
+          "strength": {
+            "type": "string",
+            "nullable": true
+          },
+          "dosageForm": {
+            "type": "string",
+            "nullable": true
+          },
+          "doseAmount": {
+            "type": "string",
+            "nullable": true
+          },
+          "doseUnit": {
+            "type": "string",
+            "nullable": true
+          },
+          "route": {
+            "type": "string",
+            "nullable": true
+          },
+          "scheduleDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "structuredSchedule": {
+            "type": "object",
+            "nullable": true
+          },
+          "reportedStatus": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "discontinued",
+              "unknown"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "isCurrent": {
+            "type": "boolean"
+          },
+          "currentMatch": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "sourceId",
+          "medicationName",
+          "reportedStatus",
+          "isCurrent"
+        ]
+      },
+      "MedicationReconciliationBaselineDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderVersion": {
+            "type": "number"
+          },
+          "snapshot": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "orderRevisionId",
+          "orderVersion",
+          "snapshot"
+        ]
+      },
+      "MedicationReconciliationDecisionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "discrepancyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "number"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "accept_internal",
+              "accept_external",
+              "requires_clarification",
+              "no_change"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "clarificationOutcome": {
+            "type": "string",
+            "nullable": true
+          },
+          "reviewedByEmployeeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reviewedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "discrepancyId",
+          "version",
+          "decision",
+          "reviewedByEmployeeId",
+          "reviewedAt"
+        ]
+      },
+      "MedicationReconciliationApplicationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "discrepancyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "applied",
+              "not_applied"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "orderRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "orderVersion": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "discrepancyId",
+          "actionId",
+          "disposition"
+        ]
+      },
+      "MedicationReconciliationDiscrepancyDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "comparisonVersion": {
+            "type": "number"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "missing_in_internal_plan",
+              "missing_in_external_source",
+              "dose_mismatch",
+              "route_mismatch",
+              "schedule_mismatch",
+              "medication_mismatch",
+              "status_mismatch",
+              "insufficient_information"
+            ]
+          },
+          "field": {
+            "type": "string"
+          },
+          "entryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "baselineId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "externalValue": {
+            "type": "object",
+            "nullable": true
+          },
+          "internalValue": {
+            "type": "object",
+            "nullable": true
+          },
+          "isCurrent": {
+            "type": "boolean"
+          },
+          "latestDecision": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MedicationReconciliationDecisionDto"
+              }
+            ]
+          },
+          "decisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MedicationReconciliationDecisionDto"
+            }
+          },
+          "application": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MedicationReconciliationApplicationDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "comparisonVersion",
+          "type",
+          "field",
+          "isCurrent",
+          "decisions"
+        ]
+      },
+      "MedicationReconciliationDetailDto": {
+        "type": "object",
+        "properties": {
+          "reconciliation": {
+            "$ref": "#/components/schemas/MedicationReconciliationSummaryDto"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MedicationReconciliationSourceDto"
+            }
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MedicationReconciliationEntryDto"
+            }
+          },
+          "baselines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MedicationReconciliationBaselineDto"
+            }
+          },
+          "discrepancies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MedicationReconciliationDiscrepancyDto"
+            }
+          },
+          "comparisonCurrent": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reconciliation",
+          "sources",
+          "entries",
+          "baselines",
+          "discrepancies",
+          "comparisonCurrent"
+        ]
+      },
+      "MedicationReconciliationSourceRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "sourceType": {
+            "type": "string",
+            "enum": [
+              "physician",
+              "hospital_discharge",
+              "pharmacy",
+              "client",
+              "representative",
+              "other"
+            ]
+          },
+          "sourceName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
+          },
+          "sourceDate": {
+            "type": "string",
+            "nullable": true,
+            "format": "date"
+          },
+          "reference": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "sourceType"
+        ]
+      },
+      "MedicationReconciliationEntryRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "sourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "supersedesEntryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "correctionReason": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          },
+          "medicationName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "activeIngredient": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
+          },
+          "strength": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 120
+          },
+          "dosageForm": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "tablet",
+              "capsule",
+              "drops",
+              "solution",
+              "injection",
+              "cream",
+              "patch",
+              "inhalation",
+              "other"
+            ]
+          },
+          "doseAmount": {
+            "type": "string",
+            "nullable": true,
+            "example": "1"
+          },
+          "doseUnit": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "mg",
+              "g",
+              "mL",
+              "tablet",
+              "capsule",
+              "drop",
+              "puff",
+              "patch"
+            ]
+          },
+          "route": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "oral",
+              "topical",
+              "subcutaneous",
+              "intramuscular",
+              "inhalation",
+              "transdermal",
+              "other"
+            ]
+          },
+          "scheduleDescription": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          },
+          "structuredSchedule": {
+            "type": "object",
+            "nullable": true
+          },
+          "reportedStatus": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "discontinued",
+              "unknown"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "sourceId",
+          "medicationName",
+          "reportedStatus"
+        ]
+      },
+      "MedicationReconciliationMatchRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "entryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "baselineId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "entryId"
+        ]
+      },
+      "MedicationReconciliationExpectedVersionRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ]
+      },
+      "MedicationReconciliationDecisionRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "discrepancyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "accept_internal",
+              "accept_external",
+              "requires_clarification",
+              "no_change"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          },
+          "clarificationOutcome": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "discrepancyId",
+          "decision"
+        ]
+      },
+      "MedicationReconciliationApplyItemDto": {
+        "type": "object",
+        "properties": {
+          "discrepancyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "apply_external",
+              "not_applied"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "discrepancyId",
+          "disposition"
+        ]
+      },
+      "MedicationReconciliationApplyRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "actionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable key reused when retrying this apply request"
+          },
+          "items": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MedicationReconciliationApplyItemDto"
+            }
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "actionId",
+          "items"
+        ]
+      },
+      "MedicationReconciliationCancelRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "reason"
+        ]
+      },
       "MeResponseDto": {
         "type": "object",
         "properties": {
@@ -28471,6 +30023,10 @@
               "medication.administration.read",
               "medication.administer",
               "medication.administration.correct",
+              "medication_reconciliation.read",
+              "medication_reconciliation.create",
+              "medication_reconciliation.update",
+              "medication_reconciliation.complete",
               "care_plan.read",
               "care_plan.create",
               "care_plan.update",

@@ -14,7 +14,7 @@ import {
   authorizeProfessionalOperation,
   type AuthorizationPrincipal,
   type CompetencyPolicyEvaluator,
-  type MedicationPermission,
+  type Permission,
   type ProfessionalOperationAuthorizationRequest,
   type ResourceContext,
 } from '@care/permissions';
@@ -22,7 +22,7 @@ import type { OutboxWriter } from '@care/platform';
 import { localDateTimeToInstant } from '@care/scheduling';
 import { visits, visitAssignments } from '@care/scheduling';
 import type { AuditWriter } from '@care/audit';
-import { medicationAdministrationCorrections, medicationAdministrationOccurrences, medicationAdministrationRecords, medicationDefinitions, medicationOrderRevisions, medicationOrders } from '../schema';
+import { medicationAdministrationCorrections, medicationAdministrationOccurrences, medicationAdministrationRecords, medicationDefinitions, medicationOrderRevisions, medicationOrders, medicationReconciliations } from '../schema';
 import {
   assertOrderTransition,
   decimalMilliunits,
@@ -36,6 +36,8 @@ import {
   type MedicationReason,
   type MedicationSchedule,
 } from '../domain/medication';
+
+type MedicationPermission = Extract<Permission, `medication.${string}` | `medication_reconciliation.${string}`>;
 
 export type MedicationScheduleInput =
   | { type: 'fixed_times'; times: string[] }
@@ -285,28 +287,44 @@ export class MedicationApplicationService {
     request: RequestContext,
     auditContext: { ip?: string; userAgent?: string },
   ) {
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const order = await this.requireOrder(transaction, principal.tenantId, orderId, true);
-      const client = await this.requireClient(transaction, principal.tenantId, order.clientId);
-      this.authorize(principal, 'medication.order.manage', this.clientResource(client));
-      this.checkVersion(order.version, expectedVersion);
-      if (order.status === 'discontinued') throw medicationError('MEDICATION_ORDER_INVALID_STATE', 409);
-      const facts = await this.toFacts(transaction, principal.tenantId, input, client.timezone);
-      if (order.status === 'active' && !facts.sourceReference?.trim()) throw medicationError('MEDICATION_ORDER_SOURCE_REQUIRED');
-      const now = new Date();
-      const nextVersion = order.version + 1;
-      if (order.status === 'active') await this.cancelPending(transaction, principal.tenantId, orderId);
-      await this.insertRevision(transaction, principal, order, facts, order.status, now, nextVersion);
-      const [updated] = await transaction
-        .update(medicationOrders)
-        .set({ version: nextVersion, updatedAt: now })
-        .where(and(eq(medicationOrders.tenantId, principal.tenantId), eq(medicationOrders.id, orderId), eq(medicationOrders.version, order.version)))
-        .returning();
-      if (!updated) throw medicationError('MEDICATION_ORDER_VERSION_CONFLICT', 409);
-      const event = this.event('medication_order.changed', 'medication_order', orderId, principal, request, { orderId, clientId: order.clientId, version: nextVersion });
-      await this.record(transaction, principal, request, auditContext, event, 'medication_order.changed', orderId, { version: nextVersion });
-      return { order: updated, currentRevision: await this.revision(transaction, principal.tenantId, orderId, nextVersion) };
-    });
+    return this.unitOfWork.transaction(
+      { tenantId: principal.tenantId },
+      (transaction) => this.reviseOrderInTransaction(
+        transaction, principal, orderId, expectedVersion, input, request, auditContext,
+      ),
+    );
+  }
+
+  /** Reuse the order lifecycle inside a larger medication transaction. */
+  async reviseOrderInTransaction(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    orderId: string,
+    expectedVersion: number,
+    input: MedicationOrderInput,
+    request: RequestContext,
+    auditContext: { ip?: string; userAgent?: string },
+  ) {
+    const order = await this.requireOrder(transaction, principal.tenantId, orderId, true);
+    const client = await this.requireClient(transaction, principal.tenantId, order.clientId);
+    this.authorize(principal, 'medication.order.manage', this.clientResource(client));
+    this.checkVersion(order.version, expectedVersion);
+    if (order.status === 'discontinued') throw medicationError('MEDICATION_ORDER_INVALID_STATE', 409);
+    const facts = await this.toFacts(transaction, principal.tenantId, input, client.timezone);
+    if (order.status === 'active' && !facts.sourceReference?.trim()) throw medicationError('MEDICATION_ORDER_SOURCE_REQUIRED');
+    const now = new Date();
+    const nextVersion = order.version + 1;
+    if (order.status === 'active') await this.cancelPending(transaction, principal.tenantId, orderId);
+    await this.insertRevision(transaction, principal, order, facts, order.status, now, nextVersion);
+    const [updated] = await transaction
+      .update(medicationOrders)
+      .set({ version: nextVersion, updatedAt: now })
+      .where(and(eq(medicationOrders.tenantId, principal.tenantId), eq(medicationOrders.id, orderId), eq(medicationOrders.version, order.version)))
+      .returning();
+    if (!updated) throw medicationError('MEDICATION_ORDER_VERSION_CONFLICT', 409);
+    const event = this.event('medication_order.changed', 'medication_order', orderId, principal, request, { orderId, clientId: order.clientId, version: nextVersion });
+    await this.record(transaction, principal, request, auditContext, event, 'medication_order.changed', orderId, { version: nextVersion });
+    return { order: updated, currentRevision: await this.revision(transaction, principal.tenantId, orderId, nextVersion) };
   }
 
   async transitionOrder(
@@ -317,43 +335,59 @@ export class MedicationApplicationService {
     request: RequestContext,
     auditContext: { ip?: string; userAgent?: string },
   ) {
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const order = await this.requireOrder(transaction, principal.tenantId, orderId, true);
-      const client = await this.requireClient(transaction, principal.tenantId, order.clientId);
-      this.authorize(principal, 'medication.order.manage', this.clientResource(client));
-      this.checkVersion(order.version, expectedVersion);
-      try {
-        assertOrderTransition(order.status, nextStatus);
-      } catch {
-        throw medicationError('MEDICATION_ORDER_INVALID_STATE', 409);
-      }
-      const current = await this.revision(transaction, principal.tenantId, orderId, order.version);
-      if (!current) throw medicationError('MEDICATION_ORDER_NOT_FOUND', 404);
-      if (nextStatus === 'active') {
-        const [definition] = await transaction
-          .select({ status: medicationDefinitions.status })
-          .from(medicationDefinitions)
-          .where(and(eq(medicationDefinitions.tenantId, principal.tenantId), eq(medicationDefinitions.id, current.medicationDefinitionId)))
-          .limit(1);
-        if (!definition || definition.status !== 'active') throw medicationError('MEDICATION_NOT_FOUND', 404);
-        if (!current.sourceReference?.trim()) throw medicationError('MEDICATION_ORDER_SOURCE_REQUIRED', 400);
-      }
-      const now = new Date();
-      const nextVersion = order.version + 1;
-      const facts = revisionFacts(current);
-      await this.insertRevision(transaction, principal, order, facts, nextStatus, now, nextVersion);
-      const [updated] = await transaction
-        .update(medicationOrders)
-        .set({ status: nextStatus, version: nextVersion, updatedAt: now })
-        .where(and(eq(medicationOrders.tenantId, principal.tenantId), eq(medicationOrders.id, orderId), eq(medicationOrders.version, order.version)))
-        .returning();
-      if (!updated) throw medicationError('MEDICATION_ORDER_VERSION_CONFLICT', 409);
-      if (order.status === 'active') await this.cancelPending(transaction, principal.tenantId, orderId);
-      const eventName = transitionEvent(order.status, nextStatus);
-      const event = this.event(eventName, 'medication_order', orderId, principal, request, { orderId, clientId: order.clientId, version: nextVersion });
-      await this.record(transaction, principal, request, auditContext, event, eventName, orderId, { version: nextVersion });
-      return { order: updated, currentRevision: await this.revision(transaction, principal.tenantId, orderId, nextVersion) };
-    });
+    return this.unitOfWork.transaction(
+      { tenantId: principal.tenantId },
+      (transaction) => this.transitionOrderInTransaction(
+        transaction, principal, orderId, expectedVersion, nextStatus, request, auditContext,
+      ),
+    );
+  }
+
+  /** Reuse the order lifecycle inside a larger medication transaction. */
+  async transitionOrderInTransaction(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    orderId: string,
+    expectedVersion: number,
+    nextStatus: MedicationOrderStatus,
+    request: RequestContext,
+    auditContext: { ip?: string; userAgent?: string },
+  ) {
+    const order = await this.requireOrder(transaction, principal.tenantId, orderId, true);
+    const client = await this.requireClient(transaction, principal.tenantId, order.clientId);
+    this.authorize(principal, 'medication.order.manage', this.clientResource(client));
+    this.checkVersion(order.version, expectedVersion);
+    try {
+      assertOrderTransition(order.status, nextStatus);
+    } catch {
+      throw medicationError('MEDICATION_ORDER_INVALID_STATE', 409);
+    }
+    const current = await this.revision(transaction, principal.tenantId, orderId, order.version);
+    if (!current) throw medicationError('MEDICATION_ORDER_NOT_FOUND', 404);
+    if (nextStatus === 'active') {
+      const [definition] = await transaction
+        .select({ status: medicationDefinitions.status })
+        .from(medicationDefinitions)
+        .where(and(eq(medicationDefinitions.tenantId, principal.tenantId), eq(medicationDefinitions.id, current.medicationDefinitionId)))
+        .limit(1);
+      if (!definition || definition.status !== 'active') throw medicationError('MEDICATION_NOT_FOUND', 404);
+      if (!current.sourceReference?.trim()) throw medicationError('MEDICATION_ORDER_SOURCE_REQUIRED', 400);
+    }
+    const now = new Date();
+    const nextVersion = order.version + 1;
+    const facts = revisionFacts(current);
+    await this.insertRevision(transaction, principal, order, facts, nextStatus, now, nextVersion);
+    const [updated] = await transaction
+      .update(medicationOrders)
+      .set({ status: nextStatus, version: nextVersion, updatedAt: now })
+      .where(and(eq(medicationOrders.tenantId, principal.tenantId), eq(medicationOrders.id, orderId), eq(medicationOrders.version, order.version)))
+      .returning();
+    if (!updated) throw medicationError('MEDICATION_ORDER_VERSION_CONFLICT', 409);
+    if (order.status === 'active') await this.cancelPending(transaction, principal.tenantId, orderId);
+    const eventName = transitionEvent(order.status, nextStatus);
+    const event = this.event(eventName, 'medication_order', orderId, principal, request, { orderId, clientId: order.clientId, version: nextVersion });
+    await this.record(transaction, principal, request, auditContext, event, eventName, orderId, { version: nextVersion });
+    return { order: updated, currentRevision: await this.revision(transaction, principal.tenantId, orderId, nextVersion) };
   }
 
   async administrationsForClient(
@@ -450,6 +484,13 @@ export class MedicationApplicationService {
       const resource = this.clientResource(visit.client);
       const employee = await this.requireAssignedEmployee(transaction, principal, visit.id);
       this.authorize(principal, 'medication.administration.read', { ...resource, assignedUserIds: [principal.userId] });
+      this.authorize(principal, 'medication_reconciliation.read', { ...resource, assignedUserIds: [principal.userId] });
+      const [pendingReconciliation] = await transaction.select({ id: medicationReconciliations.id })
+        .from(medicationReconciliations).where(and(
+          eq(medicationReconciliations.tenantId, principal.tenantId),
+          eq(medicationReconciliations.clientId, visit.client.id),
+          inArray(medicationReconciliations.status, ['draft', 'in_review']),
+        )).limit(1);
       const clientLocalDate = localDateFor(visit.plannedStart, visit.client.timezone);
       const occurrenceFrom = addDays(clientLocalDate, -2);
       const occurrenceUntil = addDays(clientLocalDate, 2);
@@ -494,6 +535,7 @@ export class MedicationApplicationService {
         visitId,
         clientId: visit.client.id,
         employeeId: employee.id,
+        reconciliationReviewPending: !!pendingReconciliation,
         due: due.filter(({ occurrence }) =>
           occurrence.localDate === localDateFor(visit.plannedStart, occurrence.scheduledTimezone),
         ).map(({ occurrence, revision }) => ({
@@ -804,12 +846,18 @@ export class MedicationApplicationService {
       .from(medicationAdministrationOccurrences)
       .where(and(eq(medicationAdministrationOccurrences.tenantId, tenantId), eq(medicationAdministrationOccurrences.clientId, clientId), eq(medicationAdministrationOccurrences.status, 'pending')));
     const activeKeys = new Set(activeOrders.map(({ order, revision }) => `${order.id}:${revision.id}`));
-    for (const stale of pendingIds) {
-      if (!activeKeys.has(`${stale.orderId}:${stale.revisionId}`)) {
-        await transaction.update(medicationAdministrationOccurrences)
-          .set({ status: 'cancelled' })
-          .where(and(eq(medicationAdministrationOccurrences.tenantId, tenantId), eq(medicationAdministrationOccurrences.id, stale.id), eq(medicationAdministrationOccurrences.status, 'pending')));
-      }
+    const staleOccurrenceIds = pendingIds
+      .filter((pending) => !activeKeys.has(`${pending.orderId}:${pending.revisionId}`))
+      .map((pending) => pending.id);
+    if (staleOccurrenceIds.length) {
+      await transaction.update(medicationAdministrationOccurrences)
+        .set({ status: 'cancelled' })
+        .where(and(
+          eq(medicationAdministrationOccurrences.tenantId, tenantId),
+          eq(medicationAdministrationOccurrences.clientId, clientId),
+          inArray(medicationAdministrationOccurrences.id, staleOccurrenceIds),
+          eq(medicationAdministrationOccurrences.status, 'pending'),
+        ));
     }
     const pending: Array<typeof medicationAdministrationOccurrences.$inferInsert> = [];
     for (const { order, revision } of activeOrders) {

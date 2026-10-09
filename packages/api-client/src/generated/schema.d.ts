@@ -2946,6 +2946,177 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clients/{clientId}/medication-reconciliations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List reconciliation history for a client */
+        get: operations["listMedicationReconciliations"];
+        put?: never;
+        /** Start a reconciliation and snapshot the current medication orders */
+        post: operations["startMedicationReconciliation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medication-reconciliations/{reconciliationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read sources, snapshots, comparisons, decisions, and applied changes */
+        get: operations["getMedicationReconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medication-reconciliations/{reconciliationId}/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record an external source with its provenance */
+        post: operations["addMedicationReconciliationSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medication-reconciliations/{reconciliationId}/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record an external medication statement or append a correction */
+        post: operations["addMedicationReconciliationEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medication-reconciliations/{reconciliationId}/matches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Manually link an external entry to an immutable internal baseline */
+        post: operations["matchMedicationReconciliationEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medication-reconciliations/{reconciliationId}/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a versioned deterministic comparison */
+        post: operations["compareMedicationReconciliation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medication-reconciliations/{reconciliationId}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Append an explicit reviewer decision */
+        post: operations["recordMedicationReconciliationDecision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medication-reconciliations/{reconciliationId}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply accepted external facts through the medication order lifecycle */
+        post: operations["applyMedicationReconciliationChanges"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medication-reconciliations/{reconciliationId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete a resolved reconciliation with competency authorization */
+        post: operations["completeMedicationReconciliation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medication-reconciliations/{reconciliationId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel an unfinished reconciliation */
+        post: operations["cancelMedicationReconciliation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -3619,7 +3790,7 @@ export interface components {
         };
         CompetencyPolicyOperationDto: {
             /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct";
+            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
             /** Format: uuid */
             policyId: string | null;
             latestVersion: number;
@@ -5914,7 +6085,7 @@ export interface components {
         };
         WorkforceComplianceOperationSummaryDto: {
             /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct";
+            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
             /** Format: date */
             asOf: string | null;
             horizonDays: number;
@@ -5974,7 +6145,7 @@ export interface components {
         };
         WorkforceComplianceAffectedOperationDto: {
             /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct";
+            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
             /** @enum {string|null} */
             readiness: "ready" | "at_risk" | "not_ready" | null;
             /** Format: date */
@@ -6003,7 +6174,7 @@ export interface components {
         };
         WorkforceComplianceOperationReadinessDto: {
             /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct";
+            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
             /** @enum {string|null} */
             readiness: "ready" | "at_risk" | "not_ready" | null;
             /** Format: date */
@@ -6040,7 +6211,7 @@ export interface components {
             /** Format: date */
             effectiveDate: string;
             /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct";
+            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
             /** Format: uuid */
             policyId: string | null;
             policyVersion: number | null;
@@ -6049,7 +6220,7 @@ export interface components {
         };
         WorkforceComplianceOperationDetailDto: {
             /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct";
+            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
             /** @enum {string|null} */
             readiness: "ready" | "at_risk" | "not_ready" | null;
             /** Format: date */
@@ -6076,7 +6247,7 @@ export interface components {
         };
         WorkforceCompliancePolicyDetailDto: {
             /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct";
+            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
             /** Format: date */
             asOf: string | null;
             horizonDays: number;
@@ -6410,6 +6581,8 @@ export interface components {
             clientId: string;
             /** Format: uuid */
             employeeId: string;
+            /** @description A review is pending; this does not block medication administration */
+            reconciliationReviewPending: boolean;
             due: components["schemas"]["MedicationDueOccurrenceDto"][];
             history: components["schemas"]["MedicationAdministrationRecordDto"][];
             prn: components["schemas"]["MedicationPrnOrderDto"][];
@@ -6441,6 +6614,223 @@ export interface components {
             note?: string | null;
             correctionReason: string;
         };
+        MedicationReconciliationSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            clientId: string;
+            /** @enum {string} */
+            status: "draft" | "in_review" | "completed" | "cancelled";
+            /** @enum {string} */
+            reason: "initial_intake" | "hospital_discharge" | "physician_update" | "periodic_review" | "reported_change" | "other";
+            version: number;
+            inputVersion: number;
+            comparedInputVersion?: number | null;
+            comparisonVersion: number;
+            /** Format: uuid */
+            startedByEmployeeId: string;
+            /** Format: uuid */
+            reviewedByEmployeeId?: string | null;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            completedAt?: string | null;
+            cancellationReason?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        MedicationReconciliationStartRequestDto: {
+            /** @enum {string} */
+            reason: "initial_intake" | "hospital_discharge" | "physician_update" | "periodic_review" | "reported_change" | "other";
+        };
+        MedicationReconciliationCreatedDto: {
+            reconciliation: components["schemas"]["MedicationReconciliationSummaryDto"];
+            baselineCount: number;
+        };
+        MedicationReconciliationSourceDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            reconciliationId: string;
+            /** Format: uuid */
+            clientId: string;
+            /** @enum {string} */
+            sourceType: "physician" | "hospital_discharge" | "pharmacy" | "client" | "representative" | "other";
+            /** @enum {string} */
+            provenanceClass: "clinician_instruction" | "pharmacy_record" | "client_report" | "representative_report" | "other";
+            sourceName?: string | null;
+            /** Format: date */
+            sourceDate?: string | null;
+            /** Format: date-time */
+            receivedAt: string;
+            /** Format: uuid */
+            recordedByEmployeeId: string;
+            reference?: string | null;
+        };
+        MedicationReconciliationEntryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceId: string;
+            /** Format: uuid */
+            supersedesEntryId?: string | null;
+            correctionReason?: string | null;
+            medicationName: string;
+            activeIngredient?: string | null;
+            strength?: string | null;
+            dosageForm?: string | null;
+            doseAmount?: string | null;
+            doseUnit?: string | null;
+            route?: string | null;
+            scheduleDescription?: string | null;
+            structuredSchedule?: Record<string, never> | null;
+            /** @enum {string} */
+            reportedStatus: "active" | "paused" | "discontinued" | "unknown";
+            note?: string | null;
+            isCurrent: boolean;
+            currentMatch?: Record<string, never> | null;
+        };
+        MedicationReconciliationBaselineDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            orderId: string;
+            /** Format: uuid */
+            orderRevisionId: string;
+            orderVersion: number;
+            snapshot: Record<string, never>;
+        };
+        MedicationReconciliationDecisionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            discrepancyId: string;
+            version: number;
+            /** @enum {string} */
+            decision: "accept_internal" | "accept_external" | "requires_clarification" | "no_change";
+            reason?: string | null;
+            clarificationOutcome?: string | null;
+            /** Format: uuid */
+            reviewedByEmployeeId: string;
+            /** Format: date-time */
+            reviewedAt: string;
+        };
+        MedicationReconciliationApplicationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            discrepancyId: string;
+            /** Format: uuid */
+            actionId: string;
+            /** @enum {string} */
+            disposition: "applied" | "not_applied";
+            reason?: string | null;
+            /** Format: uuid */
+            orderId?: string | null;
+            /** Format: uuid */
+            orderRevisionId?: string | null;
+            orderVersion?: number | null;
+        };
+        MedicationReconciliationDiscrepancyDto: {
+            /** Format: uuid */
+            id: string;
+            comparisonVersion: number;
+            /** @enum {string} */
+            type: "missing_in_internal_plan" | "missing_in_external_source" | "dose_mismatch" | "route_mismatch" | "schedule_mismatch" | "medication_mismatch" | "status_mismatch" | "insufficient_information";
+            field: string;
+            /** Format: uuid */
+            entryId?: string | null;
+            /** Format: uuid */
+            baselineId?: string | null;
+            externalValue?: Record<string, never> | null;
+            internalValue?: Record<string, never> | null;
+            isCurrent: boolean;
+            latestDecision?: components["schemas"]["MedicationReconciliationDecisionDto"] | null;
+            decisions: components["schemas"]["MedicationReconciliationDecisionDto"][];
+            application?: components["schemas"]["MedicationReconciliationApplicationDto"] | null;
+        };
+        MedicationReconciliationDetailDto: {
+            reconciliation: components["schemas"]["MedicationReconciliationSummaryDto"];
+            sources: components["schemas"]["MedicationReconciliationSourceDto"][];
+            entries: components["schemas"]["MedicationReconciliationEntryDto"][];
+            baselines: components["schemas"]["MedicationReconciliationBaselineDto"][];
+            discrepancies: components["schemas"]["MedicationReconciliationDiscrepancyDto"][];
+            comparisonCurrent: boolean;
+        };
+        MedicationReconciliationSourceRequestDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            sourceType: "physician" | "hospital_discharge" | "pharmacy" | "client" | "representative" | "other";
+            sourceName?: string | null;
+            /** Format: date */
+            sourceDate?: string | null;
+            reference?: string | null;
+        };
+        MedicationReconciliationEntryRequestDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            sourceId: string;
+            /** Format: uuid */
+            supersedesEntryId?: string | null;
+            correctionReason?: string | null;
+            medicationName: string;
+            activeIngredient?: string | null;
+            strength?: string | null;
+            /** @enum {string|null} */
+            dosageForm?: "tablet" | "capsule" | "drops" | "solution" | "injection" | "cream" | "patch" | "inhalation" | "other" | null;
+            /** @example 1 */
+            doseAmount?: string | null;
+            /** @enum {string|null} */
+            doseUnit?: "mg" | "g" | "mL" | "tablet" | "capsule" | "drop" | "puff" | "patch" | null;
+            /** @enum {string|null} */
+            route?: "oral" | "topical" | "subcutaneous" | "intramuscular" | "inhalation" | "transdermal" | "other" | null;
+            scheduleDescription?: string | null;
+            structuredSchedule?: Record<string, never> | null;
+            /** @enum {string} */
+            reportedStatus: "active" | "paused" | "discontinued" | "unknown";
+            note?: string | null;
+        };
+        MedicationReconciliationMatchRequestDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            entryId: string;
+            /** Format: uuid */
+            baselineId?: string | null;
+        };
+        MedicationReconciliationExpectedVersionRequestDto: {
+            expectedVersion: number;
+        };
+        MedicationReconciliationDecisionRequestDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            discrepancyId: string;
+            /** @enum {string} */
+            decision: "accept_internal" | "accept_external" | "requires_clarification" | "no_change";
+            reason?: string | null;
+            clarificationOutcome?: string | null;
+        };
+        MedicationReconciliationApplyItemDto: {
+            /** Format: uuid */
+            discrepancyId: string;
+            /** @enum {string} */
+            disposition: "apply_external" | "not_applied";
+            reason?: string | null;
+        };
+        MedicationReconciliationApplyRequestDto: {
+            expectedVersion: number;
+            /**
+             * Format: uuid
+             * @description Stable key reused when retrying this apply request
+             */
+            actionId: string;
+            items: components["schemas"]["MedicationReconciliationApplyItemDto"][];
+        };
+        MedicationReconciliationCancelRequestDto: {
+            expectedVersion: number;
+            reason: string | null;
+        };
         MeResponseDto: {
             /** Format: uuid */
             id: string;
@@ -6454,7 +6844,7 @@ export interface components {
         };
         PermissionGrantDto: {
             /** @enum {string} */
-            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "clinical_documentation.read" | "clinical_documentation.create" | "clinical_documentation.update" | "clinical_documentation.review" | "clinical_documentation.amend" | "medication.read" | "medication.order.manage" | "medication.administration.read" | "medication.administer" | "medication.administration.correct" | "care_plan.read" | "care_plan.create" | "care_plan.update" | "care_plan.activate" | "care_plan.evaluate" | "care_plan.end" | "care_plan.review_history" | "service_evidence.read" | "service_evidence.prepare" | "acknowledgement.read" | "acknowledgement.capture" | "acknowledgement.revoke" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "competency_policy.read" | "competency_policy.manage" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "workforce_compliance.read" | "workforce_compliance.read_details" | "workforce_compliance.manage_settings" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
+            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "clinical_documentation.read" | "clinical_documentation.create" | "clinical_documentation.update" | "clinical_documentation.review" | "clinical_documentation.amend" | "medication.read" | "medication.order.manage" | "medication.administration.read" | "medication.administer" | "medication.administration.correct" | "medication_reconciliation.read" | "medication_reconciliation.create" | "medication_reconciliation.update" | "medication_reconciliation.complete" | "care_plan.read" | "care_plan.create" | "care_plan.update" | "care_plan.activate" | "care_plan.evaluate" | "care_plan.end" | "care_plan.review_history" | "service_evidence.read" | "service_evidence.prepare" | "acknowledgement.read" | "acknowledgement.capture" | "acknowledgement.revoke" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "competency_policy.read" | "competency_policy.manage" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "workforce_compliance.read" | "workforce_compliance.read_details" | "workforce_compliance.manage_settings" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
             /** @enum {string} */
             scopeType: "assigned_clients" | "team" | "facility" | "organization" | "tenant";
             /** Format: uuid */
@@ -8647,7 +9037,7 @@ export interface operations {
                 "X-Tenant-Id": string;
             };
             path: {
-                operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct";
+                operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
             };
             cookie?: never;
         };
@@ -8684,7 +9074,7 @@ export interface operations {
                 "X-Tenant-Id": string;
             };
             path: {
-                operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct";
+                operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
                 /** @description Version number, starting at 1 */
                 version: number;
             };
@@ -8719,7 +9109,7 @@ export interface operations {
                 "X-Tenant-Id": string;
             };
             path: {
-                operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct";
+                operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
             };
             cookie?: never;
         };
@@ -13596,7 +13986,7 @@ export interface operations {
     getWorkforceQualificationImpact: {
         parameters: {
             query?: {
-                operationKey?: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct";
+                operationKey?: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
                 pageSize?: number;
                 page?: number;
                 horizonDays?: number;
@@ -13718,7 +14108,7 @@ export interface operations {
                 "X-Tenant-Id": string;
             };
             path: {
-                operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct";
+                operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
             };
             cookie?: never;
         };
@@ -14382,6 +14772,407 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    listMedicationReconciliations: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MedicationReconciliationSummaryDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    startMedicationReconciliation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MedicationReconciliationStartRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MedicationReconciliationCreatedDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    getMedicationReconciliation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                reconciliationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MedicationReconciliationDetailDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    addMedicationReconciliationSource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                reconciliationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MedicationReconciliationSourceRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    addMedicationReconciliationEntry: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                reconciliationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MedicationReconciliationEntryRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    matchMedicationReconciliationEntry: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                reconciliationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MedicationReconciliationMatchRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    compareMedicationReconciliation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                reconciliationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MedicationReconciliationExpectedVersionRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    recordMedicationReconciliationDecision: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                reconciliationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MedicationReconciliationDecisionRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    applyMedicationReconciliationChanges: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                reconciliationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MedicationReconciliationApplyRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    completeMedicationReconciliation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                reconciliationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expectedVersion: number;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MedicationReconciliationSummaryDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    cancelMedicationReconciliation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                reconciliationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MedicationReconciliationCancelRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MedicationReconciliationSummaryDto"];
+                };
             };
             /** @description Problem Details response */
             default: {

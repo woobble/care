@@ -17,6 +17,17 @@ import { clientRecords } from '@care/clients';
 import { employeeRecords } from '@care/employees';
 import { tenants } from '@care/organizations';
 import type { MedicationOrderFacts, MedicationOutcome, MedicationReason, MedicationSchedule } from './domain/medication';
+import type {
+  ExternalMedicationEntryFacts,
+  ExternalMedicationSourceType,
+  MedicationBaselineFacts,
+  MedicationDiscrepancyType,
+  MedicationReconciliationDecision,
+  MedicationReconciliationReason,
+  MedicationReconciliationStatus,
+  MedicationSourceProvenance,
+  ReportedMedicationStatus,
+} from './domain/reconciliation';
 
 const medication = pgSchema('medication');
 
@@ -254,6 +265,346 @@ export const medicationAdministrationCorrections = medication.table(
   ],
 );
 
+export const medicationReconciliations = medication.table(
+  'reconciliations',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull(),
+    clientId: uuid('client_id').notNull(),
+    status: text('status').$type<MedicationReconciliationStatus>().notNull().default('draft'),
+    reason: text('reason').$type<MedicationReconciliationReason>().notNull(),
+    version: integer('version').notNull().default(1),
+    inputVersion: integer('input_version').notNull().default(0),
+    comparedInputVersion: integer('compared_input_version'),
+    comparisonVersion: integer('comparison_version').notNull().default(0),
+    startedByEmployeeId: uuid('started_by_employee_id').notNull(),
+    reviewedByEmployeeId: uuid('reviewed_by_employee_id'),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    cancellationReason: text('cancellation_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('medication_reconciliations_tenant_id_uq').on(table.tenantId, table.id),
+    uniqueIndex('medication_reconciliations_client_reference_uq').on(table.tenantId, table.id, table.clientId),
+    index('medication_reconciliations_client_started_idx').on(table.tenantId, table.clientId, table.startedAt),
+    check(
+      'medication_reconciliations_state_ck',
+      sql`${table.status} IN ('draft', 'in_review', 'completed', 'cancelled') AND ${table.reason} IN ('initial_intake', 'hospital_discharge', 'physician_update', 'periodic_review', 'reported_change', 'other') AND ${table.version} > 0 AND ${table.comparisonVersion} >= 0`,
+    ),
+    check(
+      'medication_reconciliations_lifecycle_ck',
+      sql`(${table.status} = 'completed' AND ${table.completedAt} IS NOT NULL AND ${table.reviewedByEmployeeId} IS NOT NULL) OR (${table.status} <> 'completed' AND ${table.completedAt} IS NULL)`,
+    ),
+    check('medication_reconciliations_cancel_reason_ck', sql`${table.cancellationReason} IS NULL OR length(${table.cancellationReason}) <= 1000`),
+    foreignKey({
+      name: 'medication_reconciliations_client_fk',
+      columns: [table.tenantId, table.clientId],
+      foreignColumns: [clientRecords.tenantId, clientRecords.id],
+    }),
+    foreignKey({
+      name: 'medication_reconciliations_started_employee_fk',
+      columns: [table.tenantId, table.startedByEmployeeId],
+      foreignColumns: [employeeRecords.tenantId, employeeRecords.id],
+    }),
+    foreignKey({
+      name: 'medication_reconciliations_reviewed_employee_fk',
+      columns: [table.tenantId, table.reviewedByEmployeeId],
+      foreignColumns: [employeeRecords.tenantId, employeeRecords.id],
+    }),
+  ],
+);
+
+export const medicationReconciliationSources = medication.table(
+  'reconciliation_sources',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull(),
+    reconciliationId: uuid('reconciliation_id').notNull(),
+    clientId: uuid('client_id').notNull(),
+    sourceType: text('source_type').$type<ExternalMedicationSourceType>().notNull(),
+    provenanceClass: text('provenance_class').$type<MedicationSourceProvenance>().notNull(),
+    sourceName: text('source_name'),
+    sourceDate: date('source_date', { mode: 'string' }),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull(),
+    recordedByEmployeeId: uuid('recorded_by_employee_id').notNull(),
+    reference: text('reference'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('medication_reconciliation_sources_tenant_id_uq').on(table.tenantId, table.id),
+    uniqueIndex('medication_reconciliation_sources_reference_uq').on(table.tenantId, table.reconciliationId, table.clientId, table.id),
+    index('medication_reconciliation_sources_history_idx').on(table.tenantId, table.reconciliationId, table.receivedAt),
+    check('medication_reconciliation_sources_type_ck', sql`${table.sourceType} IN ('physician', 'hospital_discharge', 'pharmacy', 'client', 'representative', 'other')`),
+    check('medication_reconciliation_sources_provenance_ck', sql`(${table.sourceType} IN ('physician', 'hospital_discharge') AND ${table.provenanceClass} = 'clinician_instruction') OR (${table.sourceType} = 'pharmacy' AND ${table.provenanceClass} = 'pharmacy_record') OR (${table.sourceType} = 'client' AND ${table.provenanceClass} = 'client_report') OR (${table.sourceType} = 'representative' AND ${table.provenanceClass} = 'representative_report') OR (${table.sourceType} = 'other' AND ${table.provenanceClass} = 'other')`),
+    check('medication_reconciliation_sources_name_ck', sql`${table.sourceName} IS NULL OR length(trim(${table.sourceName})) BETWEEN 1 AND 200`),
+    check('medication_reconciliation_sources_reference_ck', sql`${table.reference} IS NULL OR length(trim(${table.reference})) BETWEEN 1 AND 1000`),
+    foreignKey({
+      name: 'medication_reconciliation_sources_reconciliation_fk',
+      columns: [table.tenantId, table.reconciliationId, table.clientId],
+      foreignColumns: [medicationReconciliations.tenantId, medicationReconciliations.id, medicationReconciliations.clientId],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_sources_employee_fk',
+      columns: [table.tenantId, table.recordedByEmployeeId],
+      foreignColumns: [employeeRecords.tenantId, employeeRecords.id],
+    }),
+  ],
+);
+
+export const medicationReconciliationEntries = medication.table(
+  'reconciliation_entries',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull(),
+    reconciliationId: uuid('reconciliation_id').notNull(),
+    clientId: uuid('client_id').notNull(),
+    sourceId: uuid('source_id').notNull(),
+    supersedesEntryId: uuid('supersedes_entry_id'),
+    correctionReason: text('correction_reason'),
+    medicationName: text('medication_name').notNull(),
+    activeIngredient: text('active_ingredient'),
+    strength: text('strength'),
+    dosageForm: text('dosage_form').$type<ExternalMedicationEntryFacts['dosageForm']>(),
+    doseAmount: numeric('dose_amount', { precision: 12, scale: 3, mode: 'string' }),
+    doseUnit: text('dose_unit').$type<ExternalMedicationEntryFacts['doseUnit']>(),
+    route: text('route').$type<ExternalMedicationEntryFacts['route']>(),
+    scheduleDescription: text('schedule_description'),
+    structuredSchedule: jsonb('structured_schedule').$type<MedicationSchedule>(),
+    reportedStatus: text('reported_status').$type<ReportedMedicationStatus>().notNull(),
+    note: text('note'),
+    recordedByEmployeeId: uuid('recorded_by_employee_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('medication_reconciliation_entries_tenant_id_uq').on(table.tenantId, table.id),
+    uniqueIndex('medication_reconciliation_entries_reference_uq').on(table.tenantId, table.reconciliationId, table.clientId, table.id),
+    uniqueIndex('medication_reconciliation_entries_source_reference_uq').on(table.tenantId, table.reconciliationId, table.clientId, table.sourceId, table.id),
+    uniqueIndex('medication_reconciliation_entries_supersedes_uq').on(table.tenantId, table.supersedesEntryId).where(sql`${table.supersedesEntryId} IS NOT NULL`),
+    index('medication_reconciliation_entries_history_idx').on(table.tenantId, table.reconciliationId, table.createdAt),
+    check('medication_reconciliation_entries_name_ck', sql`length(trim(${table.medicationName})) BETWEEN 1 AND 200`),
+    check('medication_reconciliation_entries_values_ck', sql`(${table.activeIngredient} IS NULL OR length(${table.activeIngredient}) <= 200) AND (${table.strength} IS NULL OR length(${table.strength}) <= 120) AND (${table.doseAmount} IS NULL OR ${table.doseAmount} > 0) AND ((${table.doseAmount} IS NULL) = (${table.doseUnit} IS NULL)) AND (${table.doseUnit} IS NULL OR ${table.doseUnit} IN ('mg', 'g', 'mL', 'tablet', 'capsule', 'drop', 'puff', 'patch')) AND (${table.route} IS NULL OR ${table.route} IN ('oral', 'topical', 'subcutaneous', 'intramuscular', 'inhalation', 'transdermal', 'other')) AND (${table.dosageForm} IS NULL OR ${table.dosageForm} IN ('tablet', 'capsule', 'drops', 'solution', 'injection', 'cream', 'patch', 'inhalation', 'other'))`),
+    check('medication_reconciliation_entries_schedule_ck', sql`${table.scheduleDescription} IS NULL OR length(${table.scheduleDescription}) <= 1000`),
+    check('medication_reconciliation_entries_note_ck', sql`${table.note} IS NULL OR length(${table.note}) <= 2000`),
+    check('medication_reconciliation_entries_reported_status_ck', sql`${table.reportedStatus} IN ('active', 'paused', 'discontinued', 'unknown')`),
+    check('medication_reconciliation_entries_correction_ck', sql`(${table.supersedesEntryId} IS NULL AND ${table.correctionReason} IS NULL) OR (${table.supersedesEntryId} IS NOT NULL AND length(trim(coalesce(${table.correctionReason}, ''))) BETWEEN 1 AND 1000)`),
+    foreignKey({
+      name: 'medication_reconciliation_entries_source_fk',
+      columns: [table.tenantId, table.reconciliationId, table.clientId, table.sourceId],
+      foreignColumns: [medicationReconciliationSources.tenantId, medicationReconciliationSources.reconciliationId, medicationReconciliationSources.clientId, medicationReconciliationSources.id],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_entries_supersedes_fk',
+      columns: [table.tenantId, table.reconciliationId, table.clientId, table.sourceId, table.supersedesEntryId],
+      foreignColumns: [table.tenantId, table.reconciliationId, table.clientId, table.sourceId, table.id],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_entries_employee_fk',
+      columns: [table.tenantId, table.recordedByEmployeeId],
+      foreignColumns: [employeeRecords.tenantId, employeeRecords.id],
+    }),
+  ],
+);
+
+export const medicationReconciliationBaselines = medication.table(
+  'reconciliation_baselines',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull(),
+    reconciliationId: uuid('reconciliation_id').notNull(),
+    clientId: uuid('client_id').notNull(),
+    orderId: uuid('order_id').notNull(),
+    orderRevisionId: uuid('order_revision_id').notNull(),
+    orderVersion: integer('order_version').notNull(),
+    snapshot: jsonb('snapshot').$type<MedicationBaselineFacts>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('medication_reconciliation_baselines_tenant_id_uq').on(table.tenantId, table.id),
+    uniqueIndex('medication_reconciliation_baselines_order_uq').on(table.tenantId, table.reconciliationId, table.orderId),
+    uniqueIndex('medication_reconciliation_baselines_reference_uq').on(table.tenantId, table.reconciliationId, table.clientId, table.id),
+    index('medication_reconciliation_baselines_order_idx').on(table.tenantId, table.orderId, table.orderVersion),
+    check('medication_reconciliation_baselines_version_ck', sql`${table.orderVersion} > 0 AND jsonb_typeof(${table.snapshot}) = 'object'`),
+    foreignKey({
+      name: 'medication_reconciliation_baselines_reconciliation_fk',
+      columns: [table.tenantId, table.reconciliationId, table.clientId],
+      foreignColumns: [medicationReconciliations.tenantId, medicationReconciliations.id, medicationReconciliations.clientId],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_baselines_order_fk',
+      columns: [table.tenantId, table.orderId, table.clientId],
+      foreignColumns: [medicationOrders.tenantId, medicationOrders.id, medicationOrders.clientId],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_baselines_revision_fk',
+      columns: [table.tenantId, table.orderRevisionId, table.orderId, table.clientId, table.orderVersion],
+      foreignColumns: [medicationOrderRevisions.tenantId, medicationOrderRevisions.id, medicationOrderRevisions.orderId, medicationOrderRevisions.clientId, medicationOrderRevisions.version],
+    }),
+  ],
+);
+
+export const medicationReconciliationMatches = medication.table(
+  'reconciliation_matches',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull(),
+    reconciliationId: uuid('reconciliation_id').notNull(),
+    clientId: uuid('client_id').notNull(),
+    entryId: uuid('entry_id').notNull(),
+    baselineId: uuid('baseline_id'),
+    version: integer('version').notNull(),
+    matchedByEmployeeId: uuid('matched_by_employee_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('medication_reconciliation_matches_tenant_id_uq').on(table.tenantId, table.id),
+    uniqueIndex('medication_reconciliation_matches_entry_version_uq').on(table.tenantId, table.entryId, table.version),
+    index('medication_reconciliation_matches_history_idx').on(table.tenantId, table.reconciliationId, table.entryId, table.version),
+    check('medication_reconciliation_matches_version_ck', sql`${table.version} > 0`),
+    foreignKey({
+      name: 'medication_reconciliation_matches_reconciliation_fk',
+      columns: [table.tenantId, table.reconciliationId, table.clientId],
+      foreignColumns: [medicationReconciliations.tenantId, medicationReconciliations.id, medicationReconciliations.clientId],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_matches_entry_fk',
+      columns: [table.tenantId, table.reconciliationId, table.clientId, table.entryId],
+      foreignColumns: [medicationReconciliationEntries.tenantId, medicationReconciliationEntries.reconciliationId, medicationReconciliationEntries.clientId, medicationReconciliationEntries.id],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_matches_baseline_fk',
+      columns: [table.tenantId, table.reconciliationId, table.clientId, table.baselineId],
+      foreignColumns: [medicationReconciliationBaselines.tenantId, medicationReconciliationBaselines.reconciliationId, medicationReconciliationBaselines.clientId, medicationReconciliationBaselines.id],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_matches_employee_fk',
+      columns: [table.tenantId, table.matchedByEmployeeId],
+      foreignColumns: [employeeRecords.tenantId, employeeRecords.id],
+    }),
+  ],
+);
+
+export const medicationReconciliationDiscrepancies = medication.table(
+  'reconciliation_discrepancies',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull(),
+    reconciliationId: uuid('reconciliation_id').notNull(),
+    clientId: uuid('client_id').notNull(),
+    comparisonVersion: integer('comparison_version').notNull(),
+    type: text('type').$type<MedicationDiscrepancyType>().notNull(),
+    field: text('field').notNull(),
+    entryId: uuid('entry_id'),
+    baselineId: uuid('baseline_id'),
+    externalValue: jsonb('external_value'),
+    internalValue: jsonb('internal_value'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('medication_reconciliation_discrepancies_tenant_id_uq').on(table.tenantId, table.id),
+    uniqueIndex('medication_reconciliation_discrepancies_reference_uq').on(table.tenantId, table.reconciliationId, table.clientId, table.id),
+    index('medication_reconciliation_discrepancies_current_idx').on(table.tenantId, table.reconciliationId, table.comparisonVersion),
+    check('medication_reconciliation_discrepancies_version_ck', sql`${table.comparisonVersion} > 0`),
+    check('medication_reconciliation_discrepancies_type_ck', sql`${table.type} IN ('missing_in_internal_plan', 'missing_in_external_source', 'dose_mismatch', 'route_mismatch', 'schedule_mismatch', 'medication_mismatch', 'status_mismatch', 'insufficient_information') AND length(trim(${table.field})) BETWEEN 1 AND 80 AND (${table.entryId} IS NOT NULL OR ${table.baselineId} IS NOT NULL)`),
+    foreignKey({
+      name: 'medication_reconciliation_discrepancies_reconciliation_fk',
+      columns: [table.tenantId, table.reconciliationId, table.clientId],
+      foreignColumns: [medicationReconciliations.tenantId, medicationReconciliations.id, medicationReconciliations.clientId],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_discrepancies_entry_fk',
+      columns: [table.tenantId, table.reconciliationId, table.clientId, table.entryId],
+      foreignColumns: [medicationReconciliationEntries.tenantId, medicationReconciliationEntries.reconciliationId, medicationReconciliationEntries.clientId, medicationReconciliationEntries.id],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_discrepancies_baseline_fk',
+      columns: [table.tenantId, table.reconciliationId, table.clientId, table.baselineId],
+      foreignColumns: [medicationReconciliationBaselines.tenantId, medicationReconciliationBaselines.reconciliationId, medicationReconciliationBaselines.clientId, medicationReconciliationBaselines.id],
+    }),
+  ],
+);
+
+export const medicationReconciliationDecisions = medication.table(
+  'reconciliation_decisions',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull(),
+    reconciliationId: uuid('reconciliation_id').notNull(),
+    clientId: uuid('client_id').notNull(),
+    discrepancyId: uuid('discrepancy_id').notNull(),
+    version: integer('version').notNull(),
+    decision: text('decision').$type<MedicationReconciliationDecision>().notNull(),
+    reason: text('reason'),
+    clarificationOutcome: text('clarification_outcome'),
+    reviewedByEmployeeId: uuid('reviewed_by_employee_id').notNull(),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('medication_reconciliation_decisions_tenant_id_uq').on(table.tenantId, table.id),
+    uniqueIndex('medication_reconciliation_decisions_discrepancy_version_uq').on(table.tenantId, table.discrepancyId, table.version),
+    index('medication_reconciliation_decisions_history_idx').on(table.tenantId, table.discrepancyId, table.version),
+    check('medication_reconciliation_decisions_version_ck', sql`${table.version} > 0`),
+    check('medication_reconciliation_decisions_values_ck', sql`${table.decision} IN ('accept_internal', 'accept_external', 'requires_clarification', 'no_change') AND (${table.reason} IS NULL OR length(${table.reason}) <= 1000) AND (${table.clarificationOutcome} IS NULL OR length(${table.clarificationOutcome}) <= 2000) AND (${table.decision} <> 'requires_clarification' OR length(trim(coalesce(${table.reason}, ''))) BETWEEN 1 AND 1000)`),
+    foreignKey({
+      name: 'medication_reconciliation_decisions_discrepancy_fk',
+      columns: [table.tenantId, table.reconciliationId, table.clientId, table.discrepancyId],
+      foreignColumns: [medicationReconciliationDiscrepancies.tenantId, medicationReconciliationDiscrepancies.reconciliationId, medicationReconciliationDiscrepancies.clientId, medicationReconciliationDiscrepancies.id],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_decisions_employee_fk',
+      columns: [table.tenantId, table.reviewedByEmployeeId],
+      foreignColumns: [employeeRecords.tenantId, employeeRecords.id],
+    }),
+  ],
+);
+
+export const medicationReconciliationApplications = medication.table(
+  'reconciliation_applications',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull(),
+    reconciliationId: uuid('reconciliation_id').notNull(),
+    clientId: uuid('client_id').notNull(),
+    discrepancyId: uuid('discrepancy_id').notNull(),
+    actionId: uuid('action_id').notNull(),
+    disposition: text('disposition').$type<'applied' | 'not_applied'>().notNull(),
+    reason: text('reason'),
+    orderId: uuid('order_id'),
+    orderRevisionId: uuid('order_revision_id'),
+    orderVersion: integer('order_version'),
+    appliedByEmployeeId: uuid('applied_by_employee_id').notNull(),
+    appliedAt: timestamp('applied_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('medication_reconciliation_applications_tenant_id_uq').on(table.tenantId, table.id),
+    uniqueIndex('medication_reconciliation_applications_discrepancy_uq').on(table.tenantId, table.discrepancyId),
+    uniqueIndex('medication_reconciliation_applications_action_uq').on(table.tenantId, table.reconciliationId, table.actionId, table.discrepancyId),
+    index('medication_reconciliation_applications_history_idx').on(table.tenantId, table.reconciliationId, table.appliedAt),
+    check('medication_reconciliation_applications_values_ck', sql`(${table.disposition} = 'applied' AND ${table.orderId} IS NOT NULL AND ${table.orderRevisionId} IS NOT NULL AND ${table.orderVersion} IS NOT NULL AND ${table.reason} IS NULL) OR (${table.disposition} = 'not_applied' AND ${table.orderId} IS NULL AND ${table.orderRevisionId} IS NULL AND ${table.orderVersion} IS NULL AND length(trim(coalesce(${table.reason}, ''))) BETWEEN 1 AND 1000)`),
+    foreignKey({
+      name: 'medication_reconciliation_applications_discrepancy_fk',
+      columns: [table.tenantId, table.reconciliationId, table.clientId, table.discrepancyId],
+      foreignColumns: [medicationReconciliationDiscrepancies.tenantId, medicationReconciliationDiscrepancies.reconciliationId, medicationReconciliationDiscrepancies.clientId, medicationReconciliationDiscrepancies.id],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_applications_order_fk',
+      columns: [table.tenantId, table.orderId, table.clientId],
+      foreignColumns: [medicationOrders.tenantId, medicationOrders.id, medicationOrders.clientId],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_applications_revision_fk',
+      columns: [table.tenantId, table.orderRevisionId, table.orderId, table.clientId, table.orderVersion],
+      foreignColumns: [medicationOrderRevisions.tenantId, medicationOrderRevisions.id, medicationOrderRevisions.orderId, medicationOrderRevisions.clientId, medicationOrderRevisions.version],
+    }),
+    foreignKey({
+      name: 'medication_reconciliation_applications_employee_fk',
+      columns: [table.tenantId, table.appliedByEmployeeId],
+      foreignColumns: [employeeRecords.tenantId, employeeRecords.id],
+    }),
+  ],
+);
+
 export const medicationSchema = {
   medicationDefinitions,
   medicationOrders,
@@ -261,4 +612,12 @@ export const medicationSchema = {
   medicationAdministrationOccurrences,
   medicationAdministrationRecords,
   medicationAdministrationCorrections,
+  medicationReconciliations,
+  medicationReconciliationSources,
+  medicationReconciliationEntries,
+  medicationReconciliationBaselines,
+  medicationReconciliationMatches,
+  medicationReconciliationDiscrepancies,
+  medicationReconciliationDecisions,
+  medicationReconciliationApplications,
 };

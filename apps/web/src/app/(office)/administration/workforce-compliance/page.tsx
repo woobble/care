@@ -49,7 +49,11 @@ const qualificationStatuses = [
   'revoked',
 ] as const;
 const assignmentStatuses = ['active', 'revoked'] as const;
-const operationKeys = ['care_plan.activate', 'care_plan.evaluate'] as const;
+const operationKeys = [
+  'care_plan.activate',
+  'care_plan.evaluate',
+  'medication.reconciliation.complete',
+] as const;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function dayWindow(value: string | undefined): number | undefined {
@@ -1025,7 +1029,9 @@ function operationLabel(
   t: Awaited<ReturnType<typeof getTranslations<'WorkforceCompliance'>>>,
   operation: string,
 ) {
-  return operation === 'care_plan.activate' ? t('operationActivate') : t('operationEvaluate');
+  if (operation === 'care_plan.activate') return t('operationActivate');
+  if (operation === 'care_plan.evaluate') return t('operationEvaluate');
+  return t('operationReconciliationComplete');
 }
 
 function employeeStatusLabel(

@@ -59,6 +59,49 @@ export interface EventPayloadMap {
     orderId: string;
     version: number;
   };
+  'medication_reconciliation.created': {
+    reconciliationId: string;
+    clientId: string;
+    version: number;
+  };
+  'medication_reconciliation.source_added': {
+    reconciliationId: string;
+    clientId: string;
+    sourceId: string;
+    version: number;
+  };
+  'medication_reconciliation.entry_added': {
+    reconciliationId: string;
+    clientId: string;
+    entryId: string;
+    sourceId: string;
+    version: number;
+  };
+  'medication_reconciliation.reviewed': {
+    reconciliationId: string;
+    clientId: string;
+    version: number;
+    comparisonVersion?: number;
+    discrepancyId?: string;
+  };
+  'medication_reconciliation.change_applied': {
+    reconciliationId: string;
+    clientId: string;
+    actionId: string;
+    version: number;
+    applicationCount: number;
+  };
+  'medication_reconciliation.completed': {
+    reconciliationId: string;
+    clientId: string;
+    version: number;
+    reviewerEmployeeId: string;
+  };
+  'medication_reconciliation.cancelled': {
+    reconciliationId: string;
+    clientId: string;
+    version: number;
+  };
   'skill.created': { skillId: string };
   'skill.updated': { skillId: string; changedFields: string[] };
   'skill.archived': { skillId: string };
@@ -477,6 +520,7 @@ export interface DomainEvent<T extends EventName = EventName> {
     | 'workforce_compliance'
     | 'medication_order'
     | 'medication_administration'
+    | 'medication_reconciliation'
     | 'service_evidence'
     | 'schedule_generation'
     | 'employee_availability'

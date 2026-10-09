@@ -210,7 +210,9 @@ export default async function EmployeeDetailPage({
               const operationName =
                 operation.operationKey === 'care_plan.activate'
                   ? t('WorkforceCompliance.operationActivate')
-                  : t('WorkforceCompliance.operationEvaluate');
+                  : operation.operationKey === 'care_plan.evaluate'
+                    ? t('WorkforceCompliance.operationEvaluate')
+                    : t('WorkforceCompliance.operationReconciliationComplete');
               const readinessName =
                 operation.readiness === 'ready'
                   ? t('WorkforceCompliance.statusReady')

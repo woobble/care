@@ -23,6 +23,7 @@ import {
   saveMedicationOrderAction,
   updateMedicationDefinitionAction,
 } from './actions';
+import MedicationReconciliationPanel from './reconciliation-panel';
 
 type MedicationOrder = components['schemas']['MedicationOrderListDto'];
 type MedicationRevision = components['schemas']['MedicationOrderRevisionDto'];
@@ -64,7 +65,13 @@ export default async function ClientMedicationsPage({
   searchParams,
 }: Readonly<{
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; from?: string; until?: string; corrected?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    from?: string;
+    until?: string;
+    corrected?: string;
+    reconciliationId?: string;
+  }>;
 }>) {
   const { id: clientId } = await params;
   const query = await searchParams;
@@ -116,6 +123,34 @@ export default async function ClientMedicationsPage({
   const canCorrect = hasClientPermission(
     grants,
     'medication.administration.correct',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canReadReconciliation = hasClientPermission(
+    grants,
+    'medication_reconciliation.read',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canCreateReconciliation = hasClientPermission(
+    grants,
+    'medication_reconciliation.create',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canUpdateReconciliation = hasClientPermission(
+    grants,
+    'medication_reconciliation.update',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canCompleteReconciliation = hasClientPermission(
+    grants,
+    'medication_reconciliation.complete',
     tenantId,
     client.organizationId,
     client.primaryFacilityId,
@@ -927,6 +962,21 @@ export default async function ClientMedicationsPage({
           </div>
         ) : null}
       </section>
+
+      <MedicationReconciliationPanel
+        clientId={clientId}
+        timezone={timezone}
+        from={from}
+        until={until}
+        selectedId={query.reconciliationId}
+        currentOrderVersions={Object.fromEntries(
+          orders.map((entry) => [entry.order.id, entry.order.version]),
+        )}
+        canRead={canReadReconciliation}
+        canCreate={canCreateReconciliation}
+        canUpdate={canUpdateReconciliation}
+        canComplete={canCompleteReconciliation}
+      />
     </main>
   );
 }

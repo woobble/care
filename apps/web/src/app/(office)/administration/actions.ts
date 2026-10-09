@@ -408,9 +408,10 @@ export async function deactivateCompetencyPolicyAction(formData: FormData): Prom
 
 function readCompetencyOperation(
   value: FormDataEntryValue | null,
-): 'care_plan.activate' | 'care_plan.evaluate' | 'medication.administer' | 'medication.administration.correct' | null {
+): 'care_plan.activate' | 'care_plan.evaluate' | 'medication.administer' | 'medication.administration.correct' | 'medication.reconciliation.complete' | null {
   return value === 'care_plan.activate' || value === 'care_plan.evaluate' ||
-    value === 'medication.administer' || value === 'medication.administration.correct'
+    value === 'medication.administer' || value === 'medication.administration.correct' ||
+    value === 'medication.reconciliation.complete'
     ? value
     : null;
 }

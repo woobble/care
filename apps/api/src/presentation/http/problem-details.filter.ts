@@ -42,7 +42,7 @@ import {
   WorkforceComplianceSettingsNotFoundError,
   WorkforceComplianceSettingsVersionConflictError,
 } from '@care/workforce-compliance';
-import { MedicationError } from '@care/medication';
+import { MedicationError, MedicationReconciliationError } from '@care/medication';
 import {
   ClientArchivedError,
   ClientAddressNotFoundError,
@@ -317,7 +317,7 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
   } else if (exception instanceof WorkforceComplianceAccessDeniedError) {
     status = 403;
     code = exception.code;
-  } else if (exception instanceof MedicationError) {
+  } else if (exception instanceof MedicationError || exception instanceof MedicationReconciliationError) {
     status = exception.status;
     code = exception.code;
   } else if (

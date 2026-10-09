@@ -48,6 +48,10 @@ export const PERMISSIONS = [
   'medication.administration.read',
   'medication.administer',
   'medication.administration.correct',
+  'medication_reconciliation.read',
+  'medication_reconciliation.create',
+  'medication_reconciliation.update',
+  'medication_reconciliation.complete',
   'care_plan.read',
   'care_plan.create',
   'care_plan.update',
@@ -130,6 +134,7 @@ export const COMPETENCY_OPERATIONS = [
   'care_plan.evaluate',
   'medication.administer',
   'medication.administration.correct',
+  'medication.reconciliation.complete',
 ] as const;
 export type CompetencyOperation = (typeof COMPETENCY_OPERATIONS)[number];
 

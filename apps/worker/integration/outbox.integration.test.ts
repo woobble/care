@@ -10,6 +10,13 @@ test('worker dispatches an outbox event before marking it delivered', async () =
   const owner = new Client({ connectionString: database.migrationUrl });
   const tenantId = uuidv7();
   const generatedVisitId = uuidv7();
+  const reconciliationId = uuidv7();
+  const reconciliationClientId = uuidv7();
+  const reconciliationSourceId = uuidv7();
+  const reconciliationEntryId = uuidv7();
+  const reconciliationDiscrepancyId = uuidv7();
+  const reconciliationActionId = uuidv7();
+  const reconciliationReviewerId = uuidv7();
   const events = [
     createDomainEvent({
       type: 'employee.created',
@@ -50,6 +57,97 @@ test('worker dispatches an outbox event before marking it delivered', async () =
         agreementId: uuidv7(),
         clientId: uuidv7(),
       },
+    }),
+    createDomainEvent({
+      type: 'medication_reconciliation.created',
+      tenantId,
+      aggregateType: 'medication_reconciliation',
+      aggregateId: reconciliationId,
+      actor: { type: 'system' },
+      correlationId: uuidv7(),
+      payload: { reconciliationId, clientId: reconciliationClientId, version: 1 },
+    }),
+    createDomainEvent({
+      type: 'medication_reconciliation.source_added',
+      tenantId,
+      aggregateType: 'medication_reconciliation',
+      aggregateId: reconciliationId,
+      actor: { type: 'system' },
+      correlationId: uuidv7(),
+      payload: {
+        reconciliationId,
+        clientId: reconciliationClientId,
+        sourceId: reconciliationSourceId,
+        version: 2,
+      },
+    }),
+    createDomainEvent({
+      type: 'medication_reconciliation.entry_added',
+      tenantId,
+      aggregateType: 'medication_reconciliation',
+      aggregateId: reconciliationId,
+      actor: { type: 'system' },
+      correlationId: uuidv7(),
+      payload: {
+        reconciliationId,
+        clientId: reconciliationClientId,
+        entryId: reconciliationEntryId,
+        sourceId: reconciliationSourceId,
+        version: 3,
+      },
+    }),
+    createDomainEvent({
+      type: 'medication_reconciliation.reviewed',
+      tenantId,
+      aggregateType: 'medication_reconciliation',
+      aggregateId: reconciliationId,
+      actor: { type: 'system' },
+      correlationId: uuidv7(),
+      payload: {
+        reconciliationId,
+        clientId: reconciliationClientId,
+        version: 4,
+        comparisonVersion: 1,
+        discrepancyId: reconciliationDiscrepancyId,
+      },
+    }),
+    createDomainEvent({
+      type: 'medication_reconciliation.change_applied',
+      tenantId,
+      aggregateType: 'medication_reconciliation',
+      aggregateId: reconciliationId,
+      actor: { type: 'system' },
+      correlationId: uuidv7(),
+      payload: {
+        reconciliationId,
+        clientId: reconciliationClientId,
+        actionId: reconciliationActionId,
+        version: 5,
+        applicationCount: 1,
+      },
+    }),
+    createDomainEvent({
+      type: 'medication_reconciliation.completed',
+      tenantId,
+      aggregateType: 'medication_reconciliation',
+      aggregateId: reconciliationId,
+      actor: { type: 'system' },
+      correlationId: uuidv7(),
+      payload: {
+        reconciliationId,
+        clientId: reconciliationClientId,
+        version: 6,
+        reviewerEmployeeId: reconciliationReviewerId,
+      },
+    }),
+    createDomainEvent({
+      type: 'medication_reconciliation.cancelled',
+      tenantId,
+      aggregateType: 'medication_reconciliation',
+      aggregateId: reconciliationId,
+      actor: { type: 'system' },
+      correlationId: uuidv7(),
+      payload: { reconciliationId, clientId: reconciliationClientId, version: 7 },
     }),
   ];
   let worker: ReturnType<typeof Bun.spawn> | undefined;

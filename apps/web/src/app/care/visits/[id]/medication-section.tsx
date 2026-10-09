@@ -141,6 +141,11 @@ export async function MedicationVisitSection({
         </h2>
         <p className="mt-1 text-sm text-slate-600">{t('Medication.visitPrivacy')}</p>
       </div>
+      {data?.reconciliationReviewPending ? (
+        <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-950">
+          {t('MedicationReconciliation.pendingReview')}
+        </p>
+      ) : null}
       {!data ? (
         <p role="alert" className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-950">
           {errorCode ? t('Medication.noReadAccess') : t('Medication.loadFailed')} {errorCode ? t(errorMessageKey(errorCode)) : ''}

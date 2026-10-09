@@ -32,6 +32,7 @@ const migrations = {
   'competency-policies': [
     '0001_professional_competency_policies.sql',
     '0002_medication_operations.sql',
+    '0003_medication_reconciliation.sql',
   ],
   'workforce-compliance': ['0001_workforce_compliance_settings.sql'],
   clients: ['0001_initial.sql', '0002_master_data.sql', '0003_scheduling_provider_reference.sql'],
@@ -49,7 +50,7 @@ const migrations = {
   'clinical-documentation': ['0001_clinical_documentation.sql', '0002_client_reference.sql'],
   'care-planning': ['0001_care_planning.sql'],
   'service-evidence': ['0001_service_evidence.sql'],
-  medication: ['0001_medication.sql'],
+  medication: ['0001_medication.sql', '0002_reconciliation.sql'],
 } as const;
 const migrationsRoot = resolve(import.meta.dirname, '../../../modules');
 

@@ -73,6 +73,7 @@
         "@care/config": "workspace:*",
         "@care/database": "workspace:*",
         "@care/identity": "workspace:*",
+        "@care/scheduling": "workspace:*",
         "@care/ui": "workspace:*",
         "better-auth": "^1.7.7",
         "next": "^16.4.0",

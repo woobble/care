@@ -109,6 +109,7 @@ async function PolicyOperationCard({
     'care_plan.evaluate': t('evaluateTitle'),
     'medication.administer': t('medicationAdministerTitle'),
     'medication.administration.correct': t('medicationCorrectionTitle'),
+    'medication.reconciliation.complete': t('medicationReconciliationCompleteTitle'),
   }[operation.operationKey];
   return (
     <section className="grid gap-4 rounded-lg border bg-white p-5">

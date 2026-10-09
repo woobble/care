@@ -355,6 +355,13 @@ test('Authentik users can be invited and administered from the office UI', async
       'medication.administer',
       carePlanQualificationId,
     );
+    await ensureCompetencyPolicy(
+      page,
+      database,
+      tenantId,
+      'medication.reconciliation.complete',
+      carePlanQualificationId,
+    );
 
     await database.query(
       `UPDATE "authorization".professional_competency_policy_versions
@@ -482,7 +489,7 @@ test('Authentik users can be invited and administered from the office UI', async
     const employeeDetailReadiness = page
       .getByRole('heading', { name: 'Workforce readiness', exact: true })
       .locator('xpath=ancestor::section[1]');
-    await expect(employeeDetailReadiness.getByText('Ready', { exact: true })).toHaveCount(3);
+    await expect(employeeDetailReadiness.getByText('Ready', { exact: true })).toHaveCount(4);
     await expect(
       page.locator('#qualifications li').filter({ hasText: 'Pflegefachkraft (PFK)' }).last(),
     ).toContainText('Valid');
@@ -494,7 +501,7 @@ test('Authentik users can be invited and administered from the office UI', async
     const configuredEmployeeRow = employeeReadinessSection
       .getByRole('row')
       .filter({ hasText: `Plan Author ${runId}` });
-    await expect(configuredEmployeeRow.getByText('Ready', { exact: true })).toHaveCount(3);
+    await expect(configuredEmployeeRow.getByText('Ready', { exact: true })).toHaveCount(4);
     await expect(configuredEmployeeRow).toContainText('Care-plan activation');
     await expect(configuredEmployeeRow).toContainText('Care-plan evaluation');
 
@@ -511,7 +518,7 @@ test('Authentik users can be invited and administered from the office UI', async
       .locator('xpath=ancestor::section[1]')
       .getByRole('row')
       .filter({ hasText: `Plan Author ${runId}` });
-    await expect(atRiskEmployeeRow.getByText('At risk', { exact: true })).toHaveCount(3);
+    await expect(atRiskEmployeeRow.getByText('At risk', { exact: true })).toHaveCount(4);
 
     await page.goto(
       `${workforceDashboardUrl}&qualificationEmployeeId=${carePlanAuthorEmployeeId}&qualificationId=${carePlanQualificationId}`,
@@ -822,6 +829,129 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     expect(activatedMedicationOrder.rows[0]).toMatchObject({ status: 'active', version: 2 });
 
+    const reconciliationSection = page.locator('#reconciliation');
+    const medicationActionPath = '/clients/' + agreementClientId + '/medications';
+    const waitForMedicationAction = () =>
+      page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' &&
+          new URL(response.url()).pathname === medicationActionPath,
+      );
+    const startReconciliationForm = reconciliationSection.locator('form').first();
+    await startReconciliationForm
+      .getByLabel('Reason (optional except for clarification)')
+      .selectOption('physician_update');
+    const startReconciliationResponse = waitForMedicationAction();
+    await startReconciliationForm.getByRole('button', { name: 'Start reconciliation' }).click();
+    expect((await startReconciliationResponse).headers()['x-action-redirect'] ?? '').not.toMatch(
+      /[?&]error=/,
+    );
+    await expect(page).toHaveURL(/reconciliationId=/);
+    await expect(reconciliationSection).toContainText('Version 1');
+
+    const sourceForm = reconciliationSection.locator('form:has(#reconciliation-source-type)');
+    await sourceForm.locator('select[name="sourceType"]').selectOption('physician');
+    await sourceForm.locator('input[name="sourceName"]').fill('E2E physician list');
+    await sourceForm.locator('input[name="reference"]').fill(medicationSourceReference + '-recon');
+    const sourceResponse = waitForMedicationAction();
+    await sourceForm.getByRole('button', { name: 'Record source' }).click();
+    expect((await sourceResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
+    await expect(reconciliationSection).toContainText('Version 2');
+    await expect(reconciliationSection).toContainText('E2E physician list');
+
+    await reconciliationSection
+      .locator('summary')
+      .filter({ hasText: 'Record external medication' })
+      .click();
+    const externalEntryForm = reconciliationSection
+      .locator('form:has(input[name="sourceId"])')
+      .first();
+    await externalEntryForm.locator('input[name="medicationName"]').fill(medicationName);
+    await externalEntryForm.locator('input[name="activeIngredient"]').fill('E2E ingredient');
+    await externalEntryForm.locator('input[name="strength"]').fill('10 mg');
+    await externalEntryForm.locator('select[name="dosageForm"]').selectOption('tablet');
+    await externalEntryForm.locator('input[name="doseAmount"]').fill('2');
+    await externalEntryForm.locator('select[name="doseUnit"]').selectOption('tablet');
+    await externalEntryForm.locator('select[name="route"]').selectOption('oral');
+    await externalEntryForm.locator('select[name="reportedStatus"]').selectOption('active');
+    await externalEntryForm.locator('select[name="scheduleType"]').selectOption('fixed_times');
+    await externalEntryForm.locator('input[name="times"]').fill('00:01');
+    const entryResponse = waitForMedicationAction();
+    await externalEntryForm.getByRole('button', { name: 'Save entry' }).click();
+    expect((await entryResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
+    await expect(reconciliationSection).toContainText('Version 3');
+
+    const matchForm = reconciliationSection.locator('form:has(input[name="entryId"])').first();
+    await matchForm.locator('select[name="baselineId"]').selectOption({ index: 1 });
+    const matchResponse = waitForMedicationAction();
+    await matchForm.getByRole('button', { name: 'Save match' }).click();
+    expect((await matchResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
+    await expect(reconciliationSection).toContainText('Version 4');
+
+    const compareForm = reconciliationSection
+      .locator('form')
+      .filter({ hasText: 'Compare recorded information' });
+    const compareResponse = waitForMedicationAction();
+    await compareForm.getByRole('button', { name: 'Compare recorded information' }).click();
+    expect((await compareResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
+    await expect(reconciliationSection).toContainText('Version 5');
+
+    const doseFinding = reconciliationSection.locator('article').filter({ hasText: 'Dose differs' }).last();
+    await expect(doseFinding).toBeVisible();
+    const decisionForm = doseFinding.locator('form:has(select[name="decision"])');
+    await decisionForm.locator('select[name="decision"]').selectOption('accept_external');
+    const decisionResponse = waitForMedicationAction();
+    await decisionForm.getByRole('button', { name: 'Record decision' }).click();
+    expect((await decisionResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
+    await expect(reconciliationSection).toContainText('Version 6');
+
+    const applyForm = reconciliationSection
+      .locator('form:has(select[name^="disposition:"])')
+      .first();
+    await applyForm.locator('select[name^="disposition:"]').selectOption('apply_external');
+    const applyResponse = waitForMedicationAction();
+    await applyForm.getByRole('button', { name: 'Save disposition' }).click();
+    expect((await applyResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
+    await expect(reconciliationSection).toContainText('Version 7');
+
+    const completionForm = reconciliationSection
+      .locator('form')
+      .filter({ hasText: 'Complete reconciliation' });
+    await completionForm
+      .getByLabel('I reviewed the findings and their documented dispositions.')
+      .check();
+    const completionResponse = waitForMedicationAction();
+    await completionForm.getByRole('button', { name: 'Complete reconciliation' }).click();
+    expect((await completionResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
+    await expect(reconciliationSection).toContainText('Completed');
+    const completedReconciliation = await database.query<{ id: string; status: string }>(
+      'SELECT id, status FROM medication.reconciliations WHERE tenant_id = $1 AND client_id = $2 ORDER BY started_at DESC LIMIT 1',
+      [tenantId, agreementClientId],
+    );
+    expect(completedReconciliation.rows[0]?.status).toBe('completed');
+    const reconciliationApplication = await database.query<{
+      disposition: string;
+      dose_amount: string;
+      order_version: number;
+    }>(
+      'SELECT application.disposition, revision.dose_amount, application.order_version ' +
+        'FROM medication.reconciliation_applications AS application ' +
+        'JOIN medication.reconciliations AS reconciliation ' +
+        'ON reconciliation.tenant_id = application.tenant_id ' +
+        'AND reconciliation.id = application.reconciliation_id ' +
+        'JOIN medication.order_revisions AS revision ' +
+        'ON revision.tenant_id = application.tenant_id ' +
+        'AND revision.id = application.order_revision_id ' +
+        'AND revision.version = application.order_version ' +
+        'WHERE reconciliation.tenant_id = $1 AND reconciliation.id = $2',
+      [tenantId, completedReconciliation.rows[0]?.id],
+    );
+    expect(reconciliationApplication.rows[0]).toMatchObject({
+      disposition: 'applied',
+      dose_amount: '2.000',
+      order_version: 3,
+    });
+
     const executionDateAtNoonUtc = new Date(`${executionDate}T12:00:00.000Z`);
     const englishCareDate = new Intl.DateTimeFormat('en', {
       dateStyle: 'full',
@@ -926,9 +1056,12 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(
       page.getByRole('heading', { name: 'Medication administration record' }),
     ).toBeVisible();
-    await expect(page.locator('article').filter({ hasText: medicationName }).last()).toContainText(
-      'Administered',
-    );
+    const medicationAdministrationRecord = page
+      .getByRole('heading', { name: 'Medication administration record' })
+      .locator('xpath=ancestor::section[1]');
+    await expect(
+      medicationAdministrationRecord.locator('article').filter({ hasText: medicationName }),
+    ).toContainText('Administered');
 
     await caregiverPage.getByRole('button', { name: 'Save outcome' }).click();
     await expect(caregiverPage.getByRole('status')).toContainText('Service outcome saved.');
@@ -1270,12 +1403,12 @@ test('Authentik users can be invited and administered from the office UI', async
       .locator('xpath=ancestor::section[1]')
       .getByRole('row')
       .filter({ hasText: `Plan Author ${runId}` });
-    await expect(revokedReadinessRow.getByText('Not ready', { exact: true })).toHaveCount(3);
+    await expect(revokedReadinessRow.getByText('Not ready', { exact: true })).toHaveCount(4);
     await page.goto(`/employees/${carePlanAuthorEmployeeId}`);
     const revokedEmployeeReadiness = page
       .getByRole('heading', { name: 'Workforce readiness', exact: true })
       .locator('xpath=ancestor::section[1]');
-    await expect(revokedEmployeeReadiness.getByText('Not ready', { exact: true })).toHaveCount(3);
+    await expect(revokedEmployeeReadiness.getByText('Not ready', { exact: true })).toHaveCount(4);
     await page.goto(`/clients/${agreementClientId}/care-plan?planId=${carePlanId}`);
     await expect(
       page
@@ -1668,7 +1801,11 @@ test('Authentik users can be invited and administered from the office UI', async
 
 async function configureCompetencyPolicy(
   page: Page,
-  operationKey: 'care_plan.activate' | 'care_plan.evaluate' | 'medication.administer',
+  operationKey:
+    | 'care_plan.activate'
+    | 'care_plan.evaluate'
+    | 'medication.administer'
+    | 'medication.reconciliation.complete',
   qualificationId: string,
 ): Promise<void> {
   await page.goto('/administration/competency-policies');
@@ -1695,7 +1832,11 @@ async function ensureCompetencyPolicy(
   page: Page,
   database: Client,
   tenantId: string,
-  operationKey: 'care_plan.activate' | 'care_plan.evaluate' | 'medication.administer',
+  operationKey:
+    | 'care_plan.activate'
+    | 'care_plan.evaluate'
+    | 'medication.administer'
+    | 'medication.reconciliation.complete',
   qualificationId: string,
 ): Promise<void> {
   const activePolicy = await database.query<{
@@ -1856,6 +1997,11 @@ async function cleanupMedicationRecords(
       [tenantId, clientId, definitionName],
     );
     const orderIds = orderRows.rows.map((row) => row.id);
+    const reconciliationRows = await database.query<{ id: string }>(
+      'SELECT id FROM medication.reconciliations WHERE tenant_id = $1 AND client_id = $2',
+      [tenantId, clientId],
+    );
+    const reconciliationIds = reconciliationRows.rows.map((row) => row.id);
     const occurrences = orderIds.length
       ? await database.query<{ id: string }>(
           'SELECT id FROM medication.administration_occurrences WHERE tenant_id = $1 AND order_id = ANY($2::uuid[])',
@@ -1884,6 +2030,7 @@ async function cleanupMedicationRecords(
       ...occurrences.rows.map((row) => row.id),
       ...recordIds,
       ...corrections.rows.map((row) => row.id),
+      ...reconciliationIds,
     ];
     await database.query(
       'DELETE FROM audit.audit_entries WHERE tenant_id = $1 AND resource_id = ANY($2::uuid[])',
@@ -1903,9 +2050,48 @@ async function cleanupMedicationRecords(
       'administration_occurrences',
       'administration_records',
       'administration_corrections',
+      'reconciliation_sources',
+      'reconciliation_entries',
+      'reconciliation_baselines',
+      'reconciliation_matches',
+      'reconciliation_discrepancies',
+      'reconciliation_decisions',
+      'reconciliation_applications',
     ]) {
       await database.query(`ALTER TABLE medication.${table} DISABLE TRIGGER USER`);
     }
+    await database.query(
+      'DELETE FROM medication.reconciliation_applications WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
+      [tenantId, reconciliationIds],
+    );
+    await database.query(
+      'DELETE FROM medication.reconciliation_decisions WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
+      [tenantId, reconciliationIds],
+    );
+    await database.query(
+      'DELETE FROM medication.reconciliation_discrepancies WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
+      [tenantId, reconciliationIds],
+    );
+    await database.query(
+      'DELETE FROM medication.reconciliation_matches WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
+      [tenantId, reconciliationIds],
+    );
+    await database.query(
+      'DELETE FROM medication.reconciliation_baselines WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
+      [tenantId, reconciliationIds],
+    );
+    await database.query(
+      'DELETE FROM medication.reconciliation_entries WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
+      [tenantId, reconciliationIds],
+    );
+    await database.query(
+      'DELETE FROM medication.reconciliation_sources WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
+      [tenantId, reconciliationIds],
+    );
+    await database.query(
+      'DELETE FROM medication.reconciliations WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+      [tenantId, reconciliationIds],
+    );
     await database.query(
       'DELETE FROM medication.administration_corrections WHERE tenant_id = $1 AND record_id = ANY($2::uuid[])',
       [tenantId, recordIds],
@@ -1935,6 +2121,13 @@ async function cleanupMedicationRecords(
       'administration_records',
       'administration_occurrences',
       'order_revisions',
+      'reconciliation_applications',
+      'reconciliation_decisions',
+      'reconciliation_discrepancies',
+      'reconciliation_matches',
+      'reconciliation_baselines',
+      'reconciliation_entries',
+      'reconciliation_sources',
     ]) {
       await database.query(`ALTER TABLE medication.${table} ENABLE TRIGGER USER`);
     }
