@@ -167,6 +167,54 @@ export async function unassignVisitAction(formData: FormData): Promise<void> {
   redirect(`/visits/${visitId}?updated=unassigned`);
 }
 
+export async function proposeSubstitutionAction(formData: FormData): Promise<void> {
+  const visitId = readUuid(formData.get('visitId'));
+  const originalAssignmentId = readUuid(formData.get('originalAssignmentId'));
+  const substituteEmployeeId = readUuid(formData.get('substituteEmployeeId'));
+  const reason = readString(formData, 'reason').slice(0, 500);
+  if (!visitId || !originalAssignmentId || !substituteEmployeeId || !reason) {
+    redirect(visitPath(visitId, 'INVALID_REQUEST'));
+  }
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/visits/{id}/substitutions', {
+    params: { path: { id: visitId }, header: await getTenantHeader() },
+    body: { originalAssignmentId, substituteEmployeeId, reason },
+  });
+  if (error) redirect(visitPath(visitId, error.code));
+  revalidatePath('/planning');
+  revalidatePath(`/visits/${visitId}`);
+  redirect(`${visitPath(visitId, '')}?updated=substitution_proposed`);
+}
+
+export async function confirmSubstitutionAction(formData: FormData): Promise<void> {
+  const visitId = readUuid(formData.get('visitId'));
+  const substitutionId = readUuid(formData.get('substitutionId'));
+  if (!visitId || !substitutionId) redirect(visitPath(visitId, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/substitutions/{id}/confirm', {
+    params: { path: { id: substitutionId }, header: await getTenantHeader() },
+  });
+  if (error) redirect(visitPath(visitId, error.code));
+  revalidatePath('/planning');
+  revalidatePath(`/visits/${visitId}`);
+  revalidatePath('/care/today');
+  redirect(`${visitPath(visitId, '')}?updated=substitution_confirmed`);
+}
+
+export async function cancelSubstitutionAction(formData: FormData): Promise<void> {
+  const visitId = readUuid(formData.get('visitId'));
+  const substitutionId = readUuid(formData.get('substitutionId'));
+  if (!visitId || !substitutionId) redirect(visitPath(visitId, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/substitutions/{id}/cancel', {
+    params: { path: { id: substitutionId }, header: await getTenantHeader() },
+  });
+  if (error) redirect(visitPath(visitId, error.code));
+  revalidatePath('/planning');
+  revalidatePath(`/visits/${visitId}`);
+  redirect(`${visitPath(visitId, '')}?updated=substitution_cancelled`);
+}
+
 export async function changeVisitStatusAction(formData: FormData): Promise<void> {
   const visitId = readUuid(formData.get('visitId'));
   const operation = readString(formData, 'operation');
@@ -213,6 +261,163 @@ export async function generateAgreementVisitsAction(formData: FormData): Promise
   redirect(
     `${agreementPath(clientId, '')}?generated=${data.generated}&existing=${data.alreadyExisting}&placement=${data.requiresManualPlacement}`,
   );
+}
+
+export async function createTourAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const localDate = readString(formData, 'localDate');
+  const timezone = readString(formData, 'timezone');
+  const visitIds = readUuids(formData, 'visitIds').slice(0, 100);
+  if (!employeeId || !datePattern.test(localDate) || !timezone || !visitIds.length) {
+    redirect(planningTourPath(localDate, employeeId, 'INVALID_REQUEST'));
+  }
+  const api = await getApiClient();
+  const { data, error } = await api.POST('/api/v1/scheduling/tours', {
+    params: { header: await getTenantHeader() },
+    body: { employeeId, localDate, timezone, visitIds },
+  });
+  if (error || !data)
+    redirect(planningTourPath(localDate, employeeId, error?.code ?? 'CREATE_FAILED'));
+  revalidatePath('/planning');
+  revalidatePath('/care/today');
+  redirect(planningTourPath(localDate, employeeId, 'tour_created', data.id));
+}
+
+export async function updateTourStopsAction(formData: FormData): Promise<void> {
+  const tourId = readUuid(formData.get('tourId'));
+  const expectedVersion = readPositiveInteger(formData.get('expectedVersion'));
+  const localDate = readString(formData, 'localDate');
+  const employeeId = readUuid(formData.get('employeeId'));
+  const visitIds = readUuids(formData, 'visitId').slice(0, 100);
+  const notes = formData
+    .getAll('dispatcherNote')
+    .map((value) => (typeof value === 'string' ? value.trim().slice(0, 500) : ''));
+  if (
+    !tourId ||
+    !expectedVersion ||
+    !visitIds.length ||
+    new Set(visitIds).size !== visitIds.length
+  ) {
+    redirect(planningTourPath(localDate, employeeId, 'INVALID_REQUEST', tourId));
+  }
+  const api = await getApiClient();
+  const { error } = await api.PUT('/api/v1/scheduling/tours/{id}/stops', {
+    params: { path: { id: tourId }, header: await getTenantHeader() },
+    body: {
+      expectedVersion,
+      stops: visitIds.map((visitId, index) => ({
+        visitId,
+        ...(notes[index] ? { dispatcherNote: notes[index] } : {}),
+      })),
+    },
+  });
+  if (error) redirect(planningTourPath(localDate, employeeId, error.code, tourId));
+  revalidatePath('/planning');
+  redirect(planningTourPath(localDate, employeeId, 'tour_reordered', tourId));
+}
+
+export async function estimateTourRouteAction(formData: FormData): Promise<void> {
+  const tourId = readUuid(formData.get('tourId'));
+  const expectedVersion = readPositiveInteger(formData.get('expectedVersion'));
+  const localDate = readString(formData, 'localDate');
+  const employeeId = readUuid(formData.get('employeeId'));
+  if (!tourId || !expectedVersion)
+    redirect(planningTourPath(localDate, employeeId, 'INVALID_REQUEST', tourId));
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/scheduling/tours/{id}/estimate-travel', {
+    params: { path: { id: tourId }, header: await getTenantHeader() },
+    body: { expectedVersion },
+  });
+  if (error) redirect(planningTourPath(localDate, employeeId, error.code, tourId));
+  revalidatePath('/planning');
+  redirect(planningTourPath(localDate, employeeId, 'travel_estimated', tourId));
+}
+
+export async function suggestTourOrderAction(formData: FormData): Promise<void> {
+  const tourId = readUuid(formData.get('tourId'));
+  const localDate = readString(formData, 'localDate');
+  const employeeId = readUuid(formData.get('employeeId'));
+  if (!tourId) redirect(planningTourPath(localDate, employeeId, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { data, error } = await api.POST('/api/v1/scheduling/tours/{id}/suggest-order', {
+    params: { path: { id: tourId }, header: await getTenantHeader() },
+  });
+  if (error || !data)
+    redirect(planningTourPath(localDate, employeeId, error?.code ?? 'ROUTE_UNAVAILABLE', tourId));
+  const path = new URLSearchParams({
+    date: localDate,
+    view: 'day',
+    employeeId: employeeId ?? '',
+    suggestedTourId: tourId,
+    suggestedOrder: data.visitIds.join(','),
+  });
+  redirect(`/planning?${path.toString()}`);
+}
+
+export async function applySuggestedTourOrderAction(formData: FormData): Promise<void> {
+  const tourId = readUuid(formData.get('tourId'));
+  const expectedVersion = readPositiveInteger(formData.get('expectedVersion'));
+  const localDate = readString(formData, 'localDate');
+  const employeeId = readUuid(formData.get('employeeId'));
+  const visitIds = readUuids(formData, 'visitIds').slice(0, 100);
+  if (
+    !tourId ||
+    !expectedVersion ||
+    !visitIds.length ||
+    new Set(visitIds).size !== visitIds.length
+  ) {
+    redirect(planningTourPath(localDate, employeeId, 'INVALID_REQUEST', tourId));
+  }
+  const api = await getApiClient();
+  const { error } = await api.PUT('/api/v1/scheduling/tours/{id}/stops', {
+    params: { path: { id: tourId }, header: await getTenantHeader() },
+    body: { expectedVersion, stops: visitIds.map((visitId) => ({ visitId })) },
+  });
+  if (error) redirect(planningTourPath(localDate, employeeId, error.code, tourId));
+  revalidatePath('/planning');
+  redirect(planningTourPath(localDate, employeeId, 'tour_reordered', tourId));
+}
+
+export async function publishTourAction(formData: FormData): Promise<void> {
+  const tourId = readUuid(formData.get('tourId'));
+  const expectedVersion = readPositiveInteger(formData.get('expectedVersion'));
+  const localDate = readString(formData, 'localDate');
+  const employeeId = readUuid(formData.get('employeeId'));
+  if (!tourId || !expectedVersion)
+    redirect(planningTourPath(localDate, employeeId, 'INVALID_REQUEST', tourId));
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/scheduling/tours/{id}/publish', {
+    params: { path: { id: tourId }, header: await getTenantHeader() },
+    body: { expectedVersion },
+  });
+  if (error) redirect(planningTourPath(localDate, employeeId, error.code, tourId));
+  revalidatePath('/planning');
+  revalidatePath('/care/today');
+  redirect(planningTourPath(localDate, employeeId, 'tour_published', tourId));
+}
+
+function planningTourPath(
+  localDate: string,
+  employeeId: string | undefined,
+  status: string,
+  tourId?: string,
+): string {
+  const query = new URLSearchParams({ view: 'day' });
+  if (datePattern.test(localDate)) query.set('date', localDate);
+  if (
+    status &&
+    status !== 'tour_created' &&
+    status !== 'tour_reordered' &&
+    status !== 'travel_estimated' &&
+    status !== 'tour_published'
+  ) {
+    query.set('error', status);
+  } else if (status) {
+    query.set('updated', status);
+  }
+  if (employeeId) query.set('employeeId', employeeId);
+  if (tourId) query.set('tourId', tourId);
+  return `/planning?${query.toString()}`;
 }
 
 function readString(formData: FormData, name: string): string {

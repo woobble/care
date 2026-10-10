@@ -7,18 +7,29 @@ import { errorMessageKey } from '../../../../i18n/errors';
 import { formatDate } from '../../../../i18n/format';
 import type { Locale } from '../../../../i18n/config';
 import { formatVisitDateTime } from '../../../../lib/care-date';
-import { getApiClient, getTenantHeader } from '../../../../lib/api';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasPermission,
+} from '../../../../lib/api';
 import { ActionNotice } from '../../administration/action-notice';
 import { ConfirmSubmitButton } from '../../administration/confirm-submit-button';
 import {
   assignFacilityAction,
+  cancelEmployeeAbsenceAction,
+  createAvailabilityExceptionAction,
+  createEmployeeAbsenceAction,
   assignQualificationAction,
   assignSkillAction,
   assignTeamAction,
   changeEmployeeStatusAction,
+  deleteAvailabilityExceptionAction,
   linkEmployeeUserAction,
   removeQualificationAction,
   removeSkillAction,
+  saveEmployeeAvailabilityAction,
+  saveEmployeeSchedulingPreferencesAction,
   unassignFacilityAction,
   unassignTeamAction,
   unlinkEmployeeUserAction,
@@ -38,6 +49,9 @@ export default async function EmployeeDetailPage({
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
+  const permissions = await getPermissionGrants(api);
+  const canReadSchedule = hasPermission(permissions, 'schedule.read');
+  const canManageSchedule = hasPermission(permissions, 'schedule.update');
   const employeeResult = await get('/api/v1/employees/{id}', { params: { path: { id }, header } });
   if (!employeeResult.data) notFound();
   const employee = employeeResult.data;
@@ -86,6 +100,26 @@ export default async function EmployeeDetailPage({
       header,
     },
   });
+  const absenceUntil = new Date(scheduleNow.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const [availabilityResult, absencesResult, preferencesResult] = canReadSchedule
+    ? await Promise.all([
+        get('/api/v1/employees/{employeeId}/availability', {
+          params: { path: { employeeId: id }, header },
+        }),
+        get('/api/v1/employees/{employeeId}/unavailability', {
+          params: {
+            path: { employeeId: id },
+            query: { from: scheduleNow.toISOString(), until: absenceUntil.toISOString() },
+            header,
+          },
+        }),
+        canManageSchedule
+          ? get('/api/v1/employees/{employeeId}/scheduling-preferences', {
+              params: { path: { employeeId: id }, header },
+            })
+          : Promise.resolve({ data: undefined, error: undefined }),
+      ])
+    : [null, null, null];
   const visitItems = visitsResult.data?.items ?? [];
   const recentVisitItems = recentVisitsResult.data?.items ?? [];
   const fetchExecutionSummaries = (items: typeof visitItems) =>
@@ -125,6 +159,21 @@ export default async function EmployeeDetailPage({
     (membership) => membership.status === 'active',
   );
   const writable = employee.status !== 'archived';
+  const availability = availabilityResult?.data?.availability ?? null;
+  const availabilityVersion = availabilityResult?.data?.version ?? 0;
+  const absences = absencesResult?.data?.absences ?? [];
+  const schedulingPreferences = preferencesResult?.data ?? null;
+  const impactedVisits = absencesResult?.data?.impactedVisits ?? [];
+  const availabilityTimezone = availability?.timezone ?? 'Europe/Berlin';
+  const weekdays = [
+    { weekday: 1, label: t('Employees.detail.weekdays.monday') },
+    { weekday: 2, label: t('Employees.detail.weekdays.tuesday') },
+    { weekday: 3, label: t('Employees.detail.weekdays.wednesday') },
+    { weekday: 4, label: t('Employees.detail.weekdays.thursday') },
+    { weekday: 5, label: t('Employees.detail.weekdays.friday') },
+    { weekday: 6, label: t('Employees.detail.weekdays.saturday') },
+    { weekday: 7, label: t('Employees.detail.weekdays.sunday') },
+  ];
 
   return (
     <div className="grid gap-8">
@@ -284,6 +333,386 @@ export default async function EmployeeDetailPage({
           </div>
         ) : null}
       </section>
+
+      {canReadSchedule ? (
+        <section
+          id="availability"
+          aria-labelledby="availability-title"
+          className="grid gap-4 rounded-lg border bg-white p-5"
+        >
+          <div>
+            <h2 id="availability-title" className="text-xl font-semibold">
+              {t('Employees.detail.availabilityTitle')}
+            </h2>
+            <p className="text-sm text-slate-600">
+              {t('Employees.detail.availabilityDescription')}
+            </p>
+          </div>
+          {availabilityResult?.error ? (
+            <p role="alert" className="text-sm text-red-800">
+              {t(errorMessageKey(availabilityResult.error.code))}
+            </p>
+          ) : null}
+          {canManageSchedule && employee.status === 'active' ? (
+            <form action={saveEmployeeAvailabilityAction} className="grid gap-4">
+              <input type="hidden" name="employeeId" value={employee.id} />
+              <input type="hidden" name="expectedVersion" value={availabilityVersion} />
+              <div className="grid gap-4 md:grid-cols-3">
+                <Field
+                  id="availability-timezone"
+                  name="timezone"
+                  label={t('Employees.detail.timezone')}
+                  defaultValue={availabilityTimezone}
+                  required
+                  maxLength={100}
+                />
+                <Field
+                  id="availability-max-daily"
+                  name="maxDailyMinutes"
+                  label={t('Employees.detail.maxDailyMinutes')}
+                  type="number"
+                  min="1"
+                  max="1440"
+                  defaultValue={availability?.maxDailyMinutes?.toString() ?? ''}
+                />
+                <Field
+                  id="availability-travel-buffer"
+                  name="travelBufferMinutes"
+                  label={t('Employees.detail.travelBufferMinutes')}
+                  type="number"
+                  min="0"
+                  max="240"
+                  defaultValue={String(availability?.travelBufferMinutes ?? 0)}
+                  required
+                />
+              </div>
+              <div className="grid gap-3">
+                <h3 className="font-semibold">{t('Employees.detail.weeklyHours')}</h3>
+                <div className="grid gap-3">
+                  {weekdays.map(({ weekday, label }) => {
+                    const windows =
+                      availability?.windows.filter((window) => window.weekday === weekday) ?? [];
+                    return (
+                      <fieldset key={weekday} className="grid gap-2 rounded-md border p-3">
+                        <legend className="px-1 font-medium">{label}</legend>
+                        {[1, 2, 3, 4].map((slot) => {
+                          const window = windows[slot - 1];
+                          return (
+                            <div key={slot} className="grid gap-3 sm:grid-cols-[1fr_1fr]">
+                              <Field
+                                id={`availability-${weekday}-${slot}-start`}
+                                name={`window_${weekday}_${slot}_start`}
+                                label={t('Employees.detail.windowStart')}
+                                type="time"
+                                defaultValue={window?.startsAt ?? ''}
+                              />
+                              <Field
+                                id={`availability-${weekday}-${slot}-end`}
+                                name={`window_${weekday}_${slot}_end`}
+                                label={t('Employees.detail.windowEnd')}
+                                type="time"
+                                defaultValue={window?.endsAt ?? ''}
+                              />
+                            </div>
+                          );
+                        })}
+                      </fieldset>
+                    );
+                  })}
+                </div>
+              </div>
+              <Button type="submit" className="w-fit">
+                {t('Employees.detail.saveAvailability')}
+              </Button>
+            </form>
+          ) : null}
+
+          <div className="grid gap-3 border-t pt-4">
+            <div>
+              <h3 className="font-semibold">{t('Employees.detail.schedulingPreferences')}</h3>
+              <p className="text-sm text-slate-600">
+                {t('Employees.detail.schedulingPreferencesDescription')}
+              </p>
+            </div>
+            {preferencesResult?.error ? (
+              <p role="alert" className="text-sm text-red-800">
+                {t(errorMessageKey(preferencesResult.error.code))}
+              </p>
+            ) : null}
+            {canManageSchedule && employee.status === 'active' ? (
+              <form action={saveEmployeeSchedulingPreferencesAction} className="grid gap-4">
+                <input type="hidden" name="employeeId" value={employee.id} />
+                <fieldset className="grid gap-2">
+                  <legend className="font-medium">{t('Employees.detail.preferredWeekdays')}</legend>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    {weekdays.map(({ weekday, label }) => (
+                      <label key={weekday} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          name="preferredWeekdays"
+                          value={weekday}
+                          defaultChecked={schedulingPreferences?.preferredWeekdays.includes(
+                            weekday,
+                          )}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <div className="grid gap-3">
+                  <p className="font-medium">{t('Employees.detail.preferredTimeWindows')}</p>
+                  {[1, 2, 3, 4].map((slot) => {
+                    const window = schedulingPreferences?.preferredTimeWindows[slot - 1];
+                    return (
+                      <div key={slot} className="grid gap-3 sm:grid-cols-2">
+                        <Field
+                          id={`employee-preferred-window-${slot}-start`}
+                          name={`preferredWindow${slot}Start`}
+                          label={t('Employees.detail.windowStart')}
+                          type="time"
+                          defaultValue={window?.startsAt ?? ''}
+                        />
+                        <Field
+                          id={`employee-preferred-window-${slot}-end`}
+                          name={`preferredWindow${slot}End`}
+                          label={t('Employees.detail.windowEnd')}
+                          type="time"
+                          defaultValue={window?.endsAt ?? ''}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div>
+                  <p className="font-medium">{t('Employees.detail.preferredStartLocation')}</p>
+                  <p className="mb-2 text-sm text-slate-600">
+                    {t('Employees.detail.preferredStartLocationDescription')}
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field
+                      id="preferred-start-latitude"
+                      name="preferredStartLatitude"
+                      label={t('Employees.detail.latitude')}
+                      type="number"
+                      min="-90"
+                      max="90"
+                      step="0.000001"
+                      defaultValue={schedulingPreferences?.preferredStartLatitude?.toString() ?? ''}
+                    />
+                    <Field
+                      id="preferred-start-longitude"
+                      name="preferredStartLongitude"
+                      label={t('Employees.detail.longitude')}
+                      type="number"
+                      min="-180"
+                      max="180"
+                      step="0.000001"
+                      defaultValue={
+                        schedulingPreferences?.preferredStartLongitude?.toString() ?? ''
+                      }
+                    />
+                  </div>
+                </div>
+                <p className="text-sm text-slate-600">{t('Employees.detail.travelModeDriving')}</p>
+                <Button type="submit" className="w-fit">
+                  {t('Employees.detail.saveSchedulingPreferences')}
+                </Button>
+              </form>
+            ) : null}
+          </div>
+
+          <div className="grid gap-3 border-t pt-4">
+            <h3 className="font-semibold">{t('Employees.detail.availabilityExceptions')}</h3>
+            {availability?.exceptions.length ? (
+              <ul className="grid gap-2">
+                {availability.exceptions.map((exception) => (
+                  <li
+                    key={exception.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3"
+                  >
+                    <span>
+                      <strong>{exception.localDate}</strong> ·{' '}
+                      {t(`Employees.detail.exceptionKinds.${exception.kind}`)}
+                      {exception.startsAt ? ` · ${exception.startsAt}–${exception.endsAt}` : ''}
+                    </span>
+                    {canManageSchedule ? (
+                      <form action={deleteAvailabilityExceptionAction}>
+                        <input type="hidden" name="employeeId" value={employee.id} />
+                        <input type="hidden" name="exceptionId" value={exception.id} />
+                        <input type="hidden" name="expectedVersion" value={availabilityVersion} />
+                        <Button type="submit" variant="secondary" size="sm">
+                          {t('Employees.detail.remove')}
+                        </Button>
+                      </form>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-slate-600">
+                {t('Employees.detail.noAvailabilityExceptions')}
+              </p>
+            )}
+            {canManageSchedule && employee.status === 'active' && availability ? (
+              <form
+                action={createAvailabilityExceptionAction}
+                className="grid gap-3 md:grid-cols-4"
+              >
+                <input type="hidden" name="employeeId" value={employee.id} />
+                <input type="hidden" name="expectedVersion" value={availabilityVersion} />
+                <Field
+                  id="availability-exception-date"
+                  name="localDate"
+                  label={t('Employees.detail.exceptionDate')}
+                  type="date"
+                  required
+                />
+                <SelectField
+                  label={t('Employees.detail.exceptionKind')}
+                  name="kind"
+                  defaultValue="closed"
+                  required
+                >
+                  <option value="closed">{t('Employees.detail.exceptionKinds.closed')}</option>
+                  <option value="working_hours">
+                    {t('Employees.detail.exceptionKinds.working_hours')}
+                  </option>
+                  <option value="unavailable">
+                    {t('Employees.detail.exceptionKinds.unavailable')}
+                  </option>
+                </SelectField>
+                <Field
+                  id="availability-exception-start"
+                  name="startsAt"
+                  label={t('Employees.detail.windowStart')}
+                  type="time"
+                />
+                <Field
+                  id="availability-exception-end"
+                  name="endsAt"
+                  label={t('Employees.detail.windowEnd')}
+                  type="time"
+                />
+                <Button type="submit" className="w-fit md:col-span-4">
+                  {t('Employees.detail.addAvailabilityException')}
+                </Button>
+              </form>
+            ) : null}
+          </div>
+
+          <div className="grid gap-3 border-t pt-4">
+            <div>
+              <h3 className="font-semibold">{t('Employees.detail.absences')}</h3>
+              <p className="text-sm text-slate-600">
+                {t('Employees.detail.impactedVisitCount', {
+                  count: absencesResult?.data?.impactedVisitCount ?? 0,
+                })}
+              </p>
+            </div>
+            {absencesResult?.error ? (
+              <p className="text-sm text-red-800">
+                {t(errorMessageKey(absencesResult.error.code))}
+              </p>
+            ) : absences.length ? (
+              <ul className="grid gap-2">
+                {absences.map((absence) => (
+                  <li
+                    key={absence.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3"
+                  >
+                    <span>
+                      <strong>{t(`Employees.detail.absenceReasons.${absence.reason}`)}</strong> ·{' '}
+                      {formatVisitDateTime(absence.startsAt, availabilityTimezone, locale)} –{' '}
+                      {formatVisitDateTime(absence.endsAt, availabilityTimezone, locale)}
+                      {absence.status === 'cancelled'
+                        ? ` · ${t('Employees.detail.cancelled')}`
+                        : ''}
+                    </span>
+                    {canManageSchedule && absence.status === 'active' ? (
+                      <form action={cancelEmployeeAbsenceAction}>
+                        <input type="hidden" name="employeeId" value={employee.id} />
+                        <input type="hidden" name="absenceId" value={absence.id} />
+                        <Button type="submit" variant="secondary" size="sm">
+                          {t('Employees.detail.cancelAbsence')}
+                        </Button>
+                      </form>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-slate-600">{t('Employees.detail.noAbsences')}</p>
+            )}
+            {canManageSchedule && employee.status === 'active' ? (
+              <form action={createEmployeeAbsenceAction} className="grid gap-3 md:grid-cols-2">
+                <input type="hidden" name="employeeId" value={employee.id} />
+                <input type="hidden" name="timezone" value={availabilityTimezone} />
+                <SelectField
+                  label={t('Employees.detail.absenceReason')}
+                  name="reason"
+                  defaultValue="vacation"
+                  required
+                >
+                  <option value="vacation">{t('Employees.detail.absenceReasons.vacation')}</option>
+                  <option value="sick_leave">
+                    {t('Employees.detail.absenceReasons.sick_leave')}
+                  </option>
+                  <option value="training">{t('Employees.detail.absenceReasons.training')}</option>
+                  <option value="personal_unavailability">
+                    {t('Employees.detail.absenceReasons.personal_unavailability')}
+                  </option>
+                  <option value="other">{t('Employees.detail.absenceReasons.other')}</option>
+                </SelectField>
+                <Field
+                  id="absence-start"
+                  name="localStart"
+                  label={t('Employees.detail.absenceStart')}
+                  type="datetime-local"
+                  required
+                />
+                <Field
+                  id="absence-end"
+                  name="localEnd"
+                  label={t('Employees.detail.absenceEnd')}
+                  type="datetime-local"
+                  required
+                />
+                <div className="grid gap-2 md:col-span-2">
+                  <Label htmlFor="absence-note">{t('Employees.detail.protectedAbsenceNote')}</Label>
+                  <textarea
+                    id="absence-note"
+                    name="note"
+                    maxLength={1000}
+                    className="min-h-16 rounded-md border px-3 py-2"
+                  />
+                </div>
+                <Button type="submit" className="w-fit">
+                  {t('Employees.detail.recordAbsence')}
+                </Button>
+              </form>
+            ) : null}
+          </div>
+          {impactedVisits.length ? (
+            <div className="grid gap-2 border-t pt-4">
+              <h3 className="font-semibold">{t('Employees.detail.visitsNeedingAction')}</h3>
+              <ul className="grid gap-2">
+                {impactedVisits.map((visit) => (
+                  <li key={visit.id}>
+                    <Link
+                      className="block rounded-md border p-3 hover:border-blue-400"
+                      href={`/visits/${visit.id}`}
+                    >
+                      {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)} ·{' '}
+                      {visit.clientDisplayName}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section
         id="overview"
@@ -889,6 +1318,35 @@ function Field({
         max={max}
         step={step}
       />
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  name,
+  defaultValue,
+  required = false,
+  children,
+}: Readonly<{
+  label: string;
+  name: string;
+  defaultValue?: string;
+  required?: boolean;
+  children: import('react').ReactNode;
+}>) {
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor={name}>{label}</Label>
+      <select
+        id={name}
+        name={name}
+        defaultValue={defaultValue}
+        required={required}
+        className="h-10 rounded-md border bg-white px-3"
+      >
+        {children}
+      </select>
     </div>
   );
 }

@@ -11,7 +11,15 @@ import {
   getTenantHeader,
   hasPermission,
 } from '../../../lib/api';
-import { createVisitAction } from './actions';
+import {
+  applySuggestedTourOrderAction,
+  createTourAction,
+  createVisitAction,
+  estimateTourRouteAction,
+  publishTourAction,
+  suggestTourOrderAction,
+  updateTourStopsAction,
+} from './actions';
 
 type SearchParams = Promise<{
   date?: string;
@@ -31,6 +39,9 @@ type SearchParams = Promise<{
   estimateQuantity?: string;
   error?: string;
   updated?: string;
+  tourId?: string;
+  suggestedTourId?: string;
+  suggestedOrder?: string;
 }>;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -141,6 +152,32 @@ export default async function PlanningPage({
     const localDate = dateAtZone(visit.plannedStart, visit.timezone);
     return localDate >= period.start && localDate < period.endExclusive;
   });
+  const worklistResult = hasPermission(permissions, 'schedule.read')
+    ? await get('/api/v1/scheduling/worklist', {
+        params: {
+          query: {
+            from: requestRange.from,
+            until: requestRange.until,
+            page,
+            pageSize: 100,
+            sortBy: 'plannedStart',
+            sortOrder: 'asc',
+            ...(employeeId ? { employeeId } : {}),
+            ...(organizationId ? { organizationId } : {}),
+            ...(facilityId ? { facilityId } : {}),
+            ...(teamId ? { teamId } : {}),
+            ...(status ? { status } : {}),
+            ...(assigned === 'all'
+              ? {}
+              : { unassigned: assigned === 'unassigned' ? 'true' : 'false' }),
+          },
+          header,
+        },
+      })
+    : null;
+  const conflictsByVisit = new Map(
+    (worklistResult?.data?.items ?? []).map((item) => [item.visit.id, item.conflicts]),
+  );
   const visitsByDate = new Map<string, typeof visits>();
   for (const visit of visits) {
     const localDate = dateAtZone(visit.plannedStart, visit.timezone);
@@ -153,6 +190,60 @@ export default async function PlanningPage({
   const facilities = facilityResult.data ?? [];
   const teams = teamResult.data ?? [];
   const services = serviceResult.data?.items ?? [];
+  const dayVisits = visitsByDate.get(selectedDate) ?? [];
+  const employeeVisitGroups = new Map<string, typeof dayVisits>();
+  for (const visit of dayVisits) {
+    for (const assignment of visit.assignments) {
+      const group = employeeVisitGroups.get(assignment.employeeId) ?? [];
+      group.push(visit);
+      employeeVisitGroups.set(assignment.employeeId, group);
+    }
+  }
+  const tourRows =
+    view === 'day' && canAssign
+      ? await Promise.all(
+          [...employeeVisitGroups].map(async ([tourEmployeeId]) => {
+            const result = await get('/api/v1/scheduling/tours', {
+              params: {
+                query: {
+                  employeeId: tourEmployeeId,
+                  from: selectedDate,
+                  until: addDays(selectedDate, 1),
+                },
+                header,
+              },
+            });
+            return { employeeId: tourEmployeeId, tours: result.data ?? [], error: result.error };
+          }),
+        )
+      : [];
+  const toursByEmployee = new Map(tourRows.map((row) => [row.employeeId, row.tours]));
+  const selectedTourId = validUuid(query.tourId);
+  const selectedTourResult =
+    selectedTourId && canAssign
+      ? await get('/api/v1/scheduling/tours/{id}', {
+          params: { path: { id: selectedTourId }, header },
+        })
+      : null;
+  const suggestedTourId = validUuid(query.suggestedTourId);
+  const suggestedOrder = (query.suggestedOrder ?? '')
+    .split(',')
+    .map((value) => validUuid(value))
+    .filter((value): value is string => value !== null);
+  const conflictMessages: Record<string, string> = {
+    missing_assignment: t('Planning.conflicts.missing_assignment'),
+    employee_overlap: t('Planning.conflicts.employee_overlap'),
+    employee_absence: t('Planning.conflicts.employee_absence'),
+    outside_employee_availability: t('Planning.conflicts.outside_employee_availability'),
+    employee_availability_unknown: t('Planning.conflicts.employee_availability_unknown'),
+    insufficient_travel_time: t('Planning.conflicts.insufficient_travel_time'),
+    travel_feasibility_unknown: t('Planning.conflicts.travel_feasibility_unknown'),
+    client_overlap: t('Planning.conflicts.client_overlap'),
+    employee_preference: t('Planning.conflicts.employee_preference'),
+    client_preference: t('Planning.conflicts.client_preference'),
+    substitution_awaiting_confirmation: t('Planning.conflicts.substitution_awaiting_confirmation'),
+    unpublished_schedule_changes: t('Planning.conflicts.unpublished_schedule_changes'),
+  };
   const openCount = visits.filter((visit) => visit.assignments.length === 0).length;
   const error = query.error ?? visitResult.error?.code;
   const estimateError = estimateResult?.error?.code;
@@ -192,7 +283,7 @@ export default async function PlanningPage({
           role="status"
           className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
         >
-          {t('Planning.saved')}
+          {t(planningUpdateKey(query.updated))}
         </p>
       ) : null}
 
@@ -496,6 +587,25 @@ export default async function PlanningPage({
                           <span className="self-start rounded-full border px-2 py-1 text-xs">
                             {t(visitStatusKey(visit.status))}
                           </span>
+                          {(conflictsByVisit.get(visit.id)?.length ?? 0) > 0 ? (
+                            <span className="sm:col-span-3">
+                              <span className="flex flex-wrap gap-1 pt-1">
+                                {(conflictsByVisit.get(visit.id) ?? []).map((conflict, index) => (
+                                  <span
+                                    key={`${conflict.code}-${conflict.relatedVisitId ?? index}`}
+                                    className={
+                                      'rounded-full px-2 py-1 text-xs ' +
+                                      (conflict.severity === 'blocking'
+                                        ? 'bg-red-100 text-red-900'
+                                        : 'bg-amber-100 text-amber-900')
+                                    }
+                                  >
+                                    {conflictMessages[conflict.code] ?? conflict.code}
+                                  </span>
+                                ))}
+                              </span>
+                            </span>
+                          ) : null}
                         </Link>
                       </li>
                     ))}
@@ -524,6 +634,234 @@ export default async function PlanningPage({
           </div>
         ) : null}
       </section>
+
+      {view === 'day' && canAssign ? (
+        <section aria-labelledby="tour-planning-title" className="grid gap-4">
+          <div>
+            <h2 id="tour-planning-title" className="text-xl font-semibold">
+              {t('Planning.tourPlanning')}
+            </h2>
+            <p className="text-sm text-slate-600">{t('Planning.tourPlanningDescription')}</p>
+          </div>
+          {employeeVisitGroups.size ? (
+            [...employeeVisitGroups].map(([tourEmployeeId, employeeVisits]) => {
+              const listedTour = toursByEmployee.get(tourEmployeeId)?.[0];
+              const tour =
+                selectedTourId === listedTour?.id && selectedTourResult?.data
+                  ? selectedTourResult.data
+                  : null;
+              const employeeName = employeeVisits[0]?.assignments.find(
+                (assignment) => assignment.employeeId === tourEmployeeId,
+              )?.employeeDisplayName;
+              const tourConflicts = tour
+                ? tour.stops.flatMap((stop) =>
+                    (conflictsByVisit.get(stop.visitId) ?? []).filter(
+                      (conflict) => conflict.severity === 'blocking',
+                    ),
+                  )
+                : [];
+              return (
+                <section key={tourEmployeeId} className="grid gap-3 rounded-lg border bg-white p-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="text-lg font-semibold">
+                      {employeeName ?? t('Planning.employeeTour')}
+                    </h3>
+                    {listedTour ? (
+                      <Link
+                        className="text-sm font-medium text-blue-800 underline"
+                        href={viewHref({
+                          ...query,
+                          date: selectedDate,
+                          view: 'day',
+                          tourId: listedTour.id,
+                        })}
+                      >
+                        {t('Planning.openTour')}
+                      </Link>
+                    ) : null}
+                  </div>
+                  {!listedTour ? (
+                    <form action={createTourAction} className="grid gap-2">
+                      <input type="hidden" name="employeeId" value={tourEmployeeId} />
+                      <input type="hidden" name="localDate" value={selectedDate} />
+                      <input type="hidden" name="timezone" value={employeeVisits[0]!.timezone} />
+                      {employeeVisits.map((visit) => (
+                        <input key={visit.id} type="hidden" name="visitIds" value={visit.id} />
+                      ))}
+                      <p className="text-sm text-slate-600">
+                        {t('Planning.tourVisitCount', { count: employeeVisits.length })}
+                      </p>
+                      <Button type="submit" className="w-fit">
+                        {t('Planning.createTour')}
+                      </Button>
+                    </form>
+                  ) : tour ? (
+                    <div className="grid gap-3">
+                      <p className="text-sm text-slate-600">
+                        {tour.status === 'published'
+                          ? t('Planning.tourPublished')
+                          : t('Planning.tourDraft')}
+                        {' · '}
+                        {t('Planning.tourVersion', { version: tour.version })}
+                        {tour.latestPublication
+                          ? ` · ${t('Planning.latestPublishedVersion', { version: tour.latestPublication.version })}`
+                          : ''}
+                      </p>
+                      {tour.stops.length ? (
+                        <ol className="grid gap-2">
+                          {tour.stops.map((stop) => {
+                            const visit = dayVisits.find((item) => item.id === stop.visitId);
+                            return (
+                              <li key={stop.id} className="rounded-md border p-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <Link
+                                    className="font-medium text-blue-900 underline"
+                                    href={`/visits/${stop.visitId}`}
+                                  >
+                                    {visit?.clientDisplayName ?? stop.visitId}
+                                  </Link>
+                                  <span className="text-sm tabular-nums">
+                                    {formatTime(stop.plannedStart, locale, stop.timezone)}–
+                                    {formatTime(stop.plannedEnd, locale, stop.timezone)}
+                                    {' · '}
+                                    {t('Planning.serviceDuration', {
+                                      minutes: Math.round(
+                                        (new Date(stop.plannedEnd).getTime() -
+                                          new Date(stop.plannedStart).getTime()) /
+                                          60_000,
+                                      ),
+                                    })}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-sm text-slate-600">
+                                  {stop.estimatedTravelMinutes !== null
+                                    ? t('Planning.travelEstimate', {
+                                        minutes: stop.estimatedTravelMinutes,
+                                      })
+                                    : stop.sequence > 1 && stop.routeStatus === 'unknown'
+                                      ? t('Planning.travelUnknown')
+                                      : stop.sequence > 1 && stop.routeStatus === 'unresolved'
+                                        ? t('Planning.routeUnresolved')
+                                        : stop.sequence > 1 && stop.routeStatus === 'unavailable'
+                                          ? t('Planning.routeUnavailable')
+                                          : ''}
+                                  {stop.estimatedDistanceMeters !== null
+                                    ? ` · ${t('Planning.travelDistance', { meters: stop.estimatedDistanceMeters })}`
+                                    : ''}
+                                </p>
+                                {visit?.services.length ? (
+                                  <p className="mt-1 text-sm text-slate-600">
+                                    {visit.services
+                                      .map((service) => service.serviceName)
+                                      .join(' · ')}
+                                  </p>
+                                ) : null}
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      ) : (
+                        <p className="text-sm text-red-800">{t('Planning.emptyTour')}</p>
+                      )}
+                      {suggestedTourId === tour.id && suggestedOrder.length ? (
+                        <form
+                          action={applySuggestedTourOrderAction}
+                          className="grid gap-2 rounded-md bg-blue-50 p-3"
+                        >
+                          <input type="hidden" name="tourId" value={tour.id} />
+                          <input type="hidden" name="expectedVersion" value={tour.version} />
+                          <input type="hidden" name="localDate" value={tour.localDate} />
+                          <input type="hidden" name="employeeId" value={tour.employeeId} />
+                          {suggestedOrder.map((visitId) => (
+                            <input key={visitId} type="hidden" name="visitIds" value={visitId} />
+                          ))}
+                          <p className="text-sm">{t('Planning.suggestedOrderReady')}</p>
+                          <Button type="submit" variant="secondary" className="w-fit">
+                            {t('Planning.useSuggestedOrder')}
+                          </Button>
+                        </form>
+                      ) : null}
+                      <form
+                        action={updateTourStopsAction}
+                        className="grid gap-3 rounded-md border p-3"
+                      >
+                        <input type="hidden" name="tourId" value={tour.id} />
+                        <input type="hidden" name="expectedVersion" value={tour.version} />
+                        <input type="hidden" name="localDate" value={tour.localDate} />
+                        <input type="hidden" name="employeeId" value={tour.employeeId} />
+                        {tour.stops.map((stop) => (
+                          <div key={stop.id} className="grid gap-1 sm:grid-cols-[1fr_1fr]">
+                            <Label htmlFor={`tour-stop-${stop.id}`}>
+                              {t('Planning.stopLabel', { sequence: stop.sequence })}
+                            </Label>
+                            <select
+                              id={`tour-stop-${stop.id}`}
+                              name="visitId"
+                              defaultValue={stop.visitId}
+                              className="h-10 rounded-md border bg-white px-3 text-sm"
+                            >
+                              {tour.stops.map((candidate) => (
+                                <option key={candidate.visitId} value={candidate.visitId}>
+                                  {dayVisits.find((item) => item.id === candidate.visitId)
+                                    ?.clientDisplayName ?? candidate.visitId}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="hidden"
+                              name="dispatcherNote"
+                              value={stop.dispatcherNote ?? ''}
+                            />
+                          </div>
+                        ))}
+                        <Button type="submit" variant="secondary" className="w-fit">
+                          {t('Planning.saveTourOrder')}
+                        </Button>
+                      </form>
+                      <div className="flex flex-wrap gap-2">
+                        <form action={suggestTourOrderAction}>
+                          <input type="hidden" name="tourId" value={tour.id} />
+                          <input type="hidden" name="localDate" value={tour.localDate} />
+                          <input type="hidden" name="employeeId" value={tour.employeeId} />
+                          <Button type="submit" variant="secondary">
+                            {t('Planning.suggestOrder')}
+                          </Button>
+                        </form>
+                        <form action={estimateTourRouteAction}>
+                          <input type="hidden" name="tourId" value={tour.id} />
+                          <input type="hidden" name="expectedVersion" value={tour.version} />
+                          <input type="hidden" name="localDate" value={tour.localDate} />
+                          <input type="hidden" name="employeeId" value={tour.employeeId} />
+                          <Button type="submit" variant="secondary">
+                            {t('Planning.estimateTravel')}
+                          </Button>
+                        </form>
+                        <form action={publishTourAction}>
+                          <input type="hidden" name="tourId" value={tour.id} />
+                          <input type="hidden" name="expectedVersion" value={tour.version} />
+                          <input type="hidden" name="localDate" value={tour.localDate} />
+                          <input type="hidden" name="employeeId" value={tour.employeeId} />
+                          <Button type="submit" disabled={tourConflicts.length > 0}>
+                            {t('Planning.publishTour')}
+                          </Button>
+                        </form>
+                      </div>
+                    </div>
+                  ) : selectedTourResult?.error ? (
+                    <p role="alert" className="text-sm text-red-800">
+                      {t(errorMessageKey(selectedTourResult.error.code))}
+                    </p>
+                  ) : null}
+                </section>
+              );
+            })
+          ) : (
+            <p className="rounded-lg border bg-white p-4 text-sm text-slate-600">
+              {t('Planning.noAssignedVisitsForTour')}
+            </p>
+          )}
+        </section>
+      ) : null}
 
       {canCreate ? (
         <section
@@ -765,4 +1103,19 @@ function viewHref(query: object): string {
     if (value) params.set(key, value);
   }
   return `/planning?${params.toString()}`;
+}
+
+function planningUpdateKey(
+  value: string | undefined,
+):
+  | 'Planning.saved'
+  | 'Planning.updates.tour_created'
+  | 'Planning.updates.tour_reordered'
+  | 'Planning.updates.travel_estimated'
+  | 'Planning.updates.tour_published' {
+  if (value === 'tour_created') return 'Planning.updates.tour_created';
+  if (value === 'tour_reordered') return 'Planning.updates.tour_reordered';
+  if (value === 'travel_estimated') return 'Planning.updates.travel_estimated';
+  if (value === 'tour_published') return 'Planning.updates.tour_published';
+  return 'Planning.saved';
 }

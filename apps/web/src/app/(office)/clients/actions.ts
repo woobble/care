@@ -394,6 +394,51 @@ export async function updateFuturePflegegradAction(formData: FormData): Promise<
   redirect(clientPath(id, ''));
 }
 
+export async function saveClientSchedulingPreferencesAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const preferredWeekdays = readIntegers(formData, 'preferredWeekdays', 1, 7);
+  const preferredEmployeeId = readUuid(formData.get('preferredEmployeeId')) ?? null;
+  const avoidedEmployeeIds = readUuids(formData, 'avoidedEmployeeIds');
+  const preferredTimeWindows: Array<{ startsAt: string; endsAt: string }> = [];
+  for (let slot = 1; slot <= 4; slot += 1) {
+    const startsAt = readString(formData, `preferredWindow${slot}Start`);
+    const endsAt = readString(formData, `preferredWindow${slot}End`);
+    if (!startsAt && !endsAt) continue;
+    if (!validTime(startsAt) || !validTime(endsAt) || startsAt >= endsAt) {
+      redirect(clientPath(id, 'SCHEDULING_TOUR_INVALID'));
+    }
+    preferredTimeWindows.push({ startsAt, endsAt });
+  }
+  if (preferredEmployeeId && avoidedEmployeeIds.includes(preferredEmployeeId)) {
+    redirect(clientPath(id, 'SCHEDULING_TOUR_INVALID'));
+  }
+  const api = await getApiClient();
+  const { error } = await api.PUT('/api/v1/clients/{clientId}/scheduling-preferences', {
+    params: { path: { clientId: id }, header: await getTenantHeader() },
+    body: { preferredWeekdays, preferredTimeWindows, preferredEmployeeId, avoidedEmployeeIds },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(`${clientPath(id, '')}?updated=scheduling_preferences#scheduling`);
+}
+
+export async function saveClientRoutingLocationAction(formData: FormData): Promise<void> {
+  const id = requireClientId(formData);
+  const latitude = readCoordinate(formData, 'latitude', -90, 90);
+  const longitude = readCoordinate(formData, 'longitude', -180, 180);
+  if (latitude === undefined || longitude === undefined) {
+    redirect(clientPath(id, 'SCHEDULING_TOUR_INVALID'));
+  }
+  const api = await getApiClient();
+  const { error } = await api.PUT('/api/v1/clients/{clientId}/routing-location', {
+    params: { path: { clientId: id }, header: await getTenantHeader() },
+    body: { latitude, longitude },
+  });
+  if (error) redirect(clientPath(id, error.code));
+  await refreshClient(id);
+  redirect(`${clientPath(id, '')}?updated=routing_location#scheduling`);
+}
+
 async function changeClientState(formData: FormData, state: 'activate' | 'archive'): Promise<void> {
   const id = requireClientId(formData);
   const api = await getApiClient();
@@ -456,6 +501,40 @@ function readInteger(formData: FormData, name: string): number | undefined {
   if (!value) return undefined;
   const parsed = Number(value);
   return Number.isInteger(parsed) ? parsed : undefined;
+}
+
+function readIntegers(
+  formData: FormData,
+  name: string,
+  minimum: number,
+  maximum: number,
+): number[] {
+  return [...new Set(formData.getAll(name))]
+    .filter((value): value is string => typeof value === 'string' && /^\d+$/.test(value))
+    .map(Number)
+    .filter((value) => Number.isSafeInteger(value) && value >= minimum && value <= maximum);
+}
+
+function readUuids(formData: FormData, name: string): string[] {
+  return [...new Set(formData.getAll(name))]
+    .filter((value): value is string => typeof value === 'string' && uuidPattern.test(value.trim()))
+    .map((value) => value.trim());
+}
+
+function readCoordinate(
+  formData: FormData,
+  name: string,
+  minimum: number,
+  maximum: number,
+): number | undefined {
+  const value = readString(formData, name);
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum ? parsed : undefined;
+}
+
+function validTime(value: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
 function clientPath(id: string, error: string): string {

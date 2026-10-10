@@ -32,7 +32,11 @@ const migrations = {
   clients: ['0001_initial.sql', '0002_master_data.sql', '0003_scheduling_provider_reference.sql'],
   services: ['0001_catalog.sql', '0002_benefit_classification_and_prices.sql'],
   'service-agreements': ['0001_service_agreements.sql', '0002_scheduling_references.sql'],
-  scheduling: ['0001_scheduling.sql'],
+  scheduling: [
+    '0001_scheduling.sql',
+    '0002_advanced_planning.sql',
+    '0003_operational_planning.sql',
+  ],
   'visit-execution': [
     '0001_visit_execution.sql',
     '0002_documentation_reference.sql',
@@ -45,6 +49,11 @@ const migrations = {
   benefits: ['0001_benefits.sql', '0002_bucket_rule_version.sql'],
   documents: ['0001_documents.sql', '0002_claim_summary.sql'],
   billing: ['0001_billing.sql', '0002_invoice_document_rendering.sql', '0003_claims.sql'],
+  operations: [
+    '0001_operations.sql',
+    '0002_operations_assignee_scope.sql',
+    '0003_exception_occurrences.sql',
+  ],
 } as const;
 const migrationsRoot = resolve(import.meta.dirname, '../../../modules');
 

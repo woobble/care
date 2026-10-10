@@ -32,6 +32,7 @@
     "@care/identity": "workspace:*",
     "@care/logging": "workspace:*",
     "@care/observability": "workspace:*",
+    "@care/operations": "workspace:*",
     "@care/organizations": "workspace:*",
     "@care/permissions": "workspace:*",
     "@care/platform": "workspace:*",

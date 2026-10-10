@@ -1,6 +1,14 @@
 import { v7 as uuidv7 } from 'uuid';
 
 export interface EventPayloadMap {
+  'operations.task_created': { taskId: string; organizationId: string; clientId: string | null };
+  'operations.task_updated': { taskId: string; changedFields: string[] };
+  'operations.task_assigned': { taskId: string; employeeId: string | null };
+  'operations.task_completed': { taskId: string };
+  'operations.task_reopened': { taskId: string };
+  'operations.task_cancelled': { taskId: string };
+  'operations.exception_acknowledged': { issueKey: string };
+  'operations.exception_snoozed': { issueKey: string; snoozedUntil: string };
   'organization.created': { organizationId: string };
   'organization.updated': { organizationId: string; changedFields: string[] };
   'organization.activated': { organizationId: string };
@@ -134,6 +142,56 @@ export interface EventPayloadMap {
     employeeId: string;
     operation: 'assigned' | 'unassigned';
   };
+  'scheduling.availability_changed': {
+    employeeId: string;
+    previousVersion: number;
+    version: number;
+    operation: 'weekly_hours_updated' | 'exception_added' | 'exception_removed';
+  };
+  'scheduling.absence_recorded': {
+    employeeId: string;
+    absenceId: string;
+    reason: 'vacation' | 'sick_leave' | 'training' | 'personal_unavailability' | 'other';
+  };
+  'scheduling.absence_cancelled': { employeeId: string; absenceId: string };
+  'scheduling.visit_substituted': {
+    visitId: string;
+    originalEmployeeId: string;
+    substituteEmployeeId: string;
+  };
+  'scheduling.substitution_changed': {
+    visitId: string;
+    substitutionId: string;
+    originalEmployeeId: string;
+    substituteEmployeeId: string;
+    status: 'proposed' | 'confirmed' | 'cancelled';
+  };
+  'scheduling.tour_created': {
+    tourId: string;
+    employeeId: string;
+    localDate: string;
+    visitIds: string[];
+    version: number;
+  };
+  'scheduling.tour_reordered': {
+    tourId: string;
+    employeeId: string;
+    localDate: string;
+    visitIds: string[];
+    version: number;
+  };
+  'scheduling.tour_published': {
+    tourId: string;
+    employeeId: string;
+    localDate: string;
+    version: number;
+    visitIds: string[];
+  };
+  'scheduling.preferences_changed': {
+    subjectType: 'client' | 'employee';
+    subjectId: string;
+  };
+  'scheduling.routing_location_updated': { clientId: string };
   'visit_execution.started': {
     executionId: string;
     visitId: string;
@@ -538,8 +596,11 @@ export interface DomainEvent<T extends EventName = EventName> {
     | 'document'
     | 'schedule_generation'
     | 'employee_availability'
+    | 'visit_substitution'
+    | 'tour'
     | 'tenant_membership'
-    | 'tenant_invitation';
+    | 'tenant_invitation'
+    | 'operations';
   aggregateId: string;
   occurredAt: string;
   actor: { type: 'user' | 'system'; id?: string };

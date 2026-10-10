@@ -349,6 +349,11 @@ try {
         'service_evidence.prepare',
         'acknowledgement.read',
         'acknowledgement.revoke',
+        'operations.read',
+        'operations.tasks.create',
+        'operations.tasks.manage',
+        'operations.tasks.assign',
+        'operations.exceptions.manage',
       ] as const,
       Caregiver: [
         'client.read',

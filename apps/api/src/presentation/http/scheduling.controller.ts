@@ -10,6 +10,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -30,8 +31,12 @@ import {
 import { z } from 'zod';
 import {
   SchedulingApplicationService,
+  type EmployeeAvailabilityInput,
+  type EmployeeAvailabilityExceptionInput,
   type CreateVisitInput,
   type VisitSearchQuery,
+  type CreateTourInput,
+  type UpdateTourStopsInput,
 } from '@care/scheduling';
 import { SCHEDULING_APPLICATION } from '../../tokens';
 import { OidcGuard, TenantContextGuard } from '../../http/auth.guards';
@@ -41,12 +46,25 @@ import {
   createVisitSchema,
   createVisitAssignmentSchema,
   employeeUnavailabilitySchema,
+  employeeUnavailabilityQuerySchema,
+  createSubstitutionSchema,
+  createTourSchema,
+  updateTourStopsSchema,
+  tourVersionSchema,
+  tourListQuerySchema,
+  routingLocationSchema,
+  employeeSchedulingPreferencesSchema,
+  clientSchedulingPreferencesSchema,
+  employeeAvailabilitySchema,
+  employeeAvailabilityExceptionSchema,
   scheduleGenerationSchema,
   updateVisitSchema,
   visitQuerySchema,
   CreateVisitAssignmentDto,
   CreateVisitDto,
   EmployeeUnavailabilityRequestDto,
+  EmployeeAvailabilityRequestDto,
+  EmployeeAvailabilityExceptionRequestDto,
   ScheduleGenerationRequestDto,
   UpdateVisitDto,
   VisitDetailResponseDto,
@@ -54,7 +72,22 @@ import {
   VisitAssignmentResponseDto,
   VisitAssignmentMutationResponseDto,
   VisitMutationResponseDto,
+  EmployeeAvailabilityResponseDto,
+  EmployeeAbsenceListResponseDto,
   ScheduleGenerationResponseDto,
+  CreateSubstitutionDto,
+  CreateTourDto,
+  UpdateTourStopsDto,
+  TourResponseDto,
+  RoutingLocationDto,
+  EmployeeSchedulingPreferencesDto,
+  ClientSchedulingPreferencesDto,
+  SchedulingWorklistResponseDto,
+  RouteOrderSuggestionResponseDto,
+  TourListItemResponseDto,
+  VisitSubstitutionResponseDto,
+  MyTodayTourResponseDto,
+  SubstituteCandidateResponseDto,
 } from './scheduling.dto';
 import {
   visitAssignmentMutationResponse,
@@ -85,12 +118,17 @@ export class VisitsController {
   @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'teamId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'clientId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'serviceDefinitionId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'origin', required: false, enum: ['agreement_generated', 'manual'] })
   @ApiQuery({ name: 'status', required: false, enum: ['planned', 'confirmed', 'cancelled'] })
   @ApiQuery({ name: 'serviceDefinitionId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'unassigned', required: false, enum: ['true', 'false'] })
   @ApiQuery({ name: 'origin', required: false, enum: ['agreement_generated', 'manual'] })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({ name: 'sortBy', required: false, enum: ['plannedStart', 'clientName', 'createdAt'] })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   @ApiQuery({ name: 'sortBy', required: false, enum: ['plannedStart', 'clientName', 'createdAt'] })
   @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   @ApiOkResponse({ type: VisitListResponseDto })
@@ -223,6 +261,36 @@ export class VisitsController {
     );
   }
 
+  @Get(':id/substitute-candidates')
+  @ApiOperation({ summary: 'List available employees who can substitute this visit' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: [SubstituteCandidateResponseDto] })
+  async substituteCandidates(@Req() request: ApiRequest, @Param('id') id: string) {
+    return this.scheduling.substituteCandidates(this.principal(request), parseId(id));
+  }
+
+  @Post(':id/substitutions')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Propose a substitute while leaving the current assignment active' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: CreateSubstitutionDto })
+  @ApiCreatedResponse({ type: VisitSubstitutionResponseDto })
+  async proposeSubstitution(
+    @Req() request: ApiRequest,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = createSubstitutionSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException();
+    return this.scheduling.proposeSubstitution(
+      this.principal(request),
+      parseId(id),
+      parsed.data,
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+
   private async changeStatus(
     request: ApiRequest,
     id: string,
@@ -297,6 +365,28 @@ export class EmployeeUnavailabilityController {
     private readonly scheduling: SchedulingApplicationService,
   ) {}
 
+  @Get()
+  @ApiOperation({ summary: 'List employee absences and assigned visits that need action' })
+  @ApiParam({ name: 'employeeId', format: 'uuid' })
+  @ApiQuery({ name: 'from', required: true, format: 'date-time' })
+  @ApiQuery({ name: 'until', required: true, format: 'date-time' })
+  @ApiOkResponse({ type: EmployeeAbsenceListResponseDto })
+  async list(
+    @Req() request: ApiRequest,
+    @Param('employeeId') employeeId: string,
+    @Query() query: Record<string, string | undefined>,
+  ) {
+    const parsed = employeeUnavailabilityQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    const result = await this.scheduling.listUnavailability(
+      this.principal(request),
+      parseId(employeeId),
+      parsed.data.from,
+      parsed.data.until,
+    );
+    return { ...result, impactedVisits: result.impactedVisits.map(visitResponse) };
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Record an employee unavailability period' })
@@ -318,9 +408,516 @@ export class EmployeeUnavailabilityController {
     );
   }
 
+  @Delete(':absenceId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Cancel an absence while preserving its history' })
+  @ApiParam({ name: 'employeeId', format: 'uuid' })
+  @ApiParam({ name: 'absenceId', format: 'uuid' })
+  @ApiNoContentResponse()
+  async cancel(
+    @Req() request: ApiRequest,
+    @Param('employeeId') employeeId: string,
+    @Param('absenceId') absenceId: string,
+  ) {
+    await this.scheduling.cancelUnavailability(
+      this.principal(request),
+      parseId(employeeId),
+      parseId(absenceId),
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+
   private principal(request: ApiRequest) {
     if (!request.principal) throw new BadRequestException();
     return request.principal;
+  }
+}
+
+@ApiTags('employee availability')
+@ApiBearerAuth()
+@ApiHeader({ name: 'X-Tenant-Id', required: true, description: 'Tenant selected for this request' })
+@ApiDefaultResponse({ type: ProblemDetailsDto, description: 'Problem Details response' })
+@UseGuards(OidcGuard, TenantContextGuard)
+@Controller('api/v1/employees/:employeeId/availability')
+export class EmployeeAvailabilityController {
+  constructor(
+    @Inject(SCHEDULING_APPLICATION)
+    private readonly scheduling: SchedulingApplicationService,
+  ) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Read an employee weekly working availability and dated exceptions' })
+  @ApiParam({ name: 'employeeId', format: 'uuid' })
+  @ApiOkResponse({ type: EmployeeAvailabilityResponseDto })
+  async get(@Req() request: ApiRequest, @Param('employeeId') employeeId: string) {
+    return this.scheduling.getEmployeeAvailability(this.principal(request), parseId(employeeId));
+  }
+
+  @Put()
+  @ApiOperation({ summary: 'Replace weekly employee working availability' })
+  @ApiParam({ name: 'employeeId', format: 'uuid' })
+  @ApiBody({ type: EmployeeAvailabilityRequestDto })
+  @ApiOkResponse({ type: EmployeeAvailabilityResponseDto })
+  async save(
+    @Req() request: ApiRequest,
+    @Param('employeeId') employeeId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = employeeAvailabilitySchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException();
+    return this.scheduling.saveEmployeeAvailability(
+      this.principal(request),
+      { ...parsed.data, employeeId: parseId(employeeId) } as EmployeeAvailabilityInput,
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+
+  @Post('exceptions')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Add a date-specific working availability exception' })
+  @ApiParam({ name: 'employeeId', format: 'uuid' })
+  @ApiBody({ type: EmployeeAvailabilityExceptionRequestDto })
+  @ApiCreatedResponse()
+  async createException(
+    @Req() request: ApiRequest,
+    @Param('employeeId') employeeId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = employeeAvailabilityExceptionSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException();
+    return this.scheduling.createAvailabilityException(
+      this.principal(request),
+      { ...parsed.data, employeeId: parseId(employeeId) } as EmployeeAvailabilityExceptionInput,
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+
+  @Delete('exceptions/:exceptionId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Remove a date-specific availability exception' })
+  @ApiParam({ name: 'employeeId', format: 'uuid' })
+  @ApiParam({ name: 'exceptionId', format: 'uuid' })
+  @ApiQuery({ name: 'expectedVersion', required: true, type: Number })
+  @ApiNoContentResponse()
+  async deleteException(
+    @Req() request: ApiRequest,
+    @Param('employeeId') employeeId: string,
+    @Param('exceptionId') exceptionId: string,
+    @Query('expectedVersion') expectedVersion: string,
+  ) {
+    const version = Number(expectedVersion);
+    if (!Number.isSafeInteger(version) || version < 1) throw new BadRequestException();
+    await this.scheduling.deleteAvailabilityException(
+      this.principal(request),
+      parseId(employeeId),
+      parseId(exceptionId),
+      version,
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+
+  private principal(request: ApiRequest) {
+    if (!request.principal) throw new BadRequestException();
+    return request.principal;
+  }
+}
+
+@ApiTags('scheduling operations')
+@ApiBearerAuth()
+@ApiHeader({ name: 'X-Tenant-Id', required: true, description: 'Tenant selected for this request' })
+@ApiDefaultResponse({ type: ProblemDetailsDto, description: 'Problem Details response' })
+@UseGuards(OidcGuard, TenantContextGuard)
+@Controller('api/v1/scheduling')
+export class SchedulingOperationsController {
+  constructor(
+    @Inject(SCHEDULING_APPLICATION)
+    private readonly scheduling: SchedulingApplicationService,
+  ) {}
+
+  @Get('worklist')
+  @ApiOperation({ summary: 'List visits requiring scheduling action with structured conflicts' })
+  @ApiQuery({ name: 'from', required: true, format: 'date-time' })
+  @ApiQuery({ name: 'until', required: true, format: 'date-time' })
+  @ApiQuery({ name: 'employeeId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'teamId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'clientId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'serviceDefinitionId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'origin', required: false, enum: ['agreement_generated', 'manual'] })
+  @ApiQuery({ name: 'status', required: false, enum: ['planned', 'confirmed', 'cancelled'] })
+  @ApiQuery({ name: 'unassigned', required: false, enum: ['true', 'false'] })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({ name: 'sortBy', required: false, enum: ['plannedStart', 'clientName', 'createdAt'] })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
+  @ApiOkResponse({ type: SchedulingWorklistResponseDto })
+  async worklist(@Req() request: ApiRequest, @Query() query: Record<string, string | undefined>) {
+    return this.report(request, query);
+  }
+
+  @Get('conflicts')
+  @ApiOperation({ summary: 'List blocking scheduling conflicts and advisory warnings' })
+  @ApiQuery({ name: 'from', required: true, format: 'date-time' })
+  @ApiQuery({ name: 'until', required: true, format: 'date-time' })
+  @ApiQuery({ name: 'employeeId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'teamId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'status', required: false, enum: ['planned', 'confirmed', 'cancelled'] })
+  @ApiQuery({ name: 'unassigned', required: false, enum: ['true', 'false'] })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiOkResponse({ type: SchedulingWorklistResponseDto })
+  async conflicts(@Req() request: ApiRequest, @Query() query: Record<string, string | undefined>) {
+    return this.report(request, query);
+  }
+
+  private async report(request: ApiRequest, query: Record<string, string | undefined>) {
+    const parsed = visitQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    const result = await this.scheduling.getWorklist(
+      this.principal(request),
+      withoutUndefined(parsed.data) as VisitSearchQuery,
+    );
+    return {
+      ...result,
+      items: result.items.map((item) => ({ ...item, visit: visitResponse(item.visit) })),
+    };
+  }
+
+  private principal(request: ApiRequest) {
+    if (!request.principal) throw new BadRequestException();
+    return request.principal;
+  }
+}
+
+@ApiTags('scheduling tours')
+@ApiBearerAuth()
+@ApiHeader({ name: 'X-Tenant-Id', required: true, description: 'Tenant selected for this request' })
+@ApiDefaultResponse({ type: ProblemDetailsDto, description: 'Problem Details response' })
+@UseGuards(OidcGuard, TenantContextGuard)
+@Controller('api/v1/scheduling/tours')
+export class SchedulingToursController {
+  constructor(
+    @Inject(SCHEDULING_APPLICATION)
+    private readonly scheduling: SchedulingApplicationService,
+  ) {}
+
+  @Get()
+  @ApiOperation({ summary: 'List one employee daily tours in a bounded date range' })
+  @ApiQuery({ name: 'employeeId', required: true, format: 'uuid' })
+  @ApiQuery({ name: 'from', required: true, format: 'date' })
+  @ApiQuery({ name: 'until', required: true, format: 'date', description: 'Exclusive end date' })
+  @ApiOkResponse({ type: [TourListItemResponseDto] })
+  async list(@Req() request: ApiRequest, @Query() query: Record<string, string | undefined>) {
+    const parsed = tourListQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    return this.scheduling.listTours(
+      this.principal(request),
+      parsed.data.employeeId,
+      parsed.data.from,
+      parsed.data.until,
+    );
+  }
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a draft employee tour from existing assigned visits' })
+  @ApiBody({ type: CreateTourDto })
+  @ApiCreatedResponse({ type: TourResponseDto })
+  async create(@Req() request: ApiRequest, @Body() body: unknown) {
+    const parsed = createTourSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException();
+    return this.scheduling.createTour(
+      this.principal(request),
+      parsed.data as CreateTourInput,
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Read a daily tour, stops, route estimates, and latest publication' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: TourResponseDto })
+  async get(@Req() request: ApiRequest, @Param('id') id: string) {
+    return this.scheduling.getTour(this.principal(request), parseId(id));
+  }
+
+  @Put(':id/stops')
+  @ApiOperation({ summary: 'Replace a draft stop order while preserving visit identity' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: UpdateTourStopsDto })
+  @ApiOkResponse({ type: TourResponseDto })
+  async updateStops(@Req() request: ApiRequest, @Param('id') id: string, @Body() body: unknown) {
+    const parsed = updateTourStopsSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException();
+    return this.scheduling.updateTourStops(
+      this.principal(request),
+      parseId(id),
+      parsed.data as UpdateTourStopsInput,
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+
+  @Post(':id/suggest-order')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Suggest a route-aware order without changing the tour' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: RouteOrderSuggestionResponseDto })
+  async suggestOrder(@Req() request: ApiRequest, @Param('id') id: string) {
+    return this.scheduling.suggestTourOrder(this.principal(request), parseId(id));
+  }
+
+  @Post(':id/estimate-travel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Estimate route legs using the configured routing provider' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { expectedVersion: { type: 'integer', minimum: 1 } },
+      required: ['expectedVersion'],
+    },
+  })
+  @ApiOkResponse({ schema: { type: 'object' } })
+  async estimateTravel(@Req() request: ApiRequest, @Param('id') id: string, @Body() body: unknown) {
+    const parsed = tourVersionSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException();
+    return this.scheduling.estimateTourRoute(
+      this.principal(request),
+      parseId(id),
+      parsed.data.expectedVersion,
+    );
+  }
+
+  @Post(':id/publish')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Publish a versioned tour after feasibility checks' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { expectedVersion: { type: 'integer', minimum: 1 } },
+      required: ['expectedVersion'],
+    },
+  })
+  @ApiOkResponse({ schema: { type: 'object' } })
+  async publish(@Req() request: ApiRequest, @Param('id') id: string, @Body() body: unknown) {
+    const parsed = tourVersionSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException();
+    return this.scheduling.publishTour(
+      this.principal(request),
+      parseId(id),
+      parsed.data.expectedVersion,
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+
+  private principal(request: ApiRequest) {
+    if (!request.principal) throw new BadRequestException();
+    return request.principal;
+  }
+}
+
+@ApiTags('caregiver schedule')
+@ApiBearerAuth()
+@ApiHeader({ name: 'X-Tenant-Id', required: true, description: 'Tenant selected for this request' })
+@ApiDefaultResponse({ type: ProblemDetailsDto, description: 'Problem Details response' })
+@UseGuards(OidcGuard, TenantContextGuard)
+@Controller('api/v1/me/today')
+export class MyTodayTourController {
+  constructor(
+    @Inject(SCHEDULING_APPLICATION)
+    private readonly scheduling: SchedulingApplicationService,
+  ) {}
+
+  @Get('tour')
+  @ApiOperation({ summary: 'Read the current user’s own latest published tour for today' })
+  @ApiOkResponse({ type: MyTodayTourResponseDto, nullable: true })
+  async getTour(@Req() request: ApiRequest) {
+    if (!request.principal) throw new BadRequestException();
+    return this.scheduling.getMyTodayTour(request.principal);
+  }
+}
+
+@ApiTags('scheduling substitutions')
+@ApiBearerAuth()
+@ApiHeader({ name: 'X-Tenant-Id', required: true, description: 'Tenant selected for this request' })
+@ApiDefaultResponse({ type: ProblemDetailsDto, description: 'Problem Details response' })
+@UseGuards(OidcGuard, TenantContextGuard)
+@Controller('api/v1/substitutions')
+export class SubstitutionsController {
+  constructor(
+    @Inject(SCHEDULING_APPLICATION)
+    private readonly scheduling: SchedulingApplicationService,
+  ) {}
+
+  @Post(':id/confirm')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm a proposed substitute and transactionally reassign the visit' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ schema: { type: 'object' } })
+  async confirm(@Req() request: ApiRequest, @Param('id') id: string) {
+    if (!request.principal) throw new BadRequestException();
+    return this.scheduling.confirmSubstitution(
+      request.principal,
+      parseId(id),
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a proposed substitute and preserve its history' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ schema: { type: 'object' } })
+  async cancel(@Req() request: ApiRequest, @Param('id') id: string) {
+    if (!request.principal) throw new BadRequestException();
+    return this.scheduling.cancelSubstitution(
+      request.principal,
+      parseId(id),
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+}
+
+@ApiTags('scheduling preferences')
+@ApiBearerAuth()
+@ApiHeader({ name: 'X-Tenant-Id', required: true, description: 'Tenant selected for this request' })
+@ApiDefaultResponse({ type: ProblemDetailsDto, description: 'Problem Details response' })
+@UseGuards(OidcGuard, TenantContextGuard)
+@Controller('api/v1/employees/:employeeId/scheduling-preferences')
+export class EmployeeSchedulingPreferencesController {
+  constructor(
+    @Inject(SCHEDULING_APPLICATION)
+    private readonly scheduling: SchedulingApplicationService,
+  ) {}
+
+  @Get()
+  @ApiParam({ name: 'employeeId', format: 'uuid' })
+  @ApiOkResponse({ type: EmployeeSchedulingPreferencesDto, nullable: true })
+  async get(@Req() request: ApiRequest, @Param('employeeId') employeeId: string) {
+    if (!request.principal) throw new BadRequestException();
+    return this.scheduling.getEmployeeSchedulingPreferences(request.principal, parseId(employeeId));
+  }
+
+  @Put()
+  @ApiParam({ name: 'employeeId', format: 'uuid' })
+  @ApiBody({ type: EmployeeSchedulingPreferencesDto })
+  @ApiOkResponse({ type: EmployeeSchedulingPreferencesDto })
+  async save(
+    @Req() request: ApiRequest,
+    @Param('employeeId') employeeId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = employeeSchedulingPreferencesSchema.safeParse(body);
+    if (!parsed.success || !request.principal) throw new BadRequestException();
+    return this.scheduling.saveEmployeeSchedulingPreferences(
+      request.principal,
+      {
+        ...parsed.data,
+        employeeId: parseId(employeeId),
+      },
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+}
+
+@ApiTags('scheduling preferences')
+@ApiBearerAuth()
+@ApiHeader({ name: 'X-Tenant-Id', required: true, description: 'Tenant selected for this request' })
+@ApiDefaultResponse({ type: ProblemDetailsDto, description: 'Problem Details response' })
+@UseGuards(OidcGuard, TenantContextGuard)
+@Controller('api/v1/clients/:clientId/scheduling-preferences')
+export class ClientSchedulingPreferencesController {
+  constructor(
+    @Inject(SCHEDULING_APPLICATION)
+    private readonly scheduling: SchedulingApplicationService,
+  ) {}
+
+  @Get()
+  @ApiParam({ name: 'clientId', format: 'uuid' })
+  @ApiOkResponse({ type: ClientSchedulingPreferencesDto, nullable: true })
+  async get(@Req() request: ApiRequest, @Param('clientId') clientId: string) {
+    if (!request.principal) throw new BadRequestException();
+    return this.scheduling.getClientSchedulingPreferences(request.principal, parseId(clientId));
+  }
+
+  @Put()
+  @ApiParam({ name: 'clientId', format: 'uuid' })
+  @ApiBody({ type: ClientSchedulingPreferencesDto })
+  @ApiOkResponse({ type: ClientSchedulingPreferencesDto })
+  async save(
+    @Req() request: ApiRequest,
+    @Param('clientId') clientId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = clientSchedulingPreferencesSchema.safeParse(body);
+    if (!parsed.success || !request.principal) throw new BadRequestException();
+    return this.scheduling.saveClientSchedulingPreferences(
+      request.principal,
+      {
+        ...parsed.data,
+        clientId: parseId(clientId),
+      },
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+}
+
+@ApiTags('scheduling routing locations')
+@ApiBearerAuth()
+@ApiHeader({ name: 'X-Tenant-Id', required: true, description: 'Tenant selected for this request' })
+@ApiDefaultResponse({ type: ProblemDetailsDto, description: 'Problem Details response' })
+@UseGuards(OidcGuard, TenantContextGuard)
+@Controller('api/v1/clients/:clientId/routing-location')
+export class ClientRoutingLocationController {
+  constructor(
+    @Inject(SCHEDULING_APPLICATION)
+    private readonly scheduling: SchedulingApplicationService,
+  ) {}
+
+  @Get()
+  @ApiParam({ name: 'clientId', format: 'uuid' })
+  @ApiOkResponse({ type: RoutingLocationDto, nullable: true })
+  async get(@Req() request: ApiRequest, @Param('clientId') clientId: string) {
+    if (!request.principal) throw new BadRequestException();
+    return this.scheduling.getClientRoutingLocation(request.principal, parseId(clientId));
+  }
+
+  @Put()
+  @ApiOperation({
+    summary: 'Set normalized coordinates for routing without sharing client identity',
+  })
+  @ApiParam({ name: 'clientId', format: 'uuid' })
+  @ApiBody({ type: RoutingLocationDto })
+  @ApiOkResponse({ type: RoutingLocationDto })
+  async save(
+    @Req() request: ApiRequest,
+    @Param('clientId') clientId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = routingLocationSchema.safeParse(body);
+    if (!parsed.success || !request.principal) throw new BadRequestException();
+    return this.scheduling.setClientRoutingLocation(
+      request.principal,
+      parseId(clientId),
+      parsed.data,
+      requestContext(request),
+      auditContext(request),
+    );
   }
 }
 

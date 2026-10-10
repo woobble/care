@@ -4,6 +4,7 @@ import {
   createSchedulingApplicationService,
   type SchedulingApplicationService,
 } from '@care/scheduling';
+import { OsrmRouteProvider, UnavailableRouteProvider } from '@care/scheduling';
 import type { AuditWriter } from '@care/audit';
 import type { ClientApplicationService } from '@care/clients';
 import type { UnitOfWork } from '@care/database';
@@ -29,6 +30,14 @@ import {
 import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
 import {
   AgreementVisitGenerationController,
+  EmployeeAvailabilityController,
+  SchedulingOperationsController,
+  SchedulingToursController,
+  MyTodayTourController,
+  SubstitutionsController,
+  EmployeeSchedulingPreferencesController,
+  ClientSchedulingPreferencesController,
+  ClientRoutingLocationController,
   EmployeeUnavailabilityController,
   VisitsController,
 } from '../presentation/http/scheduling.controller';
@@ -59,6 +68,14 @@ import { VisitExecutionModule } from './visit-execution.module';
     VisitsController,
     AgreementVisitGenerationController,
     EmployeeUnavailabilityController,
+    EmployeeAvailabilityController,
+    SchedulingOperationsController,
+    SchedulingToursController,
+    MyTodayTourController,
+    SubstitutionsController,
+    EmployeeSchedulingPreferencesController,
+    ClientSchedulingPreferencesController,
+    ClientRoutingLocationController,
   ],
   providers: [
     OidcGuard,
@@ -98,6 +115,9 @@ import { VisitExecutionModule } from './visit-execution.module';
           outbox,
           loadApiConfig().SCHEDULE_GENERATION_HORIZON_DAYS,
           executionGuards,
+          loadApiConfig().ROUTING_OSRM_URL
+            ? new OsrmRouteProvider(loadApiConfig().ROUTING_OSRM_URL!)
+            : new UnavailableRouteProvider(),
         ),
     },
   ],

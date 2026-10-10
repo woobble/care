@@ -91,6 +91,11 @@ export const PERMISSIONS = [
   'team.read',
   'team.manage',
   'audit.read',
+  'operations.read',
+  'operations.tasks.create',
+  'operations.tasks.manage',
+  'operations.tasks.assign',
+  'operations.exceptions.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

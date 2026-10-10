@@ -28,8 +28,11 @@ import { ConfirmSubmitButton } from '../../administration/confirm-submit-button'
 import { amendDocumentationAction } from '../../documentation/actions';
 import {
   assignVisitAction,
+  cancelSubstitutionAction,
   changeVisitStatusAction,
+  confirmSubstitutionAction,
   correctVisitExecutionTimesAction,
+  proposeSubstitutionAction,
   unassignVisitAction,
   updateVisitAction,
 } from '../../planning/actions';
@@ -96,7 +99,29 @@ export default async function VisitDetailPage({
   const canAssign = hasPermission(permissions, 'schedule.assign') && visit.status !== 'cancelled';
   const canConfirm = hasPermission(permissions, 'schedule.confirm') && visit.status !== 'cancelled';
   const canCancel = hasPermission(permissions, 'schedule.cancel') && visit.status !== 'cancelled';
+  const [candidateResult, worklistResult] = canAssign
+    ? await Promise.all([
+        get('/api/v1/visits/{id}/substitute-candidates', {
+          params: { path: { id: visit.id }, header },
+        }),
+        get('/api/v1/scheduling/worklist', {
+          params: {
+            query: {
+              from: visit.plannedStart,
+              until: visit.plannedEnd,
+              page: 1,
+              pageSize: 100,
+            },
+            header,
+          },
+        }),
+      ])
+    : [null, null];
   const employees = employeesResult.data?.items ?? [];
+  const substituteCandidates = candidateResult?.data ?? [];
+  const proposedSubstitutions =
+    worklistResult?.data?.items.find((item) => item.visit.id === visit.id)?.proposedSubstitutions ??
+    [];
   const conflictEmployee = employees.find((employee) => employee.id === query.employeeId);
   const conflictInterval = readConflictInterval(
     query.conflictStart,
@@ -146,7 +171,13 @@ export default async function VisitDetailPage({
           role="status"
           className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
         >
-          {t('Visits.saved')}
+          {query.updated === 'substitution_proposed'
+            ? t('Visits.substitutionProposed')
+            : query.updated === 'substitution_confirmed'
+              ? t('Visits.substitutionConfirmed')
+              : query.updated === 'substitution_cancelled'
+                ? t('Visits.substitutionCancelled')
+                : t('Visits.saved')}
         </p>
       ) : null}
 
@@ -669,6 +700,101 @@ export default async function VisitDetailPage({
           ) : (
             <p className="text-sm text-slate-600">{t('Visits.noActiveEmployees')}</p>
           )
+        ) : null}
+        {proposedSubstitutions.length ? (
+          <div className="grid gap-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+            <h3 className="font-semibold">{t('Visits.substitutionPending')}</h3>
+            {proposedSubstitutions.map((substitution) => {
+              const candidate = substituteCandidates.find(
+                (item) => item.employeeId === substitution.substituteEmployeeId,
+              );
+              return (
+                <div
+                  key={substitution.id}
+                  className="flex flex-wrap items-center justify-between gap-3"
+                >
+                  <p className="text-sm">
+                    {t('Visits.substitutionProposedFor', {
+                      employee: candidate?.displayName ?? substitution.substituteEmployeeId,
+                    })}
+                    {' · '}
+                    {substitution.reason}
+                  </p>
+                  {canAssign ? (
+                    <div className="flex gap-2">
+                      <form action={confirmSubstitutionAction}>
+                        <input type="hidden" name="visitId" value={visit.id} />
+                        <input type="hidden" name="substitutionId" value={substitution.id} />
+                        <Button type="submit" size="sm">
+                          {t('Visits.confirmSubstitution')}
+                        </Button>
+                      </form>
+                      <form action={cancelSubstitutionAction}>
+                        <input type="hidden" name="visitId" value={visit.id} />
+                        <input type="hidden" name="substitutionId" value={substitution.id} />
+                        <Button type="submit" size="sm" variant="secondary">
+                          {t('Visits.cancelSubstitution')}
+                        </Button>
+                      </form>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+        {canAssign && visit.assignments.length && !proposedSubstitutions.length ? (
+          <div className="grid gap-3 rounded-md border-t pt-4">
+            <h3 className="font-semibold">{t('Visits.proposeSubstitute')}</h3>
+            {substituteCandidates.length ? (
+              visit.assignments.map((assignment) => (
+                <form
+                  key={assignment.id}
+                  action={proposeSubstitutionAction}
+                  className="grid gap-3 rounded-md border p-3 md:grid-cols-[1fr_1fr_2fr_auto] md:items-end"
+                >
+                  <input type="hidden" name="visitId" value={visit.id} />
+                  <input type="hidden" name="originalAssignmentId" value={assignment.id} />
+                  <p className="text-sm md:pb-2">
+                    {t('Visits.substitutingFor', { employee: assignment.employeeDisplayName })}
+                  </p>
+                  <div className="grid gap-2">
+                    <Label htmlFor={`substitute-${assignment.id}`}>
+                      {t('Visits.substituteEmployee')}
+                    </Label>
+                    <select
+                      id={`substitute-${assignment.id}`}
+                      name="substituteEmployeeId"
+                      required
+                      className="h-10 rounded-md border bg-white px-3"
+                    >
+                      <option value="">{t('Visits.selectSubstitute')}</option>
+                      {substituteCandidates.map((candidate) => (
+                        <option key={candidate.employeeId} value={candidate.employeeId}>
+                          {candidate.displayName}
+                          {candidate.preferred ? ` · ${t('Visits.preferredCandidate')}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor={`substitution-reason-${assignment.id}`}>
+                      {t('Visits.substitutionReason')}
+                    </Label>
+                    <Input
+                      id={`substitution-reason-${assignment.id}`}
+                      name="reason"
+                      maxLength={500}
+                      required
+                    />
+                  </div>
+                  <Button type="submit">{t('Visits.proposeSubstitute')}</Button>
+                </form>
+              ))
+            ) : (
+              <p className="text-sm text-slate-600">{t('Visits.noSubstituteCandidates')}</p>
+            )}
+          </div>
         ) : null}
       </section>
 

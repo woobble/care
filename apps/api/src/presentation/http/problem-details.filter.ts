@@ -29,6 +29,15 @@ import {
 import { BillingDomainError } from '@care/billing';
 import { DocumentDomainError } from '@care/documents';
 import {
+  InvalidOperationsInputError,
+  OperationsAssigneeInvalidError,
+  OperationsSourceNotFoundError,
+  OperationsTaskNotFoundError,
+  OperationsTaskStateError,
+  OperationsTaskVersionConflictError,
+  OperationsWorkItemNotFoundError,
+} from '@care/operations';
+import {
   ClientArchivedError,
   ClientAddressNotFoundError,
   ClientContactNotFoundError,
@@ -125,6 +134,10 @@ import {
 import {
   DuplicateVisitAssignmentError,
   InvalidEmployeeUnavailabilityError,
+  EmployeeUnavailabilityNotFoundError,
+  InvalidEmployeeAvailabilityError,
+  AvailabilityExceptionNotFoundError,
+  SchedulingVersionConflictError,
   InvalidScheduleGenerationRangeError,
   InvalidVisitAssignmentError,
   InvalidVisitDataError,
@@ -138,9 +151,19 @@ import {
   VisitClientConflictError,
   VisitEmployeeConflictError,
   VisitEmployeeUnavailableError,
+  VisitOutsideEmployeeAvailabilityError,
+  VisitTravelBufferConflictError,
+  VisitDailyPlanLimitError,
   VisitNotFoundError,
   VisitOutsideProviderContextError,
   VisitExecutionPlanningLockedError,
+  ActiveVisitSubstitutionError,
+  VisitSubstitutionNotFoundError,
+  VisitSubstitutionStaleError,
+  TourNotFoundError,
+  SchedulingConflictsError,
+  InvalidTourError,
+  TourVersionConflictError,
 } from '@care/scheduling';
 import {
   EmployeeLinkRequiredError,
@@ -279,6 +302,25 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
   } else if (exception instanceof AuthorizationDeniedError) {
     status = 403;
     code = exception.code;
+  } else if (
+    exception instanceof OperationsTaskNotFoundError ||
+    exception instanceof OperationsWorkItemNotFoundError ||
+    exception instanceof OperationsSourceNotFoundError
+  ) {
+    status = 404;
+    code = exception.code;
+  } else if (
+    exception instanceof OperationsTaskVersionConflictError ||
+    exception instanceof OperationsTaskStateError
+  ) {
+    status = 409;
+    code = exception.code;
+  } else if (
+    exception instanceof InvalidOperationsInputError ||
+    exception instanceof OperationsAssigneeInvalidError
+  ) {
+    status = 400;
+    code = exception.code;
   } else if (exception instanceof BillingDomainError) {
     code = exception.code;
     if (code.endsWith('_NOT_FOUND')) status = 404;
@@ -373,7 +415,11 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     code = exception.code;
   } else if (
     exception instanceof VisitNotFoundError ||
-    exception instanceof VisitAssignmentNotFoundError
+    exception instanceof VisitAssignmentNotFoundError ||
+    exception instanceof AvailabilityExceptionNotFoundError ||
+    exception instanceof EmployeeUnavailabilityNotFoundError ||
+    exception instanceof VisitSubstitutionNotFoundError ||
+    exception instanceof TourNotFoundError
   ) {
     status = 404;
     code = exception.code;
@@ -383,7 +429,9 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof InvalidVisitQueryError ||
     exception instanceof InvalidScheduleGenerationRangeError ||
     exception instanceof InvalidEmployeeUnavailabilityError ||
+    exception instanceof InvalidEmployeeAvailabilityError ||
     exception instanceof InvalidVisitAssignmentError ||
+    exception instanceof InvalidTourError ||
     exception instanceof InvalidSchedulingTimezoneError
   ) {
     status = 400;
@@ -393,9 +441,17 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof VisitCancelledError ||
     exception instanceof VisitOutsideProviderContextError ||
     exception instanceof VisitExecutionPlanningLockedError ||
+    exception instanceof SchedulingVersionConflictError ||
     exception instanceof VisitClientConflictError ||
     exception instanceof VisitEmployeeConflictError ||
     exception instanceof VisitEmployeeUnavailableError ||
+    exception instanceof VisitOutsideEmployeeAvailabilityError ||
+    exception instanceof VisitTravelBufferConflictError ||
+    exception instanceof VisitDailyPlanLimitError ||
+    exception instanceof ActiveVisitSubstitutionError ||
+    exception instanceof VisitSubstitutionStaleError ||
+    exception instanceof TourVersionConflictError ||
+    exception instanceof SchedulingConflictsError ||
     exception instanceof VisitAgreementInvalidError ||
     exception instanceof VisitAgreementServiceInvalidError ||
     exception instanceof DuplicateVisitAssignmentError ||
@@ -569,6 +625,8 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
           timezone: exception.timezone,
         }
       : undefined;
+  const schedulingConflicts =
+    exception instanceof SchedulingConflictsError ? exception.conflicts : undefined;
   return {
     type: `https://care-platform.example/problems/${code.toLowerCase().replaceAll('_', '-')}`,
     title,
@@ -576,6 +634,7 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     code,
     traceId,
     ...(conflictingInterval ? { conflictingInterval } : {}),
+    ...(schedulingConflicts ? { conflicts: schedulingConflicts } : {}),
   };
 }
 

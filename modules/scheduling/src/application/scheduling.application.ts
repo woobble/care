@@ -14,7 +14,7 @@ import {
   type ResourceContext,
 } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import type { OrganizationApplicationService } from '@care/organizations';
+import { isSupportedTimeZone, type OrganizationApplicationService } from '@care/organizations';
 import type { EmployeeApplicationService } from '@care/employees';
 import type {
   AgreementServiceSnapshot,
@@ -33,6 +33,16 @@ import {
   validateVisit,
   validateVisitService,
 } from '../domain';
+import {
+  availabilityForVisit,
+  InvalidEmployeeAvailabilityError,
+  validateEmployeeAvailability,
+} from '../domain/availability';
+import type {
+  AvailabilityException,
+  AvailabilityWindow,
+  EmployeeAvailability,
+} from '../domain/availability';
 import type {
   VisitAssignmentSnapshot,
   VisitData,
@@ -47,6 +57,21 @@ import type {
   VisitSearchFilter,
 } from '../infrastructure/scheduling.repository';
 import type { SchedulingExecutionGuard } from '../infrastructure/scheduling-guards';
+import { UnavailableRouteProvider } from '../domain/route-provider';
+import type { RouteEstimate, RouteOrderSuggestion, RouteProvider } from '../domain/route-provider';
+import {
+  compareTourStops,
+  InvalidTourError,
+  sameTourDate,
+  TourVersionConflictError,
+  tourFeasibilityConflicts,
+  type SchedulingConflict,
+} from '../domain/tour';
+import {
+  clientSchedulingPreferences,
+  employeeSchedulingPreferences,
+  tourPublications,
+} from '../schema';
 
 // Each loop below awaits statements on one transaction-bound connection; the ordering is part of the transaction and lock semantics.
 // oxlint-disable no-await-in-loop
@@ -98,6 +123,7 @@ export interface VisitSearchQuery {
   serviceDefinitionId?: string;
   unassigned?: boolean;
   origin?: 'agreement_generated' | 'manual';
+  relatedToVisitId?: string;
   page?: number;
   pageSize?: number;
   sortBy?: 'plannedStart' | 'clientName' | 'createdAt';
@@ -113,9 +139,68 @@ export interface ScheduleGenerationResult {
 
 export interface EmployeeUnavailabilityInput {
   employeeId: string;
-  startsAt: Date;
-  endsAt: Date;
+  startsAt?: Date;
+  endsAt?: Date;
+  localStartDate?: string;
+  localStartTime?: string;
+  localEndDate?: string;
+  localEndTime?: string;
+  timezone?: string;
+  reason?: 'vacation' | 'sick_leave' | 'training' | 'personal_unavailability' | 'other';
   note?: string | null;
+}
+
+export interface EmployeeAvailabilityInput {
+  employeeId: string;
+  expectedVersion: number;
+  timezone: string;
+  maxDailyMinutes: number | null;
+  travelBufferMinutes: number;
+  windows: AvailabilityWindow[];
+}
+
+export interface EmployeeAvailabilityExceptionInput {
+  employeeId: string;
+  expectedVersion: number;
+  localDate: string;
+  kind: AvailabilityException['kind'];
+  startsAt: string | null;
+  endsAt: string | null;
+}
+
+export interface CreateTourInput {
+  employeeId: string;
+  localDate: string;
+  timezone: string;
+  visitIds: string[];
+}
+
+export interface UpdateTourStopsInput {
+  expectedVersion: number;
+  stops: Array<{ visitId: string; dispatcherNote?: string | null }>;
+}
+
+export interface TourSummary {
+  id: string;
+  employeeId: string;
+  organizationId: string;
+  localDate: string;
+  timezone: string;
+  status: 'draft' | 'published';
+  version: number;
+  stops: Array<{
+    id: string;
+    visitId: string;
+    sequence: number;
+    plannedStart: Date;
+    plannedEnd: Date;
+    timezone: string;
+    estimatedTravelMinutes: number | null;
+    estimatedDistanceMeters: number | null;
+    routeStatus: 'unknown' | 'available' | 'unavailable' | 'unresolved';
+    dispatcherNote: string | null;
+  }>;
+  latestPublication: typeof tourPublications.$inferSelect | null;
 }
 
 export class SchedulingApplicationService {
@@ -131,6 +216,7 @@ export class SchedulingApplicationService {
     private readonly repository = new SchedulingRepository(),
     private readonly generationHorizonDays = 28,
     private readonly executionGuard?: SchedulingExecutionGuard,
+    private readonly routeProvider: RouteProvider = new UnavailableRouteProvider(),
   ) {}
 
   async search(
@@ -413,6 +499,15 @@ export class SchedulingApplicationService {
         );
       }
       await this.repository.updateVisit(transaction, next);
+      if (timeChanged) {
+        await this.invalidateToursForVisit(
+          transaction,
+          principal.tenantId,
+          next,
+          principal.userId,
+          new Date(),
+        );
+      }
       const event = timeChanged
         ? createDomainEvent({
             type: 'visit.rescheduled',
@@ -520,6 +615,13 @@ export class SchedulingApplicationService {
       );
       const assignment = makeAssignment(principal, visit.id, employee.id, input.role ?? null, now);
       await this.repository.insertAssignment(transaction, assignment);
+      await this.invalidateToursForVisit(
+        transaction,
+        principal.tenantId,
+        visit,
+        principal.userId,
+        now,
+      );
       await this.recordAssignmentChange(
         transaction,
         principal,
@@ -563,6 +665,13 @@ export class SchedulingApplicationService {
       ]);
       const now = new Date();
       await this.repository.unassign(transaction, principal.tenantId, visit.id, assignmentId, now);
+      await this.invalidateToursForVisit(
+        transaction,
+        principal.tenantId,
+        visit,
+        principal.userId,
+        now,
+      );
       await this.recordAssignmentChange(
         transaction,
         principal,
@@ -806,77 +915,2006 @@ export class SchedulingApplicationService {
     });
   }
 
+  async proposeSubstitution(
+    principal: AuthorizationPrincipal,
+    visitId: string,
+    input: { originalAssignmentId: string; substituteEmployeeId: string; reason: string },
+    context: RequestContext,
+    auditContext: AuditContext,
+  ) {
+    if (!input.reason.trim() || input.reason.length > 500) throw new InvalidVisitAssignmentError();
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const visit = await this.requireVisitForMutation(
+        transaction,
+        principal,
+        visitId,
+        'schedule.assign',
+        true,
+      );
+      if (visit.status === 'cancelled') throw new VisitCancelledError();
+      await this.ensurePlanningMutable(transaction, visit);
+      const original = await this.repository.assignment(
+        transaction,
+        principal.tenantId,
+        visit.id,
+        input.originalAssignmentId,
+      );
+      if (!original || original.status !== 'active') throw new VisitAssignmentNotFoundError();
+      if (original.employeeId === input.substituteEmployeeId)
+        throw new InvalidVisitAssignmentError();
+      await this.lockResources(transaction, principal.tenantId, [
+        `client:${visit.clientId}`,
+        `employee:${original.employeeId}`,
+        `employee:${input.substituteEmployeeId}`,
+        `visit:${visit.id}`,
+      ]);
+      if (
+        await this.repository.activeProposedSubstitution(transaction, principal.tenantId, visit.id)
+      ) {
+        throw new ActiveVisitSubstitutionError();
+      }
+      await this.validateEmployeeAssignment(
+        transaction,
+        principal.tenantId,
+        input.substituteEmployeeId,
+        visit,
+      );
+      const now = new Date();
+      const substitution = {
+        id: uuidv7(),
+        tenantId: principal.tenantId,
+        visitId: visit.id,
+        originalAssignmentId: original.id,
+        originalEmployeeId: original.employeeId,
+        substituteEmployeeId: input.substituteEmployeeId,
+        status: 'proposed' as const,
+        reason: input.reason.trim(),
+        createdAt: now,
+        createdBy: principal.userId,
+        resolvedAt: null,
+        resolvedBy: null,
+      };
+      await this.repository.insertVisitSubstitution(transaction, substitution);
+      await this.recordSubstitutionChange(
+        transaction,
+        principal,
+        context,
+        auditContext,
+        visit,
+        substitution,
+        'proposed',
+        now,
+      );
+      return substitution;
+    });
+  }
+
+  async confirmSubstitution(
+    principal: AuthorizationPrincipal,
+    substitutionId: string,
+    context: RequestContext,
+    auditContext: AuditContext,
+  ) {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const substitution = await this.repository.getVisitSubstitution(
+        transaction,
+        principal.tenantId,
+        substitutionId,
+        true,
+      );
+      if (!substitution || substitution.status !== 'proposed')
+        throw new VisitSubstitutionNotFoundError();
+      const visit = await this.requireVisitForMutation(
+        transaction,
+        principal,
+        substitution.visitId,
+        'schedule.assign',
+        true,
+      );
+      if (visit.status === 'cancelled') throw new VisitCancelledError();
+      await this.ensurePlanningMutable(transaction, visit);
+      await this.lockResources(transaction, principal.tenantId, [
+        `client:${visit.clientId}`,
+        `employee:${substitution.originalEmployeeId}`,
+        `employee:${substitution.substituteEmployeeId}`,
+        `visit:${visit.id}`,
+      ]);
+      const original = await this.repository.assignment(
+        transaction,
+        principal.tenantId,
+        visit.id,
+        substitution.originalAssignmentId,
+      );
+      if (
+        !original ||
+        original.status !== 'active' ||
+        original.employeeId !== substitution.originalEmployeeId
+      ) {
+        throw new VisitSubstitutionStaleError();
+      }
+      await this.validateEmployeeAssignment(
+        transaction,
+        principal.tenantId,
+        substitution.substituteEmployeeId,
+        visit,
+      );
+      const now = new Date();
+      await this.repository.insertAssignment(
+        transaction,
+        makeAssignment(principal, visit.id, substitution.substituteEmployeeId, original.role, now),
+      );
+      await this.repository.unassign(transaction, principal.tenantId, visit.id, original.id, now);
+      if (
+        !(await this.repository.updateVisitSubstitution(
+          transaction,
+          principal.tenantId,
+          substitution.id,
+          'confirmed',
+          now,
+          principal.userId,
+        ))
+      ) {
+        throw new VisitSubstitutionStaleError();
+      }
+      await this.invalidateToursForVisit(
+        transaction,
+        principal.tenantId,
+        visit,
+        principal.userId,
+        now,
+      );
+      await this.recordAssignmentChange(
+        transaction,
+        principal,
+        context,
+        auditContext,
+        visit,
+        original.employeeId,
+        'unassigned',
+        now,
+      );
+      await this.recordAssignmentChange(
+        transaction,
+        principal,
+        context,
+        auditContext,
+        visit,
+        substitution.substituteEmployeeId,
+        'assigned',
+        now,
+      );
+      await this.recordSubstitutionChange(
+        transaction,
+        principal,
+        context,
+        auditContext,
+        visit,
+        substitution,
+        'confirmed',
+        now,
+      );
+      return {
+        ...substitution,
+        status: 'confirmed' as const,
+        resolvedAt: now,
+        resolvedBy: principal.userId,
+      };
+    });
+  }
+
+  async cancelSubstitution(
+    principal: AuthorizationPrincipal,
+    substitutionId: string,
+    context: RequestContext,
+    auditContext: AuditContext,
+  ) {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const substitution = await this.repository.getVisitSubstitution(
+        transaction,
+        principal.tenantId,
+        substitutionId,
+        true,
+      );
+      if (!substitution || substitution.status !== 'proposed')
+        throw new VisitSubstitutionNotFoundError();
+      const visit = await this.requireVisitForMutation(
+        transaction,
+        principal,
+        substitution.visitId,
+        'schedule.assign',
+        true,
+      );
+      const now = new Date();
+      if (
+        !(await this.repository.updateVisitSubstitution(
+          transaction,
+          principal.tenantId,
+          substitution.id,
+          'cancelled',
+          now,
+          principal.userId,
+        ))
+      ) {
+        throw new VisitSubstitutionStaleError();
+      }
+      await this.recordSubstitutionChange(
+        transaction,
+        principal,
+        context,
+        auditContext,
+        visit,
+        substitution,
+        'cancelled',
+        now,
+      );
+      return {
+        ...substitution,
+        status: 'cancelled' as const,
+        resolvedAt: now,
+        resolvedBy: principal.userId,
+      };
+    });
+  }
+
+  async substituteCandidates(principal: AuthorizationPrincipal, visitId: string) {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const visit = await this.requireVisitForMutation(
+        transaction,
+        principal,
+        visitId,
+        'schedule.assign',
+        false,
+      );
+      const assigned = await this.repository.activeEmployeeIds(
+        transaction,
+        principal.tenantId,
+        visit.id,
+      );
+      const clientPreferences = await this.repository.clientPreferences(
+        transaction,
+        principal.tenantId,
+        visit.clientId,
+      );
+      const candidates = await this.repository.activeEmployeesForOrganization(
+        transaction,
+        principal.tenantId,
+        visit.organizationId,
+      );
+      const eligible: Array<{ employeeId: string; displayName: string; preferred: boolean }> = [];
+      for (const candidate of candidates) {
+        if (assigned.includes(candidate.id)) continue;
+        if (clientPreferences?.avoidedEmployeeIds.includes(candidate.id)) continue;
+        try {
+          await this.validateEmployeeAssignment(
+            transaction,
+            principal.tenantId,
+            candidate.id,
+            visit,
+          );
+          const preference = await this.repository.employeePreferences(
+            transaction,
+            principal.tenantId,
+            candidate.id,
+          );
+          eligible.push({
+            employeeId: candidate.id,
+            displayName: `${candidate.preferredName || candidate.firstName} ${candidate.lastName}`,
+            preferred:
+              clientPreferences?.preferredEmployeeId === candidate.id ||
+              preference?.preferredWeekdays.includes(
+                weekdayNumber(visit.plannedStart, visit.timezone),
+              ) === true,
+          });
+        } catch {
+          // Ineligible candidates are excluded; the dispatcher still gets explicit reason codes from assignment attempts.
+        }
+      }
+      return eligible.sort(
+        (left, right) =>
+          Number(right.preferred) - Number(left.preferred) ||
+          left.displayName.localeCompare(right.displayName),
+      );
+    });
+  }
+
+  async createTour(
+    principal: AuthorizationPrincipal,
+    input: CreateTourInput,
+    context: RequestContext,
+    auditContext: AuditContext,
+  ): Promise<TourSummary> {
+    validateTourRequest(input.localDate, input.timezone, input.visitIds);
+    const tourId = uuidv7();
+    await this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const { employee, resource } = await this.employeeSchedulingResource(
+        transaction,
+        principal,
+        input.employeeId,
+      );
+      assertCan(principal, { action: 'schedule.update', resource });
+      await this.lockResources(transaction, principal.tenantId, [
+        `employee:${employee.id}`,
+        ...input.visitIds.map((visitId) => `visit:${visitId}`),
+      ]);
+      const visitsForTour = [] as VisitData[];
+      for (const visitId of input.visitIds) {
+        const visit = await this.requireVisitForMutation(
+          transaction,
+          principal,
+          visitId,
+          'schedule.update',
+          true,
+        );
+        if (visit.status === 'cancelled' || !sameTourDate(visit, input.localDate, input.timezone)) {
+          throw new InvalidTourError();
+        }
+        const employeeIds = await this.repository.activeEmployeeIds(
+          transaction,
+          principal.tenantId,
+          visit.id,
+        );
+        if (!employeeIds.includes(employee.id)) throw new InvalidTourError();
+        if (visitsForTour[0] && visitsForTour[0].organizationId !== visit.organizationId) {
+          throw new InvalidTourError();
+        }
+        await this.ensurePlanningMutable(transaction, visit);
+        await this.ensureEmployeeAvailable(
+          transaction,
+          principal.tenantId,
+          employee.id,
+          visit,
+          visit.id,
+        );
+        visitsForTour.push(visit);
+      }
+      const now = new Date();
+      const tour = {
+        id: tourId,
+        tenantId: principal.tenantId,
+        employeeId: employee.id,
+        organizationId: visitsForTour[0]!.organizationId,
+        facilityId: null,
+        localDate: input.localDate,
+        timezone: input.timezone,
+        status: 'draft' as const,
+        version: 1,
+        createdAt: now,
+        createdBy: principal.userId,
+        updatedAt: now,
+        updatedBy: principal.userId,
+      };
+      await this.repository.insertTour(transaction, tour);
+      await this.repository.insertTourStops(
+        transaction,
+        visitsForTour.sort(compareTourStops).map((visit, index) => ({
+          id: uuidv7(),
+          tenantId: principal.tenantId,
+          tourId,
+          visitId: visit.id,
+          sequence: index + 1,
+          estimatedTravelMinutes: null,
+          estimatedDistanceMeters: null,
+          routeStatus: 'unknown',
+          dispatcherNote: null,
+        })),
+      );
+      await this.recordTourChange(
+        transaction,
+        principal,
+        context,
+        auditContext,
+        tour,
+        'scheduling.tour_created',
+        {
+          employeeId: employee.id,
+          localDate: tour.localDate,
+          visitIds: visitsForTour.map((visit) => visit.id),
+        },
+        now,
+      );
+    });
+    return this.getTour(principal, tourId);
+  }
+
+  async listTours(
+    principal: AuthorizationPrincipal,
+    employeeId: string,
+    from: string,
+    until: string,
+  ) {
+    if (
+      !validLocalDate(from) ||
+      !validLocalDate(until) ||
+      until <= from ||
+      dayDistance(from, until) > 31
+    ) {
+      throw new InvalidTourError();
+    }
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const { resource } = await this.employeeSchedulingResource(
+        transaction,
+        principal,
+        employeeId,
+      );
+      assertCan(principal, { action: 'schedule.read', resource });
+      const rows = await this.repository.listTours(
+        transaction,
+        principal.tenantId,
+        employeeId,
+        from,
+        until,
+      );
+      return Promise.all(
+        rows.map(async (tour) => {
+          const publication = await this.repository.latestTourPublication(
+            transaction,
+            principal.tenantId,
+            tour.id,
+          );
+          const stops = await this.repository.tourStops(transaction, principal.tenantId, tour.id);
+          return {
+            id: tour.id,
+            employeeId: tour.employeeId,
+            organizationId: tour.organizationId,
+            localDate: tour.localDate,
+            timezone: tour.timezone,
+            status: tour.status,
+            version: tour.version,
+            stopCount: stops.length,
+            latestPublishedVersion: publication?.version ?? null,
+          };
+        }),
+      );
+    });
+  }
+
+  async getTour(principal: AuthorizationPrincipal, tourId: string): Promise<TourSummary> {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const tour = await this.repository.getTour(transaction, principal.tenantId, tourId);
+      if (!tour) throw new TourNotFoundError();
+      const { resource } = await this.employeeSchedulingResource(
+        transaction,
+        principal,
+        tour.employeeId,
+      );
+      assertCan(principal, { action: 'schedule.read', resource });
+      const stops = await this.repository.tourStops(transaction, principal.tenantId, tour.id);
+      for (const row of stops) {
+        const client = await this.clients.getForServiceAgreement(
+          transaction,
+          principal,
+          row.visit.clientId,
+        );
+        assertCan(principal, {
+          action: 'schedule.read',
+          resource: {
+            tenantId: principal.tenantId,
+            clientId: row.visit.clientId,
+            organizationId: row.visit.organizationId,
+            facilityId: row.visit.facilityId,
+          },
+        });
+        if (
+          client.organizationId !== row.visit.organizationId ||
+          client.primaryFacilityId !== row.visit.facilityId
+        ) {
+          throw new VisitOutsideProviderContextError();
+        }
+      }
+      const latestPublication = await this.repository.latestTourPublication(
+        transaction,
+        principal.tenantId,
+        tour.id,
+      );
+      return {
+        id: tour.id,
+        employeeId: tour.employeeId,
+        organizationId: tour.organizationId,
+        localDate: tour.localDate,
+        timezone: tour.timezone,
+        status: tour.status,
+        version: tour.version,
+        stops: stops.map(({ stop, visit }) => ({
+          id: stop.id,
+          visitId: stop.visitId,
+          sequence: stop.sequence,
+          plannedStart: visit.plannedStart,
+          plannedEnd: visit.plannedEnd,
+          timezone: visit.timezone,
+          estimatedTravelMinutes: stop.estimatedTravelMinutes,
+          estimatedDistanceMeters: stop.estimatedDistanceMeters,
+          routeStatus: stop.routeStatus,
+          dispatcherNote: stop.dispatcherNote,
+        })),
+        latestPublication,
+      };
+    });
+  }
+
+  async updateTourStops(
+    principal: AuthorizationPrincipal,
+    tourId: string,
+    input: UpdateTourStopsInput,
+    context: RequestContext,
+    auditContext: AuditContext,
+  ): Promise<TourSummary> {
+    if (
+      !Number.isInteger(input.expectedVersion) ||
+      input.expectedVersion < 1 ||
+      input.stops.length < 1 ||
+      input.stops.length > 100 ||
+      new Set(input.stops.map((stop) => stop.visitId)).size !== input.stops.length ||
+      input.stops.some((stop) => (stop.dispatcherNote?.length ?? 0) > 500)
+    ) {
+      throw new InvalidTourError();
+    }
+    await this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const tour = await this.repository.getTour(transaction, principal.tenantId, tourId, true);
+      if (!tour) throw new TourNotFoundError();
+      if (tour.version !== input.expectedVersion) throw new TourVersionConflictError();
+      const { resource } = await this.employeeSchedulingResource(
+        transaction,
+        principal,
+        tour.employeeId,
+      );
+      assertCan(principal, { action: 'schedule.update', resource });
+      await this.lockResources(transaction, principal.tenantId, [
+        `employee:${tour.employeeId}`,
+        ...input.stops.map((stop) => `visit:${stop.visitId}`),
+      ]);
+      const visitsForTour: VisitData[] = [];
+      for (const item of input.stops) {
+        const visit = await this.requireVisitForMutation(
+          transaction,
+          principal,
+          item.visitId,
+          'schedule.update',
+          true,
+        );
+        if (
+          visit.status === 'cancelled' ||
+          visit.organizationId !== tour.organizationId ||
+          !sameTourDate(visit, tour.localDate, tour.timezone)
+        ) {
+          throw new InvalidTourError();
+        }
+        const employeeIds = await this.repository.activeEmployeeIds(
+          transaction,
+          principal.tenantId,
+          visit.id,
+        );
+        if (!employeeIds.includes(tour.employeeId)) throw new InvalidTourError();
+        await this.ensurePlanningMutable(transaction, visit);
+        visitsForTour.push(visit);
+      }
+      const now = new Date();
+      await this.repository.replaceTourStops(
+        transaction,
+        principal.tenantId,
+        tour.id,
+        input.stops.map((stop, index) => ({
+          visitId: stop.visitId,
+          sequence: index + 1,
+          dispatcherNote: stop.dispatcherNote?.trim() || null,
+        })),
+      );
+      if (
+        !(await this.repository.updateTourVersion(
+          transaction,
+          principal.tenantId,
+          tour.id,
+          input.expectedVersion,
+          now,
+          principal.userId,
+          'draft',
+        ))
+      ) {
+        throw new TourVersionConflictError();
+      }
+      await this.recordTourChange(
+        transaction,
+        principal,
+        context,
+        auditContext,
+        tour,
+        'scheduling.tour_reordered',
+        {
+          employeeId: tour.employeeId,
+          localDate: tour.localDate,
+          visitIds: input.stops.map((stop) => stop.visitId),
+        },
+        now,
+      );
+    });
+    return this.getTour(principal, tourId);
+  }
+
+  async estimateTourRoute(
+    principal: AuthorizationPrincipal,
+    tourId: string,
+    expectedVersion: number,
+  ): Promise<{ tour: TourSummary; route: RouteEstimate; conflicts: SchedulingConflict[] }> {
+    const routeStops = await this.unitOfWork.transaction(
+      { tenantId: principal.tenantId },
+      async (transaction) => {
+        const tour = await this.repository.getTour(transaction, principal.tenantId, tourId);
+        if (!tour) throw new TourNotFoundError();
+        if (tour.version !== expectedVersion) throw new TourVersionConflictError();
+        const { resource } = await this.employeeSchedulingResource(
+          transaction,
+          principal,
+          tour.employeeId,
+        );
+        assertCan(principal, { action: 'schedule.update', resource });
+        const rows = await this.repository.tourStops(transaction, principal.tenantId, tour.id);
+        const preferences = await this.repository.employeePreferences(
+          transaction,
+          principal.tenantId,
+          tour.employeeId,
+        );
+        return {
+          stops: rows.map(({ stop, latitude, longitude }) => ({
+            stopId: stop.id,
+            visitId: stop.visitId,
+            location:
+              latitude === null || longitude === null
+                ? null
+                : { latitude: Number(latitude), longitude: Number(longitude) },
+          })),
+          startLocation:
+            preferences?.preferredStartLatitude === null ||
+            preferences?.preferredStartLongitude === null ||
+            !preferences
+              ? null
+              : {
+                  latitude: Number(preferences.preferredStartLatitude),
+                  longitude: Number(preferences.preferredStartLongitude),
+                },
+        };
+      },
+    );
+    const route = await this.routeProvider.estimate(
+      routeStops.stops.map(({ visitId, location }) => ({ visitId, location })),
+      routeStops.startLocation,
+    );
+    const result = await this.unitOfWork.transaction(
+      { tenantId: principal.tenantId },
+      async (transaction) => {
+        const tour = await this.repository.getTour(transaction, principal.tenantId, tourId, true);
+        if (!tour) throw new TourNotFoundError();
+        if (tour.version !== expectedVersion) throw new TourVersionConflictError();
+        await this.repository.updateTourStopEstimates(
+          transaction,
+          principal.tenantId,
+          tour.id,
+          route.legs.map((leg) => ({
+            toVisitId: leg.toVisitId,
+            travelMinutes: Math.ceil(leg.durationSeconds / 60),
+            distanceMeters: leg.distanceMeters,
+            routeStatus: route.status,
+          })),
+          route.status,
+        );
+        const now = new Date();
+        if (
+          !(await this.repository.updateTourVersion(
+            transaction,
+            principal.tenantId,
+            tour.id,
+            expectedVersion,
+            now,
+            principal.userId,
+            'draft',
+          ))
+        ) {
+          throw new TourVersionConflictError();
+        }
+        const storedStops = await this.repository.tourStops(
+          transaction,
+          principal.tenantId,
+          tour.id,
+        );
+        const conflicts = tourFeasibilityConflicts(
+          storedStops.map((row) => row.visit as VisitData),
+          storedStops.slice(1).map((row, index) => ({
+            fromVisitId: storedStops[index]!.stop.visitId,
+            toVisitId: row.stop.visitId,
+            travelMinutes:
+              row.stop.routeStatus === 'available' ? row.stop.estimatedTravelMinutes : null,
+          })),
+        );
+        return { tour, conflicts };
+      },
+    );
+    return {
+      tour: await this.getTour(principal, tourId),
+      route,
+      conflicts: result.conflicts,
+    };
+  }
+
+  async suggestTourOrder(
+    principal: AuthorizationPrincipal,
+    tourId: string,
+  ): Promise<RouteOrderSuggestion & { conflicts: SchedulingConflict[] }> {
+    const routeStops = await this.unitOfWork.transaction(
+      { tenantId: principal.tenantId },
+      async (transaction) => {
+        const tour = await this.repository.getTour(transaction, principal.tenantId, tourId);
+        if (!tour) throw new TourNotFoundError();
+        const { resource } = await this.employeeSchedulingResource(
+          transaction,
+          principal,
+          tour.employeeId,
+        );
+        assertCan(principal, { action: 'schedule.read', resource });
+        const rows = await this.repository.tourStops(transaction, principal.tenantId, tour.id);
+        const preferences = await this.repository.employeePreferences(
+          transaction,
+          principal.tenantId,
+          tour.employeeId,
+        );
+        return {
+          stops: rows.map(({ stop, visit, latitude, longitude }) => ({
+            visitId: stop.visitId,
+            visit,
+            location:
+              latitude === null || longitude === null
+                ? null
+                : { latitude: Number(latitude), longitude: Number(longitude) },
+          })),
+          startLocation:
+            preferences?.preferredStartLatitude === null ||
+            preferences?.preferredStartLongitude === null ||
+            !preferences
+              ? null
+              : {
+                  latitude: Number(preferences.preferredStartLatitude),
+                  longitude: Number(preferences.preferredStartLongitude),
+                },
+        };
+      },
+    );
+    const suggestion = await this.routeProvider.suggestOrder(
+      routeStops.stops.map(({ visitId, location }) => ({ visitId, location })),
+      routeStops.startLocation,
+    );
+    const reOrdered = suggestion.visitIds
+      .map((visitId) => routeStops.stops.find((stop) => stop.visitId === visitId)!)
+      .filter(Boolean);
+    const estimate = await this.routeProvider.estimate(
+      reOrdered.map(({ visitId, location }) => ({ visitId, location })),
+      routeStops.startLocation,
+    );
+    const conflicts = tourFeasibilityConflicts(
+      reOrdered.map(({ visit }) => visit),
+      estimate.legs.map((leg) => ({
+        fromVisitId: leg.fromVisitId,
+        toVisitId: leg.toVisitId,
+        travelMinutes: Math.ceil(leg.durationSeconds / 60),
+      })),
+    );
+    if (estimate.status !== 'available' && reOrdered.length > 1) {
+      conflicts.push({
+        code: 'travel_feasibility_unknown',
+        severity: 'warning',
+        visitId: reOrdered[1]!.visitId,
+        relatedVisitId: reOrdered[0]!.visitId,
+      });
+    }
+    return { ...suggestion, conflicts };
+  }
+
+  async publishTour(
+    principal: AuthorizationPrincipal,
+    tourId: string,
+    expectedVersion: number,
+    context: RequestContext,
+    auditContext: AuditContext,
+  ) {
+    const published = await this.unitOfWork.transaction(
+      { tenantId: principal.tenantId },
+      async (transaction) => {
+        const tour = await this.repository.getTour(transaction, principal.tenantId, tourId, true);
+        if (!tour) throw new TourNotFoundError();
+        if (tour.version !== expectedVersion) throw new TourVersionConflictError();
+        const { resource } = await this.employeeSchedulingResource(
+          transaction,
+          principal,
+          tour.employeeId,
+        );
+        assertCan(principal, { action: 'schedule.update', resource });
+        const stopRows = await this.repository.tourStops(transaction, principal.tenantId, tour.id);
+        if (stopRows.length === 0) throw new InvalidTourError();
+        for (const row of stopRows) {
+          const visit = await this.requireVisitForMutation(
+            transaction,
+            principal,
+            row.visit.id,
+            'schedule.update',
+            true,
+          );
+          if (visit.status === 'cancelled' || !sameTourDate(visit, tour.localDate, tour.timezone)) {
+            throw new InvalidTourError();
+          }
+          const assignments = await this.repository.activeEmployeeIds(
+            transaction,
+            principal.tenantId,
+            visit.id,
+          );
+          if (!assignments.includes(tour.employeeId)) throw new InvalidTourError();
+          await this.ensurePlanningMutable(transaction, visit);
+          await this.ensureEmployeeAvailable(
+            transaction,
+            principal.tenantId,
+            tour.employeeId,
+            visit,
+            visit.id,
+          );
+          if (
+            await this.repository.activeProposedSubstitution(
+              transaction,
+              principal.tenantId,
+              visit.id,
+            )
+          ) {
+            throw new ActiveVisitSubstitutionError();
+          }
+        }
+        const routeConflicts = tourFeasibilityConflicts(
+          stopRows.map(({ visit }) => visit as VisitData),
+          stopRows.slice(1).map((row, index) => ({
+            fromVisitId: stopRows[index]!.stop.visitId,
+            toVisitId: row.stop.visitId,
+            travelMinutes:
+              row.stop.routeStatus === 'available' ? row.stop.estimatedTravelMinutes : null,
+          })),
+        );
+        const blocking = routeConflicts.filter((conflict) => conflict.severity === 'blocking');
+        if (blocking.length) throw new SchedulingConflictsError(blocking);
+        const now = new Date();
+        const prior = await this.repository.latestTourPublication(
+          transaction,
+          principal.tenantId,
+          tour.id,
+        );
+        const snapshot = stopRows.map(({ stop, visit }) => ({
+          visitId: stop.visitId,
+          sequence: stop.sequence,
+          plannedStart: visit.plannedStart.toISOString(),
+          plannedEnd: visit.plannedEnd.toISOString(),
+          timezone: visit.timezone,
+          employeeId: tour.employeeId,
+          estimatedTravelMinutes: stop.estimatedTravelMinutes,
+          estimatedDistanceMeters: stop.estimatedDistanceMeters,
+          routeStatus: stop.routeStatus,
+        }));
+        const changes = publicationChanges(prior?.snapshot, snapshot);
+        const publicationVersion = (prior?.version ?? 0) + 1;
+        await this.repository.insertTourPublication(transaction, {
+          id: uuidv7(),
+          tenantId: principal.tenantId,
+          tourId: tour.id,
+          version: publicationVersion,
+          employeeId: tour.employeeId,
+          snapshot,
+          changeSummary: changes,
+          publishedAt: now,
+          publishedBy: principal.userId,
+        });
+        if (
+          !(await this.repository.updateTourVersion(
+            transaction,
+            principal.tenantId,
+            tour.id,
+            expectedVersion,
+            now,
+            principal.userId,
+            'published',
+          ))
+        ) {
+          throw new TourVersionConflictError();
+        }
+        const event = createDomainEvent({
+          type: 'scheduling.tour_published',
+          tenantId: principal.tenantId,
+          aggregateType: 'tour',
+          aggregateId: tour.id,
+          actor: { type: 'user', id: principal.userId },
+          correlationId: context.correlationId,
+          occurredAt: now.toISOString(),
+          payload: {
+            tourId: tour.id,
+            employeeId: tour.employeeId,
+            localDate: tour.localDate,
+            version: publicationVersion,
+            visitIds: snapshot.map((stop) => stop.visitId),
+          },
+        });
+        await this.record(transaction, principal, context, auditContext, {
+          event,
+          action: 'scheduling.tour_published',
+          resourceType: 'tour',
+          resourceId: tour.id,
+          metadata: {
+            employeeId: tour.employeeId,
+            localDate: tour.localDate,
+            version: publicationVersion,
+            changes,
+          },
+        });
+        return {
+          tourId: tour.id,
+          employeeId: tour.employeeId,
+          localDate: tour.localDate,
+          version: publicationVersion,
+          changes,
+        };
+      },
+    );
+    return { ...published, tour: await this.getTour(principal, tourId) };
+  }
+
+  async getMyTodayTour(principal: AuthorizationPrincipal) {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const employee = await this.repository.employeeByUser(
+        transaction,
+        principal.tenantId,
+        principal.userId,
+      );
+      if (!employee) return null;
+      const now = new Date();
+      const utcDate = localDateInZone(now, 'UTC');
+      const todayTours = await this.repository.listTours(
+        transaction,
+        principal.tenantId,
+        employee.id,
+        addCalendarDate(utcDate, -1),
+        addCalendarDate(utcDate, 2),
+      );
+      const tour = todayTours.find(
+        (candidate) => localDateInZone(now, candidate.timezone) === candidate.localDate,
+      );
+      if (!tour) return null;
+      const { localDate, timezone } = tour;
+      const publication = await this.repository.latestTourPublication(
+        transaction,
+        principal.tenantId,
+        tour.id,
+      );
+      if (!publication) return null;
+      const start = localDateTimeToInstant(localDate, '00:00', timezone, 'earlier');
+      const until = localDateTimeToInstant(
+        addCalendarDate(localDate, 1),
+        '00:00',
+        timezone,
+        'later',
+      );
+      if (!start || !until) throw new InvalidTourError();
+      const scheduleScope: VisitReadScope = {
+        schedule: { tenantWide: true, organizationIds: [], facilityIds: [], teamIds: [] },
+        client: { tenantWide: true, organizationIds: [], facilityIds: [] },
+      };
+      const currentVisits = await this.repository.list(transaction, {
+        tenantId: principal.tenantId,
+        from: start,
+        until,
+        scope: scheduleScope,
+        employeeId: employee.id,
+        page: 1,
+        pageSize: 100,
+        sortBy: 'plannedStart',
+        sortOrder: 'asc',
+      });
+      const currentById = new Map(
+        currentVisits.items
+          .filter((visit) =>
+            visit.assignments.some((assignment) => assignment.employeeId === employee.id),
+          )
+          .map((visit) => [visit.id, visit]),
+      );
+      const snapshot = Array.isArray(publication.snapshot)
+        ? publication.snapshot.filter(isPublishedStop)
+        : [];
+      const stops = snapshot.flatMap((stop) => {
+        const visit = currentById.get(stop.visitId);
+        if (
+          !visit ||
+          visit.status === 'cancelled' ||
+          !sameTourDate(visit, tour.localDate, tour.timezone)
+        )
+          return [];
+        return [
+          {
+            visitId: visit.id,
+            sequence: Number((stop as Record<string, unknown>).sequence),
+            plannedStart: visit.plannedStart,
+            plannedEnd: visit.plannedEnd,
+            estimatedTravelMinutes:
+              typeof (stop as Record<string, unknown>).estimatedTravelMinutes === 'number'
+                ? ((stop as Record<string, unknown>).estimatedTravelMinutes as number)
+                : null,
+            estimatedDistanceMeters:
+              typeof (stop as Record<string, unknown>).estimatedDistanceMeters === 'number'
+                ? ((stop as Record<string, unknown>).estimatedDistanceMeters as number)
+                : null,
+            routeStatus: (stop as Record<string, unknown>).routeStatus,
+          },
+        ];
+      });
+      return {
+        tourId: tour.id,
+        localDate: tour.localDate,
+        timezone: tour.timezone,
+        version: publication.version,
+        publishedAt: publication.publishedAt,
+        changeSummary: Array.isArray(publication.changeSummary)
+          ? publication.changeSummary.flatMap((change) => {
+              if (typeof change !== 'object' || change === null) return [];
+              const type = (change as Record<string, unknown>).type;
+              return typeof type === 'string' ? [{ type }] : [];
+            })
+          : [],
+        stops,
+      };
+    });
+  }
+
+  async setClientRoutingLocation(
+    principal: AuthorizationPrincipal,
+    clientId: string,
+    input: { latitude: number; longitude: number },
+    context: RequestContext,
+    auditContext: AuditContext,
+  ) {
+    if (
+      !Number.isFinite(input.latitude) ||
+      input.latitude < -90 ||
+      input.latitude > 90 ||
+      !Number.isFinite(input.longitude) ||
+      input.longitude < -180 ||
+      input.longitude > 180
+    ) {
+      throw new InvalidTourError();
+    }
+    const savedClientId = await this.unitOfWork.transaction(
+      { tenantId: principal.tenantId },
+      async (transaction) => {
+        const client = await this.clients.getForServiceAgreement(
+          transaction,
+          principal,
+          clientId,
+          true,
+        );
+        if (!client.organizationId || !client.primaryFacilityId)
+          throw new VisitOutsideProviderContextError();
+        assertCan(principal, {
+          action: 'schedule.update',
+          resource: {
+            tenantId: principal.tenantId,
+            clientId: client.id,
+            organizationId: client.organizationId,
+            facilityId: client.primaryFacilityId,
+          },
+        });
+        const now = new Date();
+        await this.repository.upsertClientRoutingLocation(transaction, {
+          id: uuidv7(),
+          tenantId: principal.tenantId,
+          clientId: client.id,
+          latitude: input.latitude.toFixed(6),
+          longitude: input.longitude.toFixed(6),
+          updatedAt: now,
+          updatedBy: principal.userId,
+        });
+        const event = createDomainEvent({
+          type: 'scheduling.routing_location_updated',
+          tenantId: principal.tenantId,
+          aggregateType: 'client',
+          aggregateId: client.id,
+          actor: { type: 'user', id: principal.userId },
+          correlationId: context.correlationId,
+          occurredAt: now.toISOString(),
+          payload: { clientId: client.id },
+        });
+        await this.record(transaction, principal, context, auditContext, {
+          event,
+          action: 'scheduling.routing_location_updated',
+          resourceType: 'client',
+          resourceId: client.id,
+          metadata: { clientId: client.id },
+        });
+        return client.id;
+      },
+    );
+    return { clientId: savedClientId, ...input };
+  }
+
+  async getClientRoutingLocation(principal: AuthorizationPrincipal, clientId: string) {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const client = await this.clients.getForServiceAgreement(transaction, principal, clientId);
+      if (!client.organizationId || !client.primaryFacilityId)
+        throw new VisitOutsideProviderContextError();
+      assertCan(principal, {
+        action: 'schedule.update',
+        resource: {
+          tenantId: principal.tenantId,
+          clientId: client.id,
+          organizationId: client.organizationId,
+          facilityId: client.primaryFacilityId,
+        },
+      });
+      const location = await this.repository.clientRoutingLocation(
+        transaction,
+        principal.tenantId,
+        client.id,
+      );
+      return location
+        ? { latitude: Number(location.latitude), longitude: Number(location.longitude) }
+        : null;
+    });
+  }
+
+  async saveEmployeeSchedulingPreferences(
+    principal: AuthorizationPrincipal,
+    input: {
+      employeeId: string;
+      preferredWeekdays: number[];
+      preferredTimeWindows: Array<{ startsAt: string; endsAt: string }>;
+      preferredStartLatitude: number | null;
+      preferredStartLongitude: number | null;
+      travelMode: 'driving';
+    },
+    context: RequestContext,
+    auditContext: AuditContext,
+  ) {
+    validatePreferences(input.preferredWeekdays, input.preferredTimeWindows);
+    validateCoordinatePair(input.preferredStartLatitude, input.preferredStartLongitude);
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const { employee, resource } = await this.employeeSchedulingResource(
+        transaction,
+        principal,
+        input.employeeId,
+      );
+      assertCan(principal, { action: 'schedule.update', resource });
+      await this.repository.upsertEmployeeSchedulingPreferences(transaction, {
+        id: uuidv7(),
+        tenantId: principal.tenantId,
+        employeeId: employee.id,
+        preferredWeekdays: input.preferredWeekdays,
+        preferredTimeWindows: input.preferredTimeWindows,
+        preferredStartLatitude: input.preferredStartLatitude?.toFixed(6) ?? null,
+        preferredStartLongitude: input.preferredStartLongitude?.toFixed(6) ?? null,
+        travelMode: input.travelMode,
+        updatedAt: new Date(),
+        updatedBy: principal.userId,
+      });
+      const event = createDomainEvent({
+        type: 'scheduling.preferences_changed',
+        tenantId: principal.tenantId,
+        aggregateType: 'employee',
+        aggregateId: employee.id,
+        actor: { type: 'user', id: principal.userId },
+        correlationId: context.correlationId,
+        occurredAt: new Date().toISOString(),
+        payload: { subjectType: 'employee', subjectId: employee.id },
+      });
+      await this.record(transaction, principal, context, auditContext, {
+        event,
+        action: 'scheduling.preferences_changed',
+        resourceType: 'employee',
+        resourceId: employee.id,
+        metadata: { subjectType: 'employee', subjectId: employee.id },
+      });
+      return employeeSchedulingPreferencesResponse(
+        await this.repository.employeePreferences(transaction, principal.tenantId, employee.id),
+      );
+    });
+  }
+
+  async saveClientSchedulingPreferences(
+    principal: AuthorizationPrincipal,
+    input: {
+      clientId: string;
+      preferredWeekdays: number[];
+      preferredTimeWindows: Array<{ startsAt: string; endsAt: string }>;
+      preferredEmployeeId: string | null;
+      avoidedEmployeeIds: string[];
+    },
+    context: RequestContext,
+    auditContext: AuditContext,
+  ) {
+    validatePreferences(input.preferredWeekdays, input.preferredTimeWindows);
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const client = await this.clients.getForServiceAgreement(
+        transaction,
+        principal,
+        input.clientId,
+        true,
+      );
+      if (!client.organizationId || !client.primaryFacilityId)
+        throw new VisitOutsideProviderContextError();
+      assertCan(principal, {
+        action: 'schedule.update',
+        resource: {
+          tenantId: principal.tenantId,
+          clientId: client.id,
+          organizationId: client.organizationId,
+          facilityId: client.primaryFacilityId,
+        },
+      });
+      const employeeIds = [
+        ...(input.preferredEmployeeId ? [input.preferredEmployeeId] : []),
+        ...input.avoidedEmployeeIds,
+      ];
+      if (new Set(employeeIds).size !== employeeIds.length) throw new InvalidTourError();
+      for (const employeeId of employeeIds) {
+        await this.employees.validateForScheduling(
+          transaction,
+          principal.tenantId,
+          employeeId,
+          client.organizationId,
+          client.primaryFacilityId,
+          localDateInZone(new Date(), 'Europe/Berlin'),
+        );
+      }
+      await this.repository.upsertClientSchedulingPreferences(transaction, {
+        id: uuidv7(),
+        tenantId: principal.tenantId,
+        clientId: client.id,
+        preferredWeekdays: input.preferredWeekdays,
+        preferredTimeWindows: input.preferredTimeWindows,
+        preferredEmployeeId: input.preferredEmployeeId,
+        avoidedEmployeeIds: input.avoidedEmployeeIds,
+        updatedAt: new Date(),
+        updatedBy: principal.userId,
+      });
+      const event = createDomainEvent({
+        type: 'scheduling.preferences_changed',
+        tenantId: principal.tenantId,
+        aggregateType: 'client',
+        aggregateId: client.id,
+        actor: { type: 'user', id: principal.userId },
+        correlationId: context.correlationId,
+        occurredAt: new Date().toISOString(),
+        payload: { subjectType: 'client', subjectId: client.id },
+      });
+      await this.record(transaction, principal, context, auditContext, {
+        event,
+        action: 'scheduling.preferences_changed',
+        resourceType: 'client',
+        resourceId: client.id,
+        metadata: { subjectType: 'client', subjectId: client.id },
+      });
+      return clientSchedulingPreferencesResponse(
+        await this.repository.clientPreferences(transaction, principal.tenantId, client.id),
+      );
+    });
+  }
+
+  async getEmployeeSchedulingPreferences(principal: AuthorizationPrincipal, employeeId: string) {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const { employee, resource } = await this.employeeSchedulingResource(
+        transaction,
+        principal,
+        employeeId,
+      );
+      assertCan(principal, { action: 'schedule.update', resource });
+      return employeeSchedulingPreferencesResponse(
+        await this.repository.employeePreferences(transaction, principal.tenantId, employee.id),
+      );
+    });
+  }
+
+  async getClientSchedulingPreferences(principal: AuthorizationPrincipal, clientId: string) {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const client = await this.clients.getForServiceAgreement(transaction, principal, clientId);
+      if (!client.organizationId || !client.primaryFacilityId)
+        throw new VisitOutsideProviderContextError();
+      assertCan(principal, {
+        action: 'schedule.update',
+        resource: {
+          tenantId: principal.tenantId,
+          clientId: client.id,
+          organizationId: client.organizationId,
+          facilityId: client.primaryFacilityId,
+        },
+      });
+      return clientSchedulingPreferencesResponse(
+        await this.repository.clientPreferences(transaction, principal.tenantId, client.id),
+      );
+    });
+  }
+
+  async getWorklist(principal: AuthorizationPrincipal, query: VisitSearchQuery) {
+    const result = await this.search(principal, query);
+    const nowActive = result.items.filter((visit) => visit.status !== 'cancelled');
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const conflictsByVisit = new Map<string, SchedulingConflict[]>();
+      const addConflict = (conflict: SchedulingConflict) => {
+        const list = conflictsByVisit.get(conflict.visitId) ?? [];
+        list.push(conflict);
+        conflictsByVisit.set(conflict.visitId, list);
+      };
+      for (const visit of nowActive) {
+        if (visit.assignments.length === 0) {
+          addConflict({ code: 'missing_assignment', severity: 'blocking', visitId: visit.id });
+        }
+      }
+      const allEmployeeIds = [
+        ...new Set(nowActive.flatMap((visit) => visit.assignments.map((item) => item.employeeId))),
+      ];
+      const allClientIds = [...new Set(nowActive.map((visit) => visit.clientId))];
+      const absences = await this.repository.unavailabilityForEmployees(
+        transaction,
+        principal.tenantId,
+        allEmployeeIds,
+        query.from,
+        query.until,
+      );
+      const employeePreferences = await this.repository.employeePreferencesForEmployees(
+        transaction,
+        principal.tenantId,
+        allEmployeeIds,
+      );
+      const clientPreferences = await this.repository.clientPreferencesForClients(
+        transaction,
+        principal.tenantId,
+        allClientIds,
+      );
+      const pendingSubstitutions = await this.repository.proposedSubstitutionsForVisits(
+        transaction,
+        principal.tenantId,
+        nowActive.map((visit) => visit.id),
+      );
+      const tourRows = await this.repository.tourStopsForVisits(
+        transaction,
+        principal.tenantId,
+        nowActive.map((visit) => visit.id),
+      );
+      const employeePreferenceById = new Map(
+        employeePreferences.map((item) => [item.employeeId, item]),
+      );
+      const clientPreferenceById = new Map(clientPreferences.map((item) => [item.clientId, item]));
+      const proposedByVisit = new Set(pendingSubstitutions.map((item) => item.visitId));
+      for (const visit of nowActive) {
+        const weekday = weekdayNumber(visit.plannedStart, visit.timezone);
+        const minutes = timeMinutesInZone(visit.plannedStart, visit.timezone);
+        const clientPreference = clientPreferenceById.get(visit.clientId);
+        if (
+          clientPreference &&
+          ((clientPreference.preferredWeekdays.length > 0 &&
+            !clientPreference.preferredWeekdays.includes(weekday)) ||
+            (clientPreference.preferredEmployeeId !== null &&
+              !visit.assignments.some(
+                (assignment) => assignment.employeeId === clientPreference.preferredEmployeeId,
+              )) ||
+            (clientPreference.preferredTimeWindows.length > 0 &&
+              !clientPreference.preferredTimeWindows.some(
+                (window) =>
+                  minutes >= timeStringMinutes(window.startsAt) &&
+                  minutes < timeStringMinutes(window.endsAt),
+              )))
+        ) {
+          addConflict({ code: 'client_preference', severity: 'warning', visitId: visit.id });
+        }
+        for (const assignment of visit.assignments) {
+          const absence = absences.find(
+            (item) =>
+              item.employeeId === assignment.employeeId &&
+              item.startsAt < visit.plannedEnd &&
+              item.endsAt > visit.plannedStart,
+          );
+          if (absence) {
+            addConflict({
+              code: 'employee_absence',
+              severity: 'blocking',
+              visitId: visit.id,
+              employeeId: assignment.employeeId,
+            });
+          }
+          const availability = await this.repository.availabilityForEmployee(
+            transaction,
+            principal.tenantId,
+            assignment.employeeId,
+          );
+          if (!availability) {
+            addConflict({
+              code: 'employee_availability_unknown',
+              severity: 'warning',
+              visitId: visit.id,
+              employeeId: assignment.employeeId,
+            });
+          } else if (
+            availabilityForVisit(visit.plannedStart, visit.plannedEnd, availability.value) ===
+            'outside'
+          ) {
+            addConflict({
+              code: 'outside_employee_availability',
+              severity: 'blocking',
+              visitId: visit.id,
+              employeeId: assignment.employeeId,
+            });
+          }
+          const preference = employeePreferenceById.get(assignment.employeeId);
+          if (
+            preference &&
+            ((preference.preferredWeekdays.length > 0 &&
+              !preference.preferredWeekdays.includes(weekday)) ||
+              (preference.preferredTimeWindows.length > 0 &&
+                !preference.preferredTimeWindows.some(
+                  (window) =>
+                    minutes >= timeStringMinutes(window.startsAt) &&
+                    minutes < timeStringMinutes(window.endsAt),
+                )))
+          ) {
+            addConflict({
+              code: 'employee_preference',
+              severity: 'warning',
+              visitId: visit.id,
+              employeeId: assignment.employeeId,
+            });
+          }
+          if (clientPreference?.avoidedEmployeeIds.includes(assignment.employeeId)) {
+            addConflict({
+              code: 'client_preference',
+              severity: 'warning',
+              visitId: visit.id,
+              employeeId: assignment.employeeId,
+            });
+          }
+        }
+        if (proposedByVisit.has(visit.id)) {
+          addConflict({
+            code: 'substitution_awaiting_confirmation',
+            severity: 'warning',
+            visitId: visit.id,
+          });
+        }
+      }
+      addOverlappingConflicts(nowActive, addConflict);
+      const tourGroups = [...groupBy(tourRows, (row) => row.tour.id).values()];
+      const routedPairs = new Set<string>();
+      for (const rows of tourGroups) {
+        if (rows[0]?.tour.status === 'draft') {
+          for (const row of rows) {
+            addConflict({
+              code: 'unpublished_schedule_changes',
+              severity: 'warning',
+              visitId: row.stop.visitId,
+              employeeId: row.tour.employeeId,
+            });
+          }
+        }
+        for (let index = 1; index < rows.length; index += 1) {
+          const prior = rows[index - 1]!;
+          const current = rows[index]!;
+          routedPairs.add(`${prior.stop.visitId}:${current.stop.visitId}`);
+          if (
+            current.stop.routeStatus !== 'available' ||
+            current.stop.estimatedTravelMinutes === null
+          ) {
+            addConflict({
+              code: 'travel_feasibility_unknown',
+              severity: 'warning',
+              visitId: current.stop.visitId,
+              relatedVisitId: prior.stop.visitId,
+            });
+            continue;
+          }
+          const priorVisit = nowActive.find((visit) => visit.id === prior.stop.visitId);
+          const currentVisit = nowActive.find((visit) => visit.id === current.stop.visitId);
+          if (!priorVisit || !currentVisit) continue;
+          const availableMinutes = Math.floor(
+            (currentVisit.plannedStart.getTime() - priorVisit.plannedEnd.getTime()) / 60_000,
+          );
+          if (current.stop.estimatedTravelMinutes > availableMinutes) {
+            addConflict({
+              code: 'insufficient_travel_time',
+              severity: 'blocking',
+              visitId: current.stop.visitId,
+              relatedVisitId: prior.stop.visitId,
+              requiredMinutes: current.stop.estimatedTravelMinutes,
+              availableMinutes: Math.max(0, availableMinutes),
+            });
+          }
+        }
+      }
+      const byEmployee = new Map<string, VisitCalendarRow[]>();
+      for (const visit of nowActive) {
+        for (const assignment of visit.assignments) {
+          const group = byEmployee.get(assignment.employeeId) ?? [];
+          group.push(visit);
+          byEmployee.set(assignment.employeeId, group);
+        }
+      }
+      for (const [employeeId, rows] of byEmployee) {
+        const ordered = [...rows].sort(compareTourStops);
+        for (let index = 1; index < ordered.length; index += 1) {
+          const previous = ordered[index - 1]!;
+          const current = ordered[index]!;
+          if (
+            previous.plannedEnd <= current.plannedStart &&
+            !routedPairs.has(`${previous.id}:${current.id}`)
+          ) {
+            addConflict({
+              code: 'travel_feasibility_unknown',
+              severity: 'warning',
+              visitId: current.id,
+              relatedVisitId: previous.id,
+              employeeId,
+            });
+          }
+        }
+      }
+      return {
+        ...result,
+        items: result.items.map((visit) => ({
+          visit,
+          conflicts: conflictsByVisit.get(visit.id) ?? [],
+          proposedSubstitutions: pendingSubstitutions.filter((item) => item.visitId === visit.id),
+        })),
+      };
+    });
+  }
+
+  async getWorklistForVisit(principal: AuthorizationPrincipal, visitId: string) {
+    const current = await this.get(principal, visitId);
+    const localDate = dateInTimeZone(current.visit.plannedStart, current.visit.timezone);
+    const from = localDateTimeToInstant(
+      addCalendarDate(localDate, -1),
+      '00:00',
+      current.visit.timezone,
+      'earlier',
+    );
+    const until = localDateTimeToInstant(
+      addCalendarDate(localDate, 2),
+      '00:00',
+      current.visit.timezone,
+      'later',
+    );
+    if (!from || !until) return { complete: false as const, item: null };
+
+    const result = await this.getWorklist(principal, {
+      from,
+      until,
+      relatedToVisitId: visitId,
+      page: 1,
+      pageSize: 100,
+    });
+    if (result.total > result.items.length) return { complete: false as const, item: null };
+    return {
+      complete: true as const,
+      item: result.items.find((row) => row.visit.id === visitId) ?? null,
+    };
+  }
+
+  async getEmployeeAvailability(
+    principal: AuthorizationPrincipal,
+    employeeId: string,
+  ): Promise<{ employeeId: string; version: number; availability: EmployeeAvailability | null }> {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const { employee, resource } = await this.employeeSchedulingResource(
+        transaction,
+        principal,
+        employeeId,
+      );
+      assertCan(principal, { action: 'schedule.read', resource });
+      const current = await this.repository.availabilityForEmployee(
+        transaction,
+        principal.tenantId,
+        employee.id,
+      );
+      return {
+        employeeId: employee.id,
+        version: current?.version ?? 0,
+        availability: current?.value ?? null,
+      };
+    });
+  }
+
+  async saveEmployeeAvailability(
+    principal: AuthorizationPrincipal,
+    input: EmployeeAvailabilityInput,
+    context: RequestContext,
+    auditContext: AuditContext,
+  ): Promise<{ employeeId: string; version: number; availability: EmployeeAvailability }> {
+    if (!Number.isInteger(input.expectedVersion) || input.expectedVersion < 0) {
+      throw new InvalidEmployeeAvailabilityError();
+    }
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const { employee, resource } = await this.employeeSchedulingResource(
+        transaction,
+        principal,
+        input.employeeId,
+      );
+      assertCan(principal, { action: 'schedule.update', resource });
+      await this.lockResources(transaction, principal.tenantId, [`employee:${employee.id}`]);
+      const current = await this.repository.availabilityForEmployee(
+        transaction,
+        principal.tenantId,
+        employee.id,
+      );
+      if ((current?.version ?? 0) !== input.expectedVersion) {
+        throw new SchedulingVersionConflictError();
+      }
+      const next: EmployeeAvailability = {
+        timezone: input.timezone,
+        maxDailyMinutes: input.maxDailyMinutes,
+        travelBufferMinutes: input.travelBufferMinutes,
+        windows: input.windows,
+        exceptions: current?.value.exceptions ?? [],
+      };
+      validateEmployeeAvailability(next);
+      const now = new Date();
+      const availabilityId = current?.id ?? uuidv7();
+      if (current) {
+        const updated = await this.repository.updateAvailabilityProfile(
+          transaction,
+          principal.tenantId,
+          employee.id,
+          input.expectedVersion,
+          {
+            timezone: next.timezone,
+            maxDailyMinutes: next.maxDailyMinutes,
+            travelBufferMinutes: next.travelBufferMinutes,
+            updatedAt: now,
+          },
+        );
+        if (!updated) throw new SchedulingVersionConflictError();
+      } else {
+        await this.repository.insertAvailabilityProfile(transaction, {
+          id: availabilityId,
+          tenantId: principal.tenantId,
+          employeeId: employee.id,
+          timezone: next.timezone,
+          maxDailyMinutes: next.maxDailyMinutes,
+          travelBufferMinutes: next.travelBufferMinutes,
+          version: 1,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      await this.repository.replaceAvailabilityWindows(
+        transaction,
+        principal.tenantId,
+        availabilityId,
+        next.windows.map((window) => ({
+          id: uuidv7(),
+          tenantId: principal.tenantId,
+          availabilityId,
+          weekday: window.weekday,
+          startsAt: window.startsAt,
+          endsAt: window.endsAt,
+        })),
+      );
+      const version = input.expectedVersion + 1;
+      await this.recordAvailabilityChange(
+        transaction,
+        principal,
+        context,
+        auditContext,
+        employee.id,
+        version,
+        now,
+        'weekly_hours_updated',
+      );
+      const saved = await this.repository.availabilityForEmployee(
+        transaction,
+        principal.tenantId,
+        employee.id,
+      );
+      if (!saved) throw new InvalidEmployeeAvailabilityError();
+      return { employeeId: employee.id, version, availability: saved.value };
+    });
+  }
+
+  async createAvailabilityException(
+    principal: AuthorizationPrincipal,
+    input: EmployeeAvailabilityExceptionInput,
+    context: RequestContext,
+    auditContext: AuditContext,
+  ): Promise<{
+    id: string;
+    employeeId: string;
+    version: number;
+    exception: AvailabilityException;
+  }> {
+    if (!Number.isInteger(input.expectedVersion) || input.expectedVersion < 1) {
+      throw new InvalidEmployeeAvailabilityError();
+    }
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const { employee, resource } = await this.employeeSchedulingResource(
+        transaction,
+        principal,
+        input.employeeId,
+      );
+      assertCan(principal, { action: 'schedule.update', resource });
+      await this.lockResources(transaction, principal.tenantId, [`employee:${employee.id}`]);
+      const current = await this.repository.availabilityForEmployee(
+        transaction,
+        principal.tenantId,
+        employee.id,
+      );
+      if (!current) throw new InvalidEmployeeAvailabilityError();
+      if (current.version !== input.expectedVersion) throw new SchedulingVersionConflictError();
+      const exception: AvailabilityException = {
+        localDate: input.localDate,
+        kind: input.kind,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+      };
+      validateEmployeeAvailability({
+        ...current.value,
+        exceptions: [...current.value.exceptions, exception],
+      });
+      const now = new Date();
+      const updated = await this.repository.updateAvailabilityProfile(
+        transaction,
+        principal.tenantId,
+        employee.id,
+        input.expectedVersion,
+        {
+          timezone: current.value.timezone,
+          maxDailyMinutes: current.value.maxDailyMinutes,
+          travelBufferMinutes: current.value.travelBufferMinutes,
+          updatedAt: now,
+        },
+      );
+      if (!updated) throw new SchedulingVersionConflictError();
+      const id = uuidv7();
+      await this.repository.insertAvailabilityException(transaction, {
+        id,
+        tenantId: principal.tenantId,
+        employeeId: employee.id,
+        localDate: exception.localDate,
+        kind: exception.kind,
+        startsAt: exception.startsAt,
+        endsAt: exception.endsAt,
+        createdAt: now,
+      });
+      const version = input.expectedVersion + 1;
+      await this.recordAvailabilityChange(
+        transaction,
+        principal,
+        context,
+        auditContext,
+        employee.id,
+        version,
+        now,
+        'exception_added',
+      );
+      return { id, employeeId: employee.id, version, exception };
+    });
+  }
+
+  async deleteAvailabilityException(
+    principal: AuthorizationPrincipal,
+    employeeId: string,
+    exceptionId: string,
+    expectedVersion: number,
+    context: RequestContext,
+    auditContext: AuditContext,
+  ): Promise<void> {
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1) {
+      throw new InvalidEmployeeAvailabilityError();
+    }
+    await this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const { employee, resource } = await this.employeeSchedulingResource(
+        transaction,
+        principal,
+        employeeId,
+      );
+      assertCan(principal, { action: 'schedule.update', resource });
+      await this.lockResources(transaction, principal.tenantId, [`employee:${employee.id}`]);
+      const current = await this.repository.availabilityForEmployee(
+        transaction,
+        principal.tenantId,
+        employee.id,
+      );
+      if (!current) throw new AvailabilityExceptionNotFoundError();
+      if (current.version !== expectedVersion) throw new SchedulingVersionConflictError();
+      const now = new Date();
+      const updated = await this.repository.updateAvailabilityProfile(
+        transaction,
+        principal.tenantId,
+        employee.id,
+        expectedVersion,
+        {
+          timezone: current.value.timezone,
+          maxDailyMinutes: current.value.maxDailyMinutes,
+          travelBufferMinutes: current.value.travelBufferMinutes,
+          updatedAt: now,
+        },
+      );
+      if (!updated) throw new SchedulingVersionConflictError();
+      if (
+        !(await this.repository.deleteAvailabilityException(
+          transaction,
+          principal.tenantId,
+          employee.id,
+          exceptionId,
+        ))
+      ) {
+        throw new AvailabilityExceptionNotFoundError();
+      }
+      await this.recordAvailabilityChange(
+        transaction,
+        principal,
+        context,
+        auditContext,
+        employee.id,
+        expectedVersion + 1,
+        now,
+        'exception_removed',
+      );
+    });
+  }
+
+  async listUnavailability(
+    principal: AuthorizationPrincipal,
+    employeeId: string,
+    from: Date,
+    until: Date,
+  ) {
+    if (
+      !validInstant(from) ||
+      !validInstant(until) ||
+      until <= from ||
+      until.getTime() - from.getTime() > 31 * 24 * 60 * 60 * 1000
+    ) {
+      throw new InvalidVisitQueryError();
+    }
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const { employee, resource } = await this.employeeSchedulingResource(
+        transaction,
+        principal,
+        employeeId,
+      );
+      assertCan(principal, { action: 'schedule.read', resource });
+      const absences = await this.repository.listUnavailability(
+        transaction,
+        principal.tenantId,
+        employee.id,
+        from,
+        until,
+      );
+      const scheduleScope = visitReadScope(principal);
+      const visits = await this.repository.list(transaction, {
+        tenantId: principal.tenantId,
+        from,
+        until,
+        scope: scheduleScope,
+        employeeId: employee.id,
+        page: 1,
+        pageSize: 100,
+        sortBy: 'plannedStart',
+        sortOrder: 'asc',
+      });
+      const activeAbsences = absences.filter((absence) => absence.status === 'active');
+      const impactedVisits = visits.items.filter(
+        (visit) =>
+          visit.status !== 'cancelled' &&
+          visit.assignments.some((assignment) => assignment.employeeId === employee.id) &&
+          activeAbsences.some(
+            (absence) => visit.plannedStart < absence.endsAt && visit.plannedEnd > absence.startsAt,
+          ),
+      );
+      return {
+        absences: absences.map(({ note: _protectedNote, ...absence }) => absence),
+        impactedVisits,
+        impactedVisitCount: impactedVisits.length,
+      };
+    });
+  }
+
   async createUnavailability(
     principal: AuthorizationPrincipal,
     input: EmployeeUnavailabilityInput,
     context: RequestContext,
     auditContext: AuditContext,
   ) {
-    if (
-      !validInstant(input.startsAt) ||
-      !validInstant(input.endsAt) ||
-      input.endsAt <= input.startsAt ||
-      (input.note?.length ?? 0) > 1000
-    ) {
+    if ((input.note?.length ?? 0) > 1000 || !isAbsenceReason(input.reason ?? 'other')) {
       throw new InvalidEmployeeUnavailabilityError();
     }
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const { employee, facilityIds, teamIds } = await this.employees.getForSchedulingManagement(
+      const { employee, resource } = await this.employeeSchedulingResource(
         transaction,
-        principal.tenantId,
+        principal,
         input.employeeId,
-        true,
       );
-      const resource: ResourceContext = {
-        tenantId: principal.tenantId,
-        ...(employee.organizationId ? { organizationId: employee.organizationId } : {}),
-        facilityIds,
-        teamIds,
-      };
       assertCan(principal, { action: 'schedule.update', resource });
       await this.lockResources(transaction, principal.tenantId, [`employee:${employee.id}`]);
-      const conflict = await this.repository.findEmployeeConflict(transaction, {
-        tenantId: principal.tenantId,
-        employeeId: employee.id,
-        plannedStart: input.startsAt,
-        plannedEnd: input.endsAt,
-      });
-      if (conflict) {
-        throw new VisitEmployeeConflictError(
-          conflict.visit.plannedStart,
-          conflict.visit.plannedEnd,
-          conflict.visit.timezone,
-        );
-      }
+      const range = resolveEmployeeAbsenceRange(input);
+      if (!range) throw new InvalidEmployeeUnavailabilityError();
       const id = uuidv7();
       const now = new Date();
       await this.repository.insertUnavailability(transaction, {
         id,
         tenantId: principal.tenantId,
         employeeId: employee.id,
-        startsAt: input.startsAt,
-        endsAt: input.endsAt,
+        startsAt: range.startsAt,
+        endsAt: range.endsAt,
+        reason: input.reason ?? 'other',
+        status: 'active',
         note: input.note?.trim() || null,
         createdAt: now,
         createdBy: principal.userId,
+        updatedAt: now,
+        updatedBy: principal.userId,
       });
       const event = createDomainEvent({
-        type: 'employee.unavailability_created',
+        type: 'scheduling.absence_recorded',
         tenantId: principal.tenantId,
         aggregateType: 'employee_availability',
         aggregateId: id,
         actor: { type: 'user', id: principal.userId },
         correlationId: context.correlationId,
-        payload: { employeeId: employee.id, unavailabilityId: id },
+        payload: { employeeId: employee.id, absenceId: id, reason: input.reason ?? 'other' },
       });
       await this.record(transaction, principal, context, auditContext, {
         event,
-        action: 'employee.unavailability_created',
+        action: 'scheduling.absence_recorded',
         resourceType: 'employee_availability',
         resourceId: id,
+        metadata: { employeeId: employee.id, reason: input.reason ?? 'other' },
+      });
+      return {
+        id,
+        employeeId: employee.id,
+        startsAt: range.startsAt,
+        endsAt: range.endsAt,
+        reason: input.reason ?? 'other',
+        status: 'active' as const,
+      };
+    });
+  }
+
+  async cancelUnavailability(
+    principal: AuthorizationPrincipal,
+    employeeId: string,
+    absenceId: string,
+    context: RequestContext,
+    auditContext: AuditContext,
+  ): Promise<void> {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const { employee, resource } = await this.employeeSchedulingResource(
+        transaction,
+        principal,
+        employeeId,
+      );
+      assertCan(principal, { action: 'schedule.update', resource });
+      await this.lockResources(transaction, principal.tenantId, [`employee:${employee.id}`]);
+      const now = new Date();
+      if (
+        !(await this.repository.cancelUnavailability(
+          transaction,
+          principal.tenantId,
+          employee.id,
+          absenceId,
+          now,
+          principal.userId,
+        ))
+      ) {
+        throw new EmployeeUnavailabilityNotFoundError();
+      }
+      const event = createDomainEvent({
+        type: 'scheduling.absence_cancelled',
+        tenantId: principal.tenantId,
+        aggregateType: 'employee_availability',
+        aggregateId: absenceId,
+        actor: { type: 'user', id: principal.userId },
+        correlationId: context.correlationId,
+        occurredAt: now.toISOString(),
+        payload: { employeeId: employee.id, absenceId },
+      });
+      await this.record(transaction, principal, context, auditContext, {
+        event,
+        action: 'scheduling.absence_cancelled',
+        resourceType: 'employee_availability',
+        resourceId: absenceId,
         metadata: { employeeId: employee.id },
       });
-      return { id, employeeId: employee.id, startsAt: input.startsAt, endsAt: input.endsAt };
     });
   }
 
@@ -906,6 +2944,15 @@ export class SchedulingApplicationService {
             : lifecycle.cancel();
       const next = { ...visit, status, updatedAt: new Date() };
       await this.repository.updateVisit(transaction, next);
+      if (operation === 'cancel') {
+        await this.invalidateToursForVisit(
+          transaction,
+          principal.tenantId,
+          next,
+          principal.userId,
+          next.updatedAt,
+        );
+      }
       const action =
         operation === 'confirm'
           ? 'visit.confirmed'
@@ -1202,6 +3249,283 @@ export class SchedulingApplicationService {
     ) {
       throw new VisitEmployeeUnavailableError();
     }
+    const availability = await this.repository.availabilityForEmployee(
+      transaction,
+      tenantId,
+      employeeId,
+    );
+    if (
+      availability &&
+      availabilityForVisit(visit.plannedStart, visit.plannedEnd, availability.value) === 'outside'
+    ) {
+      throw new VisitOutsideEmployeeAvailabilityError();
+    }
+    if (availability) {
+      const dates = calendarDates(
+        dateInTimeZone(visit.plannedStart, availability.value.timezone),
+        dateInTimeZone(visit.plannedEnd, availability.value.timezone),
+      );
+      const dayRanges = dates.map((date) => {
+        const nextDate = addCalendarDate(date, 1);
+        const startsAt = localDateTimeToInstant(
+          date,
+          '00:00',
+          availability.value.timezone,
+          'earlier',
+        );
+        const endsAt = localDateTimeToInstant(
+          nextDate,
+          '00:00',
+          availability.value.timezone,
+          'later',
+        );
+        if (!startsAt || !endsAt || endsAt <= startsAt)
+          throw new InvalidEmployeeAvailabilityError();
+        return { startsAt, endsAt };
+      });
+      const bufferMs = availability.value.travelBufferMinutes * 60_000;
+      const assigned = await this.repository.assignedVisitsForEmployee(
+        transaction,
+        tenantId,
+        employeeId,
+        new Date(dayRanges[0]!.startsAt.getTime() - bufferMs),
+        new Date(dayRanges.at(-1)!.endsAt.getTime() + bufferMs),
+        excludeVisitId,
+      );
+      const stops = [...assigned, visit].sort(
+        (left, right) =>
+          left.plannedStart.getTime() - right.plannedStart.getTime() ||
+          left.id.localeCompare(right.id),
+      );
+      const visitIndex = stops.findIndex((stop) => stop.id === visit.id);
+      const previous = visitIndex > 0 ? stops[visitIndex - 1] : undefined;
+      const next = visitIndex >= 0 ? stops[visitIndex + 1] : undefined;
+      if (
+        bufferMs > 0 &&
+        ((previous && visit.plannedStart.getTime() - previous.plannedEnd.getTime() < bufferMs) ||
+          (next && next.plannedStart.getTime() - visit.plannedEnd.getTime() < bufferMs))
+      ) {
+        throw new VisitTravelBufferConflictError();
+      }
+      if (availability.value.maxDailyMinutes !== null) {
+        for (let index = 0; index < dayRanges.length; index += 1) {
+          const day = dayRanges[index]!;
+          const dayStops = stops.filter(
+            (stop) => stop.plannedStart < day.endsAt && stop.plannedEnd > day.startsAt,
+          );
+          const visitMinutes = dayStops.reduce(
+            (total, stop) =>
+              total +
+              Math.max(
+                0,
+                Math.min(stop.plannedEnd.getTime(), day.endsAt.getTime()) -
+                  Math.max(stop.plannedStart.getTime(), day.startsAt.getTime()),
+              ) /
+                60_000,
+            0,
+          );
+          const bufferedMinutes =
+            visitMinutes +
+            Math.max(0, dayStops.length - 1) * availability.value.travelBufferMinutes;
+          if (bufferedMinutes > availability.value.maxDailyMinutes) {
+            throw new VisitDailyPlanLimitError(availability.value.maxDailyMinutes);
+          }
+        }
+      }
+    }
+  }
+
+  private async employeeSchedulingResource(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    employeeId: string,
+  ) {
+    const { employee, facilityIds, teamIds } = await this.employees.getForSchedulingManagement(
+      transaction,
+      principal.tenantId,
+      employeeId,
+      true,
+    );
+    const resource: ResourceContext = {
+      tenantId: principal.tenantId,
+      ...(employee.organizationId ? { organizationId: employee.organizationId } : {}),
+      facilityIds,
+      teamIds,
+    };
+    return { employee, resource };
+  }
+
+  private async invalidateToursForVisit(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    visit: VisitData,
+    actorId: string,
+    now: Date,
+  ): Promise<void> {
+    const linked = await this.repository.toursForVisit(transaction, tenantId, visit.id);
+    const assignedEmployeeIds = await this.repository.activeEmployeeIds(
+      transaction,
+      tenantId,
+      visit.id,
+    );
+    for (const { tour: linkedTour } of linked) {
+      const tour = await this.repository.getTour(transaction, tenantId, linkedTour.id, true);
+      if (!tour) continue;
+      const stops = await this.repository.tourStops(transaction, tenantId, tour.id);
+      const stillBelongs =
+        visit.status !== 'cancelled' &&
+        assignedEmployeeIds.includes(tour.employeeId) &&
+        visit.organizationId === tour.organizationId &&
+        sameTourDate(visit, tour.localDate, tour.timezone);
+      const remaining = stops
+        .filter((row) => row.stop.visitId !== visit.id || stillBelongs)
+        .map((row) => ({
+          visitId: row.stop.visitId,
+          sequence: row.stop.sequence,
+          dispatcherNote: row.stop.dispatcherNote,
+        }));
+      if (!stillBelongs) {
+        await this.repository.replaceTourStops(transaction, tenantId, tour.id, remaining);
+      } else {
+        await this.repository.updateTourStopEstimates(
+          transaction,
+          tenantId,
+          tour.id,
+          [],
+          'unknown',
+        );
+      }
+      await this.repository.updateTourVersion(
+        transaction,
+        tenantId,
+        tour.id,
+        tour.version,
+        now,
+        actorId,
+        'draft',
+      );
+    }
+  }
+
+  private async recordSubstitutionChange(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    context: RequestContext,
+    auditContext: AuditContext,
+    visit: VisitData,
+    substitution: {
+      id: string;
+      originalEmployeeId: string;
+      substituteEmployeeId: string;
+      reason: string;
+    },
+    status: 'proposed' | 'confirmed' | 'cancelled',
+    now: Date,
+  ): Promise<void> {
+    const event = createDomainEvent({
+      type: 'scheduling.substitution_changed',
+      tenantId: principal.tenantId,
+      aggregateType: 'visit_substitution',
+      aggregateId: substitution.id,
+      actor: { type: 'user', id: principal.userId },
+      correlationId: context.correlationId,
+      occurredAt: now.toISOString(),
+      payload: {
+        visitId: visit.id,
+        substitutionId: substitution.id,
+        originalEmployeeId: substitution.originalEmployeeId,
+        substituteEmployeeId: substitution.substituteEmployeeId,
+        status,
+      },
+    });
+    await this.record(transaction, principal, context, auditContext, {
+      event,
+      action: `scheduling.substitution_${status}`,
+      resourceType: 'visit_substitution',
+      resourceId: substitution.id,
+      metadata: {
+        visitId: visit.id,
+        originalEmployeeId: substitution.originalEmployeeId,
+        substituteEmployeeId: substitution.substituteEmployeeId,
+        status,
+        reason: substitution.reason,
+      },
+    });
+    if (status === 'confirmed') {
+      const substituted = createDomainEvent({
+        type: 'scheduling.visit_substituted',
+        tenantId: principal.tenantId,
+        aggregateType: 'visit',
+        aggregateId: visit.id,
+        actor: { type: 'user', id: principal.userId },
+        correlationId: context.correlationId,
+        occurredAt: now.toISOString(),
+        payload: {
+          visitId: visit.id,
+          originalEmployeeId: substitution.originalEmployeeId,
+          substituteEmployeeId: substitution.substituteEmployeeId,
+        },
+      });
+      await this.outbox.enqueue(transaction, substituted);
+    }
+  }
+
+  private async recordTourChange(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    context: RequestContext,
+    auditContext: AuditContext,
+    tour: { id: string; employeeId: string; localDate: string; version: number },
+    operation: 'scheduling.tour_created' | 'scheduling.tour_reordered',
+    metadata: { employeeId: string; localDate: string; visitIds: string[] },
+    now: Date,
+  ): Promise<void> {
+    const event = createDomainEvent({
+      type: operation,
+      tenantId: principal.tenantId,
+      aggregateType: 'tour',
+      aggregateId: tour.id,
+      actor: { type: 'user', id: principal.userId },
+      correlationId: context.correlationId,
+      occurredAt: now.toISOString(),
+      payload: { tourId: tour.id, ...metadata, version: tour.version },
+    });
+    await this.record(transaction, principal, context, auditContext, {
+      event,
+      action: operation,
+      resourceType: 'tour',
+      resourceId: tour.id,
+      metadata,
+    });
+  }
+
+  private async recordAvailabilityChange(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    context: RequestContext,
+    auditContext: AuditContext,
+    employeeId: string,
+    version: number,
+    now: Date,
+    operation: 'weekly_hours_updated' | 'exception_added' | 'exception_removed',
+  ): Promise<void> {
+    const event = createDomainEvent({
+      type: 'scheduling.availability_changed',
+      tenantId: principal.tenantId,
+      aggregateType: 'employee_availability',
+      aggregateId: employeeId,
+      actor: { type: 'user', id: principal.userId },
+      correlationId: context.correlationId,
+      occurredAt: now.toISOString(),
+      payload: { employeeId, previousVersion: version - 1, version, operation },
+    });
+    await this.record(transaction, principal, context, auditContext, {
+      event,
+      action: 'scheduling.availability_changed',
+      resourceType: 'employee_availability',
+      resourceId: employeeId,
+      metadata: { employeeId, previousVersion: version - 1, version, operation },
+    });
   }
 
   private async lockResources(
@@ -1274,6 +3598,226 @@ export class SchedulingApplicationService {
     });
     await this.outbox.enqueue(transaction, input.event);
   }
+}
+
+function validateTourRequest(localDate: string, timezone: string, visitIds: string[]): void {
+  if (
+    !validLocalDate(localDate) ||
+    !isSupportedTimeZone(timezone) ||
+    visitIds.length < 1 ||
+    visitIds.length > 100 ||
+    new Set(visitIds).size !== visitIds.length
+  ) {
+    throw new InvalidTourError();
+  }
+}
+
+function validLocalDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function dayDistance(from: string, until: string): number {
+  return (Date.parse(`${until}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
+}
+
+function localDateInZone(value: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    calendar: 'iso8601',
+    numberingSystem: 'latn',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  return `${parts.find((part) => part.type === 'year')?.value}-${parts.find((part) => part.type === 'month')?.value}-${parts.find((part) => part.type === 'day')?.value}`;
+}
+
+function weekdayNumber(value: Date, timezone: string): number {
+  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' }).format(
+    value,
+  );
+  return (
+    ({ Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 } as const)[weekday as 'Mon'] ?? 0
+  );
+}
+
+function timeMinutesInZone(value: Date, timezone: string): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(value);
+  return (
+    Number(parts.find((part) => part.type === 'hour')?.value) * 60 +
+    Number(parts.find((part) => part.type === 'minute')?.value)
+  );
+}
+
+function timeStringMinutes(value: string): number {
+  const [hours, minutes] = value.split(':').map(Number);
+  return (hours ?? 0) * 60 + (minutes ?? 0);
+}
+
+function employeeSchedulingPreferencesResponse(
+  row: typeof employeeSchedulingPreferences.$inferSelect | null,
+) {
+  if (!row) return null;
+  return {
+    preferredWeekdays: row.preferredWeekdays,
+    preferredTimeWindows: row.preferredTimeWindows as Array<{ startsAt: string; endsAt: string }>,
+    preferredStartLatitude:
+      row.preferredStartLatitude === null ? null : Number(row.preferredStartLatitude),
+    preferredStartLongitude:
+      row.preferredStartLongitude === null ? null : Number(row.preferredStartLongitude),
+    travelMode: row.travelMode,
+  };
+}
+
+function clientSchedulingPreferencesResponse(
+  row: typeof clientSchedulingPreferences.$inferSelect | null,
+) {
+  if (!row) return null;
+  return {
+    preferredWeekdays: row.preferredWeekdays,
+    preferredTimeWindows: row.preferredTimeWindows as Array<{ startsAt: string; endsAt: string }>,
+    preferredEmployeeId: row.preferredEmployeeId,
+    avoidedEmployeeIds: row.avoidedEmployeeIds,
+  };
+}
+
+function validatePreferences(
+  weekdays: number[],
+  windows: Array<{ startsAt: string; endsAt: string }>,
+): void {
+  if (
+    weekdays.length > 7 ||
+    new Set(weekdays).size !== weekdays.length ||
+    weekdays.some((day) => !Number.isInteger(day) || day < 1 || day > 7) ||
+    windows.length > 16 ||
+    windows.some(
+      (window) =>
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(window.startsAt) ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(window.endsAt) ||
+        window.startsAt >= window.endsAt,
+    )
+  ) {
+    throw new InvalidTourError();
+  }
+}
+
+function validateCoordinatePair(latitude: number | null, longitude: number | null): void {
+  if (
+    (latitude === null) !== (longitude === null) ||
+    (latitude !== null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) ||
+    (longitude !== null && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180))
+  ) {
+    throw new InvalidTourError();
+  }
+}
+
+function publicationChanges(
+  previous: unknown,
+  current: Array<{ visitId: string; sequence: number; plannedStart: string; plannedEnd: string }>,
+): Array<Record<string, unknown>> {
+  if (!Array.isArray(previous)) return [{ type: 'initial' }];
+  const oldStops = previous.filter(isPublishedStop);
+  const oldIds = oldStops.map((stop) => stop.visitId);
+  const newIds = current.map((stop) => stop.visitId);
+  const changes: Array<Record<string, unknown>> = [];
+  for (const visitId of newIds.filter((id) => !oldIds.includes(id)))
+    changes.push({ type: 'visit_added', visitId });
+  for (const visitId of oldIds.filter((id) => !newIds.includes(id)))
+    changes.push({ type: 'visit_removed', visitId });
+  if (oldIds.length === newIds.length && oldIds.some((id, index) => id !== newIds[index])) {
+    changes.push({ type: 'tour_reordered' });
+  }
+  const oldById = new Map(oldStops.map((stop) => [stop.visitId, stop]));
+  for (const stop of current) {
+    const old = oldById.get(stop.visitId);
+    if (old && (old.plannedStart !== stop.plannedStart || old.plannedEnd !== stop.plannedEnd)) {
+      changes.push({ type: 'visit_rescheduled', visitId: stop.visitId });
+    }
+  }
+  return changes;
+}
+
+function isPublishedStop(value: unknown): value is {
+  visitId: string;
+  plannedStart: string;
+  plannedEnd: string;
+} {
+  if (typeof value !== 'object' || value === null) return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.visitId === 'string' &&
+    typeof row.plannedStart === 'string' &&
+    typeof row.plannedEnd === 'string'
+  );
+}
+
+function addOverlappingConflicts(
+  visits: VisitCalendarRow[],
+  add: (conflict: SchedulingConflict) => void,
+): void {
+  const byClient = groupBy(visits, (visit) => visit.clientId);
+  for (const group of byClient.values()) {
+    addPairwiseOverlaps(group, undefined, add, 'client_overlap');
+  }
+  const byEmployee = new Map<string, VisitCalendarRow[]>();
+  for (const visit of visits) {
+    for (const assignment of visit.assignments) {
+      const group = byEmployee.get(assignment.employeeId) ?? [];
+      group.push(visit);
+      byEmployee.set(assignment.employeeId, group);
+    }
+  }
+  for (const [employeeId, group] of byEmployee) {
+    addPairwiseOverlaps(group, employeeId, add, 'employee_overlap');
+  }
+}
+
+function addPairwiseOverlaps(
+  visits: VisitCalendarRow[],
+  employeeId: string | undefined,
+  add: (conflict: SchedulingConflict) => void,
+  code: 'client_overlap' | 'employee_overlap',
+): void {
+  const ordered = [...visits].sort(compareTourStops);
+  for (let leftIndex = 0; leftIndex < ordered.length; leftIndex += 1) {
+    const left = ordered[leftIndex]!;
+    for (let rightIndex = leftIndex + 1; rightIndex < ordered.length; rightIndex += 1) {
+      const right = ordered[rightIndex]!;
+      if (right.plannedStart >= left.plannedEnd) break;
+      if (right.plannedEnd <= left.plannedStart) continue;
+      add({
+        code,
+        severity: 'blocking',
+        visitId: left.id,
+        relatedVisitId: right.id,
+        ...(employeeId ? { employeeId } : {}),
+      });
+      add({
+        code,
+        severity: 'blocking',
+        visitId: right.id,
+        relatedVisitId: left.id,
+        ...(employeeId ? { employeeId } : {}),
+      });
+    }
+  }
+}
+
+function groupBy<T, K>(values: T[], key: (value: T) => K): Map<K, T[]> {
+  const groups = new Map<K, T[]>();
+  for (const value of values) {
+    const group = groups.get(key(value)) ?? [];
+    group.push(value);
+    groups.set(key(value), group);
+  }
+  return groups;
 }
 
 interface GeneratedServiceCandidate {
@@ -1384,6 +3928,7 @@ function toSearchFilter(
       : { serviceDefinitionId: query.serviceDefinitionId }),
     ...(query.unassigned === undefined ? {} : { unassigned: query.unassigned }),
     ...(query.origin === undefined ? {} : { origin: query.origin }),
+    ...(query.relatedToVisitId === undefined ? {} : { relatedToVisitId: query.relatedToVisitId }),
     page,
     pageSize,
     sortBy: query.sortBy ?? 'plannedStart',
@@ -1462,6 +4007,18 @@ function dateInTimeZone(value: Date, timezone: string): string {
   return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
+function addCalendarDate(value: string, days: number): string {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function calendarDates(from: string, until: string): string[] {
+  const dates: string[] = [];
+  for (let date = from; date <= until; date = addCalendarDate(date, 1)) dates.push(date);
+  return dates;
+}
+
 function isDateWithin(value: string, from: string | null, until: string | null): boolean {
   return (from === null || value >= from) && (until === null || value <= until);
 }
@@ -1491,6 +4048,62 @@ function validateGenerationRange(from: string, until: string, maximumDays: numbe
 
 function validInstant(value: Date): boolean {
   return value instanceof Date && Number.isFinite(value.getTime());
+}
+
+function resolveEmployeeAbsenceRange(
+  input: EmployeeUnavailabilityInput,
+): { startsAt: Date; endsAt: Date } | null {
+  const hasInstants = input.startsAt !== undefined || input.endsAt !== undefined;
+  const hasLocalValues =
+    input.localStartDate !== undefined ||
+    input.localStartTime !== undefined ||
+    input.localEndDate !== undefined ||
+    input.localEndTime !== undefined;
+  if (hasInstants === hasLocalValues) return null;
+  if (hasInstants) {
+    if (
+      !input.startsAt ||
+      !input.endsAt ||
+      !validInstant(input.startsAt) ||
+      !validInstant(input.endsAt) ||
+      input.endsAt <= input.startsAt
+    ) {
+      return null;
+    }
+    return { startsAt: input.startsAt, endsAt: input.endsAt };
+  }
+  if (
+    !input.localStartDate ||
+    !input.localStartTime ||
+    !input.localEndDate ||
+    !input.localEndTime ||
+    !input.timezone
+  ) {
+    return null;
+  }
+  try {
+    const startsAt = localDateTimeToInstant(
+      input.localStartDate,
+      input.localStartTime,
+      input.timezone,
+      'earlier',
+    );
+    const endsAt = localDateTimeToInstant(
+      input.localEndDate,
+      input.localEndTime,
+      input.timezone,
+      'later',
+    );
+    return startsAt && endsAt && endsAt > startsAt ? { startsAt, endsAt } : null;
+  } catch {
+    return null;
+  }
+}
+
+function isAbsenceReason(
+  value: string,
+): value is NonNullable<EmployeeUnavailabilityInput['reason']> {
+  return ['vacation', 'sick_leave', 'training', 'personal_unavailability', 'other'].includes(value);
 }
 
 function resolvePlannedRange(
@@ -1590,6 +4203,7 @@ export function createSchedulingApplicationService(
   outbox: OutboxWriter,
   generationHorizonDays = 28,
   executionGuard?: SchedulingExecutionGuard,
+  routeProvider?: RouteProvider,
 ): SchedulingApplicationService {
   return new SchedulingApplicationService(
     unitOfWork,
@@ -1603,6 +4217,7 @@ export function createSchedulingApplicationService(
     new SchedulingRepository(),
     generationHorizonDays,
     executionGuard,
+    routeProvider,
   );
 }
 
@@ -1715,5 +4330,99 @@ export class InvalidEmployeeUnavailabilityError extends Error {
   constructor() {
     super('Employee unavailability range or note is invalid');
     this.name = 'InvalidEmployeeUnavailabilityError';
+  }
+}
+
+export class EmployeeUnavailabilityNotFoundError extends Error {
+  readonly code = 'EMPLOYEE_UNAVAILABILITY_NOT_FOUND';
+
+  constructor() {
+    super('Employee absence was not found or has already been cancelled');
+    this.name = 'EmployeeUnavailabilityNotFoundError';
+  }
+}
+
+export class VisitOutsideEmployeeAvailabilityError extends Error {
+  readonly code = 'VISIT_OUTSIDE_EMPLOYEE_AVAILABILITY';
+
+  constructor() {
+    super('Visit falls outside the employee working availability');
+    this.name = 'VisitOutsideEmployeeAvailabilityError';
+  }
+}
+
+export class VisitTravelBufferConflictError extends Error {
+  readonly code = 'VISIT_TRAVEL_BUFFER_CONFLICT';
+
+  constructor() {
+    super('There is not enough time for the configured travel buffer between visits');
+    this.name = 'VisitTravelBufferConflictError';
+  }
+}
+
+export class VisitDailyPlanLimitError extends Error {
+  readonly code = 'VISIT_DAILY_PLAN_LIMIT';
+
+  constructor(readonly maxDailyMinutes: number) {
+    super(`The employee's planned daily minutes would exceed ${maxDailyMinutes}`);
+    this.name = 'VisitDailyPlanLimitError';
+  }
+}
+
+export class SchedulingVersionConflictError extends Error {
+  readonly code = 'SCHEDULING_VERSION_CONFLICT';
+
+  constructor() {
+    super('Scheduling data changed; reload before saving');
+    this.name = 'SchedulingVersionConflictError';
+  }
+}
+
+export class AvailabilityExceptionNotFoundError extends Error {
+  readonly code = 'AVAILABILITY_EXCEPTION_NOT_FOUND';
+
+  constructor() {
+    super('Availability exception was not found');
+    this.name = 'AvailabilityExceptionNotFoundError';
+  }
+}
+
+export class ActiveVisitSubstitutionError extends Error {
+  readonly code = 'VISIT_SUBSTITUTION_ACTIVE';
+  constructor() {
+    super('A visit already has a proposed substitute');
+    this.name = 'ActiveVisitSubstitutionError';
+  }
+}
+
+export class VisitSubstitutionNotFoundError extends Error {
+  readonly code = 'VISIT_SUBSTITUTION_NOT_FOUND';
+  constructor() {
+    super('Substitution was not found or is no longer proposed');
+    this.name = 'VisitSubstitutionNotFoundError';
+  }
+}
+
+export class VisitSubstitutionStaleError extends Error {
+  readonly code = 'VISIT_SUBSTITUTION_STALE';
+  constructor() {
+    super('The assignment changed after this substitution was proposed');
+    this.name = 'VisitSubstitutionStaleError';
+  }
+}
+
+export class TourNotFoundError extends Error {
+  readonly code = 'SCHEDULING_TOUR_NOT_FOUND';
+  constructor() {
+    super('Tour was not found');
+    this.name = 'TourNotFoundError';
+  }
+}
+
+export class SchedulingConflictsError extends Error {
+  readonly code = 'SCHEDULING_CONFLICT';
+  constructor(readonly conflicts: SchedulingConflict[]) {
+    super('Tour cannot be published while blocking travel conflicts remain');
+    this.name = 'SchedulingConflictsError';
   }
 }

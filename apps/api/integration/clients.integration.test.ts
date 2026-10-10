@@ -61,6 +61,7 @@ describe('clients API', () => {
     process.env.S3_ACCESS_KEY = 'care-test-access';
     process.env.S3_SECRET_KEY = 'care-test-secret';
     process.env.S3_FORCE_PATH_STYLE = 'true';
+    delete process.env.ROUTING_OSRM_URL;
 
     try {
       await owner.connect();
@@ -1153,6 +1154,87 @@ describe('clients API', () => {
       };
       const schedulingEmployee = await createSchedulingEmployee('Schedule', 'Assigned');
       const unavailableEmployee = await createSchedulingEmployee('Schedule', 'Unavailable');
+      const employeePreferencesResponse = await fetch(
+        `${baseUrl}/api/v1/employees/${schedulingEmployee.id}/scheduling-preferences`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            preferredWeekdays: [],
+            preferredTimeWindows: [{ startsAt: '08:00', endsAt: '12:00' }],
+            preferredStartLatitude: 52.5,
+            preferredStartLongitude: 13.4,
+            travelMode: 'driving',
+          }),
+        },
+      );
+      expect(employeePreferencesResponse.status).toBe(200);
+      expect(await employeePreferencesResponse.json()).toMatchObject({
+        preferredTimeWindows: [{ startsAt: '08:00', endsAt: '12:00' }],
+        preferredStartLatitude: 52.5,
+        preferredStartLongitude: 13.4,
+        travelMode: 'driving',
+      });
+      const savedEmployeePreferences = await fetch(
+        `${baseUrl}/api/v1/employees/${schedulingEmployee.id}/scheduling-preferences`,
+        { headers },
+      );
+      expect(savedEmployeePreferences.status).toBe(200);
+      expect(await savedEmployeePreferences.json()).toMatchObject({
+        preferredStartLatitude: 52.5,
+        preferredStartLongitude: 13.4,
+      });
+      const clientPreferencesResponse = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/scheduling-preferences`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            preferredWeekdays: [1, 3],
+            preferredTimeWindows: [{ startsAt: '09:00', endsAt: '13:00' }],
+            preferredEmployeeId: schedulingEmployee.id,
+            avoidedEmployeeIds: [unavailableEmployee.id],
+          }),
+        },
+      );
+      expect(clientPreferencesResponse.status).toBe(200);
+      expect(await clientPreferencesResponse.json()).toMatchObject({
+        preferredWeekdays: [1, 3],
+        preferredEmployeeId: schedulingEmployee.id,
+        avoidedEmployeeIds: [unavailableEmployee.id],
+      });
+      const savedClientPreferences = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/scheduling-preferences`,
+        { headers },
+      );
+      expect(savedClientPreferences.status).toBe(200);
+      expect(await savedClientPreferences.json()).toMatchObject({
+        preferredWeekdays: [1, 3],
+        preferredEmployeeId: schedulingEmployee.id,
+        avoidedEmployeeIds: [unavailableEmployee.id],
+      });
+      const routingLocationResponse = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/routing-location`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ latitude: 52.51, longitude: 13.41 }),
+        },
+      );
+      expect(routingLocationResponse.status).toBe(200);
+      expect(await routingLocationResponse.json()).toMatchObject({
+        latitude: 52.51,
+        longitude: 13.41,
+      });
+      const savedRoutingLocation = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/routing-location`,
+        { headers },
+      );
+      expect(savedRoutingLocation.status).toBe(200);
+      expect(await savedRoutingLocation.json()).toMatchObject({
+        latitude: 52.51,
+        longitude: 13.41,
+      });
       const generationFrom = dateInBerlin(2);
       const generationUntil = addCalendarDays(generationFrom, 6);
       const generate = () =>
@@ -1269,6 +1351,67 @@ describe('clients API', () => {
       expect(unavailableAssignment.status).toBe(409);
       expect((await unavailableAssignment.json()).code).toBe('VISIT_EMPLOYEE_NOT_AVAILABLE');
 
+      const employeeAvailabilityPath = `${baseUrl}/api/v1/employees/${schedulingEmployee.id}/availability`;
+      const emptyAvailability = await fetch(employeeAvailabilityPath, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          expectedVersion: 0,
+          timezone: 'Europe/Berlin',
+          maxDailyMinutes: 420,
+          travelBufferMinutes: 15,
+          windows: [],
+        }),
+      });
+      expect(emptyAvailability.status).toBe(200);
+      expect(await emptyAvailability.json()).toMatchObject({
+        employeeId: schedulingEmployee.id,
+        version: 1,
+      });
+      const outsideAvailability = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/assignments`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ employeeId: schedulingEmployee.id }),
+        },
+      );
+      expect(outsideAvailability.status).toBe(409);
+      expect((await outsideAvailability.json()).code).toBe('VISIT_OUTSIDE_EMPLOYEE_AVAILABILITY');
+      const weekdayValue = new Date(`${firstVisitLocalTime.date}T00:00:00.000Z`).getUTCDay();
+      const availabilityWindow = await fetch(employeeAvailabilityPath, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          expectedVersion: 1,
+          timezone: 'Europe/Berlin',
+          maxDailyMinutes: 420,
+          travelBufferMinutes: 15,
+          windows: [
+            {
+              weekday: weekdayValue === 0 ? 7 : weekdayValue,
+              startsAt: '00:00',
+              endsAt: '23:59',
+            },
+          ],
+        }),
+      });
+      expect(availabilityWindow.status).toBe(200);
+      expect((await availabilityWindow.json()).version).toBe(2);
+      const staleAvailability = await fetch(employeeAvailabilityPath, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          expectedVersion: 1,
+          timezone: 'Europe/Berlin',
+          maxDailyMinutes: 420,
+          travelBufferMinutes: 15,
+          windows: [],
+        }),
+      });
+      expect(staleAvailability.status).toBe(409);
+      expect((await staleAvailability.json()).code).toBe('SCHEDULING_VERSION_CONFLICT');
+
       const assignedResponse = await fetch(
         `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/assignments`,
         {
@@ -1280,6 +1423,73 @@ describe('clients API', () => {
       expect(assignedResponse.status).toBe(201);
       const assignment = (await assignedResponse.json()) as { id: string; status: string };
       expect(assignment.status).toBe('active');
+
+      const absenceResponse = await fetch(
+        `${baseUrl}/api/v1/employees/${schedulingEmployee.id}/unavailability`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            localStartDate: firstVisitLocalTime.date,
+            localStartTime: firstVisitLocalTime.start,
+            localEndDate: firstVisitLocalTime.date,
+            localEndTime: firstVisitLocalTime.end,
+            timezone: firstGeneratedVisit.timezone,
+            reason: 'vacation',
+            note: 'protected scheduling note',
+          }),
+        },
+      );
+      expect(absenceResponse.status).toBe(201);
+      const absence = (await absenceResponse.json()) as { id: string; status: string };
+      expect(absence.status).toBe('active');
+      const absenceRange = new URLSearchParams({
+        from: new Date(new Date(firstGeneratedVisit.plannedStart).getTime() - 60_000).toISOString(),
+        until: new Date(new Date(firstGeneratedVisit.plannedEnd).getTime() + 60_000).toISOString(),
+      });
+      const absenceListResponse = await fetch(
+        `${baseUrl}/api/v1/employees/${schedulingEmployee.id}/unavailability?${absenceRange}`,
+        { headers },
+      );
+      expect(absenceListResponse.status).toBe(200);
+      const absenceList = (await absenceListResponse.json()) as {
+        absences: Array<{ id: string; note?: string; reason: string }>;
+        impactedVisitCount: number;
+        impactedVisits: Array<{ id: string }>;
+      };
+      expect(absenceList.absences).toContainEqual(
+        expect.objectContaining({ id: absence.id, reason: 'vacation' }),
+      );
+      expect(absenceList.absences[0]?.note).toBeUndefined();
+      expect(absenceList.impactedVisitCount).toBe(1);
+      expect(absenceList.impactedVisits[0]?.id).toBe(firstGeneratedVisit.id);
+      const schedulingWorklistRange = new URLSearchParams({
+        from: new Date(new Date(firstGeneratedVisit.plannedStart).getTime() - 60_000).toISOString(),
+        until: new Date(new Date(firstGeneratedVisit.plannedEnd).getTime() + 60_000).toISOString(),
+        page: '1',
+        pageSize: '100',
+      });
+      const schedulingWorklistResponse = await fetch(
+        `${baseUrl}/api/v1/scheduling/worklist?${schedulingWorklistRange}`,
+        { headers },
+      );
+      expect(schedulingWorklistResponse.status).toBe(200);
+      expect(await schedulingWorklistResponse.json()).toMatchObject({
+        items: [
+          expect.objectContaining({
+            visit: expect.objectContaining({ id: firstGeneratedVisit.id }),
+            conflicts: expect.arrayContaining([
+              expect.objectContaining({ code: 'employee_absence', severity: 'blocking' }),
+            ]),
+          }),
+        ],
+      });
+      const cancelAbsence = await fetch(
+        `${baseUrl}/api/v1/employees/${schedulingEmployee.id}/unavailability/${absence.id}`,
+        { method: 'DELETE', headers },
+      );
+      expect(cancelAbsence.status).toBe(204);
+
       const duplicateAssignment = await fetch(
         `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/assignments`,
         {
@@ -1322,6 +1532,64 @@ describe('clients API', () => {
         { method: 'POST', headers },
       );
       expect(activateCollisionClient.status).toBe(200);
+
+      const soonStart = addMinutesToLocalTime(firstVisitLocalTime.end, 5);
+      const soonEnd = addMinutesToLocalTime(soonStart, 30);
+      const travelBufferConflict = await fetch(`${baseUrl}/api/v1/visits`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          clientId: collisionClient.id,
+          localDate: firstVisitLocalTime.date,
+          localStartTime: soonStart,
+          localEndTime: soonEnd,
+          employeeIds: [schedulingEmployee.id],
+          services: [{ serviceDefinitionId: service.id }],
+        }),
+      });
+      expect(travelBufferConflict.status).toBe(409);
+      expect((await travelBufferConflict.json()).code).toBe('VISIT_TRAVEL_BUFFER_CONFLICT');
+
+      const assignedDurationMinutes = Math.ceil(
+        (new Date(firstGeneratedVisit.plannedEnd).getTime() -
+          new Date(firstGeneratedVisit.plannedStart).getTime()) /
+          60_000,
+      );
+      const tighterAvailability = await fetch(employeeAvailabilityPath, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          expectedVersion: 2,
+          timezone: 'Europe/Berlin',
+          maxDailyMinutes: assignedDurationMinutes,
+          travelBufferMinutes: 15,
+          windows: [
+            {
+              weekday: weekdayValue === 0 ? 7 : weekdayValue,
+              startsAt: '00:00',
+              endsAt: '23:59',
+            },
+          ],
+        }),
+      });
+      expect(tighterAvailability.status).toBe(200);
+      const dailyLimitStart = addMinutesToLocalTime(firstVisitLocalTime.end, 15);
+      const dailyLimitEnd = addMinutesToLocalTime(dailyLimitStart, 30);
+      const dailyLimitConflict = await fetch(`${baseUrl}/api/v1/visits`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          clientId: collisionClient.id,
+          localDate: firstVisitLocalTime.date,
+          localStartTime: dailyLimitStart,
+          localEndTime: dailyLimitEnd,
+          employeeIds: [schedulingEmployee.id],
+          services: [{ serviceDefinitionId: service.id }],
+        }),
+      });
+      expect(dailyLimitConflict.status).toBe(409);
+      expect((await dailyLimitConflict.json()).code).toBe('VISIT_DAILY_PLAN_LIMIT');
+
       const employeeConflict = await fetch(`${baseUrl}/api/v1/visits`, {
         method: 'POST',
         headers,
@@ -1441,6 +1709,167 @@ describe('clients API', () => {
       expect(await assignmentHistoryResponse.json()).toMatchObject([
         expect.objectContaining({ id: assignment.id, status: 'unassigned' }),
       ]);
+
+      const substitutionEmployee = await createSchedulingEmployee('Schedule', 'Substitute');
+      const alternateSubstituteEmployee = await createSchedulingEmployee('Schedule', 'Alternate');
+      const reassignedForProposal = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/assignments`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ employeeId: schedulingEmployee.id }),
+        },
+      );
+      expect(reassignedForProposal.status).toBe(201);
+      const proposalAssignment = (await reassignedForProposal.json()) as { id: string };
+      const beforeSubstitution = await fetch(`${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}`, {
+        headers,
+      });
+      expect(beforeSubstitution.status).toBe(200);
+      const beforeSubstitutionVisit = (await beforeSubstitution.json()) as {
+        id: string;
+        services: Array<{ id: string }>;
+        assignments: Array<{ employeeId: string }>;
+      };
+      const candidatesResponse = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/substitute-candidates`,
+        { headers },
+      );
+      expect(candidatesResponse.status).toBe(200);
+      expect(await candidatesResponse.json()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ employeeId: substitutionEmployee.id }),
+          expect.objectContaining({ employeeId: alternateSubstituteEmployee.id }),
+        ]),
+      );
+      const propose = (substituteEmployeeId: string) =>
+        fetch(`${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/substitutions`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            originalAssignmentId: proposalAssignment.id,
+            substituteEmployeeId,
+            reason: 'planned absence coverage',
+          }),
+        });
+      const competingProposals = await Promise.all([
+        propose(substitutionEmployee.id),
+        propose(alternateSubstituteEmployee.id),
+      ]);
+      expect(competingProposals.map((response) => response.status).sort()).toEqual([201, 409]);
+      const successfulProposalIndex = competingProposals.findIndex(
+        (response) => response.status === 201,
+      );
+      const winningSubstitute =
+        successfulProposalIndex === 0 ? substitutionEmployee : alternateSubstituteEmployee;
+      const substitution = (await competingProposals[successfulProposalIndex]!.json()) as {
+        id: string;
+        status: string;
+      };
+      expect(substitution.status).toBe('proposed');
+      const assignmentDuringProposal = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/assignments`,
+        { headers },
+      );
+      expect(await assignmentDuringProposal.json()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ employeeId: schedulingEmployee.id, status: 'active' }),
+        ]),
+      );
+      const confirmSubstitution = await fetch(
+        `${baseUrl}/api/v1/substitutions/${substitution.id}/confirm`,
+        {
+          method: 'POST',
+          headers,
+        },
+      );
+      expect(confirmSubstitution.status).toBe(200);
+      expect(await confirmSubstitution.json()).toMatchObject({ status: 'confirmed' });
+      const afterSubstitution = await fetch(`${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}`, {
+        headers,
+      });
+      expect(afterSubstitution.status).toBe(200);
+      const afterSubstitutionVisit = (await afterSubstitution.json()) as {
+        id: string;
+        services: Array<{ id: string }>;
+        assignments: Array<{ employeeId: string }>;
+      };
+      expect(afterSubstitutionVisit.id).toBe(beforeSubstitutionVisit.id);
+      expect(afterSubstitutionVisit.services.map((serviceLine) => serviceLine.id)).toEqual(
+        beforeSubstitutionVisit.services.map((serviceLine) => serviceLine.id),
+      );
+      expect(afterSubstitutionVisit.assignments).toEqual(
+        expect.arrayContaining([expect.objectContaining({ employeeId: winningSubstitute.id })]),
+      );
+
+      const createTour = await fetch(`${baseUrl}/api/v1/scheduling/tours`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          employeeId: winningSubstitute.id,
+          localDate: firstVisitLocalTime.date,
+          timezone: firstGeneratedVisit.timezone,
+          visitIds: [firstGeneratedVisit.id],
+        }),
+      });
+      expect(createTour.status).toBe(201);
+      const tour = (await createTour.json()) as { id: string; version: number; status: string };
+      const estimateTour = await fetch(
+        `${baseUrl}/api/v1/scheduling/tours/${tour.id}/estimate-travel`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ expectedVersion: tour.version }),
+        },
+      );
+      expect(estimateTour.status).toBe(200);
+      const estimatedTour = (await estimateTour.json()) as {
+        tour: { version: number; stops: Array<{ routeStatus: string }> };
+        route: { status: string };
+      };
+      expect(['unavailable', 'unresolved']).toContain(estimatedTour.route.status);
+      const firstPublication = await fetch(
+        `${baseUrl}/api/v1/scheduling/tours/${tour.id}/publish`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ expectedVersion: estimatedTour.tour.version }),
+        },
+      );
+      expect(firstPublication.status).toBe(200);
+      const publishedTour = (await firstPublication.json()) as {
+        tour: { version: number; latestPublication: { version: number } };
+      };
+      expect(publishedTour.tour.latestPublication.version).toBe(1);
+      const revisePublishedTour = await fetch(
+        `${baseUrl}/api/v1/scheduling/tours/${tour.id}/stops`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: publishedTour.tour.version,
+            stops: [{ visitId: firstGeneratedVisit.id }],
+          }),
+        },
+      );
+      expect(revisePublishedTour.status).toBe(200);
+      const revisedTour = (await revisePublishedTour.json()) as { version: number };
+      const secondPublication = await fetch(
+        `${baseUrl}/api/v1/scheduling/tours/${tour.id}/publish`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ expectedVersion: revisedTour.version }),
+        },
+      );
+      expect(secondPublication.status).toBe(200);
+      expect(
+        await owner.query(
+          `SELECT version FROM scheduling.tour_publications WHERE tenant_id = $1 AND tour_id = $2 ORDER BY version`,
+          [tenantId, tour.id],
+        ),
+      ).toMatchObject({ rows: [{ version: 1 }, { version: 2 }] });
+
       const confirmedVisit = await fetch(
         `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/confirm`,
         { method: 'POST', headers },
@@ -1861,6 +2290,25 @@ describe('clients API', () => {
       expect(linkUnrelatedCaregiver.status).toBe(200);
 
       const executionDate = dateInBerlin(-1);
+      const executionAvailability = await fetch(
+        `${baseUrl}/api/v1/employees/${schedulingEmployee.id}/availability`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: 3,
+            timezone: 'Europe/Berlin',
+            maxDailyMinutes: 420,
+            travelBufferMinutes: 15,
+            windows: Array.from({ length: 7 }, (_, index) => ({
+              weekday: index + 1,
+              startsAt: '00:00',
+              endsAt: '23:59',
+            })),
+          }),
+        },
+      );
+      expect(executionAvailability.status).toBe(200);
       const createExecutionVisit = async (startTime: string, employeeId: string) => {
         const response = await fetch(`${baseUrl}/api/v1/visits`, {
           method: 'POST',
@@ -1989,6 +2437,30 @@ describe('clients API', () => {
       expect(startedDetails[0]?.execution).toEqual(startedDetails[1]?.execution);
       const executionId = startedDetails[0]!.execution.id;
       expect(startedDetails[0]!.execution.version).toBe(1);
+      const executionAssignmentsResponse = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/assignments`,
+        { headers },
+      );
+      const executionAssignments = (await executionAssignmentsResponse.json()) as Array<{
+        id: string;
+        status: string;
+      }>;
+      const executionAssignment = executionAssignments.find((item) => item.status === 'active');
+      if (!executionAssignment) throw new Error('Execution visit has no active assignment');
+      const substituteExecutedVisit = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/substitutions`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            originalAssignmentId: executionAssignment.id,
+            substituteEmployeeId: substitutionEmployee.id,
+            reason: 'must not alter an executing visit',
+          }),
+        },
+      );
+      expect(substituteExecutedVisit.status).toBe(409);
+      expect((await substituteExecutedVisit.json()).code).toBe('VISIT_EXECUTION_PLANNING_LOCKED');
 
       // The past visit and ended agreement let facility and organization archive checks reach
       // their in-progress execution guards instead of earlier planning or agreement guards.
@@ -4887,6 +5359,12 @@ function addCalendarDays(value: string, count: number): string {
   const date = new Date(`${value}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + count);
   return date.toISOString().slice(0, 10);
+}
+
+function addMinutesToLocalTime(value: string, minutes: number): string {
+  const [hours = '0', remainingMinutes = '0'] = value.split(':');
+  const total = (Number(hours) * 60 + Number(remainingMinutes) + minutes) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
 function localDateTime(

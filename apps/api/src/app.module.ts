@@ -19,6 +19,7 @@ import { BenefitsModule } from './modules/benefits.module';
 import { BillingModule } from './modules/billing.module';
 import { DocumentsModule } from './modules/documents.module';
 import { DocumentWorkflowsModule } from './modules/document-workflows.module';
+import { OperationsModule } from './modules/operations.module';
 import { HealthController } from './presentation/http/health.controller';
 import { ProblemDetailsFilter } from './presentation/http/problem-details.filter';
 
@@ -42,6 +43,7 @@ import { ProblemDetailsFilter } from './presentation/http/problem-details.filter
     BillingModule,
     DocumentsModule,
     DocumentWorkflowsModule,
+    OperationsModule,
     MeModule,
   ],
   controllers: [HealthController],

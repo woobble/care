@@ -121,11 +121,145 @@ export const scheduleGenerationSchema = z
 
 export const employeeUnavailabilitySchema = z
   .object({
-    startsAt: instant,
-    endsAt: instant,
+    startsAt: instant.optional(),
+    endsAt: instant.optional(),
+    localStartDate: localDate.optional(),
+    localStartTime: localTime.optional(),
+    localEndDate: localDate.optional(),
+    localEndTime: localTime.optional(),
+    timezone: z.string().min(1).max(100).optional(),
+    reason: z
+      .enum(['vacation', 'sick_leave', 'training', 'personal_unavailability', 'other'])
+      .default('other'),
     note: z.string().max(1000).nullable().optional(),
   })
+  .strict()
+  .refine((value) => {
+    const hasInstants = value.startsAt !== undefined || value.endsAt !== undefined;
+    const hasLocal =
+      value.localStartDate !== undefined ||
+      value.localStartTime !== undefined ||
+      value.localEndDate !== undefined ||
+      value.localEndTime !== undefined;
+    return (
+      hasInstants !== hasLocal &&
+      (hasInstants
+        ? value.startsAt !== undefined && value.endsAt !== undefined && value.timezone === undefined
+        : value.localStartDate !== undefined &&
+          value.localStartTime !== undefined &&
+          value.localEndDate !== undefined &&
+          value.localEndTime !== undefined &&
+          value.timezone !== undefined)
+    );
+  });
+
+const availabilityWindowSchema = z
+  .object({
+    weekday: z.number().int().min(1).max(7),
+    startsAt: localTime,
+    endsAt: localTime,
+  })
   .strict();
+
+export const employeeAvailabilitySchema = z
+  .object({
+    expectedVersion: z.number().int().min(0),
+    timezone: z.string().min(1).max(100),
+    maxDailyMinutes: z.number().int().min(1).max(1440).nullable(),
+    travelBufferMinutes: z.number().int().min(0).max(240),
+    windows: z.array(availabilityWindowSchema).max(28),
+  })
+  .strict();
+
+export const employeeAvailabilityExceptionSchema = z
+  .object({
+    expectedVersion: z.number().int().min(1),
+    localDate,
+    kind: z.enum(['working_hours', 'closed', 'unavailable']),
+    startsAt: localTime.nullable(),
+    endsAt: localTime.nullable(),
+  })
+  .strict();
+
+export const employeeUnavailabilityQuerySchema = z
+  .object({ from: instant, until: instant })
+  .strict();
+
+const preferenceWindowSchema = z
+  .object({ startsAt: localTime, endsAt: localTime })
+  .strict()
+  .refine((window) => window.startsAt < window.endsAt);
+
+export const createSubstitutionSchema = z
+  .object({
+    originalAssignmentId: z.string().uuid(),
+    substituteEmployeeId: z.string().uuid(),
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+export const createTourSchema = z
+  .object({
+    employeeId: z.string().uuid(),
+    localDate,
+    timezone: z.string().min(1).max(100),
+    visitIds: z.array(z.string().uuid()).min(1).max(100),
+  })
+  .strict();
+
+export const updateTourStopsSchema = z
+  .object({
+    expectedVersion: z.number().int().min(1),
+    stops: z
+      .array(
+        z
+          .object({
+            visitId: z.string().uuid(),
+            dispatcherNote: z.string().max(500).nullable().optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+  })
+  .strict();
+
+export const tourVersionSchema = z
+  .object({ expectedVersion: z.coerce.number().int().min(1) })
+  .strict();
+
+export const tourListQuerySchema = z
+  .object({
+    employeeId: z.string().uuid(),
+    from: localDate,
+    until: localDate,
+  })
+  .strict();
+
+export const routingLocationSchema = z
+  .object({ latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) })
+  .strict();
+
+export const employeeSchedulingPreferencesSchema = z
+  .object({
+    preferredWeekdays: z.array(z.number().int().min(1).max(7)).max(7),
+    preferredTimeWindows: z.array(preferenceWindowSchema).max(16),
+    preferredStartLatitude: z.number().min(-90).max(90).nullable(),
+    preferredStartLongitude: z.number().min(-180).max(180).nullable(),
+    travelMode: z.literal('driving'),
+  })
+  .strict();
+
+export const clientSchedulingPreferencesSchema = z
+  .object({
+    preferredWeekdays: z.array(z.number().int().min(1).max(7)).max(7),
+    preferredTimeWindows: z.array(preferenceWindowSchema).max(16),
+    preferredEmployeeId: z.string().uuid().nullable(),
+    avoidedEmployeeIds: z.array(z.string().uuid()).max(100),
+  })
+  .strict();
+
+export const preferenceSubjectParamsSchema = z.object({ employeeId: z.string().uuid() }).strict();
 
 export class CreateVisitServiceDto {
   @ApiProperty({ format: 'uuid' })
@@ -216,14 +350,125 @@ export class ScheduleGenerationRequestDto {
 }
 
 export class EmployeeUnavailabilityRequestDto {
-  @ApiProperty({ format: 'date-time' })
-  startsAt!: string;
+  @ApiPropertyOptional({ format: 'date-time' })
+  startsAt?: string;
 
-  @ApiProperty({ format: 'date-time' })
-  endsAt!: string;
+  @ApiPropertyOptional({ format: 'date-time' })
+  endsAt?: string;
+
+  @ApiPropertyOptional({ format: 'date' })
+  localStartDate?: string;
+
+  @ApiPropertyOptional({ format: 'time' })
+  localStartTime?: string;
+
+  @ApiPropertyOptional({ format: 'date' })
+  localEndDate?: string;
+
+  @ApiPropertyOptional({ format: 'time' })
+  localEndTime?: string;
+
+  @ApiPropertyOptional({ example: 'Europe/Berlin' })
+  timezone?: string;
 
   @ApiPropertyOptional({ maxLength: 1000, nullable: true })
   note?: string | null;
+
+  @ApiPropertyOptional({
+    enum: ['vacation', 'sick_leave', 'training', 'personal_unavailability', 'other'],
+    default: 'other',
+  })
+  reason?: 'vacation' | 'sick_leave' | 'training' | 'personal_unavailability' | 'other';
+}
+
+export class EmployeeAvailabilityWindowDto {
+  @ApiProperty({ minimum: 1, maximum: 7, description: 'ISO weekday, Monday=1 and Sunday=7' })
+  weekday!: number;
+
+  @ApiProperty({ format: 'time', example: '08:00' })
+  startsAt!: string;
+
+  @ApiProperty({ format: 'time', example: '16:00' })
+  endsAt!: string;
+}
+
+export class EmployeeAvailabilityExceptionDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ format: 'date' })
+  localDate!: string;
+
+  @ApiProperty({ enum: ['working_hours', 'closed', 'unavailable'] })
+  kind!: 'working_hours' | 'closed' | 'unavailable';
+
+  @ApiProperty({ format: 'time', nullable: true })
+  startsAt!: string | null;
+
+  @ApiProperty({ format: 'time', nullable: true })
+  endsAt!: string | null;
+}
+
+export class EmployeeAvailabilityPolicyDto {
+  @ApiProperty({ example: 'Europe/Berlin' })
+  timezone!: string;
+
+  @ApiProperty({ minimum: 1, maximum: 1440, nullable: true })
+  maxDailyMinutes!: number | null;
+
+  @ApiProperty({ minimum: 0, maximum: 240 })
+  travelBufferMinutes!: number;
+
+  @ApiProperty({ type: [EmployeeAvailabilityWindowDto] })
+  windows!: EmployeeAvailabilityWindowDto[];
+
+  @ApiProperty({ type: [EmployeeAvailabilityExceptionDto] })
+  exceptions!: EmployeeAvailabilityExceptionDto[];
+}
+
+export class EmployeeAvailabilityResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  employeeId!: string;
+
+  @ApiProperty({ minimum: 0 })
+  version!: number;
+
+  @ApiProperty({ type: EmployeeAvailabilityPolicyDto, nullable: true })
+  availability!: EmployeeAvailabilityPolicyDto | null;
+}
+
+export class EmployeeAvailabilityRequestDto {
+  @ApiProperty({ minimum: 0 })
+  expectedVersion!: number;
+
+  @ApiProperty({ example: 'Europe/Berlin' })
+  timezone!: string;
+
+  @ApiProperty({ minimum: 1, maximum: 1440, nullable: true })
+  maxDailyMinutes!: number | null;
+
+  @ApiProperty({ minimum: 0, maximum: 240 })
+  travelBufferMinutes!: number;
+
+  @ApiProperty({ type: [EmployeeAvailabilityWindowDto] })
+  windows!: EmployeeAvailabilityWindowDto[];
+}
+
+export class EmployeeAvailabilityExceptionRequestDto {
+  @ApiProperty({ minimum: 1 })
+  expectedVersion!: number;
+
+  @ApiProperty({ format: 'date' })
+  localDate!: string;
+
+  @ApiProperty({ enum: ['working_hours', 'closed', 'unavailable'] })
+  kind!: 'working_hours' | 'closed' | 'unavailable';
+
+  @ApiProperty({ format: 'time', nullable: true })
+  startsAt!: string | null;
+
+  @ApiProperty({ format: 'time', nullable: true })
+  endsAt!: string | null;
 }
 
 export class VisitServiceResponseDto {
@@ -412,6 +657,49 @@ export class VisitListResponseDto {
   total!: number;
 }
 
+export class EmployeeAbsenceResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  employeeId!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  startsAt!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  endsAt!: string;
+
+  @ApiProperty({ enum: ['vacation', 'sick_leave', 'training', 'personal_unavailability', 'other'] })
+  reason!: 'vacation' | 'sick_leave' | 'training' | 'personal_unavailability' | 'other';
+
+  @ApiProperty({ enum: ['active', 'cancelled'] })
+  status!: 'active' | 'cancelled';
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  createdBy!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  updatedAt!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  updatedBy!: string;
+}
+
+export class EmployeeAbsenceListResponseDto {
+  @ApiProperty({ type: [EmployeeAbsenceResponseDto] })
+  absences!: EmployeeAbsenceResponseDto[];
+
+  @ApiProperty({ type: [VisitResponseDto] })
+  impactedVisits!: VisitResponseDto[];
+
+  @ApiProperty()
+  impactedVisitCount!: number;
+}
+
 export class VisitHistoryEntryDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -446,4 +734,358 @@ export class ScheduleGenerationResponseDto {
 
   @ApiProperty()
   requiresManualPlacement!: number;
+}
+
+export class CreateSubstitutionDto {
+  @ApiProperty({ format: 'uuid' })
+  originalAssignmentId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  substituteEmployeeId!: string;
+
+  @ApiProperty({ minLength: 1, maxLength: 500 })
+  reason!: string;
+}
+
+export class SubstituteCandidateResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  employeeId!: string;
+
+  @ApiProperty()
+  displayName!: string;
+
+  @ApiProperty()
+  preferred!: boolean;
+}
+
+export class SchedulingPreferenceTimeWindowDto {
+  @ApiProperty({ format: 'time', example: '08:00' })
+  startsAt!: string;
+
+  @ApiProperty({ format: 'time', example: '12:00' })
+  endsAt!: string;
+}
+
+export class TourChangeSummaryDto {
+  @ApiProperty()
+  type!: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  visitId?: string;
+}
+
+export class CreateTourDto {
+  @ApiProperty({ format: 'uuid' })
+  employeeId!: string;
+
+  @ApiProperty({ format: 'date' })
+  localDate!: string;
+
+  @ApiProperty({ example: 'Europe/Berlin' })
+  timezone!: string;
+
+  @ApiProperty({ type: [String], format: 'uuid' })
+  visitIds!: string[];
+}
+
+export class TourStopInputDto {
+  @ApiProperty({ format: 'uuid' })
+  visitId!: string;
+
+  @ApiPropertyOptional({ maxLength: 500, nullable: true })
+  dispatcherNote?: string | null;
+}
+
+export class UpdateTourStopsDto {
+  @ApiProperty({ minimum: 1 })
+  expectedVersion!: number;
+
+  @ApiProperty({ type: [TourStopInputDto] })
+  stops!: TourStopInputDto[];
+}
+
+export class TourStopResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  visitId!: string;
+
+  @ApiProperty({ minimum: 1 })
+  sequence!: number;
+
+  @ApiProperty({ format: 'date-time' })
+  plannedStart!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  plannedEnd!: string;
+
+  @ApiProperty()
+  timezone!: string;
+
+  @ApiProperty({ nullable: true })
+  estimatedTravelMinutes!: number | null;
+
+  @ApiProperty({ nullable: true })
+  estimatedDistanceMeters!: number | null;
+
+  @ApiProperty({ enum: ['unknown', 'available', 'unavailable', 'unresolved'] })
+  routeStatus!: string;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 500 })
+  dispatcherNote!: string | null;
+}
+
+export class TourPublicationResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ minimum: 1 })
+  version!: number;
+
+  @ApiProperty({ format: 'uuid' })
+  employeeId!: string;
+
+  @ApiProperty({ type: [Object] })
+  snapshot!: object[];
+
+  @ApiProperty({ type: [TourChangeSummaryDto] })
+  changeSummary!: TourChangeSummaryDto[];
+
+  @ApiProperty({ format: 'date-time' })
+  publishedAt!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  publishedBy!: string;
+}
+
+export class TourResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  employeeId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  organizationId!: string;
+
+  @ApiProperty({ format: 'date' })
+  localDate!: string;
+
+  @ApiProperty()
+  timezone!: string;
+
+  @ApiProperty({ enum: ['draft', 'published'] })
+  status!: 'draft' | 'published';
+
+  @ApiProperty({ minimum: 1 })
+  version!: number;
+
+  @ApiProperty({ type: [TourStopResponseDto] })
+  stops!: TourStopResponseDto[];
+
+  @ApiPropertyOptional({ nullable: true, type: TourPublicationResponseDto })
+  latestPublication!: TourPublicationResponseDto | null;
+}
+
+export class TourListItemResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  employeeId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  organizationId!: string;
+
+  @ApiProperty({ format: 'date' })
+  localDate!: string;
+
+  @ApiProperty()
+  timezone!: string;
+
+  @ApiProperty({ enum: ['draft', 'published'] })
+  status!: 'draft' | 'published';
+
+  @ApiProperty({ minimum: 1 })
+  version!: number;
+
+  @ApiProperty()
+  stopCount!: number;
+
+  @ApiPropertyOptional({ nullable: true })
+  latestPublishedVersion!: number | null;
+}
+
+export class SchedulingConflictDto {
+  @ApiProperty({
+    enum: [
+      'missing_assignment',
+      'employee_overlap',
+      'employee_absence',
+      'outside_employee_availability',
+      'employee_availability_unknown',
+      'insufficient_travel_time',
+      'travel_feasibility_unknown',
+      'client_overlap',
+      'employee_preference',
+      'client_preference',
+      'substitution_awaiting_confirmation',
+      'unpublished_schedule_changes',
+    ],
+  })
+  code!: string;
+
+  @ApiProperty({ enum: ['blocking', 'warning'] })
+  severity!: 'blocking' | 'warning';
+
+  @ApiProperty({ format: 'uuid' })
+  visitId!: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  employeeId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  relatedVisitId?: string;
+}
+
+export class VisitSubstitutionResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  visitId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  originalEmployeeId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  substituteEmployeeId!: string;
+
+  @ApiProperty({ enum: ['proposed', 'confirmed', 'cancelled'] })
+  status!: 'proposed' | 'confirmed' | 'cancelled';
+
+  @ApiProperty({ maxLength: 500 })
+  reason!: string;
+}
+
+export class SchedulingWorklistItemDto {
+  @ApiProperty({ type: VisitResponseDto })
+  visit!: VisitResponseDto;
+
+  @ApiProperty({ type: [SchedulingConflictDto] })
+  conflicts!: SchedulingConflictDto[];
+
+  @ApiProperty({ type: [VisitSubstitutionResponseDto] })
+  proposedSubstitutions!: VisitSubstitutionResponseDto[];
+}
+
+export class SchedulingWorklistResponseDto {
+  @ApiProperty({ type: [SchedulingWorklistItemDto] })
+  items!: SchedulingWorklistItemDto[];
+
+  @ApiProperty()
+  page!: number;
+
+  @ApiProperty()
+  pageSize!: number;
+
+  @ApiProperty()
+  total!: number;
+}
+
+export class RouteOrderSuggestionResponseDto {
+  @ApiProperty({ enum: ['available', 'unavailable', 'unresolved'] })
+  status!: 'available' | 'unavailable' | 'unresolved';
+
+  @ApiProperty({ type: [String], format: 'uuid' })
+  visitIds!: string[];
+
+  @ApiProperty({ type: [SchedulingConflictDto] })
+  conflicts!: SchedulingConflictDto[];
+}
+
+export class CaregiverTourStopResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  visitId!: string;
+
+  @ApiProperty({ minimum: 1 })
+  sequence!: number;
+
+  @ApiProperty({ format: 'date-time' })
+  plannedStart!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  plannedEnd!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  estimatedTravelMinutes!: number | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  estimatedDistanceMeters!: number | null;
+
+  @ApiProperty({ enum: ['unknown', 'available', 'unavailable', 'unresolved'] })
+  routeStatus!: string;
+}
+
+export class MyTodayTourResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  tourId!: string;
+
+  @ApiProperty({ format: 'date' })
+  localDate!: string;
+
+  @ApiProperty()
+  timezone!: string;
+
+  @ApiProperty({ minimum: 1 })
+  version!: number;
+
+  @ApiProperty({ format: 'date-time' })
+  publishedAt!: string;
+
+  @ApiProperty({ type: [TourChangeSummaryDto] })
+  changeSummary!: Array<{ type: string }>;
+
+  @ApiProperty({ type: [CaregiverTourStopResponseDto] })
+  stops!: CaregiverTourStopResponseDto[];
+}
+
+export class RoutingLocationDto {
+  @ApiProperty({ minimum: -90, maximum: 90 })
+  latitude!: number;
+
+  @ApiProperty({ minimum: -180, maximum: 180 })
+  longitude!: number;
+}
+
+export class EmployeeSchedulingPreferencesDto {
+  @ApiProperty({ type: [Number] })
+  preferredWeekdays!: number[];
+
+  @ApiProperty({ type: [SchedulingPreferenceTimeWindowDto] })
+  preferredTimeWindows!: SchedulingPreferenceTimeWindowDto[];
+
+  @ApiProperty({ nullable: true })
+  preferredStartLatitude!: number | null;
+
+  @ApiProperty({ nullable: true })
+  preferredStartLongitude!: number | null;
+
+  @ApiProperty({ enum: ['driving'] })
+  travelMode!: 'driving';
+}
+
+export class ClientSchedulingPreferencesDto {
+  @ApiProperty({ type: [Number] })
+  preferredWeekdays!: number[];
+
+  @ApiProperty({ type: [SchedulingPreferenceTimeWindowDto] })
+  preferredTimeWindows!: SchedulingPreferenceTimeWindowDto[];
+
+  @ApiPropertyOptional({ format: 'uuid', nullable: true })
+  preferredEmployeeId!: string | null;
+
+  @ApiProperty({ type: [String], format: 'uuid' })
+  avoidedEmployeeIds!: string[];
 }

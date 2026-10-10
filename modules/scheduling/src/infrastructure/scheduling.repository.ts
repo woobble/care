@@ -1,18 +1,37 @@
-import { and, asc, count, eq, gt, inArray, lt, not, or, desc, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, inArray, lt, not, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
+import { v7 as uuidv7 } from 'uuid';
 import { clientRecords } from '@care/clients';
 import { employeeRecords } from '@care/employees';
 import { facilities, organizationsTable } from '@care/organizations';
 import { auditEntries } from '@care/audit';
 import {
+  employeeAvailability,
+  employeeAvailabilityExceptions,
+  employeeAvailabilityWindows,
   employeeUnavailability,
+  clientRoutingLocations,
+  clientSchedulingPreferences,
+  employeeSchedulingPreferences,
   scheduleGenerations,
+  tourPublications,
+  tourStops,
+  tours,
+  visitSubstitutions,
   visitAssignments,
   visitServices,
   visits,
 } from '../schema';
 import type { VisitAssignmentSnapshot, VisitData, VisitServiceData } from '../domain/visit';
+import type {
+  AvailabilityException,
+  AvailabilityWindow,
+  EmployeeAvailability,
+} from '../domain/availability';
+
+// Preserve transaction connection order while rotating unique stop sequences and writing route estimates.
+// oxlint-disable no-await-in-loop
 
 export interface VisitReadScope {
   schedule: {
@@ -43,6 +62,7 @@ export interface VisitSearchFilter {
   unassigned?: boolean;
   origin?: 'agreement_generated' | 'manual';
   visitId?: string;
+  relatedToVisitId?: string;
   page: number;
   pageSize: number;
   sortBy: 'plannedStart' | 'clientName' | 'createdAt';
@@ -159,6 +179,38 @@ export class SchedulingRepository {
       )
       .orderBy(asc(visitAssignments.employeeId));
     return rows.map((row) => row.employeeId);
+  }
+
+  async assignedVisitsForEmployee(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+    from: Date,
+    until: Date,
+    excludeVisitId?: string,
+  ): Promise<VisitData[]> {
+    const filters = [
+      eq(visitAssignments.tenantId, tenantId),
+      eq(visitAssignments.employeeId, employeeId),
+      eq(visitAssignments.status, 'active'),
+      inArray(visits.status, ['planned', 'confirmed'] as const),
+      gt(visits.plannedEnd, from),
+      lt(visits.plannedStart, until),
+    ];
+    if (excludeVisitId) filters.push(not(eq(visits.id, excludeVisitId)));
+    const rows = await transaction
+      .select({ visit: visits })
+      .from(visitAssignments)
+      .innerJoin(
+        visits,
+        and(
+          eq(visits.tenantId, visitAssignments.tenantId),
+          eq(visits.id, visitAssignments.visitId),
+        ),
+      )
+      .where(and(...filters))
+      .orderBy(asc(visits.plannedStart), asc(visits.id));
+    return rows.map((row) => row.visit as VisitData);
   }
 
   async hasGenerationKey(
@@ -379,6 +431,7 @@ export class SchedulingRepository {
         and(
           eq(employeeUnavailability.tenantId, tenantId),
           eq(employeeUnavailability.employeeId, employeeId),
+          eq(employeeUnavailability.status, 'active'),
           lt(employeeUnavailability.startsAt, endsAt),
           gt(employeeUnavailability.endsAt, startsAt),
         ),
@@ -413,6 +466,166 @@ export class SchedulingRepository {
     input: typeof employeeUnavailability.$inferInsert,
   ): Promise<void> {
     await transaction.insert(employeeUnavailability).values(input);
+  }
+
+  async cancelUnavailability(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+    absenceId: string,
+    updatedAt: Date,
+    updatedBy: string,
+  ): Promise<boolean> {
+    const rows = await transaction
+      .update(employeeUnavailability)
+      .set({ status: 'cancelled', updatedAt, updatedBy })
+      .where(
+        and(
+          eq(employeeUnavailability.tenantId, tenantId),
+          eq(employeeUnavailability.employeeId, employeeId),
+          eq(employeeUnavailability.id, absenceId),
+          eq(employeeUnavailability.status, 'active'),
+        ),
+      )
+      .returning({ id: employeeUnavailability.id });
+    return rows.length > 0;
+  }
+
+  async availabilityForEmployee(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+  ): Promise<{ id: string; version: number; value: EmployeeAvailability } | null> {
+    const [profile] = await transaction
+      .select()
+      .from(employeeAvailability)
+      .where(
+        and(
+          eq(employeeAvailability.tenantId, tenantId),
+          eq(employeeAvailability.employeeId, employeeId),
+        ),
+      )
+      .limit(1);
+    if (!profile) return null;
+
+    const windows = await transaction
+      .select()
+      .from(employeeAvailabilityWindows)
+      .where(
+        and(
+          eq(employeeAvailabilityWindows.tenantId, tenantId),
+          eq(employeeAvailabilityWindows.availabilityId, profile.id),
+        ),
+      )
+      .orderBy(asc(employeeAvailabilityWindows.weekday), asc(employeeAvailabilityWindows.startsAt));
+    const exceptions = await transaction
+      .select()
+      .from(employeeAvailabilityExceptions)
+      .where(
+        and(
+          eq(employeeAvailabilityExceptions.tenantId, tenantId),
+          eq(employeeAvailabilityExceptions.employeeId, employeeId),
+        ),
+      )
+      .orderBy(
+        asc(employeeAvailabilityExceptions.localDate),
+        asc(employeeAvailabilityExceptions.id),
+      );
+    return {
+      id: profile.id,
+      version: profile.version,
+      value: {
+        timezone: profile.timezone,
+        maxDailyMinutes: profile.maxDailyMinutes,
+        travelBufferMinutes: profile.travelBufferMinutes,
+        windows: windows.map((window): AvailabilityWindow => ({
+          weekday: window.weekday,
+          startsAt: window.startsAt.slice(0, 5),
+          endsAt: window.endsAt.slice(0, 5),
+        })),
+        exceptions: exceptions.map((exception): AvailabilityException => ({
+          id: exception.id,
+          localDate: exception.localDate,
+          kind: exception.kind,
+          startsAt: exception.startsAt?.slice(0, 5) ?? null,
+          endsAt: exception.endsAt?.slice(0, 5) ?? null,
+        })),
+      },
+    };
+  }
+
+  async insertAvailabilityProfile(
+    transaction: DatabaseTransaction,
+    input: typeof employeeAvailability.$inferInsert,
+  ): Promise<void> {
+    await transaction.insert(employeeAvailability).values(input);
+  }
+
+  async updateAvailabilityProfile(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+    expectedVersion: number,
+    input: Pick<
+      typeof employeeAvailability.$inferInsert,
+      'timezone' | 'maxDailyMinutes' | 'travelBufferMinutes' | 'updatedAt'
+    >,
+  ): Promise<boolean> {
+    const rows = await transaction
+      .update(employeeAvailability)
+      .set({ ...input, version: expectedVersion + 1 })
+      .where(
+        and(
+          eq(employeeAvailability.tenantId, tenantId),
+          eq(employeeAvailability.employeeId, employeeId),
+          eq(employeeAvailability.version, expectedVersion),
+        ),
+      )
+      .returning({ id: employeeAvailability.id });
+    return rows.length > 0;
+  }
+
+  async replaceAvailabilityWindows(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    availabilityId: string,
+    windows: Array<typeof employeeAvailabilityWindows.$inferInsert>,
+  ): Promise<void> {
+    await transaction
+      .delete(employeeAvailabilityWindows)
+      .where(
+        and(
+          eq(employeeAvailabilityWindows.tenantId, tenantId),
+          eq(employeeAvailabilityWindows.availabilityId, availabilityId),
+        ),
+      );
+    if (windows.length > 0) await transaction.insert(employeeAvailabilityWindows).values(windows);
+  }
+
+  async insertAvailabilityException(
+    transaction: DatabaseTransaction,
+    input: typeof employeeAvailabilityExceptions.$inferInsert,
+  ): Promise<void> {
+    await transaction.insert(employeeAvailabilityExceptions).values(input);
+  }
+
+  async deleteAvailabilityException(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+    exceptionId: string,
+  ): Promise<boolean> {
+    const rows = await transaction
+      .delete(employeeAvailabilityExceptions)
+      .where(
+        and(
+          eq(employeeAvailabilityExceptions.tenantId, tenantId),
+          eq(employeeAvailabilityExceptions.employeeId, employeeId),
+          eq(employeeAvailabilityExceptions.id, exceptionId),
+        ),
+      )
+      .returning({ id: employeeAvailabilityExceptions.id });
+    return rows.length > 0;
   }
 
   async assignment(
@@ -453,6 +666,561 @@ export class SchedulingRepository {
       )
       .where(and(eq(visitAssignments.tenantId, tenantId), eq(visitAssignments.visitId, visitId)))
       .orderBy(asc(visitAssignments.assignedAt), asc(visitAssignments.id));
+  }
+
+  async insertTour(
+    transaction: DatabaseTransaction,
+    input: typeof tours.$inferInsert,
+  ): Promise<void> {
+    await transaction.insert(tours).values(input);
+  }
+
+  async getTour(transaction: DatabaseTransaction, tenantId: string, tourId: string, lock = false) {
+    const query = transaction
+      .select()
+      .from(tours)
+      .where(and(eq(tours.tenantId, tenantId), eq(tours.id, tourId)));
+    const [row] = lock ? await query.for('update').limit(1) : await query.limit(1);
+    return row ?? null;
+  }
+
+  async getTourForEmployeeDate(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+    localDate: string,
+  ) {
+    const [row] = await transaction
+      .select()
+      .from(tours)
+      .where(
+        and(
+          eq(tours.tenantId, tenantId),
+          eq(tours.employeeId, employeeId),
+          eq(tours.localDate, localDate),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  async listTours(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+    from: string,
+    until: string,
+  ) {
+    return transaction
+      .select()
+      .from(tours)
+      .where(
+        and(
+          eq(tours.tenantId, tenantId),
+          eq(tours.employeeId, employeeId),
+          gte(tours.localDate, from),
+          lt(tours.localDate, until),
+        ),
+      )
+      .orderBy(asc(tours.localDate), asc(tours.id))
+      .limit(100);
+  }
+
+  async tourStops(transaction: DatabaseTransaction, tenantId: string, tourId: string) {
+    return transaction
+      .select({
+        stop: tourStops,
+        visit: visits,
+        latitude: clientRoutingLocations.latitude,
+        longitude: clientRoutingLocations.longitude,
+      })
+      .from(tourStops)
+      .innerJoin(
+        visits,
+        and(eq(visits.tenantId, tourStops.tenantId), eq(visits.id, tourStops.visitId)),
+      )
+      .leftJoin(
+        clientRoutingLocations,
+        and(
+          eq(clientRoutingLocations.tenantId, visits.tenantId),
+          eq(clientRoutingLocations.clientId, visits.clientId),
+        ),
+      )
+      .where(and(eq(tourStops.tenantId, tenantId), eq(tourStops.tourId, tourId)))
+      .orderBy(asc(tourStops.sequence), asc(tourStops.id));
+  }
+
+  async insertTourStops(
+    transaction: DatabaseTransaction,
+    stopRows: Array<typeof tourStops.$inferInsert>,
+  ): Promise<void> {
+    if (stopRows.length > 0) await transaction.insert(tourStops).values(stopRows);
+  }
+
+  async replaceTourStops(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    tourId: string,
+    stopRows: Array<{ visitId: string; sequence: number; dispatcherNote: string | null }>,
+  ): Promise<void> {
+    const existing = await transaction
+      .select()
+      .from(tourStops)
+      .where(and(eq(tourStops.tenantId, tenantId), eq(tourStops.tourId, tourId)));
+    if (existing.length > 0) {
+      await transaction
+        .update(tourStops)
+        .set({ sequence: sql`${tourStops.sequence} + 1000` })
+        .where(and(eq(tourStops.tenantId, tenantId), eq(tourStops.tourId, tourId)));
+    }
+    const existingByVisit = new Map(existing.map((stop) => [stop.visitId, stop]));
+    const desired = new Set(stopRows.map((stop) => stop.visitId));
+    for (const stop of stopRows) {
+      const prior = existingByVisit.get(stop.visitId);
+      if (prior) {
+        await transaction
+          .update(tourStops)
+          .set({
+            sequence: stop.sequence,
+            dispatcherNote: stop.dispatcherNote,
+            estimatedTravelMinutes: null,
+            estimatedDistanceMeters: null,
+            routeStatus: 'unknown',
+          })
+          .where(and(eq(tourStops.tenantId, tenantId), eq(tourStops.id, prior.id)));
+      } else {
+        await transaction.insert(tourStops).values({
+          id: uuidv7(),
+          tenantId,
+          tourId,
+          visitId: stop.visitId,
+          sequence: stop.sequence,
+          dispatcherNote: stop.dispatcherNote,
+          estimatedTravelMinutes: null,
+          estimatedDistanceMeters: null,
+          routeStatus: 'unknown',
+        });
+      }
+    }
+    const removed = existing.filter((stop) => !desired.has(stop.visitId)).map((stop) => stop.id);
+    if (removed.length > 0) {
+      await transaction
+        .delete(tourStops)
+        .where(and(eq(tourStops.tenantId, tenantId), inArray(tourStops.id, removed)));
+    }
+  }
+
+  async updateTourVersion(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    tourId: string,
+    expectedVersion: number,
+    updatedAt: Date,
+    updatedBy: string,
+    status?: 'draft' | 'published',
+  ): Promise<boolean> {
+    const rows = await transaction
+      .update(tours)
+      .set({
+        version: expectedVersion + 1,
+        updatedAt,
+        updatedBy,
+        ...(status ? { status } : {}),
+      })
+      .where(
+        and(eq(tours.tenantId, tenantId), eq(tours.id, tourId), eq(tours.version, expectedVersion)),
+      )
+      .returning({ id: tours.id });
+    return rows.length > 0;
+  }
+
+  async updateTourStopEstimates(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    tourId: string,
+    legs: Array<{
+      toVisitId: string;
+      travelMinutes: number;
+      distanceMeters: number;
+      routeStatus: 'available' | 'unavailable' | 'unresolved';
+    }>,
+    routeStatus: 'unknown' | 'available' | 'unavailable' | 'unresolved',
+  ): Promise<void> {
+    const estimatedStatus = routeStatus === 'available' ? 'unknown' : routeStatus;
+    await transaction
+      .update(tourStops)
+      .set({
+        estimatedTravelMinutes: null,
+        estimatedDistanceMeters: null,
+        routeStatus: estimatedStatus,
+      })
+      .where(and(eq(tourStops.tenantId, tenantId), eq(tourStops.tourId, tourId)));
+    for (const leg of legs) {
+      await transaction
+        .update(tourStops)
+        .set({
+          estimatedTravelMinutes: leg.travelMinutes,
+          estimatedDistanceMeters: leg.distanceMeters,
+          routeStatus: leg.routeStatus,
+        })
+        .where(
+          and(
+            eq(tourStops.tenantId, tenantId),
+            eq(tourStops.tourId, tourId),
+            eq(tourStops.visitId, leg.toVisitId),
+          ),
+        );
+    }
+  }
+
+  async latestTourPublication(transaction: DatabaseTransaction, tenantId: string, tourId: string) {
+    const [row] = await transaction
+      .select()
+      .from(tourPublications)
+      .where(and(eq(tourPublications.tenantId, tenantId), eq(tourPublications.tourId, tourId)))
+      .orderBy(desc(tourPublications.version))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async tourPublicationsForTour(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    tourId: string,
+  ) {
+    return transaction
+      .select()
+      .from(tourPublications)
+      .where(and(eq(tourPublications.tenantId, tenantId), eq(tourPublications.tourId, tourId)))
+      .orderBy(desc(tourPublications.version));
+  }
+
+  async toursForVisit(transaction: DatabaseTransaction, tenantId: string, visitId: string) {
+    return transaction
+      .select({ tour: tours })
+      .from(tourStops)
+      .innerJoin(tours, and(eq(tours.tenantId, tourStops.tenantId), eq(tours.id, tourStops.tourId)))
+      .where(and(eq(tourStops.tenantId, tenantId), eq(tourStops.visitId, visitId)))
+      .orderBy(asc(tours.id));
+  }
+
+  async listTourStopsForEmployeeDate(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+    localDate: string,
+  ) {
+    return transaction
+      .select({ stop: tourStops, tour: tours })
+      .from(tourStops)
+      .innerJoin(tours, and(eq(tours.tenantId, tourStops.tenantId), eq(tours.id, tourStops.tourId)))
+      .where(
+        and(
+          eq(tourStops.tenantId, tenantId),
+          eq(tours.employeeId, employeeId),
+          eq(tours.localDate, localDate),
+        ),
+      )
+      .orderBy(asc(tourStops.sequence), asc(tourStops.id));
+  }
+
+  async tourStopsForVisits(transaction: DatabaseTransaction, tenantId: string, visitIds: string[]) {
+    if (visitIds.length === 0) return [];
+    return transaction
+      .select({ stop: tourStops, tour: tours })
+      .from(tourStops)
+      .innerJoin(tours, and(eq(tours.tenantId, tourStops.tenantId), eq(tours.id, tourStops.tourId)))
+      .where(and(eq(tourStops.tenantId, tenantId), inArray(tourStops.visitId, visitIds)))
+      .orderBy(asc(tours.localDate), asc(tours.employeeId), asc(tourStops.sequence));
+  }
+
+  async insertTourPublication(
+    transaction: DatabaseTransaction,
+    input: typeof tourPublications.$inferInsert,
+  ): Promise<void> {
+    await transaction.insert(tourPublications).values(input);
+  }
+
+  async insertVisitSubstitution(
+    transaction: DatabaseTransaction,
+    input: typeof visitSubstitutions.$inferInsert,
+  ): Promise<void> {
+    await transaction.insert(visitSubstitutions).values(input);
+  }
+
+  async getVisitSubstitution(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    id: string,
+    lock = false,
+  ) {
+    const query = transaction
+      .select()
+      .from(visitSubstitutions)
+      .where(and(eq(visitSubstitutions.tenantId, tenantId), eq(visitSubstitutions.id, id)));
+    const [row] = lock ? await query.for('update').limit(1) : await query.limit(1);
+    return row ?? null;
+  }
+
+  async activeProposedSubstitution(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    visitId: string,
+  ) {
+    const [row] = await transaction
+      .select()
+      .from(visitSubstitutions)
+      .where(
+        and(
+          eq(visitSubstitutions.tenantId, tenantId),
+          eq(visitSubstitutions.visitId, visitId),
+          eq(visitSubstitutions.status, 'proposed'),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  async proposedSubstitutionsForVisits(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    visitIds: string[],
+  ) {
+    if (visitIds.length === 0) return [];
+    return transaction
+      .select()
+      .from(visitSubstitutions)
+      .where(
+        and(
+          eq(visitSubstitutions.tenantId, tenantId),
+          inArray(visitSubstitutions.visitId, visitIds),
+          eq(visitSubstitutions.status, 'proposed'),
+        ),
+      )
+      .orderBy(asc(visitSubstitutions.createdAt), asc(visitSubstitutions.id));
+  }
+
+  async unavailabilityForEmployees(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeIds: string[],
+    from: Date,
+    until: Date,
+  ) {
+    if (employeeIds.length === 0) return [];
+    return transaction
+      .select()
+      .from(employeeUnavailability)
+      .where(
+        and(
+          eq(employeeUnavailability.tenantId, tenantId),
+          inArray(employeeUnavailability.employeeId, employeeIds),
+          eq(employeeUnavailability.status, 'active'),
+          lt(employeeUnavailability.startsAt, until),
+          gt(employeeUnavailability.endsAt, from),
+        ),
+      )
+      .orderBy(asc(employeeUnavailability.startsAt), asc(employeeUnavailability.id));
+  }
+
+  async employeeByUser(transaction: DatabaseTransaction, tenantId: string, userId: string) {
+    const [row] = await transaction
+      .select()
+      .from(employeeRecords)
+      .where(and(eq(employeeRecords.tenantId, tenantId), eq(employeeRecords.userId, userId)))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async activeEmployeesForOrganization(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    organizationId: string,
+  ) {
+    return transaction
+      .select()
+      .from(employeeRecords)
+      .where(
+        and(
+          eq(employeeRecords.tenantId, tenantId),
+          eq(employeeRecords.organizationId, organizationId),
+          eq(employeeRecords.status, 'active'),
+        ),
+      )
+      .orderBy(
+        asc(employeeRecords.lastName),
+        asc(employeeRecords.firstName),
+        asc(employeeRecords.id),
+      )
+      .limit(100);
+  }
+
+  async employeePreferences(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+  ) {
+    const [row] = await transaction
+      .select()
+      .from(employeeSchedulingPreferences)
+      .where(
+        and(
+          eq(employeeSchedulingPreferences.tenantId, tenantId),
+          eq(employeeSchedulingPreferences.employeeId, employeeId),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  async clientPreferences(transaction: DatabaseTransaction, tenantId: string, clientId: string) {
+    const [row] = await transaction
+      .select()
+      .from(clientSchedulingPreferences)
+      .where(
+        and(
+          eq(clientSchedulingPreferences.tenantId, tenantId),
+          eq(clientSchedulingPreferences.clientId, clientId),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  async employeePreferencesForEmployees(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeIds: string[],
+  ) {
+    if (employeeIds.length === 0) return [];
+    return transaction
+      .select()
+      .from(employeeSchedulingPreferences)
+      .where(
+        and(
+          eq(employeeSchedulingPreferences.tenantId, tenantId),
+          inArray(employeeSchedulingPreferences.employeeId, employeeIds),
+        ),
+      );
+  }
+
+  async clientPreferencesForClients(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    clientIds: string[],
+  ) {
+    if (clientIds.length === 0) return [];
+    return transaction
+      .select()
+      .from(clientSchedulingPreferences)
+      .where(
+        and(
+          eq(clientSchedulingPreferences.tenantId, tenantId),
+          inArray(clientSchedulingPreferences.clientId, clientIds),
+        ),
+      );
+  }
+
+  async updateVisitSubstitution(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    id: string,
+    status: 'confirmed' | 'cancelled',
+    resolvedAt: Date,
+    resolvedBy: string,
+  ): Promise<boolean> {
+    const rows = await transaction
+      .update(visitSubstitutions)
+      .set({ status, resolvedAt, resolvedBy })
+      .where(
+        and(
+          eq(visitSubstitutions.tenantId, tenantId),
+          eq(visitSubstitutions.id, id),
+          eq(visitSubstitutions.status, 'proposed'),
+        ),
+      )
+      .returning({ id: visitSubstitutions.id });
+    return rows.length > 0;
+  }
+
+  async upsertClientRoutingLocation(
+    transaction: DatabaseTransaction,
+    input: typeof clientRoutingLocations.$inferInsert,
+  ): Promise<void> {
+    await transaction
+      .insert(clientRoutingLocations)
+      .values(input)
+      .onConflictDoUpdate({
+        target: [clientRoutingLocations.tenantId, clientRoutingLocations.clientId],
+        set: {
+          latitude: input.latitude,
+          longitude: input.longitude,
+          updatedAt: input.updatedAt,
+          updatedBy: input.updatedBy,
+        },
+      });
+  }
+
+  async clientRoutingLocation(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    clientId: string,
+  ) {
+    const [row] = await transaction
+      .select({
+        latitude: clientRoutingLocations.latitude,
+        longitude: clientRoutingLocations.longitude,
+      })
+      .from(clientRoutingLocations)
+      .where(
+        and(
+          eq(clientRoutingLocations.tenantId, tenantId),
+          eq(clientRoutingLocations.clientId, clientId),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  async upsertEmployeeSchedulingPreferences(
+    transaction: DatabaseTransaction,
+    input: typeof employeeSchedulingPreferences.$inferInsert,
+  ): Promise<void> {
+    await transaction
+      .insert(employeeSchedulingPreferences)
+      .values(input)
+      .onConflictDoUpdate({
+        target: [employeeSchedulingPreferences.tenantId, employeeSchedulingPreferences.employeeId],
+        set: {
+          preferredWeekdays: input.preferredWeekdays,
+          preferredTimeWindows: input.preferredTimeWindows,
+          preferredStartLatitude: input.preferredStartLatitude,
+          preferredStartLongitude: input.preferredStartLongitude,
+          travelMode: input.travelMode,
+          updatedAt: input.updatedAt,
+          updatedBy: input.updatedBy,
+        },
+      });
+  }
+
+  async upsertClientSchedulingPreferences(
+    transaction: DatabaseTransaction,
+    input: typeof clientSchedulingPreferences.$inferInsert,
+  ): Promise<void> {
+    await transaction
+      .insert(clientSchedulingPreferences)
+      .values(input)
+      .onConflictDoUpdate({
+        target: [clientSchedulingPreferences.tenantId, clientSchedulingPreferences.clientId],
+        set: {
+          preferredWeekdays: input.preferredWeekdays,
+          preferredTimeWindows: input.preferredTimeWindows,
+          preferredEmployeeId: input.preferredEmployeeId,
+          avoidedEmployeeIds: input.avoidedEmployeeIds,
+          updatedAt: input.updatedAt,
+          updatedBy: input.updatedBy,
+        },
+      });
   }
 
   async history(transaction: DatabaseTransaction, tenantId: string, visitId: string) {
@@ -564,6 +1332,29 @@ export class SchedulingRepository {
     if (filter.status) filters.push(eq(visits.status, filter.status));
     if (filter.origin) filters.push(eq(visits.origin, filter.origin));
     if (filter.visitId) filters.push(eq(visits.id, filter.visitId));
+    if (filter.relatedToVisitId) {
+      filters.push(sql`(
+        ${visits.id} = ${filter.relatedToVisitId}
+        OR ${visits.clientId} = (
+          SELECT target.client_id
+          FROM scheduling.visits AS target
+          WHERE target.tenant_id = ${filter.tenantId}
+            AND target.id = ${filter.relatedToVisitId}
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM scheduling.visit_assignments AS target_assignment
+          INNER JOIN scheduling.visit_assignments AS related_assignment
+            ON related_assignment.tenant_id = target_assignment.tenant_id
+           AND related_assignment.employee_id = target_assignment.employee_id
+           AND related_assignment.status = 'active'
+          WHERE target_assignment.tenant_id = ${filter.tenantId}
+            AND target_assignment.visit_id = ${filter.relatedToVisitId}
+            AND target_assignment.status = 'active'
+            AND related_assignment.visit_id = ${visits.id}
+        )
+      )`);
+    }
     if (filter.employeeId) {
       filters.push(
         sql`exists (SELECT 1 FROM scheduling.visit_assignments va WHERE va.tenant_id = ${filter.tenantId} AND va.visit_id = ${visits.id} AND va.employee_id = ${filter.employeeId} AND va.status = 'active')`,

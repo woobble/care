@@ -86,6 +86,220 @@ export async function updateEmployeeAction(formData: FormData): Promise<void> {
   redirect(`/employees/${id}?updated=employee`);
 }
 
+export async function saveEmployeeAvailabilityAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const expectedVersion = readInteger(formData, 'expectedVersion', 0, Number.MAX_SAFE_INTEGER);
+  const timezone = readText(formData, 'timezone');
+  const maxDailyText = readText(formData, 'maxDailyMinutes');
+  const parsedMaxDailyMinutes = maxDailyText
+    ? readInteger(formData, 'maxDailyMinutes', 1, 1440)
+    : null;
+  const travelBufferMinutes = readInteger(formData, 'travelBufferMinutes', 0, 240);
+  if (
+    !employeeId ||
+    expectedVersion === undefined ||
+    !timezone ||
+    parsedMaxDailyMinutes === undefined ||
+    travelBufferMinutes === undefined
+  ) {
+    redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  }
+  const maxDailyMinutes = parsedMaxDailyMinutes;
+
+  const windows: Array<{ weekday: number; startsAt: string; endsAt: string }> = [];
+  for (let weekday = 1; weekday <= 7; weekday += 1) {
+    for (let slot = 1; slot <= 4; slot += 1) {
+      const startsAt = readText(formData, `window_${weekday}_${slot}_start`);
+      const endsAt = readText(formData, `window_${weekday}_${slot}_end`);
+      if (!startsAt && !endsAt) continue;
+      if (!validTime(startsAt) || !validTime(endsAt) || startsAt === endsAt) {
+        redirect(employeePath(employeeId, 'INVALID_EMPLOYEE_AVAILABILITY'));
+      }
+      windows.push({ weekday, startsAt, endsAt });
+    }
+  }
+
+  const api = await getApiClient();
+  const { error } = await api.PUT('/api/v1/employees/{employeeId}/availability', {
+    params: { path: { employeeId }, header: await getTenantHeader() },
+    body: { expectedVersion, timezone, maxDailyMinutes, travelBufferMinutes, windows },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  await refreshEmployee(employeeId);
+  revalidatePath('/planning');
+  revalidatePath('/care/today');
+  redirect(`/employees/${employeeId}?updated=availability`);
+}
+
+export async function createAvailabilityExceptionAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const expectedVersion = readInteger(formData, 'expectedVersion', 1, Number.MAX_SAFE_INTEGER);
+  const localDate = readDate(formData, 'localDate');
+  const kind = readText(formData, 'kind');
+  const startsAt = readText(formData, 'startsAt');
+  const endsAt = readText(formData, 'endsAt');
+  if (
+    !employeeId ||
+    expectedVersion === undefined ||
+    !localDate ||
+    (kind !== 'working_hours' && kind !== 'closed' && kind !== 'unavailable')
+  ) {
+    redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  }
+  const isClosed = kind === 'closed';
+  if (!isClosed && startsAt !== '' && !validTime(startsAt)) {
+    redirect(employeePath(employeeId, 'INVALID_EMPLOYEE_AVAILABILITY'));
+  }
+  if (!isClosed && endsAt !== '' && !validTime(endsAt)) {
+    redirect(employeePath(employeeId, 'INVALID_EMPLOYEE_AVAILABILITY'));
+  }
+  const timePair: [string | null, string | null] = isClosed
+    ? [null, null]
+    : [startsAt || null, endsAt || null];
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/employees/{employeeId}/availability/exceptions', {
+    params: { path: { employeeId }, header: await getTenantHeader() },
+    body: {
+      expectedVersion,
+      localDate,
+      kind,
+      startsAt: timePair[0],
+      endsAt: timePair[1],
+    },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  revalidatePath(`/employees/${employeeId}`);
+  revalidatePath('/planning');
+  redirect(`/employees/${employeeId}?updated=availability`);
+}
+
+export async function deleteAvailabilityExceptionAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const exceptionId = readUuid(formData.get('exceptionId'));
+  const expectedVersion = readInteger(formData, 'expectedVersion', 1, Number.MAX_SAFE_INTEGER);
+  if (!employeeId || !exceptionId || expectedVersion === undefined) {
+    redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  }
+  const api = await getApiClient();
+  const { error } = await api.DELETE(
+    '/api/v1/employees/{employeeId}/availability/exceptions/{exceptionId}',
+    {
+      params: {
+        path: { employeeId, exceptionId },
+        query: { expectedVersion },
+        header: await getTenantHeader(),
+      },
+    },
+  );
+  if (error) redirect(employeePath(employeeId, error.code));
+  revalidatePath(`/employees/${employeeId}`);
+  revalidatePath('/planning');
+  redirect(`/employees/${employeeId}?updated=availability`);
+}
+
+export async function createEmployeeAbsenceAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const localStart = readText(formData, 'localStart');
+  const localEnd = readText(formData, 'localEnd');
+  const timezone = readText(formData, 'timezone');
+  const reason = readText(formData, 'reason');
+  const localStartParts = /^([0-9]{4}-[0-9]{2}-[0-9]{2})T(([01][0-9]|2[0-3]):[0-5][0-9])$/.exec(
+    localStart,
+  );
+  const localEndParts = /^([0-9]{4}-[0-9]{2}-[0-9]{2})T(([01][0-9]|2[0-3]):[0-5][0-9])$/.exec(
+    localEnd,
+  );
+  if (
+    !employeeId ||
+    !localStartParts ||
+    !localEndParts ||
+    !timezone ||
+    !['vacation', 'sick_leave', 'training', 'personal_unavailability', 'other'].includes(reason)
+  ) {
+    redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  }
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/employees/{employeeId}/unavailability', {
+    params: { path: { employeeId }, header: await getTenantHeader() },
+    body: {
+      localStartDate: localStartParts[1]!,
+      localStartTime: localStartParts[2]!,
+      localEndDate: localEndParts[1]!,
+      localEndTime: localEndParts[2]!,
+      timezone,
+      reason: reason as
+        | 'vacation'
+        | 'sick_leave'
+        | 'training'
+        | 'personal_unavailability'
+        | 'other',
+      note: readNullableText(formData, 'note'),
+    },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  revalidatePath(`/employees/${employeeId}`);
+  revalidatePath('/planning');
+  revalidatePath('/care/today');
+  redirect(`/employees/${employeeId}?updated=absence`);
+}
+
+export async function cancelEmployeeAbsenceAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const absenceId = readUuid(formData.get('absenceId'));
+  if (!employeeId || !absenceId) redirect(employeePath(employeeId, 'INVALID_REQUEST'));
+  const api = await getApiClient();
+  const { error } = await api.DELETE('/api/v1/employees/{employeeId}/unavailability/{absenceId}', {
+    params: { path: { employeeId, absenceId }, header: await getTenantHeader() },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  revalidatePath(`/employees/${employeeId}`);
+  revalidatePath('/planning');
+  revalidatePath('/care/today');
+  redirect(`/employees/${employeeId}?updated=absence`);
+}
+
+export async function saveEmployeeSchedulingPreferencesAction(formData: FormData): Promise<void> {
+  const employeeId = readUuid(formData.get('employeeId'));
+  const preferredWeekdays = readIntegerValues(formData, 'preferredWeekdays', 1, 7);
+  const latitudeText = readText(formData, 'preferredStartLatitude');
+  const longitudeText = readText(formData, 'preferredStartLongitude');
+  const preferredStartLatitude = latitudeText ? readCoordinate(latitudeText, -90, 90) : null;
+  const preferredStartLongitude = longitudeText ? readCoordinate(longitudeText, -180, 180) : null;
+  const preferredTimeWindows: Array<{ startsAt: string; endsAt: string }> = [];
+  for (let slot = 1; slot <= 4; slot += 1) {
+    const startsAt = readText(formData, `preferredWindow${slot}Start`);
+    const endsAt = readText(formData, `preferredWindow${slot}End`);
+    if (!startsAt && !endsAt) continue;
+    if (!validTime(startsAt) || !validTime(endsAt) || startsAt >= endsAt) {
+      redirect(employeePath(employeeId, 'SCHEDULING_TOUR_INVALID'));
+    }
+    preferredTimeWindows.push({ startsAt, endsAt });
+  }
+  if (
+    !employeeId ||
+    preferredStartLatitude === undefined ||
+    preferredStartLongitude === undefined ||
+    (preferredStartLatitude === null) !== (preferredStartLongitude === null)
+  ) {
+    redirect(employeePath(employeeId, 'SCHEDULING_TOUR_INVALID'));
+  }
+  const api = await getApiClient();
+  const { error } = await api.PUT('/api/v1/employees/{employeeId}/scheduling-preferences', {
+    params: { path: { employeeId }, header: await getTenantHeader() },
+    body: {
+      preferredWeekdays,
+      preferredTimeWindows,
+      preferredStartLatitude,
+      preferredStartLongitude,
+      travelMode: 'driving',
+    },
+  });
+  if (error) redirect(employeePath(employeeId, error.code));
+  revalidatePath(`/employees/${employeeId}`);
+  revalidatePath('/planning');
+  redirect(`/employees/${employeeId}?updated=scheduling_preferences#availability`);
+}
+
 export async function changeEmployeeStatusAction(formData: FormData): Promise<void> {
   const id = readUuid(formData.get('id'));
   const operation = formData.get('operation');
@@ -383,4 +597,39 @@ function readNumber(formData: FormData, name: string): number | null | undefined
   if (!value) return null;
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 && number <= 168 ? number : undefined;
+}
+
+function readInteger(
+  formData: FormData,
+  name: string,
+  minimum: number,
+  maximum: number,
+): number | undefined {
+  const value = readText(formData, name);
+  if (!value || !/^\d+$/.test(value)) return undefined;
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= minimum && number <= maximum
+    ? number
+    : undefined;
+}
+
+function validTime(value: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+function readIntegerValues(
+  formData: FormData,
+  name: string,
+  minimum: number,
+  maximum: number,
+): number[] {
+  return [...new Set(formData.getAll(name))]
+    .filter((value): value is string => typeof value === 'string' && /^\d+$/.test(value))
+    .map(Number)
+    .filter((value) => Number.isSafeInteger(value) && value >= minimum && value <= maximum);
+}
+
+function readCoordinate(value: string, minimum: number, maximum: number): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum ? parsed : undefined;
 }

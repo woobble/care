@@ -12,6 +12,7 @@ import {
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
+  hasPermission,
 } from '../../../../lib/api';
 import {
   activateClientAction,
@@ -23,6 +24,8 @@ import {
   changeClientProviderContextAction,
   removeClientAddressAction,
   removeClientContactAction,
+  saveClientRoutingLocationAction,
+  saveClientSchedulingPreferencesAction,
   updateClientAction,
   updateClientAddressAction,
   updateClientContactAction,
@@ -63,6 +66,7 @@ export default async function ClientDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{
     error?: string;
+    updated?: string;
     documentType?: string;
     documentPage?: string;
   }>;
@@ -198,6 +202,53 @@ export default async function ClientDetailPage({
         client.primaryFacilityId,
       )
     : false;
+  const canReadSchedule = client
+    ? hasClientPermission(
+        permissions,
+        'schedule.read',
+        tenantId,
+        client.organizationId,
+        client.primaryFacilityId,
+      )
+    : false;
+  const canManageSchedule = client
+    ? hasClientPermission(
+        permissions,
+        'schedule.update',
+        tenantId,
+        client.organizationId,
+        client.primaryFacilityId,
+      )
+    : false;
+  const [schedulingPreferencesResult, routingLocationResult, schedulingEmployeesResult] =
+    client && canReadSchedule
+      ? await Promise.all([
+          canManageSchedule
+            ? get('/api/v1/clients/{clientId}/scheduling-preferences', {
+                params: { path: { clientId: client.id }, header },
+              })
+            : Promise.resolve({ data: undefined, error: undefined }),
+          canManageSchedule
+            ? get('/api/v1/clients/{clientId}/routing-location', {
+                params: { path: { clientId: client.id }, header },
+              })
+            : Promise.resolve({ data: undefined, error: undefined }),
+          hasPermission(permissions, 'employee.read')
+            ? get('/api/v1/employees', {
+                params: {
+                  query: {
+                    status: 'active',
+                    ...(client.organizationId ? { organizationId: client.organizationId } : {}),
+                    ...(client.primaryFacilityId ? { facilityId: client.primaryFacilityId } : {}),
+                    page: 1,
+                    pageSize: 100,
+                  },
+                  header,
+                },
+              })
+            : Promise.resolve({ data: undefined, error: undefined }),
+        ])
+      : [null, null, null];
   const selectedDocumentType = clientDocumentTypes.includes(
     query.documentType as ClientDocumentType,
   )
@@ -251,6 +302,18 @@ export default async function ClientDetailPage({
       (!grade.validUntil || grade.validUntil > today),
   );
   const actionError = query.error || clientResult.error?.code;
+  const schedulingPreferences = schedulingPreferencesResult?.data ?? null;
+  const routingLocation = routingLocationResult?.data ?? null;
+  const schedulingEmployees = schedulingEmployeesResult?.data?.items ?? [];
+  const planningWeekdays = [
+    { weekday: 1, label: t('Employees.detail.weekdays.monday') },
+    { weekday: 2, label: t('Employees.detail.weekdays.tuesday') },
+    { weekday: 3, label: t('Employees.detail.weekdays.wednesday') },
+    { weekday: 4, label: t('Employees.detail.weekdays.thursday') },
+    { weekday: 5, label: t('Employees.detail.weekdays.friday') },
+    { weekday: 6, label: t('Employees.detail.weekdays.saturday') },
+    { weekday: 7, label: t('Employees.detail.weekdays.sunday') },
+  ];
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
@@ -278,6 +341,16 @@ export default async function ClientDetailPage({
       {actionError ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
           {t(errorMessageKey(actionError))}
+        </p>
+      ) : null}
+      {query.updated === 'scheduling_preferences' || query.updated === 'routing_location' ? (
+        <p
+          role="status"
+          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+        >
+          {query.updated === 'scheduling_preferences'
+            ? t('Clients.detail.schedulingPreferencesSaved')
+            : t('Clients.detail.routingLocationSaved')}
         </p>
       ) : null}
       {!client ? (
@@ -1242,6 +1315,180 @@ export default async function ClientDetailPage({
             </div>
           </section>
 
+          {canReadSchedule ? (
+            <section
+              id="scheduling"
+              aria-labelledby="scheduling-title"
+              className="grid gap-4 rounded-lg border bg-white p-5 scroll-mt-6"
+            >
+              <div>
+                <h2 id="scheduling-title" className="text-xl font-semibold">
+                  {t('Clients.detail.schedulingPreferences')}
+                </h2>
+                <p className="text-sm text-slate-600">
+                  {t('Clients.detail.schedulingPreferencesDescription')}
+                </p>
+              </div>
+              {schedulingPreferencesResult?.error || routingLocationResult?.error ? (
+                <p role="alert" className="text-sm text-red-800">
+                  {t(
+                    errorMessageKey(
+                      schedulingPreferencesResult?.error?.code ??
+                        routingLocationResult?.error?.code ??
+                        'REQUEST_FAILED',
+                    ),
+                  )}
+                </p>
+              ) : null}
+              {canManageSchedule ? (
+                <form action={saveClientSchedulingPreferencesAction} className="grid gap-4">
+                  <input type="hidden" name="id" value={client.id} />
+                  <fieldset className="grid gap-2">
+                    <legend className="font-medium">{t('Clients.detail.preferredWeekdays')}</legend>
+                    <div className="flex flex-wrap gap-x-4 gap-y-2">
+                      {planningWeekdays.map(({ weekday, label }) => (
+                        <label key={weekday} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            name="preferredWeekdays"
+                            value={weekday}
+                            defaultChecked={schedulingPreferences?.preferredWeekdays.includes(
+                              weekday,
+                            )}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <div className="grid gap-3">
+                    <p className="font-medium">{t('Clients.detail.preferredTimeWindows')}</p>
+                    {[1, 2, 3, 4].map((slot) => {
+                      const window = schedulingPreferences?.preferredTimeWindows[slot - 1];
+                      return (
+                        <div key={slot} className="grid gap-3 sm:grid-cols-2">
+                          <TextField
+                            id={`client-preferred-window-${slot}-start`}
+                            name={`preferredWindow${slot}Start`}
+                            label={t('Employees.detail.windowStart')}
+                            type="time"
+                            defaultValue={window?.startsAt ?? ''}
+                          />
+                          <TextField
+                            id={`client-preferred-window-${slot}-end`}
+                            name={`preferredWindow${slot}End`}
+                            label={t('Employees.detail.windowEnd')}
+                            type="time"
+                            defaultValue={window?.endsAt ?? ''}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="client-preferred-employee">
+                        {t('Clients.detail.preferredEmployee')}
+                      </Label>
+                      <select
+                        id="client-preferred-employee"
+                        name="preferredEmployeeId"
+                        defaultValue={schedulingPreferences?.preferredEmployeeId ?? ''}
+                        className="h-10 rounded-md border bg-white px-3"
+                      >
+                        <option value="">{t('Clients.detail.noPreferredEmployee')}</option>
+                        {schedulingEmployees.map((employee) => (
+                          <option key={employee.id} value={employee.id}>
+                            {employee.preferredName || employee.firstName} {employee.lastName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="client-avoided-employees">
+                        {t('Clients.detail.avoidedEmployees')}
+                      </Label>
+                      <select
+                        id="client-avoided-employees"
+                        name="avoidedEmployeeIds"
+                        multiple
+                        defaultValue={schedulingPreferences?.avoidedEmployeeIds ?? []}
+                        className="min-h-24 rounded-md border bg-white px-3 py-2"
+                      >
+                        {schedulingEmployees.map((employee) => (
+                          <option key={employee.id} value={employee.id}>
+                            {employee.preferredName || employee.firstName} {employee.lastName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  {!schedulingEmployees.length ? (
+                    <p className="text-sm text-slate-600">
+                      {t('Clients.detail.employeeChoicesUnavailable')}
+                    </p>
+                  ) : null}
+                  <p className="text-sm text-slate-600">
+                    {t('Clients.detail.preferencesAreAdvisory')}
+                  </p>
+                  <Button type="submit" className="w-fit">
+                    {t('Clients.detail.saveSchedulingPreferences')}
+                  </Button>
+                </form>
+              ) : null}
+
+              {canManageSchedule ? (
+                <div className="grid gap-3 border-t pt-4">
+                  <div>
+                    <h3 className="font-semibold">{t('Clients.detail.routingLocation')}</h3>
+                    <p className="text-sm text-slate-600">{t('Clients.detail.routingPrivacy')}</p>
+                  </div>
+                  {canManageSchedule ? (
+                    <form
+                      action={saveClientRoutingLocationAction}
+                      className="grid gap-3 md:grid-cols-2"
+                    >
+                      <input type="hidden" name="id" value={client.id} />
+                      <TextField
+                        id="client-routing-latitude"
+                        name="latitude"
+                        label={t('Employees.detail.latitude')}
+                        type="number"
+                        min="-90"
+                        max="90"
+                        step="0.000001"
+                        defaultValue={routingLocation?.latitude?.toString() ?? ''}
+                        required
+                      />
+                      <TextField
+                        id="client-routing-longitude"
+                        name="longitude"
+                        label={t('Employees.detail.longitude')}
+                        type="number"
+                        min="-180"
+                        max="180"
+                        step="0.000001"
+                        defaultValue={routingLocation?.longitude?.toString() ?? ''}
+                        required
+                      />
+                      <Button type="submit" className="w-fit md:col-span-2">
+                        {t('Clients.detail.saveRoutingLocation')}
+                      </Button>
+                    </form>
+                  ) : routingLocation ? (
+                    <p className="text-sm text-slate-600">
+                      {routingLocation.latitude}, {routingLocation.longitude}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-slate-600">
+                      {t('Clients.detail.routingLocationUnavailable')}
+                    </p>
+                  )}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
           <section id="visits" aria-labelledby="visits-title" className="grid gap-4 scroll-mt-6">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 id="visits-title" className="text-xl font-semibold">
@@ -1567,6 +1814,7 @@ function TextField({
   maxLength,
   min,
   max,
+  step,
 }: Readonly<{
   id: string;
   name: string;
@@ -1575,8 +1823,9 @@ function TextField({
   defaultValue?: string;
   required?: boolean;
   maxLength?: number;
-  min?: number;
-  max?: number;
+  min?: number | string;
+  max?: number | string;
+  step?: number | string;
 }>) {
   return (
     <div className="grid gap-2">
@@ -1588,8 +1837,9 @@ function TextField({
         defaultValue={defaultValue}
         required={required}
         maxLength={maxLength}
-        min={min}
-        max={max}
+        min={min === undefined ? undefined : Number(min)}
+        max={max === undefined ? undefined : Number(max)}
+        step={step}
       />
     </div>
   );

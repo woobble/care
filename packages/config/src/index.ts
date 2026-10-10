@@ -20,6 +20,7 @@ export function loadApiConfig(source: NodeJS.ProcessEnv = process.env) {
       WEB_ORIGIN: url,
       PORT: z.coerce.number().int().min(1).max(65535).default(3001),
       SCHEDULE_GENERATION_HORIZON_DAYS: z.coerce.number().int().min(1).max(365).default(28),
+      ROUTING_OSRM_URL: url.optional(),
       OTEL_EXPORTER_OTLP_ENDPOINT: url.optional(),
     }),
     source,

@@ -1,0 +1,37 @@
+{
+  "name": "@care/operations",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "oxlint src",
+    "test": "bun test src",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@care/audit": "workspace:*",
+    "@care/benefits": "workspace:*",
+    "@care/billing": "workspace:*",
+    "@care/care-documentation": "workspace:*",
+    "@care/clients": "workspace:*",
+    "@care/contracts": "workspace:*",
+    "@care/database": "workspace:*",
+    "@care/documents": "workspace:*",
+    "@care/employees": "workspace:*",
+    "@care/events": "workspace:*",
+    "@care/organizations": "workspace:*",
+    "@care/permissions": "workspace:*",
+    "@care/platform": "workspace:*",
+    "@care/scheduling": "workspace:*",
+    "@care/service-agreements": "workspace:*",
+    "@care/service-evidence": "workspace:*",
+    "drizzle-orm": "^0.45.4",
+    "uuid": "^14.0.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "typescript": "^7.0.2"
+  }
+}
