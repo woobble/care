@@ -17,15 +17,17 @@ import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
+  hasClientPermission,
   hasPermission,
 } from '../../../../lib/api';
 import { formatVisitDateTime } from '../../../../lib/care-date';
 import { ConfirmSubmitButton } from '../../administration/confirm-submit-button';
 import { revokeAcknowledgementAction } from '../actions';
+import { generateDocumentAction } from '../../documents/actions';
 
 type EvidencePackage = components['schemas']['EvidencePackageResponseDto'];
 type Signature = components['schemas']['SignatureResponseDto'];
-type SearchParams = Promise<{ notice?: string }>;
+type SearchParams = Promise<{ notice?: string; error?: string }>;
 
 export default async function ServiceEvidenceDetailPage({
   params,
@@ -51,6 +53,18 @@ export default async function ServiceEvidenceDetailPage({
       </p>
     );
   }
+  const sourceClientResult = await get('/api/v1/clients/{id}', {
+    params: { path: { id: packageData.snapshot.clientId }, header },
+  });
+  const canGenerateDocument = sourceClientResult.data
+    ? hasClientPermission(
+        permissions,
+        'documents.generate',
+        header['X-Tenant-Id'],
+        sourceClientResult.data.organizationId,
+        sourceClientResult.data.primaryFacilityId,
+      )
+    : false;
 
   const acknowledged = hasPermission(permissions, 'acknowledgement.read');
   const mayRevoke = hasPermission(permissions, 'acknowledgement.revoke');
@@ -122,6 +136,43 @@ export default async function ServiceEvidenceDetailPage({
           )}
         </span>
       </header>
+
+      {query.error ? (
+        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+          {t(errorMessageKey(query.error))}
+        </p>
+      ) : null}
+      {canGenerateDocument ? (
+        <form
+          action={generateDocumentAction}
+          className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4"
+        >
+          <input type="hidden" name="sourceType" value="evidence_package" />
+          <input type="hidden" name="evidencePackageId" value={packageData.id} />
+          <input type="hidden" name="returnTo" value={`/service-evidence/${packageData.id}`} />
+          <label className="grid gap-1 text-sm font-medium">
+            <span>{t('Documents.language')}</span>
+            <select
+              name="locale"
+              defaultValue={locale}
+              className="h-10 rounded-md border bg-white px-3"
+            >
+              <option value="de">{t('Documents.languageOptions.german')}</option>
+              <option value="en">{t('Documents.languageOptions.english')}</option>
+            </select>
+          </label>
+          <Button type="submit">{t('Documents.generateEvidence')}</Button>
+          <Button asChild variant="secondary">
+            <Link
+              href={`/documents/preview?sourceType=evidence_package&id=${packageData.id}&locale=${locale}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t('Documents.preview')}
+            </Link>
+          </Button>
+        </form>
+      ) : null}
 
       {query.notice ? (
         <p

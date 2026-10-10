@@ -257,15 +257,6 @@ export class QualificationArchivedError extends Error {
   }
 }
 
-export class QualificationRequiredByActivePolicyError extends Error {
-  readonly code = 'QUALIFICATION_REQUIRED_BY_ACTIVE_COMPETENCY_POLICY';
-
-  constructor() {
-    super('Qualification is required by an active competency policy');
-    this.name = 'QualificationRequiredByActivePolicyError';
-  }
-}
-
 export class SkillArchivedError extends Error {
   readonly code = 'SKILL_ARCHIVED';
 

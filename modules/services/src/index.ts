@@ -3,6 +3,7 @@ export {
   serviceCategories,
   serviceDefinitions,
   serviceAvailability,
+  servicePrices,
 } from './schema';
 export {
   ServiceDefinition,
@@ -11,6 +12,7 @@ export {
   validateServiceAvailability,
   type ServiceStatus,
   type ServiceUnit,
+  type ServiceBenefitCategory,
   type ServiceCategoryStatus,
   type ServiceCategoryData,
   type ServiceCategorySnapshot,
@@ -27,6 +29,21 @@ export {
   InvalidServiceAvailabilityError,
   InvalidServicePaginationError,
 } from './domain/service';
+export {
+  calculateServicePriceCents,
+  validateServicePrice,
+  selectEffectiveServicePrice,
+  InvalidServicePriceError,
+  InvalidServicePriceQuantityError,
+  ServicePricingUnitMismatchError,
+  ServicePriceScopeDeniedError,
+  ServicePriceNotFoundError,
+  ServicePriceConflictError,
+  type ServicePricingUnit,
+  type ServicePriceInput,
+  type ServicePriceSnapshot,
+} from './domain/service-price';
+export { ServicePriceApplicationService } from './application/service-price.application';
 export {
   ServiceApplicationService,
   createServiceApplicationService,

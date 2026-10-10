@@ -1,6 +1,6 @@
 # Service catalog
 
-The `services` module owns provider service categories, service definitions, and organizational availability. It is a foundation for later service agreements, care plans, scheduling, performed services, and billing; it is not a billing module.
+The `services` module owns provider service categories, service definitions, and organizational availability. It is a foundation for service agreements, scheduling, performed services, and future billing; it is not a billing module.
 
 ## Definitions and categories
 

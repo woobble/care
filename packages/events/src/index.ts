@@ -41,67 +41,6 @@ export interface EventPayloadMap {
   'qualification.created': { qualificationId: string };
   'qualification.updated': { qualificationId: string; changedFields: string[] };
   'qualification.archived': { qualificationId: string };
-  'workforce_compliance.settings_updated': {
-    settingsVersion: number;
-    changedFields: string[];
-  };
-  'medication_order.created': { orderId: string; clientId: string; version: number };
-  'medication_order.activated': { orderId: string; clientId: string; version: number };
-  'medication_order.changed': { orderId: string; clientId: string; version: number };
-  'medication_order.paused': { orderId: string; clientId: string; version: number };
-  'medication_order.resumed': { orderId: string; clientId: string; version: number };
-  'medication_order.discontinued': { orderId: string; clientId: string; version: number };
-  'medication_administration.recorded': { recordId: string; clientId: string; orderId: string };
-  'medication_administration.corrected': {
-    recordId: string;
-    correctionId: string;
-    clientId: string;
-    orderId: string;
-    version: number;
-  };
-  'medication_reconciliation.created': {
-    reconciliationId: string;
-    clientId: string;
-    version: number;
-  };
-  'medication_reconciliation.source_added': {
-    reconciliationId: string;
-    clientId: string;
-    sourceId: string;
-    version: number;
-  };
-  'medication_reconciliation.entry_added': {
-    reconciliationId: string;
-    clientId: string;
-    entryId: string;
-    sourceId: string;
-    version: number;
-  };
-  'medication_reconciliation.reviewed': {
-    reconciliationId: string;
-    clientId: string;
-    version: number;
-    comparisonVersion?: number;
-    discrepancyId?: string;
-  };
-  'medication_reconciliation.change_applied': {
-    reconciliationId: string;
-    clientId: string;
-    actionId: string;
-    version: number;
-    applicationCount: number;
-  };
-  'medication_reconciliation.completed': {
-    reconciliationId: string;
-    clientId: string;
-    version: number;
-    reviewerEmployeeId: string;
-  };
-  'medication_reconciliation.cancelled': {
-    reconciliationId: string;
-    clientId: string;
-    version: number;
-  };
   'skill.created': { skillId: string };
   'skill.updated': { skillId: string; changedFields: string[] };
   'skill.archived': { skillId: string };
@@ -143,6 +82,15 @@ export interface EventPayloadMap {
   'service.updated': { serviceId: string; changedFields: string[] };
   'service.archived': { serviceId: string };
   'service.availability_changed': { serviceId: string; changedOrganizationIds: string[] };
+  'service.price_recorded': {
+    serviceId: string;
+    priceId: string;
+    organizationId: string;
+    facilityId: string | null;
+    priceCents: number;
+    pricingUnit: 'hour' | 'minute' | 'visit' | 'fixed';
+    validFrom: string;
+  };
   'service_agreement.created': {
     agreementId: string;
     clientId: string;
@@ -253,117 +201,6 @@ export interface EventPayloadMap {
     visitId: string;
     clientId: string;
     amendmentId: string;
-  };
-  'care_plan.created': { planId: string; clientId: string; revisionId: string };
-  'care_plan.revision_created': {
-    planId: string;
-    clientId: string;
-    revisionId: string;
-    revisionNumber: number;
-  };
-  'care_plan.revision_activated': {
-    planId: string;
-    clientId: string;
-    revisionId: string;
-    revisionNumber: number;
-    professionalAuthorization: {
-      operationKey: string;
-      policyId: string;
-      policyVersion: number;
-      employeeId: string;
-      matchedQualificationIds: string[];
-      evaluatedAt: string;
-    };
-  };
-  'care_plan.evaluated': {
-    planId: string;
-    clientId: string;
-    evaluationId: string;
-    revisionId: string;
-    result:
-      | 'effective'
-      | 'partially_effective'
-      | 'not_effective'
-      | 'changed_condition'
-      | 'no_change';
-    professionalAuthorization: {
-      operationKey: string;
-      policyId: string;
-      policyVersion: number;
-      employeeId: string;
-      matchedQualificationIds: string[];
-      evaluatedAt: string;
-    };
-  };
-  'competency_policy.created': { policyId: string; operationKey: string; version: number };
-  'competency_policy.updated': { policyId: string; operationKey: string; version: number };
-  'competency_policy.activated': { policyId: string; operationKey: string; version: number };
-  'competency_policy.deactivated': { policyId: string; operationKey: string; version: number };
-  'care_plan.ended': { planId: string; clientId: string };
-  'clinical.measurement_recorded': {
-    documentationId: string;
-    recordId: string;
-    measurementType: string;
-    version: number;
-  };
-  'clinical.measurement_updated': {
-    documentationId: string;
-    recordId: string;
-    measurementType: string;
-    changedFields: string[];
-    version: number;
-  };
-  'clinical.observation_recorded': {
-    documentationId: string;
-    recordId: string;
-    category: string;
-    version: number;
-  };
-  'clinical.observation_updated': {
-    documentationId: string;
-    recordId: string;
-    category: string;
-    changedFields: string[];
-    version: number;
-  };
-  'clinical.assessment_recorded': {
-    documentationId: string;
-    recordId: string;
-    assessmentType: string;
-    version: number;
-  };
-  'clinical.assessment_updated': {
-    documentationId: string;
-    recordId: string;
-    assessmentType: string;
-    changedFields: string[];
-    version: number;
-  };
-  'clinical.risk_recorded': {
-    documentationId: string;
-    recordId: string;
-    riskType: string;
-    version: number;
-  };
-  'clinical.risk_updated': {
-    documentationId: string;
-    recordId: string;
-    riskType: string;
-    changedFields: string[];
-    version: number;
-  };
-  'clinical.record_amended': {
-    documentationId: string;
-    recordId: string;
-    replacementRecordId: string;
-    recordType: string;
-    version: number;
-  };
-  'clinical.record_deleted': {
-    documentationId: string;
-    recordId: string;
-    recordType: string;
-    version: number;
   };
   'evidence_package.created': {
     evidencePackageId: string;
@@ -491,6 +328,181 @@ export interface EventPayloadMap {
     addedScopes: Array<{ scopeType: string; scopeId: string }>;
     removedScopes: Array<{ scopeType: string; scopeId: string }>;
   };
+  'benefit.entitlement_created': {
+    entitlementId: string;
+    clientId: string;
+    benefitType: string;
+    version: number;
+  };
+  'benefit.entitlement_updated': {
+    entitlementId: string;
+    clientId: string;
+    benefitType: string;
+    version: number;
+  };
+  'benefit.entitlement_period_allocated': {
+    entitlementId: string;
+    clientId: string;
+    benefitType: string;
+    period: string;
+    amountCents: number;
+    ruleVersion: number;
+  };
+  'benefit.funding_source_created': {
+    fundingSourceId: string;
+    clientId: string;
+    sourceType: string;
+  };
+  'benefit.opening_balance_recorded': {
+    ledgerEntryId: string;
+    clientId: string;
+    fundingSourceId: string;
+    amountCents: number;
+    verificationStatus: string;
+  };
+  'benefit.adjustment_recorded': {
+    ledgerEntryId: string;
+    clientId: string;
+    amountCents: number;
+    entryType: string;
+  };
+  'benefit.service_allocated': {
+    allocationId: string;
+    performedServiceId: string;
+    clientId: string;
+    amountCents: number;
+    status: string;
+  };
+  'benefit.allocation_reversed': {
+    allocationId: string;
+    reversalId: string;
+    performedServiceId: string;
+    clientId: string;
+  };
+  'benefit.provider_recognition_created': {
+    recognitionId: string;
+    organizationId: string;
+    jurisdiction: string;
+  };
+  'invoice.created': { invoiceId: string; clientId: string; organizationId: string };
+  'invoice.updated': { invoiceId: string; version: number; changedFields: string[] };
+  'invoice.issued': {
+    invoiceId: string;
+    invoiceNumber: string;
+    clientId: string;
+    grandTotalCents: number;
+    currency: 'EUR';
+  };
+  'invoice.cancelled': { invoiceId: string; clientId: string; reason: string };
+  'invoice.corrected': {
+    invoiceId: string;
+    correctionId: string;
+    correctionNumber: string;
+    amountCents: number;
+  };
+  'payment.recorded': { paymentId: string; organizationId: string; amountCents: number };
+  'payment.allocated': {
+    allocationId: string;
+    paymentId: string;
+    invoiceId: string;
+    amountCents: number;
+  };
+  'payment.allocation_reversed': {
+    allocationId: string;
+    paymentId: string;
+    invoiceId: string;
+    amountCents: number;
+  };
+  'billing.profile.updated': { profileId: string; organizationId: string; version: number };
+  'billing.payer_arrangement.created': {
+    arrangementId: string;
+    clientId: string;
+    organizationId: string;
+    arrangementType: string;
+  };
+  'billing.payer_arrangement.updated': {
+    arrangementId: string;
+    clientId: string;
+    version: number;
+    mandateStatus: string;
+  };
+  'claim.payer_created': {
+    payerId: string;
+    organizationId: string;
+    payerType: string;
+  };
+  'claim.payer_updated': {
+    payerId: string;
+    organizationId: string;
+    version: number;
+  };
+  'claim.payer_profile_versioned': {
+    payerId: string;
+    profileId: string;
+    version: number;
+    channel: string;
+    fundingSourceType: string;
+  };
+  'claim.created': {
+    claimId: string;
+    invoiceId: string;
+    payerId: string;
+    organizationId: string;
+  };
+  'claim.prepared': {
+    claimId: string;
+    packageVersion: number;
+    documentCount: number;
+    packageHash: string;
+  };
+  'claim.submitted': {
+    claimId: string;
+    submissionId: string;
+    channel: string;
+    amountCents: number;
+    packageVersion: number;
+  };
+  'claim.decision_recorded': {
+    claimId: string;
+    decisionId: string;
+    decision: string;
+    acceptedCents: number;
+    rejectedCents: number;
+  };
+  'claim.resubmitted': {
+    previousClaimId: string;
+    claimId: string;
+    submissionId: string;
+  };
+  'claim.cancelled': { claimId: string };
+  'claim.payment_linked': {
+    claimId: string;
+    paymentAllocationId: string;
+    amountCents: number;
+  };
+  'document.generated': {
+    artifactId: string;
+    clientId: string | null;
+    documentType: string;
+    sourceEntityType: string;
+    sourceEntityId: string;
+    templateVersion: number;
+    locale: 'de' | 'en';
+    sha256: string;
+  };
+  'document.template_updated': {
+    organizationId: string;
+    documentType: string;
+    version: number;
+  };
+  'document.artifact_superseded': {
+    artifactId: string;
+    sourceEntityType: string;
+    sourceEntityId: string;
+    documentType: string;
+  };
+  'billing.export_generated': { organizationId: string; exportType: string; rowCount: number };
+  'benefits.export_generated': { clientId: string | null; exportType: string; rowCount: number };
 }
 
 export type EventName = keyof EventPayloadMap;
@@ -514,14 +526,16 @@ export interface DomainEvent<T extends EventName = EventName> {
     | 'visit'
     | 'visit_execution'
     | 'care_documentation'
-    | 'care_plan'
-    | 'clinical_documentation'
-    | 'competency_policy'
-    | 'workforce_compliance'
-    | 'medication_order'
-    | 'medication_administration'
-    | 'medication_reconciliation'
+    | 'benefit'
     | 'service_evidence'
+    | 'invoice'
+    | 'payment'
+    | 'billing_profile'
+    | 'payer_arrangement'
+    | 'claim'
+    | 'payer'
+    | 'payer_profile'
+    | 'document'
     | 'schedule_generation'
     | 'employee_availability'
     | 'tenant_membership'

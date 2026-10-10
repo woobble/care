@@ -18,7 +18,6 @@ import {
   InvalidTeamAssignmentError,
   PrimaryFacilityRequiredError,
   QualificationArchivedError,
-  QualificationRequiredByActivePolicyError,
   UserAlreadyLinkedError,
 } from '../domain/employee';
 import { EmployeeApplicationService } from './employee.service';
@@ -130,7 +129,7 @@ describe('employee application rules', () => {
     ).rejects.toBeInstanceOf(PrimaryFacilityRequiredError);
   });
 
-  test('blocks qualification archival while an active policy references it', async () => {
+  test('archives qualification master data without a generic policy engine', async () => {
     let archived = false;
     const qualification: QualificationDefinitionSnapshot = {
       id: '5c48a02f-c8e8-4e59-9891-9fa2dbb0e81e',
@@ -142,27 +141,24 @@ describe('employee application rules', () => {
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
       updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     };
-    const service = createService(
-      {
-        getQualification: async () => qualification,
-        setQualificationStatus: async () => {
-          archived = true;
-          return { ...qualification, status: 'archived' };
-        },
+    const service = createService({
+      getQualification: async () => qualification,
+      setQualificationStatus: async () => {
+        archived = true;
+        return { ...qualification, status: 'archived' };
       },
-      true,
+    });
+
+    const result = await service.service.archiveQualification(
+      principal('employee.manage_qualifications'),
+      qualification.id,
+      requestContext,
+      {},
     );
 
-    await expect(
-      service.service.archiveQualification(
-        principal('employee.manage_qualifications'),
-        qualification.id,
-        requestContext,
-        {},
-      ),
-    ).rejects.toBeInstanceOf(QualificationRequiredByActivePolicyError);
-    expect(archived).toBe(false);
-    expect(service.auditRecords).toHaveLength(0);
+    expect(archived).toBe(true);
+    expect(result.status).toBe('archived');
+    expect(service.auditRecords).toHaveLength(1);
   });
 
   test('rejects links outside the tenant and users already linked to another employee', async () => {
@@ -423,7 +419,7 @@ describe('employee application rules', () => {
   });
 });
 
-function createService(overrides: Partial<EmployeeRepository> = {}, qualificationUsed = false) {
+function createService(overrides: Partial<EmployeeRepository> = {}) {
   const auditRecords: AuditRecord[] = [];
   const events: DomainEvent[] = [];
   const unitOfWork: UnitOfWork = {
@@ -450,9 +446,6 @@ function createService(overrides: Partial<EmployeeRepository> = {}, qualificatio
       unitOfWork,
       audit,
       outbox,
-      {
-        isQualificationUsedByActivePolicy: async () => qualificationUsed,
-      },
       repository as unknown as EmployeeRepository,
     ),
     auditRecords,

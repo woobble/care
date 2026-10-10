@@ -54,6 +54,6 @@ import { PlatformModule } from './platform.module';
         createServiceEvidenceApplicationService(unitOfWork, audit, outbox, storage),
     },
   ],
-  exports: [SERVICE_EVIDENCE_APPLICATION],
+  exports: [SERVICE_EVIDENCE_APPLICATION, OBJECT_STORAGE],
 })
 export class ServiceEvidenceModule {}

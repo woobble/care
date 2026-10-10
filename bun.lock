@@ -23,19 +23,18 @@
       "dependencies": {
         "@care/audit": "workspace:*",
         "@care/auth": "workspace:*",
+        "@care/benefits": "workspace:*",
+        "@care/billing": "workspace:*",
         "@care/care-documentation": "workspace:*",
-        "@care/care-planning": "workspace:*",
         "@care/clients": "workspace:*",
-        "@care/clinical-documentation": "workspace:*",
-        "@care/competency-policies": "workspace:*",
         "@care/config": "workspace:*",
         "@care/contracts": "workspace:*",
         "@care/database": "workspace:*",
+        "@care/documents": "workspace:*",
         "@care/employees": "workspace:*",
         "@care/events": "workspace:*",
         "@care/identity": "workspace:*",
         "@care/logging": "workspace:*",
-        "@care/medication": "workspace:*",
         "@care/observability": "workspace:*",
         "@care/organizations": "workspace:*",
         "@care/permissions": "workspace:*",
@@ -46,7 +45,6 @@
         "@care/services": "workspace:*",
         "@care/storage": "workspace:*",
         "@care/visit-execution": "workspace:*",
-        "@care/workforce-compliance": "workspace:*",
         "@nestjs/common": "^12.1.2",
         "@nestjs/core": "^12.1.2",
         "@nestjs/platform-express": "^12.1.2",
@@ -114,12 +112,53 @@
         "drizzle-orm": "^0.45.4",
       },
     },
+    "modules/benefits": {
+      "name": "@care/benefits",
+      "dependencies": {
+        "@care/audit": "workspace:*",
+        "@care/care-documentation": "workspace:*",
+        "@care/clients": "workspace:*",
+        "@care/contracts": "workspace:*",
+        "@care/database": "workspace:*",
+        "@care/documents": "workspace:*",
+        "@care/events": "workspace:*",
+        "@care/organizations": "workspace:*",
+        "@care/permissions": "workspace:*",
+        "@care/platform": "workspace:*",
+        "@care/scheduling": "workspace:*",
+        "@care/services": "workspace:*",
+        "@care/visit-execution": "workspace:*",
+        "drizzle-orm": "^0.45.4",
+        "uuid": "^14.0.2",
+      },
+    },
+    "modules/billing": {
+      "name": "@care/billing",
+      "dependencies": {
+        "@care/audit": "workspace:*",
+        "@care/benefits": "workspace:*",
+        "@care/clients": "workspace:*",
+        "@care/contracts": "workspace:*",
+        "@care/database": "workspace:*",
+        "@care/documents": "workspace:*",
+        "@care/events": "workspace:*",
+        "@care/organizations": "workspace:*",
+        "@care/permissions": "workspace:*",
+        "@care/platform": "workspace:*",
+        "@care/scheduling": "workspace:*",
+        "@care/service-evidence": "workspace:*",
+        "@care/services": "workspace:*",
+        "@care/storage": "workspace:*",
+        "@care/visit-execution": "workspace:*",
+        "drizzle-orm": "^0.45.4",
+        "uuid": "^14.0.2",
+      },
+    },
     "modules/care-documentation": {
       "name": "@care/care-documentation",
       "dependencies": {
         "@care/audit": "workspace:*",
         "@care/clients": "workspace:*",
-        "@care/clinical-documentation": "workspace:*",
         "@care/contracts": "workspace:*",
         "@care/database": "workspace:*",
         "@care/employees": "workspace:*",
@@ -128,25 +167,6 @@
         "@care/permissions": "workspace:*",
         "@care/platform": "workspace:*",
         "@care/scheduling": "workspace:*",
-        "@care/visit-execution": "workspace:*",
-        "drizzle-orm": "^0.45.4",
-        "uuid": "^14.0.2",
-      },
-    },
-    "modules/care-planning": {
-      "name": "@care/care-planning",
-      "dependencies": {
-        "@care/audit": "workspace:*",
-        "@care/clients": "workspace:*",
-        "@care/clinical-documentation": "workspace:*",
-        "@care/contracts": "workspace:*",
-        "@care/database": "workspace:*",
-        "@care/employees": "workspace:*",
-        "@care/events": "workspace:*",
-        "@care/organizations": "workspace:*",
-        "@care/permissions": "workspace:*",
-        "@care/platform": "workspace:*",
-        "@care/services": "workspace:*",
         "@care/visit-execution": "workspace:*",
         "drizzle-orm": "^0.45.4",
         "uuid": "^14.0.2",
@@ -166,27 +186,20 @@
         "uuid": "^14.0.2",
       },
     },
-    "modules/clinical-documentation": {
-      "name": "@care/clinical-documentation",
-      "dependencies": {
-        "@care/clients": "workspace:*",
-        "@care/database": "workspace:*",
-        "drizzle-orm": "^0.45.4",
-        "uuid": "^14.0.2",
-      },
-    },
-    "modules/competency-policies": {
-      "name": "@care/competency-policies",
+    "modules/documents": {
+      "name": "@care/documents",
       "dependencies": {
         "@care/audit": "workspace:*",
+        "@care/clients": "workspace:*",
         "@care/contracts": "workspace:*",
         "@care/database": "workspace:*",
-        "@care/employees": "workspace:*",
         "@care/events": "workspace:*",
         "@care/organizations": "workspace:*",
         "@care/permissions": "workspace:*",
         "@care/platform": "workspace:*",
+        "@care/storage": "workspace:*",
         "drizzle-orm": "^0.45.4",
+        "pdf-lib": "^1.17.1",
         "uuid": "^14.0.2",
       },
     },
@@ -216,23 +229,6 @@
         "@care/organizations": "workspace:*",
         "@care/permissions": "workspace:*",
         "@care/platform": "workspace:*",
-        "drizzle-orm": "^0.45.4",
-        "uuid": "^14.0.2",
-      },
-    },
-    "modules/medication": {
-      "name": "@care/medication",
-      "dependencies": {
-        "@care/audit": "workspace:*",
-        "@care/clients": "workspace:*",
-        "@care/contracts": "workspace:*",
-        "@care/database": "workspace:*",
-        "@care/employees": "workspace:*",
-        "@care/events": "workspace:*",
-        "@care/organizations": "workspace:*",
-        "@care/permissions": "workspace:*",
-        "@care/platform": "workspace:*",
-        "@care/scheduling": "workspace:*",
         "drizzle-orm": "^0.45.4",
         "uuid": "^14.0.2",
       },
@@ -346,22 +342,6 @@
         "@care/scheduling": "workspace:*",
         "@care/service-agreements": "workspace:*",
         "@care/services": "workspace:*",
-        "drizzle-orm": "^0.45.4",
-        "uuid": "^14.0.2",
-      },
-    },
-    "modules/workforce-compliance": {
-      "name": "@care/workforce-compliance",
-      "dependencies": {
-        "@care/audit": "workspace:*",
-        "@care/competency-policies": "workspace:*",
-        "@care/contracts": "workspace:*",
-        "@care/database": "workspace:*",
-        "@care/employees": "workspace:*",
-        "@care/events": "workspace:*",
-        "@care/organizations": "workspace:*",
-        "@care/permissions": "workspace:*",
-        "@care/platform": "workspace:*",
         "drizzle-orm": "^0.45.4",
         "uuid": "^14.0.2",
       },
@@ -539,21 +519,21 @@
 
     "@care/auth": ["@care/auth@workspace:packages/auth"],
 
+    "@care/benefits": ["@care/benefits@workspace:modules/benefits"],
+
+    "@care/billing": ["@care/billing@workspace:modules/billing"],
+
     "@care/care-documentation": ["@care/care-documentation@workspace:modules/care-documentation"],
 
-    "@care/care-planning": ["@care/care-planning@workspace:modules/care-planning"],
-
     "@care/clients": ["@care/clients@workspace:modules/clients"],
-
-    "@care/clinical-documentation": ["@care/clinical-documentation@workspace:modules/clinical-documentation"],
-
-    "@care/competency-policies": ["@care/competency-policies@workspace:modules/competency-policies"],
 
     "@care/config": ["@care/config@workspace:packages/config"],
 
     "@care/contracts": ["@care/contracts@workspace:packages/contracts"],
 
     "@care/database": ["@care/database@workspace:packages/database"],
+
+    "@care/documents": ["@care/documents@workspace:modules/documents"],
 
     "@care/employees": ["@care/employees@workspace:modules/employees"],
 
@@ -562,8 +542,6 @@
     "@care/identity": ["@care/identity@workspace:modules/identity"],
 
     "@care/logging": ["@care/logging@workspace:packages/logging"],
-
-    "@care/medication": ["@care/medication@workspace:modules/medication"],
 
     "@care/observability": ["@care/observability@workspace:packages/observability"],
 
@@ -592,8 +570,6 @@
     "@care/web": ["@care/web@workspace:apps/web"],
 
     "@care/worker": ["@care/worker@workspace:apps/worker"],
-
-    "@care/workforce-compliance": ["@care/workforce-compliance@workspace:modules/workforce-compliance"],
 
     "@eloqnt/config": ["@eloqnt/config@0.1.1", "", {}, "sha512-YRDigSaiJEzKDfzTth5kG+L/PKfB3mo8h7yNzpXExPfvQmcD05WoZT57PdhJE0jI+Vva6eb0OCU8hnHHgdME3g=="],
 
@@ -984,6 +960,10 @@
     "@parcel/watcher-win32-arm64": ["@parcel/watcher-win32-arm64@2.6.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-gIZAP23jaHjGWasY/TY6yL7NHFClf0Ga7FN+iINvk+KN94rhm94lYZhFsbYFNcA04/onvGD9kKmiJLJB2HbNwQ=="],
 
     "@parcel/watcher-win32-x64": ["@parcel/watcher-win32-x64@2.6.0", "", { "os": "win32", "cpu": "x64" }, "sha512-cA+/pXV2YkfxlIcXOQ5fSWqAzzPyD78/x5qbK/I0vUkrlYHA8TIz+MXjAbGouguKVSI4bOmkTSJ1/poVSsgt+A=="],
+
+    "@pdf-lib/standard-fonts": ["@pdf-lib/standard-fonts@1.0.0", "", { "dependencies": { "pako": "^1.0.6" } }, "sha512-hU30BK9IUN/su0Mn9VdlVKsWBS6GyhVfqjwl1FjZN4TxP6cCw0jP2w7V3Hf5uX7M0AZJ16vey9yE0ny7Sa59ZA=="],
+
+    "@pdf-lib/upng": ["@pdf-lib/upng@1.0.1", "", { "dependencies": { "pako": "^1.0.10" } }, "sha512-dQK2FUMQtowVP00mtIksrlZhdFXQZPC+taih1q4CvPZ5vqdxR/LKBaFg0oAfzd1GlHZXXSPdQfzQnt+ViGvEIQ=="],
 
     "@pinojs/redact": ["@pinojs/redact@0.4.0", "", {}, "sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg=="],
 
@@ -1635,6 +1615,8 @@
 
     "package-json-from-dist": ["package-json-from-dist@1.0.1", "", {}, "sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw=="],
 
+    "pako": ["pako@1.0.11", "", {}, "sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw=="],
+
     "parse-json": ["parse-json@8.3.0", "", { "dependencies": { "@babel/code-frame": "^7.26.2", "index-to-position": "^1.1.0", "type-fest": "^4.39.1" } }, "sha512-ybiGyvspI+fAoRQbIPRddCcSTV9/LsJbf0e/S85VLowVGzRmokfneg2kwVW/KU5rOXrPSbF1qAKPMgNTqqROQQ=="],
 
     "parseurl": ["parseurl@1.3.3", "", {}, "sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ=="],
@@ -1644,6 +1626,8 @@
     "path-scurry": ["path-scurry@1.11.1", "", { "dependencies": { "lru-cache": "^10.2.0", "minipass": "^5.0.0 || ^6.0.2 || ^7.0.0" } }, "sha512-Xa4Nw17FS9ApQFJ9umLiJS4orGjm7ZzwUrwamcGQuHSzDyth9boKDaycYdDcZDuqYATXw4HFXgaqWTctW/v1HA=="],
 
     "path-to-regexp": ["path-to-regexp@8.4.2", "", {}, "sha512-qRcuIdP69NPm4qbACK+aDogI5CBDMi1jKe0ry5rSQJz8JVLsC7jV8XpiJjGRLLol3N+R5ihGYcrPLTno6pAdBA=="],
+
+    "pdf-lib": ["pdf-lib@1.17.1", "", { "dependencies": { "@pdf-lib/standard-fonts": "^1.0.0", "@pdf-lib/upng": "^1.0.1", "pako": "^1.0.11", "tslib": "^1.11.1" } }, "sha512-V/mpyJAoTsN4cnP31vc0wfNA1+p20evqqnap0KLoRUN0Yk/p3wN52DOEsL4oBFcLdb76hlpKPtzJIgo67j/XLw=="],
 
     "pg": ["pg@8.23.1", "", { "dependencies": { "pg-connection-string": "^2.14.1", "pg-pool": "^3.14.0", "pg-protocol": "^1.16.1", "pg-types": "2.2.0", "pgpass": "1.0.5" }, "optionalDependencies": { "pg-cloudflare": "^1.4.1" }, "peerDependencies": { "pg-native": ">=3.0.1" }, "optionalPeers": ["pg-native"] }, "sha512-aL96AHANtWjPLDOLqnhx+ngp9+UK7ETEU8VJrDCGvsSSi/mGLcWYsS6Herg7lmaBJe4uwrfqsa7gTEFaSizDoQ=="],
 
@@ -1960,6 +1944,8 @@
     "negotiator/content-type": ["content-type@2.1.0", "", {}, "sha512-mj7UPXE0jaqaOsukNZRUEfEi2AcL7C/vwmwcHV0O97eO1E1pxBZuyjlZrx5seTaNBg1U6+o35wpa35Qfcc+7ag=="],
 
     "next/postcss": ["postcss@8.5.23", "", { "dependencies": { "nanoid": "^3.3.16", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-g50586zr4bZmwFiTlflMu8E0bDTb5I5gertgwAKmsdUlTQIhZtunzUlD1WSzwcVWPoAVpsrA6vlfCD7oXvRwgg=="],
+
+    "pdf-lib/tslib": ["tslib@1.14.1", "", {}, "sha512-Xni35NKzjgMrwevysHTCArtLDpPvye8zV/0E4EyYn43P7/7qvQwPh9BGkHewbMulVntbigmcT7rdX3BNo9wRJg=="],
 
     "ssh-remote-port-forward/@types/ssh2": ["@types/ssh2@0.5.52", "", { "dependencies": { "@types/node": "*", "@types/ssh2-streams": "*" } }, "sha512-lbLLlXxdCZOSJMCInKH2+9V/77ET2J6NPQHpFI0kda61Dd1KglJs+fPQBchizmzYSOJBgdTajhPqBO1xxLywvg=="],
 

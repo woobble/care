@@ -71,6 +71,20 @@ export default async function NewServicePage({
             <option value="hour">{t('Common.units.hour')}</option>
             <option value="day">{t('Common.units.day')}</option>
           </SelectField>
+          <SelectField
+            id="benefitCategory"
+            name="benefitCategory"
+            label={t('Services.form.benefitCategory')}
+            required
+          >
+            <option value="other">{t('Services.benefitCategory.other')}</option>
+            <option value="recognized_support">
+              {t('Services.benefitCategory.recognizedSupport')}
+            </option>
+            <option value="clinical_nursing">
+              {t('Services.benefitCategory.clinicalNursing')}
+            </option>
+          </SelectField>
           <Field
             id="defaultDurationMinutes"
             name="defaultDurationMinutes"

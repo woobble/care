@@ -28,6 +28,7 @@ export {
   type DeclineEvidenceInput,
   type EvidenceAcknowledgementView,
   type EvidencePackageView,
+  type BillingEvidenceReadiness,
   type EligibleSignatoryView,
   type ServiceEvidenceWorklist,
   type ServiceEvidenceWorklistItem,

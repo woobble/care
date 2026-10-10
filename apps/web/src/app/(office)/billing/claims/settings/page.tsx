@@ -1,0 +1,617 @@
+import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
+import { Button, Input } from '@care/ui';
+import { errorMessageKey } from '../../../../../i18n/errors';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasPermission,
+} from '../../../../../lib/api';
+import { BillingNavigation } from '../../billing-nav';
+import {
+  createPayerDirectoryEntryAction,
+  savePayerRequirementsAction,
+  updatePayerDirectoryEntryAction,
+} from '../../actions';
+
+type Organization = { id: string; name: string };
+type Payer = {
+  id: string;
+  organizationId: string;
+  payerType: string;
+  name: string;
+  payerIdentifier: string | null;
+  addressText: string | null;
+  billingContactName: string | null;
+  billingContactEmail: string | null;
+  billingContactPhone: string | null;
+  submissionInstructions: string | null;
+  status: 'active' | 'inactive';
+  validFrom: string;
+  validUntil: string | null;
+  version: number;
+};
+type PayerProfile = {
+  id: string;
+  channel: string;
+  fundingSourceType: string;
+  validFrom: string;
+  validUntil: string | null;
+  sourceName: string;
+  sourceVersion: string;
+  sourceEffectiveDate: string;
+  sourceUrl: string | null;
+  version: number;
+  requiresClientInsuranceNumber: boolean;
+  requiresPayerIdentifier: boolean;
+  requiresAcknowledgement: boolean;
+  requiresMandate: boolean;
+  requiresInvoicePdf: boolean;
+  requiresEvidencePdf: boolean;
+  requiresMandateDocument: boolean;
+  requiresExternalReference: boolean;
+  requiresProviderRecognition: boolean;
+};
+type SearchParams = Promise<{ error?: string; updated?: string }>;
+
+export default async function ClaimsSettingsPage({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
+  const query = await searchParams;
+  const [t, translate] = await Promise.all([getTranslations('Billing'), getTranslations()]);
+  const api = await getApiClient();
+  const header = await getTenantHeader();
+  const [permissions, organizationResult] = await Promise.all([
+    getPermissionGrants(api),
+    api.GET('/api/v1/organizations', { params: { header } }),
+  ]);
+  const canRead = hasPermission(permissions, 'claims.read');
+  const canManage = hasPermission(permissions, 'claims.settings.manage');
+  const organizations = (organizationResult.data ?? []) as Organization[];
+  const providerData = canRead
+    ? await Promise.all(
+        organizations.map(async (organization) => {
+          const result = await api.GET('/api/v1/billing/payers', {
+            params: { query: { organizationId: organization.id }, header },
+          });
+          const payers = (result.data ?? []) as Payer[];
+          const profileResults = await Promise.all(
+            payers.map(async (payer) => {
+              const profiles = await api.GET('/api/v1/billing/payers/{id}/profiles', {
+                params: { path: { id: payer.id }, header },
+              });
+              return [
+                payer.id,
+                (profiles.data ?? []) as PayerProfile[],
+                profiles.error?.code,
+              ] as const;
+            }),
+          );
+          return {
+            organization,
+            payers,
+            error: result.error?.code ?? profileResults.find(([, , code]) => code)?.[2],
+            profilesByPayerId: new Map(
+              profileResults.map(([payerId, profiles]) => [payerId, profiles]),
+            ),
+          };
+        }),
+      )
+    : [];
+
+  return (
+    <div className="mx-auto grid max-w-6xl gap-6">
+      <header className="grid gap-2">
+        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
+          <Link href="/billing/claims">{t('claims')}</Link>
+        </p>
+        <h1 className="text-3xl font-semibold">{t('claimsSettings')}</h1>
+        <p className="text-slate-700">{t('claimsSettingsDescription')}</p>
+      </header>
+      <BillingNavigation permissions={permissions} />
+      {query.error || organizationResult.error?.code ? (
+        <Alert>
+          {translate(errorMessageKey(query.error ?? organizationResult.error?.code ?? ''))}
+        </Alert>
+      ) : null}
+      {query.updated === 'payer-saved' ? <Status>{t('payerDirectorySaved')}</Status> : null}
+      {query.updated === 'profile-saved' ? <Status>{t('payerProfileSaved')}</Status> : null}
+      {!canRead ? <Alert>{t('noClaimsPermission')}</Alert> : null}
+      {!canManage ? <Alert>{t('noClaimsSettingsPermission')}</Alert> : null}
+      {canRead &&
+        providerData.map(({ organization, payers, error, profilesByPayerId }) => (
+          <section
+            key={organization.id}
+            aria-labelledby={'payers-' + organization.id}
+            className="grid gap-4 rounded-lg border bg-white p-5"
+          >
+            <div className="grid gap-1">
+              <h2 id={'payers-' + organization.id} className="text-xl font-semibold">
+                {organization.name}
+              </h2>
+              <p className="text-sm text-slate-700">{t('payerDirectoryDescription')}</p>
+            </div>
+            {error ? <Alert>{translate(errorMessageKey(error))}</Alert> : null}
+            {payers.map((payer) => {
+              const profiles = profilesByPayerId.get(payer.id) ?? [];
+              return (
+                <article key={payer.id} className="grid gap-4 rounded-md border p-4">
+                  <div className="grid gap-1">
+                    <h3 className="font-semibold">{payer.name}</h3>
+                    <p className="text-sm text-slate-700">
+                      {payerTypeLabel(t, payer.payerType)} · {payerStatusLabel(t, payer.status)} ·{' '}
+                      {t('payerVersion')}: {payer.version}
+                    </p>
+                    <p className="text-sm text-slate-700">
+                      {t('payerIdentifier')}:{' '}
+                      {payer.payerIdentifier ?? t('identifierNotConfigured')}
+                    </p>
+                    <p className="whitespace-pre-line text-sm text-slate-700">
+                      {payer.addressText ?? '—'}
+                    </p>
+                  </div>
+                  {canManage ? (
+                    <form
+                      action={updatePayerDirectoryEntryAction}
+                      className="grid gap-3 border-t pt-3 md:grid-cols-2"
+                    >
+                      <input type="hidden" name="payerId" value={payer.id} />
+                      <input type="hidden" name="organizationId" value={organization.id} />
+                      <input type="hidden" name="expectedVersion" value={payer.version} />
+                      <PayerFields t={t} payer={payer} />
+                      <Button type="submit" className="w-fit md:col-span-2">
+                        {t('savePayer')}
+                      </Button>
+                    </form>
+                  ) : null}
+                  <div className="grid gap-2 border-t pt-3">
+                    <h4 className="font-semibold">{t('payerRequirementProfiles')}</h4>
+                    {profiles.length ? (
+                      <ul className="grid gap-2">
+                        {profiles.map((profile) => (
+                          <li key={profile.id} className="rounded-md border p-3 text-sm">
+                            <p className="font-medium">
+                              {t('payerProfileSummary', {
+                                channel: channelLabel(t, profile.channel),
+                                fundingType: fundingTypeLabel(t, profile.fundingSourceType),
+                                version: profile.version,
+                              })}
+                            </p>
+                            <p>
+                              {t('payerProfileSource', {
+                                sourceName: profile.sourceName,
+                                sourceVersion: profile.sourceVersion,
+                                effectiveDate: profile.sourceEffectiveDate,
+                              })}{' '}
+                              {profile.validUntil
+                                ? t('payerProfileValidity', {
+                                    validFrom: profile.validFrom,
+                                    validUntil: profile.validUntil,
+                                  })
+                                : t('payerProfileValidityOpen', { validFrom: profile.validFrom })}
+                            </p>
+                            {profile.sourceUrl ? (
+                              <a
+                                className="break-all text-blue-900 underline"
+                                href={profile.sourceUrl}
+                                rel="noreferrer"
+                              >
+                                {profile.sourceUrl}
+                              </a>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-slate-700">{t('payerProfilesEmpty')}</p>
+                    )}
+                  </div>
+                  {canManage ? (
+                    <form
+                      action={savePayerRequirementsAction}
+                      className="grid gap-3 border-t pt-3 md:grid-cols-2"
+                    >
+                      <input type="hidden" name="payerId" value={payer.id} />
+                      <input type="hidden" name="organizationId" value={organization.id} />
+                      <SelectField
+                        id={'channel-' + payer.id}
+                        name="channel"
+                        label={t('claimChannel')}
+                        defaultValue="manual_portal"
+                      >
+                        <option value="manual_portal">{channelLabel(t, 'manual_portal')}</option>
+                        <option value="manual_email">{channelLabel(t, 'manual_email')}</option>
+                        <option value="postal">{channelLabel(t, 'postal')}</option>
+                        <option value="customer_reimbursement">
+                          {channelLabel(t, 'customer_reimbursement')}
+                        </option>
+                      </SelectField>
+                      <SelectField
+                        id={'funding-' + payer.id}
+                        name="fundingSourceType"
+                        label={t('fundingSource')}
+                        defaultValue={
+                          payer.payerType === 'private_pflegeversicherung'
+                            ? 'private_long_term_care_insurance'
+                            : payer.payerType === 'self_pay'
+                              ? 'self_pay'
+                              : payer.payerType === 'other'
+                                ? 'other'
+                                : 'statutory_long_term_care_insurance'
+                        }
+                      >
+                        <option value="statutory_long_term_care_insurance">
+                          {fundingTypeLabel(t, 'statutory_long_term_care_insurance')}
+                        </option>
+                        <option value="private_long_term_care_insurance">
+                          {fundingTypeLabel(t, 'private_long_term_care_insurance')}
+                        </option>
+                        <option value="self_pay">{fundingTypeLabel(t, 'self_pay')}</option>
+                        <option value="other">{fundingTypeLabel(t, 'other')}</option>
+                      </SelectField>
+                      <Field
+                        id={'profile-valid-from-' + payer.id}
+                        name="validFrom"
+                        label={t('validFrom')}
+                        type="date"
+                        defaultValue={today()}
+                        required
+                      />
+                      <Field
+                        id={'profile-valid-until-' + payer.id}
+                        name="validUntil"
+                        label={t('validUntil')}
+                        type="date"
+                      />
+                      <Field
+                        id={'source-name-' + payer.id}
+                        name="sourceName"
+                        label={t('requirementsSourceName')}
+                        required
+                      />
+                      <Field
+                        id={'source-version-' + payer.id}
+                        name="sourceVersion"
+                        label={t('requirementsSourceVersion')}
+                        required
+                      />
+                      <Field
+                        id={'source-effective-date-' + payer.id}
+                        name="sourceEffectiveDate"
+                        label={t('sourceEffectiveDate')}
+                        type="date"
+                        defaultValue={today()}
+                        required
+                      />
+                      <Field
+                        id={'source-url-' + payer.id}
+                        name="sourceUrl"
+                        label={t('requirementsSourceUrl')}
+                        type="url"
+                      />
+                      <div className="grid gap-2 md:col-span-2 md:grid-cols-2">
+                        <Checkbox
+                          id={'req-insurance-' + payer.id}
+                          name="requiresClientInsuranceNumber"
+                          label={t('requiresClientInsuranceNumber')}
+                        />
+                        <Checkbox
+                          id={'req-payer-id-' + payer.id}
+                          name="requiresPayerIdentifier"
+                          label={t('requiresPayerIdentifier')}
+                        />
+                        <Checkbox
+                          id={'req-ack-' + payer.id}
+                          name="requiresAcknowledgement"
+                          label={t('requiresAcknowledgement')}
+                        />
+                        <Checkbox
+                          id={'req-mandate-' + payer.id}
+                          name="requiresMandate"
+                          label={t('requiresMandate')}
+                        />
+                        <Checkbox
+                          id={'req-invoice-' + payer.id}
+                          name="requiresInvoicePdf"
+                          label={t('requiresInvoicePdf')}
+                          defaultChecked
+                        />
+                        <Checkbox
+                          id={'req-evidence-' + payer.id}
+                          name="requiresEvidencePdf"
+                          label={t('requiresEvidencePdf')}
+                          defaultChecked
+                        />
+                        <Checkbox
+                          id={'req-mandate-doc-' + payer.id}
+                          name="requiresMandateDocument"
+                          label={t('requiresMandateDocument')}
+                        />
+                        <Checkbox
+                          id={'req-reference-' + payer.id}
+                          name="requiresExternalReference"
+                          label={t('requiresExternalReference')}
+                        />
+                        <Checkbox
+                          id={'req-recognition-' + payer.id}
+                          name="requiresProviderRecognition"
+                          label={t('requiresProviderRecognition')}
+                        />
+                      </div>
+                      <p className="text-sm text-slate-700 md:col-span-2">
+                        {t('requirementsSourceNote')}
+                      </p>
+                      <Button type="submit" className="w-fit md:col-span-2">
+                        {t('savePayerRequirements')}
+                      </Button>
+                    </form>
+                  ) : null}
+                </article>
+              );
+            })}
+            {!payers.length ? <p className="text-sm text-slate-700">{t('payersEmpty')}</p> : null}
+            {canManage ? (
+              <form
+                action={createPayerDirectoryEntryAction}
+                className="grid gap-3 border-t pt-4 md:grid-cols-2"
+              >
+                <input type="hidden" name="organizationId" value={organization.id} />
+                <h3 className="text-lg font-semibold md:col-span-2">{t('addPayer')}</h3>
+                <PayerFields t={t} />
+                <Button type="submit" className="w-fit md:col-span-2">
+                  {t('createPayer')}
+                </Button>
+              </form>
+            ) : null}
+          </section>
+        ))}
+      {canRead && !providerData.length ? (
+        <p className="rounded-lg border bg-white p-5 text-sm text-slate-700">
+          {t('noOrganizations')}
+        </p>
+      ) : null}
+      <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+        {t('payerRequirementsDisclaimer')}
+      </p>
+    </div>
+  );
+}
+
+function PayerFields({
+  t,
+  payer,
+}: Readonly<{
+  t: Awaited<ReturnType<typeof getTranslations<'Billing'>>>;
+  payer?: Payer;
+}>) {
+  return (
+    <>
+      <SelectField
+        id={'payer-type-' + (payer?.id ?? 'new')}
+        name="payerType"
+        label={t('payerType')}
+        defaultValue={payer?.payerType ?? 'statutory_pflegekasse'}
+      >
+        <option value="statutory_pflegekasse">{payerTypeLabel(t, 'statutory_pflegekasse')}</option>
+        <option value="private_pflegeversicherung">
+          {payerTypeLabel(t, 'private_pflegeversicherung')}
+        </option>
+        <option value="self_pay">{payerTypeLabel(t, 'self_pay')}</option>
+        <option value="other">{payerTypeLabel(t, 'other')}</option>
+      </SelectField>
+      {payer ? (
+        <SelectField
+          id={'payer-status-' + payer.id}
+          name="status"
+          label={t('payerStatus')}
+          defaultValue={payer.status}
+        >
+          <option value="active">{payerStatusLabel(t, 'active')}</option>
+          <option value="inactive">{payerStatusLabel(t, 'inactive')}</option>
+        </SelectField>
+      ) : null}
+      <Field
+        id={'payer-name-' + (payer?.id ?? 'new')}
+        name="name"
+        label={t('payerName')}
+        defaultValue={payer?.name ?? ''}
+        required
+      />
+      <Field
+        id={'payer-identifier-' + (payer?.id ?? 'new')}
+        name="payerIdentifier"
+        label={t('payerIdentifier')}
+        defaultValue={payer?.payerIdentifier ?? ''}
+      />
+      <Field
+        id={'payer-address-' + (payer?.id ?? 'new')}
+        name="addressText"
+        label={t('payerAddress')}
+        defaultValue={payer?.addressText ?? ''}
+      />
+      <Field
+        id={'payer-contact-' + (payer?.id ?? 'new')}
+        name="billingContactName"
+        label={t('payerBillingContact')}
+        defaultValue={payer?.billingContactName ?? ''}
+      />
+      <Field
+        id={'payer-email-' + (payer?.id ?? 'new')}
+        name="billingContactEmail"
+        label={t('payerBillingEmail')}
+        type="email"
+        defaultValue={payer?.billingContactEmail ?? ''}
+      />
+      <Field
+        id={'payer-phone-' + (payer?.id ?? 'new')}
+        name="billingContactPhone"
+        label={t('payerBillingPhone')}
+        defaultValue={payer?.billingContactPhone ?? ''}
+      />
+      <Field
+        id={'payer-valid-from-' + (payer?.id ?? 'new')}
+        name="validFrom"
+        label={t('validFrom')}
+        type="date"
+        defaultValue={payer?.validFrom ?? today()}
+        required
+      />
+      <Field
+        id={'payer-valid-until-' + (payer?.id ?? 'new')}
+        name="validUntil"
+        label={t('validUntil')}
+        type="date"
+        defaultValue={payer?.validUntil ?? ''}
+      />
+      <Field
+        id={'payer-instructions-' + (payer?.id ?? 'new')}
+        name="submissionInstructions"
+        label={t('submissionInstructions')}
+        defaultValue={payer?.submissionInstructions ?? ''}
+      />
+    </>
+  );
+}
+
+function Field({
+  id,
+  name,
+  label,
+  type = 'text',
+  defaultValue,
+  required = false,
+}: Readonly<{
+  id: string;
+  name: string;
+  label: string;
+  type?: string;
+  defaultValue?: string;
+  required?: boolean;
+}>) {
+  return (
+    <label className="grid gap-1 text-sm" htmlFor={id}>
+      {label}
+      <Input id={id} name={name} type={type} defaultValue={defaultValue} required={required} />
+    </label>
+  );
+}
+
+function SelectField({
+  id,
+  name,
+  label,
+  defaultValue,
+  children,
+}: Readonly<{
+  id: string;
+  name: string;
+  label: string;
+  defaultValue: string;
+  children: React.ReactNode;
+}>) {
+  return (
+    <label className="grid gap-1 text-sm" htmlFor={id}>
+      {label}
+      <select
+        id={id}
+        name={name}
+        defaultValue={defaultValue}
+        className="h-10 rounded-md border px-3"
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
+
+function Checkbox({
+  id,
+  name,
+  label,
+  defaultChecked = false,
+}: Readonly<{ id: string; name: string; label: string; defaultChecked?: boolean }>) {
+  return (
+    <label className="flex items-center gap-2 text-sm" htmlFor={id}>
+      <input id={id} name={name} type="checkbox" value="true" defaultChecked={defaultChecked} />
+      {label}
+    </label>
+  );
+}
+
+function payerTypeLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'Billing'>>>,
+  type: string,
+): string {
+  switch (type) {
+    case 'statutory_pflegekasse':
+      return t('payerDirectoryTypes.statutory_pflegekasse');
+    case 'private_pflegeversicherung':
+      return t('payerDirectoryTypes.private_pflegeversicherung');
+    case 'self_pay':
+      return t('payerDirectoryTypes.self_pay');
+    default:
+      return t('payerDirectoryTypes.other');
+  }
+}
+
+function payerStatusLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'Billing'>>>,
+  status: string,
+): string {
+  return status === 'active'
+    ? t('payerDirectoryStatus.active')
+    : t('payerDirectoryStatus.inactive');
+}
+
+function channelLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'Billing'>>>,
+  channel: string,
+): string {
+  switch (channel) {
+    case 'manual_portal':
+      return t('claimChannels.manual_portal');
+    case 'manual_email':
+      return t('claimChannels.manual_email');
+    case 'postal':
+      return t('claimChannels.postal');
+    default:
+      return t('claimChannels.customer_reimbursement');
+  }
+}
+
+function fundingTypeLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'Billing'>>>,
+  type: string,
+): string {
+  switch (type) {
+    case 'statutory_long_term_care_insurance':
+      return t('fundingSourceTypes.statutory_long_term_care_insurance');
+    case 'private_long_term_care_insurance':
+      return t('fundingSourceTypes.private_long_term_care_insurance');
+    case 'self_pay':
+      return t('fundingSourceTypes.self_pay');
+    default:
+      return t('fundingSourceTypes.other');
+  }
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function Alert({ children }: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+      {children}
+    </p>
+  );
+}
+
+function Status({ children }: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <p role="status" className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900">
+      {children}
+    </p>
+  );
+}

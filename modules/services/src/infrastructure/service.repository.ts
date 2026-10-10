@@ -424,6 +424,7 @@ function toDefinitionRow(input: ServiceDefinitionSnapshot) {
     description: input.description ?? null,
     categoryId: input.categoryId,
     unit: input.unit,
+    benefitCategory: input.benefitCategory,
     defaultDurationMinutes: input.defaultDurationMinutes ?? null,
     status: input.status,
     validFrom: input.validFrom,

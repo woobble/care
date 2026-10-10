@@ -420,16 +420,6 @@ export class ClientMasterDataRepository {
                 'visit.cancelled',
               ]),
             ),
-            and(
-              eq(auditEntries.resourceType, 'care_plan'),
-              sql`${auditEntries.metadata}->>'clientId' = ${clientId}`,
-              inArray(auditEntries.action, [
-                'care_plan.created',
-                'care_plan.revision_activated',
-                'care_plan.evaluated',
-                'care_plan.ended',
-              ]),
-            ),
           ),
         ),
       )

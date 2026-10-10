@@ -841,74 +841,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/competency-policies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List tenant competency policies */
-        get: operations["listCompetencyPolicies"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/competency-policies/{operationKey}/versions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create a draft competency policy version */
-        post: operations["createCompetencyPolicyDraft"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/competency-policies/{operationKey}/versions/{version}/activate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Activate a policy version */
-        post: operations["activateCompetencyPolicy"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/competency-policies/{operationKey}/deactivate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Deactivate the active policy version */
-        post: operations["deactivateCompetencyPolicy"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -1293,6 +1225,24 @@ export interface paths {
         /** Replace active service availability assignments */
         put: operations["ServicesController_setAvailability"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/services/{serviceId}/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List effective service prices for a provider context */
+        get: operations["ServicePricesController_list"];
+        put?: never;
+        /** Record an effective-dated service price */
+        post: operations["ServicePricesController_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1783,687 +1733,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/care-documentation/{id}/clinical-records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read structured clinical records for care documentation */
-        get: operations["ClinicalDocumentationController_getRecords"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-documentation/{id}/measurements": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Record a measurement in draft care documentation */
-        post: operations["ClinicalDocumentationController_addMeasurement"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-documentation/{id}/measurements/{recordId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete a measurement from draft care documentation */
-        delete: operations["ClinicalDocumentationController_deleteMeasurement"];
-        options?: never;
-        head?: never;
-        /** Update a measurement in draft care documentation */
-        patch: operations["ClinicalDocumentationController_updateMeasurement"];
-        trace?: never;
-    };
-    "/api/v1/care-documentation/{id}/observations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Record a structured observation in draft care documentation */
-        post: operations["ClinicalDocumentationController_addObservation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-documentation/{id}/observations/{recordId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete a structured observation from draft care documentation */
-        delete: operations["ClinicalDocumentationController_deleteObservation"];
-        options?: never;
-        head?: never;
-        /** Update a structured observation in draft care documentation */
-        patch: operations["ClinicalDocumentationController_updateObservation"];
-        trace?: never;
-    };
-    "/api/v1/care-documentation/{id}/assessments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Record an assessment in draft care documentation */
-        post: operations["ClinicalDocumentationController_addAssessment"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-documentation/{id}/assessments/{recordId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete an assessment from draft care documentation */
-        delete: operations["ClinicalDocumentationController_deleteAssessment"];
-        options?: never;
-        head?: never;
-        /** Update an assessment in draft care documentation */
-        patch: operations["ClinicalDocumentationController_updateAssessment"];
-        trace?: never;
-    };
-    "/api/v1/care-documentation/{id}/risks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Record a risk assessment in draft care documentation */
-        post: operations["ClinicalDocumentationController_addRiskAssessment"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-documentation/{id}/risks/{recordId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete a risk assessment from draft care documentation */
-        delete: operations["ClinicalDocumentationController_deleteRiskAssessment"];
-        options?: never;
-        head?: never;
-        /** Update a risk assessment in draft care documentation */
-        patch: operations["ClinicalDocumentationController_updateRiskAssessment"];
-        trace?: never;
-    };
-    "/api/v1/care-documentation/{id}/clinical-records/{recordId}/amendments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Append a typed correction to a finalized clinical record */
-        post: operations["ClinicalDocumentationController_amendRecord"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/clients/{clientId}/measurements": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read scoped client measurement history */
-        get: operations["ClinicalDocumentationController_measurementHistory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/clients/{clientId}/observations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read scoped client observation history */
-        get: operations["ClinicalDocumentationController_observationHistory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/clients/{clientId}/assessments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read scoped client assessment history */
-        get: operations["ClinicalDocumentationController_assessmentHistory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/clients/{clientId}/risks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read scoped client risk assessment history and current projection */
-        get: operations["ClinicalDocumentationController_riskHistory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/clients/{clientId}/care-plans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List care plans for a client */
-        get: operations["listClientCarePlans"];
-        put?: never;
-        /** Create a care plan */
-        post: operations["createClientCarePlan"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/clients/{clientId}/care-plan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get the current care plan for a client
-         * @description Office read. Caregiver access is visit-scoped.
-         */
-        get: operations["getClientCarePlan"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Search care plans in provider scope */
-        get: operations["listCarePlans"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get a care plan */
-        get: operations["getCarePlan"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List care plan revisions and evaluations */
-        get: operations["getCarePlanHistory"];
-        put?: never;
-        /** Create a draft plan revision */
-        post: operations["createCarePlanRevision"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/diff": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Compare two care plan revisions */
-        get: operations["diffCarePlanRevisions"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get a historical care plan revision */
-        get: operations["getCarePlanRevision"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/assessment": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update a draft assessment */
-        patch: operations["updateCarePlanAssessment"];
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/needs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add a need to a draft revision */
-        post: operations["addCarePlanNeed"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/needs/{needId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove a need from a draft revision */
-        delete: operations["removeCarePlanNeed"];
-        options?: never;
-        head?: never;
-        /** Update a need in a draft revision */
-        patch: operations["updateCarePlanNeed"];
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/resources": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add a resource to a draft revision */
-        post: operations["addCarePlanResource"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/resources/{resourceId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove a resource from a draft revision */
-        delete: operations["removeCarePlanResource"];
-        options?: never;
-        head?: never;
-        /** Update a resource in a draft revision */
-        patch: operations["updateCarePlanResource"];
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/goals": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add a goal to a draft revision */
-        post: operations["addCarePlanGoal"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/goals/{goalId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove a goal from a draft revision */
-        delete: operations["removeCarePlanGoal"];
-        options?: never;
-        head?: never;
-        /** Update a goal in a draft revision */
-        patch: operations["updateCarePlanGoal"];
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/measures": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add a measure to a draft revision */
-        post: operations["addCarePlanMeasure"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/measures/{measureId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove a measure from a draft revision */
-        delete: operations["removeCarePlanMeasure"];
-        options?: never;
-        head?: never;
-        /** Update a measure in a draft revision */
-        patch: operations["updateCarePlanMeasure"];
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/risk-responses": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add a risk response to a draft revision */
-        post: operations["addCarePlanRiskResponse"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/risk-responses/{riskResponseId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove a risk response from a draft revision */
-        delete: operations["removeCarePlanRiskResponse"];
-        options?: never;
-        head?: never;
-        /** Update a risk response in a draft revision */
-        patch: operations["updateCarePlanRiskResponse"];
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/source-references": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reference a clinical record */
-        post: operations["addCarePlanSourceReference"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/source-references/{clinicalRecordId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove a clinical record reference */
-        delete: operations["removeCarePlanSourceReference"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/revisions/{revisionId}/activate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Activate a draft revision */
-        post: operations["activateCarePlanRevision"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/eligibility": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Check permission scope and competency eligibility for a care plan action */
-        get: operations["previewCarePlanEligibility"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/evaluations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List care plan evaluations */
-        get: operations["listCarePlanEvaluations"];
-        put?: never;
-        /** Evaluate a care plan */
-        post: operations["createCarePlanEvaluation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/care-plans/{planId}/end": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** End a care plan */
-        post: operations["endCarePlan"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/visits/{visitId}/care-plan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read active care measures for an assigned visit
-         * @description Caregiver view. The visit service verifies the caller is assigned to the visit.
-         */
-        get: operations["getVisitCarePlan"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/visits/{visitId}/evidence-package": {
         parameters: {
             query?: never;
@@ -2601,15 +1870,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workforce-compliance/summary": {
+    "/api/v1/benefit-definitions": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get scoped workforce qualification readiness and findings */
-        get: operations["getWorkforceComplianceSummary"];
+        /** List supported benefit definitions */
+        get: operations["BenefitsController_definitions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2618,15 +1887,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workforce-compliance/qualifications": {
+    "/api/v1/benefit-rules": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List scoped employee qualification validity facts */
-        get: operations["listWorkforceComplianceQualifications"];
+        /** List effective-dated benefit rules and source references */
+        get: operations["BenefitsController_rules"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2635,15 +1904,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workforce-compliance/qualifications/{qualificationDefinitionId}/impact": {
+    "/api/v1/clients/{clientId}/benefits": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Preview how a qualification affects scoped employee readiness */
-        get: operations["getWorkforceQualificationImpact"];
+        /** Get a client’s benefit entitlements, funding sources, and current budget projection */
+        get: operations["BenefitsController_benefitsForClient"];
+        put?: never;
+        /** Record a client benefit entitlement */
+        post: operations["BenefitsController_createEntitlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/benefits/{entitlementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update entitlement status or end date using optimistic versioning */
+        patch: operations["BenefitsController_updateEntitlement"];
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/budgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get recorded and confirmed budget balances plus planned consumption estimate */
+        get: operations["BenefitsController_budget"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2652,15 +1956,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workforce-compliance/employees": {
+    "/api/v1/clients/{clientId}/budget-history": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List scoped employees with workforce readiness */
-        get: operations["listWorkforceComplianceEmployees"];
+        /** Get a bounded, filterable budget ledger history */
+        get: operations["BenefitsController_history"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2669,15 +1973,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workforce-compliance/employees/{employeeId}": {
+    "/api/v1/clients/{clientId}/funding-sources": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get scoped employee readiness, findings, and qualification history */
-        get: operations["getWorkforceComplianceEmployee"];
+        /** List client funding sources linked to existing insurance records where applicable */
+        get: operations["BenefitsController_fundingSources"];
+        put?: never;
+        /** Add a client funding source */
+        post: operations["BenefitsController_createFundingSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clients/{clientId}/budget-adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record an opening balance, external consumption, or append-only correction */
+        post: operations["BenefitsController_adjustment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/benefits/worklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List clients needing benefit review and completed services awaiting allocation */
+        get: operations["BenefitsController_worklist"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2686,15 +2025,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workforce-compliance/policies/{operationKey}": {
+    "/api/v1/benefits/unallocated-services": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get an operation policy and scoped readiness impact */
-        get: operations["getWorkforceCompliancePolicy"];
+        /** List completed service facts with priced unallocated amounts */
+        get: operations["BenefitsController_unallocatedServices"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2703,97 +2042,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workforce-compliance/settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get workforce compliance monitoring settings */
-        get: operations["getWorkforceComplianceSettings"];
-        /** Update workforce compliance monitoring settings */
-        put: operations["updateWorkforceComplianceSettings"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/medications": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List tenant medication definitions */
-        get: operations["listMedicationDefinitions"];
-        put?: never;
-        /** Create a local medication catalog definition */
-        post: operations["createMedicationDefinition"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/medications/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read a tenant medication definition */
-        get: operations["getMedicationDefinition"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update or archive a local medication definition */
-        patch: operations["updateMedicationDefinition"];
-        trace?: never;
-    };
-    "/api/v1/clients/{clientId}/medication-orders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List medication orders for a client */
-        get: operations["listClientMedicationOrders"];
-        put?: never;
-        /** Create a draft medication order from documented source information */
-        post: operations["createClientMedicationOrder"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/medication-orders/{orderId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read an order and its immutable revisions */
-        get: operations["getMedicationOrderHistory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Create a new medication order revision */
-        patch: operations["reviseMedicationOrder"];
-        trace?: never;
-    };
-    "/api/v1/medication-orders/{orderId}/activate": {
+    "/api/v1/performed-services/{performedServiceId}/funding-allocations": {
         parameters: {
             query?: never;
             header?: never;
@@ -2802,15 +2051,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Explicitly activate a sourced draft medication order */
-        post: operations["activateMedicationOrder"];
+        /** Allocate a completed service amount to one or more entitlements */
+        post: operations["BenefitsController_allocate"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-orders/{orderId}/pause": {
+    "/api/v1/funding-allocations/{allocationId}/reverse": {
         parameters: {
             query?: never;
             header?: never;
@@ -2819,57 +2068,41 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Pause an active medication order */
-        post: operations["pauseMedicationOrder"];
+        /** Reverse a prior allocation while preserving the original ledger entry */
+        post: operations["BenefitsController_reverse"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-orders/{orderId}/resume": {
+    "/api/v1/benefits/provider-recognitions": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List recognition records visible to the current provider scope */
+        get: operations["BenefitsController_recognitions"];
         put?: never;
-        /** Resume a paused medication order */
-        post: operations["resumeMedicationOrder"];
+        /** Record a jurisdiction-specific recognized service offering */
+        post: operations["BenefitsController_createRecognition"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-orders/{orderId}/discontinue": {
+    "/api/v1/clients/{clientId}/budgets/estimate": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Discontinue a medication order */
-        post: operations["discontinueMedicationOrder"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/clients/{clientId}/medication-administrations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read a bounded client medication record */
-        get: operations["getClientMedicationAdministrationHistory"];
+        /** Estimate service price and benefit impact for planning without reserving or consuming funds */
+        get: operations["BenefitsController_estimate"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2878,15 +2111,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/visits/{visitId}/medication-administrations": {
+    "/api/v1/billing/settings": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Read medication due during an assigned visit */
-        get: operations["getVisitMedicationAdministrations"];
+        /** List billing profiles in the current provider scope */
+        get: operations["BillingController_settings"];
+        /** Create or update provider billing settings */
+        put: operations["BillingController_saveSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/payer-arrangements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a client’s payer arrangements and mandates */
+        get: operations["BillingController_payerArrangements"];
+        put?: never;
+        /** Record a payer arrangement and documented billing mandate */
+        post: operations["BillingController_createPayerArrangement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/payer-arrangements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update payer mandate status with optimistic versioning */
+        patch: operations["BillingController_updatePayerArrangement"];
+        trace?: never;
+    };
+    "/api/v1/billing/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List performed services and funding portions available for billing */
+        get: operations["BillingController_candidates"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2895,7 +2181,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-administrations/{occurrenceId}/record": {
+    "/api/v1/billing/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List invoices within the current tenant and resource scope */
+        get: operations["BillingController_invoices"];
+        put?: never;
+        /** Create a draft invoice from reserved billing candidates */
+        post: operations["BillingController_createDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/invoices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an invoice snapshot, corrections, and derived receivable state */
+        get: operations["BillingController_invoice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Replace draft lines using optimistic versioning */
+        patch: operations["BillingController_updateDraft"];
+        trace?: never;
+    };
+    "/api/v1/billing/invoices/{id}/cancel": {
         parameters: {
             query?: never;
             header?: never;
@@ -2904,15 +2226,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record an outcome for a pending medication occurrence */
-        post: operations["recordMedicationAdministration"];
+        /** Cancel a draft and release its billing reservations */
+        post: operations["BillingController_cancelDraft"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-orders/{orderId}/prn-administrations": {
+    "/api/v1/billing/invoices/{id}/issue": {
         parameters: {
             query?: never;
             header?: never;
@@ -2921,15 +2243,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record an explicitly indicated PRN administration during an assigned visit */
-        post: operations["recordPrnMedicationAdministration"];
+        /** Revalidate and issue a draft with a provider-scoped invoice number */
+        post: operations["BillingController_issueInvoice"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-administrations/{recordId}/corrections": {
+    "/api/v1/billing/invoices/{id}/pdf/regenerate": {
         parameters: {
             query?: never;
             header?: never;
@@ -2938,41 +2260,23 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Append an attributable correction to finalized administration history */
-        post: operations["correctMedicationAdministration"];
+        /** Regenerate an invoice PDF from its immutable issued snapshot */
+        post: operations["BillingController_regeneratePdf"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/clients/{clientId}/medication-reconciliations": {
+    "/api/v1/billing/invoices/{id}/pdf": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List reconciliation history for a client */
-        get: operations["listMedicationReconciliations"];
-        put?: never;
-        /** Start a reconciliation and snapshot the current medication orders */
-        post: operations["startMedicationReconciliation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/medication-reconciliations/{reconciliationId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read sources, snapshots, comparisons, decisions, and applied changes */
-        get: operations["getMedicationReconciliation"];
+        /** Download a private invoice PDF after authorization and hash verification */
+        get: operations["BillingController_invoicePdf"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2981,7 +2285,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-reconciliations/{reconciliationId}/sources": {
+    "/api/v1/billing/invoices/{id}/corrections": {
         parameters: {
             query?: never;
             header?: never;
@@ -2990,66 +2294,67 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record an external source with its provenance */
-        post: operations["addMedicationReconciliationSource"];
+        /** Record an append-only invoice correction */
+        post: operations["BillingController_correctInvoice"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-reconciliations/{reconciliationId}/entries": {
+    "/api/v1/billing/invoices/{id}/corrections/{correctionId}/pdf": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Download a private invoice correction PDF */
+        get: operations["BillingController_correctionPdf"];
         put?: never;
-        /** Record an external medication statement or append a correction */
-        post: operations["addMedicationReconciliationEntry"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-reconciliations/{reconciliationId}/matches": {
+    "/api/v1/billing/receivables": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List issued invoices with outstanding balances and derived status */
+        get: operations["BillingController_receivables"];
         put?: never;
-        /** Manually link an external entry to an immutable internal baseline */
-        post: operations["matchMedicationReconciliationEntry"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-reconciliations/{reconciliationId}/compare": {
+    "/api/v1/billing/payments": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List recorded payment facts and remaining unallocated amounts */
+        get: operations["BillingController_payments"];
         put?: never;
-        /** Create a versioned deterministic comparison */
-        post: operations["compareMedicationReconciliation"];
+        /** Record a payment received by the provider */
+        post: operations["BillingController_recordPayment"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-reconciliations/{reconciliationId}/decisions": {
+    "/api/v1/billing/payment-allocations": {
         parameters: {
             query?: never;
             header?: never;
@@ -3058,15 +2363,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Append an explicit reviewer decision */
-        post: operations["recordMedicationReconciliationDecision"];
+        /** Allocate part of a recorded payment to an outstanding invoice */
+        post: operations["BillingController_allocatePayment"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-reconciliations/{reconciliationId}/apply": {
+    "/api/v1/billing/payment-allocations/{id}/reverse": {
         parameters: {
             query?: never;
             header?: never;
@@ -3075,32 +2380,121 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Apply accepted external facts through the medication order lifecycle */
-        post: operations["applyMedicationReconciliationChanges"];
+        /** Reverse an incorrect payment allocation with an append-only entry */
+        post: operations["BillingController_reversePaymentAllocation"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-reconciliations/{reconciliationId}/complete": {
+    "/api/v1/billing/payers": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List payer records in the authorized provider scope */
+        get: operations["ClaimsController_listPayers"];
         put?: never;
-        /** Complete a resolved reconciliation with competency authorization */
-        post: operations["completeMedicationReconciliation"];
+        /** Create a payer directory entry */
+        post: operations["ClaimsController_createPayer"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/medication-reconciliations/{reconciliationId}/cancel": {
+    "/api/v1/billing/payers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a payer record */
+        get: operations["ClaimsController_getPayer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a payer with optimistic versioning */
+        patch: operations["ClaimsController_updatePayer"];
+        trace?: never;
+    };
+    "/api/v1/billing/payers/{id}/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List immutable, versioned payer requirements profiles */
+        get: operations["ClaimsController_payerProfiles"];
+        put?: never;
+        /** Record a new version of payer requirements */
+        post: operations["ClaimsController_savePayerProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List claims using deterministic pagination and resource scope */
+        get: operations["ClaimsController_listClaims"];
+        put?: never;
+        /** Create a draft claim from issued invoice funding portions */
+        post: operations["ClaimsController_createClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/claims/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get claim snapshot, package, decisions, and payment state */
+        get: operations["ClaimsController_getClaim"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/claims/{id}/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Evaluate payer requirements and return actionable blockers */
+        get: operations["ClaimsController_readiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/claims/{id}/prepare": {
         parameters: {
             query?: never;
             header?: never;
@@ -3109,8 +2503,348 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cancel an unfinished reconciliation */
-        post: operations["cancelMedicationReconciliation"];
+        /** Finalize a private, versioned claim package */
+        post: operations["ClaimsController_prepare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/claims/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a manual external claim submission */
+        post: operations["ClaimsController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/claims/{id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a payer response without mutating the invoice */
+        post: operations["ClaimsController_recordDecision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/claims/{id}/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a linked claim for the unpaid, unresolved portion */
+        post: operations["ClaimsController_resubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/claims/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel an unsubmitted claim and release its amount reservation */
+        post: operations["ClaimsController_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/claims/{id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List immutable package artifacts and source hashes */
+        get: operations["ClaimsController_packageDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/claims/{id}/documents/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a private claim package artifact after authorization and hash verification */
+        get: operations["ClaimsController_downloadPackageDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/claims/{id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read append-only submission and decision history */
+        get: operations["ClaimsController_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/claims/{id}/payment-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show accepted amounts separately from recorded payment allocations */
+        get: operations["ClaimsController_paymentSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List authorized document metadata for an organization or client */
+        get: operations["DocumentsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read authorized document metadata without exposing its contents */
+        get: operations["DocumentsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download an authorized immutable PDF after integrity verification */
+        get: operations["DocumentsController_download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/document-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the latest organization-scoped document templates */
+        get: operations["DocumentsController_templates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/document-templates/{type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save a new version of an organization-scoped document template */
+        put: operations["DocumentsController_saveTemplate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/document-templates/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload a bounded private PNG or JPEG organization logo */
+        post: operations["DocumentsController_uploadLogo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/exports/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export bounded billing invoices as the documented billing_invoices_v1 CSV */
+        get: operations["DocumentsController_exportInvoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/exports/invoice-lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export immutable invoice line snapshots as the documented billing_lines_v1 CSV */
+        get: operations["DocumentsController_exportInvoiceLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/exports/receivables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export issued receivables and allocated payment totals as billing_receivables_v1 CSV */
+        get: operations["DocumentsController_exportReceivables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/benefits/exports/allocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export provider-side benefit allocations as benefit_allocations_v1 CSV */
+        get: operations["DocumentsController_exportBenefitAllocations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate a persisted PDF from an authorized typed business source */
+        post: operations["DocumentsController_generate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Render a source-authorized PDF preview without storing an artifact */
+        post: operations["DocumentsController_preview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3762,59 +3496,6 @@ export interface components {
             validUntil?: string | null;
             issuer?: string | null;
         };
-        CompetencyPolicyRequirementDto: {
-            /** Format: uuid */
-            qualificationDefinitionId: string;
-            code: string | null;
-            name: string;
-            /** @enum {string} */
-            status: "active" | "archived";
-        };
-        CompetencyPolicyVersionDto: {
-            /** Format: uuid */
-            id: string;
-            version: number;
-            name: string;
-            description: string | null;
-            /** @enum {string} */
-            requirementMode: "ANY" | "ALL";
-            /** @enum {string} */
-            status: "draft" | "active" | "inactive";
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            activatedAt: string | null;
-            /** Format: date-time */
-            deactivatedAt: string | null;
-            requirements: components["schemas"]["CompetencyPolicyRequirementDto"][];
-        };
-        CompetencyPolicyOperationDto: {
-            /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
-            /** Format: uuid */
-            policyId: string | null;
-            latestVersion: number;
-            activeVersion: number | null;
-            versions: components["schemas"]["CompetencyPolicyVersionDto"][];
-        };
-        CompetencyPolicyQualificationDto: {
-            /** Format: uuid */
-            id: string;
-            code: string | null;
-            name: string;
-        };
-        CompetencyPolicyAdminDto: {
-            operations: components["schemas"]["CompetencyPolicyOperationDto"][];
-            qualificationDefinitions: components["schemas"]["CompetencyPolicyQualificationDto"][];
-        };
-        CompetencyPolicyDraftInputDto: {
-            expectedVersion: number;
-            name: string;
-            description?: string | null;
-            /** @enum {string} */
-            requirementMode: "ANY" | "ALL";
-            qualificationDefinitionIds: string[];
-        };
         AuditEntryDto: {
             /** Format: uuid */
             id: string;
@@ -4238,6 +3919,8 @@ export interface components {
             categoryId: string;
             /** @enum {string} */
             unit: "occurrence" | "minute" | "hour" | "day";
+            /** @enum {string} */
+            benefitCategory: "recognized_support" | "clinical_nursing" | "other";
             defaultDurationMinutes: number | null;
             /** @enum {string} */
             status: "active" | "archived";
@@ -4270,6 +3953,8 @@ export interface components {
             categoryId: string;
             /** @enum {string} */
             unit: "occurrence" | "minute" | "hour" | "day";
+            /** @enum {string} */
+            benefitCategory: "recognized_support" | "clinical_nursing" | "other";
             defaultDurationMinutes: number | null;
             /** @enum {string} */
             status: "active" | "archived";
@@ -4290,6 +3975,11 @@ export interface components {
             categoryId: string;
             /** @enum {string} */
             unit: "occurrence" | "minute" | "hour" | "day";
+            /**
+             * @default other
+             * @enum {string}
+             */
+            benefitCategory: "recognized_support" | "clinical_nursing" | "other";
             defaultDurationMinutes?: number | null;
             /** Format: date */
             validFrom: string;
@@ -4304,6 +3994,8 @@ export interface components {
             categoryId?: string;
             /** @enum {string} */
             unit?: "occurrence" | "minute" | "hour" | "day";
+            /** @enum {string} */
+            benefitCategory?: "recognized_support" | "clinical_nursing" | "other";
             defaultDurationMinutes?: number | null;
             /** Format: date */
             validFrom?: string;
@@ -4343,6 +4035,43 @@ export interface components {
         };
         ReplaceServiceAvailabilityDto: {
             items: components["schemas"]["ServiceAvailabilityInputDto"][];
+        };
+        ServicePriceResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            serviceId: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId: string | null;
+            /** @description Price in EUR cents */
+            priceCents: number;
+            /** @enum {string} */
+            pricingUnit: "hour" | "minute" | "visit" | "fixed";
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ServicePriceListResponseDto: {
+            items: components["schemas"]["ServicePriceResponseDto"][];
+        };
+        ServicePriceInputDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId?: string | null;
+            /** @description Price in EUR cents */
+            priceCents: number;
+            /** @enum {string} */
+            pricingUnit: "hour" | "minute" | "visit" | "fixed";
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil?: string | null;
         };
         ServiceAgreementListItemDto: {
             /** Format: uuid */
@@ -4970,915 +4699,6 @@ export interface components {
             reason: string;
             correction: string;
         };
-        ClinicalMeasurementDto: {
-            /** @enum {string} */
-            kind: "measurement";
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            documentationId: string;
-            recordVersion: number;
-            /** Format: uuid */
-            recordedByUserId: string;
-            /** Format: uuid */
-            recordedByEmployeeId: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: uuid */
-            correctsRecordId?: string | null;
-            /** Format: uuid */
-            correctedByRecordId?: string | null;
-            correctionReason?: string | null;
-            /** @enum {string} */
-            measurementType: "blood_pressure" | "pulse" | "temperature" | "weight" | "blood_glucose" | "oxygen_saturation" | "respiratory_rate";
-            value?: string | null;
-            integerValue?: number | null;
-            systolic?: number | null;
-            diastolic?: number | null;
-            /** @enum {string} */
-            unit: "mmHg" | "Cel" | "kg" | "bpm" | "/min" | "%" | "mg/dL" | "mmol/L";
-            /** Format: date-time */
-            measuredAt: string;
-            /** @enum {string} */
-            source: "manual" | "device";
-            note?: string | null;
-        };
-        ClinicalObservationDto: {
-            /** @enum {string} */
-            kind: "observation";
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            documentationId: string;
-            recordVersion: number;
-            /** Format: uuid */
-            recordedByUserId: string;
-            /** Format: uuid */
-            recordedByEmployeeId: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: uuid */
-            correctsRecordId?: string | null;
-            /** Format: uuid */
-            correctedByRecordId?: string | null;
-            correctionReason?: string | null;
-            /** @enum {string} */
-            category: "mobility" | "orientation" | "pain" | "skin" | "nutrition" | "hydration" | "elimination" | "sleep" | "mood" | "general_condition";
-            valueCode?: string | null;
-            painScore?: number | null;
-            location?: string | null;
-            severity?: string | null;
-            /** Format: date-time */
-            observedAt: string;
-            note?: string | null;
-        };
-        ClinicalAssessmentDto: {
-            /** @enum {string} */
-            kind: "assessment";
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            documentationId: string;
-            recordVersion: number;
-            /** Format: uuid */
-            recordedByUserId: string;
-            /** Format: uuid */
-            recordedByEmployeeId: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: uuid */
-            correctsRecordId?: string | null;
-            /** Format: uuid */
-            correctedByRecordId?: string | null;
-            correctionReason?: string | null;
-            /** @enum {string} */
-            assessmentType: "general_condition" | "pain";
-            resultCode: string | null;
-            score?: string | null;
-            /** Format: date-time */
-            assessedAt: string;
-            /** Format: date-time */
-            validUntil?: string | null;
-            note?: string | null;
-        };
-        ClinicalRiskAssessmentDto: {
-            /** @enum {string} */
-            kind: "risk_assessment";
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            documentationId: string;
-            recordVersion: number;
-            /** Format: uuid */
-            recordedByUserId: string;
-            /** Format: uuid */
-            recordedByEmployeeId: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: uuid */
-            correctsRecordId?: string | null;
-            /** Format: uuid */
-            correctedByRecordId?: string | null;
-            correctionReason?: string | null;
-            /** @enum {string} */
-            riskType: "fall" | "pressure_ulcer" | "dehydration" | "malnutrition";
-            /** @enum {string} */
-            level: "none" | "low" | "moderate" | "high";
-            /** Format: date-time */
-            assessedAt: string;
-            /** Format: date-time */
-            validUntil?: string | null;
-            source: string;
-            note?: string | null;
-        };
-        ClinicalDocumentationDetailDto: {
-            /** Format: uuid */
-            documentationId: string;
-            /** @enum {string} */
-            documentationStatus: "draft" | "finalized";
-            documentationVersion: number;
-            records: (components["schemas"]["ClinicalMeasurementDto"] | components["schemas"]["ClinicalObservationDto"] | components["schemas"]["ClinicalAssessmentDto"] | components["schemas"]["ClinicalRiskAssessmentDto"])[];
-        };
-        AddMeasurementRequestDto: {
-            expectedVersion: number;
-            /** @enum {string} */
-            measurementType: "blood_pressure" | "pulse" | "temperature" | "weight" | "blood_glucose" | "oxygen_saturation" | "respiratory_rate";
-            value: string | null;
-            integerValue: number | null;
-            systolic: number | null;
-            diastolic: number | null;
-            /** @enum {string} */
-            unit: "mmHg" | "Cel" | "kg" | "bpm" | "/min" | "%" | "mg/dL" | "mmol/L";
-            /** Format: date-time */
-            measuredAt: string;
-            /** @enum {string} */
-            source: "manual" | "device";
-            note?: string | null;
-        };
-        UpdateMeasurementRequestDto: {
-            expectedVersion: number;
-            /** @enum {string} */
-            measurementType: "blood_pressure" | "pulse" | "temperature" | "weight" | "blood_glucose" | "oxygen_saturation" | "respiratory_rate";
-            value: string | null;
-            integerValue: number | null;
-            systolic: number | null;
-            diastolic: number | null;
-            /** @enum {string} */
-            unit: "mmHg" | "Cel" | "kg" | "bpm" | "/min" | "%" | "mg/dL" | "mmol/L";
-            /** Format: date-time */
-            measuredAt: string;
-            /** @enum {string} */
-            source: "manual" | "device";
-            note?: string | null;
-            expectedRecordVersion: number;
-        };
-        DeleteClinicalRecordRequestDto: {
-            expectedVersion: number;
-            expectedRecordVersion: number;
-        };
-        AddObservationRequestDto: {
-            expectedVersion: number;
-            /** @enum {string} */
-            category: "mobility" | "orientation" | "pain" | "skin" | "nutrition" | "hydration" | "elimination" | "sleep" | "mood" | "general_condition";
-            valueCode?: string | null;
-            painScore?: number | null;
-            location?: string | null;
-            severity?: string | null;
-            /** Format: date-time */
-            observedAt: string;
-            note?: string | null;
-        };
-        UpdateObservationRequestDto: {
-            expectedVersion: number;
-            /** @enum {string} */
-            category: "mobility" | "orientation" | "pain" | "skin" | "nutrition" | "hydration" | "elimination" | "sleep" | "mood" | "general_condition";
-            valueCode?: string | null;
-            painScore?: number | null;
-            location?: string | null;
-            severity?: string | null;
-            /** Format: date-time */
-            observedAt: string;
-            note?: string | null;
-            expectedRecordVersion: number;
-        };
-        AddAssessmentRequestDto: {
-            expectedVersion: number;
-            /** @enum {string} */
-            assessmentType: "general_condition" | "pain";
-            resultCode?: string | null;
-            score?: string | null;
-            /** Format: date-time */
-            assessedAt: string;
-            /** Format: date-time */
-            validUntil?: string | null;
-            note?: string | null;
-        };
-        UpdateAssessmentRequestDto: {
-            expectedVersion: number;
-            /** @enum {string} */
-            assessmentType: "general_condition" | "pain";
-            resultCode?: string | null;
-            score?: string | null;
-            /** Format: date-time */
-            assessedAt: string;
-            /** Format: date-time */
-            validUntil?: string | null;
-            note?: string | null;
-            expectedRecordVersion: number;
-        };
-        AddRiskAssessmentRequestDto: {
-            expectedVersion: number;
-            /** @enum {string} */
-            riskType: "fall" | "pressure_ulcer" | "dehydration" | "malnutrition";
-            /** @enum {string} */
-            level: "none" | "low" | "moderate" | "high";
-            /** Format: date-time */
-            assessedAt: string;
-            /** Format: date-time */
-            validUntil?: string | null;
-            source: string;
-            note?: string | null;
-        };
-        UpdateRiskAssessmentRequestDto: {
-            expectedVersion: number;
-            /** @enum {string} */
-            riskType: "fall" | "pressure_ulcer" | "dehydration" | "malnutrition";
-            /** @enum {string} */
-            level: "none" | "low" | "moderate" | "high";
-            /** Format: date-time */
-            assessedAt: string;
-            /** Format: date-time */
-            validUntil?: string | null;
-            source: string;
-            note?: string | null;
-            expectedRecordVersion: number;
-        };
-        ClinicalMeasurementReplacementDto: {
-            /** @enum {string} */
-            measurementType: "blood_pressure" | "pulse" | "temperature" | "weight" | "blood_glucose" | "oxygen_saturation" | "respiratory_rate";
-            value: string | null;
-            integerValue: number | null;
-            systolic: number | null;
-            diastolic: number | null;
-            /** @enum {string} */
-            unit: "mmHg" | "Cel" | "kg" | "bpm" | "/min" | "%" | "mg/dL" | "mmol/L";
-            /** Format: date-time */
-            measuredAt: string;
-            /** @enum {string} */
-            source: "manual" | "device";
-            note?: string | null;
-        };
-        ClinicalObservationReplacementDto: {
-            /** @enum {string} */
-            category: "mobility" | "orientation" | "pain" | "skin" | "nutrition" | "hydration" | "elimination" | "sleep" | "mood" | "general_condition";
-            valueCode?: string | null;
-            painScore?: number | null;
-            location?: string | null;
-            /** @enum {string|null} */
-            severity?: "mild" | "moderate" | "severe" | null;
-            /** Format: date-time */
-            observedAt: string;
-            note?: string | null;
-        };
-        ClinicalAssessmentReplacementDto: {
-            /** @enum {string} */
-            assessmentType: "general_condition" | "pain";
-            resultCode?: string | null;
-            score?: string | null;
-            /** Format: date-time */
-            assessedAt: string;
-            /** Format: date-time */
-            validUntil?: string | null;
-            note?: string | null;
-        };
-        ClinicalRiskReplacementDto: {
-            /** @enum {string} */
-            riskType: "fall" | "pressure_ulcer" | "dehydration" | "malnutrition";
-            /** @enum {string} */
-            level: "none" | "low" | "moderate" | "high";
-            /** Format: date-time */
-            assessedAt: string;
-            /** Format: date-time */
-            validUntil?: string | null;
-            source: string;
-            note?: string | null;
-        };
-        AmendClinicalRecordRequestDto: {
-            reason: string;
-            replacement: components["schemas"]["ClinicalMeasurementReplacementDto"] | components["schemas"]["ClinicalObservationReplacementDto"] | components["schemas"]["ClinicalAssessmentReplacementDto"] | components["schemas"]["ClinicalRiskReplacementDto"];
-        };
-        ClinicalMeasurementHistoryDto: {
-            /** @enum {string} */
-            kind: "measurement";
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            documentationId: string;
-            recordVersion: number;
-            /** Format: uuid */
-            recordedByUserId: string;
-            /** Format: uuid */
-            recordedByEmployeeId: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: uuid */
-            correctsRecordId?: string | null;
-            /** Format: uuid */
-            correctedByRecordId?: string | null;
-            correctionReason?: string | null;
-            /** @enum {string} */
-            measurementType: "blood_pressure" | "pulse" | "temperature" | "weight" | "blood_glucose" | "oxygen_saturation" | "respiratory_rate";
-            value?: string | null;
-            integerValue?: number | null;
-            systolic?: number | null;
-            diastolic?: number | null;
-            /** @enum {string} */
-            unit: "mmHg" | "Cel" | "kg" | "bpm" | "/min" | "%" | "mg/dL" | "mmol/L";
-            /** Format: date-time */
-            measuredAt: string;
-            /** @enum {string} */
-            source: "manual" | "device";
-            note?: string | null;
-            recordedByEmployeeName: string | null;
-            /** Format: uuid */
-            visitId: string;
-            /** Format: date-time */
-            plannedStart: string;
-            timezone: string;
-            /** @enum {string} */
-            documentationStatus: "draft" | "finalized";
-        };
-        ClinicalObservationHistoryDto: {
-            /** @enum {string} */
-            kind: "observation";
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            documentationId: string;
-            recordVersion: number;
-            /** Format: uuid */
-            recordedByUserId: string;
-            /** Format: uuid */
-            recordedByEmployeeId: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: uuid */
-            correctsRecordId?: string | null;
-            /** Format: uuid */
-            correctedByRecordId?: string | null;
-            correctionReason?: string | null;
-            /** @enum {string} */
-            category: "mobility" | "orientation" | "pain" | "skin" | "nutrition" | "hydration" | "elimination" | "sleep" | "mood" | "general_condition";
-            valueCode?: string | null;
-            painScore?: number | null;
-            location?: string | null;
-            severity?: string | null;
-            /** Format: date-time */
-            observedAt: string;
-            note?: string | null;
-            recordedByEmployeeName: string | null;
-            /** Format: uuid */
-            visitId: string;
-            /** Format: date-time */
-            plannedStart: string;
-            timezone: string;
-            /** @enum {string} */
-            documentationStatus: "draft" | "finalized";
-        };
-        ClinicalAssessmentHistoryDto: {
-            /** @enum {string} */
-            kind: "assessment";
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            documentationId: string;
-            recordVersion: number;
-            /** Format: uuid */
-            recordedByUserId: string;
-            /** Format: uuid */
-            recordedByEmployeeId: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: uuid */
-            correctsRecordId?: string | null;
-            /** Format: uuid */
-            correctedByRecordId?: string | null;
-            correctionReason?: string | null;
-            /** @enum {string} */
-            assessmentType: "general_condition" | "pain";
-            resultCode: string | null;
-            score?: string | null;
-            /** Format: date-time */
-            assessedAt: string;
-            /** Format: date-time */
-            validUntil?: string | null;
-            note?: string | null;
-            recordedByEmployeeName: string | null;
-            /** Format: uuid */
-            visitId: string;
-            /** Format: date-time */
-            plannedStart: string;
-            timezone: string;
-            /** @enum {string} */
-            documentationStatus: "draft" | "finalized";
-        };
-        ClinicalRiskAssessmentHistoryDto: {
-            /** @enum {string} */
-            kind: "risk_assessment";
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            documentationId: string;
-            recordVersion: number;
-            /** Format: uuid */
-            recordedByUserId: string;
-            /** Format: uuid */
-            recordedByEmployeeId: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: uuid */
-            correctsRecordId?: string | null;
-            /** Format: uuid */
-            correctedByRecordId?: string | null;
-            correctionReason?: string | null;
-            /** @enum {string} */
-            riskType: "fall" | "pressure_ulcer" | "dehydration" | "malnutrition";
-            /** @enum {string} */
-            level: "none" | "low" | "moderate" | "high";
-            /** Format: date-time */
-            assessedAt: string;
-            /** Format: date-time */
-            validUntil?: string | null;
-            source: string;
-            note?: string | null;
-            recordedByEmployeeName: string | null;
-            /** Format: uuid */
-            visitId: string;
-            /** Format: date-time */
-            plannedStart: string;
-            timezone: string;
-            /** @enum {string} */
-            documentationStatus: "draft" | "finalized";
-        };
-        ClinicalRecordHistoryPageDto: {
-            items: (components["schemas"]["ClinicalMeasurementHistoryDto"] | components["schemas"]["ClinicalObservationHistoryDto"] | components["schemas"]["ClinicalAssessmentHistoryDto"] | components["schemas"]["ClinicalRiskAssessmentHistoryDto"])[];
-            page: number;
-            pageSize: number;
-            total: number;
-        };
-        CarePlanWorklistLatestEvaluationDto: {
-            /** Format: date-time */
-            evaluatedAt: string;
-            /** @enum {string} */
-            result: "effective" | "partially_effective" | "not_effective" | "changed_condition" | "no_change";
-            /** Format: date */
-            nextEvaluationDue: string | null;
-        };
-        CarePlanWorklistItemDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            clientId: string;
-            clientDisplayName: string;
-            /** Format: uuid */
-            organizationId: string;
-            /** Format: uuid */
-            facilityId: string;
-            facilityName: string;
-            /** @enum {string} */
-            status: "draft" | "active" | "under_review" | "ended";
-            /** Format: date */
-            validFrom: string;
-            /** Format: date */
-            validUntil: string | null;
-            version: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-            latestEvaluation: components["schemas"]["CarePlanWorklistLatestEvaluationDto"] | null;
-        };
-        CarePlanListResponseDto: {
-            items: components["schemas"]["CarePlanWorklistItemDto"][];
-            page: number;
-            pageSize: number;
-            total: number;
-        };
-        CreateCarePlanDto: {
-            /** Format: date */
-            validFrom: string;
-            /** Format: date */
-            validUntil?: string | null;
-        };
-        CarePlanPlanDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            tenantId: string;
-            /** Format: uuid */
-            clientId: string;
-            /** Format: uuid */
-            organizationId: string;
-            /** Format: uuid */
-            facilityId: string;
-            /** @enum {string} */
-            status: "draft" | "active" | "under_review" | "ended";
-            /** Format: date */
-            validFrom: string;
-            /** Format: date */
-            validUntil: string | null;
-            version: number;
-            /** Format: uuid */
-            createdByEmployeeId: string;
-            createdByEmployeeName: string | null;
-            /** Format: uuid */
-            endedByEmployeeId?: string | null;
-            /** Format: date-time */
-            endedAt?: string | null;
-            endedReason?: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        CarePlanRevisionDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            tenantId: string;
-            /** Format: uuid */
-            planId: string;
-            /** Format: uuid */
-            clientId: string;
-            revisionNumber: number;
-            /** @enum {string} */
-            status: "draft" | "active" | "historical";
-            /** Format: uuid */
-            authorEmployeeId: string;
-            authorEmployeeName: string | null;
-            reason?: string | null;
-            /** Format: date */
-            effectiveFrom: string;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: uuid */
-            activatedByEmployeeId?: string | null;
-            activatedByEmployeeName?: string | null;
-            /** Format: date-time */
-            activatedAt?: string | null;
-            /** Format: date-time */
-            supersededAt?: string | null;
-        };
-        CarePlanAssessmentDto: {
-            /** Format: uuid */
-            revisionId: string;
-            clientConcerns: string | null;
-            clientWishes: string | null;
-            clientGoals: string | null;
-            clientHabits: string | null;
-            clientPreferences: string | null;
-            clientPriorities: string | null;
-            professionalObservedNeeds: string | null;
-            professionalResources: string | null;
-            professionalLimitations: string | null;
-            professionalRisks: string | null;
-            professionalRationale: string | null;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        CarePlanSourceReferenceDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            clinicalRecordId: string;
-            /** @enum {string} */
-            recordKind: "measurement" | "observation" | "assessment" | "risk_assessment";
-            rationale: string | null;
-            /** Format: date-time */
-            createdAt: string;
-        };
-        CarePlanNeedDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            revisionId: string;
-            /** @enum {string} */
-            category: "personal_care" | "mobility" | "nutrition" | "hydration" | "communication" | "cognition" | "daily_living" | "social_participation" | "safety" | "other";
-            title: string;
-            description: string | null;
-            /** @enum {string} */
-            source: "client_report" | "professional_observation" | "representative_report" | "clinical_record";
-            /** @enum {string} */
-            priority: "low" | "normal" | "high";
-            /** @enum {string} */
-            status: "active" | "addressed" | "deferred";
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        CarePlanResourceDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            revisionId: string;
-            /** @enum {string} */
-            category: "self_care" | "mobility" | "communication" | "cognition" | "daily_routine" | "social_support" | "personal_interest" | "other";
-            description: string;
-            /** @enum {string} */
-            status: "available" | "needs_support" | "unavailable";
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        CarePlanRiskResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            revisionId: string;
-            /** Format: uuid */
-            clinicalRecordId: string;
-            /** @enum {string} */
-            status: "addressed" | "monitor" | "accepted";
-            plannedResponse: string;
-            needIds: string[];
-            measureIds: string[];
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        CarePlanGoalDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            revisionId: string;
-            title: string;
-            description: string | null;
-            /** Format: date */
-            targetDate: string | null;
-            /** @enum {string} */
-            status: "active" | "achieved" | "discontinued";
-            /** @enum {string} */
-            priority: "low" | "normal" | "high";
-            needIds: string[];
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        CarePlanMeasureDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            revisionId: string;
-            title: string;
-            instruction: string;
-            /** @enum {string} */
-            category: "personal_care" | "assistance" | "encouragement" | "monitoring" | "positioning" | "communication" | "other";
-            needIds: string[];
-            goalIds: string[];
-            /** Format: uuid */
-            serviceDefinitionId: string | null;
-            frequencyText: string | null;
-            responsibleRole: string | null;
-            /** Format: date */
-            validFrom: string;
-            /** Format: date */
-            validUntil: string | null;
-            /** @enum {string} */
-            status: "active" | "discontinued";
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        CarePlanRevisionDetailDto: {
-            revision: components["schemas"]["CarePlanRevisionDto"];
-            assessment: components["schemas"]["CarePlanAssessmentDto"];
-            sourceReferences: components["schemas"]["CarePlanSourceReferenceDto"][];
-            needs: components["schemas"]["CarePlanNeedDto"][];
-            resources: components["schemas"]["CarePlanResourceDto"][];
-            riskResponses: components["schemas"]["CarePlanRiskResponseDto"][];
-            goals: components["schemas"]["CarePlanGoalDto"][];
-            measures: components["schemas"]["CarePlanMeasureDto"][];
-        };
-        CarePlanGoalOutcomeDto: {
-            /** Format: uuid */
-            goalId: string;
-            /** @enum {string} */
-            outcome: "achieved" | "partially_achieved" | "not_achieved" | "not_applicable";
-            note: string | null;
-        };
-        CarePlanEvaluationDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            tenantId: string;
-            /** Format: uuid */
-            planId: string;
-            /** Format: uuid */
-            revisionId: string;
-            /** Format: uuid */
-            evaluatedByEmployeeId: string;
-            evaluatedByEmployeeName: string | null;
-            /** Format: date-time */
-            evaluatedAt: string;
-            /** @enum {string} */
-            result: "effective" | "partially_effective" | "not_effective" | "changed_condition" | "no_change";
-            /** @enum {string} */
-            planChange: "none" | "revision_required";
-            summary: string;
-            /** Format: date */
-            nextEvaluationDue: string | null;
-            goals: components["schemas"]["CarePlanGoalOutcomeDto"][];
-        };
-        CarePlanDetailDto: {
-            plan: components["schemas"]["CarePlanPlanDto"];
-            activeRevision: components["schemas"]["CarePlanRevisionDetailDto"] | null;
-            draftRevision: components["schemas"]["CarePlanRevisionDetailDto"] | null;
-            latestEvaluation: components["schemas"]["CarePlanEvaluationDto"] | null;
-            /** Format: date */
-            nextEvaluationDue: string | null;
-        };
-        CarePlanHistoryDto: {
-            revisions: components["schemas"]["CarePlanRevisionDetailDto"][];
-            evaluations: components["schemas"]["CarePlanEvaluationDto"][];
-        };
-        CreateCarePlanRevisionDto: {
-            expectedVersion: number;
-            /** Format: date */
-            effectiveFrom: string;
-            reason: string;
-        };
-        CarePlanRevisionDiffGroupDto: {
-            added: string[];
-            changed: string[];
-            removed: string[];
-        };
-        CarePlanRevisionDiffDto: {
-            needs: components["schemas"]["CarePlanRevisionDiffGroupDto"];
-            resources: components["schemas"]["CarePlanRevisionDiffGroupDto"];
-            riskResponses: components["schemas"]["CarePlanRevisionDiffGroupDto"];
-            goals: components["schemas"]["CarePlanRevisionDiffGroupDto"];
-            measures: components["schemas"]["CarePlanRevisionDiffGroupDto"];
-            sourceReferences: components["schemas"]["CarePlanRevisionDiffGroupDto"];
-            assessmentChanged: boolean;
-        };
-        UpdateCarePlanAssessmentDto: {
-            expectedVersion: number;
-            clientConcerns?: string | null;
-            clientWishes?: string | null;
-            clientGoals?: string | null;
-            clientHabits?: string | null;
-            clientPreferences?: string | null;
-            clientPriorities?: string | null;
-            professionalObservedNeeds?: string | null;
-            professionalResources?: string | null;
-            professionalLimitations?: string | null;
-            professionalRisks?: string | null;
-            professionalRationale?: string | null;
-        };
-        CareNeedInputDto: {
-            /** @enum {string} */
-            category: "personal_care" | "mobility" | "nutrition" | "hydration" | "communication" | "cognition" | "daily_living" | "social_participation" | "safety" | "other";
-            title: string;
-            description?: string | null;
-            /** @enum {string} */
-            source: "client_report" | "professional_observation" | "representative_report" | "clinical_record";
-            /** @enum {string} */
-            priority: "low" | "normal" | "high";
-            /** @enum {string} */
-            status: "active" | "addressed" | "deferred";
-            expectedVersion: number;
-        };
-        ExpectedVersionDto: {
-            expectedVersion: number;
-        };
-        CareResourceInputDto: {
-            /** @enum {string} */
-            category: "self_care" | "mobility" | "communication" | "cognition" | "daily_routine" | "social_support" | "personal_interest" | "other";
-            description: string;
-            /** @enum {string} */
-            status: "available" | "needs_support" | "unavailable";
-            expectedVersion: number;
-        };
-        CareGoalInputDto: {
-            title: string;
-            description?: string | null;
-            /** Format: date */
-            targetDate?: string | null;
-            /** @enum {string} */
-            status: "active" | "achieved" | "discontinued";
-            /** @enum {string} */
-            priority: "low" | "normal" | "high";
-            needIds: string[];
-            expectedVersion: number;
-        };
-        CareMeasureInputDto: {
-            title: string;
-            instruction: string;
-            /** @enum {string} */
-            category: "personal_care" | "assistance" | "encouragement" | "monitoring" | "positioning" | "communication" | "other";
-            needIds: string[];
-            goalIds: string[];
-            /** Format: uuid */
-            serviceDefinitionId?: string | null;
-            frequencyText?: string | null;
-            responsibleRole?: string | null;
-            /** Format: date */
-            validFrom: string;
-            /** Format: date */
-            validUntil?: string | null;
-            /** @enum {string} */
-            status: "active" | "discontinued";
-            expectedVersion: number;
-        };
-        CareRiskResponseInputDto: {
-            /** Format: uuid */
-            clinicalRecordId: string;
-            /** @enum {string} */
-            status: "addressed" | "monitor" | "accepted";
-            plannedResponse: string;
-            needIds: string[];
-            measureIds: string[];
-            expectedVersion: number;
-        };
-        CarePlanSourceReferenceInputDto: {
-            /** Format: uuid */
-            clinicalRecordId: string;
-            /** @enum {string} */
-            recordKind: "measurement" | "observation" | "assessment" | "risk_assessment";
-            rationale?: string | null;
-            expectedVersion: number;
-        };
-        CarePlanCompetencyEligibilityDto: {
-            allowed: boolean;
-            /** @enum {string} */
-            reasonCode?: "COMPETENCY_POLICY_NOT_CONFIGURED" | "COMPETENCY_POLICY_INACTIVE" | "COMPETENCY_POLICY_INVALID" | "COMPETENCY_EMPLOYEE_LINK_REQUIRED" | "COMPETENCY_EMPLOYEE_INACTIVE" | "COMPETENCY_QUALIFICATION_MISSING" | "COMPETENCY_QUALIFICATION_EXPIRED" | "COMPETENCY_REQUIREMENTS_NOT_MET" | "COMPETENCY_POLICY_CHANGED";
-            /** Format: uuid */
-            policyId?: string;
-            policyVersion?: number;
-            /** Format: uuid */
-            employeeId?: string;
-            matchedQualificationIds?: string[];
-            /** Format: date-time */
-            evaluatedAt?: string;
-        };
-        CarePlanEligibilityDto: {
-            /** @enum {string} */
-            operation: "care_plan.activate" | "care_plan.evaluate";
-            permissionAllowed: boolean;
-            competency: components["schemas"]["CarePlanCompetencyEligibilityDto"] | null;
-        };
-        CarePlanGoalOutcomeInputDto: {
-            /** Format: uuid */
-            goalId: string;
-            /** @enum {string} */
-            outcome: "achieved" | "partially_achieved" | "not_achieved" | "not_applicable";
-            note?: string | null;
-        };
-        CarePlanEvaluationInputDto: {
-            expectedVersion: number;
-            /** Format: uuid */
-            revisionId: string;
-            /** @enum {string} */
-            result: "effective" | "partially_effective" | "not_effective" | "changed_condition" | "no_change";
-            /** @enum {string} */
-            planChange: "none" | "revision_required";
-            summary: string;
-            /** Format: date */
-            nextEvaluationDue?: string | null;
-            goals: components["schemas"]["CarePlanGoalOutcomeInputDto"][];
-        };
-        EndCarePlanDto: {
-            expectedVersion: number;
-            reason: string;
-        };
-        VisitCarePlanMeasureDto: {
-            /** Format: uuid */
-            id: string;
-            title: string;
-            instruction: string;
-            /** @enum {string} */
-            category: "personal_care" | "assistance" | "encouragement" | "monitoring" | "positioning" | "communication" | "other";
-            frequencyText: string | null;
-            responsibleRole: string | null;
-        };
-        VisitCarePlanDto: {
-            /** Format: uuid */
-            planId: string;
-            /** Format: uuid */
-            clientId: string;
-            /** @enum {string} */
-            status: "draft" | "active" | "under_review" | "ended";
-            /** Format: date */
-            validFrom: string;
-            /** Format: date */
-            validUntil: string | null;
-            measures: components["schemas"]["VisitCarePlanMeasureDto"][];
-        };
         EvidencePackageItemDto: {
             /** Format: uuid */
             performedServiceId: string;
@@ -6057,779 +4877,867 @@ export interface components {
             pageSize: number;
             total: number;
         };
-        WorkforceCompliancePolicyRequirementDto: {
+        BenefitDefinitionDto: {
+            id: string;
+            /** @enum {string} */
+            benefitType: "entlastungsbetrag_45b" | "umwandlungsanspruch_45a_4" | "private" | "other";
+            name: string;
+            statutoryReference: string | null;
+        };
+        BenefitDefinitionsResponseDto: {
+            items: components["schemas"]["BenefitDefinitionDto"][];
+        };
+        BenefitRuleDto: {
             /** Format: uuid */
-            qualificationId: string;
-            name: string | null;
-            code: string | null;
+            id: string;
             /** @enum {string} */
-            status: "active" | "inactive" | "missing";
-            missingEmployeeCount: number;
-            expiringEmployeeCount: number;
-        };
-        WorkforceCompliancePolicySummaryDto: {
-            /** @enum {string} */
-            status: "missing" | "inactive" | "invalid" | "active";
-            /** Format: uuid */
-            policyId: string | null;
-            policyVersion: number | null;
-            /** @enum {string|null} */
-            requirementMode: "ANY" | "ALL" | null;
-            requirementCount: number;
-            requirements: components["schemas"]["WorkforceCompliancePolicyRequirementDto"][];
-        };
-        WorkforceComplianceReadinessCountsDto: {
-            ready: number;
-            atRisk: number;
-            notReady: number;
-        };
-        WorkforceComplianceOperationSummaryDto: {
-            /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
+            benefitType: "entlastungsbetrag_45b" | "umwandlungsanspruch_45a_4";
+            jurisdiction: string;
             /** Format: date */
-            asOf: string | null;
-            horizonDays: number;
-            policy: components["schemas"]["WorkforceCompliancePolicySummaryDto"];
-            readiness: components["schemas"]["WorkforceComplianceReadinessCountsDto"];
-            findingCounts: {
-                [key: string]: number;
-            };
-        };
-        WorkforceComplianceSummaryDto: {
+            effectiveFrom: string;
             /** Format: date */
-            asOf: string | null;
-            horizonDays: number;
-            employeeCount: number;
-            employeesWithMissingRequirements: number;
-            expiredQualifications: number;
-            expiringQualifications: number;
-            operations: components["schemas"]["WorkforceComplianceOperationSummaryDto"][];
-            historyLimitations: string[];
+            effectiveUntil: string | null;
+            /** @description Integer EUR cents */
+            monthlyAmountCents: number | null;
+            /** @description Integer EUR cents */
+            annualAmountCents: number | null;
+            eligibleCareGrades: number[];
+            /** @enum {string} */
+            carryoverPolicy: "calendar_year_june_30" | "none";
+            eligibilityRequirements: string;
+            ruleVersion: number;
+            sourceReference: string;
         };
-        WorkforceComplianceQualificationDto: {
+        BenefitRulesResponseDto: {
+            items: components["schemas"]["BenefitRuleDto"][];
+        };
+        BenefitEntitlementDto: {
             /** Format: uuid */
-            assignmentId: string;
+            id: string;
             /** Format: uuid */
-            employeeId: string;
-            employeeFirstName: string;
-            employeeLastName: string;
+            clientId: string;
             /** @enum {string} */
-            employeeStatus: "active" | "inactive" | "archived";
+            benefitType: "entlastungsbetrag_45b" | "umwandlungsanspruch_45a_4" | "private" | "other";
             /** Format: uuid */
-            organizationId: string | null;
-            organizationName: string | null;
-            /** Format: uuid */
-            qualificationId: string;
-            qualificationName: string;
-            qualificationCode: string | null;
-            /** @enum {string} */
-            assignmentStatus: "active" | "revoked";
-            /** @enum {string} */
-            complianceStatus: "valid" | "expiring_soon" | "expired" | "not_yet_valid" | "revoked";
+            fundingSourceId: string;
             /** Format: date */
-            validFrom: string | null;
+            validFrom: string;
             /** Format: date */
             validUntil: string | null;
-            /** Format: date-time */
+            /** @enum {string} */
+            status: "confirmed" | "provisional" | "suspended" | "ended";
+            /** @enum {string} */
+            calculationMode: "rule_based" | "manual" | "external_input";
+            /** @enum {string} */
+            source: "payer_confirmed" | "client_reported" | "provider_reported" | "contract";
+            verifiedAt: string | null;
+            version: number;
             createdAt: string;
+            updatedAt: string;
+        };
+        BenefitBudgetSourceDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            clientId: string;
+            sourceType: string;
+            /** Format: uuid */
+            clientInsuranceId: string | null;
+            /** @enum {string} */
+            status: "active" | "ended";
+            unlimited: boolean;
+            label: string | null;
+            entitlements: components["schemas"]["BenefitEntitlementDto"][];
+        };
+        BenefitEntitlementBudgetDto: {
+            /** Format: uuid */
+            entitlementId: string;
+            /** @enum {string} */
+            benefitType: "entlastungsbetrag_45b" | "umwandlungsanspruch_45a_4" | "private" | "other";
+            /** Format: uuid */
+            fundingSourceId: string;
+            /** @enum {string} */
+            entitlementStatus: "confirmed" | "provisional" | "suspended" | "ended";
+            /** @description Integer EUR cents */
+            currentAllocationCents: number;
+            /** @description Integer EUR cents */
+            carryoverCents: number;
+            /** @description Estimated provider-recorded balance in EUR cents */
+            estimatedRemainingCents: number | null;
+            /** @description Remaining amount from payer-confirmed balance records, in EUR cents */
+            confirmedRemainingCents: number | null;
+            /** @description Provider-reported service consumption in the current period, EUR cents */
+            actualConsumptionCents: number;
+            verificationStatuses: string[];
+            /** Format: date */
+            nextExpiry: string | null;
+        };
+        BenefitLedgerEntryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            clientId: string;
+            /** Format: uuid */
+            fundingSourceId: string;
+            /** Format: uuid */
+            allocationBucketId: string | null;
+            /** Format: uuid */
+            serviceAllocationId: string | null;
+            /** Format: uuid */
+            performedServiceId: string | null;
+            /** @enum {string} */
+            entryType: "entitlement_allocated" | "opening_balance_adjusted" | "external_consumption_recorded" | "service_consumption_allocated" | "service_consumption_reversed" | "manual_adjustment" | "benefit_expired";
+            /** @description Signed integer EUR cents */
+            amountCents: number;
+            /** Format: date */
+            effectiveDate: string;
+            sourceType: string;
+            reference: string | null;
+            verificationStatus: string;
             /** Format: date-time */
-            revokedAt: string | null;
+            recordedAt: string;
+        };
+        BenefitBudgetResponseDto: {
+            /** Format: uuid */
+            clientId: string;
             /** Format: date */
             asOf: string;
+            /** Format: date */
+            currentPeriod: string;
+            /** @enum {number|null} */
+            careGrade: 1 | 2 | 3 | 4 | 5 | null;
+            fundingSources: components["schemas"]["BenefitBudgetSourceDto"][];
+            entitlementBudgets: components["schemas"]["BenefitEntitlementBudgetDto"][];
+            /** @description Potential cost of scheduled, eligible §45b services; this is not reserved consumption, EUR cents */
+            plannedEligible45bCents: number;
+            entitlements: components["schemas"]["BenefitEntitlementDto"][];
+            history: components["schemas"]["BenefitLedgerEntryDto"][];
         };
-        WorkforceComplianceQualificationPageDto: {
-            items: components["schemas"]["WorkforceComplianceQualificationDto"][];
+        BenefitEntitlementInputDto: {
+            /** @enum {string} */
+            benefitType: "entlastungsbetrag_45b" | "umwandlungsanspruch_45a_4" | "private" | "other";
+            /** Format: uuid */
+            fundingSourceId: string;
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil?: string | null;
+            /** @enum {string} */
+            status: "confirmed" | "provisional";
+            /** @enum {string} */
+            calculationMode: "rule_based" | "manual" | "external_input";
+            /** @enum {string} */
+            source: "payer_confirmed" | "client_reported" | "provider_reported" | "contract";
+        };
+        BenefitEntitlementUpdateDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            status?: "confirmed" | "provisional" | "suspended" | "ended";
+            /** Format: date */
+            validUntil?: string | null;
+            /** @enum {string} */
+            source?: "payer_confirmed" | "client_reported" | "provider_reported" | "contract";
+        };
+        BenefitHistoryResponseDto: {
+            items: components["schemas"]["BenefitLedgerEntryDto"][];
             page: number;
             pageSize: number;
             total: number;
         };
-        WorkforceComplianceAffectedOperationDto: {
-            /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
-            /** @enum {string|null} */
-            readiness: "ready" | "at_risk" | "not_ready" | null;
-            /** Format: date */
-            projectedEligibilityEnd: string | null;
-            findingCodes: string[];
-        };
-        WorkforceComplianceQualificationImpactEmployeeDto: {
+        BenefitFundingSourceDto: {
             /** Format: uuid */
-            employeeId: string;
-            firstName: string;
-            lastName: string;
+            id: string;
             /** Format: uuid */
-            organizationId: string | null;
-            organizationName: string | null;
+            clientId: string;
             /** @enum {string} */
-            status: "active" | "inactive" | "archived";
-            /** @enum {string|null} */
-            readiness: "ready" | "at_risk" | "not_ready" | null;
-            affectedOperations: components["schemas"]["WorkforceComplianceAffectedOperationDto"][];
-        };
-        WorkforceComplianceQualificationImpactPageDto: {
-            items: components["schemas"]["WorkforceComplianceQualificationImpactEmployeeDto"][];
-            page: number;
-            pageSize: number;
-            total: number;
-        };
-        WorkforceComplianceOperationReadinessDto: {
-            /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
-            /** @enum {string|null} */
-            readiness: "ready" | "at_risk" | "not_ready" | null;
-            /** Format: date */
-            projectedEligibilityEnd: string | null;
-            findingCodes: ("COMPETENCY_POLICY_MISSING" | "COMPETENCY_POLICY_INACTIVE" | "COMPETENCY_POLICY_INVALID" | "EMPLOYEE_INACTIVE" | "EMPLOYEE_LINK_MISSING" | "COMPETENCY_REQUIREMENT_UNMET" | "COMPETENCY_ELIGIBILITY_EXPIRING")[];
-        };
-        WorkforceComplianceEmployeeDto: {
+            sourceType: "statutory_long_term_care_insurance" | "private_long_term_care_insurance" | "self_pay" | "other";
             /** Format: uuid */
-            employeeId: string;
-            firstName: string;
-            lastName: string;
+            clientInsuranceId: string | null;
+            label: string | null;
+            /** @enum {string} */
+            status: "active" | "ended";
+        };
+        BenefitFundingSourceInputDto: {
+            /** @enum {string} */
+            sourceType: "statutory_long_term_care_insurance" | "private_long_term_care_insurance" | "self_pay" | "other";
             /** Format: uuid */
-            organizationId: string | null;
-            organizationName: string | null;
-            /** @enum {string} */
-            status: "active" | "inactive" | "archived";
-            /** Format: date */
-            asOf: string;
-            operations: components["schemas"]["WorkforceComplianceOperationReadinessDto"][];
-            findingCodes: string[];
+            clientInsuranceId?: string | null;
+            label?: string | null;
         };
-        WorkforceComplianceEmployeePageDto: {
-            items: components["schemas"]["WorkforceComplianceEmployeeDto"][];
-            page: number;
-            pageSize: number;
-            total: number;
-        };
-        WorkforceComplianceFindingDto: {
+        BenefitAdjustmentDto: {
+            /** Format: uuid */
+            idempotencyKey: string;
+            /** Format: uuid */
+            fundingSourceId: string;
+            /** Format: uuid */
+            entitlementId?: string;
             /** @enum {string} */
-            code: "COMPETENCY_POLICY_MISSING" | "COMPETENCY_POLICY_INACTIVE" | "COMPETENCY_POLICY_INVALID" | "EMPLOYEE_INACTIVE" | "EMPLOYEE_LINK_MISSING" | "COMPETENCY_REQUIREMENT_UNMET" | "COMPETENCY_ELIGIBILITY_EXPIRING";
-            /** @enum {string} */
-            severity: "warning" | "critical";
-            blocking: boolean;
+            benefitType: "entlastungsbetrag_45b" | "umwandlungsanspruch_45a_4" | "private" | "other";
+            /** @description Signed integer EUR cents */
+            amountCents: number;
             /** Format: date */
             effectiveDate: string;
             /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
-            /** Format: uuid */
-            policyId: string | null;
-            policyVersion: number | null;
-            qualificationIds: string[];
-            assignmentIds: string[];
-        };
-        WorkforceComplianceOperationDetailDto: {
+            adjustmentType: "opening_balance" | "external_consumption" | "manual_adjustment" | "external_input";
+            sourceType: string;
+            reference?: string | null;
             /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
-            /** @enum {string|null} */
-            readiness: "ready" | "at_risk" | "not_ready" | null;
-            /** Format: date */
-            projectedEligibilityEnd: string | null;
-            findingCodes: ("COMPETENCY_POLICY_MISSING" | "COMPETENCY_POLICY_INACTIVE" | "COMPETENCY_POLICY_INVALID" | "EMPLOYEE_INACTIVE" | "EMPLOYEE_LINK_MISSING" | "COMPETENCY_REQUIREMENT_UNMET" | "COMPETENCY_ELIGIBILITY_EXPIRING")[];
-            findings: components["schemas"]["WorkforceComplianceFindingDto"][];
+            verificationStatus: "estimated" | "client_reported" | "provider_reported" | "payer_confirmed";
         };
-        WorkforceComplianceEmployeeDetailDto: {
+        BenefitAdjustmentResponseDto: {
             /** Format: uuid */
-            employeeId: string;
-            firstName: string;
-            lastName: string;
+            id: string;
+            /** Format: uuid */
+            bucketId: string | null;
+            amountCents: number;
+            /** Format: date */
+            effectiveDate: string;
+            /** @enum {string} */
+            verificationStatus: "estimated" | "client_reported" | "provider_reported" | "payer_confirmed";
+        };
+        BenefitWorklistClientDto: {
+            /** Format: uuid */
+            clientId: string;
+            clientName: string;
             /** Format: uuid */
             organizationId: string | null;
-            organizationName: string | null;
-            /** @enum {string} */
-            status: "active" | "inactive" | "archived";
-            /** Format: date */
-            asOf: string;
-            operations: components["schemas"]["WorkforceComplianceOperationDetailDto"][];
-            findingCodes: string[];
-            qualifications: components["schemas"]["WorkforceComplianceQualificationDto"][];
-            historyLimitations: string[];
+            /** Format: uuid */
+            facilityId: string | null;
+            /** @enum {number|null} */
+            careGrade: 1 | 2 | 3 | 4 | 5 | null;
+            missingPflegegrad: boolean;
+            missingEntitlement: boolean;
+            lowRecordedBalance: boolean;
+            /** @description Integer EUR cents */
+            recordedRemainingCents: number;
+            /** @description Integer EUR cents */
+            expiringCarryoverCents: number;
+            unverifiedOpeningBalance: boolean;
         };
-        WorkforceCompliancePolicyDetailDto: {
-            /** @enum {string} */
-            operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
-            /** Format: date */
-            asOf: string | null;
-            horizonDays: number;
-            policy: components["schemas"]["WorkforceCompliancePolicySummaryDto"];
-            readiness: components["schemas"]["WorkforceComplianceReadinessCountsDto"];
-            findingCounts: {
-                [key: string]: number;
-            };
+        BenefitPagedWorklistDto: {
+            items: components["schemas"]["BenefitWorklistClientDto"][];
+            page: number;
+            pageSize: number;
+            total: number;
         };
-        WorkforceComplianceSettingsReadDto: {
-            criticalDays: number;
-            warningDays: number;
-            reportingTimezone: string;
+        BenefitUnallocatedServiceDto: {
+            /** Format: uuid */
+            performedServiceId: string;
+            /** Format: uuid */
+            clientId: string;
+            clientName: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId: string | null;
+            serviceName: string;
+            /** @enum {string} */
+            serviceCategory: "recognized_support" | "clinical_nursing" | "other";
+            /** Format: date */
+            serviceDate: string;
+            unit: string;
+            actualQuantity: string | null;
+            /** Format: uuid */
+            priceId: string | null;
+            priceCents: number | null;
+            pricingUnit: string | null;
+            serviceAmountCents: number | null;
+            allocatedCents: number;
+            remainingCents: number | null;
+        };
+        BenefitPagedServiceWorklistDto: {
+            items: components["schemas"]["BenefitUnallocatedServiceDto"][];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
+        BenefitWorklistResponseDto: {
+            clients: components["schemas"]["BenefitPagedWorklistDto"];
+            unallocatedServices: components["schemas"]["BenefitPagedServiceWorklistDto"];
+        };
+        BenefitUnallocatedServicesResponseDto: {
+            items: components["schemas"]["BenefitUnallocatedServiceDto"][];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
+        BenefitAllocationDto: {
+            /** Format: uuid */
+            fundingSourceId: string;
+            /** Format: uuid */
+            entitlementId: string;
+            amountCents: number;
+            /** @enum {string} */
+            status: "provisional" | "confirmed";
+            /** Format: uuid */
+            idempotencyKey: string;
+            manualServiceAmountCents?: number;
+        };
+        BenefitAllocationsDto: {
+            allocations: components["schemas"]["BenefitAllocationDto"][];
+        };
+        BenefitServiceAllocationItemDto: {
+            /** Format: uuid */
+            id: string;
+            amountCents: number;
+            /** @enum {string} */
+            status: "provisional" | "confirmed";
+            /** @enum {string} */
+            benefitType: "entlastungsbetrag_45b" | "umwandlungsanspruch_45a_4" | "private" | "other";
+        };
+        BenefitServiceAllocationResultDto: {
+            /** Format: uuid */
+            performedServiceId: string;
+            serviceAmountCents: number;
+            previouslyAllocatedCents: number;
+            allocatedCents: number;
+            remainingCents: number;
+            allocations: components["schemas"]["BenefitServiceAllocationItemDto"][];
+        };
+        BenefitReversalDto: {
+            reason: string;
+            /** Format: uuid */
+            idempotencyKey: string;
+        };
+        BenefitAllocationReversalResponseDto: {
+            /** Format: uuid */
+            allocationId: string;
+            /** Format: uuid */
+            reversalId: string;
+            /** Format: date-time */
+            reversedAt: string;
+        };
+        ProviderRecognitionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            recognizedOffering: string;
+            jurisdiction: string;
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil: string | null;
+            reference: string | null;
+            /** @enum {string} */
+            status: "active" | "ended";
+        };
+        ProviderRecognitionInputDto: {
+            /** Format: uuid */
+            organizationId: string;
+            recognizedOffering: string;
+            jurisdiction: string;
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil?: string | null;
+            reference?: string | null;
+        };
+        BenefitEstimateOptionDto: {
+            /** Format: uuid */
+            entitlementId: string;
+            /** Format: uuid */
+            fundingSourceId: string;
+            benefitType: string;
+            eligible: boolean;
+            reason: string | null;
+            /** @description Integer EUR cents */
+            estimatedAvailableCents: number | null;
+            /** @description Integer EUR cents */
+            confirmedAvailableCents: number | null;
+        };
+        BenefitEstimateResponseDto: {
+            /** Format: uuid */
+            clientId: string;
+            /** Format: uuid */
+            serviceId: string;
+            /** Format: date */
+            serviceDate: string;
+            quantity: string;
+            /** @description Integer EUR cents */
+            serviceAmountCents: number | null;
+            /** Format: uuid */
+            servicePriceId: string | null;
+            /** @description Integer EUR cents */
+            estimated45bAvailableCents: number;
+            /** @description Integer EUR cents */
+            confirmed45bAvailableCents: number;
+            /** @description Estimated balance after all scheduled eligible services and this service, EUR cents */
+            estimated45bAfterCents: number | null;
+            /** @description Potential cost of scheduled eligible §45b services; this is not reserved consumption, EUR cents */
+            plannedEligible45bCents: number;
+            /** @enum {number|null} */
+            careGrade: 1 | 2 | 3 | 4 | 5 | null;
+            providerRecognized: boolean;
+            benefitOptions: components["schemas"]["BenefitEstimateOptionDto"][];
+            isEstimate: boolean;
+        };
+        BillingProfileResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            taxNumber: string | null;
+            vatId: string | null;
+            creditorIdentifier: string | null;
+            bankAccountHolder: string | null;
+            iban: string | null;
+            bic: string | null;
+            paymentTermsDays: number;
+            invoiceNumberPrefix: string;
+            /** @enum {string} */
+            defaultCurrency: "EUR";
+            /** @enum {string} */
+            taxTreatment: "taxable" | "tax_exempt" | "small_business";
+            taxRateBasisPoints: number | null;
+            taxExemptionBasis: string | null;
+            requireAcknowledgement: boolean;
+            /** @enum {string} */
+            requiredInvoiceFormat: "pdf" | "structured";
             version: number;
-            canManage: boolean;
         };
-        WorkforceComplianceSettingsUpdateDto: {
+        BillingSettingsEntryResponseDto: {
+            /** Format: uuid */
+            organizationId: string;
+            organizationName: string;
+            organizationAddress: string | null;
+            legalName: string | null;
+            address: string | null;
+            profile: components["schemas"]["BillingProfileResponseDto"] | null;
+        };
+        BillingSettingsListResponseDto: {
+            items: components["schemas"]["BillingSettingsEntryResponseDto"][];
+        };
+        BillingProfileInputDto: {
+            /** Format: uuid */
+            organizationId: string;
+            taxNumber?: string | null;
+            vatId?: string | null;
+            creditorIdentifier?: string | null;
+            bankAccountHolder?: string | null;
+            iban?: string | null;
+            bic?: string | null;
+            paymentTermsDays: number;
+            invoiceNumberPrefix: string;
+            /** @enum {string} */
+            defaultCurrency: "EUR";
+            /** @enum {string} */
+            taxTreatment: "taxable" | "tax_exempt" | "small_business";
+            taxRateBasisPoints?: number | null;
+            taxExemptionBasis?: string | null;
+            requireAcknowledgement: boolean;
+            /** @enum {string} */
+            requiredInvoiceFormat: "pdf" | "structured";
+            expectedVersion?: number;
+        };
+        PayerArrangementResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            clientId: string;
+            /** Format: uuid */
+            payerId: string | null;
+            /** Format: uuid */
+            fundingSourceId: string | null;
+            /** Format: uuid */
+            clientInsuranceId: string | null;
+            /** @enum {string} */
+            payerType: "statutory_insurance" | "private_insurance" | "other";
+            payerReference: string | null;
+            /** @enum {string} */
+            arrangementType: "direct_payer_billing" | "reimbursement_to_client" | "other";
+            /** @enum {string} */
+            recipientType: "client" | "insurance" | "contact" | "other";
+            recipientName: string | null;
+            recipientAddress: string | null;
+            /** @enum {string} */
+            mandateStatus: "authorized" | "pending" | "revoked" | "not_applicable";
+            documentedSource: string | null;
+            documentedReference: string | null;
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil: string | null;
+            version: number;
+        };
+        PayerArrangementListResponseDto: {
+            items: components["schemas"]["PayerArrangementResponseDto"][];
+        };
+        PayerArrangementInputDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            clientId: string;
+            /** Format: uuid */
+            fundingSourceId?: string | null;
+            /** Format: uuid */
+            clientInsuranceId?: string | null;
+            /** Format: uuid */
+            payerId?: string | null;
+            /** Format: uuid */
+            mandateDocumentArtifactId?: string | null;
+            /** @enum {string} */
+            payerType: "statutory_insurance" | "private_insurance" | "self_pay" | "other";
+            payerReference?: string | null;
+            /** @enum {string} */
+            arrangementType: "direct_payer_billing" | "reimbursement_to_client" | "other";
+            /** @enum {string} */
+            recipientType: "client" | "insurance" | "contact" | "other";
+            recipientName?: string | null;
+            recipientAddress?: string | null;
+            /** @enum {string} */
+            mandateStatus: "authorized" | "pending" | "revoked" | "not_applicable";
+            documentedSource?: string | null;
+            documentedReference?: string | null;
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil?: string | null;
+        };
+        PayerArrangementUpdateDto: {
             expectedVersion: number;
-            criticalDays?: number;
-            warningDays?: number;
-            reportingTimezone?: string;
-        };
-        WorkforceComplianceSettingsDto: {
-            criticalDays: number;
-            warningDays: number;
-            reportingTimezone: string;
-            version: number;
-        };
-        MedicationDefinitionDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            tenantId: string;
-            name: string;
-            activeIngredient?: string | null;
-            strength?: string | null;
-            dosageForm: string;
-            route: string;
-            manufacturer?: string | null;
-            externalCode?: string | null;
             /** @enum {string} */
-            status: "active" | "archived";
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        MedicationDefinitionRequestDto: {
-            name: string;
-            activeIngredient?: string | null;
-            strength?: string | null;
-            /** @enum {string} */
-            dosageForm: "tablet" | "capsule" | "drops" | "solution" | "injection" | "cream" | "patch" | "inhalation" | "other";
-            /** @enum {string} */
-            route: "oral" | "topical" | "subcutaneous" | "intramuscular" | "inhalation" | "transdermal" | "other";
-            manufacturer?: string | null;
-            externalCode?: string | null;
-        };
-        MedicationDefinitionPatchRequestDto: {
-            name?: string;
-            activeIngredient?: string | null;
-            strength?: string | null;
-            /** @enum {string} */
-            dosageForm?: "tablet" | "capsule" | "drops" | "solution" | "injection" | "cream" | "patch" | "inhalation" | "other";
-            /** @enum {string} */
-            route?: "oral" | "topical" | "subcutaneous" | "intramuscular" | "inhalation" | "transdermal" | "other";
-            manufacturer?: string | null;
-            externalCode?: string | null;
-            /** @enum {string} */
-            status?: "active" | "archived";
-        };
-        MedicationOrderSummaryDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            tenantId: string;
-            /** Format: uuid */
-            clientId: string;
-            /** @enum {string} */
-            status: "draft" | "active" | "paused" | "discontinued";
-            version: number;
-            /** Format: uuid */
-            createdByUserId: string;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        MedicationSnapshotDto: {
-            name: string;
-            activeIngredient?: string | null;
-            strength?: string | null;
-            dosageForm: string;
-            manufacturer?: string | null;
-        };
-        MedicationOrderRevisionDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            orderId: string;
-            version: number;
-            /** @enum {string} */
-            status: "draft" | "active" | "paused" | "discontinued";
-            /** Format: uuid */
-            medicationDefinitionId: string;
-            medicationSnapshot: components["schemas"]["MedicationSnapshotDto"];
-            doseAmount: string;
-            doseUnit: string;
-            route: string;
-            instructions?: string | null;
-            indication?: string | null;
-            prescriberName?: string | null;
-            sourceType: string;
-            sourceReference?: string | null;
-            /** Format: date-time */
-            prescribedAt?: string | null;
-            /** Format: date */
-            validFrom: string;
+            mandateStatus: "authorized" | "pending" | "revoked" | "not_applicable";
             /** Format: date */
             validUntil?: string | null;
-            schedule: {
-                /** @enum {string} */
-                type: "fixed_times";
-                times: string[];
-                timezone: string;
-            } | {
-                /** @enum {string} */
-                type: "interval";
-                /** Format: date-time */
-                anchorAt: string;
-                intervalMinutes: number;
-                timezone: string;
-            } | {
-                /** @enum {string} */
-                type: "as_needed";
-                indication: string;
-                timezone: string;
-                maximumDoseAmount?: string;
-                maximumAdministrations?: number;
-                frequencyWindowMinutes?: number;
-                minimumIntervalMinutes?: number;
-            };
-            /** Format: date-time */
-            createdAt: string;
-        };
-        MedicationOrderListDto: {
-            order: components["schemas"]["MedicationOrderSummaryDto"];
-            currentRevision: components["schemas"]["MedicationOrderRevisionDto"] | null;
-        };
-        MedicationOrderRequestDto: {
+            documentedSource?: string | null;
+            documentedReference?: string | null;
             /** Format: uuid */
-            medicationDefinitionId: string;
-            /** @example 1 */
-            doseAmount: string;
-            /** @enum {string} */
-            doseUnit: "mg" | "g" | "mL" | "tablet" | "capsule" | "drop" | "puff" | "patch";
-            /** @enum {string} */
-            route: "oral" | "topical" | "subcutaneous" | "intramuscular" | "inhalation" | "transdermal" | "other";
-            instructions?: string | null;
-            indication?: string | null;
-            prescriberName?: string | null;
-            /** @enum {string} */
-            sourceType: "prescriber" | "care_authorizing_source" | "staff_transcription";
-            sourceReference?: string | null;
-            /** Format: date-time */
-            prescribedAt?: string | null;
-            /** Format: date */
-            validFrom: string;
-            /** Format: date */
-            validUntil?: string | null;
-            schedule: {
-                /** @enum {string} */
-                type: "fixed_times";
-                times: string[];
-            } | {
-                /** @enum {string} */
-                type: "interval";
-                /** Format: date-time */
-                anchorAt: string;
-                intervalMinutes: number;
-            } | {
-                /** @enum {string} */
-                type: "as_needed";
-                indication: string;
-                maximumDoseAmount?: string;
-                maximumAdministrations?: number;
-                frequencyWindowMinutes?: number;
-                minimumIntervalMinutes?: number;
-            };
-        };
-        MedicationOrderHistoryDto: {
-            order: components["schemas"]["MedicationOrderSummaryDto"];
-            revisions: components["schemas"]["MedicationOrderRevisionDto"][];
-        };
-        MedicationOrderRevisionRequestDto: {
+            payerId?: string | null;
             /** Format: uuid */
-            medicationDefinitionId: string;
-            /** @example 1 */
-            doseAmount: string;
-            /** @enum {string} */
-            doseUnit: "mg" | "g" | "mL" | "tablet" | "capsule" | "drop" | "puff" | "patch";
-            /** @enum {string} */
-            route: "oral" | "topical" | "subcutaneous" | "intramuscular" | "inhalation" | "transdermal" | "other";
-            instructions?: string | null;
-            indication?: string | null;
-            prescriberName?: string | null;
-            /** @enum {string} */
-            sourceType: "prescriber" | "care_authorizing_source" | "staff_transcription";
-            sourceReference?: string | null;
-            /** Format: date-time */
-            prescribedAt?: string | null;
-            /** Format: date */
-            validFrom: string;
-            /** Format: date */
-            validUntil?: string | null;
-            schedule: {
-                /** @enum {string} */
-                type: "fixed_times";
-                times: string[];
-            } | {
-                /** @enum {string} */
-                type: "interval";
-                /** Format: date-time */
-                anchorAt: string;
-                intervalMinutes: number;
-            } | {
-                /** @enum {string} */
-                type: "as_needed";
-                indication: string;
-                maximumDoseAmount?: string;
-                maximumAdministrations?: number;
-                frequencyWindowMinutes?: number;
-                minimumIntervalMinutes?: number;
-            };
-            expectedVersion: number;
+            mandateDocumentArtifactId?: string | null;
         };
-        MedicationDoseDto: {
-            amount: string;
-            /** @enum {string} */
-            unit: "mg" | "g" | "mL" | "tablet" | "capsule" | "drop" | "puff" | "patch";
-        };
-        MedicationDueOccurrenceDto: {
-            /** Format: uuid */
-            occurrenceId: string;
-            /** Format: uuid */
-            orderId: string;
-            orderVersion: number;
-            /** Format: date-time */
-            scheduledAt: string;
-            timezone: string;
-            /** Format: date */
-            localDate: string;
-            localTime: string;
-            /** @enum {string} */
-            status: "due" | "overdue_not_documented";
-            medication: components["schemas"]["MedicationSnapshotDto"];
-            orderedDose: components["schemas"]["MedicationDoseDto"];
-            /** @enum {string} */
-            route: "oral" | "topical" | "subcutaneous" | "intramuscular" | "inhalation" | "transdermal" | "other";
-            instructions?: string | null;
-        };
-        MedicationCorrectionSummaryDto: {
-            /** Format: uuid */
+        BillingCandidateResponseDto: {
             id: string;
-            version: number;
-            /** @enum {string} */
-            outcome: "administered" | "not_administered" | "refused" | "withheld";
-            actualDoseAmount?: string | null;
-            /** @enum {string|null} */
-            actualDoseUnit?: "mg" | "g" | "mL" | "tablet" | "capsule" | "drop" | "puff" | "patch" | null;
-            reasonCode?: string | null;
-            administrationReason?: string | null;
-            note?: string | null;
-            correctionReason: string;
+            sourceKey: string;
             /** Format: uuid */
-            correctedByEmployeeId: string;
-            correctedByEmployeeName: string;
-            /** Format: date-time */
-            correctedAt: string;
-        };
-        MedicationAdministrationRecordDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            orderId: string;
-            orderVersion: number;
-            /** Format: uuid */
-            occurrenceId?: string | null;
-            /** Format: uuid */
-            visitId: string;
-            /** @enum {string} */
-            outcome: "administered" | "not_administered" | "refused" | "withheld";
-            orderedDose: components["schemas"]["MedicationDoseDto"];
-            actualDose?: components["schemas"]["MedicationDoseDto"] | null;
-            /** @enum {string} */
-            route: "oral" | "topical" | "subcutaneous" | "intramuscular" | "inhalation" | "transdermal" | "other";
-            reasonCode?: string | null;
-            administrationReason?: string | null;
-            note?: string | null;
-            administeredByEmployeeName: string;
-            /** Format: date-time */
-            occurredAt: string;
-            /** Format: date-time */
-            capturedAt: string;
-            /** Format: date-time */
-            scheduledAt?: string | null;
-            scheduledTimezone?: string | null;
-            medication: components["schemas"]["MedicationSnapshotDto"];
-            currentCorrection?: components["schemas"]["MedicationCorrectionSummaryDto"] | null;
-            corrections: components["schemas"]["MedicationCorrectionSummaryDto"][];
-        };
-        MedicationAdministrationResponseDto: {
-            due: components["schemas"]["MedicationDueOccurrenceDto"][];
-            history: components["schemas"]["MedicationAdministrationRecordDto"][];
-        };
-        MedicationPrnOrderDto: {
-            /** Format: uuid */
-            orderId: string;
-            orderVersion: number;
-            medication: components["schemas"]["MedicationSnapshotDto"];
-            orderedDose: components["schemas"]["MedicationDoseDto"];
-            /** @enum {string} */
-            route: "oral" | "topical" | "subcutaneous" | "intramuscular" | "inhalation" | "transdermal" | "other";
-            instructions?: string | null;
-            indication: string;
-        };
-        VisitMedicationAdministrationDto: {
+            performedServiceId: string;
             /** Format: uuid */
             visitId: string;
             /** Format: uuid */
             clientId: string;
+            clientName: string;
             /** Format: uuid */
-            employeeId: string;
-            /** @description A review is pending; this does not block medication administration */
-            reconciliationReviewPending: boolean;
-            due: components["schemas"]["MedicationDueOccurrenceDto"][];
-            history: components["schemas"]["MedicationAdministrationRecordDto"][];
-            prn: components["schemas"]["MedicationPrnOrderDto"][];
-        };
-        MedicationAdministrationRequestDto: {
+            organizationId: string;
+            organizationName: string;
             /** Format: uuid */
-            visitId: string;
+            facilityId: string;
+            facilityName: string;
+            /** Format: uuid */
+            serviceId: string;
+            serviceCode: string;
+            serviceName: string;
+            /** Format: date */
+            serviceDate: string;
+            quantity: string;
             /** @enum {string} */
-            outcome: "administered" | "not_administered" | "refused" | "withheld";
-            /** @example 1 */
-            actualDoseAmount?: string | null;
+            unit: "occurrence" | "minute" | "hour" | "day";
+            pricingUnit: string | null;
+            /** Format: uuid */
+            servicePriceId: string | null;
+            unitPriceCents: number | null;
+            serviceAmountCents: number | null;
+            /** Format: uuid */
+            fundingAllocationId: string | null;
+            /** Format: uuid */
+            fundingSourceId: string | null;
+            fundingLabel: string | null;
             /** @enum {string|null} */
-            actualDoseUnit?: "mg" | "g" | "mL" | "tablet" | "capsule" | "drop" | "puff" | "patch" | null;
-            /** @enum {string|null} */
-            reasonCode?: "client_refused" | "client_unavailable" | "medication_unavailable" | "held_per_instruction" | "administration_not_possible" | "other" | null;
-            administrationReason?: string | null;
-            note?: string | null;
-        };
-        MedicationCorrectionRequestDto: {
+            fundingStatus: "confirmed" | "provisional" | null;
+            amountCents: number | null;
+            amountAlreadyBilledCents: number;
+            amountReservedCents: number;
+            remainingBillableAmountCents: number;
             /** @enum {string} */
-            outcome: "administered" | "not_administered" | "refused" | "withheld";
-            /** @example 1 */
-            actualDoseAmount?: string | null;
-            /** @enum {string|null} */
-            actualDoseUnit?: "mg" | "g" | "mL" | "tablet" | "capsule" | "drop" | "puff" | "patch" | null;
-            /** @enum {string|null} */
-            reasonCode?: "client_refused" | "client_unavailable" | "medication_unavailable" | "held_per_instruction" | "administration_not_possible" | "other" | null;
-            administrationReason?: string | null;
-            note?: string | null;
-            correctionReason: string;
+            recommendedRecipient: "client" | "payer";
+            /** Format: uuid */
+            recommendedPayerArrangementId: string | null;
+            /** Format: uuid */
+            evidencePackageId: string | null;
+            evidenceSnapshotHash: string | null;
+            evidenceStatus: string;
+            ready: boolean;
+            blockers: string[];
         };
-        MedicationReconciliationSummaryDto: {
+        BillingCandidateListResponseDto: {
+            items: components["schemas"]["BillingCandidateResponseDto"][];
+        };
+        BillingInvoiceLineResponseDto: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
-            clientId: string;
-            /** @enum {string} */
-            status: "draft" | "in_review" | "completed" | "cancelled";
-            /** @enum {string} */
-            reason: "initial_intake" | "hospital_discharge" | "physician_update" | "periodic_review" | "reported_change" | "other";
-            version: number;
-            inputVersion: number;
-            comparedInputVersion?: number | null;
-            comparisonVersion: number;
+            performedServiceId: string;
             /** Format: uuid */
-            startedByEmployeeId: string;
+            fundingAllocationId: string | null;
             /** Format: uuid */
-            reviewedByEmployeeId?: string | null;
-            /** Format: date-time */
-            startedAt: string;
-            /** Format: date-time */
-            completedAt?: string | null;
-            cancellationReason?: string | null;
+            servicePriceId: string | null;
+            /** Format: uuid */
+            evidencePackageId: string;
+            evidenceSnapshotHash: string;
+            sourceKey: string;
+            serviceCodeSnapshot: string;
+            serviceNameSnapshot: string;
+            /** Format: date */
+            serviceDate: string;
+            quantity: string;
+            /** @enum {string} */
+            unit: "occurrence" | "minute" | "hour" | "day";
+            unitPriceCents: number;
+            serviceAmountCents: number;
+            amountCents: number;
+            /** @enum {string} */
+            taxTreatment: "taxable" | "tax_exempt" | "small_business";
+            taxRateBasisPoints: number;
+            netCents: number;
+            taxCents: number;
+            grossCents: number;
+            taxExemptionBasis: string | null;
+            fundingLabelSnapshot: string | null;
+        };
+        InvoiceCorrectionResponseItemDto: {
+            /** Format: uuid */
+            id: string;
+            correctionNumber: string;
+            amountCents: number;
+            reason: string;
             /** Format: date-time */
             createdAt: string;
+        };
+        InvoicePaymentHistoryResponseDto: {
+            /** Format: uuid */
+            allocationId: string;
+            /** Format: uuid */
+            paymentId: string;
+            amountCents: number;
             /** Format: date-time */
-            updatedAt: string;
-        };
-        MedicationReconciliationStartRequestDto: {
+            allocatedAt: string;
             /** @enum {string} */
-            reason: "initial_intake" | "hospital_discharge" | "physician_update" | "periodic_review" | "reported_change" | "other";
-        };
-        MedicationReconciliationCreatedDto: {
-            reconciliation: components["schemas"]["MedicationReconciliationSummaryDto"];
-            baselineCount: number;
-        };
-        MedicationReconciliationSourceDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            reconciliationId: string;
-            /** Format: uuid */
-            clientId: string;
-            /** @enum {string} */
-            sourceType: "physician" | "hospital_discharge" | "pharmacy" | "client" | "representative" | "other";
-            /** @enum {string} */
-            provenanceClass: "clinician_instruction" | "pharmacy_record" | "client_report" | "representative_report" | "other";
-            sourceName?: string | null;
-            /** Format: date */
-            sourceDate?: string | null;
+            method: "bank_transfer" | "cash" | "other";
             /** Format: date-time */
             receivedAt: string;
-            /** Format: uuid */
-            recordedByEmployeeId: string;
-            reference?: string | null;
-        };
-        MedicationReconciliationEntryDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            sourceId: string;
-            /** Format: uuid */
-            supersedesEntryId?: string | null;
-            correctionReason?: string | null;
-            medicationName: string;
-            activeIngredient?: string | null;
-            strength?: string | null;
-            dosageForm?: string | null;
-            doseAmount?: string | null;
-            doseUnit?: string | null;
-            route?: string | null;
-            scheduleDescription?: string | null;
-            structuredSchedule?: Record<string, never> | null;
-            /** @enum {string} */
-            reportedStatus: "active" | "paused" | "discontinued" | "unknown";
-            note?: string | null;
-            isCurrent: boolean;
-            currentMatch?: Record<string, never> | null;
-        };
-        MedicationReconciliationBaselineDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            orderId: string;
-            /** Format: uuid */
-            orderRevisionId: string;
-            orderVersion: number;
-            snapshot: Record<string, never>;
-        };
-        MedicationReconciliationDecisionDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            discrepancyId: string;
-            version: number;
-            /** @enum {string} */
-            decision: "accept_internal" | "accept_external" | "requires_clarification" | "no_change";
-            reason?: string | null;
-            clarificationOutcome?: string | null;
-            /** Format: uuid */
-            reviewedByEmployeeId: string;
+            reference: string | null;
+            payerNameSnapshot: string | null;
             /** Format: date-time */
-            reviewedAt: string;
+            reversedAt: string | null;
+            reversalReason: string | null;
         };
-        MedicationReconciliationApplicationDto: {
+        BillingInvoiceResponseDto: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
-            discrepancyId: string;
+            organizationId: string;
             /** Format: uuid */
-            actionId: string;
+            facilityId: string;
+            /** Format: uuid */
+            clientId: string;
+            clientName: string;
+            recipientName: string | null;
+            recipientAddress: string | null;
+            /** Format: uuid */
+            payerArrangementId: string | null;
             /** @enum {string} */
-            disposition: "applied" | "not_applied";
-            reason?: string | null;
-            /** Format: uuid */
-            orderId?: string | null;
-            /** Format: uuid */
-            orderRevisionId?: string | null;
-            orderVersion?: number | null;
-        };
-        MedicationReconciliationDiscrepancyDto: {
-            /** Format: uuid */
-            id: string;
-            comparisonVersion: number;
-            /** @enum {string} */
-            type: "missing_in_internal_plan" | "missing_in_external_source" | "dose_mismatch" | "route_mismatch" | "schedule_mismatch" | "medication_mismatch" | "status_mismatch" | "insufficient_information";
-            field: string;
-            /** Format: uuid */
-            entryId?: string | null;
-            /** Format: uuid */
-            baselineId?: string | null;
-            externalValue?: Record<string, never> | null;
-            internalValue?: Record<string, never> | null;
-            isCurrent: boolean;
-            latestDecision?: components["schemas"]["MedicationReconciliationDecisionDto"] | null;
-            decisions: components["schemas"]["MedicationReconciliationDecisionDto"][];
-            application?: components["schemas"]["MedicationReconciliationApplicationDto"] | null;
-        };
-        MedicationReconciliationDetailDto: {
-            reconciliation: components["schemas"]["MedicationReconciliationSummaryDto"];
-            sources: components["schemas"]["MedicationReconciliationSourceDto"][];
-            entries: components["schemas"]["MedicationReconciliationEntryDto"][];
-            baselines: components["schemas"]["MedicationReconciliationBaselineDto"][];
-            discrepancies: components["schemas"]["MedicationReconciliationDiscrepancyDto"][];
-            comparisonCurrent: boolean;
-        };
-        MedicationReconciliationSourceRequestDto: {
-            expectedVersion: number;
-            /** @enum {string} */
-            sourceType: "physician" | "hospital_discharge" | "pharmacy" | "client" | "representative" | "other";
-            sourceName?: string | null;
+            recipientType: "client" | "payer";
+            invoiceNumber: string | null;
             /** Format: date */
-            sourceDate?: string | null;
-            reference?: string | null;
-        };
-        MedicationReconciliationEntryRequestDto: {
-            expectedVersion: number;
-            /** Format: uuid */
-            sourceId: string;
-            /** Format: uuid */
-            supersedesEntryId?: string | null;
-            correctionReason?: string | null;
-            medicationName: string;
-            activeIngredient?: string | null;
-            strength?: string | null;
-            /** @enum {string|null} */
-            dosageForm?: "tablet" | "capsule" | "drops" | "solution" | "injection" | "cream" | "patch" | "inhalation" | "other" | null;
-            /** @example 1 */
-            doseAmount?: string | null;
-            /** @enum {string|null} */
-            doseUnit?: "mg" | "g" | "mL" | "tablet" | "capsule" | "drop" | "puff" | "patch" | null;
-            /** @enum {string|null} */
-            route?: "oral" | "topical" | "subcutaneous" | "intramuscular" | "inhalation" | "transdermal" | "other" | null;
-            scheduleDescription?: string | null;
-            structuredSchedule?: Record<string, never> | null;
+            issueDate: string | null;
+            /** Format: date */
+            servicePeriodFrom: string | null;
+            /** Format: date */
+            servicePeriodUntil: string | null;
+            /** Format: date */
+            dueDate: string | null;
             /** @enum {string} */
-            reportedStatus: "active" | "paused" | "discontinued" | "unknown";
-            note?: string | null;
-        };
-        MedicationReconciliationMatchRequestDto: {
-            expectedVersion: number;
-            /** Format: uuid */
-            entryId: string;
-            /** Format: uuid */
-            baselineId?: string | null;
-        };
-        MedicationReconciliationExpectedVersionRequestDto: {
-            expectedVersion: number;
-        };
-        MedicationReconciliationDecisionRequestDto: {
-            expectedVersion: number;
-            /** Format: uuid */
-            discrepancyId: string;
+            currency: "EUR";
             /** @enum {string} */
-            decision: "accept_internal" | "accept_external" | "requires_clarification" | "no_change";
-            reason?: string | null;
-            clarificationOutcome?: string | null;
+            status: "draft" | "issued" | "cancelled";
+            version: number;
+            issuerSnapshot: {
+                [key: string]: unknown;
+            } | null;
+            recipientSnapshot: {
+                [key: string]: unknown;
+            } | null;
+            subtotalCents: number;
+            taxTotalCents: number;
+            grandTotalCents: number;
+            /** @enum {string|null} */
+            pdfStatus: "pending" | "ready" | "failed" | null;
+            /** @enum {string|null} */
+            receivableStatus: "unpaid" | "partially_paid" | "paid" | "overdue" | "corrected" | null;
+            outstandingCents: number | null;
+            evidenceDiscrepancy: boolean;
+            lines: components["schemas"]["BillingInvoiceLineResponseDto"][];
+            corrections: components["schemas"]["InvoiceCorrectionResponseItemDto"][];
+            paymentHistory: components["schemas"]["InvoicePaymentHistoryResponseDto"][];
         };
-        MedicationReconciliationApplyItemDto: {
+        BillingInvoiceListResponseDto: {
+            items: components["schemas"]["BillingInvoiceResponseDto"][];
+            page: number;
+            pageSize: number;
+        };
+        BillingInvoiceLineSelectionDto: {
             /** Format: uuid */
-            discrepancyId: string;
-            /** @enum {string} */
-            disposition: "apply_external" | "not_applied";
-            reason?: string | null;
+            performedServiceId: string;
+            /** Format: uuid */
+            fundingAllocationId?: string | null;
+            amountCents: number;
         };
-        MedicationReconciliationApplyRequestDto: {
+        DraftInvoiceInputDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId: string;
+            /** Format: uuid */
+            clientId: string;
+            /** @enum {string} */
+            recipientType: "client" | "payer";
+            /** Format: uuid */
+            payerArrangementId?: string | null;
+            lines: components["schemas"]["BillingInvoiceLineSelectionDto"][];
+        };
+        DraftInvoiceUpdateDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId: string;
+            /** Format: uuid */
+            clientId: string;
+            /** @enum {string} */
+            recipientType: "client" | "payer";
+            /** Format: uuid */
+            payerArrangementId?: string | null;
+            lines: components["schemas"]["BillingInvoiceLineSelectionDto"][];
             expectedVersion: number;
+        };
+        InvoiceCorrectionResponseDto: {
+            correction: Record<string, never>;
+            invoice: components["schemas"]["BillingInvoiceResponseDto"];
+        };
+        PaymentAllocationHistoryResponseDto: {
+            /** Format: uuid */
+            allocationId: string;
+            /** Format: uuid */
+            invoiceId: string;
+            invoiceNumber: string | null;
+            amountCents: number;
+            /** Format: date-time */
+            allocatedAt: string;
+            /** Format: date-time */
+            reversedAt: string | null;
+            reversalReason: string | null;
+        };
+        BillingPaymentResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            payerReference: string | null;
+            payerNameSnapshot: string | null;
+            amountCents: number;
+            /** @enum {string} */
+            currency: "EUR";
+            /** Format: date-time */
+            receivedAt: string;
+            /** @enum {string} */
+            method: "bank_transfer" | "cash" | "other";
+            reference: string | null;
+            allocatedCents: number;
+            remainingCents: number;
+            allocationHistory: components["schemas"]["PaymentAllocationHistoryResponseDto"][];
+        };
+        BillingPaymentListResponseDto: {
+            items: components["schemas"]["BillingPaymentResponseDto"][];
+            page: number;
+            pageSize: number;
+        };
+        PayerInputDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** @enum {string} */
+            payerType: "statutory_pflegekasse" | "private_pflegeversicherung" | "self_pay" | "other";
+            name: string;
+            payerIdentifier?: string | null;
+            addressText?: string | null;
+            billingContactName?: string | null;
+            billingContactEmail?: string | null;
+            billingContactPhone?: string | null;
+            submissionInstructions?: string | null;
             /**
-             * Format: uuid
-             * @description Stable key reused when retrying this apply request
+             * @default active
+             * @enum {string}
              */
-            actionId: string;
-            items: components["schemas"]["MedicationReconciliationApplyItemDto"][];
+            status: "active" | "inactive";
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil?: string | null;
         };
-        MedicationReconciliationCancelRequestDto: {
+        PayerUpdateDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** @enum {string} */
+            payerType: "statutory_pflegekasse" | "private_pflegeversicherung" | "self_pay" | "other";
+            name: string;
+            payerIdentifier?: string | null;
+            addressText?: string | null;
+            billingContactName?: string | null;
+            billingContactEmail?: string | null;
+            billingContactPhone?: string | null;
+            submissionInstructions?: string | null;
+            /**
+             * @default active
+             * @enum {string}
+             */
+            status: "active" | "inactive";
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil?: string | null;
             expectedVersion: number;
-            reason: string | null;
+        };
+        PayerProfileInputDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** @enum {string} */
+            channel: "manual_portal" | "manual_email" | "postal" | "customer_reimbursement";
+            /** @enum {string} */
+            fundingSourceType: "statutory_long_term_care_insurance" | "private_long_term_care_insurance" | "self_pay" | "other";
+            /** Format: date */
+            validFrom: string;
+            /** Format: date */
+            validUntil?: string | null;
+            sourceName: string;
+            sourceVersion: string;
+            /** Format: date */
+            sourceEffectiveDate: string;
+            sourceUrl?: string | null;
+            requiresClientInsuranceNumber: boolean;
+            requiresPayerIdentifier: boolean;
+            requiresAcknowledgement: boolean;
+            requiresMandate: boolean;
+            requiresInvoicePdf: boolean;
+            requiresEvidencePdf: boolean;
+            requiresMandateDocument: boolean;
+            requiresExternalReference: boolean;
+            requiresProviderRecognition: boolean;
+            expectedVersion: number;
+        };
+        ClaimLineSelectionDto: {
+            /** Format: uuid */
+            invoiceLineId: string;
+            amountCents: number;
+        };
+        ClaimCreateDto: {
+            /** Format: uuid */
+            invoiceId: string;
+            expectedInvoiceVersion: number;
+            /** Format: uuid */
+            payerArrangementId: string;
+            /** Format: uuid */
+            payerBillingProfileId?: string | null;
+            lines: components["schemas"]["ClaimLineSelectionDto"][];
         };
         MeResponseDto: {
             /** Format: uuid */
@@ -6844,7 +5752,7 @@ export interface components {
         };
         PermissionGrantDto: {
             /** @enum {string} */
-            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "clinical_documentation.read" | "clinical_documentation.create" | "clinical_documentation.update" | "clinical_documentation.review" | "clinical_documentation.amend" | "medication.read" | "medication.order.manage" | "medication.administration.read" | "medication.administer" | "medication.administration.correct" | "medication_reconciliation.read" | "medication_reconciliation.create" | "medication_reconciliation.update" | "medication_reconciliation.complete" | "care_plan.read" | "care_plan.create" | "care_plan.update" | "care_plan.activate" | "care_plan.evaluate" | "care_plan.end" | "care_plan.review_history" | "service_evidence.read" | "service_evidence.prepare" | "acknowledgement.read" | "acknowledgement.capture" | "acknowledgement.revoke" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "competency_policy.read" | "competency_policy.manage" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "workforce_compliance.read" | "workforce_compliance.read_details" | "workforce_compliance.manage_settings" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
+            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service.manage_pricing" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "benefits.read" | "benefits.manage" | "benefits.adjust" | "benefits.allocate" | "benefits.review" | "service_evidence.read" | "service_evidence.prepare" | "billing.read" | "billing.manage" | "billing.issue" | "billing.correct" | "billing.payments.read" | "billing.payments.manage" | "billing.settings.manage" | "claims.read" | "claims.manage" | "claims.submit" | "claims.record_decision" | "claims.reconcile" | "claims.settings.manage" | "documents.read" | "documents.generate" | "documents.templates.manage" | "documents.exports.read" | "acknowledgement.read" | "acknowledgement.capture" | "acknowledgement.revoke" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read";
             /** @enum {string} */
             scopeType: "assigned_clients" | "team" | "facility" | "organization" | "tenant";
             /** Format: uuid */
@@ -8998,142 +7906,6 @@ export interface operations {
             };
         };
     };
-    listCompetencyPolicies: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompetencyPolicyAdminDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    createCompetencyPolicyDraft: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CompetencyPolicyDraftInputDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompetencyPolicyAdminDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    activateCompetencyPolicy: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
-                /** @description Version number, starting at 1 */
-                version: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompetencyPolicyAdminDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    deactivateCompetencyPolicy: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompetencyPolicyAdminDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
     AuditController_list: {
         parameters: {
             query?: {
@@ -10360,6 +9132,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ServiceAvailabilityResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServicePricesController_list: {
+        parameters: {
+            query: {
+                validAt: string;
+                facilityId?: unknown;
+                organizationId: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                serviceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServicePriceListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ServicePricesController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                serviceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServicePriceInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServicePriceResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -11667,1916 +10513,6 @@ export interface operations {
             };
         };
     };
-    ClinicalDocumentationController_getRecords: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_addMeasurement: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AddMeasurementRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_deleteMeasurement: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-                recordId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeleteClinicalRecordRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_updateMeasurement: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-                recordId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateMeasurementRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_addObservation: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AddObservationRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_deleteObservation: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-                recordId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeleteClinicalRecordRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_updateObservation: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-                recordId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateObservationRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_addAssessment: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AddAssessmentRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_deleteAssessment: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-                recordId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeleteClinicalRecordRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_updateAssessment: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-                recordId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateAssessmentRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_addRiskAssessment: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AddRiskAssessmentRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_deleteRiskAssessment: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-                recordId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeleteClinicalRecordRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_updateRiskAssessment: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-                recordId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateRiskAssessmentRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_amendRecord: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-                recordId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AmendClinicalRecordRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalDocumentationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_measurementHistory: {
-        parameters: {
-            query: {
-                type?: "blood_pressure" | "pulse" | "temperature" | "weight" | "blood_glucose" | "oxygen_saturation" | "respiratory_rate";
-                pageSize: number;
-                page: number;
-                until: string;
-                from: string;
-            };
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                clientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalRecordHistoryPageDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_observationHistory: {
-        parameters: {
-            query: {
-                category?: "mobility" | "orientation" | "pain" | "skin" | "nutrition" | "hydration" | "elimination" | "sleep" | "mood" | "general_condition";
-                pageSize: number;
-                page: number;
-                until: string;
-                from: string;
-            };
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                clientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalRecordHistoryPageDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_assessmentHistory: {
-        parameters: {
-            query: {
-                type?: "general_condition" | "pain";
-                pageSize: number;
-                page: number;
-                until: string;
-                from: string;
-            };
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                clientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalRecordHistoryPageDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    ClinicalDocumentationController_riskHistory: {
-        parameters: {
-            query: {
-                currentOnly?: boolean;
-                riskType?: "fall" | "pressure_ulcer" | "dehydration" | "malnutrition";
-                pageSize: number;
-                page: number;
-                /** @description Required for history reads. Ignored when currentOnly=true. */
-                until?: string;
-                /** @description Required for history reads. Ignored when currentOnly=true. */
-                from?: string;
-            };
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                clientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClinicalRecordHistoryPageDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    listClientCarePlans: {
-        parameters: {
-            query?: {
-                pageSize?: number;
-                page?: number;
-                status?: "draft" | "active" | "under_review" | "ended";
-            };
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                clientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanListResponseDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    createClientCarePlan: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                clientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateCarePlanDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    getClientCarePlan: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                clientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"] | null;
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    listCarePlans: {
-        parameters: {
-            query?: {
-                pageSize?: number;
-                page?: number;
-                evaluationDueBefore?: unknown;
-                evaluationOverdue?: boolean;
-                facilityId?: unknown;
-                clientQuery?: string;
-                clientId?: unknown;
-                status?: "draft" | "active" | "under_review" | "ended";
-            };
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanListResponseDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    getCarePlan: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    getCarePlanHistory: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanHistoryDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    createCarePlanRevision: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateCarePlanRevisionDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    diffCarePlanRevisions: {
-        parameters: {
-            query: {
-                toRevisionId: unknown;
-                fromRevisionId: unknown;
-            };
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanRevisionDiffDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    getCarePlanRevision: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanRevisionDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    updateCarePlanAssessment: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateCarePlanAssessmentDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    addCarePlanNeed: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CareNeedInputDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    removeCarePlanNeed: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-                needId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ExpectedVersionDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    updateCarePlanNeed: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-                needId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CareNeedInputDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    addCarePlanResource: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CareResourceInputDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    removeCarePlanResource: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-                resourceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ExpectedVersionDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    updateCarePlanResource: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-                resourceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CareResourceInputDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    addCarePlanGoal: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CareGoalInputDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    removeCarePlanGoal: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-                goalId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ExpectedVersionDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    updateCarePlanGoal: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-                goalId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CareGoalInputDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    addCarePlanMeasure: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CareMeasureInputDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    removeCarePlanMeasure: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-                measureId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ExpectedVersionDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    updateCarePlanMeasure: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-                measureId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CareMeasureInputDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    addCarePlanRiskResponse: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CareRiskResponseInputDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    removeCarePlanRiskResponse: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-                riskResponseId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ExpectedVersionDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    updateCarePlanRiskResponse: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-                riskResponseId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CareRiskResponseInputDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    addCarePlanSourceReference: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CarePlanSourceReferenceInputDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    removeCarePlanSourceReference: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-                clinicalRecordId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ExpectedVersionDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    activateCarePlanRevision: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-                revisionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ExpectedVersionDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    previewCarePlanEligibility: {
-        parameters: {
-            query: {
-                operation: "activate" | "evaluate";
-            };
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanEligibilityDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    listCarePlanEvaluations: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanEvaluationDto"][];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    createCarePlanEvaluation: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CarePlanEvaluationInputDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    endCarePlan: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                planId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EndCarePlanDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CarePlanDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    getVisitCarePlan: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                visitId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VisitCarePlanDto"] | null;
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
     ServiceEvidenceController_getForVisit: {
         parameters: {
             query?: never;
@@ -13903,240 +10839,11 @@ export interface operations {
             };
         };
     };
-    getWorkforceComplianceSummary: {
-        parameters: {
-            query?: {
-                horizonDays?: number;
-                asOf?: string;
-            };
-            header: {
-                "X-Tenant-Id": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkforceComplianceSummaryDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    listWorkforceComplianceQualifications: {
-        parameters: {
-            query?: {
-                sortOrder?: "asc" | "desc";
-                sortBy?: "priority" | "qualificationName" | "employeeName" | "validUntil" | "status";
-                pageSize?: number;
-                page?: number;
-                horizonDays?: number;
-                asOf?: string;
-                expiresWithinDays?: number;
-                expiresBefore?: string;
-                teamId?: unknown;
-                facilityId?: unknown;
-                organizationId?: unknown;
-                employeeId?: unknown;
-                qualificationId?: unknown;
-                assignmentStatus?: "active" | "revoked";
-                status?: "valid" | "expiring_soon" | "expired" | "not_yet_valid" | "revoked";
-                q?: string;
-            };
-            header: {
-                "X-Tenant-Id": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkforceComplianceQualificationPageDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    getWorkforceQualificationImpact: {
-        parameters: {
-            query?: {
-                operationKey?: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
-                pageSize?: number;
-                page?: number;
-                horizonDays?: number;
-                asOf?: string;
-            };
-            header: {
-                "X-Tenant-Id": string;
-            };
-            path: {
-                qualificationDefinitionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkforceComplianceQualificationImpactPageDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    listWorkforceComplianceEmployees: {
-        parameters: {
-            query?: {
-                sortOrder?: "asc" | "desc";
-                sortBy?: "lastName" | "firstName";
-                pageSize?: number;
-                page?: number;
-                horizonDays?: number;
-                asOf?: string;
-                teamId?: unknown;
-                facilityId?: unknown;
-                organizationId?: unknown;
-                status?: "active" | "inactive" | "archived";
-                q?: string;
-            };
-            header: {
-                "X-Tenant-Id": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkforceComplianceEmployeePageDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    getWorkforceComplianceEmployee: {
-        parameters: {
-            query?: {
-                horizonDays?: number;
-                asOf?: string;
-            };
-            header: {
-                "X-Tenant-Id": string;
-            };
-            path: {
-                employeeId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkforceComplianceEmployeeDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    getWorkforceCompliancePolicy: {
-        parameters: {
-            query?: {
-                horizonDays?: number;
-                asOf?: string;
-            };
-            header: {
-                "X-Tenant-Id": string;
-            };
-            path: {
-                operationKey: "care_plan.activate" | "care_plan.evaluate" | "medication.administer" | "medication.administration.correct" | "medication.reconciliation.complete";
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkforceCompliancePolicyDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    getWorkforceComplianceSettings: {
+    BenefitsController_definitions: {
         parameters: {
             query?: never;
             header: {
+                /** @description Tenant selected for this request */
                 "X-Tenant-Id": string;
             };
             path?: never;
@@ -14149,7 +10856,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkforceComplianceSettingsReadDto"];
+                    "application/json": components["schemas"]["BenefitDefinitionsResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -14163,46 +10870,9 @@ export interface operations {
             };
         };
     };
-    updateWorkforceComplianceSettings: {
+    BenefitsController_rules: {
         parameters: {
             query?: never;
-            header: {
-                "X-Tenant-Id": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WorkforceComplianceSettingsUpdateDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkforceComplianceSettingsDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    listMedicationDefinitions: {
-        parameters: {
-            query?: {
-                /** @description Apply client resource scope for catalog use while managing this client */
-                clientId?: string;
-            };
             header: {
                 /** @description Tenant selected for this request */
                 "X-Tenant-Id": string;
@@ -14217,7 +10887,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MedicationDefinitionDto"][];
+                    "application/json": components["schemas"]["BenefitRulesResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -14231,112 +10901,7 @@ export interface operations {
             };
         };
     };
-    createMedicationDefinition: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MedicationDefinitionRequestDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MedicationDefinitionDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    getMedicationDefinition: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MedicationDefinitionDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    updateMedicationDefinition: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MedicationDefinitionPatchRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MedicationDefinitionDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    listClientMedicationOrders: {
+    BenefitsController_benefitsForClient: {
         parameters: {
             query?: never;
             header: {
@@ -14355,7 +10920,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MedicationOrderListDto"][];
+                    "application/json": components["schemas"]["BenefitBudgetResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -14369,7 +10934,7 @@ export interface operations {
             };
         };
     };
-    createClientMedicationOrder: {
+    BenefitsController_createEntitlement: {
         parameters: {
             query?: never;
             header: {
@@ -14383,7 +10948,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MedicationOrderRequestDto"];
+                "application/json": components["schemas"]["BenefitEntitlementInputDto"];
             };
         };
         responses: {
@@ -14392,7 +10957,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MedicationOrderListDto"];
+                    "application/json": components["schemas"]["BenefitEntitlementDto"];
                 };
             };
             /** @description Problem Details response */
@@ -14406,7 +10971,7 @@ export interface operations {
             };
         };
     };
-    getMedicationOrderHistory: {
+    BenefitsController_updateEntitlement: {
         parameters: {
             query?: never;
             header: {
@@ -14414,46 +10979,14 @@ export interface operations {
                 "X-Tenant-Id": string;
             };
             path: {
-                orderId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MedicationOrderHistoryDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    reviseMedicationOrder: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                orderId: string;
+                clientId: string;
+                entitlementId: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MedicationOrderRevisionRequestDto"];
+                "application/json": components["schemas"]["BenefitEntitlementUpdateDto"];
             };
         };
         responses: {
@@ -14462,7 +10995,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MedicationOrderListDto"];
+                    "application/json": components["schemas"]["BenefitEntitlementDto"];
                 };
             };
             /** @description Problem Details response */
@@ -14476,7 +11009,83 @@ export interface operations {
             };
         };
     };
-    activateMedicationOrder: {
+    BenefitsController_budget: {
+        parameters: {
+            query?: {
+                asOf?: string;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenefitBudgetResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BenefitsController_history: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                reference?: string;
+                entryType?: "entitlement_allocated" | "opening_balance_adjusted" | "external_consumption_recorded" | "service_consumption_allocated" | "service_consumption_reversed" | "manual_adjustment" | "benefit_expired";
+                fundingSourceId?: unknown;
+                until?: string;
+                from?: string;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenefitHistoryResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BenefitsController_fundingSources: {
         parameters: {
             query?: never;
             header: {
@@ -14484,15 +11093,226 @@ export interface operations {
                 "X-Tenant-Id": string;
             };
             path: {
-                orderId: string;
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenefitFundingSourceDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BenefitsController_createFundingSource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": {
-                    expectedVersion: number;
+                "application/json": components["schemas"]["BenefitFundingSourceInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content: {
+                    "application/json": components["schemas"]["BenefitFundingSourceDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BenefitsController_adjustment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BenefitAdjustmentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenefitAdjustmentResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BenefitsController_worklist: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenefitWorklistResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BenefitsController_unallocatedServices: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                clientId?: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenefitUnallocatedServicesResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BenefitsController_allocate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                performedServiceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BenefitAllocationsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenefitServiceAllocationResultDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BenefitsController_reverse: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                allocationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BenefitReversalDto"];
             };
         };
         responses: {
@@ -14501,7 +11321,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MedicationOrderListDto"];
+                    "application/json": components["schemas"]["BenefitAllocationReversalResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -14515,25 +11335,25 @@ export interface operations {
             };
         };
     };
-    pauseMedicationOrder: {
+    BenefitsController_recognitions: {
         parameters: {
             query?: never;
             header: {
                 /** @description Tenant selected for this request */
                 "X-Tenant-Id": string;
             };
-            path: {
-                orderId: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProviderRecognitionDto"][];
+                };
             };
             /** @description Problem Details response */
             default: {
@@ -14546,25 +11366,29 @@ export interface operations {
             };
         };
     };
-    resumeMedicationOrder: {
+    BenefitsController_createRecognition: {
         parameters: {
             query?: never;
             header: {
                 /** @description Tenant selected for this request */
                 "X-Tenant-Id": string;
             };
-            path: {
-                orderId: string;
-            };
+            path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderRecognitionInputDto"];
+            };
+        };
         responses: {
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProviderRecognitionDto"];
+                };
             };
             /** @description Problem Details response */
             default: {
@@ -14577,42 +11401,12 @@ export interface operations {
             };
         };
     };
-    discontinueMedicationOrder: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                orderId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    getClientMedicationAdministrationHistory: {
+    BenefitsController_estimate: {
         parameters: {
             query: {
-                until: string;
-                from: string;
+                quantity: string;
+                serviceDate: string;
+                serviceId: string;
             };
             header: {
                 /** @description Tenant selected for this request */
@@ -14630,7 +11424,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MedicationAdministrationResponseDto"];
+                    "application/json": components["schemas"]["BenefitEstimateResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -14644,7 +11438,146 @@ export interface operations {
             };
         };
     };
-    getVisitMedicationAdministrations: {
+    BillingController_settings: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingSettingsListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_saveSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingProfileInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_payerArrangements: {
+        parameters: {
+            query: {
+                organizationId?: unknown;
+                clientId: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayerArrangementListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_createPayerArrangement: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayerArrangementInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_updatePayerArrangement: {
         parameters: {
             query?: never;
             header: {
@@ -14652,7 +11585,158 @@ export interface operations {
                 "X-Tenant-Id": string;
             };
             path: {
-                visitId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayerArrangementUpdateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_candidates: {
+        parameters: {
+            query?: {
+                evidenceStatus?: string;
+                ready?: "true" | "false";
+                fundingSourceId?: unknown;
+                clientId?: unknown;
+                facilityId?: unknown;
+                organizationId?: unknown;
+                until?: string;
+                from?: string;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingCandidateListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_invoices: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                status?: "draft" | "issued" | "cancelled";
+                clientId?: unknown;
+                organizationId?: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingInvoiceListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_createDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftInvoiceInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingInvoiceResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_invoice: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
             };
             cookie?: never;
         };
@@ -14663,7 +11747,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VisitMedicationAdministrationDto"];
+                    "application/json": components["schemas"]["BillingInvoiceResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -14677,7 +11761,7 @@ export interface operations {
             };
         };
     };
-    recordMedicationAdministration: {
+    BillingController_updateDraft: {
         parameters: {
             query?: never;
             header: {
@@ -14685,22 +11769,22 @@ export interface operations {
                 "X-Tenant-Id": string;
             };
             path: {
-                occurrenceId: string;
+                id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MedicationAdministrationRequestDto"];
+                "application/json": components["schemas"]["DraftInvoiceUpdateDto"];
             };
         };
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["BillingInvoiceResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -14714,7 +11798,7 @@ export interface operations {
             };
         };
     };
-    recordPrnMedicationAdministration: {
+    BillingController_cancelDraft: {
         parameters: {
             query?: never;
             header: {
@@ -14722,77 +11806,7 @@ export interface operations {
                 "X-Tenant-Id": string;
             };
             path: {
-                orderId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MedicationAdministrationRequestDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    correctMedicationAdministration: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                recordId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MedicationCorrectionRequestDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    listMedicationReconciliations: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                clientId: string;
+                id: string;
             };
             cookie?: never;
         };
@@ -14803,7 +11817,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MedicationReconciliationSummaryDto"][];
+                    "application/json": components["schemas"]["BillingInvoiceResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -14817,7 +11831,7 @@ export interface operations {
             };
         };
     };
-    startMedicationReconciliation: {
+    BillingController_issueInvoice: {
         parameters: {
             query?: never;
             header: {
@@ -14825,299 +11839,7 @@ export interface operations {
                 "X-Tenant-Id": string;
             };
             path: {
-                clientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MedicationReconciliationStartRequestDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MedicationReconciliationCreatedDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    getMedicationReconciliation: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                reconciliationId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MedicationReconciliationDetailDto"];
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    addMedicationReconciliationSource: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                reconciliationId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MedicationReconciliationSourceRequestDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    addMedicationReconciliationEntry: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                reconciliationId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MedicationReconciliationEntryRequestDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    matchMedicationReconciliationEntry: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                reconciliationId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MedicationReconciliationMatchRequestDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    compareMedicationReconciliation: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                reconciliationId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MedicationReconciliationExpectedVersionRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    recordMedicationReconciliationDecision: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                reconciliationId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MedicationReconciliationDecisionRequestDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    applyMedicationReconciliationChanges: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                reconciliationId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MedicationReconciliationApplyRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-            /** @description Problem Details response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    completeMedicationReconciliation: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Tenant selected for this request */
-                "X-Tenant-Id": string;
-            };
-            path: {
-                reconciliationId: string;
+                id: string;
             };
             cookie?: never;
         };
@@ -15134,7 +11856,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MedicationReconciliationSummaryDto"];
+                    "application/json": components["schemas"]["BillingInvoiceResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -15148,7 +11870,7 @@ export interface operations {
             };
         };
     };
-    cancelMedicationReconciliation: {
+    BillingController_regeneratePdf: {
         parameters: {
             query?: never;
             header: {
@@ -15156,13 +11878,301 @@ export interface operations {
                 "X-Tenant-Id": string;
             };
             path: {
-                reconciliationId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingInvoiceResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_invoicePdf: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_correctInvoice: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MedicationReconciliationCancelRequestDto"];
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceCorrectionResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_correctionPdf: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                correctionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_receivables: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                clientId?: unknown;
+                organizationId?: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingInvoiceListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_payments: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                organizationId?: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingPaymentListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_recordPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingPaymentResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_allocatePayment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    BillingController_reversePaymentAllocation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
             };
         };
         responses: {
@@ -15171,8 +12181,1132 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MedicationReconciliationSummaryDto"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_listPayers: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_createPayer: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayerInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_getPayer: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_updatePayer: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayerUpdateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_payerProfiles: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_savePayerProfile: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayerProfileInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_listClaims: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                status?: unknown;
+                clientId?: unknown;
+                organizationId?: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_createClaim: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimCreateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_getClaim: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_readiness: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_prepare: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expectedVersion: number;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_recordDecision: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_resubmit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expectedVersion: number;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_cancel: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expectedVersion: number;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_packageDocuments: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_downloadPackageDocument: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_history: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    ClaimsController_paymentSummary: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_list: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                documentType?: "service_evidence" | "service_agreement" | "invoice" | "invoice_correction" | "benefit_overview" | "claim_summary";
+                facilityId?: unknown;
+                clientId?: unknown;
+                organizationId?: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_download: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_templates: {
+        parameters: {
+            query: {
+                organizationId: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_saveTemplate: {
+        parameters: {
+            query: {
+                organizationId: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                type: "service_evidence" | "service_agreement" | "invoice" | "invoice_correction" | "benefit_overview" | "claim_summary";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_uploadLogo: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: uuid */
+                    organizationId: string;
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_exportInvoices: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_exportInvoiceLines: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_exportReceivables: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_exportBenefitAllocations: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_generate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DocumentsController_preview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Problem Details response */
             default: {

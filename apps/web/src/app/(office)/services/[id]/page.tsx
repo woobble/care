@@ -2,11 +2,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
-import { formatDate } from '../../../../i18n/format';
+import { formatCurrency, formatDate } from '../../../../i18n/format';
 import { statusLabelKey, unitLabelKey } from '../../../../i18n/status';
+import { todayDateKey } from '../../../../lib/care-date';
 import { ActionNotice } from '../../administration/action-notice';
 import {
   archiveServiceAction,
+  recordServicePriceAction,
   setServiceAvailabilityAction,
   updateServiceAction,
 } from '../actions';
@@ -14,6 +16,7 @@ import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
+  hasPermission,
   hasTenantPermission,
 } from '../../../../lib/api';
 
@@ -23,7 +26,13 @@ export default async function ServiceDetailPage({
   searchParams,
 }: Readonly<{
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; updated?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    updated?: string;
+    priceOrganizationId?: string;
+    priceFacilityId?: string;
+    priceDate?: string;
+  }>;
 }>) {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const { id } = await params;
@@ -40,6 +49,7 @@ export default async function ServiceDetailPage({
     'service.manage_availability',
     tenantId,
   );
+  const canManagePricing = hasPermission(permissions, 'service.manage_pricing');
   const get = api.GET;
   const [
     serviceResult,
@@ -60,6 +70,32 @@ export default async function ServiceDetailPage({
   const availability = availabilityResult.data ?? [];
   const organizations = organizationsResult.data ?? [];
   const facilities = facilitiesResult.data ?? [];
+  const priceOrganizationId =
+    query.priceOrganizationId && uuidPattern.test(query.priceOrganizationId)
+      ? query.priceOrganizationId
+      : organizations[0]?.id;
+  const priceFacilityId =
+    query.priceFacilityId && uuidPattern.test(query.priceFacilityId)
+      ? query.priceFacilityId
+      : undefined;
+  const priceDate =
+    query.priceDate && /^\d{4}-\d{2}-\d{2}$/.test(query.priceDate)
+      ? query.priceDate
+      : todayDateKey();
+  const pricesResult = priceOrganizationId
+    ? await get('/api/v1/services/{serviceId}/prices', {
+        params: {
+          path: { serviceId: id },
+          query: {
+            organizationId: priceOrganizationId,
+            validAt: priceDate,
+            ...(priceFacilityId ? { facilityId: priceFacilityId } : {}),
+          },
+          header,
+        },
+      })
+    : null;
+  const prices = pricesResult?.data?.items ?? [];
   const activeAvailability = availability.filter((item) => item.active);
   const selectedOrganizations = new Set(
     activeAvailability
@@ -144,6 +180,21 @@ export default async function ServiceDetailPage({
                 <option value="hour">{t('Common.units.hour')}</option>
                 <option value="day">{t('Common.units.day')}</option>
               </SelectField>
+              <SelectField
+                id="benefitCategory"
+                name="benefitCategory"
+                label={t('Services.form.benefitCategory')}
+                defaultValue={service.benefitCategory}
+                required
+              >
+                <option value="other">{t('Services.benefitCategory.other')}</option>
+                <option value="recognized_support">
+                  {t('Services.benefitCategory.recognizedSupport')}
+                </option>
+                <option value="clinical_nursing">
+                  {t('Services.benefitCategory.clinicalNursing')}
+                </option>
+              </SelectField>
               <Field
                 id="defaultDurationMinutes"
                 name="defaultDurationMinutes"
@@ -197,6 +248,18 @@ export default async function ServiceDetailPage({
                 value={t(unitLabelKey(service.unit))}
               />
               <ReadOnlyField
+                label={t('Services.form.benefitCategory')}
+                value={t(
+                  `Services.benefitCategory.${
+                    service.benefitCategory === 'recognized_support'
+                      ? 'recognizedSupport'
+                      : service.benefitCategory === 'clinical_nursing'
+                        ? 'clinicalNursing'
+                        : 'other'
+                  }`,
+                )}
+              />
+              <ReadOnlyField
                 label={t('Services.detail.standardDuration')}
                 value={
                   service.defaultDurationMinutes
@@ -226,6 +289,184 @@ export default async function ServiceDetailPage({
           ) : null}
           <span className="text-sm text-slate-600">{t('Services.detail.archiveHistory')}</span>
         </div>
+      </section>
+
+      <section
+        aria-labelledby="pricing-title"
+        className="grid gap-4 rounded-lg border bg-white p-5 shadow-sm"
+      >
+        <div>
+          <h2 id="pricing-title" className="text-xl font-semibold">
+            {t('Services.pricing.title')}
+          </h2>
+          <p className="text-sm text-slate-600">{t('Services.pricing.description')}</p>
+        </div>
+        {query.updated === 'price' ? (
+          <p
+            role="status"
+            className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          >
+            {t('Services.pricing.saved')}
+          </p>
+        ) : null}
+        <form method="get" className="grid gap-3 rounded-md border p-4 md:grid-cols-4">
+          <label className="grid gap-2">
+            <Label htmlFor="priceOrganizationId">{t('Common.fields.organization')}</Label>
+            <select
+              id="priceOrganizationId"
+              name="priceOrganizationId"
+              className="h-10 rounded-md border bg-white px-3"
+              defaultValue={priceOrganizationId ?? ''}
+              required
+            >
+              {organizations.map((organization) => (
+                <option key={organization.id} value={organization.id}>
+                  {organization.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-2">
+            <Label htmlFor="priceFacilityId">{t('Common.fields.facility')}</Label>
+            <select
+              id="priceFacilityId"
+              name="priceFacilityId"
+              className="h-10 rounded-md border bg-white px-3"
+              defaultValue={priceFacilityId ?? ''}
+            >
+              <option value="">{t('Services.pricing.organizationDefault')}</option>
+              {facilities.map((facility) => (
+                <option key={facility.id} value={facility.id}>
+                  {facility.organizationName} — {facility.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Field
+            id="priceDate"
+            name="priceDate"
+            label={t('Services.pricing.effectiveOn')}
+            type="date"
+            defaultValue={priceDate}
+            required
+          />
+          <div className="flex items-end">
+            <Button type="submit" variant="secondary">
+              {t('Common.actions.apply')}
+            </Button>
+          </div>
+        </form>
+        {pricesResult?.error ? (
+          <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+            {t('Services.pricing.loadFailed')}
+          </p>
+        ) : prices.length ? (
+          <ul className="grid gap-2">
+            {prices.map((price) => (
+              <li key={price.id} className="rounded-md border p-3 text-sm">
+                <span className="font-medium">
+                  {formatCurrency(price.priceCents / 100, locale)}
+                </span>
+                <span> / {t(`Services.pricing.units.${price.pricingUnit}`)}</span>
+                <span className="block text-slate-600">
+                  {price.facilityId
+                    ? (facilities.find((facility) => facility.id === price.facilityId)?.name ??
+                      t('Services.pricing.facilityPrice'))
+                    : t('Services.pricing.organizationDefault')}
+                  {' · '}
+                  {formatDate(price.validFrom, locale)} –{' '}
+                  {formatDate(price.validUntil, locale) ?? t('Services.openEnded')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-slate-600">{t('Services.pricing.noneForDate')}</p>
+        )}
+        {canManagePricing ? (
+          <form action={recordServicePriceAction} className="grid gap-4 border-t pt-4">
+            <input type="hidden" name="serviceId" value={service.id} />
+            <h3 className="font-semibold">{t('Services.pricing.addTitle')}</h3>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-2">
+                <Label htmlFor="newPriceOrganizationId">{t('Common.fields.organization')}</Label>
+                <select
+                  id="newPriceOrganizationId"
+                  name="organizationId"
+                  className="h-10 rounded-md border bg-white px-3"
+                  defaultValue={priceOrganizationId ?? ''}
+                  required
+                >
+                  {organizations.map((organization) => (
+                    <option key={organization.id} value={organization.id}>
+                      {organization.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-2">
+                <Label htmlFor="newPriceFacilityId">{t('Common.fields.facility')}</Label>
+                <select
+                  id="newPriceFacilityId"
+                  name="facilityId"
+                  className="h-10 rounded-md border bg-white px-3"
+                  defaultValue=""
+                >
+                  <option value="">{t('Services.pricing.organizationDefault')}</option>
+                  {facilities.map((facility) => (
+                    <option key={facility.id} value={facility.id}>
+                      {facility.organizationName} — {facility.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Field
+                id="price"
+                name="price"
+                label={t('Services.pricing.amount')}
+                type="text"
+                defaultValue=""
+                required
+              />
+              <label className="grid gap-2">
+                <Label htmlFor="pricingUnit">{t('Services.pricing.unit')}</Label>
+                <select
+                  id="pricingUnit"
+                  name="pricingUnit"
+                  className="h-10 rounded-md border bg-white px-3"
+                  required
+                >
+                  <option value="hour">{t('Services.pricing.units.hour')}</option>
+                  <option value="minute">{t('Services.pricing.units.minute')}</option>
+                  <option value="visit">{t('Services.pricing.units.visit')}</option>
+                  <option value="fixed">{t('Services.pricing.units.fixed')}</option>
+                </select>
+              </label>
+              <Field
+                id="priceValidFrom"
+                name="validFrom"
+                label={t('Services.form.validFrom')}
+                type="date"
+                defaultValue={priceDate}
+                required
+              />
+              <Field
+                id="priceValidUntil"
+                name="validUntil"
+                label={t('Services.form.validUntilOptional')}
+                type="date"
+              />
+            </div>
+            <p className="text-sm text-slate-600">{t('Services.pricing.priceHistoryNote')}</p>
+            <Button
+              type="submit"
+              className="w-fit"
+              disabled={!organizations.length || service.status === 'archived'}
+            >
+              {t('Services.pricing.record')}
+            </Button>
+          </form>
+        ) : null}
       </section>
 
       <section

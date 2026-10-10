@@ -68,6 +68,6 @@ import { VisitExecutionModule } from './visit-execution.module';
         createClientMasterDataApplicationService(unitOfWork, audit, outbox),
     },
   ],
-  exports: [CLIENT_APPLICATION],
+  exports: [CLIENT_APPLICATION, CLIENT_MASTER_DATA_APPLICATION],
 })
 export class ClientsModule {}

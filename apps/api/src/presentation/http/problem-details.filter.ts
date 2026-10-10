@@ -3,46 +3,31 @@ import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 import type { Response } from 'express';
 import { ZodError } from 'zod';
 import type { ProblemDetails } from '@care/contracts';
+import { AuthorizationDeniedError } from '@care/permissions';
 import {
-  CarePlanActiveRevisionRequiredError,
-  CarePlanActivationIncompleteError,
-  CarePlanAlreadyEndedError,
-  CarePlanClientInactiveError,
-  CarePlanCurrentPlanExistsError,
-  CarePlanDraftAlreadyExistsError,
-  CarePlanDraftRequiredError,
-  CarePlanEmployeeRequiredError,
-  CarePlanGoalNotFoundError,
-  CarePlanItemConflictError,
-  CarePlanItemNotFoundError,
-  CarePlanLifecycleTransitionError,
-  CarePlanNotFoundError,
-  CarePlanProviderContextRequiredError,
-  CarePlanRelationshipConflictError,
-  CarePlanRelationshipInvalidError,
-  CarePlanRevisionNotFoundError,
-  CarePlanVersionConflictError,
-  CarePlanVisitNotFoundError,
-  CarePlanInvalidQueryError,
-  InvalidCarePlanError,
-} from '@care/care-planning';
-import { ClinicalRecordAmendmentConflictError } from '@care/clinical-documentation';
-import { AuthorizationDeniedError, ProfessionalCompetencyDeniedError } from '@care/permissions';
-import {
-  CompetencyPolicyNotFoundError,
-  CompetencyPolicyVersionConflictError,
-  InvalidCompetencyPolicyConfigurationError,
-} from '@care/competency-policies';
-import {
-  InvalidWorkforceComplianceInputError,
-  InvalidWorkforceComplianceQueryError,
-  InvalidWorkforceComplianceSettingsError,
-  WorkforceComplianceAccessDeniedError,
-  WorkforceComplianceEmployeeNotFoundError,
-  WorkforceComplianceSettingsNotFoundError,
-  WorkforceComplianceSettingsVersionConflictError,
-} from '@care/workforce-compliance';
-import { MedicationError, MedicationReconciliationError } from '@care/medication';
+  BenefitAdjustmentConflictError,
+  BenefitAllocationAlreadyReversedError,
+  BenefitAllocationConflictError,
+  BenefitAllocationNotFoundError,
+  BenefitBudgetInsufficientError,
+  BenefitClientNotFoundError,
+  BenefitEntitlementNotFoundError,
+  BenefitEntitlementPeriodConflictError,
+  BenefitEntitlementVersionConflictError,
+  BenefitFundingSourceNotFoundError,
+  BenefitProviderRecognitionRequiredError,
+  BenefitServiceNotEligibleError,
+  InvalidBenefitAdjustmentError,
+  InvalidBenefitAmountError,
+  InvalidBenefitDateError,
+  InvalidBenefitEntitlementError,
+  InvalidBenefitFundingSourceError,
+  InvalidBenefitWorklistQueryError,
+  InvalidProviderRecognitionError,
+  ProviderRecognitionNotFoundError,
+} from '@care/benefits';
+import { BillingDomainError } from '@care/billing';
+import { DocumentDomainError } from '@care/documents';
 import {
   ClientArchivedError,
   ClientAddressNotFoundError,
@@ -83,7 +68,6 @@ import {
   PrimaryFacilityRequiredError,
   QualificationArchivedError,
   QualificationNotFoundError,
-  QualificationRequiredByActivePolicyError,
   SkillArchivedError,
   SkillNotFoundError,
   UserAlreadyLinkedError,
@@ -127,6 +111,12 @@ import {
   ServiceNotAvailableForProviderError,
   ServiceNotValidForPeriodError,
   ServiceDefinitionHasActiveServiceAgreementsError,
+  InvalidServicePriceError,
+  InvalidServicePriceQuantityError,
+  ServicePriceConflictError,
+  ServicePriceNotFoundError,
+  ServicePriceScopeDeniedError,
+  ServicePricingUnitMismatchError,
 } from '@care/services';
 import {
   ServiceAgreementError,
@@ -171,7 +161,6 @@ import {
 } from '@care/visit-execution';
 import {
   AmendmentReasonRequiredError,
-  AssessmentInvalidError,
   CareDocumentationAlreadyFinalizedError,
   CareDocumentationEmployeeLinkRequiredError,
   CareDocumentationIncompleteError,
@@ -180,22 +169,10 @@ import {
   CareDocumentationNotFoundError,
   CareDocumentationVersionConflictError,
   CareDocumentationVisitRelationshipRequiredError,
-  ClinicalDocumentationNotAuthorizedError,
-  ClinicalDocumentationVisitRequiredError,
-  ClinicalHistoryInvalidQueryError,
-  ClinicalRecordDocumentationNotFoundError,
-  ClinicalRecordFinalizedError,
-  ClinicalRecordInvalidError,
-  ClinicalRecordNotFinalizedError,
-  ClinicalRecordNotFoundError,
-  ClinicalRecordVersionConflictError,
   DocumentationEntryNotFoundError,
   InvalidDocumentationWorklistQueryError,
   InvalidDocumentationEntryError,
   InvalidServiceEvidenceError,
-  MeasurementInvalidError,
-  ObservationInvalidError,
-  RiskAssessmentInvalidError,
   ServiceEvidenceNotFoundError,
   VisitExecutionNotCompletedError,
   VisitExecutionRequiredError,
@@ -302,87 +279,77 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
   } else if (exception instanceof AuthorizationDeniedError) {
     status = 403;
     code = exception.code;
-  } else if (exception instanceof ProfessionalCompetencyDeniedError) {
-    status = 403;
+  } else if (exception instanceof BillingDomainError) {
     code = exception.code;
-  } else if (exception instanceof CompetencyPolicyNotFoundError) {
-    status = 404;
+    if (code.endsWith('_NOT_FOUND')) status = 404;
+    else if (code.startsWith('INVALID_') || code === 'PAYMENT_AMOUNT_INVALID') status = 400;
+    else status = 409;
+  } else if (exception instanceof DocumentDomainError) {
     code = exception.code;
-  } else if (exception instanceof CompetencyPolicyVersionConflictError) {
-    status = 409;
-    code = exception.code;
-  } else if (exception instanceof InvalidCompetencyPolicyConfigurationError) {
-    status = 400;
-    code = exception.code;
-  } else if (exception instanceof WorkforceComplianceAccessDeniedError) {
-    status = 403;
-    code = exception.code;
-  } else if (exception instanceof MedicationError || exception instanceof MedicationReconciliationError) {
-    status = exception.status;
-    code = exception.code;
+    if (code === 'DOCUMENT_ACCESS_DENIED') status = 403;
+    else if (code.endsWith('_NOT_FOUND')) status = 404;
+    else if (code === 'EXPORT_ROW_LIMIT_EXCEEDED') status = 413;
+    else if (
+      code === 'DOCUMENT_TEMPLATE_INVALID' ||
+      code === 'EXPORT_FILTER_INVALID' ||
+      code === 'EXPORT_FORMAT_UNSUPPORTED'
+    ) {
+      status = 400;
+    } else if (
+      code.endsWith('_CONFLICT') ||
+      code === 'DOCUMENT_SOURCE_NOT_READY' ||
+      code === 'DOCUMENT_TEMPLATE_VERSION_CONFLICT'
+    ) {
+      status = 409;
+    } else {
+      status = 500;
+    }
   } else if (
-    exception instanceof WorkforceComplianceEmployeeNotFoundError ||
-    exception instanceof WorkforceComplianceSettingsNotFoundError
+    exception instanceof BenefitClientNotFoundError ||
+    exception instanceof BenefitFundingSourceNotFoundError ||
+    exception instanceof BenefitEntitlementNotFoundError ||
+    exception instanceof BenefitAllocationNotFoundError ||
+    exception instanceof ProviderRecognitionNotFoundError
   ) {
     status = 404;
     code = exception.code;
-  } else if (exception instanceof WorkforceComplianceSettingsVersionConflictError) {
+  } else if (
+    exception instanceof BenefitEntitlementVersionConflictError ||
+    exception instanceof BenefitEntitlementPeriodConflictError ||
+    exception instanceof BenefitAdjustmentConflictError ||
+    exception instanceof BenefitBudgetInsufficientError ||
+    exception instanceof BenefitServiceNotEligibleError ||
+    exception instanceof BenefitAllocationConflictError ||
+    exception instanceof BenefitAllocationAlreadyReversedError ||
+    exception instanceof BenefitProviderRecognitionRequiredError
+  ) {
     status = 409;
     code = exception.code;
   } else if (
-    exception instanceof InvalidWorkforceComplianceInputError ||
-    exception instanceof InvalidWorkforceComplianceQueryError ||
-    exception instanceof InvalidWorkforceComplianceSettingsError
+    exception instanceof InvalidBenefitAdjustmentError ||
+    exception instanceof InvalidBenefitAmountError ||
+    exception instanceof InvalidBenefitDateError ||
+    exception instanceof InvalidBenefitEntitlementError ||
+    exception instanceof InvalidBenefitFundingSourceError ||
+    exception instanceof InvalidBenefitWorklistQueryError ||
+    exception instanceof InvalidProviderRecognitionError
   ) {
     status = 400;
     code = exception.code;
-  } else if (
-    exception instanceof CarePlanNotFoundError ||
-    exception instanceof CarePlanRevisionNotFoundError ||
-    exception instanceof CarePlanItemNotFoundError ||
-    exception instanceof CarePlanGoalNotFoundError ||
-    exception instanceof CarePlanVisitNotFoundError
-  ) {
-    status = 404;
-    code = exception.code;
-  } else if (exception instanceof CarePlanEmployeeRequiredError) {
+  } else if (exception instanceof ServicePriceScopeDeniedError) {
     status = 403;
-    code = exception.code;
-  } else if (
-    exception instanceof CarePlanActivationIncompleteError ||
-    exception instanceof CarePlanAlreadyEndedError ||
-    exception instanceof CarePlanClientInactiveError ||
-    exception instanceof CarePlanCurrentPlanExistsError ||
-    exception instanceof CarePlanDraftAlreadyExistsError ||
-    exception instanceof CarePlanDraftRequiredError ||
-    exception instanceof CarePlanActiveRevisionRequiredError ||
-    exception instanceof CarePlanLifecycleTransitionError ||
-    exception instanceof CarePlanItemConflictError ||
-    exception instanceof CarePlanProviderContextRequiredError ||
-    exception instanceof CarePlanRelationshipConflictError ||
-    exception instanceof CarePlanVersionConflictError
-  ) {
-    status = 409;
-    code = exception.code;
-  } else if (isCarePlanClinicalReferenceForeignKeyViolation(exception)) {
-    status = 400;
-    code = 'CARE_PLAN_RELATIONSHIP_INVALID';
-  } else if (
-    exception instanceof InvalidCarePlanError ||
-    exception instanceof CarePlanInvalidQueryError ||
-    exception instanceof CarePlanRelationshipInvalidError
-  ) {
-    status = 400;
     code = exception.code;
   } else if (
     exception instanceof ServiceNotFoundError ||
-    exception instanceof ServiceCategoryNotFoundError
+    exception instanceof ServiceCategoryNotFoundError ||
+    exception instanceof ServicePriceNotFoundError
   ) {
     status = 404;
     code = exception.code;
   } else if (
     exception instanceof ServiceCategoryArchivedError ||
-    exception instanceof ServiceDefinitionArchivedError
+    exception instanceof ServiceDefinitionArchivedError ||
+    exception instanceof ServicePriceConflictError
   ) {
     status = 409;
     code = exception.code;
@@ -390,7 +357,10 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof InvalidServiceAvailabilityError ||
     exception instanceof InvalidServiceCategoryError ||
     exception instanceof InvalidServiceDefinitionError ||
-    exception instanceof InvalidServicePaginationError
+    exception instanceof InvalidServicePaginationError ||
+    exception instanceof InvalidServicePriceError ||
+    exception instanceof InvalidServicePriceQuantityError ||
+    exception instanceof ServicePricingUnitMismatchError
   ) {
     status = 400;
     code = exception.code;
@@ -450,8 +420,6 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
   } else if (
     exception instanceof VisitExecutionNotFoundError ||
     exception instanceof PerformedServiceNotFoundError ||
-    exception instanceof ClinicalRecordDocumentationNotFoundError ||
-    exception instanceof ClinicalRecordNotFoundError ||
     exception instanceof CareDocumentationNotFoundError ||
     exception instanceof DocumentationEntryNotFoundError ||
     exception instanceof ServiceEvidenceNotFoundError ||
@@ -470,8 +438,6 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
   } else if (
     exception instanceof CareDocumentationEmployeeLinkRequiredError ||
     exception instanceof CareDocumentationVisitRelationshipRequiredError ||
-    exception instanceof ClinicalDocumentationVisitRequiredError ||
-    exception instanceof ClinicalDocumentationNotAuthorizedError ||
     exception instanceof ServiceEvidenceEmployeeLinkRequiredError ||
     exception instanceof ServiceEvidenceVisitRelationshipRequiredError ||
     exception instanceof AcknowledgementSignatoryInvalidError
@@ -484,10 +450,6 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof CareDocumentationIncompleteError ||
     exception instanceof CareDocumentationInvalidStateError ||
     exception instanceof CareDocumentationVersionConflictError ||
-    exception instanceof ClinicalRecordAmendmentConflictError ||
-    exception instanceof ClinicalRecordFinalizedError ||
-    exception instanceof ClinicalRecordNotFinalizedError ||
-    exception instanceof ClinicalRecordVersionConflictError ||
     exception instanceof VisitExecutionRequiredError ||
     exception instanceof VisitExecutionNotCompletedError ||
     exception instanceof DocumentationNotFinalizedError ||
@@ -503,12 +465,6 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof AmendmentReasonRequiredError ||
     exception instanceof InvalidDocumentationWorklistQueryError ||
     exception instanceof InvalidDocumentationEntryError ||
-    exception instanceof ClinicalRecordInvalidError ||
-    exception instanceof MeasurementInvalidError ||
-    exception instanceof ObservationInvalidError ||
-    exception instanceof AssessmentInvalidError ||
-    exception instanceof RiskAssessmentInvalidError ||
-    exception instanceof ClinicalHistoryInvalidQueryError ||
     exception instanceof InvalidServiceEvidenceError ||
     exception instanceof AcknowledgementConfirmationNameMismatchError ||
     exception instanceof AcknowledgementConfirmationRequiredError ||
@@ -569,7 +525,6 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof UserAlreadyLinkedError ||
     exception instanceof PrimaryFacilityRequiredError ||
     exception instanceof QualificationArchivedError ||
-    exception instanceof QualificationRequiredByActivePolicyError ||
     exception instanceof SkillArchivedError ||
     exception instanceof OrganizationHasActiveChildrenError ||
     exception instanceof OrganizationHasActiveServiceAgreementsError ||
@@ -622,28 +577,6 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     traceId,
     ...(conflictingInterval ? { conflictingInterval } : {}),
   };
-}
-
-function isCarePlanClinicalReferenceForeignKeyViolation(exception: unknown): boolean {
-  const visited = new Set<object>();
-  let current = exception;
-  for (
-    let depth = 0;
-    depth < 8 && typeof current === 'object' && current !== null && !visited.has(current);
-    depth += 1
-  ) {
-    visited.add(current);
-    const candidate = current as { code?: unknown; constraint?: unknown; cause?: unknown };
-    if (
-      candidate.code === '23503' &&
-      (candidate.constraint === 'care_plan_risk_responses_clinical_record_fk' ||
-        candidate.constraint === 'care_plan_source_refs_clinical_record_fk')
-    ) {
-      return true;
-    }
-    current = candidate.cause;
-  }
-  return false;
 }
 
 function statusCode(status: number): string {

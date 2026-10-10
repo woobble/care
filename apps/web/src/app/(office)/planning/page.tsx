@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
 import { errorMessageKey } from '../../../i18n/errors';
-import { formatLongDate, formatTime } from '../../../i18n/format';
+import { formatCurrency, formatLongDate, formatTime } from '../../../i18n/format';
 import type { Locale } from '../../../i18n/config';
 import { visitStatusKey } from '../../../i18n/status';
 import {
@@ -25,6 +25,10 @@ type SearchParams = Promise<{
   status?: string;
   assigned?: string;
   serviceDefinitionId?: string;
+  estimateClientId?: string;
+  estimateServiceId?: string;
+  estimateDate?: string;
+  estimateQuantity?: string;
   error?: string;
   updated?: string;
 }>;
@@ -46,6 +50,10 @@ export default async function PlanningPage({
   const facilityId = validUuid(query.facilityId);
   const teamId = validUuid(query.teamId);
   const serviceDefinitionId = validUuid(query.serviceDefinitionId);
+  const estimateClientId = validUuid(query.estimateClientId);
+  const estimateServiceId = validUuid(query.estimateServiceId);
+  const estimateDate = validDate(query.estimateDate) ?? selectedDate;
+  const estimateQuantity = validQuantity(query.estimateQuantity) ?? '1';
   const status = statusValues.find((value) => value === query.status);
   const assigned =
     query.assigned === 'assigned' || query.assigned === 'unassigned' ? query.assigned : 'all';
@@ -114,6 +122,21 @@ export default async function PlanningPage({
   const permissions = await getPermissionGrants(api);
   const canCreate = hasPermission(permissions, 'schedule.create');
   const canAssign = hasPermission(permissions, 'schedule.assign');
+  const canEstimate = hasPermission(permissions, 'benefits.read');
+  const estimateResult =
+    canEstimate && estimateClientId && estimateServiceId && validQuantity(query.estimateQuantity)
+      ? await get('/api/v1/clients/{clientId}/budgets/estimate', {
+          params: {
+            path: { clientId: estimateClientId },
+            query: {
+              serviceId: estimateServiceId,
+              serviceDate: estimateDate,
+              quantity: estimateQuantity,
+            },
+            header,
+          },
+        })
+      : null;
   const visits = (visitResult.data?.items ?? []).filter((visit) => {
     const localDate = dateAtZone(visit.plannedStart, visit.timezone);
     return localDate >= period.start && localDate < period.endExclusive;
@@ -132,6 +155,8 @@ export default async function PlanningPage({
   const services = serviceResult.data?.items ?? [];
   const openCount = visits.filter((visit) => visit.assignments.length === 0).length;
   const error = query.error ?? visitResult.error?.code;
+  const estimateError = estimateResult?.error?.code;
+  const estimate = estimateResult?.data;
 
   return (
     <div className="grid gap-6">
@@ -287,6 +312,132 @@ export default async function PlanningPage({
           </Button>
         </div>
       </form>
+
+      {canEstimate ? (
+        <section
+          aria-labelledby="budget-estimate-title"
+          className="grid gap-3 rounded-lg border bg-white p-5"
+        >
+          <div className="grid gap-1">
+            <h2 id="budget-estimate-title" className="text-xl font-semibold">
+              {t('Benefits.planningEstimateTitle')}
+            </h2>
+            <p className="text-sm text-slate-700">{t('Benefits.planningEstimateDescription')}</p>
+          </div>
+          <form method="get" className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <input type="hidden" name="date" value={selectedDate} />
+            <input type="hidden" name="view" value={view} />
+            <SelectField
+              label={t('Benefits.planningEstimateClient')}
+              name="estimateClientId"
+              defaultValue={estimateClientId ?? ''}
+              required
+            >
+              <option value="">{t('Planning.selectClient')}</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.preferredName || client.firstName} {client.lastName}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label={t('Benefits.planningEstimateService')}
+              name="estimateServiceId"
+              defaultValue={estimateServiceId ?? ''}
+              required
+            >
+              <option value="">{t('Planning.allServices')}</option>
+              {services.map((service) => (
+                <option key={service.id} value={service.id}>
+                  {service.code} · {service.name} ({service.unit})
+                </option>
+              ))}
+            </SelectField>
+            <Field
+              label={t('Benefits.planningEstimateDate')}
+              name="estimateDate"
+              type="date"
+              defaultValue={estimateDate}
+              required
+            />
+            <Field
+              label={t('Benefits.planningEstimateQuantity')}
+              name="estimateQuantity"
+              type="number"
+              min="0.001"
+              step="0.001"
+              defaultValue={estimateQuantity}
+              required
+            />
+            <Button type="submit" className="w-fit">
+              {t('Benefits.showEstimate')}
+            </Button>
+          </form>
+          {estimateError ? (
+            <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+              {t(errorMessageKey(estimateError))}
+            </p>
+          ) : null}
+          {estimate ? (
+            <div className="grid gap-3 rounded-md bg-blue-50 p-4 text-sm text-blue-950">
+              <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <Metric
+                  label={t('Benefits.estimatedCost')}
+                  value={
+                    estimate.serviceAmountCents === null
+                      ? t('Benefits.priceUnknown')
+                      : money(estimate.serviceAmountCents, locale)
+                  }
+                />
+                <Metric
+                  label={t('Benefits.available45b')}
+                  value={money(estimate.estimated45bAvailableCents, locale)}
+                />
+                <Metric
+                  label={t('Benefits.confirmedRemaining')}
+                  value={money(estimate.confirmed45bAvailableCents, locale)}
+                />
+                <Metric
+                  label={t('Benefits.estimated45bAfter')}
+                  value={
+                    estimate.estimated45bAfterCents === null
+                      ? t('Benefits.unknownBalance')
+                      : money(estimate.estimated45bAfterCents, locale)
+                  }
+                />
+              </dl>
+              <p>
+                {t('Benefits.plannedEligible')}: {money(estimate.plannedEligible45bCents, locale)}.{' '}
+                {t('Benefits.plannedNotReserved')}
+              </p>
+              {estimate.benefitOptions.length ? (
+                <ul className="grid gap-1">
+                  {estimate.benefitOptions.map((option) => (
+                    <li key={option.entitlementId}>
+                      {option.benefitType === 'entlastungsbetrag_45b'
+                        ? t('Benefits.benefitTypes.entlastungsbetrag_45b')
+                        : option.benefitType === 'umwandlungsanspruch_45a_4'
+                          ? t('Benefits.benefitTypes.umwandlungsanspruch_45a_4')
+                          : option.benefitType === 'private'
+                            ? t('Benefits.benefitTypes.private')
+                            : t('Benefits.benefitTypes.other')}
+                      :{' '}
+                      {option.eligible
+                        ? t('Benefits.eligible')
+                        : t('Benefits.errors.serviceNotEligible')}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>{t('Benefits.noEstimateEntitlement')}</p>
+              )}
+            </div>
+          ) : null}
+          {!clients.length || !services.length ? (
+            <p className="text-sm text-slate-600">{t('Benefits.noEstimateOptions')}</p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section aria-labelledby="calendar-title" className="grid gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -463,17 +614,29 @@ function Field({
   type = 'text',
   defaultValue,
   required,
+  min,
+  step,
 }: {
   label: string;
   name: string;
   type?: string;
   defaultValue?: string;
   required?: boolean;
+  min?: string;
+  step?: string;
 }) {
   return (
     <div className="grid gap-2">
       <Label htmlFor={name}>{label}</Label>
-      <Input id={name} name={name} type={type} defaultValue={defaultValue} required={required} />
+      <Input
+        id={name}
+        name={name}
+        type={type}
+        defaultValue={defaultValue}
+        required={required}
+        min={min}
+        step={step}
+      />
     </div>
   );
 }
@@ -511,6 +674,19 @@ function SelectField({
   );
 }
 
+function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div>
+      <dt className="text-blue-800">{label}</dt>
+      <dd className="font-semibold">{value}</dd>
+    </div>
+  );
+}
+
+function money(cents: number, locale: Locale): string {
+  return formatCurrency(cents / 100, locale);
+}
+
 function validDate(value: string | undefined): string | undefined {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -526,6 +702,11 @@ function validUuid(value: string | undefined): string | undefined {
 function positivePage(value: string | undefined): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function validQuantity(value: string | undefined): string | undefined {
+  if (!value || !/^(0|[1-9]\d*)(?:\.\d{1,3})?$/.test(value) || Number(value) <= 0) return undefined;
+  return value;
 }
 
 function todayInBerlin(): string {

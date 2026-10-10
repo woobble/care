@@ -101,5 +101,6 @@ import { VisitExecutionModule } from './visit-execution.module';
         ),
     },
   ],
+  exports: [SCHEDULING_APPLICATION],
 })
 export class SchedulingModule {}

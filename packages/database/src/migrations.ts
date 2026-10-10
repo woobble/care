@@ -29,14 +29,8 @@ const migrations = {
     '0004_employee_qualification_lifecycle.sql',
     '0005_employee_qualification_expiry_index.sql',
   ],
-  'competency-policies': [
-    '0001_professional_competency_policies.sql',
-    '0002_medication_operations.sql',
-    '0003_medication_reconciliation.sql',
-  ],
-  'workforce-compliance': ['0001_workforce_compliance_settings.sql'],
   clients: ['0001_initial.sql', '0002_master_data.sql', '0003_scheduling_provider_reference.sql'],
-  services: ['0001_catalog.sql'],
+  services: ['0001_catalog.sql', '0002_benefit_classification_and_prices.sql'],
   'service-agreements': ['0001_service_agreements.sql', '0002_scheduling_references.sql'],
   scheduling: ['0001_scheduling.sql'],
   'visit-execution': [
@@ -45,12 +39,12 @@ const migrations = {
     '0003_completed_services_immutable.sql',
   ],
   audit: ['0001_initial.sql', '0002_query_indexes.sql'],
-  platform: ['0001_initial.sql', '0002_uuidv7_rekey.sql'],
+  platform: ['0001_initial.sql', '0002_uuidv7_rekey.sql', '0003_retire_clinical_modules.sql'],
   'care-documentation': ['0001_care_documentation.sql'],
-  'clinical-documentation': ['0001_clinical_documentation.sql', '0002_client_reference.sql'],
-  'care-planning': ['0001_care_planning.sql'],
   'service-evidence': ['0001_service_evidence.sql'],
-  medication: ['0001_medication.sql', '0002_reconciliation.sql'],
+  benefits: ['0001_benefits.sql', '0002_bucket_rule_version.sql'],
+  documents: ['0001_documents.sql', '0002_claim_summary.sql'],
+  billing: ['0001_billing.sql', '0002_invoice_document_rendering.sql', '0003_claims.sql'],
 } as const;
 const migrationsRoot = resolve(import.meta.dirname, '../../../modules');
 

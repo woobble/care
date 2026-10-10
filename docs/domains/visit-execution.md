@@ -18,7 +18,7 @@ Quantities are decimal strings with three fractional digits and are stored as Po
 
 An unplanned service has no `visitServiceId` or agreement-service link. It must be active, valid for the execution date, and available to the visit's organization and facility. It is never added to the scheduled visit. Stable reason codes are `client_declined`, `client_not_present`, `service_not_required`, `time_constraint`, `provider_decision`, and `other`.
 
-Narrative notes and performed-service evidence belong to Care Documentation, not execution. Execution no longer stores an operational note or a performed-service note. The data migration copies existing values into documentation entries and evidence before dropping those columns. Execution still owns actual times, performed-service outcomes, actual quantities, performers, and structured outcome reasons. The slice does not model medication, clinical observations, signatures, billing, claims, prices, or benefit consumption.
+Narrative notes and performed-service evidence belong to Care Documentation, not execution. Execution no longer stores an operational note or a performed-service note. The data migration copies existing values into documentation entries and evidence before dropping those columns. Execution still owns actual times, performed-service outcomes, actual quantities, performers, and structured outcome reasons. Service prices belong to Services; completed service amounts may be allocated by Benefits after execution. This module does not create invoices, claims, or acknowledgements.
 
 ## Authorization and privacy
 

@@ -29,7 +29,6 @@ import {
   PrimaryFacilityRequiredError,
   QualificationArchivedError,
   QualificationNotFoundError,
-  QualificationRequiredByActivePolicyError,
   SkillArchivedError,
   SkillNotFoundError,
   UserAlreadyLinkedError,
@@ -56,14 +55,6 @@ export interface EmployeeExecutionGuard {
     transaction: DatabaseTransaction,
     tenantId: string,
     employeeId: string,
-  ): Promise<boolean>;
-}
-
-export interface EmployeeQualificationPolicyGuard {
-  isQualificationUsedByActivePolicy(
-    transaction: DatabaseTransaction,
-    tenantId: string,
-    qualificationDefinitionId: string,
   ): Promise<boolean>;
 }
 
@@ -110,7 +101,6 @@ export class EmployeeApplicationService {
     private readonly unitOfWork: UnitOfWork,
     private readonly audit: AuditWriter,
     private readonly outbox: OutboxWriter,
-    private readonly qualificationPolicies: EmployeeQualificationPolicyGuard,
     private readonly employees: EmployeeRepository = new EmployeeRepository(),
     private readonly scheduling?: EmployeeSchedulingGuard,
     private readonly execution?: EmployeeExecutionGuard,
@@ -1070,15 +1060,6 @@ export class EmployeeApplicationService {
       );
       if (!current) throw new QualificationNotFoundError();
       if (current.status === 'archived') return current;
-      if (
-        await this.qualificationPolicies.isQualificationUsedByActivePolicy(
-          transaction,
-          principal.tenantId,
-          id,
-        )
-      ) {
-        throw new QualificationRequiredByActivePolicyError();
-      }
       const now = new Date();
       const qualification = await this.employees.setQualificationStatus(
         transaction,

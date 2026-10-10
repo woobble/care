@@ -14,26 +14,14 @@ describe('translation catalogs', () => {
     expect(messageKeys(de).sort()).toEqual(messageKeys(en).sort());
   });
 
-  it('translates clinical measurements, units, risks, observations, and validation errors', () => {
-    expect(en.CareDocumentation.clinical.measurements.types.blood_pressure).toBe('Blood pressure');
-    expect(de.CareDocumentation.clinical.measurements.types.blood_pressure).toBe('Blutdruck');
-
-    expect(en.CareDocumentation.clinical.measurements.units.beatsPerMinute).toBe('beats/min');
-    expect(de.CareDocumentation.clinical.measurements.units.beatsPerMinute).toBe('Schläge/min');
-
-    expect(en.CareDocumentation.clinical.risks.levels.high).toBe('High');
-    expect(de.CareDocumentation.clinical.risks.levels.high).toBe('Hoch');
-
-    expect(en.CareDocumentation.clinical.observations.values.mobility.assistance_required).toBe(
-      'Assistance required',
+  it('translates benefit carryover and provider recognition errors', () => {
+    expect(en.Benefits.carryover).toBe('Prior-year carryover');
+    expect(de.Benefits.carryover).toBe('Übertrag aus dem Vorjahr');
+    expect(en.Benefits.errors.providerRecognitionRequired).toBe(
+      'Valid provider recognition is required for this statutory allocation.',
     );
-    expect(de.CareDocumentation.clinical.observations.values.mobility.assistance_required).toBe(
-      'Unterstützung erforderlich',
+    expect(de.Benefits.errors.providerRecognitionRequired).toBe(
+      'Für diese gesetzliche Zuordnung ist eine gültige Anbieteranerkennung erforderlich.',
     );
-
-    expect(en.Errors.clinicalRecordInvalid).toBe(
-      'Check the clinical record details and try again.',
-    );
-    expect(de.Errors.clinicalRecordInvalid).toBe('Bitte prüfen Sie die Angaben zum Pflegeeintrag.');
   });
 });

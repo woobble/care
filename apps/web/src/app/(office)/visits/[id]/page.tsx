@@ -26,7 +26,6 @@ import {
 } from '../../../../lib/api';
 import { ConfirmSubmitButton } from '../../administration/confirm-submit-button';
 import { amendDocumentationAction } from '../../documentation/actions';
-import { ClinicalRecordsReview } from './clinical-records-review';
 import {
   assignVisitAction,
   changeVisitStatusAction,
@@ -93,13 +92,6 @@ export default async function VisitDetailPage({
       })
     : null;
   const documentationDetail = documentationResult?.data;
-  const canReadClinicalDocumentation = hasPermission(permissions, 'clinical_documentation.read');
-  const clinicalDocumentationResult =
-    canReadClinicalDocumentation && documentationDetail?.documentation
-      ? await get('/api/v1/care-documentation/{id}/clinical-records', {
-          params: { path: { id: documentationDetail.documentation.id }, header },
-        })
-      : null;
   const canUpdate = hasPermission(permissions, 'schedule.update') && visit.status !== 'cancelled';
   const canAssign = hasPermission(permissions, 'schedule.assign') && visit.status !== 'cancelled';
   const canConfirm = hasPermission(permissions, 'schedule.confirm') && visit.status !== 'cancelled';
@@ -500,14 +492,6 @@ export default async function VisitDetailPage({
                   <p className="mt-2 text-slate-600">{t('Visits.noEntries')}</p>
                 )}
               </div>
-              {canReadClinicalDocumentation && documentationDetail.documentation ? (
-                <ClinicalRecordsReview
-                  detail={clinicalDocumentationResult?.data}
-                  loadFailed={clinicalDocumentationResult?.error !== undefined}
-                  locale={locale}
-                  timezone={visit.timezone}
-                />
-              ) : null}
               {documentationDetail.amendments.length ? (
                 <div>
                   <h3 className="font-semibold">{t('Visits.amendments')}</h3>

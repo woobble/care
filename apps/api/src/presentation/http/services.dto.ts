@@ -29,6 +29,7 @@ const serviceFields = {
   description: z.string().max(2000).nullable().optional(),
   categoryId: z.string().uuid(),
   unit: z.enum(['occurrence', 'minute', 'hour', 'day']),
+  benefitCategory: z.enum(['recognized_support', 'clinical_nursing', 'other']).default('other'),
   defaultDurationMinutes: z.number().int().min(1).max(1440).nullable().optional(),
   validFrom: date,
   validUntil: optionalDate,
@@ -128,6 +129,12 @@ export class ServiceInputDto {
   @ApiProperty({ enum: ['occurrence', 'minute', 'hour', 'day'] })
   unit!: 'occurrence' | 'minute' | 'hour' | 'day';
 
+  @ApiPropertyOptional({
+    enum: ['recognized_support', 'clinical_nursing', 'other'],
+    default: 'other',
+  })
+  benefitCategory?: 'recognized_support' | 'clinical_nursing' | 'other';
+
   @ApiPropertyOptional({ nullable: true, minimum: 1, maximum: 1440 })
   defaultDurationMinutes?: number | null;
 
@@ -153,6 +160,9 @@ export class ServicePatchDto {
 
   @ApiPropertyOptional({ enum: ['occurrence', 'minute', 'hour', 'day'] })
   unit?: 'occurrence' | 'minute' | 'hour' | 'day';
+
+  @ApiPropertyOptional({ enum: ['recognized_support', 'clinical_nursing', 'other'] })
+  benefitCategory?: 'recognized_support' | 'clinical_nursing' | 'other';
 
   @ApiPropertyOptional({ nullable: true, minimum: 1, maximum: 1440 })
   defaultDurationMinutes?: number | null;
@@ -185,6 +195,9 @@ export class ServiceResponseDto {
 
   @ApiProperty({ enum: ['occurrence', 'minute', 'hour', 'day'] })
   unit!: 'occurrence' | 'minute' | 'hour' | 'day';
+
+  @ApiProperty({ enum: ['recognized_support', 'clinical_nursing', 'other'] })
+  benefitCategory!: 'recognized_support' | 'clinical_nursing' | 'other';
 
   @ApiProperty({ nullable: true })
   defaultDurationMinutes!: number | null;

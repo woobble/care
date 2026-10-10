@@ -411,6 +411,7 @@ export class ServiceApplicationService {
         description: changes.description === undefined ? current.description : changes.description,
         categoryId: changes.categoryId ?? current.categoryId,
         unit: changes.unit ?? current.unit,
+        benefitCategory: changes.benefitCategory ?? current.benefitCategory,
         defaultDurationMinutes:
           changes.defaultDurationMinutes === undefined
             ? current.defaultDurationMinutes

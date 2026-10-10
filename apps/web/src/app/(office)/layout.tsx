@@ -37,9 +37,14 @@ export default async function OfficeLayout({ children }: Readonly<{ children: Re
                 <Link href="/planning">{t('planning')}</Link>
               </Button>
             ) : null}
-            {hasPermission(permissions, 'care_plan.read') ? (
+            {hasPermission(permissions, 'benefits.review') ? (
               <Button asChild variant="secondary" size="sm">
-                <Link href="/care-plans">{t('carePlans')}</Link>
+                <Link href="/benefits">{t('benefits')}</Link>
+              </Button>
+            ) : null}
+            {hasPermission(permissions, 'billing.read') ? (
+              <Button asChild variant="secondary" size="sm">
+                <Link href="/billing">{t('billing')}</Link>
               </Button>
             ) : null}
             {hasPermission(permissions, 'care_documentation.review') ? (

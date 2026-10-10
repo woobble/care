@@ -16,7 +16,7 @@ Formal service acknowledgement is owned by the separate `service_evidence` modul
 
 ## Execution boundary and evidence
 
-Visit execution owns actual start/end times, performed-service status, actual quantity, performer, and any structured reason for a service outcome. Care documentation owns narrative notes, observations, deviations, incidents, and service evidence. Planned quantities and service snapshots remain on their existing planning and execution records.
+Visit execution owns actual start/end times, performed-service status, actual quantity, performer, and any structured reason for a service outcome. Care documentation owns visit notes, service-related notes, operational observations, deviations, incidents, and service evidence. Planned quantities and service snapshots remain on their existing planning and execution records. Documentation does not turn narrative observations into clinical measurements or assessments.
 
 Every performed service, including an unplanned service, needs a separate evidence record before finalization. Evidence can be updated while the document is a draft and is unique per document and performed service. The `documented` status records the evidence decision; its optional note supplies context. `not_required` is valid only for a service marked `not_performed` and requires an explanation. A non-performed service also needs its execution reason. A partial service needs either its execution reason or explanatory evidence text.
 
@@ -26,9 +26,7 @@ Completeness returns structured missing requirements, including missing evidence
 
 Generic entries use `care_note`, `observation`, `deviation`, or `incident`. Entries retain employee attribution, occurrence time when supplied, and their narrative content. Incidents require an occurrence time and an operational severity classification (`low`, `moderate`, `high`, or `critical`). These labels are operational metadata, not a validated clinical severity scale. The module does not infer diagnoses or clinical conclusions.
 
-Medication, wound management, SIS, and care planning remain future specialized domains. They should attach typed records to clients, visits, executions, or documentation rather than using an untyped JSON catch-all.
-
-Structured measurements, coded observations, assessments, and risk assessments are now owned by the separate `clinical_documentation` module and linked to the visit's Care Documentation. They have their own permissions and typed history queries, while Care Documentation remains responsible for the shared draft/version/finalization lifecycle. See [Structured clinical documentation](clinical-documentation.md).
+The documentation model stays focused on Betreuung and service delivery. It does not include a second longitudinal care plan or a structured clinical record.
 
 ## Authorization and worklists
 
@@ -46,4 +44,4 @@ All documentation tables use forced tenant RLS, tenant-qualified foreign keys, a
 
 ## Billing and signatures
 
-Care documentation and service evidence are not claims, invoices, prices, or benefit-consumption records. An application-level service acknowledgement exists in the separate service-evidence domain; it is not a qualified electronic signature or identity verification.
+Care documentation and service evidence do not calculate prices, record benefit consumption, approve claims, or generate invoices. Completed service facts can later be allocated in the separate benefits domain. An application-level service acknowledgement exists in the service-evidence domain; it is not a qualified electronic signature or identity verification.

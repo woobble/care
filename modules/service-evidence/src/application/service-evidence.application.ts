@@ -107,6 +107,15 @@ export interface EvidencePackageView {
   eligibleSignatories: EligibleSignatoryView[];
 }
 
+export interface BillingEvidenceReadiness {
+  documentationStatus: 'missing' | 'draft' | 'finalized';
+  executionStatus: 'missing' | 'in_progress' | 'completed';
+  evidencePackageId: string | null;
+  snapshotHash: string | null;
+  isCurrent: boolean;
+  acknowledgementStatus: EvidencePackageView['status'] | 'missing';
+}
+
 export type ServiceEvidenceWorklistStatus =
   | 'awaiting_acknowledgement'
   | 'acknowledged'
@@ -193,6 +202,45 @@ export class ServiceEvidenceApplicationService {
       const source = await this.readSource(transaction, principal.tenantId, visitId);
       return this.packageView(transaction, principal.tenantId, evidencePackage, source);
     });
+  }
+
+  async getBillingReadiness(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    visitId: string,
+  ): Promise<BillingEvidenceReadiness> {
+    const document = await this.repository.documentForVisit(transaction, tenantId, visitId);
+    if (!document) {
+      return {
+        documentationStatus: 'missing',
+        executionStatus: 'missing',
+        evidencePackageId: null,
+        snapshotHash: null,
+        isCurrent: false,
+        acknowledgementStatus: 'missing',
+      };
+    }
+    const source = await this.readSourceByDocument(transaction, tenantId, document.id);
+    const evidencePackage = await this.repository.latestPackage(transaction, tenantId, document.id);
+    if (!evidencePackage) {
+      return {
+        documentationStatus: source.document.status,
+        executionStatus: source.execution.status,
+        evidencePackageId: null,
+        snapshotHash: null,
+        isCurrent: false,
+        acknowledgementStatus: 'missing',
+      };
+    }
+    const view = await this.packageView(transaction, tenantId, evidencePackage, source);
+    return {
+      documentationStatus: source.document.status,
+      executionStatus: source.execution.status,
+      evidencePackageId: view.id,
+      snapshotHash: view.snapshotHash,
+      isCurrent: view.isCurrent,
+      acknowledgementStatus: view.status,
+    };
   }
 
   async getPackage(principal: AuthorizationPrincipal, evidencePackageId: string) {

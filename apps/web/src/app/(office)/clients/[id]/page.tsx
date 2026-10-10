@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
-import type { components } from '@care/api-client';
 import { auditActionKey } from '../../../../i18n/audit';
 import { statusLabelKey } from '../../../../i18n/status';
 import { errorMessageKey } from '../../../../i18n/errors';
@@ -12,12 +11,8 @@ import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
-  hasPermission,
   hasClientPermission,
 } from '../../../../lib/api';
-import { ClinicalHistorySection, clinicalRange } from './clinical-history';
-
-type ClinicalHistoryPage = components['schemas']['ClinicalRecordHistoryPageDto'];
 import {
   activateClientAction,
   addClientAddressAction,
@@ -43,6 +38,24 @@ const contactRoleKeys = {
   invoice_recipient: 'Clients.detail.contactRoles.invoiceRecipient',
 } as const;
 
+const clientDocumentTypes = [
+  'service_evidence',
+  'service_agreement',
+  'invoice',
+  'invoice_correction',
+  'benefit_overview',
+  'claim_summary',
+] as const;
+type ClientDocumentType = (typeof clientDocumentTypes)[number];
+type ClientDocument = {
+  id: string;
+  documentType: ClientDocumentType;
+  status: 'pending' | 'ready' | 'failed' | 'superseded';
+  locale: 'de' | 'en';
+  generatedAt: string | null;
+  createdAt: string;
+};
+
 export default async function ClientDetailPage({
   params,
   searchParams,
@@ -50,9 +63,8 @@ export default async function ClientDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{
     error?: string;
-    clinicalFrom?: string;
-    clinicalUntil?: string;
-    clinicalPage?: string;
+    documentType?: string;
+    documentPage?: string;
   }>;
 }>) {
   const { id } = await params;
@@ -158,106 +170,58 @@ export default async function ClientDetailPage({
   const organizations = organizationsResult.data ?? [];
   const facilities = facilitiesResult.data ?? [];
   const permissions = await getPermissionGrants(api);
-  const canReviewClinicalHistory = hasPermission(permissions, 'clinical_documentation.review');
-  const canReadMedication = client
-    ? hasClientPermission(permissions, 'medication.read', client.tenantId, client.organizationId, client.primaryFacilityId) ||
-      hasClientPermission(permissions, 'medication.order.manage', client.tenantId, client.organizationId, client.primaryFacilityId)
-    : false;
-  const clinicalPeriod = clinicalRange(query.clinicalFrom, query.clinicalUntil);
-  const clinicalPage = parseClinicalPage(query.clinicalPage);
-  let clinicalMeasurements: ClinicalHistoryPage | undefined;
-  let clinicalObservations: ClinicalHistoryPage | undefined;
-  let clinicalAssessments: ClinicalHistoryPage | undefined;
-  let clinicalRiskHistory: ClinicalHistoryPage | undefined;
-  let clinicalCurrentRisks: ClinicalHistoryPage | undefined;
-  let clinicalHistoryLoadFailed = false;
-  if (client && canReviewClinicalHistory) {
-    const [
-      measurementsResult,
-      observationsResult,
-      assessmentsResult,
-      risksResult,
-      currentRisksResult,
-    ] = await Promise.all([
-      get('/api/v1/clients/{clientId}/measurements', {
-        params: {
-          path: { clientId: client.id },
-          query: {
-            page: clinicalPage,
-            pageSize: 25,
-            from: clinicalPeriod.fromInstant,
-            until: clinicalPeriod.untilInstant,
-          },
-          header,
-        },
-      }),
-      get('/api/v1/clients/{clientId}/observations', {
-        params: {
-          path: { clientId: client.id },
-          query: {
-            page: clinicalPage,
-            pageSize: 25,
-            from: clinicalPeriod.fromInstant,
-            until: clinicalPeriod.untilInstant,
-          },
-          header,
-        },
-      }),
-      get('/api/v1/clients/{clientId}/assessments', {
-        params: {
-          path: { clientId: client.id },
-          query: {
-            page: clinicalPage,
-            pageSize: 25,
-            from: clinicalPeriod.fromInstant,
-            until: clinicalPeriod.untilInstant,
-          },
-          header,
-        },
-      }),
-      get('/api/v1/clients/{clientId}/risks', {
-        params: {
-          path: { clientId: client.id },
-          query: {
-            page: clinicalPage,
-            pageSize: 25,
-            from: clinicalPeriod.fromInstant,
-            until: clinicalPeriod.untilInstant,
-          },
-          header,
-        },
-      }),
-      get('/api/v1/clients/{clientId}/risks', {
-        params: {
-          path: { clientId: client.id },
-          query: { page: 1, pageSize: 100, currentOnly: true },
-          header,
-        },
-      }),
-    ]);
-    clinicalHistoryLoadFailed = [
-      measurementsResult,
-      observationsResult,
-      assessmentsResult,
-      risksResult,
-      currentRisksResult,
-    ].some((result) => result.error !== undefined);
-    clinicalMeasurements = measurementsResult.data;
-    clinicalObservations = observationsResult.data;
-    clinicalAssessments = assessmentsResult.data;
-    clinicalRiskHistory = risksResult.data;
-    clinicalCurrentRisks = currentRisksResult.data;
-  }
   const tenantId = header['X-Tenant-Id'];
-  const canReadCarePlan = client
+  const canReadBenefits = client
     ? hasClientPermission(
         permissions,
-        'care_plan.read',
+        'benefits.read',
         tenantId,
         client.organizationId,
         client.primaryFacilityId,
       )
     : false;
+  const canReadBilling = client
+    ? hasClientPermission(
+        permissions,
+        'billing.read',
+        tenantId,
+        client.organizationId,
+        client.primaryFacilityId,
+      )
+    : false;
+  const canReadDocuments = client
+    ? hasClientPermission(
+        permissions,
+        'documents.read',
+        tenantId,
+        client.organizationId,
+        client.primaryFacilityId,
+      )
+    : false;
+  const selectedDocumentType = clientDocumentTypes.includes(
+    query.documentType as ClientDocumentType,
+  )
+    ? (query.documentType as ClientDocumentType)
+    : null;
+  const documentPage = positivePage(query.documentPage);
+  const documentsResult =
+    client && canReadDocuments
+      ? await get('/api/v1/documents', {
+          params: {
+            query: {
+              clientId: client.id,
+              page: documentPage,
+              pageSize: 25,
+              ...(selectedDocumentType ? { documentType: selectedDocumentType } : {}),
+            },
+            header,
+          },
+        })
+      : null;
+  const documentList = documentsResult?.data as
+    | { items?: ClientDocument[]; hasMore?: boolean; total?: number }
+    | undefined;
+  const documents = documentList?.items ?? [];
   const canUpdateClient = client
     ? hasClientPermission(
         permissions,
@@ -329,34 +293,140 @@ export default async function ClientDetailPage({
             <SectionLink href="#overview">{t('Clients.detail.overviewTab')}</SectionLink>
             <SectionLink href="#contacts">{t('Clients.detail.contactsTab')}</SectionLink>
             <SectionLink href="#insurance">{t('Clients.detail.insuranceTab')}</SectionLink>
+            {canReadDocuments ? (
+              <SectionLink href="#documents">{t('Documents.title')}</SectionLink>
+            ) : null}
             <Link
               className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
               href={`/clients/${client.id}/service-agreements`}
             >
               {t('Clients.detail.servicePlanningTab')}
             </Link>
-            {canReadCarePlan ? (
+            {canReadBenefits ? (
               <Link
                 className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
-                href={`/clients/${client.id}/care-plan`}
+                href={`/clients/${client.id}/benefits`}
               >
-                {t('Clients.detail.carePlanTab')}
+                {t('Clients.detail.benefitsTab')}
               </Link>
             ) : null}
-            {canReadMedication ? (
+            {canReadBilling ? (
               <Link
                 className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
-                href={`/clients/${client.id}/medications`}
+                href={`/clients/${client.id}/invoices`}
               >
-                {t('Clients.detail.medicationsTab')}
+                {t('Clients.detail.invoicesTab')}
               </Link>
             ) : null}
             <SectionLink href="#visits">{t('Clients.detail.visitsTab')}</SectionLink>
-            {canReviewClinicalHistory ? (
-              <SectionLink href="#clinical">{t('Clients.detail.clinicalTab')}</SectionLink>
-            ) : null}
             <SectionLink href="#timeline">{t('Clients.detail.timelineTab')}</SectionLink>
           </nav>
+
+          {canReadDocuments ? (
+            <section
+              id="documents"
+              aria-labelledby="documents-title"
+              className="grid gap-3 rounded-lg border bg-white p-5 scroll-mt-6"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 id="documents-title" className="text-xl font-semibold">
+                  {t('Documents.title')}
+                </h2>
+                <p className="text-sm text-slate-600">
+                  {t('Documents.historyCount', { count: documents.length })}
+                </p>
+              </div>
+              <form
+                method="get"
+                action={`/clients/${client.id}`}
+                className="flex flex-wrap items-end gap-2"
+              >
+                <div className="grid gap-1">
+                  <Label htmlFor="document-type-filter">{t('Documents.filterType')}</Label>
+                  <select
+                    id="document-type-filter"
+                    name="documentType"
+                    defaultValue={selectedDocumentType ?? ''}
+                    className="h-10 rounded-md border bg-white px-3"
+                  >
+                    <option value="">{t('Documents.allDocumentTypes')}</option>
+                    {clientDocumentTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {t(`Documents.documentTypes.${type}`)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Button type="submit" variant="secondary">
+                  {t('Documents.applyFilter')}
+                </Button>
+              </form>
+              {documents.length ? (
+                <ul className="grid gap-2">
+                  {documents.map((document) => (
+                    <li
+                      key={document.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+                    >
+                      <div>
+                        <h3 className="font-medium">
+                          {t(`Documents.documentTypes.${document.documentType}`)}
+                        </h3>
+                        <p className="text-sm text-slate-600">
+                          {formatDateTime(document.generatedAt ?? document.createdAt, locale)} ·{' '}
+                          {t(`Documents.status.${document.status}`)} ·{' '}
+                          {document.locale.toUpperCase()}
+                        </p>
+                      </div>
+                      {document.status === 'ready' ? (
+                        <Button asChild variant="secondary">
+                          <Link href={`/documents/${document.id}/pdf`}>
+                            {t('Documents.download')}
+                          </Link>
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-slate-700">
+                  {selectedDocumentType
+                    ? t('Documents.historyFilterEmpty')
+                    : t('Documents.historyEmpty')}
+                </p>
+              )}
+              {documentPage > 1 || documentList?.hasMore ? (
+                <nav aria-label={t('Documents.historyPagination')} className="flex gap-2">
+                  {documentPage > 1 ? (
+                    <Button asChild variant="secondary">
+                      <Link
+                        href={clientDocumentsHref(
+                          client.id,
+                          documentPage - 1,
+                          selectedDocumentType,
+                        )}
+                      >
+                        {t('Documents.previousPage')}
+                      </Link>
+                    </Button>
+                  ) : null}
+                  {documentList?.hasMore ? (
+                    <Button asChild variant="secondary">
+                      <Link
+                        href={clientDocumentsHref(
+                          client.id,
+                          documentPage + 1,
+                          selectedDocumentType,
+                        )}
+                      >
+                        {t('Documents.nextPage')}
+                      </Link>
+                    </Button>
+                  ) : null}
+                </nav>
+              ) : null}
+            </section>
+          ) : null}
 
           <section
             id="overview"
@@ -1323,21 +1393,6 @@ export default async function ClientDetailPage({
             ) : null}
           </section>
 
-          {canReviewClinicalHistory ? (
-            <ClinicalHistorySection
-              clientId={client.id}
-              locale={locale}
-              from={clinicalPeriod.from}
-              until={clinicalPeriod.until}
-              page={clinicalPage}
-              measurements={clinicalMeasurements}
-              observations={clinicalObservations}
-              assessments={clinicalAssessments}
-              riskHistory={clinicalRiskHistory}
-              currentRisksPage={clinicalCurrentRisks}
-              loadFailed={clinicalHistoryLoadFailed}
-            />
-          ) : null}
           <section
             id="timeline"
             aria-labelledby="timeline-title"
@@ -1608,6 +1663,21 @@ function currentDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function positivePage(value: string | undefined): number {
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page > 0 ? page : 1;
+}
+
+function clientDocumentsHref(
+  clientId: string,
+  page: number,
+  documentType: ClientDocumentType | null,
+): string {
+  const query = new URLSearchParams({ documentPage: String(page) });
+  if (documentType) query.set('documentType', documentType);
+  return `/clients/${clientId}?${query.toString()}#documents`;
+}
+
 function clientVisitRange(): { visitNow: Date; visitFuture: Date; visitRecent: Date } {
   const visitNow = new Date();
   return {
@@ -1704,10 +1774,4 @@ function facilityName(
   fallback: string,
 ): string {
   return items.find((item) => item.id === id)?.name ?? fallback;
-}
-
-function parseClinicalPage(value: string | undefined): number {
-  if (!value || !/^\d+$/.test(value)) return 1;
-  const page = Number(value);
-  return Number.isSafeInteger(page) && page > 0 && page <= 10_000 ? page : 1;
 }

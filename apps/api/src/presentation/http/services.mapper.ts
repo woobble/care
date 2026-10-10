@@ -35,6 +35,7 @@ export function serviceResponse(service: ServiceDefinitionSnapshot): ServiceResp
     description: service.description ?? null,
     categoryId: service.categoryId,
     unit: service.unit,
+    benefitCategory: service.benefitCategory,
     defaultDurationMinutes: service.defaultDurationMinutes ?? null,
     status: service.status,
     validFrom: service.validFrom,

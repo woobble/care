@@ -4,7 +4,7 @@
 
 `service_evidence` owns immutable evidence packages and the acknowledgement records attached to them. A package is a snapshot of finalized service evidence presented to a signatory. An acknowledgement records who confirmed that snapshot, in what capacity, by which application-level method, and when.
 
-This workflow does not approve an invoice or claim, certify care medically, verify identity cryptographically, or provide a qualified electronic signature. It covers service evidence only; observations, incidents, and other clinical narrative are not included in the package. Billing remains a separate domain.
+This workflow does not approve an invoice or claim, determine payer eligibility, verify identity cryptographically, or provide a qualified electronic signature. It covers service evidence only; visit narrative is not included in the package by default. Billing remains a separate domain.
 
 ## Package creation and snapshot
 

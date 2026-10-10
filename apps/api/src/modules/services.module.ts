@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { createServiceApplicationService } from '@care/services';
+import { createServiceApplicationService, ServicePriceApplicationService } from '@care/services';
 import type { AuditWriter } from '@care/audit';
 import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
@@ -10,6 +10,7 @@ import {
   OUTBOX_WRITER,
   SERVICE_AGREEMENT_GUARDS,
   SERVICE_APPLICATION,
+  SERVICE_PRICE_APPLICATION,
   UNIT_OF_WORK,
 } from '../tokens';
 import { AuditModule } from './audit.module';
@@ -21,6 +22,7 @@ import {
   ServiceCategoriesController,
   ServicesController,
 } from '../presentation/http/services.controller';
+import { ServicePricesController } from '../presentation/http/service-prices.controller';
 
 @Module({
   imports: [
@@ -30,7 +32,7 @@ import {
     PlatformModule,
     ServiceAgreementProtectionModule,
   ],
-  controllers: [ServiceCategoriesController, ServicesController],
+  controllers: [ServiceCategoriesController, ServicesController, ServicePricesController],
   providers: [
     OidcGuard,
     TenantContextGuard,
@@ -44,7 +46,13 @@ import {
         guards: ServiceAgreementGuards,
       ) => createServiceApplicationService(unitOfWork, audit, outbox, guards),
     },
+    {
+      provide: SERVICE_PRICE_APPLICATION,
+      inject: [UNIT_OF_WORK, AUDIT_WRITER, OUTBOX_WRITER],
+      useFactory: (unitOfWork: UnitOfWork, audit: AuditWriter, outbox: OutboxWriter) =>
+        new ServicePriceApplicationService(unitOfWork, audit, outbox),
+    },
   ],
-  exports: [SERVICE_APPLICATION],
+  exports: [SERVICE_APPLICATION, SERVICE_PRICE_APPLICATION],
 })
 export class ServicesModule {}

@@ -7,6 +7,8 @@ import { getApiClient, getTenantHeader } from '../../../lib/api';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const units = ['occurrence', 'minute', 'hour', 'day'] as const;
+const benefitCategories = ['recognized_support', 'clinical_nursing', 'other'] as const;
+const pricingUnits = ['hour', 'minute', 'visit', 'fixed'] as const;
 
 export async function createServiceCategoryAction(formData: FormData): Promise<void> {
   const name = readString(formData, 'name');
@@ -64,6 +66,7 @@ export async function createServiceAction(formData: FormData): Promise<void> {
   const name = readString(formData, 'name');
   const categoryId = readUuid(formData.get('categoryId'));
   const unit = readChoice(formData, 'unit', units);
+  const benefitCategory = readChoice(formData, 'benefitCategory', benefitCategories);
   const validFrom = readString(formData, 'validFrom');
   const defaultDurationMinutes = readNullableInteger(formData, 'defaultDurationMinutes');
   const validUntil = readNullableDate(formData, 'validUntil');
@@ -72,6 +75,7 @@ export async function createServiceAction(formData: FormData): Promise<void> {
     !name ||
     !categoryId ||
     !unit ||
+    !benefitCategory ||
     !validFrom ||
     !datePattern.test(validFrom) ||
     validUntil === undefined ||
@@ -86,6 +90,7 @@ export async function createServiceAction(formData: FormData): Promise<void> {
       name,
       categoryId,
       unit,
+      benefitCategory,
       validFrom,
       validUntil,
       defaultDurationMinutes,
@@ -104,6 +109,7 @@ export async function updateServiceAction(formData: FormData): Promise<void> {
   const name = readString(formData, 'name');
   const categoryId = readUuid(formData.get('categoryId'));
   const unit = readChoice(formData, 'unit', units);
+  const benefitCategory = readChoice(formData, 'benefitCategory', benefitCategories);
   const validFrom = readString(formData, 'validFrom');
   const validUntil = readNullableDate(formData, 'validUntil');
   const defaultDurationMinutes = readNullableInteger(formData, 'defaultDurationMinutes');
@@ -113,6 +119,7 @@ export async function updateServiceAction(formData: FormData): Promise<void> {
     !name ||
     !categoryId ||
     !unit ||
+    !benefitCategory ||
     !validFrom ||
     !datePattern.test(validFrom) ||
     validUntil === undefined ||
@@ -127,6 +134,7 @@ export async function updateServiceAction(formData: FormData): Promise<void> {
       name,
       categoryId,
       unit,
+      benefitCategory,
       validFrom,
       validUntil,
       defaultDurationMinutes,
@@ -136,6 +144,44 @@ export async function updateServiceAction(formData: FormData): Promise<void> {
   if (error) redirect(servicePath(id, error.code));
   refreshService(id);
   redirect(servicePath(id, ''));
+}
+
+export async function recordServicePriceAction(formData: FormData): Promise<void> {
+  const serviceId = readUuid(formData.get('serviceId'));
+  const organizationId = readUuid(formData.get('organizationId'));
+  const facilityId = readUuid(formData.get('facilityId'));
+  const priceCents = readEuroCents(readString(formData, 'price'));
+  const pricingUnit = readChoice(formData, 'pricingUnit', pricingUnits);
+  const validFrom = readString(formData, 'validFrom');
+  const validUntil = readNullableDate(formData, 'validUntil');
+  if (
+    !serviceId ||
+    !organizationId ||
+    !priceCents ||
+    !pricingUnit ||
+    !datePattern.test(validFrom) ||
+    validUntil === undefined ||
+    (validUntil !== null && validUntil <= validFrom)
+  ) {
+    redirect(servicePricePath(serviceId, organizationId, validFrom, 'INVALID_REQUEST'));
+  }
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/services/{serviceId}/prices', {
+    params: { path: { serviceId }, header: await getTenantHeader() },
+    body: {
+      organizationId,
+      ...(facilityId ? { facilityId } : {}),
+      priceCents,
+      pricingUnit,
+      validFrom,
+      validUntil,
+    },
+  });
+  if (error) redirect(servicePricePath(serviceId, organizationId, validFrom, error.code));
+  revalidatePath(`/services/${serviceId}`);
+  revalidatePath('/planning');
+  revalidatePath('/benefits');
+  redirect(servicePricePath(serviceId, organizationId, validFrom, ''));
 }
 
 export async function archiveServiceAction(formData: FormData): Promise<void> {
@@ -236,6 +282,13 @@ function readNullableInteger(formData: FormData, name: string): number | null | 
   return readInteger(formData, name);
 }
 
+function readEuroCents(value: string): number | undefined {
+  const match = /^(0|[1-9]\d*)(?:[.,](\d{1,2}))?$/.exec(value);
+  if (!match) return undefined;
+  const cents = Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
+  return Number.isSafeInteger(cents) && cents > 0 && cents <= 2_000_000_000 ? cents : undefined;
+}
+
 function readUuid(value: FormDataEntryValue | null): string | undefined {
   if (typeof value !== 'string') return undefined;
   const id = value.trim();
@@ -267,6 +320,21 @@ function servicePath(id: string | undefined, error: string): string {
   return error
     ? `/services/${encodeURIComponent(id)}?error=${encodeURIComponent(error)}`
     : `/services/${encodeURIComponent(id)}`;
+}
+
+function servicePricePath(
+  id: string | undefined,
+  organizationId: string | undefined,
+  validAt: string,
+  error: string,
+): string {
+  if (!id) return '/services?error=INVALID_REQUEST';
+  const query = new URLSearchParams();
+  if (organizationId) query.set('priceOrganizationId', organizationId);
+  if (datePattern.test(validAt)) query.set('priceDate', validAt);
+  if (error) query.set('error', error);
+  const suffix = query.toString();
+  return `/services/${encodeURIComponent(id)}${suffix ? `?${suffix}` : ''}`;
 }
 
 function refreshService(id: string): void {

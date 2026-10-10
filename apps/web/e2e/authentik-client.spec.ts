@@ -16,9 +16,7 @@ test('Authentik users can be invited and administered from the office UI', async
   const apiToken = required('AUTHENTIK_E2E_API_TOKEN');
   const database = new Client({ connectionString: required('MIGRATION_DATABASE_URL') });
   const runId = uuidv7();
-  const serviceValidFrom = new Date().toISOString().slice(0, 10);
-  const medicationName = `Medication E2E ${runId}`;
-  const medicationSourceReference = `medication-e2e-${runId}`;
+  const serviceValidFrom = dateInBerlin();
   const username = `care-e2e-${runId}`;
   const displayName = `Care E2E ${runId}`;
   const email = `${username}@example.test`;
@@ -32,8 +30,6 @@ test('Authentik users can be invited and administered from the office UI', async
   const caregiverEmail = `${caregiverUsername}@example.test`;
   const caregiverPassword = `Aa1!${uuidv7()}`;
   const executionMarker = `execution-note-${runId}`;
-  const carePlanMeasureTitle = `Fall-safe transfer support ${runId}`;
-  const carePlanNeedTitle = `Mobility support ${runId}`;
   let authentikUserId: number | undefined;
   let invitedAuthentikUserId: number | undefined;
   let caregiverAuthentikUserId: number | undefined;
@@ -51,10 +47,7 @@ test('Authentik users can be invited and administered from the office UI', async
   let clientId: string | undefined;
   let agreementClientId: string | undefined;
   let serviceId: string | undefined;
-  let carePlanAuthorEmployeeId: string | undefined;
-  let carePlanQualificationId: string | undefined;
   let executionVisitId: string | undefined;
-  let medicationOrderId: string | undefined;
   let initialEvidencePackageId: string | undefined;
   let replacementEvidencePackageId: string | undefined;
   let representativeContactId: string | undefined;
@@ -62,11 +55,10 @@ test('Authentik users can be invited and administered from the office UI', async
   const codeSuffix = runId.slice(-24);
   const serviceCategoryCode = `E2E-CAT-${codeSuffix}`;
   const serviceCode = `E2E-SVC-${codeSuffix}`;
-  const workforceOrganizationName = `E2E Organization ${runId}`;
-  const workforceFacilityName = `E2E Facility ${runId}`;
-  const workforceTeamName = `E2E Team ${runId}`;
-  const workforcePersonnelNumber = `E2E-${runId}`;
-  const carePlanAuthorPersonnelNumber = `E2E-PLAN-${runId}`;
+  const e2eOrganizationName = `E2E Organization ${runId}`;
+  const e2eFacilityName = `E2E Facility ${runId}`;
+  const e2eTeamName = `E2E Team ${runId}`;
+  const caregiverPersonnelNumber = `E2E-${runId}`;
   let invitedContext: BrowserContext | undefined;
   let caregiverContext: BrowserContext | undefined;
 
@@ -210,70 +202,90 @@ test('Authentik users can be invited and administered from the office UI', async
 
     await page.getByRole('button', { name: 'Activate' }).click();
     await expect(page.locator('span').filter({ hasText: /^Active$/ })).toBeVisible();
-    await page.getByRole('button', { name: 'Archive' }).click();
+    const clientArchivePath = new URL(page.url()).pathname;
+    const clientArchiveResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === clientArchivePath,
+    );
+    await Promise.all([
+      page.getByRole('button', { name: 'Archive' }).click(),
+      clientArchiveResponse,
+    ]);
+    await page.reload();
     await expect(page.locator('span').filter({ hasText: /^Archived$/ })).toBeVisible();
 
     await page.goto('/administration/organizations');
-    await page.getByLabel('Name', { exact: true }).fill(workforceOrganizationName);
+    await page.getByLabel('Name', { exact: true }).fill(e2eOrganizationName);
     await page.getByRole('button', { name: 'Create organization' }).click();
-    await expect(page.getByRole('heading', { name: workforceOrganizationName })).toBeVisible();
-    const workforceOrganizationRow = await database.query<{ id: string }>(
+    await expect(page.getByRole('heading', { name: e2eOrganizationName })).toBeVisible();
+    const e2eOrganizationRow = await database.query<{ id: string }>(
       'SELECT id FROM organizations.organizations WHERE tenant_id = $1 AND name = $2',
-      [tenantId, workforceOrganizationName],
+      [tenantId, e2eOrganizationName],
     );
-    const workforceOrganizationId = workforceOrganizationRow.rows[0]?.id;
-    if (!workforceOrganizationId) throw new Error('The office UI did not create the organization');
+    const e2eOrganizationId = e2eOrganizationRow.rows[0]?.id;
+    if (!e2eOrganizationId) throw new Error('The office UI did not create the organization');
 
-    await page.locator('#facility-name').fill(workforceFacilityName);
+    await page.locator('#facility-name').fill(e2eFacilityName);
     await page.getByRole('button', { name: 'Create facility' }).click();
-    await expect(page.getByRole('heading', { name: workforceFacilityName })).toBeVisible();
-    const workforceFacilityRow = await database.query<{ id: string }>(
+    await expect(page.getByRole('heading', { name: e2eFacilityName })).toBeVisible();
+    const e2eFacilityRow = await database.query<{ id: string }>(
       'SELECT id FROM organizations.facilities WHERE tenant_id = $1 AND organization_id = $2 AND name = $3',
-      [tenantId, workforceOrganizationId, workforceFacilityName],
+      [tenantId, e2eOrganizationId, e2eFacilityName],
     );
-    const workforceFacilityId = workforceFacilityRow.rows[0]?.id;
-    if (!workforceFacilityId) throw new Error('The office UI did not create the facility');
+    const e2eFacilityId = e2eFacilityRow.rows[0]?.id;
+    if (!e2eFacilityId) throw new Error('The office UI did not create the facility');
 
-    await page.locator('#team-name').fill(workforceTeamName);
+    await page.locator('#team-name').fill(e2eTeamName);
     await page.getByRole('button', { name: 'Create team' }).click();
-    await expect(page.getByRole('heading', { name: workforceTeamName })).toBeVisible();
-    const workforceTeamRow = await database.query<{ id: string }>(
+    await expect(page.getByRole('heading', { name: e2eTeamName })).toBeVisible();
+    const e2eTeamRow = await database.query<{ id: string }>(
       'SELECT id FROM organizations.teams WHERE tenant_id = $1 AND organization_id = $2 AND name = $3',
-      [tenantId, workforceOrganizationId, workforceTeamName],
+      [tenantId, e2eOrganizationId, e2eTeamName],
     );
-    const workforceTeamId = workforceTeamRow.rows[0]?.id;
-    if (!workforceTeamId) throw new Error('The office UI did not create the team');
+    const e2eTeamId = e2eTeamRow.rows[0]?.id;
+    if (!e2eTeamId) throw new Error('The office UI did not create the team');
 
     await page.goto('/employees/new');
-    await page.getByLabel('Organization').selectOption(workforceOrganizationId);
+    await page.getByLabel('Organization').selectOption(e2eOrganizationId);
     await page.getByLabel('First name').fill('E2E');
     await page.getByLabel('Last name').fill(runId);
-    await page.getByLabel('Personnel number').fill(workforcePersonnelNumber);
+    await page.getByLabel('Personnel number').fill(caregiverPersonnelNumber);
     await page.getByRole('button', { name: 'Create employee' }).click();
     await expect(page.getByRole('heading', { name: `E2E ${runId}` })).toBeVisible();
-    const workforceEmployeeRow = await database.query<{ id: string }>(
+    const caregiverEmployeeRow = await database.query<{ id: string }>(
       'SELECT id FROM employees.employees WHERE tenant_id = $1 AND personnel_number = $2',
-      [tenantId, workforcePersonnelNumber],
+      [tenantId, caregiverPersonnelNumber],
     );
-    const workforceEmployeeId = workforceEmployeeRow.rows[0]?.id;
-    if (!workforceEmployeeId) throw new Error('The office UI did not create the employee');
+    const caregiverEmployeeId = caregiverEmployeeRow.rows[0]?.id;
+    if (!caregiverEmployeeId) throw new Error('The office UI did not create the employee');
 
-    await page.getByLabel('Assign facility').selectOption(workforceFacilityId);
+    await page.getByLabel('Assign facility').selectOption(e2eFacilityId);
     await page.getByRole('button', { name: 'Assign facility' }).click();
     await expect(
-      page.getByText(`${workforceFacilityName} · Primary facility`, { exact: true }),
+      page.getByText(`${e2eFacilityName} · Primary facility`, { exact: true }),
     ).toBeVisible();
-    await page.getByLabel('Assign to team').selectOption(workforceTeamId);
-    await page.getByRole('button', { name: 'Assign to team' }).click();
+    await page.getByLabel('Assign to team').selectOption(e2eTeamId);
+    const teamAssignmentPath = new URL(page.url()).pathname;
+    const teamAssignmentResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === teamAssignmentPath,
+    );
+    await Promise.all([
+      page.getByRole('button', { name: 'Assign to team' }).click(),
+      teamAssignmentResponse,
+    ]);
+    await page.reload();
     await expect(
-      page.locator('#assignments article').filter({ hasText: workforceTeamName }),
+      page.locator('#assignments article').filter({ hasText: e2eTeamName }),
     ).toBeVisible();
     await page.getByLabel('Add qualification').selectOption({ label: 'Pflegefachkraft (PFK)' });
     await page.getByRole('button', { name: 'Save qualification' }).click();
     await expect(
       page.locator('#qualifications li').filter({ hasText: 'Pflegefachkraft (PFK)' }),
     ).toBeVisible();
-    expect(workforceEmployeeId).toMatch(/^[0-9a-f-]+$/i);
+    expect(caregiverEmployeeId).toMatch(/^[0-9a-f-]+$/i);
 
     await page.goto('/services');
     const categoryForm = page.locator('form').filter({
@@ -288,19 +300,28 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.locator('#name').fill(`E2E Service ${runId}`);
     await page.locator('#categoryId').selectOption({ label: serviceCategoryName });
     await page.locator('#unit').selectOption('occurrence');
+    await page.locator('#benefitCategory').selectOption('recognized_support');
     await page.locator('#defaultDurationMinutes').fill('30');
     await page.locator('#validFrom').fill(serviceValidFrom);
     await page.getByRole('button', { name: 'Create service' }).click();
     await expect(page.getByRole('heading', { name: `E2E Service ${runId}` })).toBeVisible();
     serviceId = new URL(page.url()).pathname.split('/').at(-1);
-    await page.locator(`input[name="organizationIds"][value="${workforceOrganizationId}"]`).check();
-    await page.locator(`input[name="facilityIds"][value="${workforceFacilityId}"]`).check();
+    await page.locator(`input[name="organizationIds"][value="${e2eOrganizationId}"]`).check();
+    await page.locator(`input[name="facilityIds"][value="${e2eFacilityId}"]`).check();
     await page.getByRole('button', { name: 'Save availability' }).click();
-    await expect(page.getByRole('table').getByText(workforceFacilityName)).toBeVisible();
+    await expect(page.getByRole('table').getByText(e2eFacilityName)).toBeVisible();
+    const priceForm = page.locator('form').filter({ has: page.locator('#newPriceOrganizationId') });
+    await priceForm.locator('select[name="organizationId"]').selectOption(e2eOrganizationId);
+    await priceForm.locator('select[name="facilityId"]').selectOption(e2eFacilityId);
+    await priceForm.locator('input[name="price"]').fill('45.00');
+    await priceForm.locator('select[name="pricingUnit"]').selectOption('visit');
+    await priceForm.locator('input[name="validFrom"]').fill(serviceValidFrom);
+    await priceForm.getByRole('button', { name: 'Record price' }).click();
+    await expect(page.getByText('Price recorded.', { exact: true })).toBeVisible();
 
     await page.goto('/clients/new');
-    await page.getByLabel('Organization').selectOption(workforceOrganizationId);
-    await page.getByLabel('Primary facility').selectOption(workforceFacilityId);
+    await page.getByLabel('Organization').selectOption(e2eOrganizationId);
+    await page.getByLabel('Primary facility').selectOption(e2eFacilityId);
     await page.getByLabel('First name').fill('Agreement E2E');
     await page.getByLabel('Last name').fill(runId);
     await page.getByRole('button', { name: 'Create client' }).click();
@@ -325,241 +346,77 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.getByRole('button', { name: 'Activate' }).click();
     await expect(page.locator('span').filter({ hasText: /^Active$/ })).toBeVisible();
 
-    await page.goto('/employees/new');
-    await page.getByLabel('Organization').selectOption(workforceOrganizationId);
-    await page.getByLabel('First name').fill('Plan');
-    await page.getByLabel('Last name').fill(`Author ${runId}`);
-    await page.getByLabel('Personnel number').fill(carePlanAuthorPersonnelNumber);
-    await page.getByRole('button', { name: 'Create employee' }).click();
-    await expect(page.getByRole('heading', { name: `Plan Author ${runId}` })).toBeVisible();
-    await page.getByLabel('Link an active user').selectOption(platformUserId!);
-    await page.getByRole('button', { name: 'Link user' }).click();
-    await expect(page.getByText(displayName, { exact: true })).toBeVisible();
-    const carePlanAuthorRow = await database.query<{ id: string }>(
-      'SELECT id FROM employees.employees WHERE tenant_id = $1 AND personnel_number = $2',
-      [tenantId, carePlanAuthorPersonnelNumber],
-    );
-    carePlanAuthorEmployeeId = carePlanAuthorRow.rows[0]?.id;
-    if (!carePlanAuthorEmployeeId) throw new Error('The care-plan author employee is missing');
-    const carePlanQualification = await database.query<{ id: string }>(
-      "SELECT id FROM employees.qualification_definitions WHERE tenant_id = $1 AND code = 'PFK'",
-      [tenantId],
-    );
-    carePlanQualificationId = carePlanQualification.rows[0]?.id;
-    if (!carePlanQualificationId) throw new Error('The seeded PFK qualification is missing');
+    await page.locator('summary').filter({ hasText: 'Add insurance relationship' }).click();
+    const benefitInsuranceForm = page
+      .locator('details')
+      .filter({ hasText: 'Add insurance relationship' })
+      .locator('form');
+    await benefitInsuranceForm.locator('#new-insurer-name').fill('E2E Pflegekasse');
+    await benefitInsuranceForm.locator('#new-insurance-number').fill(`E2E-KASSE-${runId}`);
+    await benefitInsuranceForm.locator('input[name="isPrimary"]').check();
+    await benefitInsuranceForm.getByRole('button').click();
+    await expect(page.getByRole('heading', { name: 'E2E Pflegekasse · Primary' })).toBeVisible();
 
-    await ensureCompetencyPolicy(
-      page,
-      database,
-      tenantId,
-      'medication.administer',
-      carePlanQualificationId,
-    );
-    await ensureCompetencyPolicy(
-      page,
-      database,
-      tenantId,
-      'medication.reconciliation.complete',
-      carePlanQualificationId,
-    );
+    await page.locator('summary').filter({ hasText: 'Add care level record' }).click();
+    await page.locator('#new-grade').fill('3');
+    await page.locator('#new-grade-from').fill('2000-01-01');
+    await page.locator('#new-grade-status').selectOption('confirmed');
+    await page.getByRole('button', { name: 'Save care level' }).click();
+    await expect(page.getByText('Care level 3 · Confirmed')).toBeVisible();
 
-    await database.query(
-      `UPDATE "authorization".professional_competency_policy_versions
-       SET status = 'inactive', deactivated_at = now()
-       WHERE tenant_id = $1
-         AND operation_key = ANY($2::text[])
-         AND status = 'active'`,
-      [tenantId, ['care_plan.activate', 'care_plan.evaluate']],
-    );
+    await page.goto(`/clients/${agreementClientId}/benefits`);
+    const fundingSourceForm = page.locator('form').filter({ has: page.locator('#sourceType') });
+    await fundingSourceForm
+      .locator('#sourceType')
+      .selectOption('statutory_long_term_care_insurance');
+    const insuranceOption = await fundingSourceForm
+      .locator('#clientInsuranceId option')
+      .filter({ hasText: 'E2E Pflegekasse' })
+      .getAttribute('value');
+    if (!insuranceOption) throw new Error('The benefits form did not include the Pflegekasse');
+    await fundingSourceForm.locator('#clientInsuranceId').selectOption(insuranceOption);
+    await fundingSourceForm.locator('#funding-label').fill('E2E Pflegekasse');
+    await fundingSourceForm.getByRole('button', { name: 'Add source' }).click();
+    await expect(page).toHaveURL(/updated=funding_source/);
 
-    const workforceDashboardUrl = `/administration/workforce-compliance?employeeQ=${encodeURIComponent(runId)}`;
-    await page.goto(workforceDashboardUrl);
-    for (const operation of ['Care-plan activation', 'Care-plan evaluation']) {
-      const operationCard = page
-        .getByRole('heading', { name: operation, exact: true })
-        .first()
-        .locator('xpath=ancestor::section[1]');
-      await expect(operationCard).toContainText(/No policy configured|Policy inactive/);
-    }
-    const unconfiguredEmployeeRow = page
-      .getByRole('row')
-      .filter({ hasText: `Plan Author ${runId}` });
-    await expect(unconfiguredEmployeeRow).toContainText('Not evaluated');
-    await expect(unconfiguredEmployeeRow).toContainText(
-      /No active competency policy is configured for this operation\.|The competency policy for this operation is inactive\./,
-    );
+    const entitlementForm = page.locator('form').filter({ has: page.locator('#benefitType') });
+    await entitlementForm.locator('#benefitType').selectOption('entlastungsbetrag_45b');
+    const entitlementSourceOption = await entitlementForm
+      .locator('#entitlement-source option')
+      .filter({ hasText: 'E2E Pflegekasse' })
+      .getAttribute('value');
+    if (!entitlementSourceOption)
+      throw new Error('The entitlement form did not include the Pflegekasse');
+    await entitlementForm.locator('#entitlement-source').selectOption(entitlementSourceOption);
+    await entitlementForm.locator('#entitlement-validFrom').fill(serviceValidFrom);
+    await entitlementForm.locator('#entitlement-source-info').selectOption('payer_confirmed');
+    await entitlementForm.getByRole('button', { name: 'Add entitlement' }).click();
+    await expect(page).toHaveURL(/updated=entitlement/);
+    await expect(page.getByRole('heading', { name: 'Entlastungsbetrag (§45b)' })).toBeVisible();
+    await expect(page.getByText(/Pflegegrad on/)).toBeVisible();
 
-    await ensureCompetencyPolicy(
-      page,
-      database,
-      tenantId,
-      'care_plan.activate',
-      carePlanQualificationId,
-    );
-    await ensureCompetencyPolicy(
-      page,
-      database,
-      tenantId,
-      'care_plan.evaluate',
-      carePlanQualificationId,
-    );
-
-    await page.goto('/administration/qualifications');
-    const protectedQualification = page
-      .locator('article')
-      .filter({ hasText: /Pflegefachkraft.*PFK/ })
-      .first();
-    page.once('dialog', (dialog) => dialog.accept());
-    await protectedQualification.getByRole('button', { name: 'Archive qualification' }).click();
-    await expect(
-      page.getByText('This qualification is required by an active competency policy.', {
-        exact: true,
-      }),
-    ).toBeVisible();
-
-    await page.goto(`/clients/${agreementClientId}/care-plan`);
-    const createCarePlanForm = page.locator('form').filter({
-      has: page.getByRole('button', { name: 'Create care plan', exact: true }),
-    });
-    const carePlanEffectiveDate = dateInBerlin();
-    await createCarePlanForm.locator('input[name="validFrom"]').fill(carePlanEffectiveDate);
-    await createCarePlanForm.getByRole('button', { name: 'Create care plan' }).click();
-    await expect(page).toHaveURL(
-      new RegExp(`/clients/${agreementClientId}/care-plan\\?planId=[0-9a-f-]+&notice=planCreated`),
-    );
-    const carePlanId = new URL(page.url()).searchParams.get('planId');
-    if (!carePlanId) throw new Error('The Office UI did not create a care plan');
-    await expect(page.getByRole('heading', { name: 'Care-planning assessment' })).toBeVisible();
-
-    const planAssessmentForm = page.locator('form').filter({
-      has: page.locator('textarea[name="clientConcerns"]'),
-    });
-    await planAssessmentForm
-      .locator('textarea[name="clientConcerns"]')
-      .fill('The client is concerned about falling during transfers.');
-    await planAssessmentForm.getByRole('button', { name: 'Save assessment' }).click();
-    await expect(page.getByRole('status')).toContainText('Assessment saved.');
-
-    const needDetails = page.locator('details').filter({
-      has: page.locator('input[name="kind"][value="need"]'),
-    });
-    await needDetails.locator('summary').click();
-    const needForm = needDetails.locator('form');
-    await needForm.locator('select[name="category"]').selectOption('mobility');
-    await needForm.locator('input[name="title"]').fill(carePlanNeedTitle);
-    await needForm.locator('textarea[name="description"]').fill('Needs support during transfers.');
-    await needForm.locator('select[name="source"]').selectOption('professional_observation');
-    await needForm.locator('select[name="priority"]').selectOption('normal');
-    await needForm.locator('select[name="status"]').selectOption('active');
-    await needForm.getByRole('button', { name: 'Save care need' }).click();
-    await expect(page.getByRole('heading', { name: carePlanNeedTitle, exact: true })).toBeVisible();
-
-    const measureDetails = page.locator('details').filter({
-      has: page.locator('input[name="kind"][value="measure"]'),
-    });
-    await measureDetails.locator('summary').click();
-    const measureForm = measureDetails.locator('form');
-    await measureForm.locator('input[name="title"]').fill(carePlanMeasureTitle);
-    await measureForm
-      .locator('textarea[name="instruction"]')
-      .fill('Assist the client with safe transfers during each visit.');
-    await measureForm.locator('select[name="category"]').selectOption('assistance');
-    await measureForm.locator('select[name="status"]').selectOption('active');
-    await measureForm.locator('select[name="needIds"]').selectOption({ label: carePlanNeedTitle });
-    await measureForm.locator('input[name="frequencyText"]').fill('During each visit');
-    await measureForm.locator('input[name="responsibleRole"]').fill('Caregiver');
-    await measureForm.locator('input[name="validFrom"]').fill(carePlanEffectiveDate);
-    await measureForm.getByRole('button', { name: 'Save measure' }).click();
-    await expect(
-      page.getByRole('heading', { name: carePlanMeasureTitle, exact: true }),
-    ).toBeVisible();
-    await expect(
-      page
-        .getByText('Your employee record is missing a required qualification.', { exact: true })
-        .first(),
-    ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Activate revision' })).toHaveCount(0);
-
-    await page.goto(`/employees/${carePlanAuthorEmployeeId}`);
-    await page.getByLabel('Add qualification').selectOption({ label: 'Pflegefachkraft (PFK)' });
-    await page.getByRole('button', { name: 'Save qualification' }).click();
-    await expect(
-      page.locator('#qualifications li').filter({ hasText: 'Pflegefachkraft (PFK)' }).last(),
-    ).toBeVisible();
-    const employeeDetailReadiness = page
-      .getByRole('heading', { name: 'Workforce readiness', exact: true })
-      .locator('xpath=ancestor::section[1]');
-    await expect(employeeDetailReadiness.getByText('Ready', { exact: true })).toHaveCount(4);
-    await expect(
-      page.locator('#qualifications li').filter({ hasText: 'Pflegefachkraft (PFK)' }).last(),
-    ).toContainText('Valid');
-
-    await page.goto(workforceDashboardUrl);
-    const employeeReadinessSection = page
-      .getByRole('heading', { name: 'Employee readiness', exact: true })
-      .locator('xpath=ancestor::section[1]');
-    const configuredEmployeeRow = employeeReadinessSection
-      .getByRole('row')
-      .filter({ hasText: `Plan Author ${runId}` });
-    await expect(configuredEmployeeRow.getByText('Ready', { exact: true })).toHaveCount(4);
-    await expect(configuredEmployeeRow).toContainText('Care-plan activation');
-    await expect(configuredEmployeeRow).toContainText('Care-plan evaluation');
-
-    const expiringSoonDate = addCalendarDays(dateInBerlin(), 20);
-    await database.query(
-      `UPDATE employees.employee_qualifications
-       SET valid_until = $4, updated_at = now()
-       WHERE tenant_id = $1 AND employee_id = $2 AND qualification_id = $3 AND status = 'active'`,
-      [tenantId, carePlanAuthorEmployeeId, carePlanQualificationId, expiringSoonDate],
-    );
-    await page.goto(workforceDashboardUrl);
-    const atRiskEmployeeRow = page
-      .getByRole('heading', { name: 'Employee readiness', exact: true })
-      .locator('xpath=ancestor::section[1]')
-      .getByRole('row')
-      .filter({ hasText: `Plan Author ${runId}` });
-    await expect(atRiskEmployeeRow.getByText('At risk', { exact: true })).toHaveCount(4);
+    await page.goto('/benefits');
+    const recognitionForm = page
+      .locator('form')
+      .filter({ has: page.locator('#recognition-organization') });
+    await recognitionForm.locator('#recognition-organization').selectOption(e2eOrganizationId);
+    await recognitionForm
+      .locator('#recognized-offering')
+      .fill('Angebote zur Unterstützung im Alltag');
+    await recognitionForm.locator('#recognition-valid-from').fill(serviceValidFrom);
+    await recognitionForm.locator('#recognition-reference').fill(`E2E Anerkennung ${runId}`);
+    await recognitionForm.getByRole('button', { name: 'Record recognition' }).click();
+    await expect(page.getByRole('status')).toContainText('Provider recognition recorded.');
 
     await page.goto(
-      `${workforceDashboardUrl}&qualificationEmployeeId=${carePlanAuthorEmployeeId}&qualificationId=${carePlanQualificationId}`,
+      `/planning?date=${serviceValidFrom}&estimateClientId=${agreementClientId}&estimateServiceId=${serviceId}&estimateDate=${serviceValidFrom}&estimateQuantity=1`,
     );
-    const qualificationWorklist = page
-      .getByRole('heading', { name: 'Qualification expiry worklist', exact: true })
-      .locator('xpath=ancestor::section[1]');
-    const expiringQualificationRow = qualificationWorklist
-      .getByRole('row')
-      .filter({ hasText: `Plan Author ${runId}` });
-    await expect(expiringQualificationRow).toContainText('Expiring soon');
-    await expiringQualificationRow.getByRole('link', { name: 'Review policy impact' }).click();
-    const qualificationImpact = page
-      .getByRole('heading', { name: 'Policy impact if this qualification were removed' })
-      .locator('xpath=ancestor::section[1]');
-    await qualificationImpact.getByLabel('Operation').selectOption('care_plan.evaluate');
-    await qualificationImpact.getByRole('button', { name: 'Apply filters' }).click();
-    const impactedEmployee = qualificationImpact
-      .getByRole('row')
-      .filter({ hasText: `Plan Author ${runId}` });
-    await expect(impactedEmployee).toContainText('Care-plan evaluation');
-    await expect(impactedEmployee).toContainText('Not ready');
-
-    await database.query(
-      `UPDATE employees.employee_qualifications
-       SET valid_until = NULL, updated_at = now()
-       WHERE tenant_id = $1 AND employee_id = $2 AND qualification_id = $3 AND status = 'active'`,
-      [tenantId, carePlanAuthorEmployeeId, carePlanQualificationId],
-    );
-
-    await page.goto(`/clients/${agreementClientId}/care-plan?planId=${carePlanId}`);
     await expect(
-      page.getByText(/Eligible under active competency policy version/).first(),
+      page.getByRole('heading', { name: 'Planned service budget estimate' }),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Activate revision' }).click();
-    await expect(
-      page.getByRole('heading', { name: carePlanMeasureTitle, exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText('Estimated service cost', { exact: true })).toBeVisible();
+    await expect(page.getByText('Eligible for this service date', { exact: true })).toBeVisible();
 
-    await page.getByRole('link', { name: 'Back to client' }).click();
-    await expect(page).toHaveURL(new RegExp(`/clients/${agreementClientId}$`));
     await page.getByRole('link', { name: 'Service planning' }).click();
     await expect(page.getByRole('heading', { name: 'Service planning' })).toBeVisible();
 
@@ -623,7 +480,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(generatedVisitLink).toContainText(`Agreement E2E ${runId}`);
     await generatedVisitLink.click();
     await expect(page.getByRole('heading', { name: `Agreement E2E ${runId}` })).toBeVisible();
-    await page.getByLabel('Assign employee').selectOption(workforceEmployeeId);
+    await page.getByLabel('Assign employee').selectOption(caregiverEmployeeId);
     await page.getByRole('button', { name: 'Assign' }).click();
     await expect(
       page
@@ -642,7 +499,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.goto(`/clients/${agreementClientId}`);
     await expect(page.getByRole('heading', { name: 'Upcoming visits' })).toBeVisible();
     await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true })).toBeVisible();
-    await page.goto(`/employees/${workforceEmployeeId}`);
+    await page.goto(`/employees/${caregiverEmployeeId}`);
     await expect(page.getByRole('heading', { name: 'Upcoming visits' })).toBeVisible();
     await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true })).toBeVisible();
 
@@ -725,7 +582,7 @@ test('Authentik users can be invited and administered from the office UI', async
       throw error;
     }
 
-    await page.goto(`/employees/${workforceEmployeeId}`);
+    await page.goto(`/employees/${caregiverEmployeeId}`);
     await page.getByLabel('Link an active user').selectOption(caregiverPlatformUserId);
     await page.getByRole('button', { name: 'Link user' }).click();
     await expect(page.getByText(caregiverName, { exact: true })).toBeVisible();
@@ -744,214 +601,6 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.goto(`/services/${serviceId}`);
     await expect(page.getByRole('heading', { name: `E2E Service ${runId}` })).toBeVisible();
     const executionDate = dateInBerlin();
-    await page.goto(`/clients/${agreementClientId}/medications`);
-    const medicationCatalog = page.locator('details').filter({ hasText: 'Medication catalog' });
-    await medicationCatalog.locator('summary').click();
-    const definitionForm = page.locator('form').filter({ has: page.locator('#definition-name') });
-    await definitionForm.locator('#definition-name').fill(medicationName);
-    await definitionForm.locator('#definition-activeIngredient').fill('E2E ingredient');
-    await definitionForm.locator('#definition-strength').fill('10 mg');
-    await definitionForm.locator('#definition-dosageForm').selectOption('tablet');
-    await definitionForm.locator('#definition-route').selectOption('oral');
-    const definitionResponse = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST' &&
-        new URL(response.url()).pathname === `/clients/${agreementClientId}/medications`,
-    );
-    await definitionForm
-      .getByRole('button', { name: 'Add a definition to the medication catalog' })
-      .click();
-    expect((await definitionResponse).ok()).toBe(true);
-    await page.reload();
-    await expect(
-      page
-        .locator('select[name="medicationDefinitionId"] option')
-        .filter({ hasText: medicationName }),
-    ).toHaveCount(1);
-    const medicationDefinition = await database.query<{ id: string }>(
-      'SELECT id FROM medication.definitions WHERE tenant_id = $1 AND name = $2',
-      [tenantId, medicationName],
-    );
-    const medicationDefinitionId = medicationDefinition.rows[0]?.id;
-    if (!medicationDefinitionId) {
-      throw new Error('The Office UI did not create the medication definition');
-    }
-    await reauthenticateOffice(page, username, password, tenantId);
-    await page.goto(`/clients/${agreementClientId}/medications`);
-
-    const newOrderDetails = page.locator('#new-order');
-    await newOrderDetails.locator('summary').click();
-    const draftMedicationForm = newOrderDetails.locator('form');
-    await draftMedicationForm
-      .locator('select[name="medicationDefinitionId"]')
-      .selectOption(medicationDefinitionId);
-    await draftMedicationForm.locator('input[name="doseAmount"]').fill('1');
-    await draftMedicationForm.locator('select[name="doseUnit"]').selectOption('tablet');
-    await draftMedicationForm.locator('select[name="route"]').selectOption('oral');
-    await draftMedicationForm.locator('select[name="sourceType"]').selectOption('prescriber');
-    await draftMedicationForm.locator('input[name="prescriberName"]').fill('Dr E2E');
-    await draftMedicationForm
-      .locator('input[name="sourceReference"]')
-      .fill(medicationSourceReference);
-    await draftMedicationForm.locator('input[name="validFrom"]').fill(executionDate);
-    await draftMedicationForm.locator('select[name="scheduleType"]').selectOption('fixed_times');
-    await draftMedicationForm.locator('input[name="times"]').fill('00:01');
-    const orderResponse = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST' &&
-        new URL(response.url()).pathname === `/clients/${agreementClientId}/medications`,
-    );
-    await draftMedicationForm.getByRole('button', { name: 'Save draft order' }).click();
-    const orderActionResponse = await orderResponse;
-    expect(orderActionResponse.headers()['x-action-redirect'] ?? '').not.toContain('?error=');
-    const medicationOrder = await database.query<{ id: string; version: number }>(
-      `SELECT medication_order.id, medication_order.version
-       FROM medication.orders AS medication_order
-       JOIN medication.order_revisions AS revision
-         ON revision.tenant_id = medication_order.tenant_id
-        AND revision.order_id = medication_order.id
-        AND revision.version = medication_order.version
-       WHERE medication_order.tenant_id = $1
-         AND medication_order.client_id = $2
-         AND revision.source_reference = $3`,
-      [tenantId, agreementClientId, medicationSourceReference],
-    );
-    medicationOrderId = medicationOrder.rows[0]?.id;
-    if (!medicationOrderId || medicationOrder.rows[0]?.version !== 1) {
-      throw new Error('The Office UI did not create the medication draft');
-    }
-    const medicationOrderCard = page.locator('article').filter({ hasText: medicationName }).first();
-    await medicationOrderCard.getByRole('button', { name: 'Review and activate' }).click();
-    await expect(medicationOrderCard).toContainText('Active');
-    const activatedMedicationOrder = await database.query<{ status: string; version: number }>(
-      'SELECT status, version FROM medication.orders WHERE tenant_id = $1 AND id = $2',
-      [tenantId, medicationOrderId],
-    );
-    expect(activatedMedicationOrder.rows[0]).toMatchObject({ status: 'active', version: 2 });
-
-    const reconciliationSection = page.locator('#reconciliation');
-    const medicationActionPath = '/clients/' + agreementClientId + '/medications';
-    const waitForMedicationAction = () =>
-      page.waitForResponse(
-        (response) =>
-          response.request().method() === 'POST' &&
-          new URL(response.url()).pathname === medicationActionPath,
-      );
-    const startReconciliationForm = reconciliationSection.locator('form').first();
-    await startReconciliationForm
-      .getByLabel('Reason (optional except for clarification)')
-      .selectOption('physician_update');
-    const startReconciliationResponse = waitForMedicationAction();
-    await startReconciliationForm.getByRole('button', { name: 'Start reconciliation' }).click();
-    expect((await startReconciliationResponse).headers()['x-action-redirect'] ?? '').not.toMatch(
-      /[?&]error=/,
-    );
-    await expect(page).toHaveURL(/reconciliationId=/);
-    await expect(reconciliationSection).toContainText('Version 1');
-
-    const sourceForm = reconciliationSection.locator('form:has(#reconciliation-source-type)');
-    await sourceForm.locator('select[name="sourceType"]').selectOption('physician');
-    await sourceForm.locator('input[name="sourceName"]').fill('E2E physician list');
-    await sourceForm.locator('input[name="reference"]').fill(medicationSourceReference + '-recon');
-    const sourceResponse = waitForMedicationAction();
-    await sourceForm.getByRole('button', { name: 'Record source' }).click();
-    expect((await sourceResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
-    await expect(reconciliationSection).toContainText('Version 2');
-    await expect(reconciliationSection).toContainText('E2E physician list');
-
-    await reconciliationSection
-      .locator('summary')
-      .filter({ hasText: 'Record external medication' })
-      .click();
-    const externalEntryForm = reconciliationSection
-      .locator('form:has(input[name="sourceId"])')
-      .first();
-    await externalEntryForm.locator('input[name="medicationName"]').fill(medicationName);
-    await externalEntryForm.locator('input[name="activeIngredient"]').fill('E2E ingredient');
-    await externalEntryForm.locator('input[name="strength"]').fill('10 mg');
-    await externalEntryForm.locator('select[name="dosageForm"]').selectOption('tablet');
-    await externalEntryForm.locator('input[name="doseAmount"]').fill('2');
-    await externalEntryForm.locator('select[name="doseUnit"]').selectOption('tablet');
-    await externalEntryForm.locator('select[name="route"]').selectOption('oral');
-    await externalEntryForm.locator('select[name="reportedStatus"]').selectOption('active');
-    await externalEntryForm.locator('select[name="scheduleType"]').selectOption('fixed_times');
-    await externalEntryForm.locator('input[name="times"]').fill('00:01');
-    const entryResponse = waitForMedicationAction();
-    await externalEntryForm.getByRole('button', { name: 'Save entry' }).click();
-    expect((await entryResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
-    await expect(reconciliationSection).toContainText('Version 3');
-
-    const matchForm = reconciliationSection.locator('form:has(input[name="entryId"])').first();
-    await matchForm.locator('select[name="baselineId"]').selectOption({ index: 1 });
-    const matchResponse = waitForMedicationAction();
-    await matchForm.getByRole('button', { name: 'Save match' }).click();
-    expect((await matchResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
-    await expect(reconciliationSection).toContainText('Version 4');
-
-    const compareForm = reconciliationSection
-      .locator('form')
-      .filter({ hasText: 'Compare recorded information' });
-    const compareResponse = waitForMedicationAction();
-    await compareForm.getByRole('button', { name: 'Compare recorded information' }).click();
-    expect((await compareResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
-    await expect(reconciliationSection).toContainText('Version 5');
-
-    const doseFinding = reconciliationSection.locator('article').filter({ hasText: 'Dose differs' }).last();
-    await expect(doseFinding).toBeVisible();
-    const decisionForm = doseFinding.locator('form:has(select[name="decision"])');
-    await decisionForm.locator('select[name="decision"]').selectOption('accept_external');
-    const decisionResponse = waitForMedicationAction();
-    await decisionForm.getByRole('button', { name: 'Record decision' }).click();
-    expect((await decisionResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
-    await expect(reconciliationSection).toContainText('Version 6');
-
-    const applyForm = reconciliationSection
-      .locator('form:has(select[name^="disposition:"])')
-      .first();
-    await applyForm.locator('select[name^="disposition:"]').selectOption('apply_external');
-    const applyResponse = waitForMedicationAction();
-    await applyForm.getByRole('button', { name: 'Save disposition' }).click();
-    expect((await applyResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
-    await expect(reconciliationSection).toContainText('Version 7');
-
-    const completionForm = reconciliationSection
-      .locator('form')
-      .filter({ hasText: 'Complete reconciliation' });
-    await completionForm
-      .getByLabel('I reviewed the findings and their documented dispositions.')
-      .check();
-    const completionResponse = waitForMedicationAction();
-    await completionForm.getByRole('button', { name: 'Complete reconciliation' }).click();
-    expect((await completionResponse).headers()['x-action-redirect'] ?? '').not.toMatch(/[?&]error=/);
-    await expect(reconciliationSection).toContainText('Completed');
-    const completedReconciliation = await database.query<{ id: string; status: string }>(
-      'SELECT id, status FROM medication.reconciliations WHERE tenant_id = $1 AND client_id = $2 ORDER BY started_at DESC LIMIT 1',
-      [tenantId, agreementClientId],
-    );
-    expect(completedReconciliation.rows[0]?.status).toBe('completed');
-    const reconciliationApplication = await database.query<{
-      disposition: string;
-      dose_amount: string;
-      order_version: number;
-    }>(
-      'SELECT application.disposition, revision.dose_amount, application.order_version ' +
-        'FROM medication.reconciliation_applications AS application ' +
-        'JOIN medication.reconciliations AS reconciliation ' +
-        'ON reconciliation.tenant_id = application.tenant_id ' +
-        'AND reconciliation.id = application.reconciliation_id ' +
-        'JOIN medication.order_revisions AS revision ' +
-        'ON revision.tenant_id = application.tenant_id ' +
-        'AND revision.id = application.order_revision_id ' +
-        'AND revision.version = application.order_version ' +
-        'WHERE reconciliation.tenant_id = $1 AND reconciliation.id = $2',
-      [tenantId, completedReconciliation.rows[0]?.id],
-    );
-    expect(reconciliationApplication.rows[0]).toMatchObject({
-      disposition: 'applied',
-      dose_amount: '2.000',
-      order_version: 3,
-    });
-
     const executionDateAtNoonUtc = new Date(`${executionDate}T12:00:00.000Z`);
     const englishCareDate = new Intl.DateTimeFormat('en', {
       dateStyle: 'full',
@@ -970,7 +619,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await manualVisitForm.locator('input[name="localStartTime"]').fill('08:00');
     await manualVisitForm.locator('input[name="localEndTime"]').fill('08:30');
     await manualVisitForm.locator('select[name="serviceDefinitionIds"]').selectOption(serviceId);
-    await manualVisitForm.locator('select[name="employeeId"]').selectOption(workforceEmployeeId);
+    await manualVisitForm.locator('select[name="employeeId"]').selectOption(caregiverEmployeeId);
     await manualVisitForm.locator('textarea[name="note"]').fill(executionMarker);
     await manualVisitForm.getByRole('button', { name: 'Create visit' }).click();
     await expect(page).toHaveURL(/(?:\?|&)updated=visit(?:&|$)/);
@@ -1019,50 +668,12 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(
       caregiverPage.getByRole('heading', { name: `Agreement E2E ${runId}` }),
     ).toBeVisible();
-    const visitCarePlan = caregiverPage.getByRole('region', { name: 'Care plan for this visit' });
-    await expect(visitCarePlan).toBeVisible();
-    await expect(visitCarePlan.getByText(carePlanMeasureTitle, { exact: true })).toBeVisible();
-    await expect(
-      visitCarePlan.getByText('Assist the client with safe transfers during each visit.', {
-        exact: true,
-      }),
-    ).toBeVisible();
     expect(
       await caregiverPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
     await caregiverPage.getByRole('button', { name: 'Start visit' }).click();
     await expect(caregiverPage.getByText('In progress', { exact: true })).toBeVisible();
     await expect(caregiverPage.getByRole('heading', { name: 'Planned services' })).toBeVisible();
-    const medicationSection = caregiverPage.getByRole('region', { name: 'Medications' });
-    const dueMedication = medicationSection.locator('article').filter({ hasText: medicationName });
-    await expect(dueMedication).toBeVisible();
-    await dueMedication.getByLabel('Outcome').selectOption('administered');
-    await dueMedication
-      .getByLabel(
-        'I reviewed the ordered medication, dose, and route and confirm the recorded quantity.',
-      )
-      .check();
-    await dueMedication.getByRole('button', { name: 'Record outcome' }).click();
-    await expect(
-      caregiverPage.getByRole('status').filter({ hasText: 'Medication outcome recorded.' }),
-    ).toBeVisible();
-    const recordedMedication = medicationSection.locator('li').filter({ hasText: medicationName });
-    await expect(recordedMedication).toContainText('Administered');
-
-    await reauthenticateOffice(page, username, password, tenantId);
-    await page.goto(
-      `/clients/${agreementClientId}/medications?from=${executionDate}&until=${executionDate}`,
-    );
-    await expect(
-      page.getByRole('heading', { name: 'Medication administration record' }),
-    ).toBeVisible();
-    const medicationAdministrationRecord = page
-      .getByRole('heading', { name: 'Medication administration record' })
-      .locator('xpath=ancestor::section[1]');
-    await expect(
-      medicationAdministrationRecord.locator('article').filter({ hasText: medicationName }),
-    ).toContainText('Administered');
-
     await caregiverPage.getByRole('button', { name: 'Save outcome' }).click();
     await expect(caregiverPage.getByRole('status')).toContainText('Service outcome saved.');
 
@@ -1079,122 +690,12 @@ test('Authentik users can be invited and administered from the office UI', async
       caregiverPage.getByRole('heading', { name: 'Service documentation' }),
     ).toBeVisible();
 
-    const clinicalSection = caregiverPage.getByRole('region', {
-      name: 'Structured care documentation',
-    });
-    const measurementDetails = clinicalSection
-      .locator('details')
-      .filter({ hasText: 'Add measurement' });
-    await measurementDetails.locator('summary').click();
-    const measurementForm = measurementDetails.locator('form');
-    await measurementForm.getByLabel('Measurement type').selectOption('blood_pressure');
-    await measurementForm.getByLabel('Systolic pressure').fill('120');
-    await measurementForm.getByLabel('Diastolic pressure').fill('80');
-    await measurementForm.getByRole('button', { name: 'Save record' }).click();
-    await expect(clinicalSection.getByText('120/80 mmHg', { exact: true })).toBeVisible();
-    const bloodPressureRecord = clinicalSection.locator('li').filter({ hasText: '120/80 mmHg' });
-    await bloodPressureRecord.locator('summary').filter({ hasText: 'Edit record' }).click();
-    const bloodPressureEditForm = bloodPressureRecord.locator('form').first();
-    await bloodPressureEditForm.getByLabel('Systolic pressure').fill('121');
-    await bloodPressureEditForm.getByRole('button', { name: 'Save changes' }).click();
-    await expect(clinicalSection.getByText('121/80 mmHg', { exact: true })).toBeVisible();
-
-    const observationDetails = clinicalSection
-      .locator('details')
-      .filter({ hasText: 'Add observation' });
-    await observationDetails.locator('summary').click();
-    const observationForm = observationDetails.locator('form');
-    await observationForm.getByLabel('Category').selectOption('mobility');
-    await observationForm.getByLabel('Observed value').selectOption('assistance_required');
-    await observationForm.getByRole('button', { name: 'Save record' }).click();
-    const assistanceObservation = clinicalSection
-      .locator('li')
-      .filter({ hasText: 'Assistance required' });
-    await expect(assistanceObservation).toBeVisible();
-
-    await observationDetails.locator('summary').click();
-    const painForm = observationDetails.locator('form');
-    await painForm.getByLabel('Category').selectOption('pain');
-    await painForm.getByLabel('Pain score (0–10)').fill('4');
-    await painForm.getByRole('button', { name: 'Save record' }).click();
-    await expect(clinicalSection.getByText('Pain score (0–10): 4', { exact: true })).toBeVisible();
-    const painRecord = clinicalSection.locator('li').filter({ hasText: 'Pain score (0–10): 4' });
-    await painRecord.getByRole('button', { name: 'Delete record Pain' }).click();
-    await expect(clinicalSection.getByText('Pain score (0–10): 4', { exact: true })).toHaveCount(0);
-
-    const assessmentDetails = clinicalSection
-      .locator('details')
-      .filter({ hasText: 'Add assessment' });
-    await assessmentDetails.locator('summary').click();
-    const assessmentForm = assessmentDetails.locator('form');
-    await assessmentForm.getByLabel('Assessment type').selectOption('general_condition');
-    await assessmentForm.getByLabel('Score (optional)').fill('3.5');
-    await assessmentForm.getByRole('button', { name: 'Save record' }).click();
-    const scoreOnlyAssessment = clinicalSection
-      .locator('li')
-      .filter({ hasText: 'Score (optional): 3.5' });
-    await expect(scoreOnlyAssessment).toBeVisible();
-
-    const riskDetails = clinicalSection
-      .locator('details')
-      .filter({ hasText: 'Add risk assessment' });
-    await riskDetails.locator('summary').click();
-    const riskForm = riskDetails.locator('form');
-    await riskForm.getByLabel('Risk type').selectOption('fall');
-    await riskForm.getByLabel('Risk level').selectOption('moderate');
-    const expectedVersionBeforeRisk = await riskForm
-      .locator('input[name="expectedVersion"]')
-      .inputValue();
-    const visitPath = new URL(caregiverPage.url()).pathname;
-    const riskSaveResponse = caregiverPage.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST' &&
-        response.headers()['content-type']?.startsWith('text/x-component') === true &&
-        new URL(response.url()).pathname === visitPath,
-    );
-    await Promise.all([
-      riskForm.getByRole('button', { name: 'Save record' }).click(),
-      riskSaveResponse,
-    ]);
-    const moderateRisk = clinicalSection.locator('li').filter({ hasText: 'Moderate' });
-    await expect(moderateRisk).toBeVisible();
-
-    if (!tenantId || !executionVisitId) {
-      throw new Error('The clinical risk record needs a tenant and execution visit');
-    }
-    const clinicalRiskRecord = await database.query<{ id: string }>(
-      `SELECT clinical_record.id
-       FROM clinical_documentation.records AS clinical_record
-       JOIN clinical_documentation.risk_assessments AS risk_assessment
-         ON risk_assessment.tenant_id = clinical_record.tenant_id
-        AND risk_assessment.record_id = clinical_record.id
-       JOIN care_documentation.documents AS documentation
-         ON documentation.tenant_id = clinical_record.tenant_id
-        AND documentation.id = clinical_record.documentation_id
-       WHERE clinical_record.tenant_id = $1
-         AND documentation.visit_id = $2
-         AND clinical_record.kind = 'risk_assessment'
-         AND risk_assessment.risk_type = 'fall'
-       ORDER BY clinical_record.created_at DESC, clinical_record.id
-       LIMIT 1`,
-      [tenantId, executionVisitId],
-    );
-    const clinicalRiskRecordId = clinicalRiskRecord.rows[0]?.id;
-    if (!clinicalRiskRecordId) {
-      throw new Error('The caregiver UI did not persist the fall risk assessment');
-    }
-
     const observationText = `E2E observation ${runId}`;
     const observationSection = caregiverPage
       .getByRole('heading', { name: 'Observations', level: 3 })
       .locator('..');
-    const observationComposer = caregiverPage.locator('form').filter({
-      has: caregiverPage.locator('#new-observation'),
-    });
-    await expect(observationComposer.locator('input[name="expectedVersion"]')).not.toHaveValue(
-      expectedVersionBeforeRisk,
-    );
     await observationSection.locator('textarea[name="content"]').fill(observationText);
+    const visitPath = new URL(caregiverPage.url()).pathname;
     const observationSaveResponse = caregiverPage.waitForResponse(
       (response) =>
         response.request().method() === 'POST' &&
@@ -1322,118 +823,6 @@ test('Authentik users can be invited and administered from the office UI', async
     initialEvidencePackageId = firstPackage.rows[0]?.id;
     if (!initialEvidencePackageId) throw new Error('The first evidence package was not persisted');
 
-    if (!carePlanAuthorEmployeeId || !carePlanQualificationId)
-      throw new Error('The care-plan author qualification setup is incomplete');
-    const expiredQualificationDate = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-    const expiredAssignment = await database.query(
-      `UPDATE employees.employee_qualifications
-       SET valid_until = $4, updated_at = now()
-       WHERE tenant_id = $1 AND employee_id = $2 AND qualification_id = $3 AND status = 'active'`,
-      [tenantId, carePlanAuthorEmployeeId, carePlanQualificationId, expiredQualificationDate],
-    );
-    expect(expiredAssignment.rowCount).toBe(1);
-    await page.goto(`/clients/${agreementClientId}/care-plan?planId=${carePlanId}`);
-    await expect(
-      page.getByText('A required qualification is not valid today.', { exact: true }).first(),
-    ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Record evaluation' })).toHaveCount(0);
-    await database.query(
-      `UPDATE employees.employee_qualifications
-       SET valid_until = NULL, updated_at = now()
-       WHERE tenant_id = $1 AND employee_id = $2 AND qualification_id = $3 AND status = 'active'`,
-      [tenantId, carePlanAuthorEmployeeId, carePlanQualificationId],
-    );
-    await page.reload();
-    await expect(
-      page.getByText(/Eligible under active competency policy version/).first(),
-    ).toBeVisible();
-    const evaluationForm = page.locator('form').filter({
-      has: page.locator('select[name="result"]'),
-    });
-    await evaluationForm.locator('select[name="result"]').selectOption('partially_effective');
-    await evaluationForm.locator('select[name="planChange"]').selectOption('revision_required');
-    const evaluationSummary = `Fall risk requires a care-plan update ${runId}`;
-    await evaluationForm.locator('textarea[name="summary"]').fill(evaluationSummary);
-    await evaluationForm
-      .locator('input[name="nextEvaluationDue"]')
-      .fill(addCalendarDays(dateInBerlin(), 30));
-    await evaluationForm.getByRole('button', { name: 'Record evaluation' }).click();
-    await expect(
-      page.getByRole('region', { name: 'Plan overview' }).getByText(evaluationSummary, {
-        exact: true,
-      }),
-    ).toBeVisible();
-
-    const createRevisionForm = page.locator('form').filter({
-      has: page.getByRole('button', { name: 'Create draft revision' }),
-    });
-    await createRevisionForm.locator('input[name="effectiveFrom"]').fill(dateInBerlin());
-    await createRevisionForm.locator('input[name="reason"]').fill(`Fall risk review ${runId}`);
-    await createRevisionForm.getByRole('button', { name: 'Create draft revision' }).click();
-
-    const sourceReferenceForm = page.locator('form').filter({
-      has: page.locator('input[name="kind"][value="sourceReference"]'),
-    });
-    await sourceReferenceForm.locator('input[name="clinicalRecordId"]').fill(clinicalRiskRecordId);
-    await sourceReferenceForm.locator('select[name="recordKind"]').selectOption('risk_assessment');
-    await sourceReferenceForm
-      .locator('input[name="rationale"]')
-      .fill('The latest fall risk assessment informs this plan.');
-    await sourceReferenceForm.getByRole('button', { name: 'Add clinical reference' }).click();
-    const draftReferenceCard = page.locator('section[aria-labelledby="source-references-title"]');
-    const draftReferenceRow = draftReferenceCard
-      .getByRole('listitem')
-      .filter({ hasText: clinicalRiskRecordId });
-    await expect(draftReferenceRow.getByText('Risk assessment', { exact: true })).toBeVisible();
-    await expect(
-      draftReferenceRow.getByText(`Clinical record ID: ${clinicalRiskRecordId}`, { exact: true }),
-    ).toBeVisible();
-
-    await page.goto(`/employees/${carePlanAuthorEmployeeId}`);
-    const planAuthorQualification = page
-      .locator('#qualifications li')
-      .filter({ hasText: 'Pflegefachkraft (PFK)' })
-      .last();
-    page.once('dialog', (dialog) => dialog.accept());
-    await planAuthorQualification.getByRole('button', { name: 'Remove' }).click();
-    await expect(planAuthorQualification).toContainText('Assignment revoked');
-    await page.goto(workforceDashboardUrl);
-    const revokedReadinessRow = page
-      .getByRole('heading', { name: 'Employee readiness', exact: true })
-      .locator('xpath=ancestor::section[1]')
-      .getByRole('row')
-      .filter({ hasText: `Plan Author ${runId}` });
-    await expect(revokedReadinessRow.getByText('Not ready', { exact: true })).toHaveCount(4);
-    await page.goto(`/employees/${carePlanAuthorEmployeeId}`);
-    const revokedEmployeeReadiness = page
-      .getByRole('heading', { name: 'Workforce readiness', exact: true })
-      .locator('xpath=ancestor::section[1]');
-    await expect(revokedEmployeeReadiness.getByText('Not ready', { exact: true })).toHaveCount(4);
-    await page.goto(`/clients/${agreementClientId}/care-plan?planId=${carePlanId}`);
-    await expect(
-      page
-        .getByText('Your employee record is missing a required qualification.', { exact: true })
-        .first(),
-    ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Activate revision' })).toHaveCount(0);
-    await page.goto(`/employees/${carePlanAuthorEmployeeId}`);
-    await page.getByLabel('Add qualification').selectOption({ label: 'Pflegefachkraft (PFK)' });
-    await page.getByRole('button', { name: 'Save qualification' }).click();
-    await page.goto(`/clients/${agreementClientId}/care-plan?planId=${carePlanId}`);
-    await expect(
-      page.getByText(/Eligible under active competency policy version/).first(),
-    ).toBeVisible();
-    await page.getByRole('button', { name: 'Activate revision' }).click();
-    const revisionRows = page.locator('section[aria-labelledby="history-title"] > ol > li');
-    await expect(revisionRows).toHaveCount(2);
-    const revisionWithReference = revisionRows.filter({ hasText: clinicalRiskRecordId });
-    await expect(revisionWithReference.getByText('Risk assessment', { exact: true })).toBeVisible();
-    await expect(
-      revisionWithReference.getByText(`Clinical record ID: ${clinicalRiskRecordId}`, {
-        exact: true,
-      }),
-    ).toBeVisible();
-
     await page.goto(`/visits/${executionVisitId}`);
     await expect(page.getByRole('heading', { name: 'Execution' })).toBeVisible();
     await expect(page.getByText('Visit completed', { exact: true })).toBeVisible();
@@ -1555,37 +944,54 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page.getByText('Documentation finalized', { exact: true })).toBeVisible();
     await expect(page.getByText('Incident documented', { exact: true })).toBeVisible();
     await expect(page.getByText('Documentation amended', { exact: true })).toBeVisible();
-    const clinicalHistory = page.getByRole('region', { name: 'Clinical history' });
-    await expect(clinicalHistory.getByText('121/80 mmHg', { exact: true })).toBeVisible();
-    await expect(clinicalHistory.getByText('Assistance required', { exact: true })).toBeVisible();
-    await expect(clinicalHistory.getByText('Clinical history', { exact: true })).toBeVisible();
-    await expect(clinicalHistory.getByText('Current risks', { exact: true })).toBeVisible();
-    const currentRisks = clinicalHistory.getByRole('region', { name: 'Current risks' });
-    await expect(currentRisks.getByText('Fall risk', { exact: true })).toBeVisible();
     const clientExecutionRow = page.locator(`a[href="/visits/${executionVisitId}"]`);
     await expect(clientExecutionRow).toContainText('Execution: Completed');
     await expect(clientExecutionRow).toContainText('Actual');
-    await page.goto(`/employees/${workforceEmployeeId}`);
+    await page.goto(`/employees/${caregiverEmployeeId}`);
     const employeeExecutionRow = page.locator(`a[href="/visits/${executionVisitId}"]`);
     await expect(employeeExecutionRow).toContainText('Execution: Completed');
     await expect(employeeExecutionRow).toContainText('Actual');
 
+    await page.goto('/benefits');
+    const completedService = page
+      .getByRole('heading', { name: `E2E Service ${runId} · Agreement E2E ${runId}` })
+      .first()
+      .locator('xpath=ancestor::li[1]');
+    const allocationForm = completedService.locator('form');
+    const allocationSourceOption = await allocationForm
+      .locator('select[name="allocation-0-selection"] option')
+      .filter({ hasText: 'E2E Pflegekasse' })
+      .getAttribute('value');
+    if (!allocationSourceOption)
+      throw new Error('The service allocation form has no eligible §45b source');
+    await allocationForm
+      .locator('select[name="allocation-0-selection"]')
+      .selectOption(allocationSourceOption);
+    await allocationForm.locator('input[name="allocation-0-amount"]').fill('45');
+    await allocationForm.getByRole('button', { name: 'Allocate funding' }).click();
+    await expect(page.getByRole('status')).toContainText('Service funding was allocated.');
+
+    await page.goto(`/clients/${agreementClientId}/benefits`);
+    const budgetHistory = page.locator('section[aria-labelledby="history-title"]');
+    await expect(budgetHistory.getByRole('heading', { name: 'Budget history' })).toBeVisible();
+    await expect(
+      budgetHistory.getByRole('table').getByText('Completed service allocation', { exact: true }),
+    ).toBeVisible();
+
     if (!serviceId) throw new Error('The service detail page did not expose its ID');
     await page.goto(`/services/${serviceId}`);
-    await page.getByRole('button', { name: 'Archive service' }).click();
+    const serviceArchivePath = new URL(page.url()).pathname;
+    const serviceArchiveResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === serviceArchivePath,
+    );
+    await Promise.all([
+      page.getByRole('button', { name: 'Archive service' }).click(),
+      serviceArchiveResponse,
+    ]);
+    await page.reload();
     await expect(page.locator('span').filter({ hasText: /^Archived$/ })).toBeVisible();
-    if (executionVisitId) {
-      await page.goto(`/visits/${executionVisitId}`);
-      await expect(page.getByText(`E2E Service ${runId}`, { exact: true }).first()).toBeVisible();
-      const visitClinicalRecords = page.getByRole('region', {
-        name: 'Structured care documentation',
-      });
-      await expect(visitClinicalRecords.getByText('121/80 mmHg', { exact: true })).toBeVisible();
-      await expect(
-        visitClinicalRecords.getByText('Assistance required', { exact: true }),
-      ).toBeVisible();
-      await expect(visitClinicalRecords.getByText('Fall risk', { exact: true })).toBeVisible();
-    }
 
     await page.goto('/administration/users');
     await expect(page.getByRole('heading', { name: 'Users & Access' })).toBeVisible();
@@ -1699,18 +1105,10 @@ test('Authentik users can be invited and administered from the office UI', async
           .map((context) => context.close().catch(() => undefined)),
       );
       if (tenantId) {
-        if (agreementClientId) {
-          await cleanupMedicationRecords(database, tenantId, agreementClientId, medicationName);
-        }
-        const carePlanClientIds = [clientId, agreementClientId].filter(
-          (id): id is string => id !== undefined,
-        );
-        if (carePlanClientIds.length) {
-          await cleanupCarePlanningRecords(database, tenantId, carePlanClientIds);
-        }
         const agreementClientIds = [agreementClientId].filter(
           (id): id is string => id !== undefined,
         );
+        await cleanupBenefitsRecords(database, tenantId, agreementClientIds, e2eOrganizationName);
         if (agreementClientIds.length) {
           await cleanupServiceAgreementRecords(
             database,
@@ -1725,7 +1123,7 @@ test('Authentik users can be invited and administered from the office UI', async
         });
         await database.query(
           'UPDATE employees.employees SET user_id = NULL WHERE tenant_id = $1 AND personnel_number = ANY($2::text[])',
-          [tenantId, [workforcePersonnelNumber, carePlanAuthorPersonnelNumber]],
+          [tenantId, [caregiverPersonnelNumber]],
         );
       }
       await cleanup(database, {
@@ -1759,11 +1157,11 @@ test('Authentik users can be invited and administered from the office UI', async
           : {}),
       });
       if (tenantId) {
-        await cleanupWorkforceRecords(database, tenantId, {
-          organizationName: workforceOrganizationName,
-          facilityName: workforceFacilityName,
-          teamName: workforceTeamName,
-          personnelNumbers: [workforcePersonnelNumber, carePlanAuthorPersonnelNumber],
+        await cleanupOrganizationRecords(database, tenantId, {
+          organizationName: e2eOrganizationName,
+          facilityName: e2eFacilityName,
+          teamName: e2eTeamName,
+          personnelNumbers: [caregiverPersonnelNumber],
         });
       }
     } finally {
@@ -1798,76 +1196,6 @@ test('Authentik users can be invited and administered from the office UI', async
     }
   }
 });
-
-async function configureCompetencyPolicy(
-  page: Page,
-  operationKey:
-    | 'care_plan.activate'
-    | 'care_plan.evaluate'
-    | 'medication.administer'
-    | 'medication.reconciliation.complete',
-  qualificationId: string,
-): Promise<void> {
-  await page.goto('/administration/competency-policies');
-  const operationSection = page
-    .locator('section')
-    .filter({
-      has: page.locator(`input[name="operationKey"][value="${operationKey}"]`),
-    })
-    .first();
-  const draftForm = operationSection.locator('form').first();
-  await draftForm.locator('input[name="name"]').fill(`E2E ${operationKey}`);
-  await draftForm
-    .locator(`input[name="qualificationDefinitionId"][value="${qualificationId}"]`)
-    .check();
-  await draftForm.getByRole('button', { name: 'Save draft' }).click();
-  await expect(page).toHaveURL(/\/administration\/competency-policies\?updated=draft$/);
-
-  page.once('dialog', (dialog) => dialog.accept());
-  await operationSection.getByRole('button', { name: 'Activate version' }).click();
-  await expect(page).toHaveURL(/\/administration\/competency-policies\?updated=activated$/);
-}
-
-async function ensureCompetencyPolicy(
-  page: Page,
-  database: Client,
-  tenantId: string,
-  operationKey:
-    | 'care_plan.activate'
-    | 'care_plan.evaluate'
-    | 'medication.administer'
-    | 'medication.reconciliation.complete',
-  qualificationId: string,
-): Promise<void> {
-  const activePolicy = await database.query<{
-    requirementMode: string;
-    qualificationIds: string[];
-  }>(
-    `SELECT version.requirement_mode AS "requirementMode",
-            array_agg(requirement.qualification_definition_id::text
-                      ORDER BY requirement.qualification_definition_id) AS "qualificationIds"
-     FROM "authorization".professional_competency_policies AS policy
-     JOIN "authorization".professional_competency_policy_versions AS version
-       ON version.tenant_id = policy.tenant_id
-      AND version.policy_id = policy.id
-      AND version.status = 'active'
-     JOIN "authorization".professional_competency_policy_requirements AS requirement
-       ON requirement.tenant_id = version.tenant_id
-      AND requirement.policy_version_id = version.id
-     WHERE policy.tenant_id = $1 AND policy.operation_key = $2
-     GROUP BY version.id`,
-    [tenantId, operationKey],
-  );
-  const [configured] = activePolicy.rows;
-  if (
-    configured?.requirementMode === 'ALL' &&
-    configured.qualificationIds.length === 1 &&
-    configured.qualificationIds[0] === qualificationId
-  ) {
-    return;
-  }
-  await configureCompetencyPolicy(page, operationKey, qualificationId);
-}
 
 async function waitForAuthentik(origin: string, issuer: string): Promise<void> {
   const discoveryUrl = new URL('.well-known/openid-configuration', issuer);
@@ -1952,6 +1280,10 @@ async function cleanupServiceCatalogRecords(
         );
       }
       await database.query(
+        'DELETE FROM services.service_prices WHERE tenant_id = $1 AND service_id = ANY($2::uuid[])',
+        [tenantId, serviceIds],
+      );
+      await database.query(
         'DELETE FROM services.service_availability WHERE tenant_id = $1 AND service_id = ANY($2::uuid[])',
         [tenantId, serviceIds],
       );
@@ -1973,64 +1305,58 @@ async function cleanupServiceCatalogRecords(
   }
 }
 
-async function cleanupMedicationRecords(
+async function cleanupBenefitsRecords(
   database: Client,
   tenantId: string,
-  clientId: string,
-  definitionName: string,
+  clientIds: string[],
+  organizationName: string,
 ): Promise<void> {
   await database.query('BEGIN');
   try {
     await database.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
-    const orderRows = await database.query<{ id: string }>(
-      `SELECT DISTINCT medication_order.id
-       FROM medication.orders AS medication_order
-       JOIN medication.order_revisions AS revision
-         ON revision.tenant_id = medication_order.tenant_id
-        AND revision.order_id = medication_order.id
-       JOIN medication.definitions AS definition
-         ON definition.tenant_id = revision.tenant_id
-        AND definition.id = revision.medication_definition_id
-       WHERE medication_order.tenant_id = $1
-         AND medication_order.client_id = $2
-         AND definition.name = $3`,
-      [tenantId, clientId, definitionName],
+    const organization = await database.query<{ id: string }>(
+      'SELECT id FROM organizations.organizations WHERE tenant_id = $1 AND name = $2',
+      [tenantId, organizationName],
     );
-    const orderIds = orderRows.rows.map((row) => row.id);
-    const reconciliationRows = await database.query<{ id: string }>(
-      'SELECT id FROM medication.reconciliations WHERE tenant_id = $1 AND client_id = $2',
-      [tenantId, clientId],
+    const organizationIds = organization.rows.map((row) => row.id);
+    const sources = await database.query<{ id: string }>(
+      'SELECT id FROM benefits.funding_sources WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      [tenantId, clientIds],
     );
-    const reconciliationIds = reconciliationRows.rows.map((row) => row.id);
-    const occurrences = orderIds.length
+    const entitlements = await database.query<{ id: string }>(
+      'SELECT id FROM benefits.client_entitlements WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      [tenantId, clientIds],
+    );
+    const buckets = await database.query<{ id: string }>(
+      'SELECT id FROM benefits.allocation_buckets WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      [tenantId, clientIds],
+    );
+    const allocations = await database.query<{ id: string }>(
+      'SELECT id FROM benefits.service_allocations WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      [tenantId, clientIds],
+    );
+    const reversals = await database.query<{ id: string }>(
+      'SELECT id FROM benefits.service_allocation_reversals WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      [tenantId, clientIds],
+    );
+    const ledger = await database.query<{ id: string }>(
+      'SELECT id FROM benefits.ledger_entries WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      [tenantId, clientIds],
+    );
+    const recognitions = organizationIds.length
       ? await database.query<{ id: string }>(
-          'SELECT id FROM medication.administration_occurrences WHERE tenant_id = $1 AND order_id = ANY($2::uuid[])',
-          [tenantId, orderIds],
+          'SELECT id FROM benefits.provider_recognitions WHERE tenant_id = $1 AND organization_id = ANY($2::uuid[])',
+          [tenantId, organizationIds],
         )
       : { rows: [] as Array<{ id: string }> };
-    const records = orderIds.length
-      ? await database.query<{ id: string }>(
-          'SELECT id FROM medication.administration_records WHERE tenant_id = $1 AND order_id = ANY($2::uuid[])',
-          [tenantId, orderIds],
-        )
-      : { rows: [] as Array<{ id: string }> };
-    const recordIds = records.rows.map((row) => row.id);
-    const corrections = recordIds.length
-      ? await database.query<{ id: string }>(
-          'SELECT id FROM medication.administration_corrections WHERE tenant_id = $1 AND record_id = ANY($2::uuid[])',
-          [tenantId, recordIds],
-        )
-      : { rows: [] as Array<{ id: string }> };
-    const definitions = await database.query<{ id: string }>(
-      'SELECT id FROM medication.definitions WHERE tenant_id = $1 AND name = $2',
-      [tenantId, definitionName],
-    );
     const resourceIds = [
-      ...orderIds,
-      ...occurrences.rows.map((row) => row.id),
-      ...recordIds,
-      ...corrections.rows.map((row) => row.id),
-      ...reconciliationIds,
+      ...sources.rows.map((row) => row.id),
+      ...entitlements.rows.map((row) => row.id),
+      ...buckets.rows.map((row) => row.id),
+      ...allocations.rows.map((row) => row.id),
+      ...reversals.rows.map((row) => row.id),
+      ...ledger.rows.map((row) => row.id),
+      ...recognitions.rows.map((row) => row.id),
     ];
     await database.query(
       'DELETE FROM audit.audit_entries WHERE tenant_id = $1 AND resource_id = ANY($2::uuid[])',
@@ -2040,184 +1366,54 @@ async function cleanupMedicationRecords(
       `DELETE FROM platform.outbox_messages
        WHERE tenant_id = $1
          AND (event ->> 'aggregateId' = ANY($2::text[])
-           OR event -> 'payload' ->> 'orderId' = ANY($3::text[])
-           OR event -> 'payload' ->> 'recordId' = ANY($4::text[])
-           OR event -> 'payload' ->> 'correctionId' = ANY($5::text[]))`,
-      [tenantId, resourceIds, orderIds, recordIds, corrections.rows.map((row) => row.id)],
+           OR event -> 'payload' ->> 'clientId' = ANY($3::text[]))`,
+      [tenantId, resourceIds, clientIds],
     );
-    for (const table of [
-      'order_revisions',
-      'administration_occurrences',
-      'administration_records',
-      'administration_corrections',
-      'reconciliation_sources',
-      'reconciliation_entries',
-      'reconciliation_baselines',
-      'reconciliation_matches',
-      'reconciliation_discrepancies',
-      'reconciliation_decisions',
-      'reconciliation_applications',
-    ]) {
-      await database.query(`ALTER TABLE medication.${table} DISABLE TRIGGER USER`);
+    for (const [table, trigger] of [
+      ['service_allocation_reversals', 'service_allocation_reversals_immutable'],
+      ['service_allocations', 'service_allocations_immutable'],
+      ['ledger_entries', 'benefit_ledger_entries_immutable'],
+      ['allocation_buckets', 'benefit_allocation_buckets_immutable'],
+    ] as const) {
+      await database.query(`ALTER TABLE benefits.${table} DISABLE TRIGGER ${trigger}`);
     }
     await database.query(
-      'DELETE FROM medication.reconciliation_applications WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
-      [tenantId, reconciliationIds],
-    );
-    await database.query(
-      'DELETE FROM medication.reconciliation_decisions WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
-      [tenantId, reconciliationIds],
-    );
-    await database.query(
-      'DELETE FROM medication.reconciliation_discrepancies WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
-      [tenantId, reconciliationIds],
-    );
-    await database.query(
-      'DELETE FROM medication.reconciliation_matches WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
-      [tenantId, reconciliationIds],
-    );
-    await database.query(
-      'DELETE FROM medication.reconciliation_baselines WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
-      [tenantId, reconciliationIds],
-    );
-    await database.query(
-      'DELETE FROM medication.reconciliation_entries WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
-      [tenantId, reconciliationIds],
-    );
-    await database.query(
-      'DELETE FROM medication.reconciliation_sources WHERE tenant_id = $1 AND reconciliation_id = ANY($2::uuid[])',
-      [tenantId, reconciliationIds],
-    );
-    await database.query(
-      'DELETE FROM medication.reconciliations WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
-      [tenantId, reconciliationIds],
-    );
-    await database.query(
-      'DELETE FROM medication.administration_corrections WHERE tenant_id = $1 AND record_id = ANY($2::uuid[])',
-      [tenantId, recordIds],
-    );
-    await database.query(
-      'DELETE FROM medication.administration_records WHERE tenant_id = $1 AND order_id = ANY($2::uuid[])',
-      [tenantId, orderIds],
-    );
-    await database.query(
-      'DELETE FROM medication.administration_occurrences WHERE tenant_id = $1 AND order_id = ANY($2::uuid[])',
-      [tenantId, orderIds],
-    );
-    await database.query(
-      'DELETE FROM medication.order_revisions WHERE tenant_id = $1 AND order_id = ANY($2::uuid[])',
-      [tenantId, orderIds],
-    );
-    await database.query(
-      'DELETE FROM medication.orders WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
-      [tenantId, orderIds],
-    );
-    await database.query(
-      'DELETE FROM medication.definitions WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
-      [tenantId, definitions.rows.map((row) => row.id)],
-    );
-    for (const table of [
-      'administration_corrections',
-      'administration_records',
-      'administration_occurrences',
-      'order_revisions',
-      'reconciliation_applications',
-      'reconciliation_decisions',
-      'reconciliation_discrepancies',
-      'reconciliation_matches',
-      'reconciliation_baselines',
-      'reconciliation_entries',
-      'reconciliation_sources',
-    ]) {
-      await database.query(`ALTER TABLE medication.${table} ENABLE TRIGGER USER`);
-    }
-    await database.query('COMMIT');
-  } catch (error) {
-    await database.query('ROLLBACK');
-    throw error;
-  }
-}
-
-async function cleanupCarePlanningRecords(
-  database: Client,
-  tenantId: string,
-  clientIds: string[],
-): Promise<void> {
-  await database.query('BEGIN');
-  try {
-    await database.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
-    const planRows = await database.query<{ id: string }>(
-      'SELECT id FROM care_planning.plans WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      'DELETE FROM benefits.ledger_entries WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
       [tenantId, clientIds],
     );
-    const planIds = planRows.rows.map((row) => row.id);
-    if (planIds.length) {
-      const revisionRows = await database.query<{ id: string }>(
-        'SELECT id FROM care_planning.revisions WHERE tenant_id = $1 AND plan_id = ANY($2::uuid[])',
-        [tenantId, planIds],
-      );
-      const revisionIds = revisionRows.rows.map((row) => row.id);
-      const carePlanningTables = [
-        'plans',
-        'revisions',
-        'assessments',
-        'needs',
-        'resources',
-        'risk_responses',
-        'source_references',
-        'goals',
-        'goal_needs',
-        'measures',
-        'risk_response_needs',
-        'risk_response_measures',
-        'measure_needs',
-        'measure_goals',
-        'evaluations',
-        'evaluation_goals',
-      ] as const;
+    await database.query(
+      'DELETE FROM benefits.service_allocation_reversals WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      [tenantId, clientIds],
+    );
+    await database.query(
+      'DELETE FROM benefits.service_allocations WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      [tenantId, clientIds],
+    );
+    await database.query(
+      'DELETE FROM benefits.allocation_buckets WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      [tenantId, clientIds],
+    );
+    await database.query(
+      'DELETE FROM benefits.client_entitlements WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      [tenantId, clientIds],
+    );
+    await database.query(
+      'DELETE FROM benefits.funding_sources WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+      [tenantId, clientIds],
+    );
+    if (organizationIds.length) {
       await database.query(
-        'DELETE FROM audit.audit_entries WHERE tenant_id = $1 AND resource_id = ANY($2::uuid[])',
-        [tenantId, planIds],
+        'DELETE FROM benefits.provider_recognitions WHERE tenant_id = $1 AND organization_id = ANY($2::uuid[])',
+        [tenantId, organizationIds],
       );
-      await database.query(
-        "DELETE FROM platform.outbox_messages WHERE tenant_id = $1 AND event ->> 'aggregateId' = ANY($2::text[])",
-        [tenantId, planIds],
-      );
-      for (const table of carePlanningTables) {
-        await database.query(`ALTER TABLE care_planning.${table} DISABLE TRIGGER USER`);
-      }
-      for (const table of [
-        'evaluation_goals',
-        'evaluations',
-        'source_references',
-        'risk_response_measures',
-        'risk_response_needs',
-        'measure_goals',
-        'measure_needs',
-        'goal_needs',
-        'risk_responses',
-        'measures',
-        'goals',
-        'resources',
-        'needs',
-        'assessments',
-      ] as const) {
-        await database.query(
-          `DELETE FROM care_planning.${table} WHERE tenant_id = $1 AND revision_id = ANY($2::uuid[])`,
-          [tenantId, revisionIds],
-        );
-      }
-      await database.query(
-        'DELETE FROM care_planning.revisions WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
-        [tenantId, revisionIds],
-      );
-      await database.query(
-        'DELETE FROM care_planning.plans WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
-        [tenantId, planIds],
-      );
-      for (const table of carePlanningTables) {
-        await database.query(`ALTER TABLE care_planning.${table} ENABLE TRIGGER USER`);
-      }
+    }
+    for (const [table, trigger] of [
+      ['allocation_buckets', 'benefit_allocation_buckets_immutable'],
+      ['ledger_entries', 'benefit_ledger_entries_immutable'],
+      ['service_allocations', 'service_allocations_immutable'],
+      ['service_allocation_reversals', 'service_allocation_reversals_immutable'],
+    ] as const) {
+      await database.query(`ALTER TABLE benefits.${table} ENABLE TRIGGER ${trigger}`);
     }
     await database.query('COMMIT');
   } catch (error) {
@@ -2329,102 +1525,6 @@ async function cleanupServiceAgreementRecords(
         );
         await database.query(
           'ALTER TABLE service_evidence.acknowledgements ENABLE TRIGGER acknowledgements_append_only',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.records DISABLE TRIGGER clinical_records_write_guard',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.measurements DISABLE TRIGGER clinical_measurements_write_guard',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.observations DISABLE TRIGGER clinical_observations_write_guard',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.assessments DISABLE TRIGGER clinical_assessments_write_guard',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.risk_assessments DISABLE TRIGGER clinical_risk_assessments_write_guard',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.records DISABLE TRIGGER clinical_records_typed_payload_required',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.measurements DISABLE TRIGGER clinical_measurements_typed_payload_required',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.observations DISABLE TRIGGER clinical_observations_typed_payload_required',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.assessments DISABLE TRIGGER clinical_assessments_typed_payload_required',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.risk_assessments DISABLE TRIGGER clinical_risk_assessments_typed_payload_required',
-        );
-        await database.query(
-          `DELETE FROM clinical_documentation.measurements
-           WHERE tenant_id = $1 AND record_id IN (
-             SELECT id FROM clinical_documentation.records
-             WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])
-           )`,
-          [tenantId, documentationIds],
-        );
-        await database.query(
-          `DELETE FROM clinical_documentation.observations
-           WHERE tenant_id = $1 AND record_id IN (
-             SELECT id FROM clinical_documentation.records
-             WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])
-           )`,
-          [tenantId, documentationIds],
-        );
-        await database.query(
-          `DELETE FROM clinical_documentation.assessments
-           WHERE tenant_id = $1 AND record_id IN (
-             SELECT id FROM clinical_documentation.records
-             WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])
-           )`,
-          [tenantId, documentationIds],
-        );
-        await database.query(
-          `DELETE FROM clinical_documentation.risk_assessments
-           WHERE tenant_id = $1 AND record_id IN (
-             SELECT id FROM clinical_documentation.records
-             WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])
-           )`,
-          [tenantId, documentationIds],
-        );
-        await database.query(
-          'DELETE FROM clinical_documentation.records WHERE tenant_id = $1 AND documentation_id = ANY($2::uuid[])',
-          [tenantId, documentationIds],
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.risk_assessments ENABLE TRIGGER clinical_risk_assessments_typed_payload_required',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.assessments ENABLE TRIGGER clinical_assessments_typed_payload_required',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.observations ENABLE TRIGGER clinical_observations_typed_payload_required',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.measurements ENABLE TRIGGER clinical_measurements_typed_payload_required',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.records ENABLE TRIGGER clinical_records_typed_payload_required',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.risk_assessments ENABLE TRIGGER clinical_risk_assessments_write_guard',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.assessments ENABLE TRIGGER clinical_assessments_write_guard',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.observations ENABLE TRIGGER clinical_observations_write_guard',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.measurements ENABLE TRIGGER clinical_measurements_write_guard',
-        );
-        await database.query(
-          'ALTER TABLE clinical_documentation.records ENABLE TRIGGER clinical_records_write_guard',
         );
         await database.query(
           'ALTER TABLE care_documentation.entries DISABLE TRIGGER documentation_entries_draft_only',
@@ -2561,7 +1661,7 @@ function addCalendarDays(value: string, count: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-async function cleanupWorkforceRecords(
+async function cleanupOrganizationRecords(
   database: Client,
   tenantId: string,
   names: {

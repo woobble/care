@@ -27,6 +27,7 @@ import {
   updateServiceAgreementAction,
 } from './actions';
 import { generateAgreementVisitsAction } from '../../../planning/actions';
+import { generateDocumentAction } from '../../../documents/actions';
 
 type SearchParams = Promise<{
   error?: string;
@@ -393,6 +394,13 @@ export default async function ClientServiceAgreementsPage({
                   agreement.id === selectedAgreement?.id &&
                   selectedProviderCanManage &&
                   servicePeriodValid;
+                const canGenerateDocument = hasClientPermission(
+                  permissions,
+                  'documents.generate',
+                  tenantId,
+                  agreement.organizationId,
+                  agreement.facilityId,
+                );
                 return (
                   <article
                     key={agreement.id}
@@ -430,6 +438,42 @@ export default async function ClientServiceAgreementsPage({
                       <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
                         {agreement.description}
                       </p>
+                    ) : null}
+
+                    {canGenerateDocument ? (
+                      <form
+                        action={generateDocumentAction}
+                        className="flex flex-wrap items-end gap-3 border-t pt-3"
+                      >
+                        <input type="hidden" name="sourceType" value="service_agreement" />
+                        <input type="hidden" name="agreementId" value={agreement.id} />
+                        <input
+                          type="hidden"
+                          name="returnTo"
+                          value={`/clients/${client.id}/service-agreements`}
+                        />
+                        <label className="grid gap-1 text-sm font-medium">
+                          <span>{t('Documents.language')}</span>
+                          <select
+                            name="locale"
+                            defaultValue={locale}
+                            className="h-10 rounded-md border bg-white px-3"
+                          >
+                            <option value="de">{t('Documents.languageOptions.german')}</option>
+                            <option value="en">{t('Documents.languageOptions.english')}</option>
+                          </select>
+                        </label>
+                        <Button type="submit">{t('Documents.generateAgreement')}</Button>
+                        <Button asChild variant="secondary">
+                          <Link
+                            href={`/documents/preview?sourceType=service_agreement&id=${agreement.id}&locale=${locale}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {t('Documents.preview')}
+                          </Link>
+                        </Button>
+                      </form>
                     ) : null}
 
                     <div className="flex flex-wrap gap-2">

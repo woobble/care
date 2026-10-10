@@ -1,5 +1,6 @@
 export type ServiceStatus = 'active' | 'archived';
 export type ServiceUnit = 'occurrence' | 'minute' | 'hour' | 'day';
+export type ServiceBenefitCategory = 'recognized_support' | 'clinical_nursing' | 'other';
 export type ServiceCategoryStatus = 'active' | 'archived';
 
 export interface ServiceCategoryData {
@@ -26,6 +27,7 @@ export interface ServiceDefinitionData {
   description?: string | null;
   categoryId: string;
   unit: ServiceUnit;
+  benefitCategory?: ServiceBenefitCategory;
   defaultDurationMinutes?: number | null;
   validFrom: string;
   validUntil?: string | null;
@@ -37,6 +39,7 @@ export interface ServiceDefinitionSnapshot extends ServiceDefinitionData {
   description: string | null;
   defaultDurationMinutes: number | null;
   validUntil: string | null;
+  benefitCategory: ServiceBenefitCategory;
   status: ServiceStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -94,6 +97,10 @@ export function validateServiceDefinition(input: ServiceDefinitionData): void {
         input.defaultDurationMinutes < 1 ||
         input.defaultDurationMinutes > 1440)) ||
     !(['occurrence', 'minute', 'hour', 'day'] as const).includes(input.unit) ||
+    (input.benefitCategory !== undefined &&
+      !(['recognized_support', 'clinical_nursing', 'other'] as const).includes(
+        input.benefitCategory,
+      )) ||
     !isISODate(input.validFrom) ||
     (input.validUntil && !isISODate(input.validUntil)) ||
     (input.validUntil !== undefined &&
@@ -131,6 +138,7 @@ export class ServiceDefinition {
       ...input,
       description: input.description ?? null,
       defaultDurationMinutes: input.defaultDurationMinutes ?? null,
+      benefitCategory: input.benefitCategory ?? 'other',
       validUntil: input.validUntil ?? null,
       status: 'active',
     });

@@ -6,9 +6,6 @@ import { Button, Input, Label } from '@care/ui';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { errorMessageKey } from '../../../../i18n/errors';
 import { formatNumber } from '../../../../i18n/format';
-import { CarePlanSection } from './care-plan-section';
-import { ClinicalSection } from './clinical-section';
-import { MedicationVisitSection } from './medication-section';
 import { getApiClient, getTenantHeader } from '../../../../lib/api';
 import { formatVisitDateTime, formatVisitTime } from '../../../../lib/care-date';
 import type { Locale } from '../../../../i18n/config';
@@ -48,25 +45,9 @@ export default async function CareVisitPage({
   }
 
   const { visit, execution, services } = data;
-  const [medicationResult, documentationResult, carePlanResult] = await Promise.all([
-    get('/api/v1/visits/{visitId}/medication-administrations', {
-      params: { path: { visitId: id }, header },
-    }),
-    get('/api/v1/visits/{visitId}/documentation', {
-      params: { path: { visitId: id }, header },
-    }),
-    get('/api/v1/visits/{visitId}/care-plan', {
-      params: { path: { visitId: id }, header },
-    }),
-  ]);
-  const clinicalResult = documentationResult.data?.documentation?.id
-    ? await get('/api/v1/care-documentation/{id}/clinical-records', {
-        params: {
-          path: { id: documentationResult.data.documentation.id },
-          header,
-        },
-      })
-    : null;
+  const documentationResult = await get('/api/v1/visits/{visitId}/documentation', {
+    params: { path: { visitId: id }, header },
+  });
   const evidencePackageResult =
     documentationResult.data?.documentation?.status === 'finalized'
       ? await get('/api/v1/visits/{visitId}/evidence-package', {
@@ -101,20 +82,6 @@ export default async function CareVisitPage({
         </p>
         {visit.address ? <p className="text-slate-700">{visit.address}</p> : null}
       </header>
-
-      <CarePlanSection
-        plan={carePlanResult.data ?? null}
-        loadFailed={carePlanResult.error !== undefined}
-        locale={locale}
-      />
-
-      <MedicationVisitSection
-        visitId={visit.id}
-        timezone={visit.timezone}
-        locale={locale}
-        data={medicationResult.data ?? null}
-        errorCode={medicationResult.error?.code}
-      />
 
       {query.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
@@ -291,13 +258,9 @@ export default async function CareVisitPage({
       <DocumentationSection
         detail={documentationResult.data}
         {...(documentationResult.error?.code ? { errorCode: documentationResult.error.code } : {})}
-        clinicalDetail={clinicalResult?.data}
-        clinicalErrorCode={clinicalResult?.error?.code}
         evidenceStatus={evidencePackageResult?.data?.status ?? null}
         visitId={visit.id}
         executionStatus={execution.status}
-        timezone={visit.timezone}
-        defaultTime={execution.actualStart ?? visit.plannedStart}
         locale={locale}
       />
     </div>
@@ -453,24 +416,16 @@ async function DecisionFields({
 async function DocumentationSection({
   detail,
   errorCode,
-  clinicalDetail,
-  clinicalErrorCode,
   evidenceStatus,
   visitId,
   executionStatus: visitExecutionStatus,
-  timezone,
-  defaultTime,
   locale,
 }: {
   detail: components['schemas']['CareDocumentationDetailDto'] | undefined;
   errorCode?: string;
-  clinicalDetail: components['schemas']['ClinicalDocumentationDetailDto'] | undefined;
-  clinicalErrorCode: string | undefined;
   evidenceStatus: 'ready' | 'acknowledged' | 'declined' | 'revoked' | 'outdated' | null;
   visitId: string;
   executionStatus: 'not_started' | 'in_progress' | 'completed';
-  timezone: string;
-  defaultTime: string;
   locale: Locale;
 }) {
   const t = await getTranslations();
@@ -632,15 +587,6 @@ async function DocumentationSection({
               <p className="text-slate-600">{t('CareDocumentation.visit.noServices')}</p>
             )}
           </section>
-
-          <ClinicalSection
-            detail={clinicalDetail}
-            errorCode={clinicalErrorCode}
-            visitId={visitId}
-            timezone={timezone}
-            defaultTime={defaultTime}
-            locale={locale}
-          />
 
           {(['care_note', 'observation', 'deviation', 'incident'] as const).map((type) => {
             const entries = detail.entries.filter((entry) => entry.type === type);
@@ -959,18 +905,12 @@ function noticeKey(
   | 'VisitExecution.notices.serviceSaved'
   | 'VisitExecution.notices.noteSaved'
   | 'VisitExecution.notices.completed'
-  | 'CareDocumentation.clinical.notices.saved'
-  | 'CareDocumentation.clinical.notices.deleted'
-  | 'Medication.recordedNotice'
   | 'VisitExecution.notices.unknown' {
   const keys = {
     started: 'VisitExecution.notices.started',
     'service-saved': 'VisitExecution.notices.serviceSaved',
     'note-saved': 'VisitExecution.notices.noteSaved',
     completed: 'VisitExecution.notices.completed',
-    'clinical-saved': 'CareDocumentation.clinical.notices.saved',
-    'clinical-deleted': 'CareDocumentation.clinical.notices.deleted',
-    'medication-recorded': 'Medication.recordedNotice',
   } as const;
   return notice in keys ? keys[notice as keyof typeof keys] : 'VisitExecution.notices.unknown';
 }

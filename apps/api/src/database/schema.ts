@@ -9,12 +9,11 @@ import { serviceAgreementsSchema } from '@care/service-agreements';
 import { schedulingSchema } from '@care/scheduling';
 import { visitExecutionSchema } from '@care/visit-execution';
 import { careDocumentationSchema } from '@care/care-documentation';
-import { clinicalDocumentationSchema } from '@care/clinical-documentation';
-import { carePlanningSchema } from '@care/care-planning';
 import { serviceEvidenceSchema } from '@care/service-evidence';
-import { competencyPoliciesSchema } from '@care/competency-policies';
-import { workforceComplianceSchema } from '@care/workforce-compliance';
-import { medicationSchema } from '@care/medication';
+import { benefitsSchema } from '@care/benefits';
+import { billingSchema } from '@care/billing';
+import { payerDirectorySchema, billingClaimsSchema } from '@care/billing';
+import { documentsSchema } from '@care/documents';
 
 export const databaseSchema = {
   ...identitySchema,
@@ -26,12 +25,12 @@ export const databaseSchema = {
   ...schedulingSchema,
   ...visitExecutionSchema,
   ...careDocumentationSchema,
-  ...clinicalDocumentationSchema,
-  ...carePlanningSchema,
   ...serviceEvidenceSchema,
-  ...competencyPoliciesSchema,
-  ...workforceComplianceSchema,
-  ...medicationSchema,
+  ...benefitsSchema,
+  ...billingSchema,
+  ...payerDirectorySchema,
+  ...billingClaimsSchema,
+  ...documentsSchema,
   ...auditSchema,
   ...platformSchema,
 };

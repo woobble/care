@@ -2,10 +2,25 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createCareApi } from '@care/api-client';
 import type { CareApi } from '@care/api-client';
+import type { ApiClientOptions } from '@care/api-client';
 import { loadWebConfig } from '@care/config';
 import { auth } from '../auth';
 
 export async function getApiClient(requireTenant = true) {
+  return createCareApi(await apiClientOptions(requireTenant));
+}
+
+export async function fetchCareApi(path: string, init: RequestInit = {}): Promise<Response> {
+  const options = await apiClientOptions(true);
+  const requestHeaders = new Headers(init.headers);
+  requestHeaders.set('Authorization', `Bearer ${options.accessToken}`);
+  requestHeaders.set('X-Tenant-Id', options.tenantId!);
+  if (options.requestId) requestHeaders.set('X-Request-Id', options.requestId);
+  if (options.correlationId) requestHeaders.set('X-Correlation-Id', options.correlationId);
+  return fetch(new URL(path, options.baseUrl), { ...init, headers: requestHeaders });
+}
+
+async function apiClientOptions(requireTenant: boolean): Promise<ApiClientOptions> {
   const requestHeaders = await headers();
   const session = await auth.api.getSession({ headers: requestHeaders });
   if (!session) redirect('/');
@@ -21,7 +36,7 @@ export async function getApiClient(requireTenant = true) {
   const config = loadWebConfig();
   const tenantId = (await cookies()).get('care-tenant')?.value;
   if (requireTenant && !tenantId) redirect('/');
-  return createCareApi({
+  return {
     baseUrl: config.API_INTERNAL_URL,
     accessToken: token.accessToken,
     ...(requireTenant && tenantId ? { tenantId } : {}),
@@ -31,7 +46,7 @@ export async function getApiClient(requireTenant = true) {
     ...(requestHeaders.get('x-correlation-id')
       ? { correlationId: requestHeaders.get('x-correlation-id')! }
       : {}),
-  });
+  };
 }
 
 export async function getTenantHeader(): Promise<{ 'X-Tenant-Id': string }> {

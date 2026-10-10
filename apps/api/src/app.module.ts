@@ -14,11 +14,11 @@ import { ServiceAgreementsModule } from './modules/service-agreements.module';
 import { SchedulingModule } from './modules/scheduling.module';
 import { VisitExecutionModule } from './modules/visit-execution.module';
 import { CareDocumentationModule } from './modules/care-documentation.module';
-import { CarePlanningModule } from './modules/care-planning.module';
 import { ServiceEvidenceModule } from './modules/service-evidence.module';
-import { CompetencyPoliciesModule } from './modules/competency-policies.module';
-import { WorkforceComplianceModule } from './modules/workforce-compliance.module';
-import { MedicationModule } from './modules/medication.module';
+import { BenefitsModule } from './modules/benefits.module';
+import { BillingModule } from './modules/billing.module';
+import { DocumentsModule } from './modules/documents.module';
+import { DocumentWorkflowsModule } from './modules/document-workflows.module';
 import { HealthController } from './presentation/http/health.controller';
 import { ProblemDetailsFilter } from './presentation/http/problem-details.filter';
 
@@ -37,11 +37,11 @@ import { ProblemDetailsFilter } from './presentation/http/problem-details.filter
     SchedulingModule,
     VisitExecutionModule,
     CareDocumentationModule,
-    CarePlanningModule,
     ServiceEvidenceModule,
-    CompetencyPoliciesModule,
-    WorkforceComplianceModule,
-    MedicationModule,
+    BenefitsModule,
+    BillingModule,
+    DocumentsModule,
+    DocumentWorkflowsModule,
     MeModule,
   ],
   controllers: [HealthController],
