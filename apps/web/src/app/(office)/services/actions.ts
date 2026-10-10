@@ -181,7 +181,7 @@ export async function recordServicePriceAction(formData: FormData): Promise<void
   revalidatePath(`/services/${serviceId}`);
   revalidatePath('/planning');
   revalidatePath('/benefits');
-  redirect(servicePricePath(serviceId, organizationId, validFrom, ''));
+  redirect(servicePricePath(serviceId, organizationId, validFrom, null));
 }
 
 export async function archiveServiceAction(formData: FormData): Promise<void> {
@@ -326,13 +326,14 @@ function servicePricePath(
   id: string | undefined,
   organizationId: string | undefined,
   validAt: string,
-  error: string,
+  error: string | null,
 ): string {
   if (!id) return '/services?error=INVALID_REQUEST';
   const query = new URLSearchParams();
   if (organizationId) query.set('priceOrganizationId', organizationId);
   if (datePattern.test(validAt)) query.set('priceDate', validAt);
   if (error) query.set('error', error);
+  else query.set('updated', 'price');
   const suffix = query.toString();
   return `/services/${encodeURIComponent(id)}${suffix ? `?${suffix}` : ''}`;
 }

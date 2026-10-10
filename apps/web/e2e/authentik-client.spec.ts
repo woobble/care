@@ -30,6 +30,7 @@ test('Authentik users can be invited and administered from the office UI', async
   const caregiverEmail = `${caregiverUsername}@example.test`;
   const caregiverPassword = `Aa1!${uuidv7()}`;
   const executionMarker = `execution-note-${runId}`;
+  const admissionVisitMarker = `admission-first-visit-${runId}`;
   let authentikUserId: number | undefined;
   let invitedAuthentikUserId: number | undefined;
   let caregiverAuthentikUserId: number | undefined;
@@ -46,6 +47,9 @@ test('Authentik users can be invited and administered from the office UI', async
   let invitationId: string | undefined;
   let clientId: string | undefined;
   let agreementClientId: string | undefined;
+  let admissionCaseId: string | undefined;
+  let admissionClientId: string | undefined;
+  let admissionVisitId: string | undefined;
   let serviceId: string | undefined;
   let executionVisitId: string | undefined;
   let initialEvidencePackageId: string | undefined;
@@ -158,8 +162,10 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.getByLabel('Organization').selectOption({ label: 'Demo Pflegedienst' });
     await page.getByLabel('Primary facility').selectOption({ label: 'Facility West' });
     await page.getByRole('button', { name: 'Create client' }).click();
-    await expect(page.getByRole('heading', { name: `E2E ${runId}` })).toBeVisible();
+    await expect(page).toHaveURL(/\/clients\/[0-9a-f-]{36}$/i);
     clientId = new URL(page.url()).pathname.split('/').at(-1);
+    if (!clientId) throw new Error('The office UI did not redirect to the created client');
+    await expect(page.getByRole('heading', { name: `E2E ${runId}` })).toBeVisible();
     await expect(page.locator('span').filter({ hasText: /^Pending$/ })).toBeVisible();
 
     await page.locator('summary').filter({ hasText: 'Add address' }).click();
@@ -169,7 +175,16 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.locator('#new-address-city').fill('Berlin');
     const addressForm = page.locator('details').filter({ hasText: 'Add address' }).locator('form');
     await addressForm.locator('input[name="isPrimary"]').check();
-    await addressForm.getByRole('button', { name: 'Add address' }).click();
+    const clientPath = new URL(page.url()).pathname;
+    const addressResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' && new URL(response.url()).pathname === clientPath,
+    );
+    await Promise.all([
+      addressForm.getByRole('button', { name: 'Add address' }).click(),
+      addressResponse,
+    ]);
+    await page.reload();
     await expect(page.getByRole('heading', { name: 'Home address · Primary' })).toBeVisible();
 
     await page.locator('summary').filter({ hasText: 'Add contact' }).click();
@@ -319,12 +334,94 @@ test('Authentik users can be invited and administered from the office UI', async
     await priceForm.getByRole('button', { name: 'Record price' }).click();
     await expect(page.getByText('Price recorded.', { exact: true })).toBeVisible();
 
+    await page.goto('/admissions/new');
+    await page.getByLabel('Prospect first name').fill('Admission E2E');
+    await page.getByLabel('Prospect last name').fill(runId);
+    await page.getByLabel('Organization').selectOption(e2eOrganizationId);
+    await page.getByLabel('Facility').selectOption(e2eFacilityId);
+    await page.getByLabel('Inquiry source').fill('E2E browser journey');
+    await page.getByLabel('Funding plan').selectOption('private_pay');
+    await page.getByLabel('Preferred start date').fill(serviceValidFrom);
+    await page.getByLabel('Requested services, one per line').fill(`E2E Service ${runId}`);
+    await page.getByRole('button', { name: 'New admission case' }).click();
+    await expect(page).toHaveURL(/\/admissions\/[0-9a-f-]{36}$/i);
+    admissionCaseId = new URL(page.url()).pathname.split('/').at(-1);
+    if (!admissionCaseId) throw new Error('The admission detail page did not expose its ID');
+    const createdAdmission = await database.query<{ id: string }>(
+      'SELECT id FROM onboarding.cases WHERE tenant_id = $1 AND id = $2 AND first_name = $3 AND last_name = $4',
+      [tenantId, admissionCaseId, 'Admission E2E', runId],
+    );
+    expect(createdAdmission.rows[0]?.id).toBe(admissionCaseId);
+    await page.goto(`/admissions/${admissionCaseId}`);
+    await expect(page.getByRole('heading', { name: `Admission E2E ${runId}` })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Register prospect as pending client' }).click();
+    const admissionClientLink = page.locator('a[href^="/clients/"]').first();
+    await expect(admissionClientLink).toBeVisible();
+    const admissionClientHref = await admissionClientLink.getAttribute('href');
+    admissionClientId = admissionClientHref?.match(/^\/clients\/([0-9a-f-]{36})$/i)?.[1];
+    if (!admissionClientId) throw new Error('The admissions UI did not link the registered client');
+    const registeredAdmission = await database.query<{ client_id: string | null }>(
+      'SELECT client_id FROM onboarding.cases WHERE tenant_id = $1 AND id = $2',
+      [tenantId, admissionCaseId],
+    );
+    expect(registeredAdmission.rows[0]?.client_id).toBe(admissionClientId);
+    await page.goto(`/clients/${admissionClientId}`);
+    await page.getByRole('button', { name: 'Activate' }).click();
+    await expect(page.locator('span').filter({ hasText: /^Active$/ })).toBeVisible();
+    await page.goto(`/admissions/${admissionCaseId}`);
+
+    const admissionStageForm = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Move to stage' }),
+    });
+    await admissionStageForm.getByLabel('Move to stage').selectOption('assessment');
+    await admissionStageForm.getByRole('button', { name: 'Move to stage' }).click();
+    await expect(page.getByText(/Assessment · Stage/)).toBeVisible();
+    const preparationStageForm = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Move to stage' }),
+    });
+    await preparationStageForm.getByLabel('Move to stage').selectOption('preparation');
+    await preparationStageForm.getByRole('button', { name: 'Move to stage' }).click();
+    await expect(page.getByText(/Preparation · Stage/)).toBeVisible();
+
+    await page.getByRole('link', { name: 'Plan first visit' }).click();
+    await expect(page.getByRole('heading', { name: 'Plan a visit manually' })).toBeVisible();
+    const admissionVisitForm = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Create visit' }),
+    });
+    await admissionVisitForm.locator('input[name="localDate"]').fill(serviceValidFrom);
+    await admissionVisitForm.locator('input[name="localStartTime"]').fill('09:15');
+    await admissionVisitForm.locator('input[name="localEndTime"]').fill('09:45');
+    await admissionVisitForm.locator('select[name="serviceDefinitionIds"]').selectOption(serviceId!);
+    await admissionVisitForm.locator('textarea[name="note"]').fill(admissionVisitMarker);
+    await admissionVisitForm.getByRole('button', { name: 'Create visit' }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/admissions/${admissionCaseId}\\?updated=first_visit$`),
+    );
+    await expect(page.getByRole('status')).toContainText('First visit planned');
+    const firstVisitLink = await database.query<{ first_visit_id: string | null }>(
+      'SELECT first_visit_id FROM onboarding.cases WHERE tenant_id = $1 AND id = $2',
+      [tenantId, admissionCaseId],
+    );
+    admissionVisitId = firstVisitLink.rows[0]?.first_visit_id ?? undefined;
+    if (!admissionVisitId) throw new Error('The first visit was not linked to the admission');
+    const scheduledAdmissionVisit = await database.query<{ id: string }>(
+      'SELECT id FROM scheduling.visits WHERE tenant_id = $1 AND id = $2 AND note = $3',
+      [tenantId, admissionVisitId, admissionVisitMarker],
+    );
+    expect(scheduledAdmissionVisit.rows[0]?.id).toBe(admissionVisitId);
+    await expect(page.getByRole('link', { name: admissionVisitId })).toHaveAttribute(
+      'href',
+      `/visits/${admissionVisitId}`,
+    );
+
     await page.goto('/clients/new');
     await page.getByLabel('Organization').selectOption(e2eOrganizationId);
     await page.getByLabel('Primary facility').selectOption(e2eFacilityId);
     await page.getByLabel('First name').fill('Agreement E2E');
     await page.getByLabel('Last name').fill(runId);
     await page.getByRole('button', { name: 'Create client' }).click();
+    await expect(page).toHaveURL(/\/clients\/[0-9a-f-]{36}$/i);
     await expect(page.getByRole('heading', { name: `Agreement E2E ${runId}` })).toBeVisible();
     agreementClientId = new URL(page.url()).pathname.split('/').at(-1);
     if (!agreementClientId) throw new Error('The client detail page did not expose its ID');
@@ -415,8 +512,9 @@ test('Authentik users can be invited and administered from the office UI', async
       page.getByRole('heading', { name: 'Planned service budget estimate' }),
     ).toBeVisible();
     await expect(page.getByText('Estimated service cost', { exact: true })).toBeVisible();
-    await expect(page.getByText('Eligible for this service date', { exact: true })).toBeVisible();
+    await expect(page.getByText('Eligible for this service date')).toBeVisible();
 
+    await page.goto(`/clients/${agreementClientId}`);
     await page.getByRole('link', { name: 'Service planning' }).click();
     await expect(page.getByRole('heading', { name: 'Service planning' })).toBeVisible();
 
@@ -641,17 +739,18 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(caregiverPage.locator('html')).toHaveAttribute('lang', 'en');
     await expect(caregiverPage.getByRole('heading', { name: 'My visits' })).toBeVisible();
     const mobileVisitLink = caregiverPage.locator(`a[href="/care/visits/${executionVisitId}"]`);
+    const mobileVisitRow = caregiverPage.getByRole('listitem').filter({ has: mobileVisitLink });
     await expect(
       caregiverPage.getByText(`Visits for ${englishCareDate}`, { exact: true }),
     ).toBeVisible();
-    await expect(mobileVisitLink).toContainText('Upcoming');
+    await expect(mobileVisitRow).toContainText('Upcoming');
     await caregiverPage.getByRole('combobox', { name: 'Language' }).selectOption('de');
     await expect(caregiverPage.locator('html')).toHaveAttribute('lang', 'de');
     await expect(caregiverPage.getByRole('heading', { name: 'Meine Einsätze' })).toBeVisible();
     await expect(
       caregiverPage.getByText(`Einsätze am ${germanCareDate}`, { exact: true }),
     ).toBeVisible();
-    await expect(mobileVisitLink).toContainText('Bevorstehend');
+    await expect(mobileVisitRow).toContainText('Bevorstehend');
     await caregiverPage.reload();
     await expect(caregiverPage.getByRole('combobox', { name: 'Sprache' })).toHaveValue('de');
     await expect(
@@ -1105,15 +1204,16 @@ test('Authentik users can be invited and administered from the office UI', async
           .map((context) => context.close().catch(() => undefined)),
       );
       if (tenantId) {
-        const agreementClientIds = [agreementClientId].filter(
+        const testClientIds = [agreementClientId, admissionClientId].filter(
           (id): id is string => id !== undefined,
         );
-        await cleanupBenefitsRecords(database, tenantId, agreementClientIds, e2eOrganizationName);
-        if (agreementClientIds.length) {
+        if (admissionCaseId) await cleanupAdmissionRecords(database, tenantId, admissionCaseId);
+        await cleanupBenefitsRecords(database, tenantId, testClientIds, e2eOrganizationName);
+        if (testClientIds.length) {
           await cleanupServiceAgreementRecords(
             database,
             tenantId,
-            agreementClientIds,
+            testClientIds,
             [executionVisitId].filter((id): id is string => id !== undefined),
           );
         }
@@ -1121,6 +1221,7 @@ test('Authentik users can be invited and administered from the office UI', async
           serviceCode,
           serviceCategoryCode,
         });
+        await cleanupOnboardingTemplates(database, tenantId, e2eOrganizationName);
         await database.query(
           'UPDATE employees.employees SET user_id = NULL WHERE tenant_id = $1 AND personnel_number = ANY($2::text[])',
           [tenantId, [caregiverPersonnelNumber]],
@@ -1148,9 +1249,9 @@ test('Authentik users can be invited and administered from the office UI', async
         invitationIds: invitationId ? [invitationId] : [],
         invitationEmails: [invitedEmail, caregiverEmail],
         ...(tenantId ? { tenantId } : {}),
-        ...(clientId || agreementClientId
+        ...(clientId || agreementClientId || admissionClientId
           ? {
-              clientIds: [clientId, agreementClientId].filter(
+              clientIds: [clientId, agreementClientId, admissionClientId].filter(
                 (id): id is string => id !== undefined,
               ),
             }
@@ -2009,6 +2110,108 @@ async function cleanup(
     }
     if (userIds.length) {
       await database.query('DELETE FROM identity.users WHERE id = ANY($1::uuid[])', [userIds]);
+    }
+    await database.query('COMMIT');
+  } catch (error) {
+    await database.query('ROLLBACK');
+    throw error;
+  }
+}
+
+async function cleanupAdmissionRecords(
+  database: Client,
+  tenantId: string,
+  caseId: string,
+): Promise<void> {
+  await database.query('BEGIN');
+  try {
+    await database.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+    await database.query(
+      'DELETE FROM audit.audit_entries WHERE tenant_id = $1 AND resource_id = $2',
+      [tenantId, caseId],
+    );
+    await database.query(
+      `DELETE FROM platform.outbox_messages
+       WHERE tenant_id = $1
+         AND (event ->> 'aggregateId' = $2 OR event -> 'payload' ->> 'caseId' = $2)`,
+      [tenantId, caseId],
+    );
+    await database.query(
+      'DELETE FROM onboarding.case_documents WHERE tenant_id = $1 AND case_id = $2',
+      [tenantId, caseId],
+    );
+    await database.query('DELETE FROM onboarding.case_tasks WHERE tenant_id = $1 AND case_id = $2', [
+      tenantId,
+      caseId,
+    ]);
+    await database.query(
+      'DELETE FROM onboarding.case_communications WHERE tenant_id = $1 AND case_id = $2',
+      [tenantId, caseId],
+    );
+    await database.query(
+      'DELETE FROM communications.prospect_interactions WHERE tenant_id = $1 AND case_id = $2',
+      [tenantId, caseId],
+    );
+    await database.query(
+      'DELETE FROM onboarding.checklist_responses WHERE tenant_id = $1 AND case_id = $2',
+      [tenantId, caseId],
+    );
+    await database.query('DELETE FROM onboarding.assessments WHERE tenant_id = $1 AND case_id = $2', [
+      tenantId,
+      caseId,
+    ]);
+    await database.query('DELETE FROM onboarding.transitions WHERE tenant_id = $1 AND case_id = $2', [
+      tenantId,
+      caseId,
+    ]);
+    await database.query('DELETE FROM onboarding.cases WHERE tenant_id = $1 AND id = $2', [
+      tenantId,
+      caseId,
+    ]);
+    await database.query('COMMIT');
+  } catch (error) {
+    await database.query('ROLLBACK');
+    throw error;
+  }
+}
+
+async function cleanupOnboardingTemplates(
+  database: Client,
+  tenantId: string,
+  organizationName: string,
+): Promise<void> {
+  await database.query('BEGIN');
+  try {
+    await database.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+    const organizations = await database.query<{ id: string }>(
+      'SELECT id FROM organizations.organizations WHERE tenant_id = $1 AND name = $2',
+      [tenantId, organizationName],
+    );
+    const templateRows = await database.query<{ id: string }>(
+      'SELECT id FROM onboarding.checklist_templates WHERE tenant_id = $1 AND organization_id = ANY($2::uuid[])',
+      [
+        tenantId,
+        organizations.rows.map((organization) => organization.id),
+      ],
+    );
+    const templateIds = templateRows.rows.map((template) => template.id);
+    if (templateIds.length) {
+      await database.query(
+        'DELETE FROM audit.audit_entries WHERE tenant_id = $1 AND resource_id = ANY($2::uuid[])',
+        [tenantId, templateIds],
+      );
+      await database.query(
+        "DELETE FROM platform.outbox_messages WHERE tenant_id = $1 AND event ->> 'aggregateId' = ANY($2::text[])",
+        [tenantId, templateIds],
+      );
+      await database.query(
+        'DELETE FROM onboarding.checklist_template_items WHERE tenant_id = $1 AND template_id = ANY($2::uuid[])',
+        [tenantId, templateIds],
+      );
+      await database.query(
+        'DELETE FROM onboarding.checklist_templates WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+        [tenantId, templateIds],
+      );
     }
     await database.query('COMMIT');
   } catch (error) {

@@ -39,7 +39,6 @@ export class IdentityService {
           ),
         )
         .limit(1);
-
       if (external) {
         if (profile.email !== undefined || profile.displayName !== undefined) {
           await transaction.update(users).set(profile).where(eq(users.id, external.userId));
