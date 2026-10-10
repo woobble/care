@@ -22,13 +22,13 @@ import {
   visitAssignments,
   visitServices,
   visits,
-} from '../schema';
-import type { VisitAssignmentSnapshot, VisitData, VisitServiceData } from '../domain/visit';
+} from '@module/scheduling/schema';
+import type { VisitAssignmentSnapshot, VisitData, VisitServiceData } from '@module/scheduling/domain/visit';
 import type {
   AvailabilityException,
   AvailabilityWindow,
   EmployeeAvailability,
-} from '../domain/availability';
+} from '@module/scheduling/domain/availability';
 
 // Preserve transaction connection order while rotating unique stop sequences and writing route estimates.
 // oxlint-disable no-await-in-loop

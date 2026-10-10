@@ -1,4 +1,4 @@
-import type { Locale } from '../../../i18n/config';
+import type { Locale } from '@app/web/i18n/config';
 
 export function formatCents(cents: number | null, locale: Locale): string {
   if (cents === null) return '—';

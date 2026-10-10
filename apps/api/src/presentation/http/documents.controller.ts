@@ -74,9 +74,9 @@ import {
   SCHEDULING_APPLICATION,
   SERVICE_AGREEMENT_APPLICATION,
   SERVICE_EVIDENCE_APPLICATION,
-} from '../../tokens';
-import { OidcGuard, TenantContextGuard } from '../../http/auth.guards';
-import { requestContext, type ApiRequest } from '../../http/request';
+} from '@app/api/tokens';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
 import { ProblemDetailsDto } from './dto';
 import {
   documentGenerationCommandSchema,

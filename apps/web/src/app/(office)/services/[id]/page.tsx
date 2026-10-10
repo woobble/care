@@ -2,23 +2,23 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
-import { formatCurrency, formatDate } from '../../../../i18n/format';
-import { statusLabelKey, unitLabelKey } from '../../../../i18n/status';
-import { todayDateKey } from '../../../../lib/care-date';
-import { ActionNotice } from '../../administration/action-notice';
+import { formatCurrency, formatDate } from '@app/web/i18n/format';
+import { statusLabelKey, unitLabelKey } from '@app/web/i18n/status';
+import { todayDateKey } from '@app/web/lib/care-date';
+import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import {
   archiveServiceAction,
   recordServicePriceAction,
   setServiceAvailabilityAction,
   updateServiceAction,
-} from '../actions';
+} from '@app/web/app/(office)/services/actions';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
   hasTenantPermission,
-} from '../../../../lib/api';
+} from '@app/web/lib/api';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export default async function ServiceDetailPage({

@@ -10,7 +10,7 @@ import type { ServiceApplicationService } from '@care/services';
 import type { AuditWriter } from '@care/audit';
 import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
-import { DatabaseModule } from '../database/database.module';
+import { DatabaseModule } from '@app/api/database/database.module';
 import {
   AUDIT_WRITER,
   CLIENT_APPLICATION,
@@ -20,8 +20,8 @@ import {
   SERVICE_AGREEMENT_GUARDS,
   SERVICE_APPLICATION,
   UNIT_OF_WORK,
-} from '../tokens';
-import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
+} from '@app/api/tokens';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import { AuditModule } from './audit.module';
 import { ClientsModule } from './clients.module';
 import { IdentityModule } from './identity.module';
@@ -32,7 +32,7 @@ import { ServiceAgreementProtectionModule } from './service-agreement-protection
 import {
   ClientServiceAgreementsController,
   ServiceAgreementsController,
-} from '../presentation/http/service-agreements.controller';
+} from '@app/api/presentation/http/service-agreements.controller';
 
 @Module({
   imports: [

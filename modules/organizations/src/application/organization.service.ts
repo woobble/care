@@ -10,7 +10,7 @@ import {
   FacilityHasActiveTeamsError,
   OrganizationHasActiveChildrenError,
   transitionStructureStatus,
-} from '../domain/organization';
+} from '@module/organizations/domain/organization';
 import type {
   FacilityData,
   FacilitySnapshot,
@@ -19,9 +19,9 @@ import type {
   StructureStatus,
   TeamData,
   TeamSnapshot,
-} from '../domain/organization';
-import { OrganizationRepository } from '../infrastructure/persistence/organization.repository';
-import { isSupportedTimeZone } from '../domain/timezone';
+} from '@module/organizations/domain/organization';
+import { OrganizationRepository } from '@module/organizations/infrastructure/persistence/organization.repository';
+import { isSupportedTimeZone } from '@module/organizations/domain/timezone';
 
 export interface OrganizationServiceAgreementGuard {
   hasActiveForOrganization(

@@ -11,19 +11,19 @@ import {
   type ResourceContext,
 } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { performedServices, visitExecutions } from '../schema';
+import { performedServices, visitExecutions } from '@module/visit-execution/schema';
 import {
   validateServiceDecision,
   type ExecutionReasonCode,
   type PerformedServiceStatus,
-} from '../domain/visit-execution';
+} from '@module/visit-execution/domain/visit-execution';
 import {
   VisitExecutionRepository,
   type ExecutionRow,
   type PerformedServiceRow,
   type PlannedVisitService,
   type VisitExecutionVisit,
-} from '../infrastructure/visit-execution.repository';
+} from '@module/visit-execution/infrastructure/visit-execution.repository';
 
 type AuditContext = { ip?: string; userAgent?: string };
 type ReasonCode = ExecutionReasonCode;

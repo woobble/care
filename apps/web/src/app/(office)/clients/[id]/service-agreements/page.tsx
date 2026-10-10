@@ -2,22 +2,22 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Badge, Button, Input, Label } from '@care/ui';
-import { errorMessageKey } from '../../../../../i18n/errors';
-import { auditActionKey } from '../../../../../i18n/audit';
-import { formatDate, formatDateTime, formatNumber } from '../../../../../i18n/format';
-import type { Locale } from '../../../../../i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { auditActionKey } from '@app/web/i18n/audit';
+import { formatDate, formatDateTime, formatNumber } from '@app/web/i18n/format';
+import type { Locale } from '@app/web/i18n/config';
 import {
   quantityUnitKey,
   serviceAgreementStatusKey,
   unitLabelKey,
-} from '../../../../../i18n/status';
-import { ConfirmSubmitButton } from '../../../administration/confirm-submit-button';
+} from '@app/web/i18n/status';
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
-} from '../../../../../lib/api';
+} from '@app/web/lib/api';
 import {
   addAgreementServiceAction,
   changeServiceAgreementStatusAction,
@@ -26,8 +26,8 @@ import {
   updateAgreementServiceAction,
   updateServiceAgreementAction,
 } from './actions';
-import { generateAgreementVisitsAction } from '../../../planning/actions';
-import { generateDocumentAction } from '../../../documents/actions';
+import { generateAgreementVisitsAction } from '@app/web/app/(office)/planning/actions';
+import { generateDocumentAction } from '@app/web/app/(office)/documents/actions';
 
 type SearchParams = Promise<{
   error?: string;

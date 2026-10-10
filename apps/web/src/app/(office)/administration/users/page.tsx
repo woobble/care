@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Label, StatusBadge } from '@care/ui';
-import { roleLabelKey, scopeTypeLabelKey } from '../../../../i18n/access';
-import { errorMessageKey } from '../../../../i18n/errors';
-import { formatDate } from '../../../../i18n/format';
-import { statusLabelKey } from '../../../../i18n/status';
-import { getApiClient, getTenantHeader } from '../../../../lib/api';
-import { inviteUserAction, revokeInvitationAction } from '../actions';
-import { ConfirmSubmitButton } from '../confirm-submit-button';
+import { roleLabelKey, scopeTypeLabelKey } from '@app/web/i18n/access';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate } from '@app/web/i18n/format';
+import { statusLabelKey } from '@app/web/i18n/status';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { inviteUserAction, revokeInvitationAction } from '@app/web/app/(office)/administration/actions';
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 
 type SearchParams = Promise<{
   status?: string;

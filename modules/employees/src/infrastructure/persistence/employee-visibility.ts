@@ -7,7 +7,7 @@ import {
   employeeFacilityAssignments,
   employeeRecords,
   employeeTeamMemberships,
-} from '../../schema';
+} from '@module/employees/schema';
 
 export type EmployeeVisibilityGrant = Pick<PermissionGrant, 'scopeType' | 'scopeId'>;
 

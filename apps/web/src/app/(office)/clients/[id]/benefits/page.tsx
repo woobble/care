@@ -3,21 +3,21 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
-import type { Locale } from '../../../../../i18n/config';
-import { errorMessageKey } from '../../../../../i18n/errors';
-import { formatCurrency, formatDate, formatDateTime } from '../../../../../i18n/format';
+import type { Locale } from '@app/web/i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatCurrency, formatDate, formatDateTime } from '@app/web/i18n/format';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
-} from '../../../../../lib/api';
+} from '@app/web/lib/api';
 import {
   createEntitlementAction,
   createFundingSourceAction,
   recordBenefitAdjustmentAction,
-} from '../../../benefits/actions';
-import { generateDocumentAction } from '../../../documents/actions';
+} from '@app/web/app/(office)/benefits/actions';
+import { generateDocumentAction } from '@app/web/app/(office)/documents/actions';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const historyEntryTypes = [

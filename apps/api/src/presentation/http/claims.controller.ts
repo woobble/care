@@ -35,9 +35,9 @@ import type {
   PayerBillingProfileInput,
   PayerInput,
 } from '@care/billing';
-import { BILLING_CLAIMS_APPLICATION } from '../../tokens';
-import { OidcGuard, TenantContextGuard } from '../../http/auth.guards';
-import { requestContext, type ApiRequest } from '../../http/request';
+import { BILLING_CLAIMS_APPLICATION } from '@app/api/tokens';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
 import { ProblemDetailsDto } from './dto';
 import { withoutUndefined } from './validation';
 import {

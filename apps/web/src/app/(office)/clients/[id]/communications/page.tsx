@@ -3,14 +3,14 @@ import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
 import type { components } from '@care/api-client';
-import { formatDateTime } from '../../../../../i18n/format';
+import { formatDateTime } from '@app/web/i18n/format';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
   hasPermission,
-} from '../../../../../lib/api';
+} from '@app/web/lib/api';
 import {
   amendCommunicationAction,
   createCommunicationAction,

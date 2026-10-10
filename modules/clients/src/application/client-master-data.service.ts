@@ -5,7 +5,7 @@ import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
 import type { AuthorizationPrincipal } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { Client } from '../domain/client';
+import { Client } from '@module/clients/domain/client';
 import {
   validateClientAddress,
   validateClientContact,
@@ -19,7 +19,7 @@ import {
   type ClientInsuranceSnapshot,
   type PflegegradData,
   type PflegegradSnapshot,
-} from '../domain/client-master-data';
+} from '@module/clients/domain/client-master-data';
 import { authorizeClientResource } from './client-access';
 import { appendClientChange } from './client-change';
 import { ClientNotFoundError, PflegegradRecordImmutableError } from './errors';
@@ -29,9 +29,9 @@ import {
   ClientInsuranceNotFoundError,
   OverlappingPflegegradPeriodError,
   PflegegradNotFoundError,
-} from '../domain/client-master-data';
-import { ClientMasterDataRepository } from '../infrastructure/persistence/client-master-data.repository';
-import { ClientRepository } from '../infrastructure/persistence/client.repository';
+} from '@module/clients/domain/client-master-data';
+import { ClientMasterDataRepository } from '@module/clients/infrastructure/persistence/client-master-data.repository';
+import { ClientRepository } from '@module/clients/infrastructure/persistence/client.repository';
 
 type AuditContext = { ip?: string; userAgent?: string };
 

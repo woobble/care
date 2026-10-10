@@ -16,9 +16,9 @@ import { DrizzleOutboxRepository } from '@care/platform';
 import type { AuthorizationPrincipal } from '@care/permissions';
 import type { ObjectStorage } from '@care/storage';
 import { startCareTestDatabase } from '@care/testing';
-import { databaseSchema } from '../src/database/schema';
-import { DocumentsController } from '../src/presentation/http/documents.controller';
-import type { ApiRequest } from '../src/http/request';
+import { databaseSchema } from '@app/api/database/schema';
+import { DocumentsController } from '@app/api/presentation/http/documents.controller';
+import type { ApiRequest } from '@app/api/http/request';
 import type { FastifyReply } from 'fastify';
 
 describe('documents PostgreSQL integration', () => {

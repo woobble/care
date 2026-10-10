@@ -11,7 +11,7 @@ import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
 import type { ObjectStorage } from '@care/storage';
 import type { DocumentsApplicationService } from '@care/documents';
 import { ServicePriceApplicationService } from '@care/services';
-import { DatabaseModule } from '../database/database.module';
+import { DatabaseModule } from '@app/api/database/database.module';
 import {
   AUDIT_WRITER,
   BENEFITS_APPLICATION,
@@ -23,10 +23,10 @@ import {
   SERVICE_EVIDENCE_APPLICATION,
   SERVICE_PRICE_APPLICATION,
   UNIT_OF_WORK,
-} from '../tokens';
-import { BillingController } from '../presentation/http/billing.controller';
-import { ClaimsController } from '../presentation/http/claims.controller';
-import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
+} from '@app/api/tokens';
+import { BillingController } from '@app/api/presentation/http/billing.controller';
+import { ClaimsController } from '@app/api/presentation/http/claims.controller';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import { AuditModule } from './audit.module';
 import { BenefitsModule } from './benefits.module';
 import { IdentityModule } from './identity.module';

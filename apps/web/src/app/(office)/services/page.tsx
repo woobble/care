@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
-import { formatDate, formatNumber } from '../../../i18n/format';
-import { statusLabelKey, unitLabelKey } from '../../../i18n/status';
-import { ActionNotice } from '../administration/action-notice';
+import { formatDate, formatNumber } from '@app/web/i18n/format';
+import { statusLabelKey, unitLabelKey } from '@app/web/i18n/status';
+import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import {
   archiveServiceCategoryAction,
   createServiceCategoryAction,
@@ -14,7 +14,7 @@ import {
   getPermissionGrants,
   getTenantHeader,
   hasTenantPermission,
-} from '../../../lib/api';
+} from '@app/web/lib/api';
 
 type SearchParams = Promise<{
   q?: string;

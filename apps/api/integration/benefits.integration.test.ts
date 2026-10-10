@@ -14,9 +14,9 @@ import { createBenefitsApplicationService } from '@care/benefits';
 import { DrizzleOutboxRepository } from '@care/platform';
 import type { AuthorizationPrincipal } from '@care/permissions';
 import { startCareTestDatabase } from '@care/testing';
-import { databaseSchema } from '../src/database/schema';
-import { AppModule } from '../src/app.module';
-import { configureApiHttp, createApiFastifyAdapter } from '../src/http/fastify';
+import { databaseSchema } from '@app/api/database/schema';
+import { AppModule } from '@app/api/app.module';
+import { configureApiHttp, createApiFastifyAdapter } from '@app/api/http/fastify';
 
 describe('benefits PostgreSQL integration', () => {
   test('enforces eligibility and tenant scope while recording split allocations as immutable history', async () => {

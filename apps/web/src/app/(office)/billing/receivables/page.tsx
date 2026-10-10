@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
-import { errorMessageKey } from '../../../../i18n/errors';
-import { formatDate } from '../../../../i18n/format';
-import { getApiClient, getPermissionGrants, getTenantHeader } from '../../../../lib/api';
-import { BillingNavigation } from '../billing-nav';
-import { formatCents } from '../format';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate } from '@app/web/i18n/format';
+import { getApiClient, getPermissionGrants, getTenantHeader } from '@app/web/lib/api';
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { formatCents } from '@app/web/app/(office)/billing/format';
 
 type SearchParams = Promise<{ page?: string; error?: string }>;
 

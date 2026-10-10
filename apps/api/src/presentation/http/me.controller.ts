@@ -8,9 +8,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { IdentityService } from '@care/identity';
-import { IDENTITY_SERVICE } from '../../tokens';
-import { OidcGuard, TenantContextGuard } from '../../http/auth.guards';
-import type { ApiRequest } from '../../http/request';
+import { IDENTITY_SERVICE } from '@app/api/tokens';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import type { ApiRequest } from '@app/api/http/request';
 import { MeResponseDto, PermissionGrantDto, ProblemDetailsDto, TenantSummaryDto } from './dto';
 
 @ApiTags('identity')

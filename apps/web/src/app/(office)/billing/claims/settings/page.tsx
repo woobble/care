@@ -1,19 +1,19 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input } from '@care/ui';
-import { errorMessageKey } from '../../../../../i18n/errors';
+import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../../../lib/api';
-import { BillingNavigation } from '../../billing-nav';
+} from '@app/web/lib/api';
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
 import {
   createPayerDirectoryEntryAction,
   savePayerRequirementsAction,
   updatePayerDirectoryEntryAction,
-} from '../../actions';
+} from '@app/web/app/(office)/billing/actions';
 
 type Organization = { id: string; name: string };
 type Payer = {

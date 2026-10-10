@@ -23,15 +23,15 @@ import {
   type EvidenceStatus,
   type IncidentSeverity,
   type MissingDocumentationRequirement,
-} from '../domain/care-documentation';
+} from '@module/care-documentation/domain/care-documentation';
 import {
   careDocuments,
   documentationAmendments,
   documentationEntries,
   documentationHistory,
   serviceEvidence,
-} from '../schema';
-import { CareDocumentationRepository } from '../infrastructure/care-documentation.repository';
+} from '@module/care-documentation/schema';
+import { CareDocumentationRepository } from '@module/care-documentation/infrastructure/care-documentation.repository';
 
 type AuditContext = { ip?: string; userAgent?: string };
 

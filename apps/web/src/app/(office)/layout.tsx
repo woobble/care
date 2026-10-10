@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
-import { LanguageSwitcher } from '../../components/language-switcher';
-import { getApiClient, getPermissionGrants, hasPermission } from '../../lib/api';
-import { signOutAction } from '../actions/auth';
+import { LanguageSwitcher } from '@app/web/components/language-switcher';
+import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
+import { signOutAction } from '@app/web/app/actions/auth';
 
 export default async function OfficeLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const api = await getApiClient(false);

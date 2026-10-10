@@ -30,9 +30,9 @@ import {
   InvalidScheduleRuleError,
   type ServiceAgreementApplicationService,
 } from '@care/service-agreements';
-import { SERVICE_AGREEMENT_APPLICATION } from '../../tokens';
-import { OidcGuard, TenantContextGuard } from '../../http/auth.guards';
-import { requestContext, type ApiRequest } from '../../http/request';
+import { SERVICE_AGREEMENT_APPLICATION } from '@app/api/tokens';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
 import { ProblemDetailsDto } from './dto';
 import {
   AgreementServiceInputDto,

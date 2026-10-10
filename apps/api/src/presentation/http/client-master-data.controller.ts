@@ -27,9 +27,9 @@ import {
 } from '@nestjs/swagger';
 import { z } from 'zod';
 import { ClientMasterDataApplicationService } from '@care/clients';
-import { CLIENT_MASTER_DATA_APPLICATION } from '../../tokens';
-import { OidcGuard, TenantContextGuard } from '../../http/auth.guards';
-import { requestContext, type ApiRequest } from '../../http/request';
+import { CLIENT_MASTER_DATA_APPLICATION } from '@app/api/tokens';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
 import { ProblemDetailsDto } from './dto';
 import {
   ClientAddressResponseDto,

@@ -2,24 +2,24 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
-import type { Locale } from '../../../../../i18n/config';
-import { errorMessageKey } from '../../../../../i18n/errors';
-import { formatDate, formatDateTime } from '../../../../../i18n/format';
+import type { Locale } from '@app/web/i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate, formatDateTime } from '@app/web/i18n/format';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
-} from '../../../../../lib/api';
+} from '@app/web/lib/api';
 import {
   cancelDraftInvoiceAction,
   correctInvoiceAction,
   issueInvoiceAction,
   regenerateInvoicePdfAction,
   updateDraftInvoiceAction,
-} from '../../actions';
-import { BillingNavigation } from '../../billing-nav';
-import { euroInput, formatCents, lineAmountField } from '../../format';
+} from '@app/web/app/(office)/billing/actions';
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { euroInput, formatCents, lineAmountField } from '@app/web/app/(office)/billing/format';
 
 type SearchParams = Promise<{ error?: string; updated?: string }>;
 

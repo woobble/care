@@ -1,16 +1,16 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
-import { errorMessageKey } from '../../../../i18n/errors';
-import { formatDateTime } from '../../../../i18n/format';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDateTime } from '@app/web/i18n/format';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../../lib/api';
-import { acknowledgeExceptionAction, snoozeExceptionAction } from '../actions';
-import { issueTitleKey, taskSourceHref, taskStatusTranslation, workItemSourceHref } from '../ui';
+} from '@app/web/lib/api';
+import { acknowledgeExceptionAction, snoozeExceptionAction } from '@app/web/app/(office)/operations/actions';
+import { issueTitleKey, taskSourceHref, taskStatusTranslation, workItemSourceHref } from '@app/web/app/(office)/operations/ui';
 
 type SearchParams = Promise<
   Record<string, string | undefined> & { error?: string; updated?: string }

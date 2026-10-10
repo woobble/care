@@ -4,7 +4,7 @@ import { clientAddresses, clientRecords } from '@care/clients';
 import { employeeRecords, employeeTeamMemberships } from '@care/employees';
 import { visitAssignments, visits, visitServices } from '@care/scheduling';
 import { serviceAvailability, serviceDefinitions } from '@care/services';
-import { performedServices, visitExecutions } from '../schema';
+import { performedServices, visitExecutions } from '@module/visit-execution/schema';
 
 export type VisitExecutionVisit = typeof visits.$inferSelect;
 export type PlannedVisitService = typeof visitServices.$inferSelect;

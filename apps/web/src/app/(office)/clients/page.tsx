@@ -1,14 +1,14 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
-import { formatDate } from '../../../i18n/format';
-import { statusLabelKey } from '../../../i18n/status';
+import { formatDate } from '@app/web/i18n/format';
+import { statusLabelKey } from '@app/web/i18n/status';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../lib/api';
+} from '@app/web/lib/api';
 
 type SearchParams = Promise<{
   q?: string;

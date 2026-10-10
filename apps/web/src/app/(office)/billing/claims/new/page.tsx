@@ -2,17 +2,17 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input } from '@care/ui';
-import type { Locale } from '../../../../../i18n/config';
-import { errorMessageKey } from '../../../../../i18n/errors';
+import type { Locale } from '@app/web/i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
-} from '../../../../../lib/api';
-import { BillingNavigation } from '../../billing-nav';
-import { formatCents } from '../../format';
-import { createClaimAction } from '../../actions';
+} from '@app/web/lib/api';
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { formatCents } from '@app/web/app/(office)/billing/format';
+import { createClaimAction } from '@app/web/app/(office)/billing/actions';
 
 type Arrangement = {
   id: string;

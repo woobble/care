@@ -157,4 +157,4 @@ function localParts(value: Date, timezone: string): Record<string, string> {
       .map((part) => [part.type, part.value]),
   );
 }
-import type { Locale } from '../i18n/config';
+import type { Locale } from '@app/web/i18n/config';

@@ -7,8 +7,8 @@ import {
   getPermissionGrants,
   getTenantHeader,
   hasTenantPermission,
-} from '../../../../lib/api';
-import { createServiceAction } from '../actions';
+} from '@app/web/lib/api';
+import { createServiceAction } from '@app/web/app/(office)/services/actions';
 
 export default async function NewServicePage({
   searchParams,

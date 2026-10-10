@@ -10,7 +10,7 @@ import { createAccessTokenVerifier, type VerifiedIdentity } from '@care/auth';
 import { loadApiConfig } from '@care/config';
 import { DisabledUserError, IdentityService, TenantAccessService } from '@care/identity';
 import { asUUID } from '@care/contracts';
-import { IDENTITY_SERVICE, TENANT_ACCESS_SERVICE } from '../tokens';
+import { IDENTITY_SERVICE, TENANT_ACCESS_SERVICE } from '@app/api/tokens';
 import type { ApiRequest } from './request';
 import { requestContext } from './request';
 

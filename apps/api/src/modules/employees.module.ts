@@ -4,9 +4,9 @@ import type { VisitExecutionGuards } from '@care/visit-execution';
 import type { AuditWriter } from '@care/audit';
 import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
-import { DatabaseModule } from '../database/database.module';
-import { EmployeesController } from '../presentation/http/employees.controller';
-import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
+import { DatabaseModule } from '@app/api/database/database.module';
+import { EmployeesController } from '@app/api/presentation/http/employees.controller';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import {
   AUDIT_WRITER,
   EMPLOYEE_APPLICATION,
@@ -14,7 +14,7 @@ import {
   SCHEDULING_GUARDS,
   VISIT_EXECUTION_GUARDS,
   UNIT_OF_WORK,
-} from '../tokens';
+} from '@app/api/tokens';
 import { ServiceAgreementProtectionModule } from './service-agreement-protection.module';
 import { AuditModule } from './audit.module';
 import { IdentityModule } from './identity.module';

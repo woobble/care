@@ -2,14 +2,14 @@ import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
 import type { components } from '@care/api-client';
-import { errorMessageKey } from '../../../i18n/errors';
-import { formatDate } from '../../../i18n/format';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate } from '@app/web/i18n/format';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../lib/api';
+} from '@app/web/lib/api';
 import { createDraftInvoiceAction } from './actions';
 import { BillingNavigation } from './billing-nav';
 import { euroInput, formatCents, lineAmountField } from './format';

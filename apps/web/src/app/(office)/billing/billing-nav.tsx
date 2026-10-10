@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import type { CurrentPermissionGrant } from '../../../lib/api';
-import { hasPermission } from '../../../lib/api';
+import type { CurrentPermissionGrant } from '@app/web/lib/api';
+import { hasPermission } from '@app/web/lib/api';
 
 export async function BillingNavigation({
   permissions,

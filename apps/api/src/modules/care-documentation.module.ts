@@ -6,15 +6,15 @@ import {
 import type { AuditWriter } from '@care/audit';
 import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
-import { DatabaseModule } from '../database/database.module';
-import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
+import { DatabaseModule } from '@app/api/database/database.module';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import {
   AUDIT_WRITER,
   CARE_DOCUMENTATION_APPLICATION,
   OUTBOX_WRITER,
   UNIT_OF_WORK,
-} from '../tokens';
-import { CareDocumentationController } from '../presentation/http/care-documentation.controller';
+} from '@app/api/tokens';
+import { CareDocumentationController } from '@app/api/presentation/http/care-documentation.controller';
 import { AuditModule } from './audit.module';
 import { PlatformModule } from './platform.module';
 import { IdentityModule } from './identity.module';

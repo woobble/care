@@ -17,9 +17,9 @@ import type { DocumentsApplicationService } from '@care/documents';
 import { ExportFilterInvalidError, ExportRowLimitExceededError } from '@care/documents';
 import { visits } from '@care/scheduling';
 import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
-import { payers } from '../claims/payer-schema';
-import { claims, claimDecisions } from '../claims/schema';
-import { ClaimPaymentAmountExceededError } from '../claims/domain';
+import { payers } from '@module/billing/claims/payer-schema';
+import { claims, claimDecisions } from '@module/billing/claims/schema';
+import { ClaimPaymentAmountExceededError } from '@module/billing/claims/domain';
 import {
   calculateInvoiceAmounts,
   calculateServiceAmountCents,
@@ -54,7 +54,7 @@ import {
   assertPaymentAllocation,
   type ReceivableStatus,
   type TaxTreatment,
-} from '../domain/billing';
+} from '@module/billing/domain/billing';
 import {
   billingProfiles,
   invoiceCorrectionLines,
@@ -68,7 +68,7 @@ import {
   paymentAllocations,
   paymentReversals,
   payments,
-} from '../schema';
+} from '@module/billing/schema';
 import { performedServices, visitExecutions } from '@care/visit-execution';
 import { ServicePriceApplicationService } from '@care/services';
 import type { ServicePricingUnit } from '@care/services';
@@ -76,7 +76,7 @@ import {
   BillingPdfRenderer,
   type CorrectionPdfData,
   type InvoicePdfData,
-} from '../infrastructure/invoice-pdf';
+} from '@module/billing/infrastructure/invoice-pdf';
 
 type AuditContext = { ip?: string; userAgent?: string };
 type BillingPermission = Extract<Permission, `billing.${string}`>;

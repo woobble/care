@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { auditActionKey } from '../../../../i18n/audit';
-import { formatDateTime } from '../../../../i18n/format';
-import { getApiClient, getTenantHeader } from '../../../../lib/api';
+import { auditActionKey } from '@app/web/i18n/audit';
+import { formatDateTime } from '@app/web/i18n/format';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 
 export default async function AuditPage() {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);

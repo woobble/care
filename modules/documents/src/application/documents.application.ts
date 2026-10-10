@@ -21,7 +21,7 @@ import {
   DocumentTemplateVersionConflictError,
   defaultDocumentTemplate,
   validateTemplateInput,
-} from '../domain/documents';
+} from '@module/documents/domain/documents';
 import type {
   DocumentArtifactView,
   DocumentGenerationInput,
@@ -29,10 +29,10 @@ import type {
   DocumentTemplateConfig,
   DocumentTemplateInput,
   DocumentType,
-} from '../domain/documents';
-import { documentArtifacts, documentTemplates, logoAssets } from '../schema';
-import { renderDocumentPdf } from '../infrastructure/pdf-renderer';
-import type { PdfBranding } from '../infrastructure/pdf-renderer';
+} from '@module/documents/domain/documents';
+import { documentArtifacts, documentTemplates, logoAssets } from '@module/documents/schema';
+import { renderDocumentPdf } from '@module/documents/infrastructure/pdf-renderer';
+import type { PdfBranding } from '@module/documents/infrastructure/pdf-renderer';
 
 export interface DocumentAuditContext {
   ip?: string;

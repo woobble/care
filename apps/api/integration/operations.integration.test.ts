@@ -8,8 +8,8 @@ import { describe, expect, test } from 'bun:test';
 import { v7 as uuidv7 } from 'uuid';
 import { SignJWT, exportJWK, generateKeyPair } from 'jose';
 import { startCareTestDatabase } from '@care/testing';
-import { AppModule } from '../src/app.module';
-import { configureApiHttp, createApiFastifyAdapter } from '../src/http/fastify';
+import { AppModule } from '@app/api/app.module';
+import { configureApiHttp, createApiFastifyAdapter } from '@app/api/http/fastify';
 
 describe('operations PostgreSQL/API integration', () => {
   test('projects a current scheduling exception, records task history, and enforces tenant and source scope', async () => {

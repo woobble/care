@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import { errorMessageKey } from '../../../i18n/errors';
+import { errorMessageKey } from '@app/web/i18n/errors';
 
 export async function ActionNotice({
   error,

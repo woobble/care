@@ -1,9 +1,9 @@
 import { headers } from 'next/headers';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { auth } from '../auth';
-import { getApiClient } from '../lib/api';
+import { auth } from '@app/web/auth';
+import { getApiClient } from '@app/web/lib/api';
 import { Button, Label } from '@care/ui';
-import { LanguageSwitcher } from '../components/language-switcher';
+import { LanguageSwitcher } from '@app/web/components/language-switcher';
 import { signOutAction } from './actions/auth';
 import { selectTenantAction } from './actions/tenant';
 import { SignInButton } from './sign-in-button';

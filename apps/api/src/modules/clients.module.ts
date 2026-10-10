@@ -9,7 +9,7 @@ import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
 import type { ServiceAgreementGuards } from '@care/service-agreements';
 import type { VisitExecutionGuards } from '@care/visit-execution';
-import { DatabaseModule } from '../database/database.module';
+import { DatabaseModule } from '@app/api/database/database.module';
 import {
   AUDIT_WRITER,
   CLIENT_APPLICATION,
@@ -19,13 +19,13 @@ import {
   SCHEDULING_GUARDS,
   VISIT_EXECUTION_GUARDS,
   UNIT_OF_WORK,
-} from '../tokens';
+} from '@app/api/tokens';
 import { AuditModule } from './audit.module';
 import { PlatformModule } from './platform.module';
 import { IdentityModule } from './identity.module';
-import { ClientsController } from '../presentation/http/clients.controller';
-import { ClientMasterDataController } from '../presentation/http/client-master-data.controller';
-import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
+import { ClientsController } from '@app/api/presentation/http/clients.controller';
+import { ClientMasterDataController } from '@app/api/presentation/http/client-master-data.controller';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import { ServiceAgreementProtectionModule } from './service-agreement-protection.module';
 import { VisitExecutionModule } from './visit-execution.module';
 

@@ -4,7 +4,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { v7 as uuidv7 } from 'uuid';
 import type { VerifiedIdentity } from '@care/auth';
 import type { AuthorizationPrincipal } from '@care/permissions';
-import { externalIdentities, tenantMemberships, users } from '../schema';
+import { externalIdentities, tenantMemberships, users } from '@module/identity/schema';
 import { tenants } from '@care/organizations';
 import { loadTenantAuthorizationPrincipal } from './authorization-principal';
 

@@ -1,17 +1,17 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
-import type { Locale } from '../../../../i18n/config';
-import { errorMessageKey } from '../../../../i18n/errors';
-import { formatDateTime } from '../../../../i18n/format';
+import type { Locale } from '@app/web/i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDateTime } from '@app/web/i18n/format';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../../lib/api';
-import { BillingNavigation } from '../billing-nav';
-import { formatCents } from '../format';
+} from '@app/web/lib/api';
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { formatCents } from '@app/web/app/(office)/billing/format';
 
 type ClaimStatus =
   | 'draft'

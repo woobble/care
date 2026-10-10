@@ -10,7 +10,7 @@ import {
 import { employeeRecords, employeeTeamMemberships } from '@care/employees';
 import { visitAssignments, visits } from '@care/scheduling';
 import { performedServices, visitExecutions } from '@care/visit-execution';
-import { acknowledgements, evidencePackages } from '../schema';
+import { acknowledgements, evidencePackages } from '@module/service-evidence/schema';
 
 export interface EvidenceVisitContext {
   visit: typeof visits.$inferSelect;

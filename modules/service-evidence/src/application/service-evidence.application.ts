@@ -28,13 +28,13 @@ import {
   type EvidenceSnapshot,
   type SignatoryCapacity,
   type SignatureStrokes,
-} from '../domain/service-evidence';
-import { acknowledgements, evidencePackages } from '../schema';
+} from '@module/service-evidence/domain/service-evidence';
+import { acknowledgements, evidencePackages } from '@module/service-evidence/schema';
 import {
   ServiceEvidenceRepository,
   type EligibleContactRow,
   type EvidenceVisitContext,
-} from '../infrastructure/service-evidence.repository';
+} from '@module/service-evidence/infrastructure/service-evidence.repository';
 
 type AuditContext = { ip?: string; userAgent?: string };
 type SelectedSignatory =

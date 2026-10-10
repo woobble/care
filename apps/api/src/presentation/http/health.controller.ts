@@ -3,8 +3,8 @@ import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { sql } from 'drizzle-orm';
 import { loadApiConfig } from '@care/config';
 import { OsrmRouteProvider } from '@care/scheduling';
-import type { AppDatabase } from '../../database/database.module';
-import { DATABASE } from '../../tokens';
+import type { AppDatabase } from '@app/api/database/database.module';
+import { DATABASE } from '@app/api/tokens';
 
 type ApiConfig = ReturnType<typeof loadApiConfig>;
 type RoutingHealthStatus = 'not_configured' | 'unverified' | 'ready' | 'unavailable';

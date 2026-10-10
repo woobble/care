@@ -3,7 +3,7 @@
 import { useState, type FormEvent, type PointerEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import type { components } from '@care/api-client';
-import { acknowledgeEvidenceAction, declineEvidenceAction } from '../../../actions';
+import { acknowledgeEvidenceAction, declineEvidenceAction } from '@app/web/app/care/actions';
 
 type EligibleSignatory = components['schemas']['EligibleSignatoryDto'];
 type SignaturePoint = { x: number; y: number };

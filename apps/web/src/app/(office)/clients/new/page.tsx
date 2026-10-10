@@ -7,8 +7,8 @@ import {
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../../lib/api';
-import { createClientAction } from '../actions';
+} from '@app/web/lib/api';
+import { createClientAction } from '@app/web/app/(office)/clients/actions';
 
 export default async function NewClientPage({
   searchParams,

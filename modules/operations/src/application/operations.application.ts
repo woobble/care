@@ -58,8 +58,8 @@ import { invoices } from '@care/billing';
 import { claims } from '@care/billing';
 import { clientBenefitEntitlements } from '@care/benefits';
 import { documentArtifacts } from '@care/documents';
-import { exceptionInteractions, exceptionOccurrences, taskActivity, tasks } from '../schema';
-import { evidenceIssueCode, evidencePackageIssueCode, stableIssueId } from '../domain/operations';
+import { exceptionInteractions, exceptionOccurrences, taskActivity, tasks } from '@module/operations/schema';
+import { evidenceIssueCode, evidencePackageIssueCode, stableIssueId } from '@module/operations/domain/operations';
 
 type AuditContext = { ip?: string; userAgent?: string };
 type SourceType = NonNullable<(typeof tasks.$inferSelect)['sourceType']>;

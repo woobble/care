@@ -31,7 +31,7 @@ import {
   paymentAllocations,
   payments,
   paymentReversals,
-} from '../schema';
+} from '@module/billing/schema';
 import {
   claimDecisionLines,
   claimDecisions,

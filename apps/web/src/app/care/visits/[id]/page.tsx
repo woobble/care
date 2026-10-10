@@ -4,11 +4,11 @@ import { v7 as uuidv7 } from 'uuid';
 import type { components } from '@care/api-client';
 import { Button, Input, Label } from '@care/ui';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { errorMessageKey } from '../../../../i18n/errors';
-import { formatNumber } from '../../../../i18n/format';
-import { getApiClient, getTenantHeader } from '../../../../lib/api';
-import { formatVisitDateTime, formatVisitTime } from '../../../../lib/care-date';
-import type { Locale } from '../../../../i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatNumber } from '@app/web/i18n/format';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { formatVisitDateTime, formatVisitTime } from '@app/web/lib/care-date';
+import type { Locale } from '@app/web/i18n/config';
 import {
   addDocumentationEntryAction,
   completeVisitAction,
@@ -18,7 +18,7 @@ import {
   recordServiceEvidenceAction,
   startVisitAction,
   updateDocumentationEntryAction,
-} from '../../actions';
+} from '@app/web/app/care/actions';
 
 type SearchParams = Promise<{ error?: string; notice?: string }>;
 

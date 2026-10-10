@@ -10,7 +10,7 @@ import {
   documentationEntries,
   documentationHistory,
   serviceEvidence,
-} from '../schema';
+} from '@module/care-documentation/schema';
 
 export class CareDocumentationRepository {
   async visitContext(transaction: DatabaseTransaction, tenantId: string, visitId: string) {

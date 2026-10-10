@@ -2,7 +2,7 @@ import { and, eq, or, isNotNull } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
 import { visitAssignments } from '@care/scheduling';
 import { visits } from '@care/scheduling';
-import { performedServices, visitExecutions } from '../schema';
+import { performedServices, visitExecutions } from '@module/visit-execution/schema';
 
 export interface VisitExecutionGuards {
   hasExecutionForVisit(

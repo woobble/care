@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
-import { statusLabelKey } from '../../../../i18n/status';
-import { getApiClient, getTenantHeader } from '../../../../lib/api';
-import { ActionNotice } from '../action-notice';
-import { createFacilityAction } from '../actions';
+import { statusLabelKey } from '@app/web/i18n/status';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
+import { createFacilityAction } from '@app/web/app/(office)/administration/actions';
 
 type SearchParams = Promise<{ error?: string; updated?: string }>;
 

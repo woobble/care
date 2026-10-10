@@ -38,9 +38,9 @@ import {
   type CreateTourInput,
   type UpdateTourStopsInput,
 } from '@care/scheduling';
-import { SCHEDULING_APPLICATION } from '../../tokens';
-import { OidcGuard, TenantContextGuard } from '../../http/auth.guards';
-import { requestContext, type ApiRequest } from '../../http/request';
+import { SCHEDULING_APPLICATION } from '@app/api/tokens';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
 import { ProblemDetailsDto } from './dto';
 import {
   createVisitSchema,

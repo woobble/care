@@ -16,8 +16,8 @@ import {
 import type { SQL } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
 import { facilities, organizationsTable } from '@care/organizations';
-import { clientRecords, pflegegradRecords } from '../../schema';
-import type { ClientSnapshot, ClientStatus } from '../../domain/client';
+import { clientRecords, pflegegradRecords } from '@module/clients/schema';
+import type { ClientSnapshot, ClientStatus } from '@module/clients/domain/client';
 
 export interface ClientScopeFilter {
   tenantWide: boolean;

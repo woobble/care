@@ -35,9 +35,9 @@ import {
   type OperationsTaskListQuery,
   type OperationsTaskPatch,
 } from '@care/operations';
-import { OidcGuard, TenantContextGuard } from '../../http/auth.guards';
-import { requestContext, type ApiRequest } from '../../http/request';
-import { OPERATIONS_APPLICATION } from '../../tokens';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
+import { OPERATIONS_APPLICATION } from '@app/api/tokens';
 import { ProblemDetailsDto } from './dto';
 import { withoutUndefined } from './validation';
 

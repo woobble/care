@@ -22,7 +22,7 @@ import type { ObjectStorage } from '@care/storage';
 import { createServiceEvidenceApplicationService } from '@care/service-evidence';
 import { ServicePriceApplicationService } from '@care/services';
 import { startCareTestDatabase } from '@care/testing';
-import { databaseSchema } from '../src/database/schema';
+import { databaseSchema } from '@app/api/database/schema';
 
 describe('billing PostgreSQL integration', () => {
   test('protects billing scope and preserves reservations, funding, issuance, documents, and payment history', async () => {

@@ -2,16 +2,16 @@ import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
-import type { Locale } from '../../../i18n/config';
-import { errorMessageKey } from '../../../i18n/errors';
-import { formatCurrency, formatDate } from '../../../i18n/format';
+import type { Locale } from '@app/web/i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatCurrency, formatDate } from '@app/web/i18n/format';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
   hasPermission,
-} from '../../../lib/api';
+} from '@app/web/lib/api';
 import { createProviderRecognitionAction, allocatePerformedServiceAction } from './actions';
 
 type SearchParams = Promise<{ page?: string; error?: string; updated?: string }>;

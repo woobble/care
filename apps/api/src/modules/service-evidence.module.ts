@@ -8,16 +8,16 @@ import type { AuditWriter } from '@care/audit';
 import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
 import { loadStorageConfig } from '@care/config';
-import { DatabaseModule } from '../database/database.module';
-import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
-import { ServiceEvidenceController } from '../presentation/http/service-evidence.controller';
+import { DatabaseModule } from '@app/api/database/database.module';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { ServiceEvidenceController } from '@app/api/presentation/http/service-evidence.controller';
 import {
   AUDIT_WRITER,
   OBJECT_STORAGE,
   OUTBOX_WRITER,
   SERVICE_EVIDENCE_APPLICATION,
   UNIT_OF_WORK,
-} from '../tokens';
+} from '@app/api/tokens';
 import { AuditModule } from './audit.module';
 import { IdentityModule } from './identity.module';
 import { PlatformModule } from './platform.module';

@@ -4,7 +4,7 @@ import { createCareApi } from '@care/api-client';
 import type { CareApi } from '@care/api-client';
 import type { ApiClientOptions } from '@care/api-client';
 import { loadWebConfig } from '@care/config';
-import { auth } from '../auth';
+import { auth } from '@app/web/auth';
 
 export async function getApiClient(requireTenant = true) {
   return createCareApi(await apiClientOptions(requireTenant));

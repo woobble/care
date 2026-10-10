@@ -37,10 +37,10 @@ import {
   type RecordServiceEvidenceInput,
   type UpdateDocumentationEntryInput,
 } from '@care/care-documentation';
-import { CARE_DOCUMENTATION_APPLICATION } from '../../tokens';
-import { OidcGuard, TenantContextGuard } from '../../http/auth.guards';
-import type { ApiRequest } from '../../http/request';
-import { requestContext } from '../../http/request';
+import { CARE_DOCUMENTATION_APPLICATION } from '@app/api/tokens';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import type { ApiRequest } from '@app/api/http/request';
+import { requestContext } from '@app/api/http/request';
 import { ProblemDetailsDto } from './dto';
 import {
   addDocumentationAmendmentSchema,

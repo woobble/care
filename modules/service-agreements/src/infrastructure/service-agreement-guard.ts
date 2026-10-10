@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
-import { agreementServices, agreements } from '../schema';
+import { agreementServices, agreements } from '@module/service-agreements/schema';
 
 export interface ServiceAgreementGuards {
   hasActiveForClient(

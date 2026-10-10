@@ -2,18 +2,18 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
-import { auditActionKey } from '../../../../i18n/audit';
-import { statusLabelKey } from '../../../../i18n/status';
-import { errorMessageKey } from '../../../../i18n/errors';
-import { formatDate, formatDateTime } from '../../../../i18n/format';
-import { formatVisitDateTime } from '../../../../lib/care-date';
+import { auditActionKey } from '@app/web/i18n/audit';
+import { statusLabelKey } from '@app/web/i18n/status';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate, formatDateTime } from '@app/web/i18n/format';
+import { formatVisitDateTime } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
   hasPermission,
-} from '../../../../lib/api';
+} from '@app/web/lib/api';
 import {
   activateClientAction,
   addClientAddressAction,
@@ -31,7 +31,7 @@ import {
   updateClientContactAction,
   updateClientInsuranceAction,
   updateFuturePflegegradAction,
-} from '../actions';
+} from '@app/web/app/(office)/clients/actions';
 
 const contactRoleKeys = {
   primary_contact: 'Clients.detail.contactRoles.primaryContact',

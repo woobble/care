@@ -13,12 +13,12 @@ import {
   type ClientSnapshot,
   type ClientStatus,
   InvalidProviderContextError,
-} from '../domain/client';
+} from '@module/clients/domain/client';
 import {
   validateClientAddress,
   type ClientAddressData,
   type ClientAddressSnapshot,
-} from '../domain/client-master-data';
+} from '@module/clients/domain/client-master-data';
 import { clientScopeFilter, authorizeClientResource } from './client-access';
 import { appendClientChange } from './client-change';
 import {
@@ -26,8 +26,8 @@ import {
   FacilityNotInOrganizationError,
   InvalidPaginationError,
 } from './errors';
-import { ClientMasterDataRepository } from '../infrastructure/persistence/client-master-data.repository';
-import { ClientRepository } from '../infrastructure/persistence/client.repository';
+import { ClientMasterDataRepository } from '@module/clients/infrastructure/persistence/client-master-data.repository';
+import { ClientRepository } from '@module/clients/infrastructure/persistence/client.repository';
 
 export interface CreateClientInput extends ClientPersonalData, ClientProviderContext {
   primaryAddress?: ClientAddressData | null;

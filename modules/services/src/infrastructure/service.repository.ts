@@ -16,13 +16,13 @@ import {
 import type { SQL } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
 import { facilities } from '@care/organizations';
-import { serviceAvailability, serviceCategories, serviceDefinitions } from '../schema';
+import { serviceAvailability, serviceCategories, serviceDefinitions } from '@module/services/schema';
 import type {
   ServiceAvailabilitySnapshot,
   ServiceCategoryData,
   ServiceCategorySnapshot,
   ServiceDefinitionSnapshot,
-} from '../domain/service';
+} from '@module/services/domain/service';
 
 export interface ServiceReadScope {
   tenantWide: boolean;

@@ -11,7 +11,7 @@ import {
   employeeTeamMemberships,
   qualificationDefinitions,
   skillDefinitions,
-} from '../../schema';
+} from '@module/employees/schema';
 import type {
   EmployeeChanges,
   EmployeeDetailSnapshot,
@@ -22,7 +22,7 @@ import type {
   QualificationDefinitionSnapshot,
   SkillDefinitionSnapshot,
   TeamMembershipSnapshot,
-} from '../../domain/employee';
+} from '@module/employees/domain/employee';
 import { employeeVisibilityPredicate } from './employee-visibility';
 
 export interface EmployeeSearch {

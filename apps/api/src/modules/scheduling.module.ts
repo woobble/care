@@ -14,7 +14,7 @@ import type { OutboxWriter } from '@care/platform';
 import type { ServiceAgreementApplicationService } from '@care/service-agreements';
 import type { ServiceApplicationService } from '@care/services';
 import type { VisitExecutionGuards } from '@care/visit-execution';
-import { DatabaseModule } from '../database/database.module';
+import { DatabaseModule } from '@app/api/database/database.module';
 import {
   AUDIT_WRITER,
   CLIENT_APPLICATION,
@@ -26,8 +26,8 @@ import {
   SERVICE_AGREEMENT_APPLICATION,
   SERVICE_APPLICATION,
   UNIT_OF_WORK,
-} from '../tokens';
-import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
+} from '@app/api/tokens';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import {
   AgreementVisitGenerationController,
   EmployeeAvailabilityController,
@@ -40,7 +40,7 @@ import {
   ClientRoutingLocationController,
   EmployeeUnavailabilityController,
   VisitsController,
-} from '../presentation/http/scheduling.controller';
+} from '@app/api/presentation/http/scheduling.controller';
 import { AuditModule } from './audit.module';
 import { ClientsModule } from './clients.module';
 import { EmployeesModule } from './employees.module';

@@ -20,9 +20,9 @@ import {
 import type { DrizzleAuditReader } from '@care/audit';
 import { AuthorizationDeniedError, can } from '@care/permissions';
 import { z } from 'zod';
-import { AUDIT_READER } from '../../tokens';
-import { OidcGuard, TenantContextGuard } from '../../http/auth.guards';
-import type { ApiRequest } from '../../http/request';
+import { AUDIT_READER } from '@app/api/tokens';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import type { ApiRequest } from '@app/api/http/request';
 import { ProblemDetailsDto } from './dto';
 
 class AuditEntryDto {

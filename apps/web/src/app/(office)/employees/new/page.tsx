@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
-import { getApiClient, getTenantHeader } from '../../../../lib/api';
-import { ActionNotice } from '../../administration/action-notice';
-import { createEmployeeAction } from '../actions';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
+import { createEmployeeAction } from '@app/web/app/(office)/employees/actions';
 
 type SearchParams = Promise<{ error?: string }>;
 

@@ -233,7 +233,7 @@ import {
   ServiceEvidenceVisitRelationshipRequiredError,
   SignatureTooLargeError,
 } from '@care/service-evidence';
-import type { ApiRequest } from '../../http/request';
+import type { ApiRequest } from '@app/api/http/request';
 
 @Injectable()
 @Catch()

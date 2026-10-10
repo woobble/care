@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { PDFDocument } from 'pdf-lib';
-import type { DocumentPayload } from '../domain/documents';
+import type { DocumentPayload } from '@module/documents/domain/documents';
 import { renderDocumentPdf } from './pdf-renderer';
 
 describe('document PDF renderer', () => {

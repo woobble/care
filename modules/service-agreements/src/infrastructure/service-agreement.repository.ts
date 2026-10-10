@@ -6,8 +6,8 @@ import type {
   AgreementStatus,
   ServiceAgreementSnapshot,
   Weekday,
-} from '../domain/service-agreement';
-import { agreementServices, agreements } from '../schema';
+} from '@module/service-agreements/domain/service-agreement';
+import { agreementServices, agreements } from '@module/service-agreements/schema';
 
 export interface AgreementReadScope {
   tenantWide: boolean;

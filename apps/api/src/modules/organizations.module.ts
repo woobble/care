@@ -6,9 +6,9 @@ import type { OutboxWriter } from '@care/platform';
 import type { ServiceAgreementGuards } from '@care/service-agreements';
 import type { OrganizationSchedulingGuard } from '@care/organizations';
 import type { VisitExecutionGuards } from '@care/visit-execution';
-import { DatabaseModule } from '../database/database.module';
+import { DatabaseModule } from '@app/api/database/database.module';
 import { IdentityModule } from './identity.module';
-import { OrganizationsController } from '../presentation/http/organizations.controller';
+import { OrganizationsController } from '@app/api/presentation/http/organizations.controller';
 import {
   AUDIT_WRITER,
   ORGANIZATION_APPLICATION,
@@ -17,7 +17,7 @@ import {
   SCHEDULING_GUARDS,
   UNIT_OF_WORK,
   VISIT_EXECUTION_GUARDS,
-} from '../tokens';
+} from '@app/api/tokens';
 import { AuditModule } from './audit.module';
 import { PlatformModule } from './platform.module';
 import { ServiceAgreementProtectionModule } from './service-agreement-protection.module';

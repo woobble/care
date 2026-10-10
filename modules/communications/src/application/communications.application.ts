@@ -32,8 +32,8 @@ import { users } from '@care/identity';
 import { tasks } from '@care/operations';
 import { visits } from '@care/scheduling';
 import { agreements } from '@care/service-agreements';
-import { contactAuthorizationFor } from '../domain/contact-authorization';
-import { clientCommunicationPreferences, interactionAmendments, interactions } from '../schema';
+import { contactAuthorizationFor } from '@module/communications/domain/contact-authorization';
+import { clientCommunicationPreferences, interactionAmendments, interactions } from '@module/communications/schema';
 
 type AuditContext = { ip?: string; userAgent?: string };
 type InteractionDirection = (typeof interactions.$inferSelect)['direction'];

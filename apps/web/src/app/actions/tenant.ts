@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { loadWebConfig } from '@care/config';
-import { getApiClient } from '../../lib/api';
+import { getApiClient } from '@app/web/lib/api';
 
 export async function selectTenantAction(formData: FormData): Promise<void> {
   const tenantId = formData.get('tenantId');

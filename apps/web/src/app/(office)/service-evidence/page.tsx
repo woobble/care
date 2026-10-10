@@ -3,16 +3,16 @@ import { redirect } from 'next/navigation';
 import type { components } from '@care/api-client';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
-import { acknowledgementCapacityKey, evidenceStatusKey } from '../../../i18n/evidence';
-import { errorMessageKey } from '../../../i18n/errors';
-import { formatNumber } from '../../../i18n/format';
-import { dateRange, shiftDate, todayDateKey, formatVisitDateTime } from '../../../lib/care-date';
+import { acknowledgementCapacityKey, evidenceStatusKey } from '@app/web/i18n/evidence';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatNumber } from '@app/web/i18n/format';
+import { dateRange, shiftDate, todayDateKey, formatVisitDateTime } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../lib/api';
+} from '@app/web/lib/api';
 
 type Status = components['schemas']['ServiceEvidenceWorklistItemDto']['status'];
 type SignatoryType = 'client' | 'representative' | 'other_authorized_person';

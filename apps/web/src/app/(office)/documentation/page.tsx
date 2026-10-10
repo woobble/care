@@ -2,15 +2,15 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
-import { dateRange, shiftDate, todayDateKey } from '../../../lib/care-date';
-import { formatDateTime } from '../../../i18n/format';
-import { errorMessageKey } from '../../../i18n/errors';
+import { dateRange, shiftDate, todayDateKey } from '@app/web/lib/care-date';
+import { formatDateTime } from '@app/web/i18n/format';
+import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../lib/api';
+} from '@app/web/lib/api';
 
 type SearchParams = Promise<{
   from?: string;

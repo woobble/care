@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
-import { getApiClient, getTenantHeader } from '../../../lib/api';
-import { statusLabelKey } from '../../../i18n/status';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { statusLabelKey } from '@app/web/i18n/status';
 
 type SearchParams = Promise<{
   q?: string;

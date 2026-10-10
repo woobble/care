@@ -1,4 +1,4 @@
-import { fetchCareApi } from '../../../../../../../../lib/api';
+import { fetchCareApi } from '@app/web/lib/api';
 
 export async function GET(
   _request: Request,

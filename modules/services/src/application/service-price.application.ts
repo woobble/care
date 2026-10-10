@@ -8,7 +8,7 @@ import { facilities } from '@care/organizations';
 import { assertCan, AuthorizationDeniedError, can } from '@care/permissions';
 import type { AuthorizationPrincipal } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { serviceDefinitions, servicePrices } from '../schema';
+import { serviceDefinitions, servicePrices } from '@module/services/schema';
 import {
   InvalidServicePriceError,
   ServicePriceConflictError,
@@ -18,7 +18,7 @@ import {
   validateServicePrice,
   type ServicePriceInput,
   type ServicePriceSnapshot,
-} from '../domain/service-price';
+} from '@module/services/domain/service-price';
 
 type AuditContext = { ip?: string; userAgent?: string };
 

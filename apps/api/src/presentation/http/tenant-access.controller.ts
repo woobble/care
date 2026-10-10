@@ -28,9 +28,9 @@ import {
 import { z } from 'zod';
 import { TenantAccessError, TenantAccessService } from '@care/identity';
 import type { TenantInvitationView, TenantMemberView } from '@care/identity';
-import { TENANT_ACCESS_SERVICE } from '../../tokens';
-import { OidcGuard, TenantContextGuard } from '../../http/auth.guards';
-import { requestContext, type ApiRequest } from '../../http/request';
+import { TENANT_ACCESS_SERVICE } from '@app/api/tokens';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
 import { ProblemDetailsDto } from './dto';
 import {
   InvitationCreateDto,

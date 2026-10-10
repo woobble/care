@@ -3,12 +3,12 @@ import { v7 as uuidv7 } from 'uuid';
 import { getLocale, getTranslations } from 'next-intl/server';
 import type { components } from '@care/api-client';
 import { Button } from '@care/ui';
-import { getApiClient, getTenantHeader } from '../../../../../lib/api';
-import { formatVisitDateTime } from '../../../../../lib/care-date';
-import { formatNumber } from '../../../../../i18n/format';
-import { errorMessageKey } from '../../../../../i18n/errors';
-import { quantityUnitKey } from '../../../../../i18n/status';
-import { prepareEvidencePackageAction } from '../../../actions';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { formatVisitDateTime } from '@app/web/lib/care-date';
+import { formatNumber } from '@app/web/i18n/format';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { quantityUnitKey } from '@app/web/i18n/status';
+import { prepareEvidencePackageAction } from '@app/web/app/care/actions';
 import { EvidenceAcknowledgementForm } from './evidence-acknowledgement-form';
 
 type EvidencePackage = components['schemas']['EvidencePackageResponseDto'];

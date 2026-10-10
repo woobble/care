@@ -21,7 +21,7 @@ import {
   MembershipRevokedError,
   revokeMembership,
   transitionInvitation,
-} from '../domain/membership';
+} from '@module/identity/domain/membership';
 import {
   membershipRoles,
   membershipScopes,
@@ -30,7 +30,7 @@ import {
   tenantInvitations,
   tenantMemberships,
   users,
-} from '../schema';
+} from '@module/identity/schema';
 import { loadTenantAuthorizationPrincipal } from './authorization-principal';
 import { InvalidAuthorizationConfigurationError } from './identity.service';
 

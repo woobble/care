@@ -11,7 +11,7 @@ import type {
   EmployeeSnapshot,
   QualificationDefinitionSnapshot,
   SkillDefinitionSnapshot,
-} from '../domain/employee';
+} from '@module/employees/domain/employee';
 import {
   CrossTenantReferenceError,
   EmployeeAlreadyLinkedError,
@@ -19,9 +19,9 @@ import {
   PrimaryFacilityRequiredError,
   QualificationArchivedError,
   UserAlreadyLinkedError,
-} from '../domain/employee';
+} from '@module/employees/domain/employee';
 import { EmployeeApplicationService } from './employee.service';
-import type { EmployeeRepository } from '../infrastructure/persistence/employee.repository';
+import type { EmployeeRepository } from '@module/employees/infrastructure/persistence/employee.repository';
 
 const tenantId = '91ce6a63-434f-7423-a7dc-3eaf36766378';
 const organizationId = '193df432-2718-76ba-8a42-6b4242c3f121';

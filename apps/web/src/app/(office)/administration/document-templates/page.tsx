@@ -1,13 +1,13 @@
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
-import { errorMessageKey } from '../../../../i18n/errors';
+import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
-} from '../../../../lib/api';
+} from '@app/web/lib/api';
 import { saveDocumentTemplateAction, uploadDocumentLogoAction } from './actions';
 
 const documentTypes = [

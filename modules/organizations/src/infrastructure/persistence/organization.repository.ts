@@ -1,6 +1,6 @@
 import { and, asc, count, eq } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
-import { facilities, organizationsTable, teams } from '../../schema';
+import { facilities, organizationsTable, teams } from '@module/organizations/schema';
 import type {
   FacilityData,
   FacilitySnapshot,
@@ -9,7 +9,7 @@ import type {
   StructureStatus,
   TeamData,
   TeamSnapshot,
-} from '../../domain/organization';
+} from '@module/organizations/domain/organization';
 
 export class OrganizationRepository {
   async listOrganizations(

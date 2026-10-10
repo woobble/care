@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
-import { formatNumber } from '../../../../i18n/format';
-import { statusLabelKey } from '../../../../i18n/status';
-import { getApiClient, getTenantHeader } from '../../../../lib/api';
-import { ActionNotice } from '../action-notice';
-import { createOrganizationAction } from '../actions';
+import { formatNumber } from '@app/web/i18n/format';
+import { statusLabelKey } from '@app/web/i18n/status';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
+import { createOrganizationAction } from '@app/web/app/(office)/administration/actions';
 
 type SearchParams = Promise<{ error?: string; updated?: string }>;
 

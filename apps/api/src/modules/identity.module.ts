@@ -5,8 +5,8 @@ import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
 import { AuditModule } from './audit.module';
 import { PlatformModule } from './platform.module';
-import { TenantAccessController } from '../presentation/http/tenant-access.controller';
-import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
+import { TenantAccessController } from '@app/api/presentation/http/tenant-access.controller';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import {
   AUDIT_WRITER,
   DATABASE,
@@ -14,9 +14,9 @@ import {
   OUTBOX_WRITER,
   TENANT_ACCESS_SERVICE,
   UNIT_OF_WORK,
-} from '../tokens';
-import { DatabaseModule } from '../database/database.module';
-import type { AppDatabase } from '../database/database.module';
+} from '@app/api/tokens';
+import { DatabaseModule } from '@app/api/database/database.module';
+import type { AppDatabase } from '@app/api/database/database.module';
 
 @Module({
   imports: [DatabaseModule, AuditModule, PlatformModule],

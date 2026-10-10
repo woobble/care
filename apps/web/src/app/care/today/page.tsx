@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
-import { getApiClient, getTenantHeader } from '../../../lib/api';
-import { formatVisitTime, todayRange } from '../../../lib/care-date';
-import { formatLongDate } from '../../../i18n/format';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { formatVisitTime, todayRange } from '@app/web/lib/care-date';
+import { formatLongDate } from '@app/web/i18n/format';
 
 export default async function CareTodayPage() {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);

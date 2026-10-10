@@ -24,8 +24,8 @@ import {
   type ServiceCategorySnapshot,
   type ServiceDefinitionData,
   type ServiceDefinitionSnapshot,
-} from '../domain/service';
-import { ServiceRepository, type ServiceReadScope } from '../infrastructure/service.repository';
+} from '@module/services/domain/service';
+import { ServiceRepository, type ServiceReadScope } from '@module/services/infrastructure/service.repository';
 
 type AuditContext = { ip?: string; userAgent?: string };
 

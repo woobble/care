@@ -13,7 +13,7 @@ import {
   rolePermissions,
   roles,
   tenantMemberships,
-} from '../schema';
+} from '@module/identity/schema';
 import {
   InvalidAuthorizationConfigurationError,
   TenantAccessDeniedError,

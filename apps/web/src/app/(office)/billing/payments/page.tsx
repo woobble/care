@@ -1,21 +1,21 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
-import { formatDateTime } from '../../../../i18n/format';
-import { errorMessageKey } from '../../../../i18n/errors';
+import { formatDateTime } from '@app/web/i18n/format';
+import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../../lib/api';
-import { BillingNavigation } from '../billing-nav';
-import { formatCents, euroInput } from '../format';
+} from '@app/web/lib/api';
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { formatCents, euroInput } from '@app/web/app/(office)/billing/format';
 import {
   allocatePaymentAction,
   recordPaymentAction,
   reversePaymentAllocationAction,
-} from '../actions';
+} from '@app/web/app/(office)/billing/actions';
 
 type SearchParams = Promise<{ invoiceId?: string; error?: string; updated?: string }>;
 

@@ -1,15 +1,15 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
-import { errorMessageKey } from '../../../../i18n/errors';
+import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../../lib/api';
-import { BillingNavigation } from '../billing-nav';
-import { saveBillingProfileAction } from '../actions';
+} from '@app/web/lib/api';
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { saveBillingProfileAction } from '@app/web/app/(office)/billing/actions';
 
 type SearchParams = Promise<{ error?: string; updated?: string }>;
 

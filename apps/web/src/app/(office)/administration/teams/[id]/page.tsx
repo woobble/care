@@ -2,11 +2,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
-import { statusLabelKey } from '../../../../../i18n/status';
-import { getApiClient, getTenantHeader } from '../../../../../lib/api';
-import { ActionNotice } from '../../action-notice';
-import { setTeamStatusAction, updateTeamAction } from '../../actions';
-import { ConfirmSubmitButton } from '../../confirm-submit-button';
+import { statusLabelKey } from '@app/web/i18n/status';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
+import { setTeamStatusAction, updateTeamAction } from '@app/web/app/(office)/administration/actions';
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 
 type Params = Promise<{ id: string }>;
 type SearchParams = Promise<{ error?: string; updated?: string }>;

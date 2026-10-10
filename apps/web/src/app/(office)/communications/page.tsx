@@ -2,13 +2,13 @@ import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
 import type { components } from '@care/api-client';
-import { formatDateTime } from '../../../i18n/format';
+import { formatDateTime } from '@app/web/i18n/format';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../lib/api';
+} from '@app/web/lib/api';
 
 type Interaction = components['schemas']['CommunicationInteractionResponseDto'];
 type FollowUpStatus = 'needs_task' | 'open' | 'overdue' | 'completed';

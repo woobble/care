@@ -43,7 +43,7 @@ import {
   type BenefitRule,
   type BenefitType,
   type VerificationStatus,
-} from '../domain/benefits';
+} from '@module/benefits/domain/benefits';
 import {
   BenefitAdjustmentConflictError,
   BenefitAllocationAlreadyReversedError,
@@ -61,7 +61,7 @@ import {
   InvalidBenefitEntitlementError,
   InvalidBenefitFundingSourceError,
   InvalidProviderRecognitionError,
-} from '../domain/errors';
+} from '@module/benefits/domain/errors';
 import {
   benefitAllocationBuckets,
   benefitDefinitions,
@@ -72,7 +72,7 @@ import {
   providerRecognitions,
   serviceAllocationReversals,
   serviceAllocations,
-} from '../schema';
+} from '@module/benefits/schema';
 
 type AuditContext = { ip?: string; userAgent?: string };
 type BenefitPermission = Extract<Permission, `benefits.${string}`>;

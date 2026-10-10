@@ -1,6 +1,6 @@
 import { renderDocumentPdf } from '@care/documents';
 import type { DocumentPayload } from '@care/documents';
-import type { TaxTreatment } from '../domain/billing';
+import type { TaxTreatment } from '@module/billing/domain/billing';
 import type { PdfBranding } from '@care/documents';
 
 export interface InvoicePdfLine {

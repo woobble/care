@@ -9,21 +9,21 @@ import {
   declineReasonKey,
   evidenceOutcomeKey,
   evidenceStatusKey,
-} from '../../../../i18n/evidence';
-import { errorMessageKey } from '../../../../i18n/errors';
-import { formatNumber } from '../../../../i18n/format';
-import { quantityUnitKey } from '../../../../i18n/status';
+} from '@app/web/i18n/evidence';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatNumber } from '@app/web/i18n/format';
+import { quantityUnitKey } from '@app/web/i18n/status';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
   hasPermission,
-} from '../../../../lib/api';
-import { formatVisitDateTime } from '../../../../lib/care-date';
-import { ConfirmSubmitButton } from '../../administration/confirm-submit-button';
-import { revokeAcknowledgementAction } from '../actions';
-import { generateDocumentAction } from '../../documents/actions';
+} from '@app/web/lib/api';
+import { formatVisitDateTime } from '@app/web/lib/care-date';
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { revokeAcknowledgementAction } from '@app/web/app/(office)/service-evidence/actions';
+import { generateDocumentAction } from '@app/web/app/(office)/documents/actions';
 
 type EvidencePackage = components['schemas']['EvidencePackageResponseDto'];
 type Signature = components['schemas']['SignatureResponseDto'];

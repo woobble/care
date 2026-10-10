@@ -7,14 +7,14 @@ import {
   clientContacts,
   clientInsurances,
   pflegegradRecords,
-} from '../../schema';
+} from '@module/clients/schema';
 import type {
   ClientAddressSnapshot,
   ClientContactRole,
   ClientContactSnapshot,
   ClientInsuranceSnapshot,
   PflegegradSnapshot,
-} from '../../domain/client-master-data';
+} from '@module/clients/domain/client-master-data';
 
 export interface ClientTimelineRecord {
   id: string;

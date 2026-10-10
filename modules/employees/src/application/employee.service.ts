@@ -15,7 +15,7 @@ import type {
   EmployeeStatus,
   QualificationDefinitionSnapshot,
   SkillDefinitionSnapshot,
-} from '../domain/employee';
+} from '@module/employees/domain/employee';
 import {
   CrossTenantReferenceError,
   EmployeeAlreadyLinkedError,
@@ -34,8 +34,8 @@ import {
   UserAlreadyLinkedError,
   isValidDateRange,
   transitionEmployeeStatus,
-} from '../domain/employee';
-import { EmployeeRepository } from '../infrastructure/persistence/employee.repository';
+} from '@module/employees/domain/employee';
+import { EmployeeRepository } from '@module/employees/infrastructure/persistence/employee.repository';
 
 export interface EmployeeRequestMetadata {
   ip?: string;

@@ -2,17 +2,17 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
-import { errorMessageKey } from '../../../../../i18n/errors';
-import { formatDateTime } from '../../../../../i18n/format';
-import { visitDateTimeInputValue } from '../../../../../lib/care-date';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDateTime } from '@app/web/i18n/format';
+import { visitDateTimeInputValue } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../../../lib/api';
-import { addTaskCommentAction, transitionTaskAction, updateTaskAction } from '../../actions';
-import { taskSourceHref, taskStatusTranslation } from '../../ui';
+} from '@app/web/lib/api';
+import { addTaskCommentAction, transitionTaskAction, updateTaskAction } from '@app/web/app/(office)/operations/actions';
+import { taskSourceHref, taskStatusTranslation } from '@app/web/app/(office)/operations/ui';
 
 type Params = Promise<{ id: string }>;
 type SearchParams = Promise<{ error?: string; updated?: string }>;

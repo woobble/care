@@ -2,8 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { getApiClient, getTenantHeader } from '../../../lib/api';
-import { visitDateTimeFromInput } from '../../../lib/care-date';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { visitDateTimeFromInput } from '@app/web/lib/care-date';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const priorities = ['low', 'normal', 'high', 'urgent'] as const;

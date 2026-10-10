@@ -2,18 +2,18 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
-import { permissionLabelKeys, roleLabelKey } from '../../../../../i18n/access';
-import { errorMessageKey } from '../../../../../i18n/errors';
-import { statusLabelKey } from '../../../../../i18n/status';
-import { getApiClient, getTenantHeader } from '../../../../../lib/api';
+import { permissionLabelKeys, roleLabelKey } from '@app/web/i18n/access';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { statusLabelKey } from '@app/web/i18n/status';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 import {
   activateMemberAction,
   deactivateMemberAction,
   replaceMemberRolesAction,
   replaceMemberScopesAction,
   revokeMemberAction,
-} from '../../actions';
-import { ConfirmSubmitButton } from '../../confirm-submit-button';
+} from '@app/web/app/(office)/administration/actions';
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 
 type Params = Promise<{ id: string }>;
 type SearchParams = Promise<{ error?: string; updated?: string }>;

@@ -1,16 +1,16 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
-import { errorMessageKey } from '../../../i18n/errors';
-import { formatCurrency, formatLongDate, formatTime } from '../../../i18n/format';
-import type { Locale } from '../../../i18n/config';
-import { visitStatusKey } from '../../../i18n/status';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatCurrency, formatLongDate, formatTime } from '@app/web/i18n/format';
+import type { Locale } from '@app/web/i18n/config';
+import { visitStatusKey } from '@app/web/i18n/status';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../lib/api';
+} from '@app/web/lib/api';
 import {
   applySuggestedTourOrderAction,
   createTourAction,

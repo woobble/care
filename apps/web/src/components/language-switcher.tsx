@@ -3,8 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useTransition } from 'react';
-import { setLocaleAction } from '../app/actions/locale';
-import type { Locale } from '../i18n/config';
+import { setLocaleAction } from '@app/web/app/actions/locale';
+import type { Locale } from '@app/web/i18n/config';
 
 export function LanguageSwitcher({ locale }: Readonly<{ locale: Locale }>) {
   const t = useTranslations('Common');

@@ -32,33 +32,33 @@ import {
   localDateTimeToInstant,
   validateVisit,
   validateVisitService,
-} from '../domain';
+} from '@module/scheduling/domain';
 import {
   availabilityForVisit,
   InvalidEmployeeAvailabilityError,
   validateEmployeeAvailability,
-} from '../domain/availability';
+} from '@module/scheduling/domain/availability';
 import type {
   AvailabilityException,
   AvailabilityWindow,
   EmployeeAvailability,
-} from '../domain/availability';
+} from '@module/scheduling/domain/availability';
 import type {
   VisitAssignmentSnapshot,
   VisitData,
   VisitServiceData,
   VisitSnapshot,
   VisitStatus,
-} from '../domain/visit';
-import { SchedulingRepository } from '../infrastructure/scheduling.repository';
+} from '@module/scheduling/domain/visit';
+import { SchedulingRepository } from '@module/scheduling/infrastructure/scheduling.repository';
 import type {
   VisitCalendarRow,
   VisitReadScope,
   VisitSearchFilter,
-} from '../infrastructure/scheduling.repository';
-import type { SchedulingExecutionGuard } from '../infrastructure/scheduling-guards';
-import { UnavailableRouteProvider } from '../domain/route-provider';
-import type { RouteEstimate, RouteOrderSuggestion, RouteProvider } from '../domain/route-provider';
+} from '@module/scheduling/infrastructure/scheduling.repository';
+import type { SchedulingExecutionGuard } from '@module/scheduling/infrastructure/scheduling-guards';
+import { UnavailableRouteProvider } from '@module/scheduling/domain/route-provider';
+import type { RouteEstimate, RouteOrderSuggestion, RouteProvider } from '@module/scheduling/domain/route-provider';
 import {
   compareTourStops,
   InvalidTourError,
@@ -66,12 +66,12 @@ import {
   TourVersionConflictError,
   tourFeasibilityConflicts,
   type SchedulingConflict,
-} from '../domain/tour';
+} from '@module/scheduling/domain/tour';
 import {
   clientSchedulingPreferences,
   employeeSchedulingPreferences,
   tourPublications,
-} from '../schema';
+} from '@module/scheduling/schema';
 
 // Each loop below awaits statements on one transaction-bound connection; the ordering is part of the transaction and lock semantics.
 // oxlint-disable no-await-in-loop

@@ -11,8 +11,8 @@ import { startCareTestDatabase } from '@care/testing';
 import { createDatabase } from '@care/database';
 import { DrizzleOutboxRepository, platformSchema } from '@care/platform';
 import { PERMISSIONS } from '@care/permissions';
-import { AppModule } from '../src/app.module';
-import { configureApiHttp, createApiFastifyAdapter } from '../src/http/fastify';
+import { AppModule } from '@app/api/app.module';
+import { configureApiHttp, createApiFastifyAdapter } from '@app/api/http/fastify';
 
 const UUID_V4_COMPATIBILITY_ID = '00000000-0000-4000-8000-000000000001';
 

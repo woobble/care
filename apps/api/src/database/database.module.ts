@@ -2,7 +2,7 @@ import { Global, Inject, Injectable, Module, type OnApplicationShutdown } from '
 import { loadApiConfig } from '@care/config';
 import { createDatabase, createUnitOfWork } from '@care/database';
 import { databaseSchema } from './schema';
-import { API_CONFIG, DATABASE, UNIT_OF_WORK } from '../tokens';
+import { API_CONFIG, DATABASE, UNIT_OF_WORK } from '@app/api/tokens';
 
 export type AppDatabase = ReturnType<typeof createDatabase<typeof databaseSchema>>;
 

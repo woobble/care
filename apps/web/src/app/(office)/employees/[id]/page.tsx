@@ -2,19 +2,19 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
-import { statusLabelKey } from '../../../../i18n/status';
-import { errorMessageKey } from '../../../../i18n/errors';
-import { formatDate } from '../../../../i18n/format';
-import type { Locale } from '../../../../i18n/config';
-import { formatVisitDateTime } from '../../../../lib/care-date';
+import { statusLabelKey } from '@app/web/i18n/status';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate } from '@app/web/i18n/format';
+import type { Locale } from '@app/web/i18n/config';
+import { formatVisitDateTime } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../../lib/api';
-import { ActionNotice } from '../../administration/action-notice';
-import { ConfirmSubmitButton } from '../../administration/confirm-submit-button';
+} from '@app/web/lib/api';
+import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 import {
   assignFacilityAction,
   cancelEmployeeAbsenceAction,
@@ -34,7 +34,7 @@ import {
   unassignTeamAction,
   unlinkEmployeeUserAction,
   updateEmployeeAction,
-} from '../actions';
+} from '@app/web/app/(office)/employees/actions';
 
 type Params = Promise<{ id: string }>;
 type SearchParams = Promise<{ error?: string; updated?: string }>;

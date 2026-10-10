@@ -2,12 +2,12 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
-import { auditActionKey } from '../../../../i18n/audit';
-import { errorMessageKey } from '../../../../i18n/errors';
+import { auditActionKey } from '@app/web/i18n/audit';
+import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   formatDateTime as formatLocaleDateTime,
   formatTime as formatLocaleTime,
-} from '../../../../i18n/format';
+} from '@app/web/i18n/format';
 import {
   documentationEntryTypeKey,
   documentationRequirementKey,
@@ -17,15 +17,15 @@ import {
   executionStatusKey,
   quantityUnitKey,
   visitStatusKey,
-} from '../../../../i18n/status';
+} from '@app/web/i18n/status';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-} from '../../../../lib/api';
-import { ConfirmSubmitButton } from '../../administration/confirm-submit-button';
-import { amendDocumentationAction } from '../../documentation/actions';
+} from '@app/web/lib/api';
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { amendDocumentationAction } from '@app/web/app/(office)/documentation/actions';
 import {
   assignVisitAction,
   cancelSubstitutionAction,
@@ -35,7 +35,7 @@ import {
   proposeSubstitutionAction,
   unassignVisitAction,
   updateVisitAction,
-} from '../../planning/actions';
+} from '@app/web/app/(office)/planning/actions';
 
 type SearchParams = Promise<{
   error?: string;

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
-import { DocumentsController } from '../presentation/http/documents.controller';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { DocumentsController } from '@app/api/presentation/http/documents.controller';
 import { BenefitsModule } from './benefits.module';
 import { BillingModule } from './billing.module';
 import { ClientsModule } from './clients.module';

@@ -8,7 +8,7 @@ import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
 import type { SchedulingApplicationService } from '@care/scheduling';
 import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
-import { DatabaseModule } from '../database/database.module';
+import { DatabaseModule } from '@app/api/database/database.module';
 import {
   AUDIT_WRITER,
   BENEFITS_APPLICATION,
@@ -20,9 +20,9 @@ import {
   SCHEDULING_APPLICATION,
   SERVICE_EVIDENCE_APPLICATION,
   UNIT_OF_WORK,
-} from '../tokens';
-import { OidcGuard, TenantContextGuard } from '../http/auth.guards';
-import { OperationsController } from '../presentation/http/operations.controller';
+} from '@app/api/tokens';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { OperationsController } from '@app/api/presentation/http/operations.controller';
 import { AuditModule } from './audit.module';
 import { BenefitsModule } from './benefits.module';
 import { BillingModule } from './billing.module';

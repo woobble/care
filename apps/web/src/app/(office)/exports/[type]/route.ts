@@ -1,4 +1,4 @@
-import { fetchCareApi } from '../../../../lib/api';
+import { fetchCareApi } from '@app/web/lib/api';
 
 const endpoints = {
   invoices: '/api/v1/billing/exports/invoices',

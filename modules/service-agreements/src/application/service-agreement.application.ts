@@ -33,14 +33,14 @@ import {
   type ServiceAgreementData,
   type AgreementServiceScheduleRule,
   type ServiceAgreementSnapshot,
-} from '../domain/service-agreement';
+} from '@module/service-agreements/domain/service-agreement';
 import {
   ServiceAgreementRepository,
   type AgreementReadScope,
   type ServiceAgreementListRow,
   type ServiceAgreementSearchFilter,
-} from '../infrastructure/service-agreement.repository';
-import type { ServiceAgreementGuards } from '../infrastructure/service-agreement-guard';
+} from '@module/service-agreements/infrastructure/service-agreement.repository';
+import type { ServiceAgreementGuards } from '@module/service-agreements/infrastructure/service-agreement-guard';
 
 type AuditContext = { ip?: string; userAgent?: string };
 

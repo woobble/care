@@ -3,21 +3,21 @@ import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
 import type { components } from '@care/api-client';
-import type { Locale } from '../../../../../i18n/config';
-import { errorMessageKey } from '../../../../../i18n/errors';
-import { formatDate, formatDateTime } from '../../../../../i18n/format';
+import type { Locale } from '@app/web/i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate, formatDateTime } from '@app/web/i18n/format';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
-} from '../../../../../lib/api';
-import { BillingNavigation } from '../../../billing/billing-nav';
-import { formatCents } from '../../../billing/format';
+} from '@app/web/lib/api';
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { formatCents } from '@app/web/app/(office)/billing/format';
 import {
   createPayerArrangementAction,
   updatePayerArrangementAction,
-} from '../../../billing/actions';
+} from '@app/web/app/(office)/billing/actions';
 
 type SearchParams = Promise<{ error?: string; updated?: string }>;
 type Invoice = components['schemas']['BillingInvoiceResponseDto'];
