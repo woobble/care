@@ -8,9 +8,13 @@ describe('OSRM route provider', () => {
       expect(String(input)).toContain('/route/v1/driving/13.4,52.5;13.5,52.6;13.6,52.7');
       return Response.json({
         code: 'Ok',
-        legs: [
-          { duration: 300, distance: 1000 },
-          { duration: 600, distance: 2000 },
+        routes: [
+          {
+            legs: [
+              { duration: 300, distance: 1000 },
+              { duration: 600, distance: 2000 },
+            ],
+          },
         ],
       });
     }) as typeof fetch;

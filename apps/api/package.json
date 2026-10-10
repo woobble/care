@@ -23,6 +23,7 @@
     "@care/billing": "workspace:*",
     "@care/care-documentation": "workspace:*",
     "@care/clients": "workspace:*",
+    "@care/communications": "workspace:*",
     "@care/config": "workspace:*",
     "@care/contracts": "workspace:*",
     "@care/database": "workspace:*",

@@ -1107,6 +1107,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/communications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List client communications in the caller scope */
+        get: operations["CommunicationsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communications/clients/{clientId}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a client communication overview */
+        get: operations["CommunicationsController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communications/clients/{clientId}/interactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a client communication history */
+        get: operations["CommunicationsController_clientInteractions"];
+        put?: never;
+        /** Record a client communication */
+        post: operations["CommunicationsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communications/clients/{clientId}/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read client communication preferences */
+        get: operations["CommunicationsController_preferences"];
+        put?: never;
+        /** Update client communication preferences */
+        post: operations["CommunicationsController_updatePreferences"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communications/interactions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a communication and its amendment history */
+        get: operations["CommunicationsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communications/interactions/{id}/amendments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Amend a communication with a reason and full snapshot */
+        post: operations["CommunicationsController_amend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/service-categories": {
         parameters: {
             query?: never;
@@ -4462,6 +4566,99 @@ export interface components {
             actorId: string;
             action: string;
         };
+        CommunicationSourceResponseDto: {
+            /** @enum {string} */
+            type: "visit" | "service_agreement" | "operations_task" | "invoice" | "claim" | "document";
+            /** Format: uuid */
+            id: string;
+        };
+        CommunicationInteractionResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            clientId: string;
+            clientName?: string;
+            recordedByName?: string | null;
+            /** @enum {string} */
+            followUpStatus?: "needs_task" | "open" | "overdue" | "completed" | "none";
+            /** Format: uuid */
+            contactId: string | null;
+            contactLabel: string | null;
+            /** @enum {string} */
+            contactAuthorization: "legal_representative" | "authorized_contact" | "not_confirmed" | "not_applicable";
+            /** @enum {string} */
+            direction: "inbound" | "outbound" | "internal";
+            /** @enum {string} */
+            channel: "phone" | "in_person" | "email" | "letter" | "portal" | "other";
+            /** @enum {string} */
+            category: "general_inquiry" | "appointment_coordination" | "cancellation_rescheduling" | "service_request" | "service_agreement" | "documentation" | "billing_payment" | "benefits_payer" | "complaint_feedback" | "other";
+            subject: string;
+            summary: string | null;
+            /** @enum {string} */
+            outcome: "information_provided" | "request_received" | "action_required" | "appointment_agreed" | "no_answer" | "resolved" | "other";
+            /** Format: date-time */
+            occurredAt: string;
+            /** Format: uuid */
+            recordedByUserId: string;
+            source: components["schemas"]["CommunicationSourceResponseDto"] | null;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CommunicationInteractionListResponseDto: {
+            items: components["schemas"]["CommunicationInteractionResponseDto"][];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
+        CommunicationClientSummaryAuthorizedContactDto: {
+            name: string;
+            /** @enum {string} */
+            authorization: "legal_representative" | "authorized_contact";
+        };
+        CommunicationClientSummaryInteractionDto: {
+            subject: string;
+            /** Format: date-time */
+            occurredAt: string;
+        };
+        CommunicationClientSummaryFollowUpDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @enum {string} */
+            status: "open" | "in_progress";
+            /** Format: date-time */
+            dueAt: string | null;
+        };
+        CommunicationClientSummaryResponseDto: {
+            /** @enum {string|null} */
+            preferredChannel: "phone" | "in_person" | "email" | "letter" | "portal" | "other" | null;
+            preferredContactName: string | null;
+            primaryAuthorizedContact: components["schemas"]["CommunicationClientSummaryAuthorizedContactDto"] | null;
+            mostRecentInteraction: components["schemas"]["CommunicationClientSummaryInteractionDto"] | null;
+            openFollowUps: components["schemas"]["CommunicationClientSummaryFollowUpDto"][];
+        };
+        CommunicationPreferencesResponseDto: {
+            /** @enum {string} */
+            consentStatus: "unknown";
+            /** Format: uuid */
+            clientId: string;
+            preferredChannel: string | null;
+            preferredLanguage: string | null;
+            /** Format: uuid */
+            preferredContactId: string | null;
+            preferredContactTimes: string | null;
+            /** @enum {string} */
+            correspondencePreference: "unspecified" | "postal" | "electronic";
+            contactRestrictions: string | null;
+            version: number;
+            /** Format: uuid */
+            updatedByUserId: string | null;
+            /** Format: date-time */
+            updatedAt: string | null;
+        };
         ServiceCategoryResponseDto: {
             /** Format: uuid */
             id: string;
@@ -6794,7 +6991,7 @@ export interface components {
         };
         PermissionGrantDto: {
             /** @enum {string} */
-            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service.manage_pricing" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "benefits.read" | "benefits.manage" | "benefits.adjust" | "benefits.allocate" | "benefits.review" | "service_evidence.read" | "service_evidence.prepare" | "billing.read" | "billing.manage" | "billing.issue" | "billing.correct" | "billing.payments.read" | "billing.payments.manage" | "billing.settings.manage" | "claims.read" | "claims.manage" | "claims.submit" | "claims.record_decision" | "claims.reconcile" | "claims.settings.manage" | "documents.read" | "documents.generate" | "documents.templates.manage" | "documents.exports.read" | "acknowledgement.read" | "acknowledgement.capture" | "acknowledgement.revoke" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read" | "operations.read" | "operations.tasks.create" | "operations.tasks.manage" | "operations.tasks.assign" | "operations.exceptions.manage";
+            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "communications.read" | "communications.create" | "communications.update" | "communications.amend" | "communications.preferences.manage" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service.manage_pricing" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "benefits.read" | "benefits.manage" | "benefits.adjust" | "benefits.allocate" | "benefits.review" | "service_evidence.read" | "service_evidence.prepare" | "billing.read" | "billing.manage" | "billing.issue" | "billing.correct" | "billing.payments.read" | "billing.payments.manage" | "billing.settings.manage" | "claims.read" | "claims.manage" | "claims.submit" | "claims.record_decision" | "claims.reconcile" | "claims.settings.manage" | "documents.read" | "documents.generate" | "documents.templates.manage" | "documents.exports.read" | "acknowledgement.read" | "acknowledgement.capture" | "acknowledgement.revoke" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read" | "operations.read" | "operations.tasks.create" | "operations.tasks.manage" | "operations.tasks.assign" | "operations.exceptions.manage";
             /** @enum {string} */
             scopeType: "assigned_clients" | "team" | "facility" | "organization" | "tenant";
             /** Format: uuid */
@@ -6824,7 +7021,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        status?: string;
+                        /** @enum {string} */
+                        status: "ok";
+                        dependencies: {
+                            /** @enum {string} */
+                            database: "ready";
+                            /** @enum {string} */
+                            routing: "not_configured" | "unverified" | "ready" | "unavailable";
+                        };
                     };
                 };
             };
@@ -9752,6 +9956,314 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClientTimelineEntryDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CommunicationsController_list: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                search?: string;
+                until?: string;
+                from?: string;
+                followUpStatus?: "needs_task" | "open" | "overdue" | "completed";
+                outcome?: "information_provided" | "request_received" | "action_required" | "appointment_agreed" | "no_answer" | "resolved" | "other";
+                category?: "general_inquiry" | "appointment_coordination" | "cancellation_rescheduling" | "service_request" | "service_agreement" | "documentation" | "billing_payment" | "benefits_payer" | "complaint_feedback" | "other";
+                direction?: "inbound" | "outbound" | "internal";
+                channel?: "phone" | "in_person" | "email" | "letter" | "portal" | "other";
+                recordedByUserId?: unknown;
+                clientSearch?: string;
+                facilityId?: unknown;
+                organizationId?: unknown;
+                clientId?: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationInteractionListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CommunicationsController_summary: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationClientSummaryResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CommunicationsController_clientInteractions: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                search?: string;
+                until?: string;
+                from?: string;
+                outcome?: "information_provided" | "request_received" | "action_required" | "appointment_agreed" | "no_answer" | "resolved" | "other";
+                category?: "general_inquiry" | "appointment_coordination" | "cancellation_rescheduling" | "service_request" | "service_agreement" | "documentation" | "billing_payment" | "benefits_payer" | "complaint_feedback" | "other";
+                direction?: "inbound" | "outbound" | "internal";
+                channel?: "phone" | "in_person" | "email" | "letter" | "portal" | "other";
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationInteractionListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CommunicationsController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationInteractionResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CommunicationsController_preferences: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationPreferencesResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CommunicationsController_updatePreferences: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationPreferencesResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CommunicationsController_get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    CommunicationsController_amend: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationInteractionResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -15551,7 +16063,7 @@ export interface operations {
                     dueAt?: string | null;
                     source?: {
                         /** @enum {string} */
-                        type: "client" | "visit" | "service_agreement" | "service_evidence" | "invoice" | "claim" | "benefit_entitlement" | "document";
+                        type: "client" | "visit" | "service_agreement" | "service_evidence" | "invoice" | "claim" | "benefit_entitlement" | "document" | "communication";
                         /** Format: uuid */
                         id: string;
                     };

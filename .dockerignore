@@ -2,6 +2,7 @@
 .agents
 .codex
 graphify-out
+/data/osrm
 node_modules
 **/node_modules
 .turbo

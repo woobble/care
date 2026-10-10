@@ -83,6 +83,9 @@ export interface EventPayloadMap {
     recordId: string;
     operation: 'added' | 'updated';
   };
+  'communication.recorded': { interactionId: string; clientId: string };
+  'communication.amended': { interactionId: string; clientId: string; version: number };
+  'communication.preferences_updated': { clientId: string; version: number };
   'service.category_created': { categoryId: string };
   'service.category_updated': { categoryId: string; changedFields: string[] };
   'service.category_archived': { categoryId: string };

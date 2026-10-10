@@ -50,6 +50,7 @@ export const tasks = operations.table(
       | 'claim'
       | 'benefit_entitlement'
       | 'document'
+      | 'communication'
       | null
     >(),
     sourceClientId: uuid('source_client_id'),
@@ -60,6 +61,7 @@ export const tasks = operations.table(
     sourceClaimId: uuid('source_claim_id'),
     sourceEntitlementId: uuid('source_entitlement_id'),
     sourceDocumentId: uuid('source_document_id'),
+    sourceCommunicationId: uuid('source_communication_id'),
     version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -88,17 +90,22 @@ export const tasks = operations.table(
     check('operations_tasks_version_ck', sql`${table.version} > 0`),
     check('operations_tasks_title_ck', sql`length(trim(${table.title})) BETWEEN 1 AND 200`),
     check(
+      'operations_tasks_source_type_ck',
+      sql`${table.sourceType} IS NULL OR ${table.sourceType} IN ('client', 'visit', 'service_agreement', 'service_evidence', 'invoice', 'claim', 'benefit_entitlement', 'document', 'communication')`,
+    ),
+    check(
       'operations_tasks_source_pair_ck',
       sql`
-      (${table.sourceType} IS NULL AND ${table.sourceClientId} IS NULL AND ${table.sourceVisitId} IS NULL AND ${table.sourceAgreementId} IS NULL AND ${table.sourceEvidencePackageId} IS NULL AND ${table.sourceInvoiceId} IS NULL AND ${table.sourceClaimId} IS NULL AND ${table.sourceEntitlementId} IS NULL AND ${table.sourceDocumentId} IS NULL)
-      OR (${table.sourceType} = 'client' AND ${table.sourceClientId} IS NOT NULL AND ${table.sourceVisitId} IS NULL AND ${table.sourceAgreementId} IS NULL AND ${table.sourceEvidencePackageId} IS NULL AND ${table.sourceInvoiceId} IS NULL AND ${table.sourceClaimId} IS NULL AND ${table.sourceEntitlementId} IS NULL AND ${table.sourceDocumentId} IS NULL)
-      OR (${table.sourceType} = 'visit' AND ${table.sourceClientId} IS NULL AND ${table.sourceVisitId} IS NOT NULL AND ${table.sourceAgreementId} IS NULL AND ${table.sourceEvidencePackageId} IS NULL AND ${table.sourceInvoiceId} IS NULL AND ${table.sourceClaimId} IS NULL AND ${table.sourceEntitlementId} IS NULL AND ${table.sourceDocumentId} IS NULL)
-      OR (${table.sourceType} = 'service_agreement' AND ${table.sourceClientId} IS NULL AND ${table.sourceVisitId} IS NULL AND ${table.sourceAgreementId} IS NOT NULL AND ${table.sourceEvidencePackageId} IS NULL AND ${table.sourceInvoiceId} IS NULL AND ${table.sourceClaimId} IS NULL AND ${table.sourceEntitlementId} IS NULL AND ${table.sourceDocumentId} IS NULL)
-      OR (${table.sourceType} = 'service_evidence' AND ${table.sourceClientId} IS NULL AND ${table.sourceVisitId} IS NULL AND ${table.sourceAgreementId} IS NULL AND ${table.sourceEvidencePackageId} IS NOT NULL AND ${table.sourceInvoiceId} IS NULL AND ${table.sourceClaimId} IS NULL AND ${table.sourceEntitlementId} IS NULL AND ${table.sourceDocumentId} IS NULL)
-      OR (${table.sourceType} = 'invoice' AND ${table.sourceClientId} IS NULL AND ${table.sourceVisitId} IS NULL AND ${table.sourceAgreementId} IS NULL AND ${table.sourceEvidencePackageId} IS NULL AND ${table.sourceInvoiceId} IS NOT NULL AND ${table.sourceClaimId} IS NULL AND ${table.sourceEntitlementId} IS NULL AND ${table.sourceDocumentId} IS NULL)
-      OR (${table.sourceType} = 'claim' AND ${table.sourceClientId} IS NULL AND ${table.sourceVisitId} IS NULL AND ${table.sourceAgreementId} IS NULL AND ${table.sourceEvidencePackageId} IS NULL AND ${table.sourceInvoiceId} IS NULL AND ${table.sourceClaimId} IS NOT NULL AND ${table.sourceEntitlementId} IS NULL AND ${table.sourceDocumentId} IS NULL)
-      OR (${table.sourceType} = 'benefit_entitlement' AND ${table.sourceClientId} IS NULL AND ${table.sourceVisitId} IS NULL AND ${table.sourceAgreementId} IS NULL AND ${table.sourceEvidencePackageId} IS NULL AND ${table.sourceInvoiceId} IS NULL AND ${table.sourceClaimId} IS NULL AND ${table.sourceEntitlementId} IS NOT NULL AND ${table.sourceDocumentId} IS NULL)
-      OR (${table.sourceType} = 'document' AND ${table.sourceClientId} IS NULL AND ${table.sourceVisitId} IS NULL AND ${table.sourceAgreementId} IS NULL AND ${table.sourceEvidencePackageId} IS NULL AND ${table.sourceInvoiceId} IS NULL AND ${table.sourceClaimId} IS NULL AND ${table.sourceEntitlementId} IS NULL AND ${table.sourceDocumentId} IS NOT NULL)
+      (${table.sourceType} IS NULL AND num_nonnulls(${table.sourceClientId}, ${table.sourceVisitId}, ${table.sourceAgreementId}, ${table.sourceEvidencePackageId}, ${table.sourceInvoiceId}, ${table.sourceClaimId}, ${table.sourceEntitlementId}, ${table.sourceDocumentId}, ${table.sourceCommunicationId}) = 0)
+      OR (${table.sourceType} = 'client' AND ${table.sourceClientId} IS NOT NULL AND num_nonnulls(${table.sourceClientId}, ${table.sourceVisitId}, ${table.sourceAgreementId}, ${table.sourceEvidencePackageId}, ${table.sourceInvoiceId}, ${table.sourceClaimId}, ${table.sourceEntitlementId}, ${table.sourceDocumentId}, ${table.sourceCommunicationId}) = 1)
+      OR (${table.sourceType} = 'visit' AND ${table.sourceVisitId} IS NOT NULL AND num_nonnulls(${table.sourceClientId}, ${table.sourceVisitId}, ${table.sourceAgreementId}, ${table.sourceEvidencePackageId}, ${table.sourceInvoiceId}, ${table.sourceClaimId}, ${table.sourceEntitlementId}, ${table.sourceDocumentId}, ${table.sourceCommunicationId}) = 1)
+      OR (${table.sourceType} = 'service_agreement' AND ${table.sourceAgreementId} IS NOT NULL AND num_nonnulls(${table.sourceClientId}, ${table.sourceVisitId}, ${table.sourceAgreementId}, ${table.sourceEvidencePackageId}, ${table.sourceInvoiceId}, ${table.sourceClaimId}, ${table.sourceEntitlementId}, ${table.sourceDocumentId}, ${table.sourceCommunicationId}) = 1)
+      OR (${table.sourceType} = 'service_evidence' AND ${table.sourceEvidencePackageId} IS NOT NULL AND num_nonnulls(${table.sourceClientId}, ${table.sourceVisitId}, ${table.sourceAgreementId}, ${table.sourceEvidencePackageId}, ${table.sourceInvoiceId}, ${table.sourceClaimId}, ${table.sourceEntitlementId}, ${table.sourceDocumentId}, ${table.sourceCommunicationId}) = 1)
+      OR (${table.sourceType} = 'invoice' AND ${table.sourceInvoiceId} IS NOT NULL AND num_nonnulls(${table.sourceClientId}, ${table.sourceVisitId}, ${table.sourceAgreementId}, ${table.sourceEvidencePackageId}, ${table.sourceInvoiceId}, ${table.sourceClaimId}, ${table.sourceEntitlementId}, ${table.sourceDocumentId}, ${table.sourceCommunicationId}) = 1)
+      OR (${table.sourceType} = 'claim' AND ${table.sourceClaimId} IS NOT NULL AND num_nonnulls(${table.sourceClientId}, ${table.sourceVisitId}, ${table.sourceAgreementId}, ${table.sourceEvidencePackageId}, ${table.sourceInvoiceId}, ${table.sourceClaimId}, ${table.sourceEntitlementId}, ${table.sourceDocumentId}, ${table.sourceCommunicationId}) = 1)
+      OR (${table.sourceType} = 'benefit_entitlement' AND ${table.sourceEntitlementId} IS NOT NULL AND num_nonnulls(${table.sourceClientId}, ${table.sourceVisitId}, ${table.sourceAgreementId}, ${table.sourceEvidencePackageId}, ${table.sourceInvoiceId}, ${table.sourceClaimId}, ${table.sourceEntitlementId}, ${table.sourceDocumentId}, ${table.sourceCommunicationId}) = 1)
+      OR (${table.sourceType} = 'document' AND ${table.sourceDocumentId} IS NOT NULL AND num_nonnulls(${table.sourceClientId}, ${table.sourceVisitId}, ${table.sourceAgreementId}, ${table.sourceEvidencePackageId}, ${table.sourceInvoiceId}, ${table.sourceClaimId}, ${table.sourceEntitlementId}, ${table.sourceDocumentId}, ${table.sourceCommunicationId}) = 1)
+      OR (${table.sourceType} = 'communication' AND ${table.sourceCommunicationId} IS NOT NULL AND num_nonnulls(${table.sourceClientId}, ${table.sourceVisitId}, ${table.sourceAgreementId}, ${table.sourceEvidencePackageId}, ${table.sourceInvoiceId}, ${table.sourceClaimId}, ${table.sourceEntitlementId}, ${table.sourceDocumentId}, ${table.sourceCommunicationId}) = 1)
     `,
     ),
     foreignKey({

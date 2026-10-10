@@ -14,6 +14,8 @@ Personal names are structured as first, last, and optional preferred name. Gende
 
 Related people are stored as client contacts, not identity users. A contact can have multiple structured roles, including primary contact, emergency contact, legal representative, authorized contact, and invoice recipient. The model includes a relationship type and a limited representation foundation for power of attorney, legal guardianship, and authorized representatives. Contact notes are capped and are not a place for medical information.
 
+Communications reads these contacts and roles as its authority source. It snapshots contact labels and the authority basis at recording time; it does not duplicate or replace client contact records.
+
 Insurance relationships store an insurance type, insurer name, optional identifiers and validity dates. The module uses direct structured insurer data instead of a generic external-party model. This keeps the current scope small; claims and billing remain out of scope. Insurance identifiers are not copied into audit metadata, outbox payloads, or structured application logs.
 
 Pflegegrad is represented as historical records with grade 1 through 5, validity, decision date, optional insurer reference, and pending/confirmed/revoked status. Confirmed validity periods cannot overlap. A missing effective confirmed record means there is no current Pflegegrad. Future pending changes can coexist with a current confirmed grade.

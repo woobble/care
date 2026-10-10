@@ -63,15 +63,16 @@ export class OsrmRouteProvider implements RouteProvider {
       if (!response.ok) return { status: 'unavailable', legs: [] };
       const result = (await response.json()) as {
         code?: string;
-        legs?: Array<{ distance?: number; duration?: number }>;
+        routes?: Array<{ legs?: Array<{ distance?: number; duration?: number }> }>;
       };
+      const legs = result.routes?.[0]?.legs;
       const expectedLegCount = stops.length - 1 + (startLocation ? 1 : 0);
-      if (result.code !== 'Ok' || result.legs?.length !== expectedLegCount) {
+      if (result.code !== 'Ok' || legs?.length !== expectedLegCount) {
         return { status: 'unavailable', legs: [] };
       }
       return {
         status: 'available',
-        legs: result.legs.map((leg, index) => ({
+        legs: legs.map((leg, index) => ({
           fromVisitId:
             startLocation && index === 0 ? null : stops[index - (startLocation ? 1 : 0)]!.visitId,
           toVisitId: stops[index + 1 - (startLocation ? 1 : 0)]!.visitId,

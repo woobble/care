@@ -18,7 +18,7 @@ Comments and task descriptions are scoped Office data and are not copied into au
 
 ## Authorization
 
-Operations permissions are `operations.read`, `operations.tasks.create`, `operations.tasks.manage`, `operations.tasks.assign`, and `operations.exceptions.manage`. Reads and changes are checked against tenant, organization, and facility scopes. Client-scoped tasks retain their client context. A task reference is stored in a type-specific tenant-qualified foreign key and validated with the source module's read permission. A returned source link is included only when the caller can read that source resource; following a link still invokes the source route's authorization.
+Operations permissions are `operations.read`, `operations.tasks.create`, `operations.tasks.manage`, `operations.tasks.assign`, and `operations.exceptions.manage`. Reads and changes are checked against tenant, organization, and facility scopes. Client-scoped tasks retain their client context. A task reference is stored in a type-specific tenant-qualified source column and validated with the source module's read permission. Communication references are checked against the communications table and current client provider context; a composite foreign key also ties the task's tenant and client to its communication source. A returned source link is included only when the caller can read that source resource; following a link still invokes the source route's authorization.
 
 Caregiver roles receive no Operations permissions. Employees can use the task workflow only when explicitly granted the required Operations permissions.
 

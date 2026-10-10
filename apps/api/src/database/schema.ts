@@ -15,6 +15,7 @@ import { billingSchema } from '@care/billing';
 import { payerDirectorySchema, billingClaimsSchema } from '@care/billing';
 import { documentsSchema } from '@care/documents';
 import { operationsSchema } from '@care/operations';
+import { communicationsSchema } from '@care/communications';
 
 export const databaseSchema = {
   ...identitySchema,
@@ -33,6 +34,7 @@ export const databaseSchema = {
   ...billingClaimsSchema,
   ...documentsSchema,
   ...operationsSchema,
+  ...communicationsSchema,
   ...auditSchema,
   ...platformSchema,
 };

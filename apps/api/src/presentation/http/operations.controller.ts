@@ -94,6 +94,7 @@ const sourceSchema = z.object({
     'claim',
     'benefit_entitlement',
     'document',
+    'communication',
   ]),
   id: uuid,
 });
@@ -528,6 +529,7 @@ export class OperationsController {
                 'claim',
                 'benefit_entitlement',
                 'document',
+                'communication',
               ],
             },
             id: { type: 'string', format: 'uuid' },

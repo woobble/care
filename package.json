@@ -23,6 +23,9 @@
     "seed:identity": "bun run --filter @care/api seed:identity",
     "infra:up": "docker compose up -d --wait && docker compose --profile bootstrap run --rm --no-deps seaweedfs-init",
     "infra:down": "docker compose down",
+    "routing:setup": "node scripts/routing.mjs setup",
+    "routing:update": "node scripts/routing.mjs update",
+    "routing:status": "node scripts/routing.mjs status",
     "reset": "bash scripts/reset.sh"
   },
   "devDependencies": {

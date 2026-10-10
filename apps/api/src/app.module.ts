@@ -4,6 +4,7 @@ import { DatabaseModule } from './database/database.module';
 import { AuditModule } from './modules/audit.module';
 import { AuditQueryModule } from './modules/audit-query.module';
 import { ClientsModule } from './modules/clients.module';
+import { CommunicationsModule } from './modules/communications.module';
 import { EmployeesModule } from './modules/employees.module';
 import { IdentityModule } from './modules/identity.module';
 import { MeModule } from './modules/me.module';
@@ -33,6 +34,7 @@ import { ProblemDetailsFilter } from './presentation/http/problem-details.filter
     AuditQueryModule,
     PlatformModule,
     ClientsModule,
+    CommunicationsModule,
     ServicesModule,
     ServiceAgreementsModule,
     SchedulingModule,

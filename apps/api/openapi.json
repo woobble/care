@@ -14,9 +14,40 @@
                   "type": "object",
                   "properties": {
                     "status": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "dependencies": {
+                      "type": "object",
+                      "properties": {
+                        "database": {
+                          "type": "string",
+                          "enum": [
+                            "ready"
+                          ]
+                        },
+                        "routing": {
+                          "type": "string",
+                          "enum": [
+                            "not_configured",
+                            "unverified",
+                            "ready",
+                            "unavailable"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "database",
+                        "routing"
+                      ]
                     }
-                  }
+                  },
+                  "required": [
+                    "status",
+                    "dependencies"
+                  ]
                 }
               }
             }
@@ -5507,6 +5538,741 @@
         "summary": "Read a client-oriented timeline",
         "tags": [
           "clients"
+        ]
+      }
+    },
+    "/api/v1/communications": {
+      "get": {
+        "operationId": "CommunicationsController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "followUpStatus",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "needs_task",
+                "open",
+                "overdue",
+                "completed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcome",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "information_provided",
+                "request_received",
+                "action_required",
+                "appointment_agreed",
+                "no_answer",
+                "resolved",
+                "other"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "general_inquiry",
+                "appointment_coordination",
+                "cancellation_rescheduling",
+                "service_request",
+                "service_agreement",
+                "documentation",
+                "billing_payment",
+                "benefits_payer",
+                "complaint_feedback",
+                "other"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "direction",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "inbound",
+                "outbound",
+                "internal"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "channel",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "phone",
+                "in_person",
+                "email",
+                "letter",
+                "portal",
+                "other"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "recordedByUserId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "clientSearch",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunicationInteractionListResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List client communications in the caller scope",
+        "tags": [
+          "communications"
+        ]
+      }
+    },
+    "/api/v1/communications/clients/{clientId}/summary": {
+      "get": {
+        "operationId": "CommunicationsController_summary",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunicationClientSummaryResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a client communication overview",
+        "tags": [
+          "communications"
+        ]
+      }
+    },
+    "/api/v1/communications/clients/{clientId}/interactions": {
+      "get": {
+        "operationId": "CommunicationsController_clientInteractions",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcome",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "information_provided",
+                "request_received",
+                "action_required",
+                "appointment_agreed",
+                "no_answer",
+                "resolved",
+                "other"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "general_inquiry",
+                "appointment_coordination",
+                "cancellation_rescheduling",
+                "service_request",
+                "service_agreement",
+                "documentation",
+                "billing_payment",
+                "benefits_payer",
+                "complaint_feedback",
+                "other"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "direction",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "inbound",
+                "outbound",
+                "internal"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "channel",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "phone",
+                "in_person",
+                "email",
+                "letter",
+                "portal",
+                "other"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunicationInteractionListResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List a client communication history",
+        "tags": [
+          "communications"
+        ]
+      },
+      "post": {
+        "operationId": "CommunicationsController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunicationInteractionResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Record a client communication",
+        "tags": [
+          "communications"
+        ]
+      }
+    },
+    "/api/v1/communications/clients/{clientId}/preferences": {
+      "get": {
+        "operationId": "CommunicationsController_preferences",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunicationPreferencesResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read client communication preferences",
+        "tags": [
+          "communications"
+        ]
+      },
+      "post": {
+        "operationId": "CommunicationsController_updatePreferences",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunicationPreferencesResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update client communication preferences",
+        "tags": [
+          "communications"
+        ]
+      }
+    },
+    "/api/v1/communications/interactions/{id}": {
+      "get": {
+        "operationId": "CommunicationsController_get",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read a communication and its amendment history",
+        "tags": [
+          "communications"
+        ]
+      }
+    },
+    "/api/v1/communications/interactions/{id}/amendments": {
+      "post": {
+        "operationId": "CommunicationsController_amend",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunicationInteractionResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Amend a communication with a reason and full snapshot",
+        "tags": [
+          "communications"
         ]
       }
     },
@@ -16594,7 +17360,8 @@
                           "invoice",
                           "claim",
                           "benefit_entitlement",
-                          "document"
+                          "document",
+                          "communication"
                         ]
                       },
                       "id": {
@@ -20974,6 +21741,392 @@
           "occurredAt",
           "actorId",
           "action"
+        ]
+      },
+      "CommunicationSourceResponseDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "visit",
+              "service_agreement",
+              "operations_task",
+              "invoice",
+              "claim",
+              "document"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "type",
+          "id"
+        ]
+      },
+      "CommunicationInteractionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientName": {
+            "type": "string"
+          },
+          "recordedByName": {
+            "type": "string",
+            "nullable": true
+          },
+          "followUpStatus": {
+            "type": "string",
+            "enum": [
+              "needs_task",
+              "open",
+              "overdue",
+              "completed",
+              "none"
+            ]
+          },
+          "contactId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "contactLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "contactAuthorization": {
+            "type": "string",
+            "enum": [
+              "legal_representative",
+              "authorized_contact",
+              "not_confirmed",
+              "not_applicable"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "inbound",
+              "outbound",
+              "internal"
+            ]
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "phone",
+              "in_person",
+              "email",
+              "letter",
+              "portal",
+              "other"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "general_inquiry",
+              "appointment_coordination",
+              "cancellation_rescheduling",
+              "service_request",
+              "service_agreement",
+              "documentation",
+              "billing_payment",
+              "benefits_payer",
+              "complaint_feedback",
+              "other"
+            ]
+          },
+          "subject": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string",
+            "nullable": true
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "information_provided",
+              "request_received",
+              "action_required",
+              "appointment_agreed",
+              "no_answer",
+              "resolved",
+              "other"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recordedByUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CommunicationSourceResponseDto"
+              }
+            ]
+          },
+          "version": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "contactId",
+          "contactLabel",
+          "contactAuthorization",
+          "direction",
+          "channel",
+          "category",
+          "subject",
+          "summary",
+          "outcome",
+          "occurredAt",
+          "recordedByUserId",
+          "source",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CommunicationInteractionListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommunicationInteractionResponseDto"
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "CommunicationClientSummaryAuthorizedContactDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "authorization": {
+            "type": "string",
+            "enum": [
+              "legal_representative",
+              "authorized_contact"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "authorization"
+        ]
+      },
+      "CommunicationClientSummaryInteractionDto": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "subject",
+          "occurredAt"
+        ]
+      },
+      "CommunicationClientSummaryFollowUpDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "in_progress"
+            ]
+          },
+          "dueAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "dueAt"
+        ]
+      },
+      "CommunicationClientSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "preferredChannel": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "phone",
+              "in_person",
+              "email",
+              "letter",
+              "portal",
+              "other"
+            ]
+          },
+          "preferredContactName": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryAuthorizedContact": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CommunicationClientSummaryAuthorizedContactDto"
+              }
+            ]
+          },
+          "mostRecentInteraction": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CommunicationClientSummaryInteractionDto"
+              }
+            ]
+          },
+          "openFollowUps": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommunicationClientSummaryFollowUpDto"
+            }
+          }
+        },
+        "required": [
+          "preferredChannel",
+          "preferredContactName",
+          "primaryAuthorizedContact",
+          "mostRecentInteraction",
+          "openFollowUps"
+        ]
+      },
+      "CommunicationPreferencesResponseDto": {
+        "type": "object",
+        "properties": {
+          "consentStatus": {
+            "type": "string",
+            "enum": [
+              "unknown"
+            ]
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "preferredChannel": {
+            "type": "string",
+            "nullable": true
+          },
+          "preferredLanguage": {
+            "type": "string",
+            "nullable": true
+          },
+          "preferredContactId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "preferredContactTimes": {
+            "type": "string",
+            "nullable": true
+          },
+          "correspondencePreference": {
+            "type": "string",
+            "enum": [
+              "unspecified",
+              "postal",
+              "electronic"
+            ]
+          },
+          "contactRestrictions": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "number"
+          },
+          "updatedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "consentStatus",
+          "clientId",
+          "preferredChannel",
+          "preferredLanguage",
+          "preferredContactId",
+          "preferredContactTimes",
+          "correspondencePreference",
+          "contactRestrictions",
+          "version",
+          "updatedByUserId",
+          "updatedAt"
         ]
       },
       "ServiceCategoryResponseDto": {
@@ -29155,6 +30308,11 @@
               "client.create",
               "client.update",
               "client.archive",
+              "communications.read",
+              "communications.create",
+              "communications.update",
+              "communications.amend",
+              "communications.preferences.manage",
               "service.read",
               "service.create",
               "service.update",

@@ -98,6 +98,8 @@ export function taskSourceHref(task: OperationsTask): string | null {
       return task.clientId ? `/clients/${task.clientId}/benefits` : '/benefits';
     case 'document':
       return `/documents/${source.id}/pdf`;
+    case 'communication':
+      return task.clientId ? `/clients/${task.clientId}/communications` : '/communications';
     default:
       return null;
   }

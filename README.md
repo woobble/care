@@ -83,4 +83,26 @@ docker build -f apps/web/Dockerfile -t care-web .
 
 Pass runtime settings through the deployment environment. Do not use `.env.example` secrets outside local development. Run migrations as a separate release step with the migration database role.
 
+## Self-hosted routing
+
+Routing is optional. Normal Compose startup neither starts OSRM nor downloads map data. Leave `ROUTING_OSRM_URL` unset to keep Scheduling's existing unavailable fallback.
+
+The default region is `europe/germany/nordrhein-westfalen`. Copy `.env.example` to `.env`, check that the configured probe points are on connected drivable roads inside the selected region, then prepare and check the dataset:
+
+```sh
+cp .env.example .env
+bun run routing:setup
+bun run routing:status
+```
+
+The commands require Node 24+, Docker Compose, `curl`, and network access. They validate `OSRM_REGION` against Geofabrik's official index, download only that extract over HTTPS, and run the MLD pipeline with the same digest-pinned v26.10.0 image used at runtime. The generation-specific PBF and OSRM files live under ignored `data/osrm/`; the runtime mount is read-only. Setup explicitly starts the `routing` profile after preparation. It verifies the configured route probe before reporting ready.
+
+To use a smaller or different extract, set `OSRM_REGION` to a Geofabrik path such as `europe/germany/berlin` and set both `ROUTING_OSRM_PROBE_FROM` and `ROUTING_OSRM_PROBE_TO` to connected road points inside it, then run setup again. An API process on the host uses `ROUTING_OSRM_URL=http://localhost:5000`; an API container on the same Compose network uses `ROUTING_OSRM_URL=http://osrm:5000`. Change the host URL when changing `ROUTING_OSRM_PORT`. This Compose file runs infrastructure only, so pass the internal URL through the API container's deployment environment.
+
+Run `bun run routing:update` to download the latest extract for the configured region. Preprocessing occurs beside the active generation; a failed download or preprocessing leaves the active dataset alone. Updates recreate OSRM and wait for its route health check before discarding the prior generation. If startup fails, the command restores the prior generation and restarts it. Updates briefly interrupt routing. `bun run routing:status` reports application configuration, configured and active region, preparation state, download/preparation dates, dataset availability, and endpoint readiness. To disable routing, unset `ROUTING_OSRM_URL` for the API and stop OSRM with `docker compose --profile routing stop osrm`.
+
+The API health response keeps its overall status healthy when optional routing is disabled or unavailable and reports routing as `not_configured`, `unverified`, `ready`, or `unavailable`. Compose health checks a real OSRM route using the active dataset's probe file. The service is on the internal Compose network; its optional host mapping is bound to loopback, not a public interface.
+
+The selected extract defines routing coverage. Choose a larger region when dispatch routes cross its boundary; OSRM will not fetch adjacent regions automatically. Preprocessing needs temporary disk space for the PBF and generated graph and can require substantial memory and CPU, so size the host for the chosen region. OSM data is © OpenStreetMap contributors under the [Open Database License (ODbL)](https://www.openstreetmap.org/copyright); Geofabrik distributes the extracts. Retain attribution where derived routing results are shown. Routing sends coordinates only, never names, notes, or care details.
+
 See [architecture overview](docs/architecture/overview.md), the [client master-data domain](docs/domains/client-master-data.md), the [service catalog domain](docs/domains/service-catalog.md), [visit execution](docs/domains/visit-execution.md), [care documentation](docs/domains/care-documentation.md), [tenant isolation](docs/security/tenant-isolation.md), [privacy boundaries](docs/security/privacy.md), and the [ADRs](docs/adr/) for design decisions.

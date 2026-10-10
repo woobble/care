@@ -19,6 +19,11 @@ Copy `.env.example` to `.env` for local development. Compose reads it for infras
 | `API_INTERNAL_URL`                 | Web                        | API origin used by server-side requests.                                                                 |
 | `PORT`                             | API                        | API listen port; defaults to `3001`.                                                                     |
 | `SCHEDULE_GENERATION_HORIZON_DAYS` | API                        | Maximum inclusive date range for one visit-generation command; defaults to `28`.                         |
+| `OSRM_REGION`                      | Routing CLI                | Geofabrik path for the extract; defaults to `europe/germany/nordrhein-westfalen`.                        |
+| `ROUTING_OSRM_URL`                 | API                        | Optional OSRM base URL for driving estimates; leave unset to report routing as unavailable.              |
+| `ROUTING_OSRM_PROBE_FROM`          | API, routing CLI           | Region-specific longitude,latitude route health probe start.                                             |
+| `ROUTING_OSRM_PROBE_TO`            | API, routing CLI           | Region-specific longitude,latitude route health probe destination.                                       |
+| `ROUTING_OSRM_PORT`                | Compose, routing CLI       | Host port for the loopback-only OSRM mapping; defaults to `5000`.                                        |
 | `S3_ENDPOINT`                      | Storage                    | S3-compatible SeaweedFS endpoint; local default is `http://localhost:9002`.                              |
 | `S3_REGION`                        | Storage                    | S3 signing region.                                                                                       |
 | `S3_BUCKET`                        | Storage                    | Bucket for document objects.                                                                             |
@@ -36,7 +41,7 @@ Copy `.env.example` to `.env` for local development. Compose reads it for infras
 | `PLAYWRIGHT_BASE_URL`              | E2E test                   | Optional browser base URL. Defaults to `WEB_ORIGIN`.                                                     |
 | `PLAYWRIGHT_BROWSERS_PATH`         | E2E test                   | Optional Playwright browser installation path.                                                           |
 
-Local service endpoints: Authentik `9000`, SeaweedFS S3 `9002`, SeaweedFS filer `9004`, Mailpit SMTP/UI `1026`/`8025`, OTLP `4317`/`4318`, Prometheus `9090`, and Grafana `3002`.
+Local service endpoints: Authentik `9000`, SeaweedFS S3 `9002`, SeaweedFS filer `9004`, Mailpit SMTP/UI `1026`/`8025`, OTLP `4317`/`4318`, Prometheus `9090`, Grafana `3002`, and optional loopback-only OSRM `5000` when the `routing` Compose profile is enabled. For a host-run API, set `ROUTING_OSRM_URL` to `http://localhost:<ROUTING_OSRM_PORT>`; an API container on the same Compose network uses `http://osrm:5000`. Set the probe coordinates to connected roads inside `OSRM_REGION`. See [self-hosted routing](../README.md#self-hosted-routing) for setup and update commands.
 
 `REDIS_URL` is not required by the app worker. Redis remains in Compose for Authentik and future queue-backed jobs.
 

@@ -159,6 +159,26 @@ services:
     depends_on:
       - prometheus
 
+  osrm:
+    # Keep this digest in sync with scripts/routing.mjs, which uses the same
+    # image for dataset preprocessing.
+    image: ghcr.io/project-osrm/osrm-backend:v26.10.0-debian@sha256:55dbfd47d984c2cacd64e32901b4321c86b5ec761438e69aa053dc78698a786f
+    profiles: [routing]
+    command: [/bin/bash, /usr/local/bin/care-osrm-entrypoint]
+    ports:
+      - '127.0.0.1:${ROUTING_OSRM_PORT:-5000}:5000'
+    volumes:
+      - ./data/osrm:/data:ro
+      - ./infra/osrm/entrypoint.sh:/usr/local/bin/care-osrm-entrypoint:ro
+      - ./infra/osrm/healthcheck.sh:/usr/local/bin/care-osrm-healthcheck:ro
+    healthcheck:
+      test: [CMD, /bin/bash, /usr/local/bin/care-osrm-healthcheck]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5m
+    restart: unless-stopped
+
 volumes:
   care-postgres:
   care-redis:

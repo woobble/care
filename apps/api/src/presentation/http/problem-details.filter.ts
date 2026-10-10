@@ -27,6 +27,12 @@ import {
   ProviderRecognitionNotFoundError,
 } from '@care/benefits';
 import { BillingDomainError } from '@care/billing';
+import {
+  CommunicationNotFoundError,
+  CommunicationSourceNotFoundError,
+  CommunicationVersionConflictError,
+  InvalidCommunicationInputError,
+} from '@care/communications';
 import { DocumentDomainError } from '@care/documents';
 import {
   InvalidOperationsInputError,
@@ -301,6 +307,18 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     code = exception.code;
   } else if (exception instanceof AuthorizationDeniedError) {
     status = 403;
+    code = exception.code;
+  } else if (
+    exception instanceof CommunicationNotFoundError ||
+    exception instanceof CommunicationSourceNotFoundError
+  ) {
+    status = 404;
+    code = exception.code;
+  } else if (exception instanceof CommunicationVersionConflictError) {
+    status = 409;
+    code = exception.code;
+  } else if (exception instanceof InvalidCommunicationInputError) {
+    status = 400;
     code = exception.code;
   } else if (
     exception instanceof OperationsTaskNotFoundError ||

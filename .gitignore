@@ -388,6 +388,7 @@ $RECYCLE.BIN/
 .agents/
 .codex/
 graphify-out/
+/data/osrm/
 .graphifyignore
 AGENTS.md
 skills-lock.json

@@ -1606,6 +1606,31 @@ export class OperationsApplicationService {
             : null;
           break;
         }
+        case 'communication': {
+          const resultSet = await transaction.execute(sql`
+            SELECT client.organization_id AS "organizationId",
+                   client.primary_facility_id AS "facilityId",
+                   interaction.client_id AS "clientId"
+            FROM communications.interactions AS interaction
+            INNER JOIN clients.clients AS client
+              ON client.tenant_id = interaction.tenant_id
+             AND client.id = interaction.client_id
+            WHERE interaction.tenant_id = ${principal.tenantId}
+              AND interaction.id = ${source.id}
+            LIMIT 1
+          `);
+          const row = resultSet.rows[0] as
+            | { organizationId: string | null; facilityId: string | null; clientId: string }
+            | undefined;
+          result = row?.organizationId
+            ? {
+                organizationId: row.organizationId,
+                facilityId: row.facilityId,
+                clientId: row.clientId,
+              }
+            : null;
+          break;
+        }
       }
       if (!result) throw new OperationsSourceNotFoundError();
       assertCan(principal, {
@@ -2529,6 +2554,7 @@ function validSourceType(value: string): value is SourceType {
     'claim',
     'benefit_entitlement',
     'document',
+    'communication',
   ].includes(value);
 }
 
@@ -2573,6 +2599,8 @@ function sourcePermission(type: SourceType): Permission {
       return 'benefits.read';
     case 'document':
       return 'documents.read';
+    case 'communication':
+      return 'communications.read';
   }
 }
 
@@ -2586,6 +2614,7 @@ function sourceColumnsFor(source: OperationsSourceReference | null) {
     sourceClaimId: source?.type === 'claim' ? source.id : null,
     sourceEntitlementId: source?.type === 'benefit_entitlement' ? source.id : null,
     sourceDocumentId: source?.type === 'document' ? source.id : null,
+    sourceCommunicationId: source?.type === 'communication' ? source.id : null,
   };
 }
 
@@ -2607,6 +2636,8 @@ function sourceIdFromRow(task: typeof tasks.$inferSelect): string | null {
       return task.sourceEntitlementId;
     case 'document':
       return task.sourceDocumentId;
+    case 'communication':
+      return task.sourceCommunicationId;
     default:
       return null;
   }

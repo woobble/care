@@ -202,6 +202,22 @@ export default async function ClientDetailPage({
         client.primaryFacilityId,
       )
     : false;
+  const canReadCommunications = client
+    ? hasClientPermission(
+        permissions,
+        'communications.read',
+        tenantId,
+        client.organizationId,
+        client.primaryFacilityId,
+      ) &&
+      hasClientPermission(
+        permissions,
+        'client.read',
+        tenantId,
+        client.organizationId,
+        client.primaryFacilityId,
+      )
+    : false;
   const canReadSchedule = client
     ? hasClientPermission(
         permissions,
@@ -220,6 +236,42 @@ export default async function ClientDetailPage({
         client.primaryFacilityId,
       )
     : false;
+  const communicationsSummaryResult =
+    client && canReadCommunications
+      ? await get('/api/v1/communications/clients/{clientId}/summary', {
+          params: { path: { clientId: client.id }, header },
+        })
+      : null;
+  const communicationsSummary = communicationsSummaryResult?.data;
+  const canReadCommunicationTasks = client
+    ? hasClientPermission(
+        permissions,
+        'operations.read',
+        tenantId,
+        client.organizationId,
+        client.primaryFacilityId,
+      )
+    : false;
+  const operationTaskStatusLabels: Record<string, string> = {
+    open: t('Operations.taskOpen'),
+    in_progress: t('Operations.taskInProgress'),
+    completed: t('Operations.taskCompleted'),
+    cancelled: t('Operations.taskCancelled'),
+  };
+  const communicationChannelLabels: Record<string, string> = {
+    phone: t('Communications.channels.phone'),
+    in_person: t('Communications.channels.in_person'),
+    email: t('Communications.channels.email'),
+    letter: t('Communications.channels.letter'),
+    portal: t('Communications.channels.portal'),
+    other: t('Communications.channels.other'),
+  };
+  const contactAuthorizationLabels: Record<string, string> = {
+    legal_representative: t('Communications.authorizationStatus.legal_representative'),
+    authorized_contact: t('Communications.authorizationStatus.authorized_contact'),
+    not_confirmed: t('Communications.authorizationStatus.not_confirmed'),
+    not_applicable: t('Communications.authorizationStatus.not_applicable'),
+  };
   const [schedulingPreferencesResult, routingLocationResult, schedulingEmployeesResult] =
     client && canReadSchedule
       ? await Promise.all([
@@ -392,8 +444,102 @@ export default async function ClientDetailPage({
               </Link>
             ) : null}
             <SectionLink href="#visits">{t('Clients.detail.visitsTab')}</SectionLink>
+            {canReadCommunications ? (
+              <Link
+                className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
+                href={`/clients/${client.id}/communications`}
+              >
+                {t('Clients.detail.communicationsTab')}
+              </Link>
+            ) : null}
             <SectionLink href="#timeline">{t('Clients.detail.timelineTab')}</SectionLink>
           </nav>
+
+          {canReadCommunications ? (
+            <section className="grid gap-3 rounded-lg border bg-white p-4 sm:grid-cols-[1fr_auto]">
+              <div className="grid gap-2">
+                <div>
+                  <h2 className="font-semibold">{t('Clients.detail.communicationsSummary')}</h2>
+                  <p className="text-sm text-slate-600">
+                    {t('Clients.detail.communicationsSummaryDescription')}
+                  </p>
+                </div>
+                <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+                  {communicationsSummary?.preferredChannel ? (
+                    <div>
+                      <dt className="inline font-medium">
+                        {t('Communications.preferredChannel')}:{' '}
+                      </dt>
+                      <dd className="inline">
+                        {communicationChannelLabels[communicationsSummary.preferredChannel] ??
+                          communicationsSummary.preferredChannel}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {communicationsSummary?.preferredContactName ? (
+                    <div>
+                      <dt className="inline font-medium">
+                        {t('Communications.preferredContact')}:{' '}
+                      </dt>
+                      <dd className="inline">{communicationsSummary.preferredContactName}</dd>
+                    </div>
+                  ) : null}
+                  {communicationsSummary?.primaryAuthorizedContact ? (
+                    <div>
+                      <dt className="inline font-medium">
+                        {t('Communications.primaryAuthorizedContact')}:{' '}
+                      </dt>
+                      <dd className="inline">
+                        {communicationsSummary.primaryAuthorizedContact.name} ·{' '}
+                        {contactAuthorizationLabels[
+                          communicationsSummary.primaryAuthorizedContact.authorization
+                        ] ?? communicationsSummary.primaryAuthorizedContact.authorization}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {communicationsSummary?.mostRecentInteraction ? (
+                    <div>
+                      <dt className="inline font-medium">
+                        {t('Communications.mostRecentInteraction')}:{' '}
+                      </dt>
+                      <dd className="inline">
+                        {communicationsSummary.mostRecentInteraction.subject} ·{' '}
+                        {formatDateTime(
+                          communicationsSummary.mostRecentInteraction.occurredAt,
+                          locale,
+                        )}
+                      </dd>
+                    </div>
+                  ) : null}
+                </dl>
+                {canReadCommunicationTasks && communicationsSummary?.openFollowUps.length ? (
+                  <div className="grid gap-1">
+                    <p className="text-sm font-medium">{t('Communications.openFollowUps')}</p>
+                    <ul className="grid gap-1 text-sm">
+                      {communicationsSummary.openFollowUps.map((task) => (
+                        <li key={task.id}>
+                          <Link
+                            className="text-blue-900 underline"
+                            href={`/operations/tasks/${task.id}`}
+                          >
+                            {task.title}
+                          </Link>
+                          {' · '}
+                          {operationTaskStatusLabels[task.status] ?? task.status}
+                          {task.dueAt ? ` · ${formatDateTime(task.dueAt, locale)}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+              <Button asChild variant="secondary">
+                <Link href={`/clients/${client.id}/communications`}>
+                  {t('Clients.detail.openCommunications')}
+                </Link>
+              </Button>
+            </section>
+          ) : null}
 
           {canReadDocuments ? (
             <section
