@@ -28,7 +28,7 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
   BillingApplicationService,
@@ -299,7 +299,11 @@ export class BillingController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiProduces('application/pdf')
   @ApiOkResponse({ schema: { type: 'string', format: 'binary' } })
-  async invoicePdf(@Req() request: ApiRequest, @Param('id') id: string, @Res() response: Response) {
+  async invoicePdf(
+    @Req() request: ApiRequest,
+    @Param('id') id: string,
+    @Res() response: FastifyReply,
+  ) {
     const file = await this.billing.getInvoicePdf(this.principal(request), parseId(id));
     this.sendPdf(response, file.fileName, file.bytes);
   }
@@ -332,7 +336,7 @@ export class BillingController {
     @Req() request: ApiRequest,
     @Param('id') id: string,
     @Param('correctionId') correctionId: string,
-    @Res() response: Response,
+    @Res() response: FastifyReply,
   ) {
     const file = await this.billing.getCorrectionPdf(
       this.principal(request),
@@ -446,16 +450,14 @@ export class BillingController {
     return request.principal;
   }
 
-  private sendPdf(response: Response, fileName: string, bytes: Uint8Array): void {
+  private sendPdf(response: FastifyReply, fileName: string, bytes: Uint8Array): void {
     const safeName = encodeURIComponent(fileName).replaceAll("'", '%27');
     response
-      .status(HttpStatus.OK)
-      .set({
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename*=UTF-8''${safeName}`,
-        'Cache-Control': 'private, no-store',
-        'Content-Length': String(bytes.byteLength),
-      })
+      .code(HttpStatus.OK)
+      .type('application/pdf')
+      .header('Content-Disposition', `attachment; filename*=UTF-8''${safeName}`)
+      .header('Cache-Control', 'private, no-store')
+      .header('Content-Length', String(bytes.byteLength))
       .send(Buffer.from(bytes));
   }
 }

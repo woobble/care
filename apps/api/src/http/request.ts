@@ -1,12 +1,16 @@
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import type { RequestContext, UUID } from '@care/contracts';
 import type { AuthorizationPrincipal } from '@care/permissions';
 
-export interface ApiRequest extends Request {
-  context: RequestContext;
-  identity?: { userId: string; issuer: string; subject: string };
-  principal?: AuthorizationPrincipal;
+declare module 'fastify' {
+  interface FastifyRequest {
+    context: RequestContext;
+    identity?: { userId: string; issuer: string; subject: string };
+    principal?: AuthorizationPrincipal;
+  }
 }
+
+export interface ApiRequest extends FastifyRequest {}
 
 export function requestContext(request: ApiRequest): RequestContext {
   return {

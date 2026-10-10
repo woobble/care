@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { NestFactory } from '@nestjs/core';
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Client } from 'pg';
 import { describe, expect, test } from 'bun:test';
 import { SignJWT, exportJWK, generateKeyPair } from 'jose';
@@ -15,9 +16,7 @@ import type { AuthorizationPrincipal } from '@care/permissions';
 import { startCareTestDatabase } from '@care/testing';
 import { databaseSchema } from '../src/database/schema';
 import { AppModule } from '../src/app.module';
-import { RequestContextMiddleware } from '../src/http/request-context.middleware';
-import type { ApiRequest } from '../src/http/request';
-import type { NextFunction, Request, Response } from 'express';
+import { configureApiHttp, createApiFastifyAdapter } from '../src/http/fastify';
 
 describe('benefits PostgreSQL integration', () => {
   test('enforces eligibility and tenant scope while recording split allocations as immutable history', async () => {
@@ -75,7 +74,7 @@ describe('benefits PostgreSQL integration', () => {
     publicJwk.alg = 'RS256';
     publicJwk.use = 'sig';
     const oidc = await startOidcServer(publicJwk);
-    let api: Awaited<ReturnType<typeof NestFactory.create>> | undefined;
+    let api: NestFastifyApplication | undefined;
 
     try {
       await owner.connect();
@@ -519,11 +518,10 @@ describe('benefits PostgreSQL integration', () => {
       process.env.S3_SECRET_KEY = 'care-test-secret';
       process.env.S3_FORCE_PATH_STYLE = 'true';
 
-      api = await NestFactory.create(AppModule, { logger: false });
-      const contextMiddleware = new RequestContextMiddleware();
-      api.use((request: Request, response: Response, next: NextFunction) =>
-        contextMiddleware.use(request as ApiRequest, response, next),
-      );
+      api = await NestFactory.create<NestFastifyApplication>(AppModule, createApiFastifyAdapter(), {
+        logger: false,
+      });
+      await configureApiHttp(api, 'http://localhost:3000');
       await api.listen(0, '127.0.0.1');
       const address = api.getHttpServer().address() as AddressInfo;
       const baseUrl = `http://127.0.0.1:${address.port}`;

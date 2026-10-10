@@ -14,7 +14,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor } from '@nestjs/platform-fastify/multipart';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -28,7 +28,7 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { FastifyReply } from 'fastify';
 import { createHash } from 'node:crypto';
 import {
   DocumentAccessDeniedError,
@@ -172,7 +172,11 @@ export class DocumentsController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiProduces('application/pdf')
   @ApiOkResponse({ schema: { type: 'string', format: 'binary' } })
-  async download(@Req() request: ApiRequest, @Param('id') id: string, @Res() response: Response) {
+  async download(
+    @Req() request: ApiRequest,
+    @Param('id') id: string,
+    @Res() response: FastifyReply,
+  ) {
     const principal = this.principal(request);
     const artifact = await this.documents.artifactForSourceAuthorization(principal, parseId(id));
     await this.requireSourceAccess(principal, artifact);
@@ -274,7 +278,7 @@ export class DocumentsController {
   async exportInvoices(
     @Req() request: ApiRequest,
     @Query() query: Record<string, string | undefined>,
-    @Res() response: Response,
+    @Res() response: FastifyReply,
   ) {
     const parsed = billingExportQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException();
@@ -325,7 +329,7 @@ export class DocumentsController {
   async exportInvoiceLines(
     @Req() request: ApiRequest,
     @Query() query: Record<string, string | undefined>,
-    @Res() response: Response,
+    @Res() response: FastifyReply,
   ) {
     const parsed = billingExportQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException();
@@ -373,7 +377,7 @@ export class DocumentsController {
   async exportReceivables(
     @Req() request: ApiRequest,
     @Query() query: Record<string, string | undefined>,
-    @Res() response: Response,
+    @Res() response: FastifyReply,
   ) {
     const parsed = billingExportQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException();
@@ -428,7 +432,7 @@ export class DocumentsController {
   async exportBenefitAllocations(
     @Req() request: ApiRequest,
     @Query() query: Record<string, string | undefined>,
-    @Res() response: Response,
+    @Res() response: FastifyReply,
   ) {
     const parsed = benefitAllocationExportQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException();
@@ -488,7 +492,7 @@ export class DocumentsController {
   @ApiOperation({ summary: 'Render a source-authorized PDF preview without storing an artifact' })
   @ApiBody({ schema: { type: 'object', additionalProperties: true } })
   @ApiProduces('application/pdf')
-  async preview(@Req() request: ApiRequest, @Body() body: unknown, @Res() response: Response) {
+  async preview(@Req() request: ApiRequest, @Body() body: unknown, @Res() response: FastifyReply) {
     const parsed = documentGenerationCommandSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException();
     const result = await this.generateCommand(this.principal(request), parsed.data, request, true);
@@ -1300,23 +1304,20 @@ function auditContext(request: ApiRequest) {
   };
 }
 
-function sendPdf(response: Response, fileName: string, bytes: Uint8Array): void {
+function sendPdf(response: FastifyReply, fileName: string, bytes: Uint8Array): void {
   response
-    .status(200)
+    .code(200)
     .type('application/pdf')
-    .setHeader(
-      'Content-Disposition',
-      `attachment; filename="${fileName.replace(/[\r\n"\\]/g, '_')}"`,
-    )
-    .setHeader('Cache-Control', 'private, no-store')
+    .header('Content-Disposition', `attachment; filename="${fileName.replace(/[\r\n"\\]/g, '_')}"`)
+    .header('Cache-Control', 'private, no-store')
     .send(Buffer.from(bytes));
 }
 
-function sendCsv(response: Response, fileName: string, csv: string): void {
+function sendCsv(response: FastifyReply, fileName: string, csv: string): void {
   response
-    .status(200)
-    .setHeader('Content-Type', 'text/csv; charset=utf-8')
-    .setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
-    .setHeader('Cache-Control', 'private, no-store')
+    .code(200)
+    .header('Content-Type', 'text/csv; charset=utf-8')
+    .header('Content-Disposition', `attachment; filename="${fileName}"`)
+    .header('Cache-Control', 'private, no-store')
     .send(Buffer.from(csv, 'utf8'));
 }

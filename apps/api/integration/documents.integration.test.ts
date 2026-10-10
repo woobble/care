@@ -19,7 +19,7 @@ import { startCareTestDatabase } from '@care/testing';
 import { databaseSchema } from '../src/database/schema';
 import { DocumentsController } from '../src/presentation/http/documents.controller';
 import type { ApiRequest } from '../src/http/request';
-import type { Response } from 'express';
+import type { FastifyReply } from 'fastify';
 
 describe('documents PostgreSQL integration', () => {
   test('versions templates and stores, scopes, and verifies immutable document artifacts', async () => {
@@ -271,7 +271,7 @@ describe('documents PostgreSQL integration', () => {
           headers: {},
         };
       const response = {
-        status(status: number) {
+        code(status: number) {
           responseState.statusCode = status;
           return this;
         },
@@ -279,7 +279,7 @@ describe('documents PostgreSQL integration', () => {
           responseState.headers['Content-Type'] = value;
           return this;
         },
-        setHeader(name: string, value: string) {
+        header(name: string, value: string) {
           responseState.headers[name] = value;
           return this;
         },
@@ -287,7 +287,7 @@ describe('documents PostgreSQL integration', () => {
           responseState.body = value;
           return this;
         },
-      } as unknown as Response;
+      } as unknown as FastifyReply;
       await controller.download(apiRequest, firstArtifact.id, response);
       expect(responseState.statusCode).toBe(200);
       expect(responseState.headers['Content-Type']).toBe('application/pdf');
@@ -394,7 +394,7 @@ function responseCapture() {
     headers: {},
   };
   const response = {
-    status(statusCode: number) {
+    code(statusCode: number) {
       state.statusCode = statusCode;
       return this;
     },
@@ -402,7 +402,7 @@ function responseCapture() {
       state.headers['Content-Type'] = value;
       return this;
     },
-    setHeader(name: string, value: string) {
+    header(name: string, value: string) {
       state.headers[name] = value;
       return this;
     },
@@ -410,6 +410,6 @@ function responseCapture() {
       state.body = body;
       return this;
     },
-  } as unknown as Response;
+  } as unknown as FastifyReply;
   return { state, response };
 }

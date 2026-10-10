@@ -942,9 +942,9 @@ function parseId(value: string): string {
 }
 
 function auditContext(request: ApiRequest): { ip?: string; userAgent?: string } {
-  const userAgent = request.get('user-agent');
+  const userAgent = request.headers['user-agent'];
   return {
     ...(request.ip ? { ip: request.ip } : {}),
-    ...(userAgent ? { userAgent } : {}),
+    ...(typeof userAgent === 'string' ? { userAgent } : {}),
   };
 }

@@ -1,6 +1,6 @@
 import { Catch, HttpException, Injectable } from '@nestjs/common';
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
-import type { Response } from 'express';
+import type { FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import type { ProblemDetails } from '@care/contracts';
 import { AuthorizationDeniedError } from '@care/permissions';
@@ -241,9 +241,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
     const request = http.getRequest<ApiRequest>();
-    const response = http.getResponse<Response>();
+    const response = http.getResponse<FastifyReply>();
     const problem = problemFor(exception, request.context?.requestId ?? request.id ?? 'unknown');
-    response.status(problem.status).type('application/problem+json').json(problem);
+    response.code(problem.status).type('application/problem+json').send(problem);
   }
 }
 

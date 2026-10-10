@@ -43,13 +43,15 @@
     "@care/services": "workspace:*",
     "@care/storage": "workspace:*",
     "@care/visit-execution": "workspace:*",
+    "@fastify/helmet": "^13.1.2",
+    "@fastify/multipart": "^10.1.3",
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",
-    "@nestjs/platform-express": "^12.1.2",
+    "@nestjs/platform-fastify": "^12.1.2",
     "@nestjs/swagger": "^12.0.2",
     "dotenv": "^18.0.6",
     "drizzle-orm": "^0.45.4",
-    "helmet": "^8.3.0",
+    "fastify": "^5.12.5",
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
@@ -58,7 +60,6 @@
   },
   "devDependencies": {
     "@care/testing": "workspace:*",
-    "@types/express": "^5.0.6",
     "jose": "^6.2.12"
   }
 }

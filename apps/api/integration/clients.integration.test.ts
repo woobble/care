@@ -2,8 +2,8 @@ import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { v7 as uuidv7 } from 'uuid';
-import type { NextFunction, Request, Response } from 'express';
 import { NestFactory } from '@nestjs/core';
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { describe, expect, test } from 'bun:test';
 import { SignJWT, exportJWK, generateKeyPair } from 'jose';
 import { Client } from 'pg';
@@ -12,8 +12,7 @@ import { createDatabase } from '@care/database';
 import { DrizzleOutboxRepository, platformSchema } from '@care/platform';
 import { PERMISSIONS } from '@care/permissions';
 import { AppModule } from '../src/app.module';
-import { RequestContextMiddleware } from '../src/http/request-context.middleware';
-import type { ApiRequest } from '../src/http/request';
+import { configureApiHttp, createApiFastifyAdapter } from '../src/http/fastify';
 
 const UUID_V4_COMPATIBILITY_ID = '00000000-0000-4000-8000-000000000001';
 
@@ -48,7 +47,7 @@ describe('clients API', () => {
     const otherOrganizationId = uuidv7();
     const otherFacilityId = uuidv7();
     const crossTenantClientId = uuidv7();
-    let app: Awaited<ReturnType<typeof NestFactory.create>> | undefined;
+    let app: NestFastifyApplication | undefined;
 
     process.env.NODE_ENV = 'test';
     process.env.DATABASE_URL = database.appUrl;
@@ -310,11 +309,10 @@ describe('clients API', () => {
       await appRole.query('COMMIT');
       expect((await appRole.query('SELECT id FROM identity.tenant_memberships')).rowCount).toBe(0);
 
-      app = await NestFactory.create(AppModule, { logger: false });
-      const contextMiddleware = new RequestContextMiddleware();
-      app.use((request: Request, response: Response, next: NextFunction) =>
-        contextMiddleware.use(request as ApiRequest, response, next),
-      );
+      app = await NestFactory.create<NestFastifyApplication>(AppModule, createApiFastifyAdapter(), {
+        logger: false,
+      });
+      await configureApiHttp(app, 'http://localhost:3000');
       await app.listen(0, '127.0.0.1');
       const address = app.getHttpServer().address() as AddressInfo;
       const baseUrl = `http://127.0.0.1:${address.port}`;

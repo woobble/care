@@ -27,7 +27,7 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type {
   BillingClaimsApplicationService,
@@ -318,7 +318,7 @@ export class ClaimsController {
     @Req() request: ApiRequest,
     @Param('id') id: string,
     @Param('documentId') documentId: string,
-    @Res() response: Response,
+    @Res() response: FastifyReply,
   ) {
     const file = await this.claims.downloadPackageDocument(
       principal(request),
@@ -366,15 +366,13 @@ function auditContext(request: ApiRequest) {
   };
 }
 
-function sendPdf(response: Response, fileName: string, bytes: Uint8Array): void {
+function sendPdf(response: FastifyReply, fileName: string, bytes: Uint8Array): void {
   const safeName = encodeURIComponent(fileName).replaceAll("'", '%27');
   response
-    .status(HttpStatus.OK)
-    .set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename*=UTF-8''${safeName}`,
-      'Cache-Control': 'private, no-store',
-      'Content-Length': String(bytes.byteLength),
-    })
+    .code(HttpStatus.OK)
+    .type('application/pdf')
+    .header('Content-Disposition', `attachment; filename*=UTF-8''${safeName}`)
+    .header('Cache-Control', 'private, no-store')
+    .header('Content-Length', String(bytes.byteLength))
     .send(Buffer.from(bytes));
 }
