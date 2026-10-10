@@ -26,7 +26,7 @@ export default async function OfficeLayout({ children }: Readonly<{ children: Re
           <Link className="font-semibold text-blue-900" href="/clients">
             Care Platform
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {hasPermission(permissions, 'service.read') ? (
               <Button asChild variant="secondary" size="sm">
                 <Link href="/services">{t('services')}</Link>
@@ -40,6 +40,11 @@ export default async function OfficeLayout({ children }: Readonly<{ children: Re
             {hasPermission(permissions, 'operations.read') ? (
               <Button asChild variant="secondary" size="sm">
                 <Link href="/operations">{t('operations')}</Link>
+              </Button>
+            ) : null}
+            {hasPermission(permissions, 'onboarding.read') ? (
+              <Button asChild variant="secondary" size="sm">
+                <Link href="/admissions">{t('admissions')}</Link>
               </Button>
             ) : null}
             {hasPermission(permissions, 'communications.read') &&

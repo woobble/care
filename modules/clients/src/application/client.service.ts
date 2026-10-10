@@ -147,6 +147,18 @@ export class ClientApplicationService {
     context: RequestContext,
     auditContext: { ip?: string; userAgent?: string },
   ): Promise<ClientSnapshot> {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+      this.createWithinTransaction(transaction, principal, data, context, auditContext),
+    );
+  }
+
+  async createWithinTransaction(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    data: CreateClientInput,
+    context: RequestContext,
+    auditContext: { ip?: string; userAgent?: string },
+  ): Promise<ClientSnapshot> {
     const now = new Date();
     if (data.primaryAddress) validateClientAddress({ ...data.primaryAddress, isPrimary: true });
     const client = Client.pending({
@@ -168,18 +180,61 @@ export class ClientApplicationService {
       updatedAt: now,
     });
 
-    await this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      await this.validateProviderContext(transaction, principal.tenantId, data);
-      assertCan(principal, {
-        action: 'client.create',
-        resource: {
-          tenantId: principal.tenantId,
-          organizationId: data.organizationId,
-          facilityId: data.primaryFacilityId,
-        },
-      });
-      const snapshot = client.snapshot;
-      await this.clients.insert(transaction, snapshot);
+    await this.validateProviderContext(transaction, principal.tenantId, data);
+    assertCan(principal, {
+      action: 'client.create',
+      resource: {
+        tenantId: principal.tenantId,
+        organizationId: data.organizationId,
+        facilityId: data.primaryFacilityId,
+      },
+    });
+    const snapshot = client.snapshot;
+    await this.clients.insert(transaction, snapshot);
+    await appendClientChange({
+      transaction,
+      audit: this.audit,
+      outbox: this.outbox,
+      principal,
+      context,
+      auditContext,
+      clientId: snapshot.id,
+      occurredAt: now,
+      action: 'client.created',
+      metadata: {
+        changedFields: [
+          'firstName',
+          'lastName',
+          'preferredName',
+          'dateOfBirth',
+          'dateOfDeath',
+          'gender',
+          'salutation',
+          'email',
+          'phone',
+          'mobile',
+          'organizationId',
+          'primaryFacilityId',
+        ],
+      },
+      event: createDomainEvent({
+        type: 'client.created',
+        tenantId: principal.tenantId,
+        aggregateType: 'client',
+        aggregateId: snapshot.id,
+        actor: { type: 'user', id: principal.userId },
+        correlationId: context.correlationId,
+        payload: { clientId: snapshot.id },
+      }),
+    });
+    if (data.primaryAddress) {
+      const address = this.addressSnapshot(
+        principal.tenantId,
+        snapshot.id,
+        { ...data.primaryAddress, isPrimary: true },
+        now,
+      );
+      await this.masterData.insertAddress(transaction, address);
       await appendClientChange({
         transaction,
         audit: this.audit,
@@ -189,64 +244,19 @@ export class ClientApplicationService {
         auditContext,
         clientId: snapshot.id,
         occurredAt: now,
-        action: 'client.created',
-        metadata: {
-          changedFields: [
-            'firstName',
-            'lastName',
-            'preferredName',
-            'dateOfBirth',
-            'dateOfDeath',
-            'gender',
-            'salutation',
-            'email',
-            'phone',
-            'mobile',
-            'organizationId',
-            'primaryFacilityId',
-          ],
-        },
+        action: 'client.address_added',
+        metadata: { addressId: address.id, isPrimary: true },
         event: createDomainEvent({
-          type: 'client.created',
+          type: 'client.address_changed',
           tenantId: principal.tenantId,
           aggregateType: 'client',
           aggregateId: snapshot.id,
           actor: { type: 'user', id: principal.userId },
           correlationId: context.correlationId,
-          payload: { clientId: snapshot.id },
+          payload: { clientId: snapshot.id, addressId: address.id, operation: 'added' },
         }),
       });
-      if (data.primaryAddress) {
-        const address = this.addressSnapshot(
-          principal.tenantId,
-          snapshot.id,
-          { ...data.primaryAddress, isPrimary: true },
-          now,
-        );
-        await this.masterData.insertAddress(transaction, address);
-        await appendClientChange({
-          transaction,
-          audit: this.audit,
-          outbox: this.outbox,
-          principal,
-          context,
-          auditContext,
-          clientId: snapshot.id,
-          occurredAt: now,
-          action: 'client.address_added',
-          metadata: { addressId: address.id, isPrimary: true },
-          event: createDomainEvent({
-            type: 'client.address_changed',
-            tenantId: principal.tenantId,
-            aggregateType: 'client',
-            aggregateId: snapshot.id,
-            actor: { type: 'user', id: principal.userId },
-            correlationId: context.correlationId,
-            payload: { clientId: snapshot.id, addressId: address.id, operation: 'added' },
-          }),
-        });
-      }
-    });
+    }
     return client.snapshot;
   }
 
@@ -388,7 +398,44 @@ export class ClientApplicationService {
     context: RequestContext,
     auditContext: { ip?: string; userAgent?: string },
   ): Promise<ClientSnapshot> {
-    return this.changeStatus(principal, id, 'activate', context, auditContext);
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+      this.activateWithinTransaction(transaction, principal, id, context, auditContext),
+    );
+  }
+
+  async activateWithinTransaction(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    id: string,
+    context: RequestContext,
+    auditContext: { ip?: string; userAgent?: string },
+  ): Promise<ClientSnapshot> {
+    const client = await this.requireClient(transaction, principal, id, 'client.update', true);
+    client.activate();
+    const snapshot = client.snapshot;
+    await this.clients.update(transaction, snapshot);
+    await appendClientChange({
+      transaction,
+      audit: this.audit,
+      outbox: this.outbox,
+      principal,
+      context,
+      auditContext,
+      clientId: id,
+      occurredAt: snapshot.updatedAt,
+      action: 'client.activated',
+      metadata: { changedFields: ['status'] },
+      event: createDomainEvent({
+        type: 'client.activated',
+        tenantId: principal.tenantId,
+        aggregateType: 'client',
+        aggregateId: id,
+        actor: { type: 'user', id: principal.userId },
+        correlationId: context.correlationId,
+        payload: { clientId: id },
+      }),
+    });
+    return snapshot;
   }
 
   async archive(
@@ -397,37 +444,31 @@ export class ClientApplicationService {
     context: RequestContext,
     auditContext: { ip?: string; userAgent?: string },
   ): Promise<ClientSnapshot> {
-    return this.changeStatus(principal, id, 'archive', context, auditContext);
+    return this.changeStatus(principal, id, context, auditContext);
   }
 
   private async changeStatus(
     principal: AuthorizationPrincipal,
     id: string,
-    operation: 'activate' | 'archive',
     context: RequestContext,
     auditContext: { ip?: string; userAgent?: string },
   ): Promise<ClientSnapshot> {
-    const action = operation === 'archive' ? 'client.archive' : 'client.update';
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const client = await this.requireClient(transaction, principal, id, action, true);
-      if (operation === 'activate') client.activate();
-      else {
-        client.archive();
-        if (await this.serviceAgreements?.hasActiveForClient(transaction, principal.tenantId, id)) {
-          throw new ClientHasActiveServiceAgreementsError();
-        }
-        if (await this.scheduling?.hasFutureVisitsForClient(transaction, principal.tenantId, id)) {
-          throw new FutureVisitsExistError();
-        }
-        if (
-          await this.execution?.hasInProgressExecutionForClient(transaction, principal.tenantId, id)
-        ) {
-          throw new ClientExecutionInProgressError();
-        }
+      const client = await this.requireClient(transaction, principal, id, 'client.archive', true);
+      client.archive();
+      if (await this.serviceAgreements?.hasActiveForClient(transaction, principal.tenantId, id)) {
+        throw new ClientHasActiveServiceAgreementsError();
+      }
+      if (await this.scheduling?.hasFutureVisitsForClient(transaction, principal.tenantId, id)) {
+        throw new FutureVisitsExistError();
+      }
+      if (
+        await this.execution?.hasInProgressExecutionForClient(transaction, principal.tenantId, id)
+      ) {
+        throw new ClientExecutionInProgressError();
       }
       const snapshot = client.snapshot;
       await this.clients.update(transaction, snapshot);
-      const eventType = operation === 'activate' ? 'client.activated' : 'client.archived';
       await appendClientChange({
         transaction,
         audit: this.audit,
@@ -437,10 +478,10 @@ export class ClientApplicationService {
         auditContext,
         clientId: id,
         occurredAt: snapshot.updatedAt,
-        action: eventType,
+        action: 'client.archived',
         metadata: { changedFields: ['status'] },
         event: createDomainEvent({
-          type: eventType,
+          type: 'client.archived',
           tenantId: principal.tenantId,
           aggregateType: 'client',
           aggregateId: id,

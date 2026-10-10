@@ -26,6 +26,7 @@ type SearchParams = Promise<{
   view?: string;
   page?: string;
   clientId?: string;
+  admissionCaseId?: string;
   employeeId?: string;
   organizationId?: string;
   facilityId?: string;
@@ -47,6 +48,29 @@ type SearchParams = Promise<{
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const statusValues = ['planned', 'confirmed', 'cancelled'] as const;
 
+type AdmissionPlanningContext = {
+  id: string;
+  organizationId: string;
+  facilityId: string | null;
+  clientId: string | null;
+  version: number;
+  stage: string;
+  firstName: string;
+  lastName: string;
+  requestedServices: string[];
+  serviceLocation: string | null;
+  assessment: {
+    requestedServices: string[];
+    preferredDays: string[];
+    visitsPerWeek: number | null;
+    preferredTimeStart: string | null;
+    preferredTimeEnd: string | null;
+    accessibility: string;
+    preferences: string;
+    organizationalNotes: string;
+  } | null;
+};
+
 export default async function PlanningPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
@@ -55,10 +79,12 @@ export default async function PlanningPage({
   const view = query.view === 'day' ? 'day' : 'week';
   const selectedDate = validDate(query.date) ?? todayInBerlin();
   const page = positivePage(query.page);
-  const clientId = validUuid(query.clientId);
+  const requestedClientId = validUuid(query.clientId);
   const employeeId = validUuid(query.employeeId);
-  const organizationId = validUuid(query.organizationId);
-  const facilityId = validUuid(query.facilityId);
+  const requestedOrganizationId = validUuid(query.organizationId);
+  const requestedFacilityId = validUuid(query.facilityId);
+  const requestedAdmissionCaseId = query.admissionCaseId?.trim();
+  const admissionCaseId = validUuid(requestedAdmissionCaseId);
   const teamId = validUuid(query.teamId);
   const serviceDefinitionId = validUuid(query.serviceDefinitionId);
   const estimateClientId = validUuid(query.estimateClientId);
@@ -73,7 +99,41 @@ export default async function PlanningPage({
 
   const api = await getApiClient();
   const header = await getTenantHeader();
+  const permissions = await getPermissionGrants(api);
+  const admissionResult =
+    admissionCaseId && hasPermission(permissions, 'onboarding.read')
+      ? await api.GET('/api/v1/onboarding/cases/{id}', {
+          params: { path: { id: admissionCaseId }, header },
+        })
+      : null;
+  const admission = admissionResult?.data as unknown as AdmissionPlanningContext | undefined;
+  const admissionHandoffRequested = requestedAdmissionCaseId !== undefined;
+  const admissionCaseVisible = Boolean(
+    admission &&
+    admission.clientId &&
+    hasPermission(permissions, 'onboarding.manage') &&
+    ['preparation', 'ready_for_admission', 'admitted'].includes(admission.stage) &&
+    !['declined', 'withdrawn'].includes(admission.stage) &&
+    (!requestedClientId || requestedClientId === admission.clientId),
+  );
+  const onboardingT = await getTranslations('Onboarding');
   const get = api.GET;
+  const linkedClientResult =
+    admissionCaseVisible && hasPermission(permissions, 'client.read')
+      ? await get('/api/v1/clients/{id}', {
+          params: { path: { id: admission!.clientId! }, header },
+        })
+      : null;
+  const admissionContextUsable = Boolean(
+    admissionCaseVisible && linkedClientResult?.data?.status === 'active',
+  );
+  const clientId = admissionContextUsable ? admission!.clientId! : requestedClientId;
+  const organizationId = admissionContextUsable
+    ? admission!.organizationId
+    : requestedOrganizationId;
+  const facilityId = admissionContextUsable
+    ? (admission!.facilityId ?? undefined)
+    : requestedFacilityId;
   const [
     visitResult,
     clientResult,
@@ -130,7 +190,6 @@ export default async function PlanningPage({
     }),
   ]);
 
-  const permissions = await getPermissionGrants(api);
   const canCreate = hasPermission(permissions, 'schedule.create');
   const canAssign = hasPermission(permissions, 'schedule.assign');
   const canEstimate = hasPermission(permissions, 'benefits.read');
@@ -184,15 +243,75 @@ export default async function PlanningPage({
     visitsByDate.set(localDate, [...(visitsByDate.get(localDate) ?? []), visit]);
   }
   const days = datesBetween(period.start, period.endExclusive);
-  const clients = clientResult.data?.items ?? [];
+  const clients = [...(clientResult.data?.items ?? [])];
+  if (
+    linkedClientResult?.data &&
+    !clients.some((client) => client.id === linkedClientResult.data!.id)
+  ) {
+    clients.push({
+      ...linkedClientResult.data,
+      organizationName: null,
+      facilityName: null,
+      currentPflegegrad: null,
+    });
+  }
   const employees = employeeResult.data?.items ?? [];
   const organizations = organizationResult.data ?? [];
   const facilities = facilityResult.data ?? [];
   const teams = teamResult.data ?? [];
   const services = serviceResult.data?.items ?? [];
-  const dayVisits = visitsByDate.get(selectedDate) ?? [];
-  const employeeVisitGroups = new Map<string, typeof dayVisits>();
-  for (const visit of dayVisits) {
+  const requestedServiceNames = admission
+    ? admission.assessment?.requestedServices.length
+      ? admission.assessment.requestedServices
+      : admission.requestedServices
+    : [];
+  const preselectedServiceIds = services
+    .filter((service) =>
+      requestedServiceNames.some((requested) => {
+        const value = requested.trim().toLocaleLowerCase();
+        return [service.code, service.name].some(
+          (candidate) => candidate.trim().toLocaleLowerCase() === value,
+        );
+      }),
+    )
+    .map((service) => service.id);
+  const weekdayLabels: Record<string, string> = {
+    monday: t('Employees.detail.weekdays.monday'),
+    tuesday: t('Employees.detail.weekdays.tuesday'),
+    wednesday: t('Employees.detail.weekdays.wednesday'),
+    thursday: t('Employees.detail.weekdays.thursday'),
+    friday: t('Employees.detail.weekdays.friday'),
+    saturday: t('Employees.detail.weekdays.saturday'),
+    sunday: t('Employees.detail.weekdays.sunday'),
+  };
+  const planningNote = admission
+    ? [
+        admission.serviceLocation
+          ? `${onboardingT('serviceLocation')}: ${admission.serviceLocation}`
+          : '',
+        admission.assessment?.accessibility
+          ? `${onboardingT('accessibility')}: ${admission.assessment.accessibility}`
+          : '',
+        admission.assessment?.preferences
+          ? `${onboardingT('preferences')}: ${admission.assessment.preferences}`
+          : '',
+        admission.assessment?.preferredDays.length
+          ? `${onboardingT('preferredDays')}: ${admission.assessment.preferredDays.map((day) => weekdayLabels[day] ?? day).join(', ')}`
+          : '',
+        admission.assessment?.visitsPerWeek
+          ? `${onboardingT('visitsPerWeek')}: ${admission.assessment.visitsPerWeek}`
+          : '',
+        admission.assessment?.organizationalNotes
+          ? `${onboardingT('organizationalNotes')}: ${admission.assessment.organizationalNotes}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+        .slice(0, 2000)
+    : '';
+  const selectedDayVisits = visitsByDate.get(selectedDate) ?? [];
+  const employeeVisitGroups = new Map<string, typeof selectedDayVisits>();
+  for (const visit of selectedDayVisits) {
     for (const assignment of visit.assignments) {
       const group = employeeVisitGroups.get(assignment.employeeId) ?? [];
       group.push(visit);
@@ -276,6 +395,11 @@ export default async function PlanningPage({
       {error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
           {t(errorMessageKey(error))}
+        </p>
+      ) : null}
+      {admissionHandoffRequested && !admissionContextUsable ? (
+        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+          {onboardingT('schedulingContextUnavailable')}
         </p>
       ) : null}
       {query.updated ? (
@@ -710,7 +834,9 @@ export default async function PlanningPage({
                       {tour.stops.length ? (
                         <ol className="grid gap-2">
                           {tour.stops.map((stop) => {
-                            const visit = dayVisits.find((item) => item.id === stop.visitId);
+                            const visit = selectedDayVisits.find(
+                              (item) => item.id === stop.visitId,
+                            );
                             return (
                               <li key={stop.id} className="rounded-md border p-3">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -802,7 +928,7 @@ export default async function PlanningPage({
                             >
                               {tour.stops.map((candidate) => (
                                 <option key={candidate.visitId} value={candidate.visitId}>
-                                  {dayVisits.find((item) => item.id === candidate.visitId)
+                                  {selectedDayVisits.find((item) => item.id === candidate.visitId)
                                     ?.clientDisplayName ?? candidate.visitId}
                                 </option>
                               ))}
@@ -863,7 +989,7 @@ export default async function PlanningPage({
         </section>
       ) : null}
 
-      {canCreate ? (
+      {canCreate && (!admissionHandoffRequested || admissionContextUsable) ? (
         <section
           aria-labelledby="create-title"
           className="grid gap-3 rounded-lg border bg-white p-5"
@@ -871,9 +997,37 @@ export default async function PlanningPage({
           <h2 id="create-title" className="text-xl font-semibold">
             {t('Planning.createTitle')}
           </h2>
+          {admissionContextUsable && admission ? (
+            <div className="grid gap-2 rounded-md bg-slate-50 p-3 text-sm">
+              <Link className="w-fit text-blue-800 underline" href={`/admissions/${admission.id}`}>
+                {onboardingT('backToAdmission')}: {admission.firstName} {admission.lastName}
+              </Link>
+              {requestedServiceNames.length ? (
+                <p>
+                  {onboardingT('requestedServices')}: {requestedServiceNames.join(', ')}
+                  {!preselectedServiceIds.length
+                    ? ` · ${onboardingT('selectMatchingServices')}`
+                    : ''}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {clients.length && services.length ? (
             <form action={createVisitAction} className="grid gap-4 md:grid-cols-2">
-              <SelectField label={t('Planning.client')} name="clientId" required>
+              {admissionContextUsable && admission ? (
+                <>
+                  <input type="hidden" name="admissionCaseId" value={admission.id} />
+                  <input type="hidden" name="expectedAdmissionVersion" value={admission.version} />
+                </>
+              ) : null}
+              <SelectField
+                label={t('Planning.client')}
+                name="clientId"
+                required
+                defaultValue={
+                  admissionContextUsable ? (admission?.clientId ?? '') : (clientId ?? '')
+                }
+              >
                 <option value="">{t('Planning.selectClient')}</option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
@@ -892,14 +1046,22 @@ export default async function PlanningPage({
                 label={t('Planning.start')}
                 name="localStartTime"
                 type="time"
-                defaultValue="08:00"
+                defaultValue={
+                  admissionContextUsable && admission?.assessment?.preferredTimeStart
+                    ? validTime(admission.assessment.preferredTimeStart, '08:00')
+                    : '08:00'
+                }
                 required
               />
               <Field
                 label={t('Planning.end')}
                 name="localEndTime"
                 type="time"
-                defaultValue="09:00"
+                defaultValue={
+                  admissionContextUsable && admission?.assessment?.preferredTimeEnd
+                    ? validTime(admission.assessment.preferredTimeEnd, '09:00')
+                    : '09:00'
+                }
                 required
               />
               <SelectField
@@ -907,6 +1069,7 @@ export default async function PlanningPage({
                 name="serviceDefinitionIds"
                 multiple
                 required
+                defaultValue={admissionContextUsable ? preselectedServiceIds : []}
               >
                 {services.map((service) => (
                   <option key={service.id} value={service.id}>
@@ -930,6 +1093,7 @@ export default async function PlanningPage({
                   id="visit-note"
                   name="note"
                   maxLength={2000}
+                  defaultValue={admissionContextUsable ? planningNote : ''}
                   className="min-h-20 rounded-md border px-3 py-2"
                 />
               </div>
@@ -989,7 +1153,7 @@ function SelectField({
 }: {
   label: string;
   name: string;
-  defaultValue?: string;
+  defaultValue?: string | string[];
   required?: boolean;
   multiple?: boolean;
   children: React.ReactNode;
@@ -1023,6 +1187,10 @@ function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
 
 function money(cents: number, locale: Locale): string {
   return formatCurrency(cents / 100, locale);
+}
+
+function validTime(value: string, fallback: string): string {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : fallback;
 }
 
 function validDate(value: string | undefined): string | undefined {

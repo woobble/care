@@ -58,8 +58,17 @@ import { invoices } from '@care/billing';
 import { claims } from '@care/billing';
 import { clientBenefitEntitlements } from '@care/benefits';
 import { documentArtifacts } from '@care/documents';
-import { exceptionInteractions, exceptionOccurrences, taskActivity, tasks } from '@module/operations/schema';
-import { evidenceIssueCode, evidencePackageIssueCode, stableIssueId } from '@module/operations/domain/operations';
+import {
+  exceptionInteractions,
+  exceptionOccurrences,
+  taskActivity,
+  tasks,
+} from '@module/operations/schema';
+import {
+  evidenceIssueCode,
+  evidencePackageIssueCode,
+  stableIssueId,
+} from '@module/operations/domain/operations';
 
 type AuditContext = { ip?: string; userAgent?: string };
 type SourceType = NonNullable<(typeof tasks.$inferSelect)['sourceType']>;
@@ -74,6 +83,18 @@ type ReconciliationWindow = {
   until: Date | null;
   sourceEntityKeys?: Set<string>;
 };
+type OnboardingReadinessCase = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  organizationId: string;
+  facilityId: string | null;
+  clientId: string | null;
+  stage: string;
+  createdAt: Date;
+  nextFollowUpAt: Date | null;
+  blockerCount: number;
+};
 
 const MAX_STALE_EXCEPTION_RECONCILIATIONS = 20;
 
@@ -84,6 +105,15 @@ export interface OperationsSourceServices {
   benefits: Pick<BenefitsApplicationService, 'getWorklist' | 'listUnallocatedServices'>;
   billing: Pick<BillingApplicationService, 'listInvoices' | 'receivables'>;
   claims: Pick<BillingClaimsApplicationService, 'listClaims' | 'readiness'>;
+  onboarding?: {
+    operationsReadinessWorklist(
+      principal: AuthorizationPrincipal,
+    ): Promise<{ items: OnboardingReadinessCase[]; complete: boolean }>;
+    operationsIssueState(
+      principal: AuthorizationPrincipal,
+      caseId: string,
+    ): Promise<{ readinessBlocked: boolean; followUpOverdue: boolean }>;
+  };
 }
 
 export interface OperationsSourceReference {
@@ -130,7 +160,14 @@ export interface OperationsQuery {
 export interface OperationsWorkItem {
   id: string;
   kind: 'exception';
-  category: 'scheduling' | 'visits' | 'documentation' | 'benefits' | 'billing' | 'claims';
+  category:
+    | 'scheduling'
+    | 'visits'
+    | 'documentation'
+    | 'benefits'
+    | 'billing'
+    | 'claims'
+    | 'onboarding';
   sourceDomain: string;
   sourceEntityType: string;
   sourceEntityId: string;
@@ -170,12 +207,20 @@ export class OperationsApplicationService {
     const worklist = await this.listWorkItems(principal, { ...query, page: 1, pageSize: 1000 });
     const tasksSummary = await this.taskSummary(principal, query);
     const categoryCounts = Object.fromEntries(
-      (['scheduling', 'visits', 'documentation', 'benefits', 'billing', 'claims'] as const).map(
-        (category) => [
-          category,
-          worklist.items.filter((item) => item.category === category).length,
-        ],
-      ),
+      (
+        [
+          'scheduling',
+          'visits',
+          'documentation',
+          'benefits',
+          'billing',
+          'claims',
+          'onboarding',
+        ] as const
+      ).map((category) => [
+        category,
+        worklist.items.filter((item) => item.category === category).length,
+      ]),
     );
     const severityCounts = Object.fromEntries(
       (['info', 'warning', 'critical'] as const).map((severity) => [
@@ -215,6 +260,7 @@ export class OperationsApplicationService {
       invoicesForDocuments,
       receivables,
       claimsPage,
+      onboardingReadiness,
     ] = await Promise.all([
       canRead('schedule.read')
         ? this.sources.scheduling.getWorklist(principal, {
@@ -250,6 +296,9 @@ export class OperationsApplicationService {
         : null,
       canRead('claims.read')
         ? this.sources.claims.listClaims(principal, { page: 1, pageSize: 100 })
+        : null,
+      canRead('onboarding.read') && this.sources.onboarding
+        ? this.sources.onboarding.operationsReadinessWorklist(principal)
         : null,
     ]);
     const completeDomains = new Map<string, ReconciliationWindow>();
@@ -296,6 +345,9 @@ export class OperationsApplicationService {
     }
     if (claimsPage && !claimsPage.hasMore) {
       completeDomains.set('claims', { from: null, until: null });
+    }
+    if (onboardingReadiness?.complete) {
+      completeDomains.set('onboarding', { from: null, until: null });
     }
 
     const evidenceResources = evidence
@@ -554,6 +606,52 @@ export class OperationsApplicationService {
             descriptionCode: `operations.issues.claims.${issueCode}`,
           }),
         );
+      }
+    }
+    if (onboardingReadiness) {
+      truncated ||= !onboardingReadiness.complete;
+      for (const admission of onboardingReadiness.items) {
+        const isOverdue = Boolean(
+          admission.nextFollowUpAt && admission.nextFollowUpAt < observedAt,
+        );
+        if (admission.blockerCount > 0) {
+          items.push(
+            this.workItem({
+              sourceDomain: 'onboarding',
+              entityType: 'admission_case',
+              entityId: admission.id,
+              issueCode: 'admission_readiness_blocked',
+              category: 'onboarding',
+              severity: isOverdue ? 'critical' : 'warning',
+              organizationId: admission.organizationId,
+              facilityId: admission.facilityId,
+              clientId: admission.clientId,
+              clientName: `${admission.firstName} ${admission.lastName}`,
+              dueAt: admission.nextFollowUpAt?.toISOString() ?? null,
+              sourceAt: admission.createdAt,
+              descriptionCode: 'operations.issues.onboarding.readiness_blocked',
+            }),
+          );
+        }
+        if (isOverdue) {
+          items.push(
+            this.workItem({
+              sourceDomain: 'onboarding',
+              entityType: 'admission_case',
+              entityId: admission.id,
+              issueCode: 'admission_follow_up_overdue',
+              category: 'onboarding',
+              severity: 'critical',
+              organizationId: admission.organizationId,
+              facilityId: admission.facilityId,
+              clientId: admission.clientId,
+              clientName: `${admission.firstName} ${admission.lastName}`,
+              dueAt: admission.nextFollowUpAt!.toISOString(),
+              sourceAt: admission.nextFollowUpAt,
+              descriptionCode: 'operations.issues.onboarding.follow_up_overdue',
+            }),
+          );
+        }
       }
     }
 
@@ -1907,6 +2005,7 @@ export class OperationsApplicationService {
                 'scheduling',
                 'care_documentation',
                 'service_evidence',
+                'onboarding',
               ]),
             ),
           )
@@ -2023,6 +2122,29 @@ export class OperationsApplicationService {
         if (
           error instanceof AuthorizationDeniedError ||
           error instanceof ServiceEvidenceVisitRelationshipRequiredError
+        ) {
+          return null;
+        }
+        throw error;
+      }
+    }
+    if (
+      occurrence.sourceDomain === 'onboarding' &&
+      occurrence.sourceEntityType === 'admission_case'
+    ) {
+      if (!this.sources.onboarding) return null;
+      try {
+        const state = await this.sources.onboarding.operationsIssueState(
+          principal,
+          occurrence.sourceEntityId,
+        );
+        if (occurrence.issueCode === 'admission_readiness_blocked') return state.readinessBlocked;
+        if (occurrence.issueCode === 'admission_follow_up_overdue') return state.followUpOverdue;
+        return null;
+      } catch (error) {
+        if (
+          error instanceof AuthorizationDeniedError ||
+          (error instanceof Error && 'code' in error && error.code === 'ONBOARDING_CASE_NOT_FOUND')
         ) {
           return null;
         }
@@ -2667,6 +2789,8 @@ function exceptionReadPermission(sourceDomain: string, issueCode: string): Permi
       return issueCode === 'receivable_overdue' ? 'billing.payments.read' : 'billing.read';
     case 'claims':
       return 'claims.read';
+    case 'onboarding':
+      return 'onboarding.read';
     default:
       return null;
   }

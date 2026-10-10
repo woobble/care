@@ -232,7 +232,9 @@ export const exceptionOccurrences = operations.table(
     sourceEntityId: uuid('source_entity_id').notNull(),
     issueCode: text('issue_code').notNull(),
     category: text('category')
-      .$type<'scheduling' | 'visits' | 'documentation' | 'benefits' | 'billing' | 'claims'>()
+      .$type<
+        'scheduling' | 'visits' | 'documentation' | 'benefits' | 'billing' | 'claims' | 'onboarding'
+      >()
       .notNull(),
     severity: text('severity').$type<'info' | 'warning' | 'critical'>().notNull(),
     organizationId: uuid('organization_id'),
@@ -264,11 +266,11 @@ export const exceptionOccurrences = operations.table(
     check('operations_exception_occurrences_key_ck', sql`length(${table.issueKey}) = 64`),
     check(
       'operations_exception_occurrences_source_domain_ck',
-      sql`${table.sourceDomain} IN ('scheduling', 'care_documentation', 'service_evidence', 'benefits', 'billing', 'claims')`,
+      sql`${table.sourceDomain} IN ('scheduling', 'care_documentation', 'service_evidence', 'benefits', 'billing', 'claims', 'onboarding')`,
     ),
     check(
       'operations_exception_occurrences_category_ck',
-      sql`${table.category} IN ('scheduling', 'visits', 'documentation', 'benefits', 'billing', 'claims')`,
+      sql`${table.category} IN ('scheduling', 'visits', 'documentation', 'benefits', 'billing', 'claims', 'onboarding')`,
     ),
     check(
       'operations_exception_occurrences_severity_ck',

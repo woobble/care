@@ -10,6 +10,7 @@ const priorities = ['low', 'normal', 'high', 'urgent'] as const;
 const transitionActions = ['start', 'complete', 'reopen', 'cancel'] as const;
 
 export async function createTaskAction(formData: FormData): Promise<void> {
+  const admissionCaseId = optionalUuid(formData.get('admissionCaseId'));
   const organizationId = uuid(formData.get('organizationId'));
   const facilityId = optionalUuid(formData.get('facilityId'));
   const clientId = optionalUuid(formData.get('clientId'));
@@ -26,14 +27,36 @@ export async function createTaskAction(formData: FormData): Promise<void> {
     dueAt === undefined ||
     facilityId === undefined ||
     clientId === undefined ||
-    assignedEmployeeId === undefined
+    assignedEmployeeId === undefined ||
+    admissionCaseId === undefined
   ) {
     redirect('/operations/tasks?error=OPERATIONS_INVALID_INPUT');
   }
 
   const api = await getApiClient();
+  const header = await getTenantHeader();
+  if (admissionCaseId) {
+    const caseResult = await api.GET('/api/v1/onboarding/cases/{id}', {
+      params: { path: { id: admissionCaseId }, header },
+    });
+    const admission = caseResult.data as unknown as
+      | { organizationId: string; clientId: string | null; stage: string }
+      | undefined;
+    if (caseResult.error)
+      redirect(`/operations/tasks?error=${encodeURIComponent(caseResult.error.code)}`);
+    if (
+      !admission ||
+      ['declined', 'withdrawn'].includes(admission.stage) ||
+      admission.organizationId !== organizationId ||
+      (admission.clientId
+        ? Boolean(clientId && clientId !== admission.clientId)
+        : Boolean(clientId))
+    ) {
+      redirect(`/admissions/${admissionCaseId}?error=ONBOARDING_SOURCE_NOT_FOUND`);
+    }
+  }
   const { data, error } = await api.POST('/api/v1/operations/tasks', {
-    params: { header: await getTenantHeader() },
+    params: { header },
     body: {
       organizationId,
       title,
@@ -50,6 +73,18 @@ export async function createTaskAction(formData: FormData): Promise<void> {
   if (error || !data)
     redirect(`/operations/tasks?error=${error?.code ?? 'OPERATIONS_INVALID_INPUT'}`);
   revalidateOperations(data.id);
+  if (admissionCaseId) {
+    const { error: linkError } = await api.POST('/api/v1/onboarding/cases/{id}/tasks', {
+      params: { path: { id: admissionCaseId }, header },
+      body: { taskId: data.id },
+    });
+    revalidatePath(`/admissions/${admissionCaseId}`);
+    if (linkError)
+      redirect(
+        `/admissions/${admissionCaseId}?createdTaskId=${data.id}&error=${encodeURIComponent(linkError.code)}`,
+      );
+    redirect(`/admissions/${admissionCaseId}?updated=task_created`);
+  }
   redirect(`/operations/tasks/${data.id}?updated=created`);
 }
 

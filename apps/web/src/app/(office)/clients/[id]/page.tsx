@@ -218,6 +218,37 @@ export default async function ClientDetailPage({
         client.primaryFacilityId,
       )
     : false;
+  const canReadAdmissions = client
+    ? hasClientPermission(
+        permissions,
+        'onboarding.read',
+        tenantId,
+        client.organizationId,
+        client.primaryFacilityId,
+      )
+    : false;
+  const admissionHistoryResult = canReadAdmissions
+    ? await api.GET('/api/v1/onboarding/clients/{clientId}/history', {
+        params: { path: { clientId: id }, header },
+      })
+    : undefined;
+  const admissionHistory = (admissionHistoryResult?.data ?? []) as unknown as Array<{
+    id: string;
+    stage: string;
+    admittedAt: string | null;
+    ownerEmployeeId: string | null;
+    createdAt: string;
+    firstVisitId: string | null;
+    history: Array<{ version: number; toStage: string; occurredAt: string }>;
+    documents: Array<{ id: string; requirementCode: string; status: string }>;
+    tasks: Array<{ id: string; title: string; status: string; dueAt: string | null }>;
+    communications: Array<{
+      id: string;
+      subject: string;
+      summary: string | null;
+      occurredAt: string;
+    }>;
+  }>;
   const canReadSchedule = client
     ? hasClientPermission(
         permissions,
@@ -452,6 +483,9 @@ export default async function ClientDetailPage({
                 {t('Clients.detail.communicationsTab')}
               </Link>
             ) : null}
+            {canReadAdmissions ? (
+              <SectionLink href="#admissions">{t('Onboarding.title')}</SectionLink>
+            ) : null}
             <SectionLink href="#timeline">{t('Clients.detail.timelineTab')}</SectionLink>
           </nav>
 
@@ -647,6 +681,132 @@ export default async function ClientDetailPage({
             </section>
           ) : null}
 
+          {canReadAdmissions ? (
+            <section
+              id="admissions"
+              aria-labelledby="admissions-title"
+              className="grid gap-3 scroll-mt-6"
+            >
+              <h2 id="admissions-title" className="text-xl font-semibold">
+                {t('Onboarding.title')}
+              </h2>
+              {admissionHistoryResult?.error ? (
+                <p role="alert" className="rounded-lg border bg-white p-5">
+                  {t('Onboarding.loadFailed')}
+                </p>
+              ) : admissionHistory.length ? (
+                <ul className="grid gap-3">
+                  {admissionHistory.map((entry) => (
+                    <li key={entry.id} className="rounded-lg border bg-white p-4">
+                      <Link
+                        className="font-semibold text-blue-800 underline"
+                        href={`/admissions/${entry.id}`}
+                      >
+                        {t('Onboarding.stage')}:{' '}
+                        {t(
+                          `Onboarding.${entry.stage === 'assessment' ? 'assessmentStage' : entry.stage}` as 'Onboarding.inquiry',
+                        )}
+                      </Link>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {entry.admittedAt
+                          ? t('Onboarding.admitted') +
+                            ' · ' +
+                            formatDateTime(entry.admittedAt, locale)
+                          : formatDate(entry.createdAt, locale)}
+                      </p>
+                      {entry.ownerEmployeeId ? (
+                        <p className="mt-1 text-sm text-slate-600">
+                          {t('Onboarding.ownerEmployee')}: {entry.ownerEmployeeId}
+                        </p>
+                      ) : null}
+                      {entry.firstVisitId ? (
+                        <p className="mt-1 text-sm">
+                          {t('Onboarding.firstScheduledVisit')}:{' '}
+                          <Link
+                            className="text-blue-800 underline"
+                            href={`/visits/${entry.firstVisitId}`}
+                          >
+                            {entry.firstVisitId}
+                          </Link>
+                        </p>
+                      ) : null}
+                      {entry.history.length ? (
+                        <div className="mt-3 border-t pt-3">
+                          <h3 className="font-medium">{t('Onboarding.admissionHistory')}</h3>
+                          <ol className="mt-2 grid gap-1 text-sm text-slate-600">
+                            {entry.history.map((transition) => (
+                              <li key={`${entry.id}-${transition.version}`}>
+                                {t(
+                                  `Onboarding.${transition.toStage === 'assessment' ? 'assessmentStage' : transition.toStage}` as 'Onboarding.inquiry',
+                                )}{' '}
+                                · {formatDateTime(transition.occurredAt, locale)}
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      ) : null}
+                      {entry.documents.length ? (
+                        <div className="mt-3 border-t pt-3">
+                          <h3 className="font-medium">{t('Onboarding.admissionDocuments')}</h3>
+                          <ul className="mt-2 grid gap-1 text-sm text-slate-600">
+                            {entry.documents.map((document) => (
+                              <li key={document.id}>
+                                {document.requirementCode} · {document.status} · {document.id}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {entry.tasks.some(
+                        (task) => !['completed', 'cancelled'].includes(task.status),
+                      ) ? (
+                        <div className="mt-3 border-t pt-3">
+                          <h3 className="font-medium">{t('Onboarding.admissionTasks')}</h3>
+                          <ul className="mt-2 grid gap-1 text-sm">
+                            {entry.tasks
+                              .filter((task) => !['completed', 'cancelled'].includes(task.status))
+                              .map((task) => (
+                                <li key={task.id}>
+                                  <Link
+                                    className="text-blue-800 underline"
+                                    href={`/operations/tasks/${task.id}`}
+                                  >
+                                    {task.title}
+                                  </Link>{' '}
+                                  · {task.status}
+                                  {task.dueAt ? ` · ${formatDateTime(task.dueAt, locale)}` : ''}
+                                </li>
+                              ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {entry.communications.length ? (
+                        <ul className="mt-3 grid gap-2 border-t pt-3 text-sm">
+                          {entry.communications.map((interaction) => (
+                            <li key={interaction.id}>
+                              <p className="font-medium">
+                                {interaction.subject} ·{' '}
+                                {formatDateTime(interaction.occurredAt, locale)}
+                              </p>
+                              {interaction.summary ? (
+                                <p className="whitespace-pre-wrap text-slate-600">
+                                  {interaction.summary}
+                                </p>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="rounded-lg border bg-white p-5 text-slate-700">
+                  {t('Onboarding.noHistory')}
+                </p>
+              )}
+            </section>
+          ) : null}
           <section
             id="overview"
             aria-labelledby="overview-title"

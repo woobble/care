@@ -629,6 +629,25 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
   } else if (exception instanceof ServiceAgreementHasFutureVisitsError) {
     status = 409;
     code = exception.code;
+  } else if (onboardingCode(exception)) {
+    code = onboardingCode(exception)!;
+    if (code.endsWith('_NOT_FOUND') || code === 'ONBOARDING_CLIENT_LINK_INVALID') {
+      status = 404;
+    } else if (
+      code.includes('CONFLICT') ||
+      code.includes('IMMUTABLE') ||
+      code.includes('INVALID_TRANSITION') ||
+      code.includes('READINESS_BLOCKED') ||
+      code.includes('NOT_READY_FOR_ADMISSION') ||
+      code.includes('FIRST_VISIT_STAGE') ||
+      code.includes('CLIENT_LINK_REQUIRED') ||
+      code.includes('FACILITY_REQUIRED') ||
+      code.includes('CASE_CLOSED')
+    ) {
+      status = 409;
+    } else {
+      status = 400;
+    }
   } else if (exception instanceof HttpException) {
     status = exception.getStatus();
     code = statusCode(status);
@@ -654,6 +673,12 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     ...(conflictingInterval ? { conflictingInterval } : {}),
     ...(schedulingConflicts ? { conflicts: schedulingConflicts } : {}),
   };
+}
+
+function onboardingCode(exception: unknown): string | null {
+  if (!(exception instanceof Error) || !('code' in exception)) return null;
+  const code = exception.code;
+  return typeof code === 'string' && code.startsWith('ONBOARDING_') ? code : null;
 }
 
 function statusCode(status: number): string {

@@ -54,8 +54,14 @@ const migrations = {
     '0002_operations_assignee_scope.sql',
     '0003_exception_occurrences.sql',
     '0004_communication_task_source.sql',
+    '0005_onboarding_exception_category.sql',
   ],
-  communications: ['0001_communications.sql', '0002_communication_task_reference.sql'],
+  communications: [
+    '0001_communications.sql',
+    '0002_communication_task_reference.sql',
+    '0003_prospect_interactions.sql',
+  ],
+  onboarding: ['0001_onboarding.sql', '0002_onboarding_readiness.sql'],
 } as const;
 const migrationsRoot = resolve(import.meta.dirname, '../../../modules');
 

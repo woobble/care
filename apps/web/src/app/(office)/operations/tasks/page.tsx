@@ -3,6 +3,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDateTime } from '@app/web/i18n/format';
+import { visitDateTimeInputValue } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
@@ -22,20 +23,33 @@ type SearchParams = Promise<{
   organizationId?: string;
   facilityId?: string;
   clientId?: string;
+  admissionCaseId?: string;
   q?: string;
   error?: string;
   updated?: string;
 }>;
+
+type AdmissionTaskContext = {
+  id: string;
+  organizationId: string;
+  facilityId: string | null;
+  clientId: string | null;
+  firstName: string;
+  lastName: string;
+  stage: string;
+  nextFollowUpAt: string | null;
+};
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export default async function OperationsTasksPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
-  const [t, translate, locale] = await Promise.all([
+  const [t, translate, locale, onboardingT] = await Promise.all([
     getTranslations('Operations'),
     getTranslations(),
     getLocale(),
+    getTranslations('Onboarding'),
   ]);
   const query = await searchParams;
   const api = await getApiClient();
@@ -51,6 +65,8 @@ export default async function OperationsTasksPage({
 
   const canCreate = hasPermission(permissions, 'operations.tasks.create');
   const canAssign = hasPermission(permissions, 'operations.tasks.assign');
+  const requestedAdmissionCaseId = query.admissionCaseId?.trim();
+  const admissionCaseId = validUuid(requestedAdmissionCaseId);
   const organizationId = validUuid(query.organizationId);
   const facilityId = validUuid(query.facilityId);
   const clientId = validUuid(query.clientId);
@@ -115,10 +131,50 @@ export default async function OperationsTasksPage({
           })
         : Promise.resolve({ data: undefined, error: undefined }),
     ]);
+  const canReadAdmission = hasPermission(permissions, 'onboarding.read');
+  const canManageAdmission = hasPermission(permissions, 'onboarding.manage');
+  const admissionResult =
+    admissionCaseId && canCreate && canReadAdmission && canManageAdmission
+      ? await api.GET('/api/v1/onboarding/cases/{id}', {
+          params: { path: { id: admissionCaseId }, header },
+        })
+      : null;
+  const admission = admissionResult?.data as unknown as AdmissionTaskContext | undefined;
+  const admissionHandoffRequested = requestedAdmissionCaseId !== undefined;
+  const admissionHandoffReady = Boolean(
+    admissionCaseId &&
+    canCreate &&
+    canReadAdmission &&
+    canManageAdmission &&
+    admission &&
+    !['declined', 'withdrawn'].includes(admission.stage),
+  );
+  const admissionClientResult =
+    admissionHandoffReady && admission?.clientId && hasPermission(permissions, 'client.read')
+      ? await api.GET('/api/v1/clients/{id}', {
+          params: { path: { id: admission.clientId }, header },
+        })
+      : null;
   const organizations = organizationResult.data ?? [];
   const facilities = facilityResult.data ?? [];
   const employees = employeeResult.data?.items ?? [];
-  const clients = clientResult.data?.items ?? [];
+  const clients = (clientResult.data?.items ?? []).map((client) => ({
+    id: client.id,
+    firstName: client.firstName,
+    lastName: client.lastName,
+    preferredName: client.preferredName,
+  }));
+  if (
+    admissionClientResult?.data &&
+    !clients.some((client) => client.id === admissionClientResult.data!.id)
+  ) {
+    clients.push({
+      id: admissionClientResult.data.id,
+      firstName: admissionClientResult.data.firstName,
+      lastName: admissionClientResult.data.lastName,
+      preferredName: admissionClientResult.data.preferredName,
+    });
+  }
   const tasks = taskResult.data?.items ?? [];
   const timezoneByOrganization = new Map(
     organizations.map((organization) => [organization.id, organization.timezone]),
@@ -158,7 +214,13 @@ export default async function OperationsTasksPage({
         </p>
       ) : null}
 
-      {canCreate ? (
+      {admissionHandoffRequested && !admissionHandoffReady ? (
+        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+          {onboardingT('taskContextUnavailable')}
+        </p>
+      ) : null}
+
+      {canCreate && (!admissionHandoffRequested || admissionHandoffReady) ? (
         <section
           aria-labelledby="create-task-title"
           className="grid gap-4 rounded-lg border bg-white p-5"
@@ -170,9 +232,24 @@ export default async function OperationsTasksPage({
             <p className="text-sm text-slate-600">{t('manualTaskHelp')}</p>
           </div>
           <form action={createTaskAction} className="grid gap-4 md:grid-cols-2">
+            {admissionHandoffReady ? (
+              <input type="hidden" name="admissionCaseId" value={admission!.id} />
+            ) : null}
             <div className="grid gap-2 md:col-span-2">
               <Label htmlFor="task-title">{t('taskTitle')}</Label>
-              <Input id="task-title" name="title" required maxLength={200} />
+              <Input
+                id="task-title"
+                name="title"
+                required
+                maxLength={200}
+                defaultValue={
+                  admission
+                    ? onboardingT('followUpTaskTitle', {
+                        name: `${admission.firstName} ${admission.lastName}`,
+                      })
+                    : ''
+                }
+              />
             </div>
             <div className="grid gap-2 md:col-span-2">
               <Label htmlFor="task-description">{t('taskDescription')}</Label>
@@ -189,6 +266,7 @@ export default async function OperationsTasksPage({
               name="organizationId"
               label={t('organization')}
               required
+              defaultValue={admission?.organizationId ?? ''}
             >
               <option value="" disabled>
                 {t('selectOrganization')}
@@ -199,7 +277,12 @@ export default async function OperationsTasksPage({
                 </option>
               ))}
             </SelectField>
-            <SelectField id="facilityId" name="facilityId" label={t('facility')}>
+            <SelectField
+              id="facilityId"
+              name="facilityId"
+              label={t('facility')}
+              defaultValue={admission?.facilityId ?? ''}
+            >
               <option value="">{t('all')}</option>
               {facilities.map((facility) => (
                 <option key={facility.id} value={facility.id}>
@@ -207,7 +290,12 @@ export default async function OperationsTasksPage({
                 </option>
               ))}
             </SelectField>
-            <SelectField id="clientId" name="clientId" label={t('client')}>
+            <SelectField
+              id="clientId"
+              name="clientId"
+              label={t('client')}
+              defaultValue={admission?.clientId ?? ''}
+            >
               <option value="">{t('unassigned')}</option>
               {clients.map((client) => (
                 <option key={client.id} value={client.id}>
@@ -239,12 +327,28 @@ export default async function OperationsTasksPage({
             </SelectField>
             <div className="grid gap-2">
               <Label htmlFor="dueAt">{t('dueDate')}</Label>
-              <Input id="dueAt" name="dueAt" type="datetime-local" />
+              <Input
+                id="dueAt"
+                name="dueAt"
+                type="datetime-local"
+                defaultValue={
+                  admission?.nextFollowUpAt
+                    ? visitDateTimeInputValue(
+                        admission.nextFollowUpAt,
+                        timezoneByOrganization.get(admission.organizationId) ?? 'Europe/Berlin',
+                      )
+                    : ''
+                }
+              />
               <select
                 name="timezone"
                 aria-label={t('timezone')}
                 className="h-10 rounded-md border bg-white px-3 text-sm"
-                defaultValue={organizations[0]?.timezone ?? ''}
+                defaultValue={
+                  admission
+                    ? (timezoneByOrganization.get(admission.organizationId) ?? '')
+                    : (organizations[0]?.timezone ?? '')
+                }
               >
                 {[...new Set(organizations.map((organization) => organization.timezone))].map(
                   (timezone) => (

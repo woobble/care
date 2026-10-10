@@ -38,6 +38,8 @@ const issueTitles: readonly OperationsIssueTitle[] = [
   'claim_ready_to_submit',
   'claim_readiness_blocked',
   'claim_payment_outstanding',
+  'admission_readiness_blocked',
+  'admission_follow_up_overdue',
 ];
 
 export function issueTitleKey(code: string): OperationsIssueTitle {
@@ -66,6 +68,8 @@ export function workItemSourceHref(item: OperationsWorkItem): string {
       return `/billing/invoices/${item.sourceEntityId}`;
     case 'claims':
       return `/billing/claims/${item.sourceEntityId}`;
+    case 'onboarding':
+      return `/admissions/${item.sourceEntityId}`;
     default:
       return '/operations/worklist';
   }

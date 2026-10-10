@@ -37,6 +37,7 @@
         "@care/identity": "workspace:*",
         "@care/logging": "workspace:*",
         "@care/observability": "workspace:*",
+        "@care/onboarding": "workspace:*",
         "@care/operations": "workspace:*",
         "@care/organizations": "workspace:*",
         "@care/permissions": "workspace:*",
@@ -260,6 +261,31 @@
         "@care/platform": "workspace:*",
         "drizzle-orm": "^0.45.4",
         "uuid": "^14.0.2",
+      },
+    },
+    "modules/onboarding": {
+      "name": "@care/onboarding",
+      "dependencies": {
+        "@care/audit": "workspace:*",
+        "@care/benefits": "workspace:*",
+        "@care/clients": "workspace:*",
+        "@care/communications": "workspace:*",
+        "@care/contracts": "workspace:*",
+        "@care/database": "workspace:*",
+        "@care/documents": "workspace:*",
+        "@care/employees": "workspace:*",
+        "@care/events": "workspace:*",
+        "@care/identity": "workspace:*",
+        "@care/operations": "workspace:*",
+        "@care/organizations": "workspace:*",
+        "@care/permissions": "workspace:*",
+        "@care/platform": "workspace:*",
+        "@care/scheduling": "workspace:*",
+        "@care/service-agreements": "workspace:*",
+        "@care/services": "workspace:*",
+        "drizzle-orm": "^0.45.4",
+        "uuid": "^14.0.2",
+        "zod": "^4.6.5",
       },
     },
     "modules/operations": {
@@ -601,6 +627,8 @@
     "@care/logging": ["@care/logging@workspace:packages/logging"],
 
     "@care/observability": ["@care/observability@workspace:packages/observability"],
+
+    "@care/onboarding": ["@care/onboarding@workspace:modules/onboarding"],
 
     "@care/operations": ["@care/operations@workspace:modules/operations"],
 

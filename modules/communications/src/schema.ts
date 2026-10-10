@@ -189,6 +189,95 @@ export const interactions = communications.table(
   ],
 );
 
+export const prospectInteractions = communications.table(
+  'prospect_interactions',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull(),
+    caseId: uuid('case_id').notNull(),
+    organizationId: uuid('organization_id').notNull(),
+    facilityId: uuid('facility_id'),
+    direction: text('direction').$type<'inbound' | 'outbound' | 'internal'>().notNull(),
+    channel: text('channel')
+      .$type<'phone' | 'in_person' | 'email' | 'letter' | 'portal' | 'other'>()
+      .notNull(),
+    category: text('category')
+      .$type<
+        | 'general_inquiry'
+        | 'appointment_coordination'
+        | 'cancellation_rescheduling'
+        | 'service_request'
+        | 'service_agreement'
+        | 'documentation'
+        | 'billing_payment'
+        | 'benefits_payer'
+        | 'complaint_feedback'
+        | 'other'
+      >()
+      .notNull(),
+    subject: text('subject').notNull(),
+    summary: text('summary'),
+    outcome: text('outcome')
+      .$type<
+        | 'information_provided'
+        | 'request_received'
+        | 'action_required'
+        | 'appointment_agreed'
+        | 'no_answer'
+        | 'resolved'
+        | 'other'
+      >()
+      .notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    recordedByUserId: uuid('recorded_by_user_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('communications_prospect_interactions_tenant_id_uq').on(table.tenantId, table.id),
+    index('communications_prospect_interactions_case_timeline_idx').on(
+      table.tenantId,
+      table.caseId,
+      table.occurredAt.desc(),
+      table.id.desc(),
+    ),
+    check(
+      'communications_prospect_interactions_content_ck',
+      sql`length(trim(${table.subject})) BETWEEN 1 AND 200 AND (${table.summary} IS NULL OR length(${table.summary}) <= 4000)`,
+    ),
+    check(
+      'communications_prospect_interactions_direction_ck',
+      sql`${table.direction} IN ('inbound', 'outbound', 'internal')`,
+    ),
+    check(
+      'communications_prospect_interactions_channel_ck',
+      sql`${table.channel} IN ('phone', 'in_person', 'email', 'letter', 'portal', 'other')`,
+    ),
+    check(
+      'communications_prospect_interactions_category_ck',
+      sql`${table.category} IN ('general_inquiry', 'appointment_coordination', 'cancellation_rescheduling', 'service_request', 'service_agreement', 'documentation', 'billing_payment', 'benefits_payer', 'complaint_feedback', 'other')`,
+    ),
+    check(
+      'communications_prospect_interactions_outcome_ck',
+      sql`${table.outcome} IN ('information_provided', 'request_received', 'action_required', 'appointment_agreed', 'no_answer', 'resolved', 'other')`,
+    ),
+    foreignKey({
+      name: 'communications_prospect_interactions_org_fk',
+      columns: [table.tenantId, table.organizationId],
+      foreignColumns: [organizationsTable.tenantId, organizationsTable.id],
+    }),
+    foreignKey({
+      name: 'communications_prospect_interactions_facility_fk',
+      columns: [table.tenantId, table.organizationId, table.facilityId],
+      foreignColumns: [facilities.tenantId, facilities.organizationId, facilities.id],
+    }),
+    foreignKey({
+      name: 'communications_prospect_interactions_author_fk',
+      columns: [table.recordedByUserId],
+      foreignColumns: [users.id],
+    }),
+  ],
+);
+
 export const interactionAmendments = communications.table(
   'interaction_amendments',
   {
@@ -330,6 +419,7 @@ export const clientCommunicationPreferences = communications.table(
 
 export const communicationsSchema = {
   interactions,
+  prospectInteractions,
   interactionAmendments,
   clientCommunicationPreferences,
 };

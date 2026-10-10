@@ -51,6 +51,13 @@ export async function correctVisitExecutionTimesAction(formData: FormData): Prom
 
 export async function createVisitAction(formData: FormData): Promise<void> {
   const clientId = readUuid(formData.get('clientId'));
+  const rawAdmissionCaseId = readString(formData, 'admissionCaseId');
+  const admissionCaseId = rawAdmissionCaseId
+    ? readUuid(formData.get('admissionCaseId'))
+    : undefined;
+  const expectedAdmissionVersion = rawAdmissionCaseId
+    ? readPositiveInteger(formData.get('expectedAdmissionVersion'))
+    : undefined;
   const localDate = readString(formData, 'localDate');
   const localStartTime = readString(formData, 'localStartTime');
   const localEndTime = readString(formData, 'localEndTime');
@@ -62,14 +69,37 @@ export async function createVisitAction(formData: FormData): Promise<void> {
     !timePattern.test(localStartTime) ||
     !timePattern.test(localEndTime) ||
     localEndTime <= localStartTime ||
-    serviceDefinitionIds.length === 0
+    serviceDefinitionIds.length === 0 ||
+    (rawAdmissionCaseId && (!admissionCaseId || !expectedAdmissionVersion))
   ) {
     redirect('/planning?error=INVALID_REQUEST');
   }
 
   const api = await getApiClient();
-  const { error } = await api.POST('/api/v1/visits', {
-    params: { header: await getTenantHeader() },
+  const header = await getTenantHeader();
+  if (admissionCaseId && expectedAdmissionVersion) {
+    const caseResult = await api.GET('/api/v1/onboarding/cases/{id}', {
+      params: { path: { id: admissionCaseId }, header },
+    });
+    const admission = caseResult.data as unknown as
+      | { clientId: string | null; version: number; stage: string }
+      | undefined;
+    if (caseResult.error)
+      redirect(`/admissions/${admissionCaseId}?error=${encodeURIComponent(caseResult.error.code)}`);
+    if (
+      !admission ||
+      admission.clientId !== clientId ||
+      admission.version !== expectedAdmissionVersion
+    ) {
+      redirect(`/admissions/${admissionCaseId}?error=ONBOARDING_VERSION_CONFLICT`);
+    }
+    if (['declined', 'withdrawn'].includes(admission.stage))
+      redirect(`/admissions/${admissionCaseId}?error=ONBOARDING_CASE_CLOSED`);
+    if (!['preparation', 'ready_for_admission', 'admitted'].includes(admission.stage))
+      redirect(`/admissions/${admissionCaseId}?error=ONBOARDING_FIRST_VISIT_STAGE_INVALID`);
+  }
+  const { data: visit, error } = await api.POST('/api/v1/visits', {
+    params: { header },
     body: {
       clientId,
       localDate,
@@ -83,10 +113,29 @@ export async function createVisitAction(formData: FormData): Promise<void> {
       note: readNullableText(formData, 'note'),
     },
   });
-  if (error) redirect(`/planning?date=${localDate}&error=${encodeURIComponent(error.code)}`);
+  if (error || !visit) {
+    const code = error?.code ?? 'SCHEDULING_VISIT_NOT_FOUND';
+    redirect(
+      admissionCaseId
+        ? `/planning?admissionCaseId=${admissionCaseId}&clientId=${clientId}&date=${localDate}&error=${encodeURIComponent(code)}`
+        : `/planning?date=${localDate}&error=${encodeURIComponent(code)}`,
+    );
+  }
   revalidatePath('/planning');
   revalidatePath(`/clients/${clientId}`);
   if (employeeId) revalidatePath(`/employees/${employeeId}`);
+  if (admissionCaseId && expectedAdmissionVersion) {
+    const { error: linkError } = await api.POST('/api/v1/onboarding/cases/{id}/first-visit', {
+      params: { path: { id: admissionCaseId }, header },
+      body: { visitId: visit.id, expectedVersion: expectedAdmissionVersion },
+    });
+    revalidatePath(`/admissions/${admissionCaseId}`);
+    if (linkError)
+      redirect(
+        `/admissions/${admissionCaseId}?createdVisitId=${visit.id}&error=${encodeURIComponent(linkError.code)}`,
+      );
+    redirect(`/admissions/${admissionCaseId}?updated=first_visit`);
+  }
   redirect(`/planning?date=${localDate}&updated=visit`);
 }
 

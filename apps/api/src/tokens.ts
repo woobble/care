@@ -27,3 +27,4 @@ export const EMPLOYEE_APPLICATION = Symbol('EMPLOYEE_APPLICATION');
 export const AUDIT_WRITER = Symbol('AUDIT_WRITER');
 export const AUDIT_READER = Symbol('AUDIT_READER');
 export const OUTBOX_WRITER = Symbol('OUTBOX_WRITER');
+export const ONBOARDING_APPLICATION = Symbol('ONBOARDING_APPLICATION');

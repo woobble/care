@@ -50,7 +50,7 @@ const dashboardQuerySchema = z.object({
 });
 const workItemQuerySchema = z.object({
   category: z
-    .enum(['scheduling', 'visits', 'documentation', 'benefits', 'billing', 'claims'])
+    .enum(['scheduling', 'visits', 'documentation', 'benefits', 'billing', 'claims', 'onboarding'])
     .optional(),
   status: z.enum(['open', 'acknowledged', 'snoozed']).optional(),
   severity: z.enum(['info', 'warning', 'critical']).optional(),
@@ -130,7 +130,9 @@ export class OperationsWorkItemResponseDto {
   id!: string;
   @ApiProperty({ enum: ['exception'] })
   kind!: 'exception';
-  @ApiProperty({ enum: ['scheduling', 'visits', 'documentation', 'benefits', 'billing', 'claims'] })
+  @ApiProperty({
+    enum: ['scheduling', 'visits', 'documentation', 'benefits', 'billing', 'claims', 'onboarding'],
+  })
   category!: string;
   @ApiProperty()
   sourceDomain!: string;
@@ -367,7 +369,7 @@ export class OperationsController {
   @ApiQuery({
     name: 'category',
     required: false,
-    enum: ['scheduling', 'visits', 'documentation', 'benefits', 'billing', 'claims'],
+    enum: ['scheduling', 'visits', 'documentation', 'benefits', 'billing', 'claims', 'onboarding'],
   })
   @ApiQuery({ name: 'status', required: false, enum: ['open', 'acknowledged', 'snoozed'] })
   @ApiQuery({ name: 'severity', required: false, enum: ['info', 'warning', 'critical'] })

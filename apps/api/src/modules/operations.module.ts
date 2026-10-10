@@ -6,6 +6,7 @@ import type { BillingApplicationService, BillingClaimsApplicationService } from 
 import type { CareDocumentationApplicationService } from '@care/care-documentation';
 import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
+import type { OnboardingApplicationService } from '@care/onboarding';
 import type { SchedulingApplicationService } from '@care/scheduling';
 import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
 import { DatabaseModule } from '@app/api/database/database.module';
@@ -17,6 +18,7 @@ import {
   CARE_DOCUMENTATION_APPLICATION,
   OPERATIONS_APPLICATION,
   OUTBOX_WRITER,
+  ONBOARDING_APPLICATION,
   SCHEDULING_APPLICATION,
   SERVICE_EVIDENCE_APPLICATION,
   UNIT_OF_WORK,
@@ -31,6 +33,7 @@ import { IdentityModule } from './identity.module';
 import { PlatformModule } from './platform.module';
 import { SchedulingModule } from './scheduling.module';
 import { ServiceEvidenceModule } from './service-evidence.module';
+import { OnboardingModule } from './onboarding.module';
 
 @Module({
   imports: [
@@ -43,6 +46,7 @@ import { ServiceEvidenceModule } from './service-evidence.module';
     ServiceEvidenceModule,
     BenefitsModule,
     BillingModule,
+    OnboardingModule,
   ],
   controllers: [OperationsController],
   providers: [
@@ -60,6 +64,7 @@ import { ServiceEvidenceModule } from './service-evidence.module';
         BENEFITS_APPLICATION,
         BILLING_APPLICATION,
         BILLING_CLAIMS_APPLICATION,
+        ONBOARDING_APPLICATION,
       ],
       useFactory: (
         unitOfWork: UnitOfWork,
@@ -71,6 +76,7 @@ import { ServiceEvidenceModule } from './service-evidence.module';
         benefits: BenefitsApplicationService,
         billing: BillingApplicationService,
         claims: BillingClaimsApplicationService,
+        onboarding: OnboardingApplicationService,
       ) =>
         createOperationsApplicationService(unitOfWork, audit, outbox, {
           scheduling,
@@ -79,6 +85,7 @@ import { ServiceEvidenceModule } from './service-evidence.module';
           benefits,
           billing,
           claims,
+          onboarding,
         }),
     },
   ],

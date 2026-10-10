@@ -11,8 +11,8 @@ import { startCareTestDatabase } from '@care/testing';
 import { AppModule } from '@app/api/app.module';
 import { configureApiHttp, createApiFastifyAdapter } from '@app/api/http/fastify';
 
-describe('communications PostgreSQL/API integration', () => {
-  test('records, authorizes, amends, and links client communication history', async () => {
+describe('communications and onboarding PostgreSQL/API integration', () => {
+  test('links intake communications, registers prospects, admits clients, and schedules first visits', async () => {
     const database = await startCareTestDatabase();
     const owner = new Client({ connectionString: database.migrationUrl });
     const tenantId = uuidv7();
@@ -144,14 +144,24 @@ describe('communications PostgreSQL/API integration', () => {
       ]);
       const permissions = [
         'client.read',
+        'client.update',
+        'client.create',
         'communications.read',
         'communications.create',
         'communications.update',
         'communications.amend',
         'communications.preferences.manage',
         'schedule.read',
+        'schedule.create',
+        'service.read',
         'operations.read',
         'operations.tasks.create',
+        'onboarding.read',
+        'onboarding.create',
+        'onboarding.manage',
+        'onboarding.admit',
+        'onboarding.templates.manage',
+        'service_agreement.read',
       ];
       for (const permission of permissions) {
         await owner.query(
@@ -235,6 +245,552 @@ describe('communications PostgreSQL/API integration', () => {
         'Content-Type': 'application/json',
       };
       const otherTenantHeaders = { ...headers, 'X-Tenant-Id': otherTenantId };
+
+      const admissionResponse = await fetch(`${baseUrl}/api/v1/onboarding/cases`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          organizationId,
+          facilityId,
+          firstName: 'Nora',
+          lastName: 'Prospect',
+          contactMethod: 'phone',
+          inquirySource: 'website',
+          fundingPlan: 'private_pay',
+        }),
+      });
+      expect(admissionResponse.status).toBe(201);
+      const admission = (await admissionResponse.json()) as { id: string; version: number };
+
+      const prospectCommunicationResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${admission.id}/communications/records`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            direction: 'inbound',
+            channel: 'phone',
+            category: 'general_inquiry',
+            subject: 'Ask about weekday support',
+            summary: 'Requested a morning callback.',
+            outcome: 'action_required',
+            occurredAt: now.toISOString(),
+          }),
+        },
+      );
+      expect(prospectCommunicationResponse.status).toBe(201);
+      const prospectCommunication = (await prospectCommunicationResponse.json()) as {
+        id: string;
+        subject: string;
+      };
+      expect(prospectCommunication.subject).toBe('Ask about weekday support');
+
+      const admissionDetailResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${admission.id}`,
+        { headers },
+      );
+      expect(admissionDetailResponse.status).toBe(200);
+      const admissionDetail = (await admissionDetailResponse.json()) as {
+        version: number;
+        communications: Array<{
+          link: { interactionId: string };
+          interaction: { id: string; summary: string | null };
+          prospect: boolean;
+        }>;
+      };
+      expect(admissionDetail.version).toBe(admission.version + 1);
+      expect(admissionDetail.communications).toEqual([
+        {
+          link: { interactionId: prospectCommunication.id },
+          interaction: expect.objectContaining({
+            id: prospectCommunication.id,
+            summary: 'Requested a morning callback.',
+          }),
+          prospect: true,
+        },
+      ]);
+      const crossTenantAdmission = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${admission.id}`,
+        { headers: otherTenantHeaders },
+      );
+      expect(crossTenantAdmission.status).toBe(404);
+
+      const secondAdmissionResponse = await fetch(`${baseUrl}/api/v1/onboarding/cases`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          organizationId,
+          facilityId,
+          firstName: 'Omar',
+          lastName: 'Prospect',
+          contactMethod: 'email',
+          inquirySource: 'referral',
+        }),
+      });
+      expect(secondAdmissionResponse.status).toBe(201);
+      const secondAdmission = (await secondAdmissionResponse.json()) as {
+        id: string;
+        version: number;
+      };
+      const otherFundingResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${secondAdmission.id}`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ expectedVersion: secondAdmission.version, fundingPlan: 'other' }),
+        },
+      );
+      expect(otherFundingResponse.status).toBe(200);
+      const incompleteFundingReadinessResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${secondAdmission.id}/readiness`,
+        { headers },
+      );
+      const incompleteFundingReadiness = (await incompleteFundingReadinessResponse.json()) as {
+        findings: Array<{ code: string; severity: string; detailCode?: string }>;
+      };
+      expect(
+        incompleteFundingReadiness.findings.find(
+          (finding) => finding.code === 'funding_arrangement',
+        ),
+      ).toMatchObject({ severity: 'blocker', detailCode: 'FUNDING_PLAN_DETAILS_MISSING' });
+      const documentedFundingResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${secondAdmission.id}`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: secondAdmission.version + 1,
+            fundingPlanDetails: 'Private payment from the client',
+          }),
+        },
+      );
+      expect(documentedFundingResponse.status).toBe(200);
+      const documentedFundingReadinessResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${secondAdmission.id}/readiness`,
+        { headers },
+      );
+      const documentedFundingReadiness = (await documentedFundingReadinessResponse.json()) as {
+        findings: Array<{ code: string; severity: string }>;
+      };
+      expect(
+        documentedFundingReadiness.findings.find(
+          (finding) => finding.code === 'funding_arrangement',
+        )?.severity,
+      ).toBe('complete');
+      const blockedWorklistResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases?readiness=blocked&page=1&pageSize=25`,
+        { headers },
+      );
+      expect(blockedWorklistResponse.status).toBe(200);
+      const blockedWorklist = (await blockedWorklistResponse.json()) as {
+        total: number;
+        items: Array<{ id: string }>;
+      };
+      expect(blockedWorklist.total).toBe(2);
+      expect(blockedWorklist.items.map((item) => item.id)).toEqual(
+        expect.arrayContaining([admission.id, secondAdmission.id]),
+      );
+      const templatesResponse = await fetch(`${baseUrl}/api/v1/onboarding/templates`, { headers });
+      expect(templatesResponse.status).toBe(200);
+      const templates = (await templatesResponse.json()) as Array<{
+        id: string;
+        currentVersion: number;
+        items: Array<{
+          code: string;
+          category: string;
+          label: string;
+          source: 'automatic' | 'manual' | 'document';
+          mandatory: boolean;
+          requirementType: 'policy' | 'external';
+        }>;
+      }>;
+      expect(templates).toHaveLength(1);
+      expect(templates[0]?.items).toHaveLength(7);
+      const templateItems = templates[0]!.items.map(
+        ({ code, category, label, source, mandatory, requirementType }) => ({
+          code,
+          category,
+          label,
+          source,
+          mandatory,
+          requirementType,
+        }),
+      );
+      expect(templateItems.some((item) => item.category === 'required_documents')).toBe(true);
+      templateItems.push({
+        code: 'prospect_follow_up',
+        category: 'follow_up',
+        label: 'Confirm follow-up completed',
+        source: 'manual',
+        mandatory: false,
+        requirementType: 'policy',
+      });
+      const templateUpdateResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/templates/${templates[0]!.id}`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ expectedVersion: 1, name: 'Default', items: templateItems }),
+        },
+      );
+      expect(templateUpdateResponse.status).toBe(200);
+      const updatedTemplate = (await templateUpdateResponse.json()) as {
+        currentVersion: number;
+        items: Array<{ code: string }>;
+      };
+      expect(updatedTemplate.currentVersion).toBe(2);
+      expect(updatedTemplate.items).toHaveLength(8);
+      const pinnedChecklistResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${admission.id}`,
+        { headers },
+      );
+      const pinnedChecklist = (await pinnedChecklistResponse.json()) as {
+        checklist: Array<{ code: string }>;
+      };
+      expect(pinnedChecklist.checklist).toHaveLength(7);
+
+      const primaryContactId = uuidv7();
+      const serviceCategoryId = uuidv7();
+      const serviceId = uuidv7();
+      const agreementId = uuidv7();
+      const nowForAdmission = new Date();
+      const todayForAdmission = nowForAdmission.toISOString().slice(0, 10);
+      const activationCaseResponse = await fetch(`${baseUrl}/api/v1/onboarding/cases`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          organizationId,
+          facilityId,
+          firstName: 'Iris',
+          lastName: 'Pending',
+          contactMethod: 'phone',
+          inquirySource: 'referral',
+          fundingPlan: 'private_pay',
+        }),
+      });
+      expect(activationCaseResponse.status).toBe(201);
+      const createdActivationCase = (await activationCaseResponse.json()) as {
+        id: string;
+        version: number;
+      };
+      const registerClientResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${createdActivationCase.id}/register-client`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ expectedVersion: createdActivationCase.version }),
+        },
+      );
+      expect(registerClientResponse.status).toBe(200);
+      const activationCase = (await registerClientResponse.json()) as {
+        id: string;
+        clientId: string;
+        version: number;
+      };
+      expect(activationCase.version).toBe(createdActivationCase.version + 1);
+      const earlyFirstVisitLinkResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${activationCase.id}/first-visit`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ visitId: uuidv7(), expectedVersion: activationCase.version }),
+        },
+      );
+      expect(earlyFirstVisitLinkResponse.status).toBe(409);
+      expect((await earlyFirstVisitLinkResponse.json()).code).toBe(
+        'ONBOARDING_FIRST_VISIT_STAGE_INVALID',
+      );
+      const registeredClient = await owner.query<{ status: string }>(
+        'SELECT status FROM clients.clients WHERE tenant_id = $1 AND id = $2',
+        [tenantId, activationCase.clientId],
+      );
+      expect(registeredClient.rows[0]?.status).toBe('pending');
+      const registeredClientId = activationCase.clientId;
+      await owner.query(
+        `INSERT INTO clients.client_contacts
+           (id, tenant_id, client_id, first_name, last_name, relationship_type, created_at, updated_at)
+         VALUES ($1, $2, $3, 'Iris', 'Contact', 'relative', $4, $4)`,
+        [primaryContactId, tenantId, registeredClientId, nowForAdmission],
+      );
+      await owner.query(
+        `INSERT INTO clients.client_contact_roles (tenant_id, client_id, contact_id, role)
+         VALUES ($1, $2, $3, 'primary_contact')`,
+        [tenantId, registeredClientId, primaryContactId],
+      );
+      await owner.query(
+        `INSERT INTO services.service_categories (id, tenant_id, name, status, created_at, updated_at)
+         VALUES ($1, $2, 'Integration services', 'active', $3, $3)`,
+        [serviceCategoryId, tenantId, nowForAdmission],
+      );
+      await owner.query(
+        `INSERT INTO services.service_definitions
+           (id, tenant_id, code, name, category_id, unit, benefit_category, status, valid_from, created_at, updated_at)
+         VALUES ($1, $2, 'HOME-01', 'Home support', $3, 'hour', 'recognized_support', 'active', $4, $5, $5)`,
+        [serviceId, tenantId, serviceCategoryId, todayForAdmission, nowForAdmission],
+      );
+      await owner.query(
+        `INSERT INTO services.service_availability
+           (id, tenant_id, service_id, organization_id, facility_id, active, valid_from, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7, $7)`,
+        [
+          uuidv7(),
+          tenantId,
+          serviceId,
+          organizationId,
+          facilityId,
+          todayForAdmission,
+          nowForAdmission,
+        ],
+      );
+      await owner.query(
+        `INSERT INTO services.service_prices
+           (id, tenant_id, service_id, organization_id, facility_id, price_cents, pricing_unit,
+            valid_from, created_by, created_at)
+         VALUES ($1, $2, $3, $4, $5, 3200, 'hour', $6, $7, $8)`,
+        [
+          uuidv7(),
+          tenantId,
+          serviceId,
+          organizationId,
+          facilityId,
+          todayForAdmission,
+          userId,
+          nowForAdmission,
+        ],
+      );
+      await owner.query(
+        `INSERT INTO service_agreements.agreements
+           (id, tenant_id, client_id, organization_id, facility_id, status, valid_from, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $7)`,
+        [
+          agreementId,
+          tenantId,
+          registeredClientId,
+          organizationId,
+          facilityId,
+          todayForAdmission,
+          nowForAdmission,
+        ],
+      );
+      await owner.query(
+        `INSERT INTO service_agreements.agreement_services
+           (id, tenant_id, agreement_id, service_definition_id, service_code, service_name, service_unit,
+            status, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, 'HOME-01', 'Home support', 'hour', 'active', $5, $5)`,
+        [uuidv7(), tenantId, agreementId, serviceId, nowForAdmission],
+      );
+      const mismatchedServicesCaseResponse = await fetch(`${baseUrl}/api/v1/onboarding/cases`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          organizationId,
+          facilityId,
+          clientId: registeredClientId,
+          firstName: 'Iris',
+          lastName: 'Pending',
+          contactMethod: 'phone',
+          inquirySource: 'referral',
+          fundingPlan: 'private_pay',
+        }),
+      });
+      expect(mismatchedServicesCaseResponse.status).toBe(201);
+      const mismatchedServicesCase = (await mismatchedServicesCaseResponse.json()) as {
+        id: string;
+        version: number;
+      };
+      const mismatchedAssessmentResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${mismatchedServicesCase.id}/assessment`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: mismatchedServicesCase.version,
+            data: {
+              requestedServices: ['Companion support'],
+              householdSupport: 'Weekly companionship',
+              everydayAssistance: '',
+              accompaniment: '',
+              preferredDays: ['monday'],
+              preferredTimeStart: null,
+              preferredTimeEnd: null,
+              visitsPerWeek: 1,
+              preferredStartDate: null,
+              accessibility: '',
+              preferences: '',
+              organizationalNotes: '',
+            },
+          }),
+        },
+      );
+      expect(mismatchedAssessmentResponse.status).toBe(200);
+      const mismatchedAgreementReadinessResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${mismatchedServicesCase.id}/readiness`,
+        { headers },
+      );
+      const mismatchedAgreementReadiness = (await mismatchedAgreementReadinessResponse.json()) as {
+        findings: Array<{ code: string; severity: string; detailCode?: string }>;
+      };
+      expect(
+        mismatchedAgreementReadiness.findings.find(
+          (finding) => finding.code === 'service_agreement',
+        ),
+      ).toMatchObject({ severity: 'blocker', detailCode: 'AGREEMENT_SERVICES_MISSING' });
+      const assessmentResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${activationCase.id}/assessment`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: activationCase.version,
+            data: {
+              requestedServices: ['home support'],
+              householdSupport: 'Weekly home support',
+              everydayAssistance: '',
+              accompaniment: '',
+              preferredDays: ['monday'],
+              preferredTimeStart: null,
+              preferredTimeEnd: null,
+              visitsPerWeek: 1,
+              preferredStartDate: null,
+              accessibility: '',
+              preferences: '',
+              organizationalNotes: '',
+            },
+          }),
+        },
+      );
+      expect(assessmentResponse.status).toBe(200);
+      let activationCaseVersion = activationCase.version + 1;
+      for (const toStage of ['assessment', 'preparation', 'ready_for_admission'] as const) {
+        const transitionResponse = await fetch(
+          `${baseUrl}/api/v1/onboarding/cases/${activationCase.id}/transitions`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ expectedVersion: activationCaseVersion, toStage }),
+          },
+        );
+        expect(transitionResponse.status).toBe(200);
+        activationCaseVersion += 1;
+      }
+      const admissionDecisionResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${activationCase.id}/admit`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ expectedVersion: activationCaseVersion }),
+        },
+      );
+      expect(admissionDecisionResponse.status).toBe(200);
+      const admittedActivationCase = (await admissionDecisionResponse.json()) as {
+        version: number;
+        decisionSnapshot: { checklistTemplateId: string; checklistTemplateVersion: number };
+      };
+      expect(admittedActivationCase.decisionSnapshot).toMatchObject({
+        checklistTemplateId: templates[0]!.id,
+        checklistTemplateVersion: updatedTemplate.currentVersion,
+      });
+      const activatedClient = await owner.query<{ status: string }>(
+        'SELECT status FROM clients.clients WHERE tenant_id = $1 AND id = $2',
+        [tenantId, registeredClientId],
+      );
+      const admittedCase = await owner.query<{ stage: string }>(
+        'SELECT stage FROM onboarding.cases WHERE tenant_id = $1 AND id = $2',
+        [tenantId, activationCase.id],
+      );
+      expect(activatedClient.rows[0]?.status).toBe('active');
+      expect(admittedCase.rows[0]?.stage).toBe('admitted');
+
+      const firstVisitDate = new Date(nowForAdmission.getTime() + 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      const firstVisitResponse = await fetch(`${baseUrl}/api/v1/visits`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          clientId: registeredClientId,
+          localDate: firstVisitDate,
+          localStartTime: '10:00',
+          localEndTime: '11:00',
+          services: [{ serviceDefinitionId: serviceId, plannedQuantity: '1' }],
+        }),
+      });
+      const firstVisitBody = (await firstVisitResponse.json()) as
+        | { id: string }
+        | { code?: string; detail?: string };
+      if (firstVisitResponse.status !== 201)
+        throw new Error(`First visit creation failed: ${JSON.stringify(firstVisitBody)}`);
+      const firstVisit = firstVisitBody as { id: string };
+      const firstVisitLinkResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${activationCase.id}/first-visit`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            visitId: firstVisit.id,
+            expectedVersion: admittedActivationCase.version,
+          }),
+        },
+      );
+      expect(firstVisitLinkResponse.status).toBe(200);
+      const linkedCaseResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${activationCase.id}`,
+        { headers },
+      );
+      const linkedCase = (await linkedCaseResponse.json()) as {
+        firstVisitId: string | null;
+        version: number;
+        servicePricing: Array<{
+          status: string;
+          priceCents: number | null;
+          pricingUnit: string | null;
+        }>;
+      };
+      expect(linkedCaseResponse.status).toBe(200);
+      expect(linkedCase).toMatchObject({
+        firstVisitId: firstVisit.id,
+        version: admittedActivationCase.version + 1,
+      });
+      expect(linkedCase.servicePricing).toContainEqual(
+        expect.objectContaining({
+          requestedService: 'home support',
+          serviceId,
+          status: 'available',
+          priceCents: 3200,
+          pricingUnit: 'hour',
+        }),
+      );
+
+      const followUpTaskResponse = await fetch(`${baseUrl}/api/v1/operations/tasks`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          organizationId,
+          facilityId,
+          clientId: registeredClientId,
+          title: 'Confirm first visit details',
+          priority: 'normal',
+        }),
+      });
+      expect(followUpTaskResponse.status).toBe(201);
+      const followUpTask = (await followUpTaskResponse.json()) as { id: string };
+      const followUpLinkResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${activationCase.id}/tasks`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ taskId: followUpTask.id }),
+        },
+      );
+      expect(followUpLinkResponse.status).toBe(200);
+      const linkedAfterTaskResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${activationCase.id}`,
+        { headers },
+      );
+      const linkedAfterTask = (await linkedAfterTaskResponse.json()) as {
+        tasks: Array<{ task: { id: string } }>;
+      };
+      expect(linkedAfterTask.tasks.map(({ task }) => task.id)).toContain(followUpTask.id);
 
       const recorded = await fetch(
         `${baseUrl}/api/v1/communications/clients/${clientId}/interactions`,

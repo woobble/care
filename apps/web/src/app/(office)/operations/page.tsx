@@ -21,6 +21,7 @@ const categories = [
   'benefits',
   'billing',
   'claims',
+  'onboarding',
 ] as const;
 
 export default async function OperationsDashboardPage({
@@ -124,7 +125,9 @@ export default async function OperationsDashboardPage({
                   href={operationsHref('/operations/worklist', scope, { category })}
                   className="rounded-lg border bg-white p-4 hover:border-blue-400"
                 >
-                  <span className="text-sm text-slate-600">{t(category)}</span>
+                  <span className="text-sm text-slate-600">
+                    {t(category === 'onboarding' ? 'categories.onboarding' : category)}
+                  </span>
                   <strong className="mt-1 block text-2xl">
                     {dashboard.categoryCounts[category] ?? 0}
                   </strong>
@@ -213,7 +216,12 @@ export default async function OperationsDashboardPage({
                           {t(`issueTitles.${issueTitleKey(item.issueCode)}`)}
                         </span>
                         <span className="text-sm text-slate-600">
-                          {item.clientName ?? t(item.category)} ·{' '}
+                          {item.clientName ??
+                            t(
+                              item.category === 'onboarding'
+                                ? 'categories.onboarding'
+                                : item.category,
+                            )}{' '}
                           {item.dueAt
                             ? formatDateTime(
                                 item.dueAt,

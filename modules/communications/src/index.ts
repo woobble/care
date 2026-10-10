@@ -1,6 +1,7 @@
 export {
   communicationsSchema,
   interactions,
+  prospectInteractions,
   interactionAmendments,
   clientCommunicationPreferences,
 } from './schema';
@@ -12,6 +13,7 @@ export {
   InvalidCommunicationInputError,
   CommunicationVersionConflictError,
   type CommunicationInput,
+  type ProspectCommunicationCaseContext,
   type CommunicationAmendmentInput,
   type CommunicationListQuery,
   type CommunicationPreferencesInput,

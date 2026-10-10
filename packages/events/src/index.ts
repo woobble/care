@@ -84,6 +84,7 @@ export interface EventPayloadMap {
     operation: 'added' | 'updated';
   };
   'communication.recorded': { interactionId: string; clientId: string };
+  'communication.prospect_recorded': { interactionId: string; caseId: string };
   'communication.amended': { interactionId: string; clientId: string; version: number };
   'communication.preferences_updated': { clientId: string; version: number };
   'service.category_created': { categoryId: string };
@@ -564,6 +565,20 @@ export interface EventPayloadMap {
   };
   'billing.export_generated': { organizationId: string; exportType: string; rowCount: number };
   'benefits.export_generated': { clientId: string | null; exportType: string; rowCount: number };
+  'onboarding.case_created': { caseId: string; version: number };
+  'onboarding.case_updated': { caseId: string; changedFields: string[]; version: number };
+  'onboarding.assessment_updated': { caseId: string; version: number };
+  'onboarding.checklist_updated': { caseId: string; itemCode: string; version: number };
+  'onboarding.template_updated': { templateId: string; version: number };
+  'onboarding.stage_changed': {
+    caseId: string;
+    fromStage: string;
+    toStage: string;
+    version: number;
+  };
+  'onboarding.admitted': { caseId: string; clientId: string; version: number };
+  'onboarding.declined': { caseId: string; version: number };
+  'onboarding.withdrawn': { caseId: string; version: number };
 }
 
 export type EventName = keyof EventPayloadMap;
@@ -603,7 +618,8 @@ export interface DomainEvent<T extends EventName = EventName> {
     | 'tour'
     | 'tenant_membership'
     | 'tenant_invitation'
-    | 'operations';
+    | 'operations'
+    | 'onboarding';
   aggregateId: string;
   occurredAt: string;
   actor: { type: 'user' | 'system'; id?: string };

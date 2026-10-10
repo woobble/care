@@ -33,7 +33,12 @@ import { tasks } from '@care/operations';
 import { visits } from '@care/scheduling';
 import { agreements } from '@care/service-agreements';
 import { contactAuthorizationFor } from '@module/communications/domain/contact-authorization';
-import { clientCommunicationPreferences, interactionAmendments, interactions } from '@module/communications/schema';
+import {
+  clientCommunicationPreferences,
+  interactionAmendments,
+  interactions,
+  prospectInteractions,
+} from '@module/communications/schema';
 
 type AuditContext = { ip?: string; userAgent?: string };
 type InteractionDirection = (typeof interactions.$inferSelect)['direction'];
@@ -59,6 +64,13 @@ export interface CommunicationInput {
   contactId?: string | null;
   contactLabel?: string | null;
   source?: CommunicationSourceReference | null;
+}
+
+export interface ProspectCommunicationCaseContext {
+  caseId: string;
+  tenantId: string;
+  organizationId: string;
+  facilityId: string | null;
 }
 
 export interface CommunicationAmendmentInput {
@@ -181,6 +193,82 @@ export class CommunicationsApplicationService {
       });
       return interactionView(row!, principal);
     });
+  }
+
+  async recordProspectInteractionWithinTransaction(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    admission: ProspectCommunicationCaseContext,
+    input: CommunicationInput,
+    request: RequestContext,
+    auditContext: AuditContext,
+  ) {
+    validateInteractionInput(input);
+    if (
+      input.contactId ||
+      input.contactLabel ||
+      input.source ||
+      admission.tenantId !== principal.tenantId
+    ) {
+      throw new InvalidCommunicationInputError();
+    }
+    const resource: ResourceContext = {
+      tenantId: principal.tenantId,
+      organizationId: admission.organizationId,
+      ...(admission.facilityId ? { facilityId: admission.facilityId } : {}),
+    };
+    assertCan(principal, { action: 'onboarding.manage', resource });
+    assertCan(principal, { action: 'communications.create', resource });
+    const now = new Date();
+    const id = uuidv7();
+    const [row] = await transaction
+      .insert(prospectInteractions)
+      .values({
+        id,
+        tenantId: principal.tenantId,
+        caseId: admission.caseId,
+        organizationId: admission.organizationId,
+        facilityId: admission.facilityId,
+        direction: input.direction,
+        channel: input.channel,
+        category: input.category,
+        subject: input.subject.trim(),
+        summary: normalizeOptional(input.summary),
+        outcome: input.outcome,
+        occurredAt: input.occurredAt,
+        recordedByUserId: principal.userId,
+        createdAt: now,
+      })
+      .returning();
+    const event = createDomainEvent({
+      type: 'communication.prospect_recorded',
+      tenantId: principal.tenantId,
+      aggregateType: 'onboarding',
+      aggregateId: admission.caseId,
+      actor: { type: 'user', id: principal.userId },
+      correlationId: request.correlationId,
+      payload: { interactionId: id, caseId: admission.caseId },
+    });
+    await this.recordChange(
+      transaction,
+      principal,
+      request,
+      auditContext,
+      event,
+      admission.caseId,
+      {
+        interactionId: id,
+        direction: input.direction,
+        channel: input.channel,
+        category: input.category,
+        outcome: input.outcome,
+        sourceType: 'admission_case',
+        contactAuthorization: 'not_applicable',
+      },
+      'communication.prospect_recorded',
+      'admission_communication',
+    );
+    return row!;
   }
 
   async listClientInteractions(

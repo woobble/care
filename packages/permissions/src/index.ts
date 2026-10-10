@@ -101,6 +101,11 @@ export const PERMISSIONS = [
   'operations.tasks.manage',
   'operations.tasks.assign',
   'operations.exceptions.manage',
+  'onboarding.read',
+  'onboarding.create',
+  'onboarding.manage',
+  'onboarding.admit',
+  'onboarding.templates.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

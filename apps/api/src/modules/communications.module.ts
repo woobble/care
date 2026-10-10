@@ -4,7 +4,12 @@ import type { AuditWriter } from '@care/audit';
 import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
 import { DatabaseModule } from '@app/api/database/database.module';
-import { AUDIT_WRITER, COMMUNICATIONS_APPLICATION, OUTBOX_WRITER, UNIT_OF_WORK } from '@app/api/tokens';
+import {
+  AUDIT_WRITER,
+  COMMUNICATIONS_APPLICATION,
+  OUTBOX_WRITER,
+  UNIT_OF_WORK,
+} from '@app/api/tokens';
 import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import { CommunicationsController } from '@app/api/presentation/http/communications.controller';
 import { AuditModule } from './audit.module';
@@ -24,5 +29,6 @@ import { PlatformModule } from './platform.module';
         createCommunicationsApplicationService(unitOfWork, audit, outbox),
     },
   ],
+  exports: [COMMUNICATIONS_APPLICATION],
 })
 export class CommunicationsModule {}
