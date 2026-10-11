@@ -6,7 +6,10 @@ import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate } from '@app/web/i18n/format';
 import { statusLabelKey } from '@app/web/i18n/status';
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
-import { inviteUserAction, revokeInvitationAction } from '@app/web/app/(office)/administration/actions';
+import {
+  inviteUserAction,
+  revokeInvitationAction,
+} from '@app/web/app/(office)/administration/actions';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 
 type SearchParams = Promise<{

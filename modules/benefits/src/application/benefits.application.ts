@@ -661,13 +661,21 @@ export class BenefitsApplicationService {
     });
   }
 
-  async getWorklist(principal: AuthorizationPrincipal, page: number, pageSize: number) {
+  async getWorklist(
+    principal: AuthorizationPrincipal,
+    page: number,
+    pageSize: number,
+    expiryLookaheadDays = 60,
+  ) {
     if (
       !Number.isSafeInteger(page) ||
       page < 1 ||
       !Number.isSafeInteger(pageSize) ||
       pageSize < 1 ||
-      pageSize > 100
+      pageSize > 100 ||
+      !Number.isSafeInteger(expiryLookaheadDays) ||
+      expiryLookaheadDays < 0 ||
+      expiryLookaheadDays > 365
     )
       throw new InvalidBenefitAdjustmentError();
     this.requireAnyGrant(principal, 'benefits.review');
@@ -771,7 +779,7 @@ export class BenefitsApplicationService {
         const monthly45b =
           applicableRule(rules, 'entlastungsbetrag_45b', 'DE', todayDate)?.monthlyAmountCents ?? 0;
         const expiryLimit = new Date(`${todayDate}T00:00:00.000Z`);
-        expiryLimit.setUTCDate(expiryLimit.getUTCDate() + 60);
+        expiryLimit.setUTCDate(expiryLimit.getUTCDate() + expiryLookaheadDays);
         const until = expiryLimit.toISOString().slice(0, 10);
         return {
           page,
@@ -794,19 +802,21 @@ export class BenefitsApplicationService {
                   ['confirmed', 'provisional'].includes(item.status) &&
                   entitlementCovers(item, todayDate),
               );
-            const expiringCents = clientBuckets
+            const expiringBuckets = clientBuckets
               .filter(
                 (bucket) =>
                   bucket.benefitType === 'entlastungsbetrag_45b' &&
                   bucket.expiresAt !== null &&
                   bucket.expiresAt >= todayDate &&
-                  bucket.expiresAt <= until,
+                  bucket.expiresAt <= until &&
+                  bucketRemainingCents(bucket, facts, todayDate, 'provisional') > 0,
               )
-              .reduce(
-                (sum, bucket) =>
-                  addCents(sum, bucketRemainingCents(bucket, facts, todayDate, 'provisional')),
-                0,
-              );
+              .sort((left, right) => (left.expiresAt ?? '').localeCompare(right.expiresAt ?? ''));
+            const expiringCents = expiringBuckets.reduce(
+              (sum, bucket) =>
+                addCents(sum, bucketRemainingCents(bucket, facts, todayDate, 'provisional')),
+              0,
+            );
             const unverifiedOpeningBalance = clientBuckets.some(
               (bucket) =>
                 ['opening_balance', 'external_input'].includes(bucket.bucketType) &&
@@ -839,6 +849,7 @@ export class BenefitsApplicationService {
                 active45b && monthly45b > 0 && recordedRemainingCents < monthly45b,
               recordedRemainingCents,
               expiringCarryoverCents: expiringCents,
+              expiringCarryoverDueDate: expiringBuckets[0]?.expiresAt ?? null,
               unverifiedOpeningBalance,
             };
           }),
@@ -852,6 +863,107 @@ export class BenefitsApplicationService {
       pageSize,
     );
     return { clients: clientItems, unallocatedServices };
+  }
+
+  async operationsCarryoverDeadlines(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    asOfDate: string,
+    expiryLookaheadDays: number,
+    maxClients = 500,
+    afterClientId?: string | null,
+  ): Promise<{
+    items: Array<{
+      clientId: string;
+      organizationId: string | null;
+      facilityId: string | null;
+      dueDate: string;
+    }>;
+    complete: boolean;
+    nextCursor: string | null;
+  }> {
+    const clients = await transaction
+      .select({
+        id: clientRecords.id,
+        organizationId: clientRecords.organizationId,
+        primaryFacilityId: clientRecords.primaryFacilityId,
+      })
+      .from(clientRecords)
+      .where(
+        and(
+          eq(clientRecords.tenantId, tenantId),
+          eq(clientRecords.status, 'active'),
+          ...(afterClientId ? [gt(clientRecords.id, afterClientId)] : []),
+        ),
+      )
+      .orderBy(asc(clientRecords.id))
+      .limit(maxClients + 1);
+    const complete = clients.length <= maxClients;
+    const clientRows = clients.slice(0, maxClients);
+    const clientIds = clientRows.map((client) => client.id);
+    if (!clientIds.length) return { items: [], complete, nextCursor: null };
+
+    const entitlements = await transaction
+      .select()
+      .from(clientBenefitEntitlements)
+      .where(
+        and(
+          eq(clientBenefitEntitlements.tenantId, tenantId),
+          inArray(clientBenefitEntitlements.clientId, clientIds),
+        ),
+      );
+    const rules = await this.rules(transaction);
+    const buckets = await transaction
+      .select()
+      .from(benefitAllocationBuckets)
+      .where(
+        and(
+          eq(benefitAllocationBuckets.tenantId, tenantId),
+          inArray(benefitAllocationBuckets.clientId, clientIds),
+        ),
+      );
+    const entries = await transaction
+      .select()
+      .from(benefitLedgerEntries)
+      .where(
+        and(
+          eq(benefitLedgerEntries.tenantId, tenantId),
+          inArray(benefitLedgerEntries.clientId, clientIds),
+        ),
+      );
+    const projectedBuckets = this.projectedBuckets(buckets, entitlements, rules, asOfDate);
+    const facts = entries.map(toLedgerFact);
+    const expiryLimit = new Date(`${asOfDate}T00:00:00.000Z`);
+    expiryLimit.setUTCDate(expiryLimit.getUTCDate() + expiryLookaheadDays);
+    const until = expiryLimit.toISOString().slice(0, 10);
+    const entitlementClient = new Map(entitlements.map((row) => [row.id, row.clientId]));
+    const items = clientRows.flatMap((client) => {
+      const expiring = projectedBuckets
+        .filter(
+          (bucket) =>
+            bucket.benefitType === 'entlastungsbetrag_45b' &&
+            bucket.expiresAt !== null &&
+            bucket.expiresAt >= asOfDate &&
+            bucket.expiresAt <= until &&
+            entitlementClient.get(bucket.entitlementId ?? '') === client.id &&
+            bucketRemainingCents(bucket, facts, asOfDate, 'provisional') > 0,
+        )
+        .sort((left, right) => (left.expiresAt ?? '').localeCompare(right.expiresAt ?? ''));
+      if (!expiring.length) return [];
+      return [
+        {
+          clientId: client.id,
+          organizationId: client.organizationId,
+          facilityId: client.primaryFacilityId,
+          dueDate: expiring[0]!.expiresAt!,
+        },
+      ];
+    });
+    return {
+      items,
+      complete,
+      nextCursor: clientRows.at(-1)?.id ?? null,
+    };
   }
 
   async createFundingSource(

@@ -16806,6 +16806,46 @@
             }
           },
           {
+            "name": "untilDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "sourceDomain",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          },
+          {
+            "name": "assignedEmployeeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "employeeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
             "name": "clientId",
             "required": false,
             "in": "query",
@@ -16867,7 +16907,9 @@
                 "benefits",
                 "billing",
                 "claims",
-                "onboarding"
+                "onboarding",
+                "agreements",
+                "employees"
               ],
               "type": "string"
             }
@@ -16901,6 +16943,362 @@
           }
         ],
         "summary": "List current source-derived operational exceptions",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/v1/operations/deadlines": {
+      "get": {
+        "operationId": "OperationsController_deadlines",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "untilDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "due",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "overdue",
+                "today",
+                "upcoming"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "relevance",
+                "due"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "sourceDomain",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          },
+          {
+            "name": "assignedEmployeeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "employeeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "open",
+                "acknowledged",
+                "snoozed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "agreements",
+                "employees",
+                "benefits",
+                "billing",
+                "onboarding"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationsWorklistResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List paginated source-derived deadlines and reminder work items",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/v1/operations/deadlines/{id}/tasks": {
+      "post": {
+        "operationId": "OperationsController_createDeadlineTask",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Stable deadline work item identity",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeadlineTaskRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationsTaskResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create or return the linked Operations task for a live agreement deadline",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/v1/operations/reminder-settings": {
+      "get": {
+        "operationId": "OperationsController_reminderSettings",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderSettingsResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read organization-scoped deadline reminder policies",
+        "tags": [
+          "operations"
+        ]
+      },
+      "put": {
+        "operationId": "OperationsController_updateReminderSettings",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReminderPolicyRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderPolicySettingResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update one organization-scoped deadline reminder policy",
         "tags": [
           "operations"
         ]
@@ -18132,6 +18530,570 @@
           }
         ],
         "summary": "Cancel an open task",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/v1/operations/recurring-tasks": {
+      "get": {
+        "operationId": "OperationsController_recurringTaskList",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "paused",
+                "ended"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "assignedEmployeeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringTaskListResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List recurring administrative task definitions",
+        "tags": [
+          "operations"
+        ]
+      },
+      "post": {
+        "operationId": "OperationsController_createRecurringTask",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecurringTaskCreateRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringTaskResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a recurring administrative task definition",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/v1/operations/recurring-tasks/{id}": {
+      "get": {
+        "operationId": "OperationsController_getRecurringTask",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringTaskResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read a recurring task definition",
+        "tags": [
+          "operations"
+        ]
+      },
+      "patch": {
+        "operationId": "OperationsController_patchRecurringTask",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecurringTaskPatchRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringTaskResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edit future occurrences of a recurring task",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/v1/operations/recurring-tasks/{id}/occurrences": {
+      "get": {
+        "operationId": "OperationsController_recurringTaskOccurrences",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecurringTaskOccurrenceResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List generated Operations tasks for a recurrence",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/v1/operations/recurring-tasks/{id}/pause": {
+      "post": {
+        "operationId": "OperationsController_pauseRecurringTask",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringTaskResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Pause a recurring task",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/v1/operations/recurring-tasks/{id}/resume": {
+      "post": {
+        "operationId": "OperationsController_resumeRecurringTask",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringTaskResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Resume a paused recurring task",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/v1/operations/recurring-tasks/{id}/end": {
+      "post": {
+        "operationId": "OperationsController_endRecurringTask",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringTaskResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "End a recurring task and preserve its history",
         "tags": [
           "operations"
         ]
@@ -31549,7 +32511,9 @@
               "benefits",
               "billing",
               "claims",
-              "onboarding"
+              "onboarding",
+              "agreements",
+              "employees"
             ]
           },
           "sourceDomain": {
@@ -31608,6 +32572,15 @@
             "type": "string",
             "nullable": true
           },
+          "employeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "employeeName": {
+            "type": "string",
+            "nullable": true
+          },
           "dueAt": {
             "type": "string",
             "format": "date-time",
@@ -31644,6 +32617,8 @@
           "facilityId",
           "clientId",
           "clientName",
+          "employeeId",
+          "employeeName",
           "dueAt",
           "firstDetectedAt",
           "lastObservedAt",
@@ -31672,6 +32647,12 @@
               "type": "number"
             }
           },
+          "deadlineCounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
           "worklistTruncated": {
             "type": "boolean"
           },
@@ -31693,6 +32674,7 @@
           "exceptionCount",
           "categoryCounts",
           "severityCounts",
+          "deadlineCounts",
           "worklistTruncated",
           "tasks",
           "highPriorityExceptions"
@@ -31726,6 +32708,286 @@
           "pageSize",
           "total",
           "truncated"
+        ]
+      },
+      "DeadlineTaskRequestDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "normal",
+              "high",
+              "urgent"
+            ]
+          },
+          "assignedEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "required": [
+          "title"
+        ]
+      },
+      "OperationsTaskResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "normal",
+              "high",
+              "urgent"
+            ]
+          },
+          "assignedEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "assignmentWarningCode": {
+            "type": "string",
+            "enum": [
+              "assignee_unavailable"
+            ],
+            "nullable": true
+          },
+          "createdByUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "completedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "dueAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "source": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "version": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "facilityId",
+          "clientId",
+          "title",
+          "description",
+          "status",
+          "priority",
+          "assignedEmployeeId",
+          "assignmentWarningCode",
+          "createdByUserId",
+          "completedByUserId",
+          "dueAt",
+          "completedAt",
+          "source",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ReminderPolicySettingResponseDto": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "agreements",
+              "employees",
+              "benefits",
+              "billing",
+              "onboarding"
+            ]
+          },
+          "offsetsDays": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "createFollowUpTask": {
+            "type": "boolean"
+          },
+          "assignedEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "category",
+          "offsetsDays",
+          "enabled",
+          "createFollowUpTask",
+          "assignedEmployeeId",
+          "version"
+        ]
+      },
+      "ReminderOrganizationSettingsResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "policies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReminderPolicySettingResponseDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "policies"
+        ]
+      },
+      "ReminderSettingsResponseDto": {
+        "type": "object",
+        "properties": {
+          "scheduler": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "organizations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReminderOrganizationSettingsResponseDto"
+            }
+          }
+        },
+        "required": [
+          "scheduler",
+          "organizations"
+        ]
+      },
+      "ReminderPolicyRequestDto": {
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "agreements",
+              "employees",
+              "benefits",
+              "billing",
+              "onboarding"
+            ]
+          },
+          "offsetsDays": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "createFollowUpTask": {
+            "type": "boolean"
+          },
+          "assignedEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "organizationId",
+          "category",
+          "offsetsDays",
+          "enabled",
+          "createFollowUpTask",
+          "expectedVersion"
         ]
       },
       "OperationsExceptionOccurrenceResponseDto": {
@@ -31896,113 +33158,6 @@
           "interactions"
         ]
       },
-      "OperationsTaskResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "organizationId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "facilityId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "clientId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "title": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string",
-            "nullable": true
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "open",
-              "in_progress",
-              "completed",
-              "cancelled"
-            ]
-          },
-          "priority": {
-            "type": "string",
-            "enum": [
-              "low",
-              "normal",
-              "high",
-              "urgent"
-            ]
-          },
-          "assignedEmployeeId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "createdByUserId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "completedByUserId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "dueAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "completedAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "source": {
-            "type": "object",
-            "nullable": true,
-            "additionalProperties": true
-          },
-          "version": {
-            "type": "number"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "id",
-          "organizationId",
-          "facilityId",
-          "clientId",
-          "title",
-          "description",
-          "status",
-          "priority",
-          "assignedEmployeeId",
-          "createdByUserId",
-          "completedByUserId",
-          "dueAt",
-          "completedAt",
-          "source",
-          "version",
-          "createdAt",
-          "updatedAt"
-        ]
-      },
       "OperationsTaskListResponseDto": {
         "type": "object",
         "properties": {
@@ -32082,6 +33237,379 @@
           "details",
           "comment",
           "occurredAt"
+        ]
+      },
+      "RecurringTaskResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "normal",
+              "high",
+              "urgent"
+            ]
+          },
+          "assignedEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "rule": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "timeOfDay": {
+            "type": "string",
+            "format": "time"
+          },
+          "nextOccurrenceDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "nextOccurrenceAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "ended"
+            ]
+          },
+          "generationPolicy": {
+            "type": "string",
+            "enum": [
+              "generate_missed",
+              "skip_missed"
+            ]
+          },
+          "version": {
+            "type": "number"
+          },
+          "createdByUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "facilityId",
+          "clientId",
+          "title",
+          "description",
+          "priority",
+          "assignedEmployeeId",
+          "rule",
+          "timezone",
+          "startDate",
+          "endDate",
+          "timeOfDay",
+          "nextOccurrenceDate",
+          "nextOccurrenceAt",
+          "status",
+          "generationPolicy",
+          "version",
+          "createdByUserId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "RecurringTaskListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecurringTaskResponseDto"
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "RecurrenceRuleRequestDto": {
+        "type": "object",
+        "properties": {
+          "frequency": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "yearly"
+            ]
+          },
+          "interval": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "weekdays": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "dayOfMonth": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 31
+          },
+          "month": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 12
+          }
+        },
+        "required": [
+          "frequency",
+          "interval"
+        ]
+      },
+      "RecurringTaskCreateRequestDto": {
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "normal",
+              "high",
+              "urgent"
+            ]
+          },
+          "assignedEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "rule": {
+            "$ref": "#/components/schemas/RecurrenceRuleRequestDto"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "timeOfDay": {
+            "type": "string",
+            "format": "time"
+          },
+          "generationPolicy": {
+            "type": "string",
+            "enum": [
+              "generate_missed",
+              "skip_missed"
+            ]
+          }
+        },
+        "required": [
+          "organizationId",
+          "title",
+          "rule",
+          "startDate"
+        ]
+      },
+      "RecurringTaskOccurrenceResponseDto": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "occurrenceDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "dueAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "taskId",
+          "occurrenceDate",
+          "dueAt",
+          "status",
+          "title"
+        ]
+      },
+      "RecurringTaskPatchRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facilityId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "normal",
+              "high",
+              "urgent"
+            ]
+          },
+          "assignedEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "rule": {
+            "$ref": "#/components/schemas/RecurrenceRuleRequestDto"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "timeOfDay": {
+            "type": "string",
+            "format": "time"
+          },
+          "generationPolicy": {
+            "type": "string",
+            "enum": [
+              "generate_missed",
+              "skip_missed"
+            ]
+          }
+        },
+        "required": [
+          "expectedVersion"
         ]
       },
       "MeResponseDto": {
@@ -32228,6 +33756,8 @@
               "operations.tasks.manage",
               "operations.tasks.assign",
               "operations.exceptions.manage",
+              "operations.recurring_tasks.manage",
+              "operations.reminder_settings.manage",
               "onboarding.read",
               "onboarding.create",
               "onboarding.manage",

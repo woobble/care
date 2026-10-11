@@ -8,6 +8,196 @@ import { visitDateTimeFromInput } from '@app/web/lib/care-date';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const priorities = ['low', 'normal', 'high', 'urgent'] as const;
 const transitionActions = ['start', 'complete', 'reopen', 'cancel'] as const;
+const recurrenceActions = ['pause', 'resume', 'end'] as const;
+const recurrenceFrequencies = ['daily', 'weekly', 'monthly', 'yearly'] as const;
+const reminderCategories = [
+  'agreements',
+  'employees',
+  'benefits',
+  'billing',
+  'onboarding',
+] as const;
+
+export async function createDeadlineTaskAction(formData: FormData): Promise<void> {
+  const issueId = text(formData.get('issueId'));
+  const title = text(formData.get('title')).trim();
+  const priority = choice(formData.get('priority'), priorities) ?? 'high';
+  if (!/^[a-f0-9]{64}$/.test(issueId) || title.length < 1 || title.length > 200)
+    redirect('/operations/deadlines?error=OPERATIONS_INVALID_INPUT');
+  const api = await getApiClient();
+  const { data, error } = await api.POST('/api/v1/operations/deadlines/{id}/tasks', {
+    params: { path: { id: issueId }, header: await getTenantHeader() },
+    body: { title, priority },
+  });
+  if (error || !data)
+    redirect(
+      `/operations/deadlines?error=${encodeURIComponent(error?.code ?? 'OPERATIONS_INVALID_INPUT')}`,
+    );
+  revalidateOperations(data.id);
+  redirect(`/operations/tasks/${data.id}?updated=created`);
+}
+
+export async function createRecurringTaskAction(formData: FormData): Promise<void> {
+  const organizationId = uuid(formData.get('organizationId'));
+  const facilityId = optionalUuid(formData.get('facilityId'));
+  const clientId = optionalUuid(formData.get('clientId'));
+  const assignedEmployeeId = optionalUuid(formData.get('assignedEmployeeId'));
+  const frequency = choice(formData.get('frequency'), recurrenceFrequencies);
+  const interval = boundedInteger(formData.get('interval'), 1, 365);
+  const title = text(formData.get('title')).trim();
+  const description = text(formData.get('description')).trim();
+  const priority = choice(formData.get('priority'), priorities);
+  const startDate = text(formData.get('startDate'));
+  const endDate = text(formData.get('endDate'));
+  const timeOfDay = text(formData.get('timeOfDay')) || '09:00';
+  const generationPolicy = choice(formData.get('generationPolicy'), [
+    'generate_missed',
+    'skip_missed',
+  ] as const);
+  if (
+    !organizationId ||
+    !frequency ||
+    !interval ||
+    title.length < 1 ||
+    title.length > 200 ||
+    !priority ||
+    !validDate(startDate) ||
+    (endDate && !validDate(endDate)) ||
+    !/^([01]\d|2[0-3]):[0-5]\d$/.test(timeOfDay) ||
+    facilityId === undefined ||
+    clientId === undefined ||
+    assignedEmployeeId === undefined ||
+    !generationPolicy
+  )
+    redirect('/operations/recurring-tasks?error=OPERATIONS_INVALID_INPUT');
+
+  const rule: {
+    frequency: (typeof recurrenceFrequencies)[number];
+    interval: number;
+    weekdays?: number[];
+    dayOfMonth?: number;
+    month?: number;
+  } = { frequency, interval };
+  if (frequency === 'weekly') {
+    const weekdays = formData.getAll('weekdays').map((value) => Number(value));
+    if (weekdays.some((day) => !Number.isInteger(day) || day < 1 || day > 7))
+      redirect('/operations/recurring-tasks?error=OPERATIONS_INVALID_INPUT');
+    if (weekdays.length) rule.weekdays = weekdays;
+  }
+  if (frequency === 'monthly' || frequency === 'yearly') {
+    const dayOfMonth = boundedInteger(formData.get('dayOfMonth'), 1, 31);
+    if (!dayOfMonth) redirect('/operations/recurring-tasks?error=OPERATIONS_INVALID_INPUT');
+    rule.dayOfMonth = dayOfMonth;
+  }
+  if (frequency === 'yearly') {
+    const month = boundedInteger(formData.get('month'), 1, 12);
+    if (!month) redirect('/operations/recurring-tasks?error=OPERATIONS_INVALID_INPUT');
+    rule.month = month;
+  }
+
+  const api = await getApiClient();
+  const { data, error } = await api.POST('/api/v1/operations/recurring-tasks', {
+    params: { header: await getTenantHeader() },
+    body: {
+      organizationId,
+      title,
+      priority,
+      rule,
+      startDate,
+      timeOfDay,
+      generationPolicy,
+      ...(description ? { description } : {}),
+      ...(facilityId ? { facilityId } : {}),
+      ...(clientId ? { clientId } : {}),
+      ...(assignedEmployeeId ? { assignedEmployeeId } : {}),
+      ...(endDate ? { endDate } : {}),
+    },
+  });
+  if (error || !data)
+    redirect(
+      `/operations/recurring-tasks?error=${encodeURIComponent(error?.code ?? 'OPERATIONS_INVALID_INPUT')}`,
+    );
+  revalidateOperations();
+  redirect('/operations/recurring-tasks?updated=created');
+}
+
+export async function transitionRecurringTaskAction(formData: FormData): Promise<void> {
+  const id = uuid(formData.get('recurrenceId'));
+  const expectedVersion = positiveInteger(formData.get('expectedVersion'));
+  const action = choice(formData.get('action'), recurrenceActions);
+  if (!id || !expectedVersion || !action)
+    redirect('/operations/recurring-tasks?error=OPERATIONS_INVALID_INPUT');
+  const api = await getApiClient();
+  const params = { path: { id }, header: await getTenantHeader() };
+  const body = { expectedVersion };
+  const result =
+    action === 'pause'
+      ? await api.POST('/api/v1/operations/recurring-tasks/{id}/pause', { params, body })
+      : action === 'resume'
+        ? await api.POST('/api/v1/operations/recurring-tasks/{id}/resume', { params, body })
+        : await api.POST('/api/v1/operations/recurring-tasks/{id}/end', { params, body });
+  if (result.error)
+    redirect(`/operations/recurring-tasks?error=${encodeURIComponent(result.error.code)}`);
+  revalidateOperations();
+  redirect('/operations/recurring-tasks?updated=saved');
+}
+
+export async function updateRecurringTaskAction(formData: FormData): Promise<void> {
+  const id = uuid(formData.get('recurrenceId'));
+  const expectedVersion = positiveInteger(formData.get('expectedVersion'));
+  const title = text(formData.get('title')).trim();
+  const priority = choice(formData.get('priority'), priorities);
+  if (!id || !expectedVersion || title.length < 1 || title.length > 200 || !priority)
+    redirect('/operations/recurring-tasks?error=OPERATIONS_INVALID_INPUT');
+  const api = await getApiClient();
+  const { error } = await api.PATCH('/api/v1/operations/recurring-tasks/{id}', {
+    params: { path: { id }, header: await getTenantHeader() },
+    body: { expectedVersion, title, priority },
+  });
+  if (error) redirect(`/operations/recurring-tasks?error=${encodeURIComponent(error.code)}`);
+  revalidateOperations();
+  redirect('/operations/recurring-tasks?updated=saved');
+}
+
+export async function updateReminderPolicyAction(formData: FormData): Promise<void> {
+  const organizationId = uuid(formData.get('organizationId'));
+  const category = choice(formData.get('category'), reminderCategories);
+  const expectedVersion = nonnegativeInteger(formData.get('expectedVersion'));
+  const assignedEmployeeId = optionalUuid(formData.get('assignedEmployeeId'));
+  const offsetsDays = text(formData.get('offsetsDays'))
+    .split(',')
+    .map((value) => Number(value.trim()))
+    .filter((value) => Number.isInteger(value));
+  if (
+    !organizationId ||
+    !category ||
+    expectedVersion === null ||
+    assignedEmployeeId === undefined ||
+    !offsetsDays.length ||
+    offsetsDays.length > 8 ||
+    offsetsDays.some((day) => day < 0 || day > 365)
+  )
+    redirect('/operations/reminder-settings?error=OPERATIONS_INVALID_INPUT');
+  const api = await getApiClient();
+  const { error } = await api.PUT('/api/v1/operations/reminder-settings', {
+    params: { header: await getTenantHeader() },
+    body: {
+      organizationId,
+      category,
+      offsetsDays: [...new Set(offsetsDays)],
+      enabled: formData.get('enabled') === 'on',
+      createFollowUpTask: formData.get('createFollowUpTask') === 'on',
+      expectedVersion,
+      ...(assignedEmployeeId ? { assignedEmployeeId } : {}),
+    },
+  });
+  if (error)
+    redirect(
+      `/operations/reminder-settings?organizationId=${organizationId}&error=${encodeURIComponent(error.code)}`,
+    );
+  revalidateOperations();
+  redirect(`/operations/reminder-settings?organizationId=${organizationId}&updated=saved`);
+}
 
 export async function createTaskAction(formData: FormData): Promise<void> {
   const admissionCaseId = optionalUuid(formData.get('admissionCaseId'));
@@ -168,6 +358,7 @@ export async function addTaskCommentAction(formData: FormData): Promise<void> {
 
 export async function acknowledgeExceptionAction(formData: FormData): Promise<void> {
   const issueId = text(formData.get('issueId'));
+  const returnTo = safeOperationsReturn(text(formData.get('returnTo')));
   if (!/^[a-f0-9]{64}$/.test(issueId))
     redirect('/operations/worklist?error=OPERATIONS_INVALID_INPUT');
   const api = await getApiClient();
@@ -175,13 +366,14 @@ export async function acknowledgeExceptionAction(formData: FormData): Promise<vo
     params: { path: { id: issueId }, header: await getTenantHeader() },
     body: {},
   });
-  if (error) redirect(`/operations/worklist?error=${error.code}`);
+  if (error) redirect(`${returnTo}?error=${error.code}`);
   revalidateOperations();
-  redirect('/operations/worklist?updated=acknowledged');
+  redirect(`${returnTo}?updated=acknowledged`);
 }
 
 export async function snoozeExceptionAction(formData: FormData): Promise<void> {
   const issueId = text(formData.get('issueId'));
+  const returnTo = safeOperationsReturn(text(formData.get('returnTo')));
   if (!/^[a-f0-9]{64}$/.test(issueId))
     redirect('/operations/worklist?error=OPERATIONS_INVALID_INPUT');
   const snoozedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -190,9 +382,9 @@ export async function snoozeExceptionAction(formData: FormData): Promise<void> {
     params: { path: { id: issueId }, header: await getTenantHeader() },
     body: { snoozedUntil },
   });
-  if (error) redirect(`/operations/worklist?error=${error.code}`);
+  if (error) redirect(`${returnTo}?error=${error.code}`);
   revalidateOperations();
-  redirect('/operations/worklist?updated=snoozed');
+  redirect(`${returnTo}?updated=snoozed`);
 }
 
 function dueDate(formData: FormData): string | null | undefined {
@@ -231,6 +423,28 @@ function optionalUuid(value: FormDataEntryValue | null): string | null | undefin
 function positiveInteger(value: FormDataEntryValue | null): number | null {
   const parsed = Number(text(value));
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function nonnegativeInteger(value: FormDataEntryValue | null): number | null {
+  const parsed = Number(text(value));
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function boundedInteger(
+  value: FormDataEntryValue | null,
+  minimum: number,
+  maximum: number,
+): number | null {
+  const parsed = Number(text(value));
+  return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : null;
+}
+
+function validDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00.000Z`));
+}
+
+function safeOperationsReturn(value: string): string {
+  return value === '/operations/deadlines' ? value : '/operations/worklist';
 }
 
 function choice<const T extends readonly string[]>(

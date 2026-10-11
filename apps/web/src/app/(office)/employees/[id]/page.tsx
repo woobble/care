@@ -194,6 +194,13 @@ export default async function EmployeeDetailPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {hasPermission(permissions, 'operations.read') ? (
+            <Button asChild variant="secondary">
+              <Link href={`/operations/deadlines?employeeId=${employee.id}`}>
+                {t('Operations.employeeDeadlines')}
+              </Link>
+            </Button>
+          ) : null}
           {employee.status === 'active' ? (
             <StatusForm id={id} operation="deactivate" label={t('Employees.detail.deactivate')} />
           ) : employee.status === 'inactive' ? (

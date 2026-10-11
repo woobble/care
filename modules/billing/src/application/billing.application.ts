@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { v7 as uuidv7 } from 'uuid';
@@ -2988,37 +2988,7 @@ export class BillingApplicationService {
     transaction: DatabaseTransaction,
     invoice: typeof invoices.$inferSelect,
   ): Promise<{ correctionsCents: number; paymentsCents: number; outstandingCents: number }> {
-    const corrections = await transaction
-      .select({ amountCents: invoiceCorrections.amountCents })
-      .from(invoiceCorrections)
-      .where(
-        and(
-          eq(invoiceCorrections.tenantId, invoice.tenantId),
-          eq(invoiceCorrections.invoiceId, invoice.id),
-        ),
-      );
-    const paymentsForInvoice = await transaction
-      .select({ amountCents: paymentAllocations.amountCents })
-      .from(paymentAllocations)
-      .leftJoin(
-        paymentReversals,
-        and(
-          eq(paymentReversals.tenantId, paymentAllocations.tenantId),
-          eq(paymentReversals.allocationId, paymentAllocations.id),
-        ),
-      )
-      .where(
-        and(
-          eq(paymentAllocations.tenantId, invoice.tenantId),
-          eq(paymentAllocations.invoiceId, invoice.id),
-          isNull(paymentReversals.id),
-        ),
-      );
-    const correctionsCents = corrections.reduce((sum, row) => sum + row.amountCents, 0);
-    const paymentsCents = paymentsForInvoice.reduce((sum, row) => sum + row.amountCents, 0);
-    const outstandingCents = invoice.grandTotalCents - correctionsCents - paymentsCents;
-    if (outstandingCents < 0) throw new PaymentAllocationExceededError();
-    return { correctionsCents, paymentsCents, outstandingCents };
+    return (await receivableFactsByInvoice(transaction, [invoice])).get(invoice.id)!;
   }
 
   private async paymentUsage(
@@ -3959,6 +3929,129 @@ function addDays(value: string, days: number): string {
   const date = new Date(`${value}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+async function receivableFactsByInvoice(
+  transaction: DatabaseTransaction,
+  invoicesToCheck: Array<Pick<typeof invoices.$inferSelect, 'id' | 'tenantId' | 'grandTotalCents'>>,
+) {
+  if (!invoicesToCheck.length) return new Map();
+  const tenantId = invoicesToCheck[0]!.tenantId;
+  const invoiceIds = invoicesToCheck.map((invoice) => invoice.id);
+  const corrections = await transaction
+    .select({
+      invoiceId: invoiceCorrections.invoiceId,
+      amountCents: sql<number>`coalesce(sum(${invoiceCorrections.amountCents}), 0)::int`,
+    })
+    .from(invoiceCorrections)
+    .where(
+      and(
+        eq(invoiceCorrections.tenantId, tenantId),
+        inArray(invoiceCorrections.invoiceId, invoiceIds),
+      ),
+    )
+    .groupBy(invoiceCorrections.invoiceId);
+  const paymentsForInvoices = await transaction
+    .select({
+      invoiceId: paymentAllocations.invoiceId,
+      amountCents: sql<number>`coalesce(sum(${paymentAllocations.amountCents}), 0)::int`,
+    })
+    .from(paymentAllocations)
+    .leftJoin(
+      paymentReversals,
+      and(
+        eq(paymentReversals.tenantId, paymentAllocations.tenantId),
+        eq(paymentReversals.allocationId, paymentAllocations.id),
+      ),
+    )
+    .where(
+      and(
+        eq(paymentAllocations.tenantId, tenantId),
+        inArray(paymentAllocations.invoiceId, invoiceIds),
+        isNull(paymentReversals.id),
+      ),
+    )
+    .groupBy(paymentAllocations.invoiceId);
+  const correctedCentsByInvoice = new Map(
+    corrections.map((row) => [row.invoiceId, row.amountCents]),
+  );
+  const paidCentsByInvoice = new Map(
+    paymentsForInvoices.map((row) => [row.invoiceId, row.amountCents]),
+  );
+  const result = new Map<
+    string,
+    { correctionsCents: number; paymentsCents: number; outstandingCents: number }
+  >();
+  for (const invoice of invoicesToCheck) {
+    const correctionsCents = correctedCentsByInvoice.get(invoice.id) ?? 0;
+    const paymentsCents = paidCentsByInvoice.get(invoice.id) ?? 0;
+    const outstandingCents = invoice.grandTotalCents - correctionsCents - paymentsCents;
+    if (outstandingCents < 0) throw new PaymentAllocationExceededError();
+    result.set(invoice.id, { correctionsCents, paymentsCents, outstandingCents });
+  }
+  return result;
+}
+
+export async function readOperationsReceivableDeadlines(
+  transaction: DatabaseTransaction,
+  tenantId: string,
+  maxInvoices = 500,
+  afterInvoiceId?: string | null,
+): Promise<{
+  items: Array<{
+    id: string;
+    organizationId: string;
+    facilityId: string;
+    clientId: string;
+    dueDate: string;
+  }>;
+  complete: boolean;
+  nextCursor: string | null;
+}> {
+  const rows = await transaction
+    .select({
+      id: invoices.id,
+      tenantId: invoices.tenantId,
+      organizationId: invoices.organizationId,
+      facilityId: invoices.facilityId,
+      clientId: invoices.clientId,
+      dueDate: invoices.dueDate,
+      grandTotalCents: invoices.grandTotalCents,
+    })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.tenantId, tenantId),
+        eq(invoices.status, 'issued'),
+        isNotNull(invoices.dueDate),
+        ...(afterInvoiceId ? [gt(invoices.id, afterInvoiceId)] : []),
+      ),
+    )
+    .orderBy(asc(invoices.id))
+    .limit(maxInvoices + 1);
+  const complete = rows.length <= maxInvoices;
+  const invoicesToCheck = rows.slice(0, maxInvoices);
+  if (!invoicesToCheck.length) return { items: [], complete, nextCursor: null };
+  const receivables = await receivableFactsByInvoice(transaction, invoicesToCheck);
+  const items = invoicesToCheck.flatMap((invoice) => {
+    const receivable = receivables.get(invoice.id);
+    return receivable?.outstandingCents && receivable.outstandingCents > 0 && invoice.dueDate
+      ? [
+          {
+            id: invoice.id,
+            organizationId: invoice.organizationId,
+            facilityId: invoice.facilityId,
+            clientId: invoice.clientId,
+            dueDate: invoice.dueDate,
+          },
+        ]
+      : [];
+  });
+  return {
+    items,
+    complete,
+    nextCursor: invoicesToCheck.at(-1)?.id ?? null,
+  };
 }
 
 export function createBillingApplicationService(

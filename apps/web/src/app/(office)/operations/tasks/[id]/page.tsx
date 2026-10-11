@@ -11,7 +11,11 @@ import {
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
-import { addTaskCommentAction, transitionTaskAction, updateTaskAction } from '@app/web/app/(office)/operations/actions';
+import {
+  addTaskCommentAction,
+  transitionTaskAction,
+  updateTaskAction,
+} from '@app/web/app/(office)/operations/actions';
 import { taskSourceHref, taskStatusTranslation } from '@app/web/app/(office)/operations/ui';
 
 type Params = Promise<{ id: string }>;
@@ -126,6 +130,14 @@ export default async function OperationsTaskDetailPage({
           className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
         >
           {t('taskUpdated')}
+        </p>
+      ) : null}
+      {task.assignmentWarningCode === 'assignee_unavailable' && !task.assignedEmployeeId ? (
+        <p
+          role="alert"
+          className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-950"
+        >
+          {t('assigneeUnavailableWarning')}
         </p>
       ) : null}
       {sourceHref ? (

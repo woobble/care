@@ -16,7 +16,11 @@ import {
 import type { SQL } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
 import { facilities } from '@care/organizations';
-import { serviceAvailability, serviceCategories, serviceDefinitions } from '@module/services/schema';
+import {
+  serviceAvailability,
+  serviceCategories,
+  serviceDefinitions,
+} from '@module/services/schema';
 import type {
   ServiceAvailabilitySnapshot,
   ServiceCategoryData,

@@ -8,6 +8,7 @@ import {
   Inject,
   Param,
   Patch,
+  Put,
   Post,
   Query,
   Req,
@@ -23,6 +24,7 @@ import {
   ApiOkResponse,
   ApiParam,
   ApiProperty,
+  ApiPropertyOptional,
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
@@ -34,10 +36,15 @@ import {
   type OperationsTaskInput,
   type OperationsTaskListQuery,
   type OperationsTaskPatch,
+  type OperationsReminderPolicyInput,
+  type OperationsRecurrenceApplicationService,
+  type RecurringTaskInput,
+  type RecurringTaskPatch,
+  type RecurringTaskQuery,
 } from '@care/operations';
 import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import { requestContext, type ApiRequest } from '@app/api/http/request';
-import { OPERATIONS_APPLICATION } from '@app/api/tokens';
+import { OPERATIONS_APPLICATION, OPERATIONS_RECURRENCE_APPLICATION } from '@app/api/tokens';
 import { ProblemDetailsDto } from './dto';
 import { withoutUndefined } from './validation';
 
@@ -50,13 +57,28 @@ const dashboardQuerySchema = z.object({
 });
 const workItemQuerySchema = z.object({
   category: z
-    .enum(['scheduling', 'visits', 'documentation', 'benefits', 'billing', 'claims', 'onboarding'])
+    .enum([
+      'scheduling',
+      'visits',
+      'documentation',
+      'benefits',
+      'billing',
+      'claims',
+      'onboarding',
+      'agreements',
+      'employees',
+    ])
     .optional(),
   status: z.enum(['open', 'acknowledged', 'snoozed']).optional(),
   severity: z.enum(['info', 'warning', 'critical']).optional(),
   organizationId: uuid.optional(),
   facilityId: uuid.optional(),
   clientId: uuid.optional(),
+  employeeId: uuid.optional(),
+  assignedEmployeeId: uuid.optional(),
+  sourceDomain: z.string().trim().min(1).max(100).optional(),
+  fromDate: z.iso.date().optional(),
+  untilDate: z.iso.date().optional(),
   due: z.enum(['overdue', 'today', 'upcoming']).optional(),
   sort: z.enum(['relevance', 'due']).optional(),
   search: z.string().trim().min(1).max(120).optional(),
@@ -118,11 +140,86 @@ const patchTaskSchema = z.object({
   dueAt: z.iso.datetime({ offset: true }).nullable().optional(),
 });
 const expectedVersionSchema = z.object({ expectedVersion: z.number().int().positive() });
+const reminderSettingsQuerySchema = z.object({ organizationId: uuid.optional() });
+const reminderPolicySchema = z.object({
+  organizationId: uuid,
+  category: z.enum(['agreements', 'employees', 'benefits', 'billing', 'onboarding']),
+  offsetsDays: z.array(z.number().int().min(0).max(365)).min(1).max(8),
+  enabled: z.boolean(),
+  createFollowUpTask: z.boolean(),
+  assignedEmployeeId: uuid.nullable().optional(),
+  expectedVersion: z.number().int().nonnegative(),
+});
+const deadlineTaskSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().max(8000).nullable().optional(),
+  priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+  assignedEmployeeId: uuid.nullable().optional(),
+});
 const commentSchema = z.object({ comment: z.string().trim().min(1).max(4000) });
 const acknowledgementSchema = z.object({ reason: z.string().trim().min(1).max(500).optional() });
 const snoozeSchema = z.object({
   snoozedUntil: z.iso.datetime({ offset: true }),
   reason: z.string().trim().min(1).max(500).optional(),
+});
+const recurrenceRuleSchema = z.object({
+  frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
+  interval: z.number().int().min(1).max(365),
+  weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7).optional(),
+  dayOfMonth: z.number().int().min(1).max(31).optional(),
+  month: z.number().int().min(1).max(12).optional(),
+});
+const recurringTaskFields = {
+  organizationId: uuid,
+  facilityId: uuid.nullable(),
+  clientId: uuid.nullable(),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().max(8000).nullable(),
+  priority: z.enum(['low', 'normal', 'high', 'urgent']),
+  assignedEmployeeId: uuid.nullable(),
+  rule: recurrenceRuleSchema,
+  timezone: z.string().trim().min(1).max(100),
+  startDate: z.iso.date(),
+  endDate: z.iso.date().nullable(),
+  timeOfDay: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  generationPolicy: z.enum(['generate_missed', 'skip_missed']),
+};
+const recurringTaskCreateSchema = z.object({
+  ...recurringTaskFields,
+  facilityId: recurringTaskFields.facilityId.optional(),
+  clientId: recurringTaskFields.clientId.optional(),
+  description: recurringTaskFields.description.optional(),
+  priority: recurringTaskFields.priority.optional(),
+  assignedEmployeeId: recurringTaskFields.assignedEmployeeId.optional(),
+  timezone: recurringTaskFields.timezone.optional(),
+  endDate: recurringTaskFields.endDate.optional(),
+  timeOfDay: recurringTaskFields.timeOfDay.optional(),
+  generationPolicy: recurringTaskFields.generationPolicy.optional(),
+});
+const recurringTaskPatchSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  organizationId: recurringTaskFields.organizationId.optional(),
+  facilityId: recurringTaskFields.facilityId.optional(),
+  clientId: recurringTaskFields.clientId.optional(),
+  title: recurringTaskFields.title.optional(),
+  description: recurringTaskFields.description.optional(),
+  priority: recurringTaskFields.priority.optional(),
+  assignedEmployeeId: recurringTaskFields.assignedEmployeeId.optional(),
+  rule: recurringTaskFields.rule.optional(),
+  timezone: recurringTaskFields.timezone.optional(),
+  startDate: recurringTaskFields.startDate.optional(),
+  endDate: recurringTaskFields.endDate.optional(),
+  timeOfDay: recurringTaskFields.timeOfDay.optional(),
+  generationPolicy: recurringTaskFields.generationPolicy.optional(),
+});
+const recurringTaskQuerySchema = z.object({
+  organizationId: uuid.optional(),
+  facilityId: uuid.optional(),
+  clientId: uuid.optional(),
+  assignedEmployeeId: uuid.optional(),
+  status: z.enum(['active', 'paused', 'ended']).optional(),
+  page: pageSchema,
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
 
 export class OperationsWorkItemResponseDto {
@@ -131,7 +228,17 @@ export class OperationsWorkItemResponseDto {
   @ApiProperty({ enum: ['exception'] })
   kind!: 'exception';
   @ApiProperty({
-    enum: ['scheduling', 'visits', 'documentation', 'benefits', 'billing', 'claims', 'onboarding'],
+    enum: [
+      'scheduling',
+      'visits',
+      'documentation',
+      'benefits',
+      'billing',
+      'claims',
+      'onboarding',
+      'agreements',
+      'employees',
+    ],
   })
   category!: string;
   @ApiProperty()
@@ -160,6 +267,10 @@ export class OperationsWorkItemResponseDto {
   clientId!: string | null;
   @ApiProperty({ type: String, nullable: true })
   clientName!: string | null;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true })
+  employeeId!: string | null;
+  @ApiProperty({ type: String, nullable: true })
+  employeeName!: string | null;
   @ApiProperty({ type: String, format: 'date-time', nullable: true })
   dueAt!: string | null;
   @ApiProperty({ format: 'date-time' })
@@ -257,12 +368,107 @@ export class OperationsDashboardResponseDto {
   categoryCounts!: Record<string, number>;
   @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } })
   severityCounts!: Record<string, number>;
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } })
+  deadlineCounts!: Record<string, number>;
   @ApiProperty()
   worklistTruncated!: boolean;
   @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } })
   tasks!: Record<string, number>;
   @ApiProperty({ type: [OperationsWorkItemResponseDto] })
   highPriorityExceptions!: OperationsWorkItemResponseDto[];
+}
+
+export class ReminderPolicyRequestDto {
+  @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiProperty({ enum: ['agreements', 'employees', 'benefits', 'billing', 'onboarding'] })
+  category!: string;
+  @ApiProperty({ type: [Number], minItems: 1, maxItems: 8 }) offsetsDays!: number[];
+  @ApiProperty() enabled!: boolean;
+  @ApiProperty() createFollowUpTask!: boolean;
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) assignedEmployeeId?:
+    | string
+    | null;
+  @ApiProperty({ minimum: 0 }) expectedVersion!: number;
+}
+
+export class ReminderPolicySettingResponseDto {
+  @ApiProperty({ enum: ['agreements', 'employees', 'benefits', 'billing', 'onboarding'] })
+  category!: string;
+  @ApiProperty({ type: [Number] }) offsetsDays!: number[];
+  @ApiProperty() enabled!: boolean;
+  @ApiProperty() createFollowUpTask!: boolean;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true }) assignedEmployeeId!: string | null;
+  @ApiProperty() version!: number;
+}
+
+export class ReminderOrganizationSettingsResponseDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty({ type: [ReminderPolicySettingResponseDto] })
+  policies!: ReminderPolicySettingResponseDto[];
+}
+
+export class ReminderSettingsResponseDto {
+  @ApiProperty({ type: 'object', nullable: true, additionalProperties: true }) scheduler!: Record<
+    string,
+    unknown
+  > | null;
+  @ApiProperty({ type: [ReminderOrganizationSettingsResponseDto] })
+  organizations!: ReminderOrganizationSettingsResponseDto[];
+}
+
+export class RecurrenceRuleRequestDto {
+  @ApiProperty({ enum: ['daily', 'weekly', 'monthly', 'yearly'] }) frequency!: string;
+  @ApiProperty({ minimum: 1, maximum: 365 }) interval!: number;
+  @ApiPropertyOptional({ type: [Number] }) weekdays?: number[];
+  @ApiPropertyOptional({ minimum: 1, maximum: 31 }) dayOfMonth?: number;
+  @ApiPropertyOptional({ minimum: 1, maximum: 12 }) month?: number;
+}
+
+export class RecurringTaskCreateRequestDto {
+  @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) facilityId?: string | null;
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) clientId?: string | null;
+  @ApiProperty() title!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) description?: string | null;
+  @ApiPropertyOptional({ enum: ['low', 'normal', 'high', 'urgent'] }) priority?: string;
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) assignedEmployeeId?:
+    | string
+    | null;
+  @ApiProperty({ type: RecurrenceRuleRequestDto }) rule!: RecurrenceRuleRequestDto;
+  @ApiPropertyOptional() timezone?: string;
+  @ApiProperty({ format: 'date' }) startDate!: string;
+  @ApiPropertyOptional({ type: String, format: 'date', nullable: true }) endDate?: string | null;
+  @ApiPropertyOptional({ format: 'time' }) timeOfDay?: string;
+  @ApiPropertyOptional({ enum: ['generate_missed', 'skip_missed'] }) generationPolicy?: string;
+}
+
+export class RecurringTaskPatchRequestDto {
+  @ApiProperty({ minimum: 1 }) expectedVersion!: number;
+  @ApiPropertyOptional({ format: 'uuid' }) organizationId?: string;
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) facilityId?: string | null;
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) clientId?: string | null;
+  @ApiPropertyOptional() title?: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) description?: string | null;
+  @ApiPropertyOptional({ enum: ['low', 'normal', 'high', 'urgent'] }) priority?: string;
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) assignedEmployeeId?:
+    | string
+    | null;
+  @ApiPropertyOptional({ type: RecurrenceRuleRequestDto }) rule?: RecurrenceRuleRequestDto;
+  @ApiPropertyOptional() timezone?: string;
+  @ApiPropertyOptional({ format: 'date' }) startDate?: string;
+  @ApiPropertyOptional({ type: String, format: 'date', nullable: true }) endDate?: string | null;
+  @ApiPropertyOptional({ format: 'time' }) timeOfDay?: string;
+  @ApiPropertyOptional({ enum: ['generate_missed', 'skip_missed'] }) generationPolicy?: string;
+}
+
+export class DeadlineTaskRequestDto {
+  @ApiProperty() title!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) description?: string | null;
+  @ApiPropertyOptional({ enum: ['low', 'normal', 'high', 'urgent'] }) priority?: string;
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) assignedEmployeeId?:
+    | string
+    | null;
 }
 
 export class OperationsTaskResponseDto {
@@ -284,6 +490,8 @@ export class OperationsTaskResponseDto {
   priority!: 'low' | 'normal' | 'high' | 'urgent';
   @ApiProperty({ type: String, format: 'uuid', nullable: true })
   assignedEmployeeId!: string | null;
+  @ApiProperty({ enum: ['assignee_unavailable'], nullable: true })
+  assignmentWarningCode!: 'assignee_unavailable' | null;
   @ApiProperty({ format: 'uuid' })
   createdByUserId!: string;
   @ApiProperty({ type: String, format: 'uuid', nullable: true })
@@ -342,6 +550,70 @@ export class OperationsTaskActivityResponseDto {
   occurredAt!: string;
 }
 
+export class RecurringTaskResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+  @ApiProperty({ format: 'uuid' })
+  organizationId!: string;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true })
+  facilityId!: string | null;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true })
+  clientId!: string | null;
+  @ApiProperty()
+  title!: string;
+  @ApiProperty({ type: String, nullable: true })
+  description!: string | null;
+  @ApiProperty({ enum: ['low', 'normal', 'high', 'urgent'] })
+  priority!: string;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true })
+  assignedEmployeeId!: string | null;
+  @ApiProperty({ type: 'object', additionalProperties: true })
+  rule!: Record<string, unknown>;
+  @ApiProperty()
+  timezone!: string;
+  @ApiProperty({ format: 'date' })
+  startDate!: string;
+  @ApiProperty({ type: String, format: 'date', nullable: true })
+  endDate!: string | null;
+  @ApiProperty({ format: 'time' })
+  timeOfDay!: string;
+  @ApiProperty({ type: String, format: 'date', nullable: true })
+  nextOccurrenceDate!: string | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  nextOccurrenceAt!: string | null;
+  @ApiProperty({ enum: ['active', 'paused', 'ended'] })
+  status!: string;
+  @ApiProperty({ enum: ['generate_missed', 'skip_missed'] })
+  generationPolicy!: string;
+  @ApiProperty()
+  version!: number;
+  @ApiProperty({ format: 'uuid' })
+  createdByUserId!: string;
+  @ApiProperty({ format: 'date-time' })
+  createdAt!: string;
+  @ApiProperty({ format: 'date-time' })
+  updatedAt!: string;
+}
+
+export class RecurringTaskListResponseDto {
+  @ApiProperty({ type: [RecurringTaskResponseDto] })
+  items!: RecurringTaskResponseDto[];
+  @ApiProperty()
+  page!: number;
+  @ApiProperty()
+  pageSize!: number;
+  @ApiProperty()
+  total!: number;
+}
+
+export class RecurringTaskOccurrenceResponseDto {
+  @ApiProperty({ format: 'uuid' }) taskId!: string;
+  @ApiProperty({ format: 'date' }) occurrenceDate!: string;
+  @ApiProperty({ format: 'date-time' }) dueAt!: string;
+  @ApiProperty({ enum: ['open', 'in_progress', 'completed', 'cancelled'] }) status!: string;
+  @ApiProperty() title!: string;
+}
+
 @ApiTags('operations')
 @ApiBearerAuth()
 @ApiHeader({ name: 'X-Tenant-Id', required: true, description: 'Tenant selected for this request' })
@@ -351,6 +623,8 @@ export class OperationsTaskActivityResponseDto {
 export class OperationsController {
   constructor(
     @Inject(OPERATIONS_APPLICATION) private readonly operations: OperationsApplicationService,
+    @Inject(OPERATIONS_RECURRENCE_APPLICATION)
+    private readonly recurringTasks: OperationsRecurrenceApplicationService,
   ) {}
 
   @Get('dashboard')
@@ -369,13 +643,28 @@ export class OperationsController {
   @ApiQuery({
     name: 'category',
     required: false,
-    enum: ['scheduling', 'visits', 'documentation', 'benefits', 'billing', 'claims', 'onboarding'],
+    enum: [
+      'scheduling',
+      'visits',
+      'documentation',
+      'benefits',
+      'billing',
+      'claims',
+      'onboarding',
+      'agreements',
+      'employees',
+    ],
   })
   @ApiQuery({ name: 'status', required: false, enum: ['open', 'acknowledged', 'snoozed'] })
   @ApiQuery({ name: 'severity', required: false, enum: ['info', 'warning', 'critical'] })
   @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'clientId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'employeeId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'assignedEmployeeId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'sourceDomain', required: false })
+  @ApiQuery({ name: 'fromDate', required: false, type: String, format: 'date' })
+  @ApiQuery({ name: 'untilDate', required: false, type: String, format: 'date' })
   @ApiQuery({ name: 'due', required: false, enum: ['overdue', 'today', 'upcoming'] })
   @ApiQuery({ name: 'sort', required: false, enum: ['relevance', 'due'] })
   @ApiQuery({ name: 'search', required: false })
@@ -386,6 +675,80 @@ export class OperationsController {
     const parsed = workItemQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException();
     return this.operations.listWorkItems(principal(request), parsed.data as OperationsQuery);
+  }
+
+  @Get('deadlines')
+  @ApiOperation({ summary: 'List paginated source-derived deadlines and reminder work items' })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    enum: ['agreements', 'employees', 'benefits', 'billing', 'onboarding'],
+  })
+  @ApiQuery({ name: 'status', required: false, enum: ['open', 'acknowledged', 'snoozed'] })
+  @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'clientId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'employeeId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'assignedEmployeeId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'sourceDomain', required: false })
+  @ApiQuery({ name: 'sort', required: false, enum: ['relevance', 'due'] })
+  @ApiQuery({ name: 'due', required: false, enum: ['overdue', 'today', 'upcoming'] })
+  @ApiQuery({ name: 'fromDate', required: false, type: String, format: 'date' })
+  @ApiQuery({ name: 'untilDate', required: false, type: String, format: 'date' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiOkResponse({ type: OperationsWorklistResponseDto })
+  deadlines(@Req() request: ApiRequest, @Query() query: Record<string, string | undefined>) {
+    const parsed = workItemQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    return this.operations.listWorkItems(principal(request), {
+      ...(parsed.data as OperationsQuery),
+      deadlinesOnly: true,
+    });
+  }
+
+  @Post('deadlines/:id/tasks')
+  @ApiOperation({
+    summary: 'Create or return the linked Operations task for a live agreement deadline',
+  })
+  @ApiParam({ name: 'id', description: 'Stable deadline work item identity' })
+  @ApiBody({ type: DeadlineTaskRequestDto })
+  @ApiCreatedResponse({ type: OperationsTaskResponseDto })
+  createDeadlineTask(@Req() request: ApiRequest, @Param('id') id: string, @Body() body: unknown) {
+    const parsed = deadlineTaskSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException();
+    return this.operations.createDeadlineTask(
+      principal(request),
+      id,
+      withoutUndefined(parsed.data),
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+
+  @Get('reminder-settings')
+  @ApiOperation({ summary: 'Read organization-scoped deadline reminder policies' })
+  @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiOkResponse({ type: ReminderSettingsResponseDto })
+  reminderSettings(@Req() request: ApiRequest, @Query() query: Record<string, string | undefined>) {
+    const parsed = reminderSettingsQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    return this.operations.reminderSettings(principal(request), parsed.data.organizationId);
+  }
+
+  @Put('reminder-settings')
+  @ApiOperation({ summary: 'Update one organization-scoped deadline reminder policy' })
+  @ApiBody({ type: ReminderPolicyRequestDto })
+  @ApiOkResponse({ type: ReminderPolicySettingResponseDto })
+  updateReminderSettings(@Req() request: ApiRequest, @Body() body: unknown) {
+    const parsed = reminderPolicySchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException();
+    return this.operations.updateReminderPolicy(
+      principal(request),
+      parsed.data as OperationsReminderPolicyInput,
+      requestContext(request),
+      auditContext(request),
+    );
   }
 
   @Get('work-items/:id/history')
@@ -722,6 +1085,141 @@ export class OperationsController {
       requestContext(request),
       auditContext(request),
     );
+  }
+
+  @Get('recurring-tasks')
+  @ApiOperation({ summary: 'List recurring administrative task definitions' })
+  @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'clientId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'assignedEmployeeId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'status', required: false, enum: ['active', 'paused', 'ended'] })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiOkResponse({ type: RecurringTaskListResponseDto })
+  recurringTaskList(
+    @Req() request: ApiRequest,
+    @Query() query: Record<string, string | undefined>,
+  ) {
+    const parsed = recurringTaskQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    return this.recurringTasks.list(
+      principal(request),
+      withoutUndefined(parsed.data) as RecurringTaskQuery,
+    );
+  }
+
+  @Post('recurring-tasks')
+  @ApiOperation({ summary: 'Create a recurring administrative task definition' })
+  @ApiBody({ type: RecurringTaskCreateRequestDto })
+  @ApiCreatedResponse({ type: RecurringTaskResponseDto })
+  createRecurringTask(@Req() request: ApiRequest, @Body() body: unknown) {
+    const parsed = recurringTaskCreateSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException();
+    return this.recurringTasks.create(
+      principal(request),
+      parsed.data as RecurringTaskInput,
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+
+  @Get('recurring-tasks/:id')
+  @ApiOperation({ summary: 'Read a recurring task definition' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: RecurringTaskResponseDto })
+  getRecurringTask(@Req() request: ApiRequest, @Param('id') id: string) {
+    return this.recurringTasks.get(principal(request), parseId(id));
+  }
+
+  @Get('recurring-tasks/:id/occurrences')
+  @ApiOperation({ summary: 'List generated Operations tasks for a recurrence' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: [RecurringTaskOccurrenceResponseDto] })
+  recurringTaskOccurrences(@Req() request: ApiRequest, @Param('id') id: string) {
+    return this.recurringTasks.occurrences(principal(request), parseId(id));
+  }
+
+  @Patch('recurring-tasks/:id')
+  @ApiOperation({ summary: 'Edit future occurrences of a recurring task' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: RecurringTaskPatchRequestDto })
+  @ApiOkResponse({ type: RecurringTaskResponseDto })
+  patchRecurringTask(@Req() request: ApiRequest, @Param('id') id: string, @Body() body: unknown) {
+    const parsed = recurringTaskPatchSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException();
+    return this.recurringTasks.patch(
+      principal(request),
+      parseId(id),
+      parsed.data as RecurringTaskPatch,
+      requestContext(request),
+      auditContext(request),
+    );
+  }
+
+  @Post('recurring-tasks/:id/pause')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Pause a recurring task' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['expectedVersion'],
+      properties: { expectedVersion: { type: 'integer', minimum: 1 } },
+    },
+  })
+  @ApiOkResponse({ type: RecurringTaskResponseDto })
+  pauseRecurringTask(@Req() request: ApiRequest, @Param('id') id: string, @Body() body: unknown) {
+    return this.transitionRecurringTask('pause', request, id, body);
+  }
+
+  @Post('recurring-tasks/:id/resume')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resume a paused recurring task' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['expectedVersion'],
+      properties: { expectedVersion: { type: 'integer', minimum: 1 } },
+    },
+  })
+  @ApiOkResponse({ type: RecurringTaskResponseDto })
+  resumeRecurringTask(@Req() request: ApiRequest, @Param('id') id: string, @Body() body: unknown) {
+    return this.transitionRecurringTask('resume', request, id, body);
+  }
+
+  @Post('recurring-tasks/:id/end')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'End a recurring task and preserve its history' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['expectedVersion'],
+      properties: { expectedVersion: { type: 'integer', minimum: 1 } },
+    },
+  })
+  @ApiOkResponse({ type: RecurringTaskResponseDto })
+  endRecurringTask(@Req() request: ApiRequest, @Param('id') id: string, @Body() body: unknown) {
+    return this.transitionRecurringTask('end', request, id, body);
+  }
+
+  private transitionRecurringTask(
+    action: 'pause' | 'resume' | 'end',
+    request: ApiRequest,
+    id: string,
+    body: unknown,
+  ) {
+    const parsed = expectedVersionSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException();
+    const args = [
+      principal(request),
+      parseId(id),
+      parsed.data.expectedVersion,
+      requestContext(request),
+      auditContext(request),
+    ] as const;
+    if (action === 'pause') return this.recurringTasks.pause(...args);
+    if (action === 'resume') return this.recurringTasks.resume(...args);
+    return this.recurringTasks.end(...args);
   }
 }
 

@@ -58,7 +58,11 @@ import type {
 } from '@module/scheduling/infrastructure/scheduling.repository';
 import type { SchedulingExecutionGuard } from '@module/scheduling/infrastructure/scheduling-guards';
 import { UnavailableRouteProvider } from '@module/scheduling/domain/route-provider';
-import type { RouteEstimate, RouteOrderSuggestion, RouteProvider } from '@module/scheduling/domain/route-provider';
+import type {
+  RouteEstimate,
+  RouteOrderSuggestion,
+  RouteProvider,
+} from '@module/scheduling/domain/route-provider';
 import {
   compareTourStops,
   InvalidTourError,

@@ -69,7 +69,7 @@ export {
   InvalidScheduleRuleError,
   type CadenceDates,
 } from './domain/schedule-generation';
-export { localDateTimeInstants, localDateTimeToInstant } from './domain/zoned-time';
+export { isTimeZone, localDateTimeInstants, localDateTimeToInstant } from './domain/zoned-time';
 export {
   DrizzleSchedulingGuards,
   createSchedulingGuards,

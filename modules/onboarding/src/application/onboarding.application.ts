@@ -144,6 +144,7 @@ export type AdmissionOperationsCase = {
   stage: AdmissionStage;
   createdAt: Date;
   nextFollowUpAt: Date | null;
+  preferredStartDate: string | null;
   blockerCount: number;
 };
 export type ProspectCommunicationInput = Omit<
@@ -1009,6 +1010,7 @@ export class OnboardingApplicationService {
 
   async operationsReadinessWorklist(
     principal: AuthorizationPrincipal,
+    deadlineWindow: { fromDate: string; untilDate: string },
   ): Promise<{ items: AdmissionOperationsCase[]; complete: boolean }> {
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const filters = this.visibleCases(principal);
@@ -1023,7 +1025,10 @@ export class OnboardingApplicationService {
       const batchSize = 100;
       const scanLimit = 500;
       const now = new Date();
-      const items: AdmissionOperationsCase[] = [];
+      const scannedCases: Array<{
+        admission: typeof admissionCases.$inferSelect;
+        blockerCount: number;
+      }> = [];
       let cursor: typeof admissionCases.$inferSelect | null = null;
       let scanned = 0;
       while (scanned < scanLimit) {
@@ -1055,24 +1060,7 @@ export class OnboardingApplicationService {
         );
         for (const admission of candidates) {
           const readiness = readinessByCase.get(admission.id)!;
-          const overdue = Boolean(admission.nextFollowUpAt && admission.nextFollowUpAt < now);
-          if (!readiness.blockers.length && !overdue) continue;
-          items.push({
-            id: admission.id,
-            firstName: admission.firstName,
-            lastName: admission.lastName,
-            organizationId: admission.organizationId,
-            facilityId: admission.facilityId,
-            clientId:
-              admission.clientId &&
-              can(principal, { action: 'client.read', resource: clientResource(admission) })
-                ? admission.clientId
-                : null,
-            stage: admission.stage,
-            createdAt: admission.createdAt,
-            nextFollowUpAt: admission.nextFollowUpAt,
-            blockerCount: readiness.blockers.length,
-          });
+          scannedCases.push({ admission, blockerCount: readiness.blockers.length });
         }
         cursor = candidates[candidates.length - 1]!;
         if (candidates.length < limit) break;
@@ -1097,6 +1085,61 @@ export class OnboardingApplicationService {
           .limit(1);
         complete = !remaining;
       }
+      const assessmentRows = scannedCases.length
+        ? await transaction
+            .select({ caseId: admissionAssessments.caseId, data: admissionAssessments.data })
+            .from(admissionAssessments)
+            .where(
+              and(
+                eq(admissionAssessments.tenantId, principal.tenantId),
+                inArray(
+                  admissionAssessments.caseId,
+                  scannedCases.map(({ admission }) => admission.id),
+                ),
+              ),
+            )
+        : [];
+      const preferredStartDateByCase = new Map(
+        assessmentRows.map((row) => [row.caseId, row.data.preferredStartDate]),
+      );
+      const until = new Date(`${deadlineWindow.untilDate}T23:59:59.999Z`);
+      const items = scannedCases.flatMap(({ admission, blockerCount }) => {
+        const overdue = Boolean(admission.nextFollowUpAt && admission.nextFollowUpAt < now);
+        const upcomingFollowUp = Boolean(
+          admission.nextFollowUpAt &&
+          admission.nextFollowUpAt > now &&
+          admission.nextFollowUpAt <= until,
+        );
+        const requestedStartDate =
+          preferredStartDateByCase.get(admission.id) ?? admission.preferredStartDate;
+        const startDateInWindow = Boolean(
+          requestedStartDate &&
+          isISODate(requestedStartDate) &&
+          requestedStartDate >= deadlineWindow.fromDate &&
+          requestedStartDate <= deadlineWindow.untilDate,
+        );
+        if (!blockerCount && !overdue && !upcomingFollowUp && !startDateInWindow) return [];
+        return [
+          {
+            id: admission.id,
+            firstName: admission.firstName,
+            lastName: admission.lastName,
+            organizationId: admission.organizationId,
+            facilityId: admission.facilityId,
+            clientId:
+              admission.clientId &&
+              can(principal, { action: 'client.read', resource: clientResource(admission) })
+                ? admission.clientId
+                : null,
+            stage: admission.stage,
+            createdAt: admission.createdAt,
+            nextFollowUpAt: admission.nextFollowUpAt,
+            preferredStartDate:
+              requestedStartDate && isISODate(requestedStartDate) ? requestedStartDate : null,
+            blockerCount,
+          },
+        ];
+      });
       return { items, complete };
     });
   }
@@ -1106,12 +1149,25 @@ export class OnboardingApplicationService {
       const admission = await this.requireCase(transaction, principal, id, 'onboarding.read');
       const readiness = await this.evaluateReadiness(transaction, principal, admission);
       const active = !['admitted', 'declined', 'withdrawn'].includes(admission.stage);
-      const overdue = Boolean(
-        active && admission.nextFollowUpAt && admission.nextFollowUpAt < new Date(),
-      );
+      const [assessment] = await transaction
+        .select({ data: admissionAssessments.data })
+        .from(admissionAssessments)
+        .where(
+          and(
+            eq(admissionAssessments.tenantId, principal.tenantId),
+            eq(admissionAssessments.caseId, admission.id),
+          ),
+        )
+        .limit(1);
+      const preferredStartDate =
+        assessment?.data.preferredStartDate ?? admission.preferredStartDate;
+      const now = new Date();
+      const overdue = Boolean(active && admission.nextFollowUpAt && admission.nextFollowUpAt < now);
       return {
         readinessBlocked: active && readiness.blockers.length > 0,
         followUpOverdue: overdue,
+        followUpDue: Boolean(active && admission.nextFollowUpAt && admission.nextFollowUpAt >= now),
+        startDateActionable: Boolean(active && preferredStartDate && isISODate(preferredStartDate)),
       };
     });
   }

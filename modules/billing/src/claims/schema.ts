@@ -15,7 +15,12 @@ import {
 import { clientRecords } from '@care/clients';
 import { facilities, organizationsTable } from '@care/organizations';
 import { documentArtifacts } from '@care/documents';
-import { invoiceDocuments, invoiceLines, invoices, payerArrangements } from '@module/billing/schema';
+import {
+  invoiceDocuments,
+  invoiceLines,
+  invoices,
+  payerArrangements,
+} from '@module/billing/schema';
 import { payerBillingProfiles, payers } from './payer-schema';
 
 const billing = pgSchema('billing');

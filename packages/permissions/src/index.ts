@@ -101,6 +101,8 @@ export const PERMISSIONS = [
   'operations.tasks.manage',
   'operations.tasks.assign',
   'operations.exceptions.manage',
+  'operations.recurring_tasks.manage',
+  'operations.reminder_settings.manage',
   'onboarding.read',
   'onboarding.create',
   'onboarding.manage',

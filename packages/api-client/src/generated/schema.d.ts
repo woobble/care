@@ -3330,6 +3330,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/deadlines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List paginated source-derived deadlines and reminder work items */
+        get: operations["OperationsController_deadlines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/deadlines/{id}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create or return the linked Operations task for a live agreement deadline */
+        post: operations["OperationsController_createDeadlineTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/reminder-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read organization-scoped deadline reminder policies */
+        get: operations["OperationsController_reminderSettings"];
+        /** Update one organization-scoped deadline reminder policy */
+        put: operations["OperationsController_updateReminderSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/work-items/{id}/history": {
         parameters: {
             query?: never;
@@ -3530,6 +3582,110 @@ export interface paths {
         put?: never;
         /** Cancel an open task */
         post: operations["OperationsController_cancelTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/recurring-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recurring administrative task definitions */
+        get: operations["OperationsController_recurringTaskList"];
+        put?: never;
+        /** Create a recurring administrative task definition */
+        post: operations["OperationsController_createRecurringTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/recurring-tasks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a recurring task definition */
+        get: operations["OperationsController_getRecurringTask"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit future occurrences of a recurring task */
+        patch: operations["OperationsController_patchRecurringTask"];
+        trace?: never;
+    };
+    "/api/v1/operations/recurring-tasks/{id}/occurrences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List generated Operations tasks for a recurrence */
+        get: operations["OperationsController_recurringTaskOccurrences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/recurring-tasks/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause a recurring task */
+        post: operations["OperationsController_pauseRecurringTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/recurring-tasks/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume a paused recurring task */
+        post: operations["OperationsController_resumeRecurringTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/recurring-tasks/{id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End a recurring task and preserve its history */
+        post: operations["OperationsController_endRecurringTask"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7110,7 +7266,7 @@ export interface components {
             /** @enum {string} */
             kind: "exception";
             /** @enum {string} */
-            category: "scheduling" | "visits" | "documentation" | "benefits" | "billing" | "claims" | "onboarding";
+            category: "scheduling" | "visits" | "documentation" | "benefits" | "billing" | "claims" | "onboarding" | "agreements" | "employees";
             sourceDomain: string;
             sourceEntityType: string;
             sourceEntityId: string;
@@ -7129,6 +7285,9 @@ export interface components {
             /** Format: uuid */
             clientId: string | null;
             clientName: string | null;
+            /** Format: uuid */
+            employeeId: string | null;
+            employeeName: string | null;
             /** Format: date-time */
             dueAt: string | null;
             /** Format: date-time */
@@ -7149,6 +7308,9 @@ export interface components {
             severityCounts: {
                 [key: string]: number;
             };
+            deadlineCounts: {
+                [key: string]: number;
+            };
             worklistTruncated: boolean;
             tasks: {
                 [key: string]: number;
@@ -7161,6 +7323,84 @@ export interface components {
             pageSize: number;
             total: number;
             truncated: boolean;
+        };
+        DeadlineTaskRequestDto: {
+            title: string;
+            description?: string | null;
+            /** @enum {string} */
+            priority?: "low" | "normal" | "high" | "urgent";
+            /** Format: uuid */
+            assignedEmployeeId?: string | null;
+        };
+        OperationsTaskResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId: string | null;
+            /** Format: uuid */
+            clientId: string | null;
+            title: string;
+            description: string | null;
+            /** @enum {string} */
+            status: "open" | "in_progress" | "completed" | "cancelled";
+            /** @enum {string} */
+            priority: "low" | "normal" | "high" | "urgent";
+            /** Format: uuid */
+            assignedEmployeeId: string | null;
+            /** @enum {string|null} */
+            assignmentWarningCode: "assignee_unavailable" | null;
+            /** Format: uuid */
+            createdByUserId: string;
+            /** Format: uuid */
+            completedByUserId: string | null;
+            /** Format: date-time */
+            dueAt: string | null;
+            /** Format: date-time */
+            completedAt: string | null;
+            source: {
+                [key: string]: unknown;
+            } | null;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ReminderPolicySettingResponseDto: {
+            /** @enum {string} */
+            category: "agreements" | "employees" | "benefits" | "billing" | "onboarding";
+            offsetsDays: number[];
+            enabled: boolean;
+            createFollowUpTask: boolean;
+            /** Format: uuid */
+            assignedEmployeeId: string | null;
+            version: number;
+        };
+        ReminderOrganizationSettingsResponseDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            policies: components["schemas"]["ReminderPolicySettingResponseDto"][];
+        };
+        ReminderSettingsResponseDto: {
+            scheduler: {
+                [key: string]: unknown;
+            } | null;
+            organizations: components["schemas"]["ReminderOrganizationSettingsResponseDto"][];
+        };
+        ReminderPolicyRequestDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** @enum {string} */
+            category: "agreements" | "employees" | "benefits" | "billing" | "onboarding";
+            offsetsDays: number[];
+            enabled: boolean;
+            createFollowUpTask: boolean;
+            /** Format: uuid */
+            assignedEmployeeId?: string | null;
+            expectedVersion: number;
         };
         OperationsExceptionOccurrenceResponseDto: {
             /** Format: uuid */
@@ -7211,40 +7451,6 @@ export interface components {
             occurrences: components["schemas"]["OperationsExceptionOccurrenceResponseDto"][];
             interactions: components["schemas"]["OperationsExceptionInteractionResponseDto"][];
         };
-        OperationsTaskResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            organizationId: string;
-            /** Format: uuid */
-            facilityId: string | null;
-            /** Format: uuid */
-            clientId: string | null;
-            title: string;
-            description: string | null;
-            /** @enum {string} */
-            status: "open" | "in_progress" | "completed" | "cancelled";
-            /** @enum {string} */
-            priority: "low" | "normal" | "high" | "urgent";
-            /** Format: uuid */
-            assignedEmployeeId: string | null;
-            /** Format: uuid */
-            createdByUserId: string;
-            /** Format: uuid */
-            completedByUserId: string | null;
-            /** Format: date-time */
-            dueAt: string | null;
-            /** Format: date-time */
-            completedAt: string | null;
-            source: {
-                [key: string]: unknown;
-            } | null;
-            version: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
         OperationsTaskListResponseDto: {
             items: components["schemas"]["OperationsTaskResponseDto"][];
             page: number;
@@ -7269,6 +7475,121 @@ export interface components {
             /** Format: date-time */
             occurredAt: string;
         };
+        RecurringTaskResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId: string | null;
+            /** Format: uuid */
+            clientId: string | null;
+            title: string;
+            description: string | null;
+            /** @enum {string} */
+            priority: "low" | "normal" | "high" | "urgent";
+            /** Format: uuid */
+            assignedEmployeeId: string | null;
+            rule: {
+                [key: string]: unknown;
+            };
+            timezone: string;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: string | null;
+            /** Format: time */
+            timeOfDay: string;
+            /** Format: date */
+            nextOccurrenceDate: string | null;
+            /** Format: date-time */
+            nextOccurrenceAt: string | null;
+            /** @enum {string} */
+            status: "active" | "paused" | "ended";
+            /** @enum {string} */
+            generationPolicy: "generate_missed" | "skip_missed";
+            version: number;
+            /** Format: uuid */
+            createdByUserId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        RecurringTaskListResponseDto: {
+            items: components["schemas"]["RecurringTaskResponseDto"][];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
+        RecurrenceRuleRequestDto: {
+            /** @enum {string} */
+            frequency: "daily" | "weekly" | "monthly" | "yearly";
+            interval: number;
+            weekdays?: number[];
+            dayOfMonth?: number;
+            month?: number;
+        };
+        RecurringTaskCreateRequestDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            facilityId?: string | null;
+            /** Format: uuid */
+            clientId?: string | null;
+            title: string;
+            description?: string | null;
+            /** @enum {string} */
+            priority?: "low" | "normal" | "high" | "urgent";
+            /** Format: uuid */
+            assignedEmployeeId?: string | null;
+            rule: components["schemas"]["RecurrenceRuleRequestDto"];
+            timezone?: string;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate?: string | null;
+            /** Format: time */
+            timeOfDay?: string;
+            /** @enum {string} */
+            generationPolicy?: "generate_missed" | "skip_missed";
+        };
+        RecurringTaskOccurrenceResponseDto: {
+            /** Format: uuid */
+            taskId: string;
+            /** Format: date */
+            occurrenceDate: string;
+            /** Format: date-time */
+            dueAt: string;
+            /** @enum {string} */
+            status: "open" | "in_progress" | "completed" | "cancelled";
+            title: string;
+        };
+        RecurringTaskPatchRequestDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            facilityId?: string | null;
+            /** Format: uuid */
+            clientId?: string | null;
+            title?: string;
+            description?: string | null;
+            /** @enum {string} */
+            priority?: "low" | "normal" | "high" | "urgent";
+            /** Format: uuid */
+            assignedEmployeeId?: string | null;
+            rule?: components["schemas"]["RecurrenceRuleRequestDto"];
+            timezone?: string;
+            /** Format: date */
+            startDate?: string;
+            /** Format: date */
+            endDate?: string | null;
+            /** Format: time */
+            timeOfDay?: string;
+            /** @enum {string} */
+            generationPolicy?: "generate_missed" | "skip_missed";
+        };
         MeResponseDto: {
             /** Format: uuid */
             id: string;
@@ -7282,7 +7603,7 @@ export interface components {
         };
         PermissionGrantDto: {
             /** @enum {string} */
-            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "communications.read" | "communications.create" | "communications.update" | "communications.amend" | "communications.preferences.manage" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service.manage_pricing" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "benefits.read" | "benefits.manage" | "benefits.adjust" | "benefits.allocate" | "benefits.review" | "service_evidence.read" | "service_evidence.prepare" | "billing.read" | "billing.manage" | "billing.issue" | "billing.correct" | "billing.payments.read" | "billing.payments.manage" | "billing.settings.manage" | "claims.read" | "claims.manage" | "claims.submit" | "claims.record_decision" | "claims.reconcile" | "claims.settings.manage" | "documents.read" | "documents.generate" | "documents.templates.manage" | "documents.exports.read" | "acknowledgement.read" | "acknowledgement.capture" | "acknowledgement.revoke" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read" | "operations.read" | "operations.tasks.create" | "operations.tasks.manage" | "operations.tasks.assign" | "operations.exceptions.manage" | "onboarding.read" | "onboarding.create" | "onboarding.manage" | "onboarding.admit" | "onboarding.templates.manage";
+            permission: "tenant.members.read" | "tenant.members.manage" | "tenant.roles.read" | "tenant.roles.assign" | "client.read" | "client.create" | "client.update" | "client.archive" | "communications.read" | "communications.create" | "communications.update" | "communications.amend" | "communications.preferences.manage" | "service.read" | "service.create" | "service.update" | "service.archive" | "service.manage_categories" | "service.manage_availability" | "service.manage_pricing" | "service_agreement.read" | "service_agreement.create" | "service_agreement.update" | "service_agreement.activate" | "service_agreement.suspend" | "service_agreement.end" | "service_agreement.manage_services" | "schedule.read" | "schedule.create" | "schedule.update" | "schedule.cancel" | "schedule.confirm" | "schedule.assign" | "schedule.generate" | "visit_execution.read" | "visit_execution.start" | "visit_execution.record_services" | "visit_execution.complete" | "visit_execution.correct" | "care_documentation.read" | "care_documentation.create" | "care_documentation.update" | "care_documentation.finalize" | "care_documentation.amend" | "care_documentation.review" | "benefits.read" | "benefits.manage" | "benefits.adjust" | "benefits.allocate" | "benefits.review" | "service_evidence.read" | "service_evidence.prepare" | "billing.read" | "billing.manage" | "billing.issue" | "billing.correct" | "billing.payments.read" | "billing.payments.manage" | "billing.settings.manage" | "claims.read" | "claims.manage" | "claims.submit" | "claims.record_decision" | "claims.reconcile" | "claims.settings.manage" | "documents.read" | "documents.generate" | "documents.templates.manage" | "documents.exports.read" | "acknowledgement.read" | "acknowledgement.capture" | "acknowledgement.revoke" | "employee.read" | "employee.create" | "employee.update" | "employee.archive" | "employee.assign_facility" | "employee.assign_team" | "employee.link_user" | "employee.manage_qualifications" | "employee.manage_skills" | "employee.manage_employment" | "employee.manage" | "organization.read" | "organization.create" | "organization.update" | "organization.activate" | "organization.archive" | "organization.manage" | "facility.read" | "facility.create" | "facility.update" | "facility.activate" | "facility.archive" | "team.read" | "team.manage" | "audit.read" | "operations.read" | "operations.tasks.create" | "operations.tasks.manage" | "operations.tasks.assign" | "operations.exceptions.manage" | "operations.recurring_tasks.manage" | "operations.reminder_settings.manage" | "onboarding.read" | "onboarding.create" | "onboarding.manage" | "onboarding.admit" | "onboarding.templates.manage";
             /** @enum {string} */
             scopeType: "assigned_clients" | "team" | "facility" | "organization" | "tenant";
             /** Format: uuid */
@@ -16131,12 +16452,17 @@ export interface operations {
                 search?: unknown;
                 sort?: "relevance" | "due";
                 due?: "overdue" | "today" | "upcoming";
+                untilDate?: string;
+                fromDate?: string;
+                sourceDomain?: unknown;
+                assignedEmployeeId?: unknown;
+                employeeId?: unknown;
                 clientId?: unknown;
                 facilityId?: unknown;
                 organizationId?: unknown;
                 severity?: "info" | "warning" | "critical";
                 status?: "open" | "acknowledged" | "snoozed";
-                category?: "scheduling" | "visits" | "documentation" | "benefits" | "billing" | "claims" | "onboarding";
+                category?: "scheduling" | "visits" | "documentation" | "benefits" | "billing" | "claims" | "onboarding" | "agreements" | "employees";
             };
             header: {
                 /** @description Tenant selected for this request */
@@ -16153,6 +16479,158 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationsWorklistResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OperationsController_deadlines: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                untilDate?: string;
+                fromDate?: string;
+                due?: "overdue" | "today" | "upcoming";
+                sort?: "relevance" | "due";
+                sourceDomain?: unknown;
+                assignedEmployeeId?: unknown;
+                employeeId?: unknown;
+                clientId?: unknown;
+                facilityId?: unknown;
+                organizationId?: unknown;
+                status?: "open" | "acknowledged" | "snoozed";
+                category?: "agreements" | "employees" | "benefits" | "billing" | "onboarding";
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsWorklistResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OperationsController_createDeadlineTask: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                /** @description Stable deadline work item identity */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeadlineTaskRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsTaskResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OperationsController_reminderSettings: {
+        parameters: {
+            query?: {
+                organizationId?: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderSettingsResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OperationsController_updateReminderSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReminderPolicyRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderPolicySettingResponseDto"];
                 };
             };
             /** @description Problem Details response */
@@ -16729,6 +17207,300 @@ export interface operations {
             };
         };
     };
+    OperationsController_recurringTaskList: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+                status?: "active" | "paused" | "ended";
+                assignedEmployeeId?: unknown;
+                clientId?: unknown;
+                facilityId?: unknown;
+                organizationId?: unknown;
+            };
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringTaskListResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OperationsController_createRecurringTask: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecurringTaskCreateRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringTaskResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OperationsController_getRecurringTask: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringTaskResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OperationsController_patchRecurringTask: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecurringTaskPatchRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringTaskResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OperationsController_recurringTaskOccurrences: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringTaskOccurrenceResponseDto"][];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OperationsController_pauseRecurringTask: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expectedVersion: number;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringTaskResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OperationsController_resumeRecurringTask: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expectedVersion: number;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringTaskResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    OperationsController_endRecurringTask: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Tenant selected for this request */
+                "X-Tenant-Id": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expectedVersion: number;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringTaskResponseDto"];
+                };
+            };
+            /** @description Problem Details response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
     OnboardingController_search: {
         parameters: {
             query?: {
@@ -16811,6 +17583,7 @@ export interface operations {
                     inquirySource: string;
                     /** @enum {string} */
                     fundingPlan?: "unknown" | "private_pay" | "benefits" | "other";
+                    fundingPlanDetails?: string | null;
                     initialNotes?: string | null;
                     /** Format: date-time */
                     nextFollowUpAt?: string | null;
@@ -16910,6 +17683,7 @@ export interface operations {
                     inquirySource?: string;
                     /** @enum {string} */
                     fundingPlan?: "unknown" | "private_pay" | "benefits" | "other";
+                    fundingPlanDetails?: string | null;
                     initialNotes?: string | null;
                     /** Format: date-time */
                     nextFollowUpAt?: string | null;

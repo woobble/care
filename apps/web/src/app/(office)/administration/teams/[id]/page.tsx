@@ -5,7 +5,10 @@ import { Button, Input, Label, StatusBadge } from '@care/ui';
 import { statusLabelKey } from '@app/web/i18n/status';
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
-import { setTeamStatusAction, updateTeamAction } from '@app/web/app/(office)/administration/actions';
+import {
+  setTeamStatusAction,
+  updateTeamAction,
+} from '@app/web/app/(office)/administration/actions';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 
 type Params = Promise<{ id: string }>;

@@ -15,6 +15,7 @@ import {
 } from '@app/web/app/(office)/operations/actions';
 import {
   issueTitleKey,
+  categoryTranslationKey,
   taskSourceHref,
   taskStatusTranslation,
   workItemSourceHref,
@@ -32,6 +33,8 @@ const categories = [
   'billing',
   'claims',
   'onboarding',
+  'agreements',
+  'employees',
 ] as const;
 
 export default async function OperationsWorklistPage({
@@ -280,7 +283,7 @@ export default async function OperationsWorklistPage({
           <option value="">{t('allCategories')}</option>
           {categories.map((value) => (
             <option key={value} value={value}>
-              {t(value === 'onboarding' ? 'categories.onboarding' : value)}
+              {t(categoryTranslationKey(value))}
             </option>
           ))}
         </SelectField>
@@ -400,7 +403,7 @@ export default async function OperationsWorklistPage({
                 <div className="grid gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-900">
-                      {t(item.category === 'onboarding' ? 'categories.onboarding' : item.category)}
+                      {t(categoryTranslationKey(item.category))}
                     </span>
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.severity === 'critical' ? 'bg-red-100 text-red-900' : item.severity === 'warning' ? 'bg-amber-100 text-amber-950' : 'bg-slate-100 text-slate-800'}`}

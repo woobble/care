@@ -1,4 +1,5 @@
 export { onboardingSchema } from './schema';
+export { readOperationsDeadlineCases } from './application/operations-deadlines';
 export type { AdmissionStage, NeedsAssessment } from './schema';
 export {
   OnboardingApplicationService,

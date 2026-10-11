@@ -4,16 +4,18 @@ Care Platform is a Bun workspace with a Next.js office app, a NestJS API, and an
 
 ## Local setup
 
-Requirements: Bun 1.4.2 or newer, Docker Compose, and Node.js 24 or newer.
+Requirements: Bun 1.4.2 (the repository's pinned version), Node.js 24 or newer, and Docker Engine with the Compose v2 plugin for local services and integration tests. The package manifest accepts Bun 1.4.0 or newer; use the pinned 1.4.2 version for reproducible installs.
 
 ```sh
 cp .env.example .env
-bun install
+bun install --frozen-lockfile
 bun run infra:up
 bun run migrate
 bun run seed
 bun run dev
 ```
+
+`bun run build` generates the API OpenAPI document and API client types before building the workspaces. No separate workspace initialization or code-generation step is needed.
 
 `bun run infra:up` waits for healthy infrastructure. The first database start creates `care_app`, `care_worker`, and Authentik's separate database. PostgreSQL init scripts run only when its volume is empty. If you change a database password later, update the database role and matching URL variables together. Removing the database volume deletes all local database data.
 
@@ -35,19 +37,30 @@ Mailpit is at <http://localhost:8025> and accepts local SMTP on port `1026`. Pro
 
 ## Commands
 
-| Command                    | Purpose                                                                        |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| `bun install`              | Install root and workspace dependencies from `bun.lock`                        |
-| `bun run build`            | Generate OpenAPI types and build all workspaces                                |
-| `bun run typecheck`        | Typecheck every workspace                                                      |
-| `bun run test`             | Run unit tests                                                                 |
-| `bun run test:integration` | Run PostgreSQL Testcontainers and API integration tests; Docker required       |
-| `bun run test:e2e`         | Start Compose, migrate and seed, then run Authentik, client, and workforce E2E |
-| `bun run migrate`          | Apply checked, transactional SQL migrations                                    |
-| `bun run seed`             | Create demo tenant, organization, facility, and roles                          |
-| `bun run seed:identity`    | Grant a configured Authentik subject demo tenant access                        |
-| `bun run infra:down`       | Stop local services; keeps named volumes                                       |
-| `bun run reset`            | Confirm and reset Compose data; reruns migrations and demo seed                |
+| Command                         | Purpose                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------ |
+| `bun install --frozen-lockfile` | Install root and workspace dependencies from `bun.lock`                        |
+| `bun run build`                 | Generate OpenAPI types and build all workspaces                                |
+| `bun run typecheck`             | Typecheck every workspace                                                      |
+| `bun run test`                  | Run unit tests                                                                 |
+| `bun run test:integration`      | Run PostgreSQL Testcontainers and API integration tests; Docker required       |
+| `bun run test:e2e`              | Start Compose, migrate and seed, then run Authentik, client, and workforce E2E |
+| `bun run migrate`               | Apply checked, transactional SQL migrations                                    |
+| `bun run seed`                  | Create demo tenant, organization, facility, and roles                          |
+| `bun run seed:identity`         | Grant a configured Authentik subject demo tenant access                        |
+| `bun run infra:down`            | Stop local services; keeps named volumes                                       |
+| `bun run reset`                 | Confirm and reset Compose data; reruns migrations and demo seed                |
+
+If Bun reports `EROFS accessing temporary directory`, run from a writable checkout and point its temporary files and package cache at writable paths. For example:
+
+```sh
+mkdir -p /tmp/care-bun-tmp /tmp/care-bun-cache
+BUN_TMPDIR=/tmp/care-bun-tmp bun install --frozen-lockfile --cache-dir /tmp/care-bun-cache
+```
+
+This is an execution-environment filesystem restriction when the configured paths are read-only; do not change workspace manifests or permissions to work around it. Keep generated files and `node_modules` out of commits.
+
+If Next.js reports `ERR_SWC_NATIVE_CACHE`, set `SWC_NATIVE_BINDING_CACHE` to a user-owned cache directory with trusted parent permissions. Some sandboxes reject every writable cache path; run the build in a normal host checkout rather than weakening filesystem permissions.
 
 The same module-owned SQL migrations run in development and integration tests. Once applied, a migration's checksum is immutable; add a new numbered migration for schema changes. The identity module has an additional migration for membership and role RLS policies.
 

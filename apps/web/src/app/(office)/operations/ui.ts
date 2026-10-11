@@ -39,13 +39,38 @@ const issueTitles: readonly OperationsIssueTitle[] = [
   'claim_readiness_blocked',
   'claim_payment_outstanding',
   'admission_readiness_blocked',
+  'admission_follow_up_due',
   'admission_follow_up_overdue',
+  'admission_start_date',
+  'benefit_entitlement_expiry',
+  'agreement_expiry',
+  'payer_authorization_expiry',
+  'qualification_expiry',
+  'receivable_due',
 ];
 
 export function issueTitleKey(code: string): OperationsIssueTitle {
   return issueTitles.includes(code as OperationsIssueTitle)
     ? (code as OperationsIssueTitle)
     : 'missing_assignment';
+}
+
+export function categoryTranslationKey(
+  category: OperationsWorkItem['category'],
+):
+  | 'categories.agreements'
+  | 'categories.employees'
+  | 'categories.onboarding'
+  | 'scheduling'
+  | 'visits'
+  | 'documentation'
+  | 'benefits'
+  | 'billing'
+  | 'claims' {
+  if (category === 'agreements') return 'categories.agreements';
+  if (category === 'employees') return 'categories.employees';
+  if (category === 'onboarding') return 'categories.onboarding';
+  return category;
 }
 
 export function workItemSourceHref(item: OperationsWorkItem): string {
@@ -61,15 +86,21 @@ export function workItemSourceHref(item: OperationsWorkItem): string {
         ? `/service-evidence/${item.sourceEntityId}`
         : '/service-evidence';
     case 'benefits':
-      return item.sourceEntityType === 'client' && item.clientId
-        ? `/clients/${item.clientId}/benefits`
-        : '/benefits';
+      return item.clientId ? `/clients/${item.clientId}/benefits` : '/benefits';
     case 'billing':
-      return `/billing/invoices/${item.sourceEntityId}`;
+      return item.sourceEntityType === 'payer_arrangement' && item.clientId
+        ? `/clients/${item.clientId}/invoices`
+        : `/billing/invoices/${item.sourceEntityId}`;
     case 'claims':
       return `/billing/claims/${item.sourceEntityId}`;
     case 'onboarding':
       return `/admissions/${item.sourceEntityId}`;
+    case 'service_agreements':
+      return item.clientId
+        ? `/clients/${item.clientId}/service-agreements`
+        : '/operations/deadlines';
+    case 'employee_qualifications':
+      return item.employeeId ? `/employees/${item.employeeId}` : '/operations/deadlines';
     default:
       return '/operations/worklist';
   }

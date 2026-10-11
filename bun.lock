@@ -96,12 +96,21 @@
     "apps/worker": {
       "name": "@care/worker",
       "dependencies": {
+        "@care/audit": "workspace:*",
+        "@care/benefits": "workspace:*",
+        "@care/billing": "workspace:*",
+        "@care/clients": "workspace:*",
         "@care/config": "workspace:*",
         "@care/database": "workspace:*",
+        "@care/employees": "workspace:*",
         "@care/events": "workspace:*",
         "@care/logging": "workspace:*",
         "@care/observability": "workspace:*",
+        "@care/onboarding": "workspace:*",
+        "@care/operations": "workspace:*",
+        "@care/organizations": "workspace:*",
         "@care/platform": "workspace:*",
+        "drizzle-orm": "^0.45.4",
       },
       "devDependencies": {
         "@care/testing": "workspace:*",

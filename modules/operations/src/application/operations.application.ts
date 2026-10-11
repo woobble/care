@@ -9,12 +9,15 @@ import {
   inArray,
   isNotNull,
   isNull,
+  gte,
+  lte,
   lt,
   max,
   or,
   type SQL,
   sql,
 } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { v7 as uuidv7 } from 'uuid';
 import type { AuditWriter } from '@care/audit';
 import type { BillingApplicationService, BillingClaimsApplicationService } from '@care/billing';
@@ -48,19 +51,25 @@ import {
   type ServiceEvidenceApplicationService,
 } from '@care/service-evidence';
 import { clientRecords } from '@care/clients';
-import { employeeFacilityAssignments, employeeRecords } from '@care/employees';
+import {
+  employeeFacilityAssignments,
+  employeeQualifications,
+  employeeRecords,
+  qualificationDefinitions,
+} from '@care/employees';
 import { facilities, organizationsTable } from '@care/organizations';
 import { agreements } from '@care/service-agreements';
 import { visits } from '@care/scheduling';
 import { careDocuments } from '@care/care-documentation';
 import { evidencePackages } from '@care/service-evidence';
-import { invoices } from '@care/billing';
-import { claims } from '@care/billing';
-import { clientBenefitEntitlements } from '@care/benefits';
+import { invoices, claims, payerArrangements } from '@care/billing';
+import { benefitFundingSources, clientBenefitEntitlements } from '@care/benefits';
 import { documentArtifacts } from '@care/documents';
 import {
   exceptionInteractions,
   exceptionOccurrences,
+  reminderPolicies,
+  schedulerRuns,
   taskActivity,
   tasks,
 } from '@module/operations/schema';
@@ -69,6 +78,7 @@ import {
   evidencePackageIssueCode,
   stableIssueId,
 } from '@module/operations/domain/operations';
+import { validateOperationsAssignee } from './operations-guards';
 
 type AuditContext = { ip?: string; userAgent?: string };
 type SourceType = NonNullable<(typeof tasks.$inferSelect)['sourceType']>;
@@ -93,10 +103,29 @@ type OnboardingReadinessCase = {
   stage: string;
   createdAt: Date;
   nextFollowUpAt: Date | null;
+  preferredStartDate: string | null;
   blockerCount: number;
 };
 
 const MAX_STALE_EXCEPTION_RECONCILIATIONS = 20;
+const REMINDER_POLICY_CATEGORIES = [
+  'agreements',
+  'employees',
+  'benefits',
+  'billing',
+  'onboarding',
+] as const;
+
+export type OperationsReminderPolicyCategory = (typeof REMINDER_POLICY_CATEGORIES)[number];
+export interface OperationsReminderPolicyInput {
+  organizationId: string;
+  category: OperationsReminderPolicyCategory;
+  offsetsDays: number[];
+  enabled: boolean;
+  createFollowUpTask: boolean;
+  assignedEmployeeId?: string | null;
+  expectedVersion: number;
+}
 
 export interface OperationsSourceServices {
   scheduling: Pick<SchedulingApplicationService, 'getWorklist' | 'getWorklistForVisit'>;
@@ -108,11 +137,17 @@ export interface OperationsSourceServices {
   onboarding?: {
     operationsReadinessWorklist(
       principal: AuthorizationPrincipal,
+      deadlineWindow: { fromDate: string; untilDate: string },
     ): Promise<{ items: OnboardingReadinessCase[]; complete: boolean }>;
     operationsIssueState(
       principal: AuthorizationPrincipal,
       caseId: string,
-    ): Promise<{ readinessBlocked: boolean; followUpOverdue: boolean }>;
+    ): Promise<{
+      readinessBlocked: boolean;
+      followUpOverdue: boolean;
+      followUpDue: boolean;
+      startDateActionable: boolean;
+    }>;
   };
 }
 
@@ -149,6 +184,11 @@ export interface OperationsQuery {
   organizationId?: string;
   facilityId?: string;
   clientId?: string;
+  employeeId?: string;
+  sourceDomain?: string;
+  fromDate?: string;
+  untilDate?: string;
+  deadlinesOnly?: boolean;
   assignedEmployeeId?: string;
   due?: 'overdue' | 'today' | 'upcoming';
   search?: string;
@@ -167,7 +207,9 @@ export interface OperationsWorkItem {
     | 'benefits'
     | 'billing'
     | 'claims'
-    | 'onboarding';
+    | 'onboarding'
+    | 'agreements'
+    | 'employees';
   sourceDomain: string;
   sourceEntityType: string;
   sourceEntityId: string;
@@ -181,6 +223,8 @@ export interface OperationsWorkItem {
   facilityId: string | null;
   clientId: string | null;
   clientName: string | null;
+  employeeId: string | null;
+  employeeName: string | null;
   dueAt: string | null;
   firstDetectedAt: string;
   lastObservedAt: string;
@@ -206,6 +250,24 @@ export class OperationsApplicationService {
   ) {
     const worklist = await this.listWorkItems(principal, { ...query, page: 1, pageSize: 1000 });
     const tasksSummary = await this.taskSummary(principal, query);
+    const deadlineItems = worklist.items.filter(
+      (item) => deadlinePolicyCategory(item) !== null && item.dueAt !== null,
+    );
+    const deadlineTimezones = await this.organizationTimezones(principal.tenantId, [
+      ...new Set(
+        deadlineItems.flatMap((item) => (item.organizationId ? [item.organizationId] : [])),
+      ),
+    ]);
+    const now = new Date();
+    const deadlineCounts = { overdue: 0, today: 0, upcoming: 0 };
+    for (const item of deadlineItems) {
+      const timezone = deadlineTimezones.get(item.organizationId ?? '') ?? 'Europe/Berlin';
+      const dueDate = localDateKey(new Date(item.dueAt!), timezone);
+      const today = localDateKey(now, timezone);
+      if (dueDate < today) deadlineCounts.overdue += 1;
+      else if (dueDate === today) deadlineCounts.today += 1;
+      else deadlineCounts.upcoming += 1;
+    }
     const categoryCounts = Object.fromEntries(
       (
         [
@@ -216,6 +278,8 @@ export class OperationsApplicationService {
           'billing',
           'claims',
           'onboarding',
+          'agreements',
+          'employees',
         ] as const
       ).map((category) => [
         category,
@@ -235,12 +299,223 @@ export class OperationsApplicationService {
       ).length,
       categoryCounts,
       severityCounts,
+      deadlineCounts,
       worklistTruncated: worklist.truncated || worklist.total > worklist.items.length,
       tasks: tasksSummary,
       highPriorityExceptions: worklist.items
         .filter((item) => item.severity === 'critical' || item.severity === 'warning')
         .slice(0, 10),
     };
+  }
+
+  async reminderSettings(principal: AuthorizationPrincipal, organizationId?: string) {
+    this.requireAnyGrant(principal, 'operations.reminder_settings.manage');
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const organizations = await transaction
+        .select({ id: organizationsTable.id, name: organizationsTable.name })
+        .from(organizationsTable)
+        .where(
+          and(
+            eq(organizationsTable.tenantId, principal.tenantId),
+            ...(organizationId ? [eq(organizationsTable.id, organizationId)] : []),
+          ),
+        )
+        .orderBy(asc(organizationsTable.name), asc(organizationsTable.id));
+      const visible = organizations.filter((organization) =>
+        can(principal, {
+          action: 'operations.reminder_settings.manage',
+          resource: { tenantId: principal.tenantId, organizationId: organization.id },
+        }),
+      );
+      if (organizationId && !visible.length)
+        throw new AuthorizationDeniedError('operations.reminder_settings.manage');
+      const policyRows = visible.length
+        ? await transaction
+            .select()
+            .from(reminderPolicies)
+            .where(
+              and(
+                eq(reminderPolicies.tenantId, principal.tenantId),
+                inArray(
+                  reminderPolicies.organizationId,
+                  visible.map((organization) => organization.id),
+                ),
+              ),
+            )
+        : [];
+      const [schedulerRun] = await transaction
+        .select({
+          status: schedulerRuns.status,
+          lastStartedAt: schedulerRuns.lastStartedAt,
+          lastSucceededAt: schedulerRuns.lastSucceededAt,
+          lastFailedAt: schedulerRuns.lastFailedAt,
+          lastFailureCode: schedulerRuns.lastFailureCode,
+          tasksCreated: schedulerRuns.tasksCreated,
+          remindersTriggered: schedulerRuns.remindersTriggered,
+        })
+        .from(schedulerRuns)
+        .where(
+          and(
+            eq(schedulerRuns.tenantId, principal.tenantId),
+            eq(schedulerRuns.jobName, 'deadline_evaluation'),
+          ),
+        )
+        .limit(1);
+      const byKey = new Map(
+        policyRows.map((policy) => [`${policy.organizationId}:${policy.category}`, policy]),
+      );
+      return {
+        scheduler: schedulerRun
+          ? {
+              ...schedulerRun,
+              lastStartedAt: schedulerRun.lastStartedAt.toISOString(),
+              lastSucceededAt: schedulerRun.lastSucceededAt?.toISOString() ?? null,
+              lastFailedAt: schedulerRun.lastFailedAt?.toISOString() ?? null,
+            }
+          : null,
+        organizations: visible.map((organization) => ({
+          ...organization,
+          policies: REMINDER_POLICY_CATEGORIES.map((category) => {
+            const policy = byKey.get(`${organization.id}:${category}`);
+            return {
+              category,
+              offsetsDays: policy?.offsetsDays ?? [30, 7, 0],
+              enabled: policy?.enabled ?? true,
+              createFollowUpTask: policy?.createFollowUpTask ?? false,
+              assignedEmployeeId: policy?.assignedEmployeeId ?? null,
+              version: policy?.version ?? 0,
+            };
+          }),
+        })),
+      };
+    });
+  }
+
+  async updateReminderPolicy(
+    principal: AuthorizationPrincipal,
+    input: OperationsReminderPolicyInput,
+    request: RequestContext,
+    auditContext: AuditContext,
+  ) {
+    if (
+      !REMINDER_POLICY_CATEGORIES.includes(input.category) ||
+      !Array.isArray(input.offsetsDays) ||
+      input.offsetsDays.length < 1 ||
+      input.offsetsDays.length > 8 ||
+      input.offsetsDays.some((day) => !Number.isSafeInteger(day) || day < 0 || day > 365) ||
+      new Set(input.offsetsDays).size !== input.offsetsDays.length ||
+      typeof input.enabled !== 'boolean' ||
+      typeof input.createFollowUpTask !== 'boolean' ||
+      (input.createFollowUpTask && input.category !== 'agreements') ||
+      !Number.isSafeInteger(input.expectedVersion) ||
+      input.expectedVersion < 0
+    )
+      throw new InvalidOperationsInputError();
+    const resource = { tenantId: principal.tenantId, organizationId: input.organizationId };
+    assertCan(principal, { action: 'operations.reminder_settings.manage', resource });
+    const assignedEmployeeId = input.assignedEmployeeId ?? null;
+    if (assignedEmployeeId) {
+      assertCan(principal, { action: 'operations.tasks.assign', resource });
+      await this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+        validateOperationsAssignee(
+          transaction,
+          principal.tenantId,
+          assignedEmployeeId,
+          input.organizationId,
+          null,
+        ),
+      );
+    }
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const [organization] = await transaction
+        .select({ id: organizationsTable.id })
+        .from(organizationsTable)
+        .where(
+          and(
+            eq(organizationsTable.tenantId, principal.tenantId),
+            eq(organizationsTable.id, input.organizationId),
+          ),
+        )
+        .limit(1);
+      if (!organization) throw new InvalidOperationsInputError();
+      const [current] = await transaction
+        .select()
+        .from(reminderPolicies)
+        .where(
+          and(
+            eq(reminderPolicies.tenantId, principal.tenantId),
+            eq(reminderPolicies.organizationId, input.organizationId),
+            eq(reminderPolicies.category, input.category),
+          ),
+        )
+        .for('update')
+        .limit(1);
+      if ((current?.version ?? 0) !== input.expectedVersion)
+        throw new OperationsTaskVersionConflictError();
+      const now = new Date();
+      const version = input.expectedVersion + 1;
+      const values = {
+        enabled: input.enabled,
+        offsetsDays: [...input.offsetsDays].sort((left, right) => right - left),
+        createFollowUpTask: input.createFollowUpTask,
+        assignedEmployeeId,
+        version,
+        updatedByUserId: principal.userId,
+        updatedAt: now,
+      };
+      const [saved] = current
+        ? await transaction
+            .update(reminderPolicies)
+            .set(values)
+            .where(eq(reminderPolicies.id, current.id))
+            .returning()
+        : await transaction
+            .insert(reminderPolicies)
+            .values({
+              id: uuidv7(),
+              tenantId: principal.tenantId,
+              organizationId: input.organizationId,
+              category: input.category,
+              ...values,
+              createdAt: now,
+            })
+            .returning();
+      const event = createDomainEvent({
+        type: 'operations.reminder_settings_updated',
+        tenantId: principal.tenantId,
+        aggregateType: 'operations',
+        aggregateId: input.organizationId,
+        actor: { type: 'user', id: principal.userId },
+        correlationId: request.correlationId,
+        payload: {
+          organizationId: input.organizationId,
+          category: input.category,
+          version,
+        },
+      });
+      await this.audit.append(transaction, {
+        id: event.id,
+        tenantId: principal.tenantId,
+        actorId: principal.userId,
+        action: event.type,
+        resourceType: 'reminder_policy',
+        resourceId: saved!.id,
+        timestamp: new Date(event.occurredAt),
+        requestId: request.requestId,
+        correlationId: event.correlationId,
+        metadata: { organizationId: input.organizationId, category: input.category, version },
+        ...auditContext,
+      });
+      await this.outbox.enqueue(transaction, event);
+      return {
+        category: saved!.category,
+        offsetsDays: saved!.offsetsDays,
+        enabled: saved!.enabled,
+        createFollowUpTask: saved!.createFollowUpTask,
+        assignedEmployeeId: saved!.assignedEmployeeId,
+        version: saved!.version,
+      };
+    });
   }
 
   async listWorkItems(principal: AuthorizationPrincipal, query: OperationsQuery = {}) {
@@ -252,6 +527,33 @@ export class OperationsApplicationService {
     const documentationFrom = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000 + 1);
     const sourceUntil = new Date(now.getTime() + 1);
     const canRead = (permission: Permission) => hasGrant(principal, permission);
+    const agreementScope = permissionScope(principal, 'service_agreement.read');
+    const employeeScope = permissionScope(principal, 'employee.read');
+    const benefitScope = permissionScope(principal, 'benefits.review');
+    const billingScope = permissionScope(principal, 'billing.read');
+    const policies = await this.unitOfWork.transaction(
+      { tenantId: principal.tenantId },
+      (transaction) =>
+        transaction
+          .select({
+            organizationId: reminderPolicies.organizationId,
+            category: reminderPolicies.category,
+            offsetsDays: reminderPolicies.offsetsDays,
+            enabled: reminderPolicies.enabled,
+          })
+          .from(reminderPolicies)
+          .where(eq(reminderPolicies.tenantId, principal.tenantId)),
+    );
+    const policyByOrganization = new Map(
+      policies.map((policy) => [`${policy.organizationId}:${policy.category}`, policy]),
+    );
+    const lookaheadDays = Math.min(
+      365,
+      Math.max(30, ...policies.flatMap((row) => row.offsetsDays)),
+    );
+    const todayUtc = now.toISOString().slice(0, 10);
+    const deadlineFrom = addDaysToDate(todayUtc, -365);
+    const deadlineUntil = addDaysToDate(todayUtc, lookaheadDays);
     const [
       schedule,
       documentation,
@@ -261,46 +563,248 @@ export class OperationsApplicationService {
       receivables,
       claimsPage,
       onboardingReadiness,
-    ] = await Promise.all([
-      canRead('schedule.read')
-        ? this.sources.scheduling.getWorklist(principal, {
-            from: now,
-            until,
-            page: 1,
-            pageSize: 100,
-          })
-        : null,
-      canRead('care_documentation.review')
-        ? this.sources.documentation.worklist(principal, {
-            from: documentationFrom,
-            until: sourceUntil,
-            incomplete: true,
-            page: 1,
-            pageSize: 100,
-          })
-        : null,
-      canRead('service_evidence.read')
-        ? this.sources.evidence.worklist(principal, {
-            from,
-            until: sourceUntil,
-            page: 1,
-            pageSize: 100,
-          })
-        : null,
-      canRead('benefits.review') ? this.sources.benefits.getWorklist(principal, 1, 100) : null,
-      canRead('billing.read')
-        ? this.sources.billing.listInvoices(principal, { page: 1, pageSize: 100 })
-        : null,
-      canRead('billing.payments.read')
-        ? this.sources.billing.receivables(principal, { page: 1, pageSize: 100 })
-        : null,
-      canRead('claims.read')
-        ? this.sources.claims.listClaims(principal, { page: 1, pageSize: 100 })
-        : null,
-      canRead('onboarding.read') && this.sources.onboarding
-        ? this.sources.onboarding.operationsReadinessWorklist(principal)
-        : null,
-    ]);
+      agreementDeadlines,
+      qualificationDeadlines,
+      benefitEntitlementDeadlines,
+      payerArrangementDeadlines,
+    ] = await isolateOperationsSources(
+      [
+        canRead('schedule.read')
+          ? this.sources.scheduling.getWorklist(principal, {
+              from: now,
+              until,
+              page: 1,
+              pageSize: 100,
+            })
+          : null,
+        canRead('care_documentation.review')
+          ? this.sources.documentation.worklist(principal, {
+              from: documentationFrom,
+              until: sourceUntil,
+              incomplete: true,
+              page: 1,
+              pageSize: 100,
+            })
+          : null,
+        canRead('service_evidence.read')
+          ? this.sources.evidence.worklist(principal, {
+              from,
+              until: sourceUntil,
+              page: 1,
+              pageSize: 100,
+            })
+          : null,
+        canRead('benefits.review')
+          ? this.sources.benefits.getWorklist(principal, 1, 100, lookaheadDays)
+          : null,
+        canRead('billing.read')
+          ? this.sources.billing.listInvoices(principal, { page: 1, pageSize: 100 })
+          : null,
+        canRead('billing.payments.read')
+          ? this.sources.billing.receivables(principal, { page: 1, pageSize: 100 })
+          : null,
+        canRead('claims.read')
+          ? this.sources.claims.listClaims(principal, { page: 1, pageSize: 100 })
+          : null,
+        canRead('onboarding.read') && this.sources.onboarding
+          ? this.sources.onboarding.operationsReadinessWorklist(principal, {
+              fromDate: deadlineFrom,
+              untilDate: deadlineUntil,
+            })
+          : null,
+        canRead('service_agreement.read')
+          ? this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+              transaction
+                .select({
+                  id: agreements.id,
+                  clientId: agreements.clientId,
+                  clientName: sql<string>`coalesce(nullif(concat_ws(' ', ${clientRecords.preferredName}, ${clientRecords.lastName}), ''), concat_ws(' ', ${clientRecords.firstName}, ${clientRecords.lastName}))`,
+                  organizationId: agreements.organizationId,
+                  facilityId: agreements.facilityId,
+                  validUntil: agreements.validUntil,
+                })
+                .from(agreements)
+                .innerJoin(
+                  clientRecords,
+                  and(
+                    eq(clientRecords.tenantId, agreements.tenantId),
+                    eq(clientRecords.id, agreements.clientId),
+                  ),
+                )
+                .where(
+                  and(
+                    eq(agreements.tenantId, principal.tenantId),
+                    inArray(agreements.status, ['active', 'suspended']),
+                    scopedTo(agreementScope, agreements.organizationId, agreements.facilityId),
+                    isNotNull(agreements.validUntil),
+                    gte(agreements.validUntil, deadlineFrom),
+                    lte(agreements.validUntil, deadlineUntil),
+                  ),
+                )
+                .orderBy(asc(agreements.validUntil), asc(agreements.id))
+                .limit(101),
+            )
+          : null,
+        canRead('employee.read')
+          ? this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+              transaction
+                .select({
+                  id: employeeQualifications.id,
+                  employeeId: employeeRecords.id,
+                  employeeName: sql<string>`coalesce(nullif(concat_ws(' ', ${employeeRecords.preferredName}, ${employeeRecords.lastName}), ''), concat_ws(' ', ${employeeRecords.firstName}, ${employeeRecords.lastName}))`,
+                  qualificationName: qualificationDefinitions.name,
+                  organizationId: employeeRecords.organizationId,
+                  facilityId: employeeFacilityAssignments.facilityId,
+                  validUntil: employeeQualifications.validUntil,
+                })
+                .from(employeeQualifications)
+                .innerJoin(
+                  employeeRecords,
+                  and(
+                    eq(employeeRecords.tenantId, employeeQualifications.tenantId),
+                    eq(employeeRecords.id, employeeQualifications.employeeId),
+                  ),
+                )
+                .innerJoin(
+                  qualificationDefinitions,
+                  and(
+                    eq(qualificationDefinitions.tenantId, employeeQualifications.tenantId),
+                    eq(qualificationDefinitions.id, employeeQualifications.qualificationId),
+                  ),
+                )
+                .leftJoin(
+                  employeeFacilityAssignments,
+                  and(
+                    eq(employeeFacilityAssignments.tenantId, employeeRecords.tenantId),
+                    eq(employeeFacilityAssignments.employeeId, employeeRecords.id),
+                    eq(employeeFacilityAssignments.organizationId, employeeRecords.organizationId),
+                    eq(employeeFacilityAssignments.isPrimary, true),
+                    eq(employeeFacilityAssignments.status, 'active'),
+                  ),
+                )
+                .where(
+                  and(
+                    eq(employeeQualifications.tenantId, principal.tenantId),
+                    eq(employeeQualifications.status, 'active'),
+                    eq(employeeRecords.status, 'active'),
+                    scopedTo(
+                      employeeScope,
+                      employeeRecords.organizationId,
+                      employeeFacilityAssignments.facilityId,
+                    ),
+                    isNotNull(employeeQualifications.validUntil),
+                    gte(employeeQualifications.validUntil, deadlineFrom),
+                    lte(employeeQualifications.validUntil, deadlineUntil),
+                  ),
+                )
+                .orderBy(asc(employeeQualifications.validUntil), asc(employeeQualifications.id))
+                .limit(101),
+            )
+          : null,
+        canRead('benefits.review')
+          ? this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+              transaction
+                .select({
+                  id: clientBenefitEntitlements.id,
+                  clientId: clientRecords.id,
+                  clientName: sql<string>`coalesce(nullif(concat_ws(' ', ${clientRecords.preferredName}, ${clientRecords.lastName}), ''), concat_ws(' ', ${clientRecords.firstName}, ${clientRecords.lastName}))`,
+                  organizationId: clientRecords.organizationId,
+                  facilityId: clientRecords.primaryFacilityId,
+                  validUntil: clientBenefitEntitlements.validUntil,
+                })
+                .from(clientBenefitEntitlements)
+                .innerJoin(
+                  benefitFundingSources,
+                  and(
+                    eq(benefitFundingSources.tenantId, clientBenefitEntitlements.tenantId),
+                    eq(benefitFundingSources.clientId, clientBenefitEntitlements.clientId),
+                    eq(benefitFundingSources.id, clientBenefitEntitlements.fundingSourceId),
+                    eq(benefitFundingSources.status, 'active'),
+                  ),
+                )
+                .innerJoin(
+                  clientRecords,
+                  and(
+                    eq(clientRecords.tenantId, clientBenefitEntitlements.tenantId),
+                    eq(clientRecords.id, clientBenefitEntitlements.clientId),
+                  ),
+                )
+                .where(
+                  and(
+                    eq(clientBenefitEntitlements.tenantId, principal.tenantId),
+                    inArray(clientBenefitEntitlements.status, ['confirmed', 'provisional']),
+                    isNotNull(clientBenefitEntitlements.validUntil),
+                    gte(clientBenefitEntitlements.validUntil, deadlineFrom),
+                    lte(clientBenefitEntitlements.validUntil, deadlineUntil),
+                    scopedTo(
+                      benefitScope,
+                      clientRecords.organizationId,
+                      clientRecords.primaryFacilityId,
+                    ),
+                  ),
+                )
+                .orderBy(
+                  asc(clientBenefitEntitlements.validUntil),
+                  asc(clientBenefitEntitlements.id),
+                )
+                .limit(101),
+            )
+          : null,
+        canRead('billing.read')
+          ? this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+              transaction
+                .select({
+                  id: payerArrangements.id,
+                  clientId: clientRecords.id,
+                  clientName: sql<string>`coalesce(nullif(concat_ws(' ', ${clientRecords.preferredName}, ${clientRecords.lastName}), ''), concat_ws(' ', ${clientRecords.firstName}, ${clientRecords.lastName}))`,
+                  organizationId: payerArrangements.organizationId,
+                  facilityId: clientRecords.primaryFacilityId,
+                  validUntil: payerArrangements.validUntil,
+                })
+                .from(payerArrangements)
+                .innerJoin(
+                  clientRecords,
+                  and(
+                    eq(clientRecords.tenantId, payerArrangements.tenantId),
+                    eq(clientRecords.id, payerArrangements.clientId),
+                  ),
+                )
+                .where(
+                  and(
+                    eq(payerArrangements.tenantId, principal.tenantId),
+                    eq(payerArrangements.mandateStatus, 'authorized'),
+                    lte(payerArrangements.validFrom, todayUtc),
+                    isNotNull(payerArrangements.validUntil),
+                    gte(payerArrangements.validUntil, deadlineFrom),
+                    lte(payerArrangements.validUntil, deadlineUntil),
+                    scopedTo(
+                      billingScope,
+                      payerArrangements.organizationId,
+                      clientRecords.primaryFacilityId,
+                    ),
+                  ),
+                )
+                .orderBy(asc(payerArrangements.validUntil), asc(payerArrangements.id))
+                .limit(101),
+            )
+          : null,
+      ],
+      [
+        'scheduling',
+        'care_documentation',
+        'service_evidence',
+        'benefits',
+        'billing',
+        'billing',
+        'claims',
+        'onboarding',
+        'service_agreements',
+        'employee_qualifications',
+        'benefits',
+        'billing',
+      ],
+    );
+    let claimsReadinessComplete = true;
     const completeDomains = new Map<string, ReconciliationWindow>();
     if (schedule && schedule.total <= schedule.items.length) {
       completeDomains.set('scheduling', {
@@ -330,24 +834,34 @@ export class OperationsApplicationService {
     }
     if (
       benefitData &&
+      benefitEntitlementDeadlines &&
       benefitData.clients.total <= benefitData.clients.items.length &&
-      benefitData.unallocatedServices.items.length < 100
+      benefitData.unallocatedServices.items.length < 100 &&
+      benefitEntitlementDeadlines.length <= 100
     ) {
       completeDomains.set('benefits', { from: null, until: null });
     }
     if (
       invoicesForDocuments &&
       receivables &&
+      payerArrangementDeadlines &&
       invoicesForDocuments.length < 100 &&
-      receivables.length < 100
+      receivables.length < 100 &&
+      payerArrangementDeadlines.length <= 100
     ) {
       completeDomains.set('billing', { from: null, until: null });
     }
-    if (claimsPage && !claimsPage.hasMore) {
+    if (claimsPage && !claimsPage.hasMore && claimsReadinessComplete) {
       completeDomains.set('claims', { from: null, until: null });
     }
     if (onboardingReadiness?.complete) {
       completeDomains.set('onboarding', { from: null, until: null });
+    }
+    if (agreementDeadlines && agreementDeadlines.length <= 100) {
+      completeDomains.set('service_agreements', { from: null, until: null });
+    }
+    if (qualificationDeadlines && qualificationDeadlines.length <= 100) {
+      completeDomains.set('employee_qualifications', { from: null, until: null });
     }
 
     const evidenceResources = evidence
@@ -364,9 +878,15 @@ export class OperationsApplicationService {
       ),
       ...(benefitData?.clients.items.map((row) => row.organizationId) ?? []),
       ...(benefitData?.unallocatedServices.items.map((row) => row.organizationId) ?? []),
+      ...(benefitEntitlementDeadlines?.map((row) => row.organizationId) ?? []),
       ...(invoicesForDocuments?.map((row) => row.organizationId) ?? []),
       ...(receivables?.map((row) => row.organizationId) ?? []),
+      ...(payerArrangementDeadlines?.map((row) => row.organizationId) ?? []),
       ...(claimsPage?.items.map((row) => row.organizationId) ?? []),
+      ...(agreementDeadlines?.map((row) => row.organizationId) ?? []),
+      ...(qualificationDeadlines?.flatMap((row) =>
+        row.organizationId ? [row.organizationId] : [],
+      ) ?? []),
     ];
     const timezoneByOrganization = await this.organizationTimezones(
       principal.tenantId,
@@ -492,7 +1012,17 @@ export class OperationsApplicationService {
               facilityId: row.facilityId,
               clientId: row.clientId,
               clientName: row.clientName,
-              dueAt: null,
+              dueAt:
+                problem.code === 'carryover_expiring' && row.expiringCarryoverDueDate
+                  ? endOfLocalDay(
+                      row.expiringCarryoverDueDate,
+                      timezoneByOrganization.get(row.organizationId ?? '') ?? 'Europe/Berlin',
+                    )
+                  : null,
+              sourceAt:
+                problem.code === 'carryover_expiring' && row.expiringCarryoverDueDate
+                  ? new Date(`${row.expiringCarryoverDueDate}T12:00:00.000Z`)
+                  : null,
               descriptionCode: `operations.issues.benefits.${problem.code}`,
             }),
           );
@@ -517,6 +1047,32 @@ export class OperationsApplicationService {
         );
       }
       truncated ||= benefitData.unallocatedServices.items.length === 100;
+    }
+    if (benefitEntitlementDeadlines) {
+      truncated ||= benefitEntitlementDeadlines.length > 100;
+      for (const entitlement of benefitEntitlementDeadlines.slice(0, 100)) {
+        if (!entitlement.validUntil || !entitlement.organizationId) continue;
+        const timezone = timezoneByOrganization.get(entitlement.organizationId) ?? 'Europe/Berlin';
+        const dueAt = endOfLocalDay(entitlement.validUntil, timezone);
+        if (!dueAt) continue;
+        items.push(
+          this.workItem({
+            sourceDomain: 'benefits',
+            entityType: 'benefit_entitlement',
+            entityId: entitlement.id,
+            issueCode: 'benefit_entitlement_expiry',
+            category: 'benefits',
+            severity: new Date(dueAt) < observedAt ? 'critical' : 'warning',
+            organizationId: entitlement.organizationId,
+            facilityId: entitlement.facilityId,
+            clientId: entitlement.clientId,
+            clientName: entitlement.clientName,
+            dueAt,
+            sourceAt: new Date(`${entitlement.validUntil}T12:00:00.000Z`),
+            descriptionCode: 'operations.issues.benefits.entitlement_expiry',
+          }),
+        );
+      }
     }
     if (invoicesForDocuments) {
       truncated ||= invoicesForDocuments.length === 100;
@@ -543,15 +1099,22 @@ export class OperationsApplicationService {
     if (receivables) {
       truncated ||= receivables.length === 100;
       for (const invoice of receivables) {
-        if (!invoice.dueDate || invoice.dueDate >= now.toISOString().slice(0, 10)) continue;
+        if (!invoice.dueDate) continue;
         items.push(
           this.workItem({
             sourceDomain: 'billing',
             entityType: 'invoice',
             entityId: invoice.id,
-            issueCode: 'receivable_overdue',
+            issueCode: 'receivable_due',
             category: 'billing',
-            severity: 'critical',
+            severity:
+              invoice.dueDate <
+              localDateKey(
+                now,
+                timezoneByOrganization.get(invoice.organizationId) ?? 'Europe/Berlin',
+              )
+                ? 'critical'
+                : 'warning',
             organizationId: invoice.organizationId,
             facilityId: invoice.facilityId,
             clientId: invoice.clientId,
@@ -560,21 +1123,55 @@ export class OperationsApplicationService {
               invoice.dueDate,
               timezoneByOrganization.get(invoice.organizationId) ?? 'Europe/Berlin',
             ),
-            descriptionCode: 'operations.issues.billing.receivable_overdue',
+            sourceAt: new Date(`${invoice.dueDate}T12:00:00.000Z`),
+            descriptionCode: 'operations.issues.billing.receivable_due',
+          }),
+        );
+      }
+    }
+    if (payerArrangementDeadlines) {
+      truncated ||= payerArrangementDeadlines.length > 100;
+      for (const arrangement of payerArrangementDeadlines.slice(0, 100)) {
+        if (!arrangement.validUntil) continue;
+        const timezone = timezoneByOrganization.get(arrangement.organizationId) ?? 'Europe/Berlin';
+        const dueAt = endOfLocalDay(arrangement.validUntil, timezone);
+        if (!dueAt) continue;
+        items.push(
+          this.workItem({
+            sourceDomain: 'billing',
+            entityType: 'payer_arrangement',
+            entityId: arrangement.id,
+            issueCode: 'payer_authorization_expiry',
+            category: 'billing',
+            severity: new Date(dueAt) < observedAt ? 'critical' : 'warning',
+            organizationId: arrangement.organizationId,
+            facilityId: arrangement.facilityId,
+            clientId: arrangement.clientId,
+            clientName: arrangement.clientName,
+            dueAt,
+            sourceAt: new Date(`${arrangement.validUntil}T12:00:00.000Z`),
+            descriptionCode: 'operations.issues.billing.payer_authorization_expiry',
           }),
         );
       }
     }
     if (claimsPage) {
       truncated ||= claimsPage.hasMore;
-      const claimReadiness = new Map(
-        await Promise.all(
-          claimsPage.items
-            .filter((claim) => claim.status === 'draft')
-            .map(
-              async (claim) =>
-                [claim.id, await this.sources.claims.readiness(principal, claim.id)] as const,
+      const readinessResults = await Promise.all(
+        claimsPage.items
+          .filter((claim) => claim.status === 'draft')
+          .map(async (claim) => ({
+            claimId: claim.id,
+            readiness: await isolateOperationsSource('claims', () =>
+              this.sources.claims.readiness(principal, claim.id),
             ),
+          })),
+      );
+      claimsReadinessComplete = readinessResults.every((result) => result.readiness !== null);
+      if (!claimsReadinessComplete) completeDomains.delete('claims');
+      const claimReadiness = new Map(
+        readinessResults.flatMap((result) =>
+          result.readiness ? [[result.claimId, result.readiness] as const] : [],
         ),
       );
       for (const claim of claimsPage.items) {
@@ -608,12 +1205,87 @@ export class OperationsApplicationService {
         );
       }
     }
+    if (agreementDeadlines) {
+      truncated ||= agreementDeadlines.length > 100;
+      for (const agreement of agreementDeadlines.slice(0, 100)) {
+        if (!agreement.validUntil) continue;
+        const timezone = timezoneByOrganization.get(agreement.organizationId) ?? 'Europe/Berlin';
+        const dueAt = endOfLocalDay(agreement.validUntil, timezone);
+        if (!dueAt) continue;
+        const expired = new Date(dueAt) < observedAt;
+        items.push(
+          this.workItem({
+            sourceDomain: 'service_agreements',
+            entityType: 'agreement',
+            entityId: agreement.id,
+            issueCode: 'agreement_expiry',
+            category: 'agreements',
+            severity: expired ? 'critical' : 'warning',
+            organizationId: agreement.organizationId,
+            facilityId: agreement.facilityId,
+            clientId: agreement.clientId,
+            clientName: agreement.clientName,
+            dueAt,
+            sourceAt: new Date(`${agreement.validUntil}T12:00:00.000Z`),
+            descriptionCode: 'operations.issues.agreements.expiry',
+          }),
+        );
+      }
+    }
+    if (qualificationDeadlines) {
+      truncated ||= qualificationDeadlines.length > 100;
+      for (const qualification of qualificationDeadlines.slice(0, 100)) {
+        if (!qualification.validUntil || !qualification.organizationId) continue;
+        const timezone =
+          timezoneByOrganization.get(qualification.organizationId) ?? 'Europe/Berlin';
+        const dueAt = endOfLocalDay(qualification.validUntil, timezone);
+        if (!dueAt) continue;
+        items.push(
+          this.workItem({
+            sourceDomain: 'employee_qualifications',
+            entityType: 'employee_qualification',
+            entityId: qualification.id,
+            issueCode: 'qualification_expiry',
+            category: 'employees',
+            severity: new Date(dueAt) < observedAt ? 'critical' : 'warning',
+            organizationId: qualification.organizationId,
+            facilityId: qualification.facilityId,
+            clientId: null,
+            clientName: null,
+            employeeId: qualification.employeeId,
+            employeeName: qualification.employeeName,
+            dueAt,
+            sourceAt: new Date(`${qualification.validUntil}T12:00:00.000Z`),
+            descriptionCode: 'operations.issues.employees.qualification_expiry',
+          }),
+        );
+      }
+    }
     if (onboardingReadiness) {
       truncated ||= !onboardingReadiness.complete;
       for (const admission of onboardingReadiness.items) {
         const isOverdue = Boolean(
           admission.nextFollowUpAt && admission.nextFollowUpAt < observedAt,
         );
+        if (admission.nextFollowUpAt) {
+          items.push(
+            this.workItem({
+              sourceDomain: 'onboarding',
+              entityType: 'admission_case',
+              entityId: admission.id,
+              issueCode: isOverdue ? 'admission_follow_up_overdue' : 'admission_follow_up_due',
+              category: 'onboarding',
+              severity: isOverdue ? 'critical' : 'warning',
+              organizationId: admission.organizationId,
+              facilityId: admission.facilityId,
+              clientId: admission.clientId,
+              clientName: `${admission.firstName} ${admission.lastName}`,
+              dueAt: admission.nextFollowUpAt.toISOString(),
+              sourceAt: admission.nextFollowUpAt,
+              descriptionCode: `operations.issues.onboarding.${isOverdue ? 'follow_up_overdue' : 'follow_up_due'}`,
+            }),
+          );
+        }
         if (admission.blockerCount > 0) {
           items.push(
             this.workItem({
@@ -633,44 +1305,110 @@ export class OperationsApplicationService {
             }),
           );
         }
-        if (isOverdue) {
-          items.push(
-            this.workItem({
-              sourceDomain: 'onboarding',
-              entityType: 'admission_case',
-              entityId: admission.id,
-              issueCode: 'admission_follow_up_overdue',
-              category: 'onboarding',
-              severity: 'critical',
-              organizationId: admission.organizationId,
-              facilityId: admission.facilityId,
-              clientId: admission.clientId,
-              clientName: `${admission.firstName} ${admission.lastName}`,
-              dueAt: admission.nextFollowUpAt!.toISOString(),
-              sourceAt: admission.nextFollowUpAt,
-              descriptionCode: 'operations.issues.onboarding.follow_up_overdue',
-            }),
-          );
+        if (admission.preferredStartDate) {
+          const timezone = timezoneByOrganization.get(admission.organizationId) ?? 'Europe/Berlin';
+          const dueAt = endOfLocalDay(admission.preferredStartDate, timezone);
+          if (dueAt) {
+            const startDatePassed = new Date(dueAt) < observedAt;
+            items.push(
+              this.workItem({
+                sourceDomain: 'onboarding',
+                entityType: 'admission_case',
+                entityId: admission.id,
+                issueCode: 'admission_start_date',
+                category: 'onboarding',
+                severity: startDatePassed ? 'critical' : 'warning',
+                organizationId: admission.organizationId,
+                facilityId: admission.facilityId,
+                clientId: admission.clientId,
+                clientName: `${admission.firstName} ${admission.lastName}`,
+                dueAt,
+                sourceAt: new Date(`${admission.preferredStartDate}T12:00:00.000Z`),
+                descriptionCode: 'operations.issues.onboarding.start_date',
+              }),
+            );
+          }
         }
       }
     }
 
-    let visible = deduplicateWorkItems(items).filter((item) =>
-      can(principal, {
-        action: 'operations.read',
-        resource: workItemResource(principal, item),
-      }),
-    );
+    let visible = deduplicateWorkItems(items)
+      .filter((item) => {
+        const policyCategory = deadlinePolicyCategory(item);
+        if (!policyCategory || !item.dueAt || !item.organizationId) return true;
+        const policy = policyByOrganization.get(`${item.organizationId}:${policyCategory}`);
+        const timezone = timezoneByOrganization.get(item.organizationId) ?? 'Europe/Berlin';
+        const remainingDays = dateDifferenceDays(
+          localDateKey(new Date(item.dueAt), timezone),
+          localDateKey(now, timezone),
+        );
+        if (remainingDays < 0 || item.severity === 'critical') return true;
+        if (policy?.enabled === false) return false;
+        const offsets = policy?.offsetsDays ?? [30, 7, 0];
+        return remainingDays <= Math.max(0, ...offsets);
+      })
+      .filter((item) => {
+        const resource = workItemResource(principal, item);
+        const readPermission = exceptionReadPermission(item.sourceDomain, item.issueCode);
+        return (
+          can(principal, { action: 'operations.read', resource }) &&
+          readPermission !== null &&
+          can(principal, { action: readPermission, resource })
+        );
+      });
     await this.syncExceptionOccurrences(principal, visible, completeDomains, observedAt);
     await this.reconcileStaleExceptionOccurrences(principal, visible, observedAt);
     visible = await this.attachInteractions(principal, visible);
+    let assignedDeadlineKeys: Set<string> | null = null;
+    if (query.assignedEmployeeId) {
+      this.requireAnyGrant(principal, 'operations.tasks.assign');
+      const deadlineKeys = visible
+        .filter(
+          (item) =>
+            deadlinePolicyCategory(item) &&
+            can(principal, {
+              action: 'operations.tasks.assign',
+              resource: workItemResource(principal, item),
+            }),
+        )
+        .map((item) => item.id);
+      const assignedTasks = deadlineKeys.length
+        ? await this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+            transaction
+              .select({ sourceDeadlineKey: tasks.sourceDeadlineKey })
+              .from(tasks)
+              .where(
+                and(
+                  eq(tasks.tenantId, principal.tenantId),
+                  eq(tasks.assignedEmployeeId, query.assignedEmployeeId!),
+                  inArray(tasks.sourceDeadlineKey, deadlineKeys),
+                ),
+              ),
+          )
+        : [];
+      assignedDeadlineKeys = new Set(
+        assignedTasks.flatMap((task) => (task.sourceDeadlineKey ? [task.sourceDeadlineKey] : [])),
+      );
+    }
     visible = visible.filter((item) => {
+      if (assignedDeadlineKeys && !assignedDeadlineKeys.has(item.id)) return false;
       if (query.category && item.category !== query.category) return false;
       if (query.status && item.status !== query.status) return false;
       if (query.severity && item.severity !== query.severity) return false;
       if (query.organizationId && item.organizationId !== query.organizationId) return false;
       if (query.facilityId && item.facilityId !== query.facilityId) return false;
       if (query.clientId && item.clientId !== query.clientId) return false;
+      if (query.employeeId && item.employeeId !== query.employeeId) return false;
+      if (query.sourceDomain && item.sourceDomain !== query.sourceDomain) return false;
+      if (query.deadlinesOnly && (!item.dueAt || !deadlinePolicyCategory(item))) return false;
+      const localDueDate = item.dueAt
+        ? localDateKey(
+            new Date(item.dueAt),
+            timezoneByOrganization.get(item.organizationId ?? '') ?? 'Europe/Berlin',
+          )
+        : null;
+      if (query.fromDate && (!localDueDate || localDueDate < query.fromDate)) return false;
+      if (query.untilDate && (!localDueDate || localDueDate > query.untilDate)) return false;
       if (
         query.due &&
         !matchesDueFilter(
@@ -818,6 +1556,7 @@ export class OperationsApplicationService {
     input: OperationsTaskInput,
     request: RequestContext,
     auditContext: AuditContext,
+    sourceDeadlineKey: string | null = null,
   ) {
     if (!validTaskInput(input)) throw new InvalidOperationsInputError();
     const sourceContext = input.source ? await this.validateSource(principal, input.source) : null;
@@ -875,6 +1614,22 @@ export class OperationsApplicationService {
     const id = uuidv7();
     const sourceColumns = sourceColumnsFor(input.source ?? null);
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      if (sourceDeadlineKey) {
+        await transaction.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${`operations-deadline-task:${principal.tenantId}:${sourceDeadlineKey}`}, 0))`,
+        );
+        const [existing] = await transaction
+          .select()
+          .from(tasks)
+          .where(
+            and(
+              eq(tasks.tenantId, principal.tenantId),
+              eq(tasks.sourceDeadlineKey, sourceDeadlineKey),
+            ),
+          )
+          .limit(1);
+        if (existing) return this.taskView(principal, existing);
+      }
       if (input.assignedEmployeeId) {
         await this.validateAssignee(
           transaction,
@@ -903,6 +1658,7 @@ export class OperationsApplicationService {
           completedAt: null,
           sourceType: input.source?.type ?? null,
           ...sourceColumns,
+          sourceDeadlineKey,
           version: 1,
           createdAt: now,
           updatedAt: now,
@@ -935,6 +1691,48 @@ export class OperationsApplicationService {
       }
       return this.taskView(principal, task!);
     });
+  }
+
+  async createDeadlineTask(
+    principal: AuthorizationPrincipal,
+    issueId: string,
+    input: Pick<OperationsTaskInput, 'title' | 'description' | 'priority' | 'assignedEmployeeId'>,
+    request: RequestContext,
+    auditContext: AuditContext,
+  ) {
+    const worklist = await this.listWorkItems(principal, {
+      deadlinesOnly: true,
+      page: 1,
+      pageSize: 1000,
+    });
+    const deadline = worklist.items.find((item) => item.id === issueId);
+    if (
+      !deadline ||
+      deadline.sourceDomain !== 'service_agreements' ||
+      deadline.issueCode !== 'agreement_expiry'
+    ) {
+      throw new OperationsWorkItemNotFoundError();
+    }
+    if (!deadline.organizationId) throw new OperationsWorkItemNotFoundError();
+    return this.createTask(
+      principal,
+      {
+        organizationId: deadline.organizationId,
+        facilityId: deadline.facilityId,
+        clientId: deadline.clientId,
+        title: input.title,
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.priority !== undefined ? { priority: input.priority } : {}),
+        ...(input.assignedEmployeeId !== undefined
+          ? { assignedEmployeeId: input.assignedEmployeeId }
+          : {}),
+        dueAt: deadline.dueAt ? new Date(deadline.dueAt) : null,
+        source: { type: 'service_agreement', id: deadline.sourceEntityId },
+      },
+      request,
+      auditContext,
+      issueId,
+    );
   }
 
   async listTasks(principal: AuthorizationPrincipal, query: OperationsTaskListQuery = {}) {
@@ -1463,6 +2261,7 @@ export class OperationsApplicationService {
       status: task.status,
       priority: task.priority,
       assignedEmployeeId: task.assignedEmployeeId,
+      assignmentWarningCode: task.assignmentWarningCode,
       createdByUserId: task.createdByUserId,
       completedByUserId: task.completedByUserId,
       dueAt: task.dueAt,
@@ -1791,36 +2590,7 @@ export class OperationsApplicationService {
     organizationId: string,
     facilityId: string | null,
   ) {
-    const filters = [
-      eq(employeeRecords.tenantId, tenantId),
-      eq(employeeRecords.id, employeeId),
-      eq(employeeRecords.status, 'active'),
-      eq(employeeRecords.organizationId, organizationId),
-    ];
-    const [employee] = await transaction
-      .select({ id: employeeRecords.id })
-      .from(employeeRecords)
-      .where(and(...filters))
-      .for('share')
-      .limit(1);
-    if (!employee) throw new OperationsAssigneeInvalidError();
-    if (facilityId) {
-      const [assignment] = await transaction
-        .select({ id: employeeFacilityAssignments.id })
-        .from(employeeFacilityAssignments)
-        .where(
-          and(
-            eq(employeeFacilityAssignments.tenantId, tenantId),
-            eq(employeeFacilityAssignments.organizationId, organizationId),
-            eq(employeeFacilityAssignments.employeeId, employeeId),
-            eq(employeeFacilityAssignments.facilityId, facilityId),
-            eq(employeeFacilityAssignments.status, 'active'),
-          ),
-        )
-        .for('share')
-        .limit(1);
-      if (!assignment) throw new OperationsAssigneeInvalidError();
-    }
+    await validateOperationsAssignee(transaction, tenantId, employeeId, organizationId, facilityId);
   }
 
   private async employeeForUser(tenantId: string, userId: string) {
@@ -1962,6 +2732,8 @@ export class OperationsApplicationService {
     facilityId: string | null;
     clientId: string | null;
     clientName: string | null;
+    employeeId?: string | null;
+    employeeName?: string | null;
     dueAt: string | null;
     sourceAt?: Date | null;
     descriptionCode: string;
@@ -1970,6 +2742,8 @@ export class OperationsApplicationService {
     const id = stableIssueId(input.sourceDomain, entityType, entityId, input.issueCode);
     return {
       ...workItem,
+      employeeId: input.employeeId ?? null,
+      employeeName: input.employeeName ?? null,
       [projectionSourceAt]: sourceAt ?? (input.dueAt ? new Date(input.dueAt) : null),
       id,
       kind: 'exception',
@@ -2006,6 +2780,8 @@ export class OperationsApplicationService {
                 'care_documentation',
                 'service_evidence',
                 'onboarding',
+                'service_agreements',
+                'employee_qualifications',
               ]),
             ),
           )
@@ -2140,6 +2916,8 @@ export class OperationsApplicationService {
         );
         if (occurrence.issueCode === 'admission_readiness_blocked') return state.readinessBlocked;
         if (occurrence.issueCode === 'admission_follow_up_overdue') return state.followUpOverdue;
+        if (occurrence.issueCode === 'admission_follow_up_due') return state.followUpDue;
+        if (occurrence.issueCode === 'admission_start_date') return state.startDateActionable;
         return null;
       } catch (error) {
         if (
@@ -2168,7 +2946,11 @@ export class OperationsApplicationService {
       `);
       const activeCurrent = issueKeys.length
         ? await transaction
-            .select({ id: exceptionOccurrences.id, issueKey: exceptionOccurrences.issueKey })
+            .select({
+              id: exceptionOccurrences.id,
+              issueKey: exceptionOccurrences.issueKey,
+              sourceAt: exceptionOccurrences.sourceAt,
+            })
             .from(exceptionOccurrences)
             .where(
               and(
@@ -2178,7 +2960,32 @@ export class OperationsApplicationService {
               ),
             )
         : [];
-      const activeKeys = new Set(activeCurrent.map((row) => row.issueKey));
+      const itemByKey = new Map(currentItems.map((item) => [item.id, item]));
+      const superseded = activeCurrent.filter((row) => {
+        const item = itemByKey.get(row.issueKey);
+        if (!item || !deadlinePolicyCategory(item) || !item.dueAt) return false;
+        const nextSourceAt = item[projectionSourceAt];
+        return row.sourceAt?.getTime() !== nextSourceAt?.getTime();
+      });
+      if (superseded.length) {
+        await transaction
+          .update(exceptionOccurrences)
+          .set({ resolvedAt: observedAt, version: sql`${exceptionOccurrences.version} + 1` })
+          .where(
+            and(
+              eq(exceptionOccurrences.tenantId, principal.tenantId),
+              inArray(
+                exceptionOccurrences.id,
+                superseded.map((row) => row.id),
+              ),
+              isNull(exceptionOccurrences.resolvedAt),
+            ),
+          );
+      }
+      const supersededIds = new Set(superseded.map((row) => row.id));
+      const activeKeys = new Set(
+        activeCurrent.filter((row) => !supersededIds.has(row.id)).map((row) => row.issueKey),
+      );
       const missing = currentItems.filter((item) => !activeKeys.has(item.id));
       if (missing.length) {
         const latestResolved = await transaction
@@ -2567,12 +3374,6 @@ export class OperationsSourceNotFoundError extends Error {
     super('The referenced source record was not found');
   }
 }
-export class OperationsAssigneeInvalidError extends Error {
-  readonly code = 'OPERATIONS_ASSIGNEE_INVALID';
-  constructor() {
-    super('The assignee is not active in this task scope');
-  }
-}
 export class OperationsTaskVersionConflictError extends Error {
   readonly code = 'OPERATIONS_TASK_VERSION_CONFLICT';
   constructor() {
@@ -2777,6 +3578,10 @@ function deduplicateWorkItems<T extends OperationsWorkItem>(items: T[]): T[] {
 
 function exceptionReadPermission(sourceDomain: string, issueCode: string): Permission | null {
   switch (sourceDomain) {
+    case 'service_agreements':
+      return 'service_agreement.read';
+    case 'employee_qualifications':
+      return 'employee.read';
     case 'scheduling':
       return 'schedule.read';
     case 'care_documentation':
@@ -2786,7 +3591,7 @@ function exceptionReadPermission(sourceDomain: string, issueCode: string): Permi
     case 'benefits':
       return 'benefits.review';
     case 'billing':
-      return issueCode === 'receivable_overdue' ? 'billing.payments.read' : 'billing.read';
+      return issueCode === 'receivable_due' ? 'billing.payments.read' : 'billing.read';
     case 'claims':
       return 'claims.read';
     case 'onboarding':
@@ -2834,6 +3639,73 @@ function localDateKey(value: Date, timezone: string): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
+function deadlinePolicyCategory(
+  item: OperationsWorkItem,
+): 'agreements' | 'employees' | 'benefits' | 'billing' | 'onboarding' | null {
+  switch (item.issueCode) {
+    case 'agreement_expiry':
+      return 'agreements';
+    case 'qualification_expiry':
+      return 'employees';
+    case 'carryover_expiring':
+    case 'benefit_entitlement_expiry':
+      return 'benefits';
+    case 'receivable_due':
+    case 'payer_authorization_expiry':
+      return 'billing';
+    case 'admission_start_date':
+    case 'admission_follow_up_due':
+    case 'admission_follow_up_overdue':
+      return 'onboarding';
+    default:
+      return null;
+  }
+}
+
+function dateDifferenceDays(laterDate: string, earlierDate: string): number {
+  return Math.floor(
+    (Date.parse(`${laterDate}T00:00:00Z`) - Date.parse(`${earlierDate}T00:00:00Z`)) / 86_400_000,
+  );
+}
+
+function addDaysToDate(value: string, days: number): string {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function permissionScope(principal: AuthorizationPrincipal, permission: Permission) {
+  const grants = principal.grants.filter(
+    (grant) =>
+      grant.permission === permission ||
+      (permission === 'employee.read' && grant.permission === 'employee.manage'),
+  );
+  return {
+    tenantWide: grants.some(
+      (grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId,
+    ),
+    organizationIds: grants
+      .filter((grant) => grant.scopeType === 'organization')
+      .map((grant) => grant.scopeId),
+    facilityIds: grants
+      .filter((grant) => grant.scopeType === 'facility')
+      .map((grant) => grant.scopeId),
+  };
+}
+
+function scopedTo(
+  scope: ReturnType<typeof permissionScope>,
+  organizationColumn: AnyPgColumn,
+  facilityColumn: AnyPgColumn,
+): SQL {
+  if (scope.tenantWide) return sql`true`;
+  const allowed: SQL[] = [];
+  if (scope.organizationIds.length)
+    allowed.push(inArray(organizationColumn, scope.organizationIds));
+  if (scope.facilityIds.length) allowed.push(inArray(facilityColumn, scope.facilityIds));
+  return allowed.length ? or(...allowed)! : sql`false`;
+}
+
 function endOfLocalDay(date: string, timezone: string): string | null {
   try {
     const lastMinute = localDateTimeToInstant(date, '23:59', timezone, 'later');
@@ -2841,6 +3713,38 @@ function endOfLocalDay(date: string, timezone: string): string | null {
   } catch {
     return null;
   }
+}
+
+async function isolateOperationsSources<T extends readonly unknown[]>(
+  reads: T,
+  sourceDomains: readonly string[],
+): Promise<{ [K in keyof T]: Awaited<T[K]> | null }> {
+  const results = await Promise.allSettled(reads);
+  return results.map((result, index) => {
+    if (result.status === 'fulfilled') return result.value;
+    logOperationsSourceFailure(sourceDomains[index] ?? 'unknown', result.reason);
+    return null;
+  }) as { [K in keyof T]: Awaited<T[K]> | null };
+}
+
+async function isolateOperationsSource<T>(
+  sourceDomain: string,
+  read: () => Promise<T>,
+): Promise<T | null> {
+  try {
+    return await read();
+  } catch (error) {
+    logOperationsSourceFailure(sourceDomain, error);
+    return null;
+  }
+}
+
+function logOperationsSourceFailure(sourceDomain: string, error: unknown): void {
+  const errorName =
+    error instanceof Error && /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/.test(error.name)
+      ? error.name
+      : 'UnknownError';
+  console.warn({ sourceDomain, errorName }, 'Operations worklist source read failed');
 }
 
 function workItemResource(

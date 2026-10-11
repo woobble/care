@@ -1,12 +1,25 @@
 // oxlint-disable-next-line import/no-unassigned-import -- load dotenv before reading worker configuration
 import '@care/config/load-env';
 import { hostname } from 'node:os';
+import { eq } from 'drizzle-orm';
 import { EventDispatcher } from '@care/events';
 import { loadWorkerConfig } from '@care/config';
-import { createDatabase } from '@care/database';
+import { createDatabase, createUnitOfWork } from '@care/database';
 import { createLogger } from '@care/logging';
 import { startTelemetry } from '@care/observability';
 import { DrizzleOutboxRepository, platformSchema } from '@care/platform';
+import { DrizzleAuditWriter } from '@care/audit';
+import { billingSchema } from '@care/billing';
+import { benefitsSchema, createBenefitsApplicationService } from '@care/benefits';
+import { clientsSchema } from '@care/clients';
+import { employeesSchema } from '@care/employees';
+import { organizationsSchema, tenants } from '@care/organizations';
+import { onboardingSchema, readOperationsDeadlineCases } from '@care/onboarding';
+import {
+  OperationsDeadlineTaskScheduler,
+  OperationsRecurrenceApplicationService,
+  operationsSchema,
+} from '@care/operations';
 
 const batchSize = 50;
 const leaseMs = 120_000;
@@ -16,14 +29,42 @@ async function main(): Promise<void> {
   const config = loadWorkerConfig();
   const logger = createLogger('care-worker');
   const stopTelemetry = await startTelemetry('care-worker', config.OTEL_EXPORTER_OTLP_ENDPOINT);
-  const database = createDatabase(config.WORKER_DATABASE_URL, platformSchema);
+  const database = createDatabase(config.WORKER_DATABASE_URL, {
+    ...platformSchema,
+    ...organizationsSchema,
+    ...clientsSchema,
+    ...employeesSchema,
+    ...benefitsSchema,
+    ...billingSchema,
+    ...onboardingSchema,
+    ...operationsSchema,
+  });
   const outbox = new DrizzleOutboxRepository(database.db);
+  const unitOfWork = createUnitOfWork(database.db);
+  const auditWriter = new DrizzleAuditWriter();
+  const recurrenceScheduler = new OperationsRecurrenceApplicationService(
+    unitOfWork,
+    auditWriter,
+    outbox,
+  );
+  const deadlineScheduler = new OperationsDeadlineTaskScheduler(unitOfWork, auditWriter, outbox, {
+    benefits: createBenefitsApplicationService(unitOfWork, auditWriter, outbox),
+    onboardingCases: readOperationsDeadlineCases,
+  });
   const dispatcher = new EventDispatcher();
   for (const eventType of [
     'organization.created',
     'organization.updated',
     'organization.activated',
     'organization.archived',
+    'operations.recurrence_created',
+    'operations.recurrence_updated',
+    'operations.recurrence_paused',
+    'operations.recurrence_resumed',
+    'operations.recurrence_ended',
+    'operations.recurring_task_generated',
+    'operations.reminder_settings_updated',
+    'operations.task_created',
     'facility.created',
     'facility.updated',
     'facility.activated',
@@ -170,6 +211,62 @@ async function main(): Promise<void> {
           }
         }
         // oxlint-enable no-await-in-loop
+        const tenantsToProcess = await database.db
+          .select({ id: tenants.id })
+          .from(tenants)
+          .where(eq(tenants.active, true))
+          .orderBy(tenants.id);
+        // Each tenant is isolated so one failure cannot block other tenant schedules.
+        // oxlint-disable no-await-in-loop
+        for (const tenant of tenantsToProcess) {
+          try {
+            const result = await recurrenceScheduler.runRecurringTaskScheduler(tenant.id, workerId);
+            if (result.tasksCreated > 0) {
+              logger.info(
+                { tasksCreated: result.tasksCreated },
+                'Recurring Operations tasks generated',
+              );
+            }
+          } catch (error) {
+            logger.error(
+              {
+                tenantId: tenant.id,
+                errorName: safeErrorName(error),
+              },
+              'Recurring Operations evaluation failed',
+            );
+          }
+          try {
+            const deadlineResult = await deadlineScheduler.run(tenant.id, workerId);
+            if (deadlineResult.tasksCreated > 0) {
+              logger.info(
+                { tasksCreated: deadlineResult.tasksCreated },
+                'Agreement deadline Operations tasks generated',
+              );
+            }
+            if ('remindersTriggered' in deadlineResult && deadlineResult.remindersTriggered > 0) {
+              logger.info(
+                { remindersTriggered: deadlineResult.remindersTriggered },
+                'Operations deadline reminders evaluated',
+              );
+            }
+            if ('failedDomains' in deadlineResult && deadlineResult.failedDomains.length > 0) {
+              logger.error(
+                { tenantId: tenant.id, failedDomains: deadlineResult.failedDomains },
+                'Some Operations deadline sources could not be evaluated',
+              );
+            }
+          } catch (error) {
+            logger.error(
+              {
+                tenantId: tenant.id,
+                errorName: safeErrorName(error),
+              },
+              'Agreement deadline Operations evaluation failed',
+            );
+          }
+        }
+        // oxlint-enable no-await-in-loop
       } catch (error) {
         logger.error({ err: error }, 'Outbox polling failed');
       }
@@ -195,6 +292,12 @@ async function main(): Promise<void> {
     await database.close();
     await stopTelemetry();
   }
+}
+
+function safeErrorName(error: unknown): string {
+  return error instanceof Error && /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/.test(error.name)
+    ? error.name
+    : 'UnknownError';
 }
 
 void main();

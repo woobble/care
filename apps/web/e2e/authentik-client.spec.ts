@@ -392,7 +392,9 @@ test('Authentik users can be invited and administered from the office UI', async
     await admissionVisitForm.locator('input[name="localDate"]').fill(serviceValidFrom);
     await admissionVisitForm.locator('input[name="localStartTime"]').fill('09:15');
     await admissionVisitForm.locator('input[name="localEndTime"]').fill('09:45');
-    await admissionVisitForm.locator('select[name="serviceDefinitionIds"]').selectOption(serviceId!);
+    await admissionVisitForm
+      .locator('select[name="serviceDefinitionIds"]')
+      .selectOption(serviceId!);
     await admissionVisitForm.locator('textarea[name="note"]').fill(admissionVisitMarker);
     await admissionVisitForm.getByRole('button', { name: 'Create visit' }).click();
     await expect(page).toHaveURL(
@@ -2140,10 +2142,10 @@ async function cleanupAdmissionRecords(
       'DELETE FROM onboarding.case_documents WHERE tenant_id = $1 AND case_id = $2',
       [tenantId, caseId],
     );
-    await database.query('DELETE FROM onboarding.case_tasks WHERE tenant_id = $1 AND case_id = $2', [
-      tenantId,
-      caseId,
-    ]);
+    await database.query(
+      'DELETE FROM onboarding.case_tasks WHERE tenant_id = $1 AND case_id = $2',
+      [tenantId, caseId],
+    );
     await database.query(
       'DELETE FROM onboarding.case_communications WHERE tenant_id = $1 AND case_id = $2',
       [tenantId, caseId],
@@ -2156,14 +2158,14 @@ async function cleanupAdmissionRecords(
       'DELETE FROM onboarding.checklist_responses WHERE tenant_id = $1 AND case_id = $2',
       [tenantId, caseId],
     );
-    await database.query('DELETE FROM onboarding.assessments WHERE tenant_id = $1 AND case_id = $2', [
-      tenantId,
-      caseId,
-    ]);
-    await database.query('DELETE FROM onboarding.transitions WHERE tenant_id = $1 AND case_id = $2', [
-      tenantId,
-      caseId,
-    ]);
+    await database.query(
+      'DELETE FROM onboarding.assessments WHERE tenant_id = $1 AND case_id = $2',
+      [tenantId, caseId],
+    );
+    await database.query(
+      'DELETE FROM onboarding.transitions WHERE tenant_id = $1 AND case_id = $2',
+      [tenantId, caseId],
+    );
     await database.query('DELETE FROM onboarding.cases WHERE tenant_id = $1 AND id = $2', [
       tenantId,
       caseId,
@@ -2189,10 +2191,7 @@ async function cleanupOnboardingTemplates(
     );
     const templateRows = await database.query<{ id: string }>(
       'SELECT id FROM onboarding.checklist_templates WHERE tenant_id = $1 AND organization_id = ANY($2::uuid[])',
-      [
-        tenantId,
-        organizations.rows.map((organization) => organization.id),
-      ],
+      [tenantId, organizations.rows.map((organization) => organization.id)],
     );
     const templateIds = templateRows.rows.map((template) => template.id);
     if (templateIds.length) {

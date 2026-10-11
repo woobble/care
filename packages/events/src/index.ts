@@ -9,6 +9,21 @@ export interface EventPayloadMap {
   'operations.task_cancelled': { taskId: string };
   'operations.exception_acknowledged': { issueKey: string };
   'operations.exception_snoozed': { issueKey: string; snoozedUntil: string };
+  'operations.recurrence_created': { recurrenceId: string };
+  'operations.recurrence_updated': { recurrenceId: string; changedFields: string[] };
+  'operations.recurrence_paused': { recurrenceId: string };
+  'operations.recurrence_resumed': { recurrenceId: string };
+  'operations.recurrence_ended': { recurrenceId: string };
+  'operations.recurring_task_generated': {
+    recurrenceId: string;
+    taskId: string;
+    occurrenceDate: string;
+  };
+  'operations.reminder_settings_updated': {
+    organizationId: string;
+    category: string;
+    version: number;
+  };
   'organization.created': { organizationId: string };
   'organization.updated': { organizationId: string; changedFields: string[] };
   'organization.activated': { organizationId: string };

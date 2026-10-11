@@ -6,11 +6,7 @@ import { errorMessageKey } from '@app/web/i18n/errors';
 import { auditActionKey } from '@app/web/i18n/audit';
 import { formatDate, formatDateTime, formatNumber } from '@app/web/i18n/format';
 import type { Locale } from '@app/web/i18n/config';
-import {
-  quantityUnitKey,
-  serviceAgreementStatusKey,
-  unitLabelKey,
-} from '@app/web/i18n/status';
+import { quantityUnitKey, serviceAgreementStatusKey, unitLabelKey } from '@app/web/i18n/status';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 import {
   getApiClient,

@@ -10,7 +10,7 @@ import {
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
-import { issueTitleKey, workItemSourceHref } from './ui';
+import { categoryTranslationKey, issueTitleKey, workItemSourceHref } from './ui';
 
 type SearchParams = Promise<{ organizationId?: string; facilityId?: string }>;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -22,6 +22,8 @@ const categories = [
   'billing',
   'claims',
   'onboarding',
+  'agreements',
+  'employees',
 ] as const;
 
 export default async function OperationsDashboardPage({
@@ -88,6 +90,21 @@ export default async function OperationsDashboardPage({
               <Link href={operationsHref('/operations/tasks', scope)}>{t('createTask')}</Link>
             </Button>
           ) : null}
+          <Button asChild variant="secondary">
+            <Link href={operationsHref('/operations/deadlines', scope)}>{t('deadlinesTitle')}</Link>
+          </Button>
+          {hasPermission(permissions, 'operations.recurring_tasks.manage') ? (
+            <Button asChild variant="secondary">
+              <Link href={operationsHref('/operations/recurring-tasks', scope)}>
+                {t('recurringTasks')}
+              </Link>
+            </Button>
+          ) : null}
+          {hasPermission(permissions, 'operations.reminder_settings.manage') ? (
+            <Button asChild variant="secondary">
+              <Link href="/operations/reminder-settings">{t('reminderSettings')}</Link>
+            </Button>
+          ) : null}
         </div>
       </header>
 
@@ -122,17 +139,46 @@ export default async function OperationsDashboardPage({
               {categories.map((category) => (
                 <Link
                   key={category}
-                  href={operationsHref('/operations/worklist', scope, { category })}
+                  href={operationsHref(
+                    category === 'agreements' ||
+                      category === 'employees' ||
+                      category === 'benefits' ||
+                      category === 'billing'
+                      ? '/operations/deadlines'
+                      : '/operations/worklist',
+                    scope,
+                    { category },
+                  )}
                   className="rounded-lg border bg-white p-4 hover:border-blue-400"
                 >
                   <span className="text-sm text-slate-600">
-                    {t(category === 'onboarding' ? 'categories.onboarding' : category)}
+                    {t(categoryTranslationKey(category))}
                   </span>
                   <strong className="mt-1 block text-2xl">
                     {dashboard.categoryCounts[category] ?? 0}
                   </strong>
                 </Link>
               ))}
+            </div>
+            <div className="grid gap-3">
+              <h3 className="font-semibold">{t('deadlinesTitle')}</h3>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <CounterLink
+                  href={operationsHref('/operations/deadlines', scope, { due: 'overdue' })}
+                  label={t('overdue')}
+                  count={dashboard.deadlineCounts.overdue ?? 0}
+                />
+                <CounterLink
+                  href={operationsHref('/operations/deadlines', scope, { due: 'today' })}
+                  label={t('dueToday')}
+                  count={dashboard.deadlineCounts.today ?? 0}
+                />
+                <CounterLink
+                  href={operationsHref('/operations/deadlines', scope, { due: 'upcoming' })}
+                  label={t('upcoming')}
+                  count={dashboard.deadlineCounts.upcoming ?? 0}
+                />
+              </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <CounterLink
@@ -216,12 +262,7 @@ export default async function OperationsDashboardPage({
                           {t(`issueTitles.${issueTitleKey(item.issueCode)}`)}
                         </span>
                         <span className="text-sm text-slate-600">
-                          {item.clientName ??
-                            t(
-                              item.category === 'onboarding'
-                                ? 'categories.onboarding'
-                                : item.category,
-                            )}{' '}
+                          {item.clientName ?? t(categoryTranslationKey(item.category))}{' '}
                           {item.dueAt
                             ? formatDateTime(
                                 item.dueAt,

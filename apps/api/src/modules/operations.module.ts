@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
-import { createOperationsApplicationService } from '@care/operations';
+import {
+  createOperationsApplicationService,
+  OperationsRecurrenceApplicationService,
+} from '@care/operations';
 import type { AuditWriter } from '@care/audit';
 import type { BenefitsApplicationService } from '@care/benefits';
 import type { BillingApplicationService, BillingClaimsApplicationService } from '@care/billing';
@@ -17,6 +20,7 @@ import {
   BILLING_CLAIMS_APPLICATION,
   CARE_DOCUMENTATION_APPLICATION,
   OPERATIONS_APPLICATION,
+  OPERATIONS_RECURRENCE_APPLICATION,
   OUTBOX_WRITER,
   ONBOARDING_APPLICATION,
   SCHEDULING_APPLICATION,
@@ -88,7 +92,13 @@ import { OnboardingModule } from './onboarding.module';
           onboarding,
         }),
     },
+    {
+      provide: OPERATIONS_RECURRENCE_APPLICATION,
+      inject: [UNIT_OF_WORK, AUDIT_WRITER, OUTBOX_WRITER],
+      useFactory: (unitOfWork: UnitOfWork, audit: AuditWriter, outbox: OutboxWriter) =>
+        new OperationsRecurrenceApplicationService(unitOfWork, audit, outbox),
+    },
   ],
-  exports: [OPERATIONS_APPLICATION],
+  exports: [OPERATIONS_APPLICATION, OPERATIONS_RECURRENCE_APPLICATION],
 })
 export class OperationsModule {}

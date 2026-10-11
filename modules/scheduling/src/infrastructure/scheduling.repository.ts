@@ -23,7 +23,11 @@ import {
   visitServices,
   visits,
 } from '@module/scheduling/schema';
-import type { VisitAssignmentSnapshot, VisitData, VisitServiceData } from '@module/scheduling/domain/visit';
+import type {
+  VisitAssignmentSnapshot,
+  VisitData,
+  VisitServiceData,
+} from '@module/scheduling/domain/visit';
 import type {
   AvailabilityException,
   AvailabilityWindow,
