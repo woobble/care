@@ -11,8 +11,21 @@ const retiredModuleNavigationName =
 test('Authentik users can be invited and administered from the office UI', async ({
   page,
   browser,
-}) => {
+}, testInfo) => {
   test.setTimeout(600_000);
+  page.setDefaultTimeout(15_000);
+  await page.addInitScript(() => {
+    const hideNextDevToolbar = () => {
+      const style = document.createElement('style');
+      style.textContent = 'nextjs-portal { display: none !important; }';
+      document.head?.append(style);
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', hideNextDevToolbar, { once: true });
+    } else {
+      hideNextDevToolbar();
+    }
+  });
 
   const issuer = required('OIDC_ISSUER');
   const authentikOrigin = new URL(issuer).origin;
@@ -90,7 +103,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.getByRole('combobox', { name: 'Language' }).selectOption('de');
     await expect(page.locator('html')).toHaveAttribute('lang', 'de');
     await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('combobox', { name: 'Sprache' })).toHaveValue('de');
     await page.getByRole('combobox', { name: 'Sprache' }).selectOption('en');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
@@ -190,12 +203,284 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(
       page.getByRole('heading', { name: 'Klientinnen und Klienten', exact: true }),
     ).toBeVisible();
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('combobox', { name: 'Sprache' })).toHaveValue('de');
     await page.getByRole('combobox', { name: 'Sprache' }).selectOption('en');
     await expect(page).toHaveURL(/\/clients\?localeCheck=1$/);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible();
+
+    const sidebar = page.locator('#office-sidebar');
+    await test.step('office sidebar and responsive navigation', async () => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      const expandSidebar = page.getByRole('button', { name: 'Expand sidebar' });
+      const topbarBrand = page.getByRole('banner').getByText('Care Platform', { exact: true });
+      const topbarBrandMark = page.getByRole('banner').locator('svg.lucide-heart-handshake');
+      await expect(expandSidebar).toBeVisible();
+      await expect(expandSidebar).toHaveAttribute('aria-expanded', 'false');
+      await expect(topbarBrand).toBeVisible();
+      await expect(topbarBrandMark).toBeHidden();
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+      const activeLabel = sidebar.locator('a[aria-current="page"] > span').nth(1);
+      await expect(activeLabel).toHaveCSS('opacity', '0');
+      const collapsedIconBox = await sidebar.locator('a[aria-current="page"] svg').boundingBox();
+      expect(collapsedIconBox).not.toBeNull();
+      await page.screenshot({
+        path: testInfo.outputPath('office-1440-collapsed-light.png'),
+        fullPage: true,
+      });
+      await page.evaluate(() => {
+        document.querySelector('main h1')?.setAttribute('data-shell-node-check', 'kept');
+      });
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const reducedTransitionDuration = await sidebar.evaluate(
+        (element) => getComputedStyle(element).transitionDuration,
+      );
+      expect(Number.parseFloat(reducedTransitionDuration)).toBeLessThanOrEqual(0.001);
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      const accountTrigger = page.getByRole('button', { name: /Account: / });
+      await accountTrigger.click();
+      const accountMenu = page.getByRole('menu');
+      await expect(accountMenu.getByText(displayName, { exact: true })).toBeVisible();
+      await expect(accountMenu.getByText(email, { exact: true })).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath('office-account-menu.png') });
+      await page.keyboard.press('Escape');
+
+      await expandSidebar.click();
+      await page.waitForTimeout(90);
+      const transitioningSidebarWidth = await page
+        .locator('#office-sidebar')
+        .evaluate((element) => element.getBoundingClientRect().width);
+      const transitioningMainLeft = await page
+        .locator('main')
+        .evaluate((element) => element.getBoundingClientRect().left);
+      expect(transitioningSidebarWidth).toBeGreaterThan(72);
+      expect(transitioningSidebarWidth).toBeLessThan(304);
+      expect(transitioningMainLeft).toBeGreaterThan(72);
+      expect(transitioningMainLeft).toBeLessThan(304);
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
+      await expect(topbarBrand).toBeHidden();
+      await page.waitForFunction(() => {
+        const element = document.querySelector('#office-sidebar');
+        return (
+          element instanceof HTMLElement &&
+          Math.abs(element.getBoundingClientRect().width - 304) < 1
+        );
+      });
+      await expect(activeLabel).toHaveAttribute('aria-hidden', 'false');
+      await expect(activeLabel).toHaveCSS('opacity', '1');
+      const expandedIconBox = await sidebar.locator('a[aria-current="page"] svg').boundingBox();
+      expect(expandedIconBox).not.toBeNull();
+      expect(Math.abs(expandedIconBox!.x - collapsedIconBox!.x - 10)).toBeLessThan(1);
+      await page.screenshot({
+        path: testInfo.outputPath('office-1440-expanded-light.png'),
+        fullPage: true,
+      });
+      await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible();
+      await expect(page.locator('main h1')).toHaveAttribute('data-shell-node-check', 'kept');
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
+      const keyboardCollapse = page.getByRole('button', { name: 'Collapse sidebar' });
+      await keyboardCollapse.focus();
+      await page.keyboard.press('Space');
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+      const keyboardExpand = page.getByRole('button', { name: 'Expand sidebar' });
+      await expect(keyboardExpand).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
+
+      await page.getByRole('button', { name: 'Appearance' }).click();
+      await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+      await expect(page.locator('html')).toHaveClass(/dark/);
+      await page.evaluate(() => {
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      });
+      await page.screenshot({
+        path: testInfo.outputPath('office-1440-expanded-dark.png'),
+        fullPage: true,
+      });
+      const hoveredNavigationItem = sidebar.getByRole('link', { name: 'Benefits & budgets' });
+      await hoveredNavigationItem.hover();
+      const hoverBackgroundInsets = await hoveredNavigationItem.evaluate((element) => {
+        const before = getComputedStyle(element, '::before');
+        return { left: before.left, right: before.right };
+      });
+      expect(hoverBackgroundInsets).toEqual({ left: '12px', right: '12px' });
+      await expect
+        .poll(() =>
+          hoveredNavigationItem.evaluate(
+            (element) => getComputedStyle(element, '::before').opacity,
+          ),
+        )
+        .toBe('1');
+      await page.screenshot({
+        path: testInfo.outputPath('office-1440-expanded-hover-dark.png'),
+        fullPage: true,
+      });
+      await hoveredNavigationItem.click();
+      await expect(hoveredNavigationItem).toHaveAttribute('aria-current', 'page');
+      const activeBackground = await hoveredNavigationItem.evaluate((element) => {
+        const before = getComputedStyle(element, '::before');
+        return {
+          left: before.left,
+          right: before.right,
+          opacity: before.opacity,
+          usesFullWidthLinkBackground: element.classList.contains('bg-sidebar-accent'),
+        };
+      });
+      expect(activeBackground).toEqual({
+        left: '12px',
+        right: '12px',
+        opacity: '1',
+        usesFullWidthLinkBackground: false,
+      });
+      const activeBenefitLabel = hoveredNavigationItem.locator('span').nth(1);
+      const activeBenefitDot = hoveredNavigationItem.locator('span').nth(2);
+      const activeBenefitLabelBox = await activeBenefitLabel.boundingBox();
+      const activeBenefitDotBox = await activeBenefitDot.boundingBox();
+      expect(activeBenefitLabelBox).not.toBeNull();
+      expect(activeBenefitDotBox).not.toBeNull();
+      expect(
+        activeBenefitDotBox!.x - (activeBenefitLabelBox!.x + activeBenefitLabelBox!.width),
+      ).toBeGreaterThanOrEqual(10);
+      const activeBenefitLinkBox = await hoveredNavigationItem.boundingBox();
+      expect(activeBenefitLinkBox).not.toBeNull();
+      expect(
+        activeBenefitLinkBox!.x +
+          activeBenefitLinkBox!.width -
+          12 -
+          (activeBenefitDotBox!.x + activeBenefitDotBox!.width),
+      ).toBeGreaterThanOrEqual(7);
+      await page.screenshot({
+        path: testInfo.outputPath('office-1440-expanded-benefits-active-dark.png'),
+        fullPage: true,
+      });
+      await sidebar.getByRole('link', { name: 'Clients' }).click();
+      await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+      await page.screenshot({
+        path: testInfo.outputPath('office-1440-collapsed-dark.png'),
+        fullPage: true,
+      });
+      await page.getByRole('button', { name: 'Appearance' }).click();
+      await page.getByRole('menuitemradio', { name: 'Light' }).click();
+
+      await page.setViewportSize({ width: 1024, height: 900 });
+      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+      await expect(page.getByRole('button', { name: 'Open navigation' })).toHaveCount(0);
+      await page.screenshot({
+        path: testInfo.outputPath('office-1024-navigation-rail.png'),
+        fullPage: true,
+      });
+      await expectMobileLayoutToFit(page);
+      await page.setViewportSize({ width: 768, height: 1024 });
+      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+      await expect(page.getByRole('button', { name: 'Open navigation' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath('office-768-tablet.png'), fullPage: true });
+      await expectMobileLayoutToFit(page);
+      await page.getByRole('button', { name: 'Expand sidebar' }).click();
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
+      await expectMobileLayoutToFit(page);
+      await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+      await expect(
+        (await page.context().cookies()).find((cookie) => cookie.name === 'care-office-sidebar')
+          ?.value,
+      ).toBe('collapsed');
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(topbarBrandMark).toBeVisible();
+      await expect(sidebar).not.toBeVisible();
+      const mobileNavigationTrigger = page.locator(
+        'button[aria-controls="office-mobile-navigation"]',
+      );
+      await expect(mobileNavigationTrigger).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath('office-390-mobile.png'), fullPage: true });
+      await expectMobileLayoutToFit(page);
+      await mobileNavigationTrigger.click();
+      await expect(page.locator('#office-mobile-navigation')).toBeVisible();
+      await expect(mobileNavigationTrigger).toHaveAttribute('aria-expanded', 'true');
+      await page.screenshot({ path: testInfo.outputPath('office-390-mobile-drawer.png') });
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#office-mobile-navigation')).not.toBeVisible();
+      await expect(mobileNavigationTrigger).toBeFocused();
+      await mobileNavigationTrigger.click();
+      await page
+        .locator('#office-mobile-navigation')
+        .getByRole('link', { name: 'Planning', exact: true })
+        .click();
+      await expect(page).toHaveURL(/\/planning(?:\?|$)/);
+      await expect(page.locator('#office-mobile-navigation')).not.toBeVisible();
+      await page.goto('/clients?localeCheck=1');
+      await page.setViewportSize({ width: 390, height: 844 });
+      await mobileNavigationTrigger.click();
+      await expect(page.locator('#office-mobile-navigation')).toBeVisible();
+      await page.setViewportSize({ width: 768, height: 1024 });
+      await expect(page.locator('#office-mobile-navigation')).not.toBeVisible();
+      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+      await expect(page.locator('#office-page-context')).toBeFocused();
+      await expect(
+        (await page.context().cookies()).find((cookie) => cookie.name === 'care-office-sidebar')
+          ?.value,
+      ).toBe('collapsed');
+      await expectMobileLayoutToFit(page);
+    });
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole('button', { name: 'Expand sidebar' }).click();
+    await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
+    await page.goto('/operations');
+    await expect(page.getByRole('heading', { name: 'Operations dashboard' })).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath('operations-1440-light.png'),
+      fullPage: true,
+    });
+    await expectMobileLayoutToFit(page);
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await page.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    await page.screenshot({
+      path: testInfo.outputPath('operations-1440-dark.png'),
+      fullPage: true,
+    });
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Light' }).click();
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await page.screenshot({
+      path: testInfo.outputPath('operations-1024.png'),
+      fullPage: true,
+    });
+    await expectMobileLayoutToFit(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    await page.screenshot({
+      path: testInfo.outputPath('operations-390-mobile.png'),
+      fullPage: true,
+    });
+    await expectMobileLayoutToFit(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const scheduledVisits = page.getByRole('link', { name: /Today's scheduled visits:/ });
+    await expect(scheduledVisits).toBeVisible();
+    await scheduledVisits.click();
+    await expect(page).toHaveURL(/\/planning(?:\?|$)/);
+    await page.goto('/operations');
+    const visitIssues = page.getByRole('link', { name: /Visit issues:/ });
+    await expect(visitIssues).toBeVisible();
+    await visitIssues.click();
+    await expect(page).toHaveURL(/\/operations\/worklist\?.*category=visits/);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/clients?localeCheck=1');
 
     await page.getByRole('link', { name: 'Create client' }).click();
     await expect(page).toHaveURL(/\/clients\/new$/);
@@ -430,6 +715,14 @@ test('Authentik users can be invited and administered from the office UI', async
       [tenantId, admissionCaseId, 'Admission E2E', runId],
     );
     expect(createdAdmission.rows[0]?.id).toBe(admissionCaseId);
+    await page.goto('/admissions');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await page.screenshot({
+      path: testInfo.outputPath('admissions-390-mobile.png'),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/admissions/${admissionCaseId}`);
     await expect(page.getByRole('heading', { name: `Admission E2E ${runId}` })).toBeVisible();
 
@@ -809,6 +1102,19 @@ test('Authentik users can be invited and administered from the office UI', async
       timezoneId: 'Europe/Berlin',
     });
     const caregiverPage = await caregiverContext.newPage();
+    caregiverPage.setDefaultTimeout(15_000);
+    await caregiverPage.addInitScript(() => {
+      const hideNextDevToolbar = () => {
+        const style = document.createElement('style');
+        style.textContent = 'nextjs-portal { display: none !important; }';
+        document.head?.append(style);
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', hideNextDevToolbar, { once: true });
+      } else {
+        hideNextDevToolbar();
+      }
+    });
     await signInWithAuthentik(caregiverPage, caregiverUsername, caregiverPassword);
     await expect(
       caregiverPage.getByText('Your account does not have access to an active organization.'),
@@ -848,10 +1154,33 @@ test('Authentik users can be invited and administered from the office UI', async
       throw error;
     }
 
+    await caregiverPage.goto('/');
+    await caregiverPage.locator('select[name="tenantId"]').selectOption(tenantId);
+    await caregiverPage.getByRole('button', { name: 'Continue' }).click();
+    await expect(caregiverPage).toHaveURL(/\/clients$/);
+    await caregiverPage.goto('/care/today');
+    const employeeLinkError = caregiverPage.getByText(
+      'Your account is not linked to an active employee profile. Ask your organization administrator to link it, then try again.',
+      { exact: true },
+    );
+    await expect(employeeLinkError).toBeVisible();
+    await expectMobileLayoutToFit(caregiverPage);
+    await caregiverPage.screenshot({
+      path: testInfo.outputPath('caregiver-unlinked-error-390-mobile.png'),
+      fullPage: true,
+    });
+    await retryCareToday(caregiverPage, 'Try again');
+    await expect(employeeLinkError).toBeVisible();
+
     await page.goto(`/employees/${caregiverEmployeeId}`);
     await page.getByLabel('Link an active user').selectOption(caregiverPlatformUserId);
     await page.getByRole('button', { name: 'Link user' }).click();
     await expect(page.getByText(caregiverName, { exact: true })).toBeVisible();
+    await retryCareToday(caregiverPage, 'Try again');
+    await expect(employeeLinkError).toHaveCount(0);
+    await expect(caregiverPage.getByRole('heading', { name: 'No visits today' })).toBeVisible();
+    await retryCareToday(caregiverPage, 'Refresh');
+    await expect(caregiverPage.getByRole('heading', { name: 'No visits today' })).toBeVisible();
 
     await page.goto('/');
     if (await page.getByRole('button', { name: 'Sign in with Authentik' }).isVisible()) {
@@ -919,9 +1248,14 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(
       caregiverPage.getByText(`Visits for ${englishCareDate}`, { exact: true }),
     ).toBeVisible();
+    await caregiverPage.screenshot({
+      path: testInfo.outputPath('caregiver-mobile-today.png'),
+      fullPage: true,
+    });
+    await expectMobileLayoutToFit(caregiverPage);
     await expect(mobileVisitRow).toContainText('Next visit');
     await expect(mobileVisitRow).toContainText('Not started');
-    await caregiverPage.getByRole('combobox', { name: 'Language' }).selectOption('de');
+    await selectCaregiverLocale(caregiverPage, 'en', 'de');
     await expect(caregiverPage.locator('html')).toHaveAttribute('lang', 'de');
     await expect(caregiverPage.getByRole('heading', { name: 'Meine Einsätze' })).toBeVisible();
     await expect(
@@ -935,11 +1269,18 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(mobileVisitRow).toContainText('Nächster Einsatz');
     await expect(mobileVisitRow).toContainText('Nicht gestartet');
     await caregiverPage.reload();
-    await expect(caregiverPage.getByRole('combobox', { name: 'Sprache' })).toHaveValue('de');
+    await caregiverPage.getByRole('button', { name: /Konto/ }).click();
+    await caregiverPage.getByRole('menuitem', { name: /Sprache/ }).click();
+    await expect(caregiverPage.getByRole('menuitemradio', { name: 'Deutsch' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await caregiverPage.keyboard.press('Escape');
+    await caregiverPage.keyboard.press('Escape');
     await expect(
       caregiverPage.getByText(`Einsätze am ${germanCareDate}`, { exact: true }),
     ).toBeVisible();
-    await caregiverPage.getByRole('combobox', { name: 'Sprache' }).selectOption('en');
+    await selectCaregiverLocale(caregiverPage, 'de', 'en');
     await expect(caregiverPage.locator('html')).toHaveAttribute('lang', 'en');
     await expect(caregiverPage.getByRole('heading', { name: 'My visits' })).toBeVisible();
     await expect(
@@ -1277,6 +1618,13 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.goto(`/visits/${executionVisitId}`);
     await expect(page.getByRole('heading', { name: 'Execution' })).toBeVisible();
     await expect(page.getByText('Visit completed', { exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: testInfo.outputPath('office-visit-detail-390-mobile.png'),
+      fullPage: true,
+    });
+    await expectMobileLayoutToFit(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
     await expect(page.getByText(`E2E Service ${runId}`, { exact: true }).first()).toBeVisible();
     await expect(page.getByText(observationText, { exact: true })).toBeVisible();
     await expect(page.getByText(deviationText, { exact: true })).toBeVisible();
@@ -1505,6 +1853,13 @@ test('Authentik users can be invited and administered from the office UI', async
     });
     await page.goto(`/billing?${billingFilters.toString()}`);
     await expect(page.getByRole('heading', { name: 'Billable service worklist' })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await page.screenshot({
+      path: testInfo.outputPath('billing-worklist-390-mobile.png'),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
     const payerInvoiceGroup = page.locator('#worklist section').filter({
       has: page.locator('header p').filter({ hasText: 'E2E Pflegekasse' }),
     });
@@ -2928,11 +3283,68 @@ async function cleanupOnboardingTemplates(
 }
 
 async function expectMobileLayoutToFit(page: Page): Promise<void> {
-  const { documentWidth, visualWidth } = await page.evaluate(() => ({
-    documentWidth: document.documentElement.scrollWidth,
-    visualWidth: window.visualViewport?.width ?? window.innerWidth,
-  }));
-  expect(documentWidth).toBeLessThanOrEqual(visualWidth);
+  const { documentWidth, visualWidth, overflowCandidates } = await page.evaluate(() => {
+    const width = window.visualViewport?.width ?? window.innerWidth;
+    return {
+      documentWidth: document.documentElement.scrollWidth,
+      visualWidth: width,
+      overflowCandidates: Array.from(document.body.querySelectorAll('*'))
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            tag: element.tagName,
+            id: element.id,
+            className: typeof element.className === 'string' ? element.className : '',
+            text: element.textContent?.trim().slice(0, 100) ?? '',
+            left: Math.round(rect.left),
+            right: Math.round(rect.right),
+            width: Math.round(rect.width),
+            scrollWidth: element.scrollWidth,
+            clientWidth: element.clientWidth,
+          };
+        })
+        .filter((element) => element.right > width + 1 || element.left < -1)
+        .sort((left, right) => right.right - left.right)
+        .slice(0, 8),
+    };
+  });
+  expect(documentWidth, JSON.stringify(overflowCandidates)).toBeLessThanOrEqual(visualWidth);
+}
+
+async function retryCareToday(page: Page, buttonName: string): Promise<void> {
+  const refreshedPage = page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      new URL(response.url()).pathname === '/care/today' &&
+      request.method() === 'GET' &&
+      request.headers()['rsc'] === '1'
+    );
+  });
+  await page.getByRole('button', { name: buttonName, exact: true }).click();
+  expect((await refreshedPage).status()).toBe(200);
+}
+
+async function selectCaregiverLocale(
+  page: Page,
+  currentLocale: 'en' | 'de',
+  nextLocale: 'en' | 'de',
+) {
+  const accountTrigger = page.getByRole('button', {
+    name: currentLocale === 'en' ? /Account/ : /Konto/,
+  });
+  await expect(accountTrigger).toBeVisible();
+  await accountTrigger.click({ timeout: 10_000 });
+  const accountMenu = page.getByRole('menu').first();
+  const languageTrigger = accountMenu.getByRole('menuitem', {
+    name: currentLocale === 'en' ? /Language/ : /Sprache/,
+  });
+  await expect(languageTrigger).toBeVisible();
+  await languageTrigger.click({ timeout: 10_000 });
+  const localeOption = page.getByRole('menuitemradio', {
+    name: nextLocale === 'de' ? 'Deutsch' : 'English',
+  });
+  await expect(localeOption).toBeVisible();
+  await localeOption.press('Enter', { timeout: 10_000 });
 }
 
 function required(name: string): string {

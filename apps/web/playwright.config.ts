@@ -11,13 +11,18 @@ if (existsSync(envFile)) loadEnvFile(envFile);
 
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL ?? process.env.WEB_ORIGIN ?? 'http://localhost:3000';
-const apiPort = await findAvailablePort();
-const apiURL = `http://localhost:${apiPort}`;
+const useExistingServers = process.env.PLAYWRIGHT_USE_EXISTING_SERVERS === 'true';
+const apiPort = useExistingServers ? undefined : await findAvailablePort();
+const apiURL = apiPort
+  ? `http://localhost:${apiPort}`
+  : (process.env.API_INTERNAL_URL ?? 'http://localhost:3001');
 const webPort = new URL(baseURL).port || '3000';
 
-// Give each run a fresh API process so an old dev server cannot keep stale storage settings.
-process.env.API_INTERNAL_URL = apiURL;
-process.env.WEB_ORIGIN = baseURL;
+if (!useExistingServers && apiURL) {
+  // Give each run a fresh API process so an old dev server cannot keep stale storage settings.
+  process.env.API_INTERNAL_URL = apiURL;
+  process.env.WEB_ORIGIN = baseURL;
+}
 
 export default defineConfig({
   testDir: './e2e',
@@ -29,26 +34,28 @@ export default defineConfig({
     baseURL,
     trace: 'retain-on-failure',
   },
-  webServer: [
-    {
-      name: 'Care API',
-      command: 'bun run dev',
-      cwd: resolve(configDirectory, '../api'),
-      url: `${apiURL}/health/live`,
-      env: { PORT: String(apiPort), WEB_ORIGIN: baseURL },
-      reuseExistingServer: false,
-      timeout: 120_000,
-    },
-    {
-      name: 'Care web',
-      command: 'bun run dev',
-      cwd: configDirectory,
-      url: baseURL,
-      env: { PORT: webPort, API_INTERNAL_URL: apiURL, WEB_ORIGIN: baseURL },
-      reuseExistingServer: false,
-      timeout: 120_000,
-    },
-  ],
+  webServer: useExistingServers
+    ? []
+    : [
+        {
+          name: 'Care API',
+          command: 'bun run dev',
+          cwd: resolve(configDirectory, '../api'),
+          url: `${apiURL!}/health/live`,
+          env: { PORT: String(apiPort!), WEB_ORIGIN: baseURL },
+          reuseExistingServer: false,
+          timeout: 120_000,
+        },
+        {
+          name: 'Care web',
+          command: 'bun run dev',
+          cwd: configDirectory,
+          url: baseURL,
+          env: { PORT: webPort, API_INTERNAL_URL: apiURL, WEB_ORIGIN: baseURL },
+          reuseExistingServer: false,
+          timeout: 120_000,
+        },
+      ],
 });
 
 async function findAvailablePort(): Promise<number> {

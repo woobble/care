@@ -17,7 +17,7 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <header className="flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="grid min-w-0 gap-1.5">
         {eyebrow ? (
           <p className="text-xs font-semibold uppercase tracking-[0.13em] text-primary">
@@ -29,7 +29,7 @@ export function PageHeader({
         </h1>
         {meta ? <div>{meta}</div> : null}
         {description ? (
-          <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
+          <p className="max-w-3xl break-words text-sm leading-6 text-muted-foreground sm:text-base">
             {description}
           </p>
         ) : null}

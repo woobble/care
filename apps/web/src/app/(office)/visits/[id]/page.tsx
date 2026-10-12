@@ -138,12 +138,12 @@ export default async function VisitDetailPage({
     t(quantityUnitKey(unit), { count: Number(value) });
 
   return (
-    <div className="mx-auto grid max-w-4xl gap-6">
+    <div className="mx-auto grid w-full min-w-0 max-w-4xl grid-cols-[minmax(0,1fr)] gap-6">
       <PageHeader
         eyebrow={<Link href="/planning">{t('Visits.planning')}</Link>}
         title={visit.clientDisplayName}
         meta={
-          <p className="text-sm text-muted-foreground">
+          <p className="break-words text-sm text-muted-foreground">
             {visit.facilityName} · {visit.organizationName}
           </p>
         }
@@ -182,7 +182,10 @@ export default async function VisitDetailPage({
         </p>
       ) : null}
 
-      <section aria-labelledby="visit-title" className="grid gap-4 rounded-lg border bg-white p-5">
+      <section
+        aria-labelledby="visit-title"
+        className="grid min-w-0 gap-4 rounded-lg border bg-white p-5"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="visit-title" className="text-xl font-semibold">
             {t('Visits.visit')}
@@ -223,9 +226,9 @@ export default async function VisitDetailPage({
         </dl>
         <div>
           <h3 className="font-semibold">{t('Visits.plannedServices')}</h3>
-          <ul className="mt-2 grid gap-2">
+          <ul className="mt-2 grid min-w-0 gap-2">
             {visit.services.map((service) => (
-              <li key={service.id} className="rounded-md bg-slate-50 p-3">
+              <li key={service.id} className="min-w-0 break-words rounded-md bg-slate-50 p-3">
                 {service.serviceCode} · {service.serviceName} ·{' '}
                 {quantity(service.plannedQuantity, service.unit)}
                 {service.plannedDurationMinutes
@@ -238,7 +241,7 @@ export default async function VisitDetailPage({
         {visit.note ? (
           <div>
             <h3 className="font-semibold">{t('Visits.planningNote')}</h3>
-            <p className="mt-1 whitespace-pre-wrap text-slate-700">{visit.note}</p>
+            <p className="mt-1 break-words whitespace-pre-wrap text-slate-700">{visit.note}</p>
           </div>
         ) : null}
       </section>
@@ -246,7 +249,7 @@ export default async function VisitDetailPage({
       {canReadExecution ? (
         <section
           aria-labelledby="execution-title"
-          className="grid gap-4 rounded-lg border bg-white p-5"
+          className="grid min-w-0 gap-4 rounded-lg border bg-white p-5"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 id="execution-title" className="text-xl font-semibold">
@@ -406,7 +409,7 @@ export default async function VisitDetailPage({
       {canReadDocumentation ? (
         <section
           aria-labelledby="documentation-title"
-          className="grid gap-4 rounded-lg border bg-white p-5"
+          className="grid min-w-0 gap-4 rounded-lg border bg-white p-5"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 id="documentation-title" className="text-xl font-semibold">
@@ -633,7 +636,7 @@ export default async function VisitDetailPage({
                 name="note"
                 defaultValue={visit.note ?? ''}
                 maxLength={2000}
-                className="min-h-20 rounded-md border px-3 py-2"
+                className="min-h-20 w-full min-w-0 rounded-md border px-3 py-2"
               />
             </div>
             <Button type="submit" className="w-fit">
@@ -645,7 +648,7 @@ export default async function VisitDetailPage({
 
       <section
         aria-labelledby="assignments-title"
-        className="grid gap-3 rounded-lg border bg-white p-5"
+        className="grid min-w-0 gap-3 rounded-lg border bg-white p-5"
       >
         <h2 id="assignments-title" className="text-xl font-semibold">
           {t('Visits.employees')}
@@ -678,15 +681,18 @@ export default async function VisitDetailPage({
         )}
         {canAssign ? (
           employees.length ? (
-            <form action={assignVisitAction} className="flex flex-wrap items-end gap-3">
+            <form
+              action={assignVisitAction}
+              className="grid min-w-0 gap-3 sm:flex sm:flex-wrap sm:items-end"
+            >
               <input type="hidden" name="visitId" value={visit.id} />
-              <div className="grid gap-2">
+              <div className="grid min-w-0 gap-2">
                 <Label htmlFor="employeeId">{t('Visits.assignEmployee')}</Label>
                 <select
                   id="employeeId"
                   name="employeeId"
                   required
-                  className="h-10 rounded-md border bg-white px-3"
+                  className="h-10 w-full min-w-0 max-w-full rounded-md border bg-white px-3"
                 >
                   <option value="">{t('Visits.selectEmployee')}</option>
                   {employees.map((employee) => (
@@ -752,14 +758,14 @@ export default async function VisitDetailPage({
                 <form
                   key={assignment.id}
                   action={proposeSubstitutionAction}
-                  className="grid gap-3 rounded-md border p-3 md:grid-cols-[1fr_1fr_2fr_auto] md:items-end"
+                  className="grid min-w-0 gap-3 rounded-md border p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_auto] md:items-end"
                 >
                   <input type="hidden" name="visitId" value={visit.id} />
                   <input type="hidden" name="originalAssignmentId" value={assignment.id} />
                   <p className="text-sm md:pb-2">
                     {t('Visits.substitutingFor', { employee: assignment.employeeDisplayName })}
                   </p>
-                  <div className="grid gap-2">
+                  <div className="grid min-w-0 gap-2">
                     <Label htmlFor={`substitute-${assignment.id}`}>
                       {t('Visits.substituteEmployee')}
                     </Label>
@@ -767,7 +773,7 @@ export default async function VisitDetailPage({
                       id={`substitute-${assignment.id}`}
                       name="substituteEmployeeId"
                       required
-                      className="h-10 rounded-md border bg-white px-3"
+                      className="h-10 w-full min-w-0 max-w-full rounded-md border bg-white px-3"
                     >
                       <option value="">{t('Visits.selectSubstitute')}</option>
                       {substituteCandidates.map((candidate) => (
@@ -778,7 +784,7 @@ export default async function VisitDetailPage({
                       ))}
                     </select>
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid min-w-0 gap-2">
                     <Label htmlFor={`substitution-reason-${assignment.id}`}>
                       {t('Visits.substitutionReason')}
                     </Label>

@@ -1,21 +1,28 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui';
-import { LanguageSwitcher } from '@app/web/components/language-switcher';
-import { SignOutForm } from '@app/web/components/sign-out-form';
+import { SignOutMenuItem } from '@app/web/components/sign-out-menu-item';
 import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
 import { signOutAction } from '@app/web/app/actions/auth';
 import { OfficeShell, type OfficeNavigationGroup } from '@app/web/components/office-shell';
+import { auth } from '@app/web/auth';
 
 export default async function OfficeLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const api = await getApiClient(false);
   const get = api.GET;
-  const { data: tenants, error } = await get('/api/v1/me/tenants');
-  const tenantId = (await cookies()).get('care-tenant')?.value;
+  const [requestHeaders, cookieStore, t, locale] = await Promise.all([
+    headers(),
+    cookies(),
+    getTranslations('Navigation'),
+    getLocale(),
+  ]);
+  const [{ data: tenants, error }, session] = await Promise.all([
+    get('/api/v1/me/tenants'),
+    auth.api.getSession({ headers: requestHeaders }),
+  ]);
+  const tenantId = cookieStore.get('care-tenant')?.value;
   if (error || !tenantId || !tenants?.some((tenant) => tenant.id === tenantId)) redirect('/');
   const permissions = await getPermissionGrants(api);
-  const [t, locale] = await Promise.all([getTranslations('Navigation'), getLocale()]);
   const navigationLabels = {
     workspace: t('workspace'),
     servicesFinance: t('servicesFinance'),
@@ -95,6 +102,7 @@ export default async function OfficeLayout({ children }: Readonly<{ children: Re
     },
   ] as const;
   const tenantName = tenants.find((tenant) => tenant.id === tenantId)?.name ?? t('office');
+  const initialCollapsed = cookieStore.get('care-office-sidebar')?.value !== 'expanded';
   const administrationLinks = [
     { permission: 'tenant.members.read', href: '/administration/users' },
     { permission: 'organization.read', href: '/administration/organizations' },
@@ -133,14 +141,11 @@ export default async function OfficeLayout({ children }: Readonly<{ children: Re
     <OfficeShell
       groups={groups}
       tenantName={tenantName}
-      language={<LanguageSwitcher locale={locale} />}
-      signOut={
-        <SignOutForm action={signOutAction}>
-          <Button variant="ghost" size="sm" className="w-full justify-start">
-            {t('signOut')}
-          </Button>
-        </SignOutForm>
-      }
+      profileName={session?.user.name}
+      email={session?.user.email}
+      locale={locale}
+      initialCollapsed={initialCollapsed}
+      signOut={<SignOutMenuItem action={signOutAction} label={t('signOut')} />}
       labels={{
         main: t('main'),
         brand: t('brand'),

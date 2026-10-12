@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button, Card, Input, Label } from '@care/ui';
+import { Button, Input, Label } from '@care/ui';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { FilterDisclosure } from '@app/web/components/filter-disclosure';
 import { formatCurrency, formatLongDate, formatTime } from '@app/web/i18n/format';
 import type { Locale } from '@app/web/i18n/config';
 import { visitStatusKey } from '@app/web/i18n/status';
@@ -443,8 +444,11 @@ export default async function PlanningPage({
         </Button>
       </section>
 
-      <Card className="p-4">
-        <form method="get" className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+      <FilterDisclosure title={t('Planning.filters')}>
+        <form
+          method="get"
+          className="grid min-w-0 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+        >
           <input type="hidden" name="view" value={view} />
           <Field label={t('Planning.date')} name="date" type="date" defaultValue={selectedDate} />
           <SelectField
@@ -524,7 +528,7 @@ export default async function PlanningPage({
             </Button>
           </div>
         </form>
-      </Card>
+      </FilterDisclosure>
 
       {canEstimate ? (
         <section
@@ -1126,7 +1130,7 @@ function Field({
   step?: string;
 }) {
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 gap-2">
       <Label htmlFor={name}>{label}</Label>
       <Input
         id={name}
@@ -1157,7 +1161,7 @@ function SelectField({
   children: React.ReactNode;
 }) {
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 gap-2">
       <Label htmlFor={name}>{label}</Label>
       <select
         id={name}
@@ -1166,7 +1170,7 @@ function SelectField({
         required={required}
         multiple={multiple}
         size={multiple ? 4 : undefined}
-        className="min-h-10 rounded-md border bg-white px-3 py-2"
+        className="min-h-10 w-full min-w-0 rounded-md border bg-white px-3 py-2"
       >
         {children}
       </select>

@@ -2,22 +2,24 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   BadgeEuro,
+  Briefcase,
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
   FileCheck2,
+  FileText,
   HeartHandshake,
   Landmark,
   Menu,
   MessageSquareText,
   PanelLeftClose,
   PanelLeftOpen,
+  Settings,
   Users,
-  UserRound,
   UserRoundPlus,
   Wrench,
   type LucideIcon,
@@ -37,6 +39,9 @@ import {
   TooltipTrigger,
   cn,
 } from '@care/ui';
+import { AccountMenu } from '@app/web/components/account-menu';
+import type { Locale } from '@app/web/i18n/config';
+import { LanguageSwitcher } from '@app/web/components/language-switcher';
 import { ThemeSwitcher } from '@app/web/components/theme-switcher';
 
 export type OfficeNavigationGroup = {
@@ -51,50 +56,35 @@ const icons: Record<string, LucideIcon> = {
   planning: CalendarDays,
   clients: Users,
   admissions: UserRoundPlus,
-  employees: Users,
+  employees: Briefcase,
   services: Wrench,
   benefits: BadgeEuro,
   billing: Landmark,
   claims: ClipboardCheck,
-  documentation: ClipboardList,
+  documentation: FileText,
   serviceEvidence: FileCheck2,
   communications: MessageSquareText,
-  administration: Wrench,
+  administration: Settings,
 };
-
-function subscribeSidebar(listener: () => void) {
-  window.addEventListener('storage', listener);
-  window.addEventListener('care-sidebar-change', listener);
-  return () => {
-    window.removeEventListener('storage', listener);
-    window.removeEventListener('care-sidebar-change', listener);
-  };
-}
-
-function getSidebarSnapshot() {
-  try {
-    return window.localStorage.getItem('care-office-sidebar') === 'collapsed';
-  } catch {
-    return false;
-  }
-}
-
-function getSidebarServerSnapshot() {
-  return false;
-}
 
 export function OfficeShell({
   children,
   groups,
   tenantName,
-  language,
+  profileName,
+  email,
+  locale,
+  initialCollapsed,
   signOut,
   labels,
 }: {
   children: React.ReactNode;
   groups: OfficeNavigationGroup[];
   tenantName: string;
-  language: React.ReactNode;
+  profileName?: string | null | undefined;
+  email?: string | null | undefined;
+  locale: Locale;
+  initialCollapsed: boolean;
   signOut: React.ReactNode;
   labels: {
     main: string;
@@ -109,96 +99,114 @@ export function OfficeShell({
   };
 }) {
   const pathname = usePathname();
-  const collapsed = useSyncExternalStore(
-    subscribeSidebar,
-    getSidebarSnapshot,
-    getSidebarServerSnapshot,
-  );
+  const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pageContextRef = useRef<HTMLSpanElement>(null);
   const activeItem = useMemo(() => {
-    const links = groups.flatMap((group) => group.items.map((item) => ({ ...item, group })));
+    const links = groups.flatMap((group) => group.items);
     return links
       .filter((item) => isNavigationItemActive(item, pathname))
       .sort((left, right) => right.href.length - left.href.length)[0];
   }, [groups, pathname]);
+  const tenantInitial = tenantName.trim().charAt(0).toUpperCase() || 'C';
+
+  useEffect(() => {
+    const desktopViewport = window.matchMedia('(min-width: 768px)');
+    function closeDrawerOnDesktop() {
+      if (desktopViewport.matches) setMobileOpen(false);
+    }
+    closeDrawerOnDesktop();
+    desktopViewport.addEventListener('change', closeDrawerOnDesktop);
+    return () => {
+      desktopViewport.removeEventListener('change', closeDrawerOnDesktop);
+    };
+  }, []);
 
   function toggleCollapsed() {
-    const next = !getSidebarSnapshot();
+    const next = !collapsed;
+    setCollapsed(next);
     try {
-      window.localStorage.setItem('care-office-sidebar', next ? 'collapsed' : 'expanded');
+      document.cookie = `care-office-sidebar=${next ? 'collapsed' : 'expanded'}; Path=/; Max-Age=31536000; SameSite=Lax`;
     } catch {
-      // The control still works for this session when storage is unavailable.
+      // The control still works for this session when cookies are unavailable.
     }
-    window.dispatchEvent(new Event('care-sidebar-change'));
   }
 
   return (
     <TooltipProvider delayDuration={250}>
       <div className="flex min-h-dvh w-full bg-background text-foreground">
         <aside
+          id="office-sidebar"
           aria-label={labels.main}
           data-collapsed={collapsed}
+          style={{
+            width: collapsed ? 'var(--sidebar-width-collapsed)' : 'var(--sidebar-width-expanded)',
+          }}
           className={cn(
-            'sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 lg:flex lg:w-[4.5rem] xl:w-64',
-            collapsed && 'xl:w-[4.5rem]',
+            'sticky top-0 hidden h-dvh shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none md:flex',
           )}
         >
           <SidebarBrand
             href={groups[0]?.items[0]?.href ?? '/'}
             label={labels.brand}
             collapsed={collapsed}
+            mobileView={false}
           />
           <Separator className="bg-sidebar-border" />
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3 xl:px-3">
+          <div className="office-sidebar-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto py-3">
             <NavigationGroups
               groups={groups}
-              pathname={pathname}
+              activeItemId={activeItem?.id}
               collapsed={collapsed}
               mobileView={false}
               closeMobile={() => undefined}
             />
           </div>
-          <div className="border-t border-sidebar-border p-3">
-            <div className="hidden min-w-0 xl:block" data-expanded={!collapsed}>
-              {!collapsed ? (
-                <>
-                  <p className="truncate text-sm font-medium" title={tenantName}>
-                    {tenantName}
-                  </p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{labels.brand}</p>
-                </>
-              ) : null}
-            </div>
-            <div className="hidden justify-center xl:flex" data-collapsed={collapsed}>
-              {collapsed ? (
-                <span
-                  className="flex size-9 items-center justify-center rounded-lg bg-sidebar-accent text-sidebar-accent-foreground"
-                  title={tenantName}
-                >
-                  <HeartHandshake className="size-4" aria-hidden="true" />
-                </span>
-              ) : null}
-            </div>
-            <div className="flex justify-center xl:hidden">
+          <div className="border-t border-sidebar-border">
+            <div className="flex min-w-0 items-center">
               <span
-                className="flex size-9 items-center justify-center rounded-lg bg-sidebar-accent text-sidebar-accent-foreground"
+                className={cn(
+                  'flex h-[4.75rem] w-[var(--sidebar-width-collapsed)] shrink-0 items-center justify-center text-sidebar-foreground transition-transform duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+                  !collapsed && 'translate-x-2.5',
+                )}
                 title={tenantName}
               >
-                <HeartHandshake className="size-4" aria-hidden="true" />
+                <span
+                  className="flex size-11 items-center justify-center rounded-full border border-sidebar-border bg-background text-sm font-semibold text-foreground"
+                  aria-hidden="true"
+                >
+                  {tenantInitial}
+                </span>
               </span>
+              <div
+                className={cn(
+                  'ml-[18px] grid min-w-0 overflow-hidden transition-[max-width,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+                  collapsed
+                    ? 'max-w-0 -translate-x-1 opacity-0'
+                    : 'max-w-44 translate-x-0 opacity-100',
+                )}
+                aria-hidden={collapsed}
+              >
+                <p className="truncate text-sm font-medium" title={tenantName}>
+                  {tenantName}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">{labels.brand}</p>
+              </div>
             </div>
           </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex min-h-16 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur sm:px-5 lg:px-7">
+          <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur md:h-[4.75rem] sm:px-5 lg:px-7">
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="shrink-0 lg:hidden"
+                  className="shrink-0 md:hidden"
                   aria-label={labels.openMenu}
+                  aria-expanded={mobileOpen}
+                  aria-controls="office-mobile-navigation"
                 >
                   <Menu className="size-5" aria-hidden="true" />
                 </Button>
@@ -207,6 +215,12 @@ export function OfficeShell({
                 className="p-0"
                 closeLabel={labels.closeMenu}
                 aria-describedby={undefined}
+                onCloseAutoFocus={(event) => {
+                  if (window.matchMedia('(min-width: 768px)').matches) {
+                    event.preventDefault();
+                    pageContextRef.current?.focus({ preventScroll: true });
+                  }
+                }}
               >
                 <SheetHeader className="border-b border-sidebar-border px-4 py-4 pr-14">
                   <SheetTitle className="sr-only">{labels.main}</SheetTitle>
@@ -215,12 +229,18 @@ export function OfficeShell({
                     href={groups[0]?.items[0]?.href ?? '/'}
                     label={labels.brand}
                     collapsed={false}
+                    mobileView
+                    onNavigate={() => setMobileOpen(false)}
                   />
                 </SheetHeader>
-                <nav aria-label={labels.main} className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+                <nav
+                  id="office-mobile-navigation"
+                  aria-label={labels.main}
+                  className="min-h-0 flex-1 overflow-y-auto px-2 py-3"
+                >
                   <NavigationGroups
                     groups={groups}
-                    pathname={pathname}
+                    activeItemId={activeItem?.id}
                     collapsed={false}
                     mobileView
                     closeMobile={() => setMobileOpen(false)}
@@ -236,9 +256,11 @@ export function OfficeShell({
             <Button
               variant="ghost"
               size="icon"
-              className="hidden shrink-0 xl:inline-flex"
+              className="hidden shrink-0 rounded-full md:inline-flex"
               aria-label={collapsed ? labels.expand : labels.collapse}
               title={collapsed ? labels.expand : labels.collapse}
+              aria-expanded={!collapsed}
+              aria-controls="office-sidebar"
               onClick={toggleCollapsed}
             >
               {collapsed ? (
@@ -248,59 +270,54 @@ export function OfficeShell({
               )}
             </Button>
 
-            <nav aria-label={labels.main} className="min-w-0 flex-1">
-              <ol className="flex min-w-0 items-center gap-2 text-sm">
-                <li className="hidden shrink-0 text-muted-foreground sm:block">{labels.brand}</li>
-                {activeItem ? (
-                  <>
-                    <li aria-hidden="true" className="hidden text-muted-foreground sm:block">
-                      /
-                    </li>
-                    <li className="truncate font-medium" aria-current="page">
-                      {activeItem.label}
-                    </li>
-                  </>
-                ) : (
-                  <li className="truncate font-medium">{labels.overview}</li>
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground md:hidden">
+                <HeartHandshake className="size-4" aria-hidden="true" />
+              </span>
+              <span
+                className={cn(
+                  'hidden shrink-0 text-sm font-semibold sm:inline',
+                  !collapsed && 'md:hidden',
                 )}
-              </ol>
-            </nav>
+              >
+                {labels.brand}
+              </span>
+              <Separator
+                orientation="vertical"
+                className={cn('hidden h-7 sm:block', !collapsed && 'md:hidden')}
+              />
+              <span
+                id="office-page-context"
+                ref={pageContextRef}
+                tabIndex={-1}
+                className="min-w-0 truncate rounded-sm text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-current="page"
+              >
+                {activeItem?.label ?? labels.overview}
+              </span>
+              <span className="hidden min-w-0 truncate text-xs text-muted-foreground lg:block">
+                {tenantName}
+              </span>
+            </div>
 
             <div className="flex shrink-0 items-center gap-1 sm:gap-2">
               <ThemeSwitcher />
-              {language}
-              <details className="group relative">
-                <summary
-                  className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-md px-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
-                  aria-label={labels.account}
-                  title={labels.account}
-                >
-                  <span className="flex size-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
-                    <UserRound className="size-4" aria-hidden="true" />
-                  </span>
-                  <span className="hidden max-w-24 truncate text-sm sm:block">
-                    {labels.account}
-                  </span>
-                </summary>
-                <div className="absolute right-0 z-40 mt-2 grid min-w-56 gap-1 rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg">
-                  <div className="px-2 py-1.5">
-                    <p className="text-sm font-medium">{labels.account}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{tenantName}</p>
-                  </div>
-                  <Separator />
-                  <Link
-                    href="/"
-                    className="flex min-h-10 items-center rounded-md px-2 text-sm hover:bg-accent"
-                  >
-                    {labels.changeTenant}
-                  </Link>
-                  {signOut}
-                </div>
-              </details>
+              <div className="hidden sm:block">
+                <LanguageSwitcher locale={locale} />
+              </div>
+              <AccountMenu
+                profileName={profileName}
+                email={email}
+                tenantName={tenantName}
+                locale={locale}
+                mobileLanguageOnly
+                labels={{ account: labels.account, changeTenant: labels.changeTenant }}
+                signOut={signOut}
+              />
             </div>
           </header>
 
-          <main className="mx-auto w-full max-w-[1680px] min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
+          <main className="mx-auto w-full max-w-[1680px] min-w-0 flex-1 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
             {children}
           </main>
         </div>
@@ -313,28 +330,52 @@ function SidebarBrand({
   href,
   label,
   collapsed,
+  mobileView,
+  onNavigate,
 }: {
   href: string;
   label: string;
   collapsed: boolean;
+  mobileView: boolean;
+  onNavigate?: (() => void) | undefined;
 }) {
   return (
     <Link
       href={href}
       className={cn(
-        'flex min-h-16 items-center gap-3 px-3 text-sidebar-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring xl:px-4',
-        collapsed && 'xl:justify-center xl:px-2',
+        'relative flex items-center overflow-hidden text-sidebar-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+        mobileView ? 'min-h-16' : 'min-h-[4.75rem]',
+        mobileView ? 'gap-3 px-2' : 'px-0',
       )}
       aria-label={label}
+      {...(onNavigate ? { onClick: onNavigate } : {})}
     >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-        <HeartHandshake className="size-5" aria-hidden="true" />
+      <span
+        className={cn(
+          'flex shrink-0 items-center justify-center transition-transform duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+          mobileView ? 'size-10' : 'h-[4.75rem] w-[var(--sidebar-width-collapsed)]',
+          !mobileView && !collapsed && 'translate-x-2.5',
+        )}
+      >
+        <span
+          className={cn(
+            'flex items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm',
+            mobileView ? 'size-9' : 'size-11',
+          )}
+        >
+          <HeartHandshake className={cn('size-5', !mobileView && 'size-6')} aria-hidden="true" />
+        </span>
       </span>
       <span
         className={cn(
-          'min-w-0 truncate text-sm font-semibold lg:hidden xl:block',
-          collapsed && 'xl:hidden',
+          'min-w-0 overflow-hidden truncate whitespace-nowrap font-semibold transition-[max-width,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+          mobileView ? 'text-sm' : 'text-lg',
+          !mobileView && 'ml-[18px]',
+          !mobileView && collapsed
+            ? 'max-w-0 -translate-x-1 opacity-0'
+            : 'max-w-40 translate-x-0 opacity-100',
         )}
+        aria-hidden={!mobileView && collapsed}
       >
         {label}
       </span>
@@ -344,64 +385,104 @@ function SidebarBrand({
 
 function NavigationGroups({
   groups,
-  pathname,
+  activeItemId,
   collapsed,
   mobileView,
   closeMobile,
 }: {
   groups: OfficeNavigationGroup[];
-  pathname: string;
+  activeItemId?: string | undefined;
   collapsed: boolean;
   mobileView: boolean;
   closeMobile: () => void;
 }) {
-  const links = groups.flatMap((group) => group.items.map((item) => ({ ...item, group })));
-  const active = links
-    .filter((item) => isNavigationItemActive(item, pathname))
-    .sort((left, right) => right.href.length - left.href.length)[0];
-
   return (
-    <div className="grid gap-4">
+    <div className={cn('grid', mobileView || !collapsed ? 'gap-7' : 'gap-5')}>
       {groups.map((group) => (
-        <section key={group.id} className="grid gap-1">
+        <section key={group.id} className="grid gap-2">
           <h2
             className={cn(
-              'block px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground lg:hidden xl:block',
-              collapsed && !mobileView && 'xl:hidden',
+              'block overflow-hidden text-sm font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground transition-[max-height,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+              mobileView || !collapsed
+                ? mobileView
+                  ? 'max-h-10 translate-y-0 px-3 pb-1 opacity-100'
+                  : 'max-h-10 translate-y-0 pb-1 pl-[calc(var(--sidebar-width-collapsed)+1.125rem)] pr-4 opacity-100'
+                : 'max-h-0 translate-y-1 p-0 opacity-0',
             )}
+            aria-hidden={collapsed && !mobileView}
           >
             {group.label}
           </h2>
-          <ul className="grid gap-1">
+          <ul
+            className={cn(
+              'grid',
+              collapsed && !mobileView ? 'gap-1.5' : 'gap-2',
+              mobileView && 'px-2',
+            )}
+          >
             {group.items.map((item) => {
               const Icon = icons[item.id] ?? Activity;
-              const isActive = active?.id === item.id;
+              const isActive = activeItemId === item.id;
               const link = (
                 <Link
                   href={item.href}
                   aria-current={isActive ? 'page' : undefined}
+                  aria-label={!mobileView && collapsed ? item.label : undefined}
                   onClick={closeMobile}
                   className={cn(
-                    'group flex min-h-11 min-w-0 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:px-3',
-                    'lg:justify-center lg:px-2 xl:justify-start xl:px-3',
-                    collapsed && 'xl:justify-center xl:px-2',
-                    isActive && 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm',
+                    'relative isolate flex min-w-0 items-center overflow-hidden rounded-2xl font-medium text-muted-foreground transition-colors hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    mobileView
+                      ? 'min-h-11 gap-3 px-3 text-base'
+                      : collapsed
+                        ? 'mx-auto min-h-11 w-11 text-sm'
+                        : 'min-h-14 w-full text-base',
+                    mobileView || collapsed
+                      ? 'hover:bg-sidebar-accent'
+                      : 'hover:bg-transparent before:pointer-events-none before:absolute before:inset-y-1 before:left-3 before:right-3 before:z-0 before:rounded-xl before:bg-sidebar-accent before:shadow-sm before:opacity-0 before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100',
+                    isActive &&
+                      (mobileView || collapsed
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                        : 'text-sidebar-accent-foreground before:opacity-100'),
                   )}
                 >
-                  <Icon className="size-[18px] shrink-0" strokeWidth={1.8} aria-hidden="true" />
                   <span
                     className={cn(
-                      'min-w-0 flex-1 truncate lg:sr-only',
-                      collapsed && !mobileView ? 'xl:sr-only' : 'xl:not-sr-only',
+                      'z-10 flex shrink-0 items-center justify-center',
+                      mobileView
+                        ? 'size-10'
+                        : collapsed
+                          ? 'absolute inset-y-0 left-0 w-full'
+                          : 'absolute inset-y-0 left-0 w-[var(--sidebar-width-collapsed)]',
+                      !mobileView && !collapsed && 'translate-x-2.5',
+                      !mobileView &&
+                        'transition-transform duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
                     )}
                   >
-                    {item.label}
+                    <Icon className="size-5" strokeWidth={1.8} aria-hidden="true" />
                   </span>
+                  {mobileView ? (
+                    <span className="min-w-0 flex-1 truncate whitespace-nowrap">{item.label}</span>
+                  ) : (
+                    <span
+                      className={cn(
+                        'absolute inset-y-0 z-10 flex min-w-0 items-center overflow-hidden truncate whitespace-nowrap transition-[opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+                        isActive && !collapsed ? 'right-10' : 'right-3',
+                        collapsed
+                          ? 'left-[var(--sidebar-width-collapsed)] text-sm'
+                          : 'left-[calc(var(--sidebar-width-collapsed)+1.125rem)] text-base',
+                        collapsed ? 'translate-x-1 opacity-0' : 'translate-x-0 opacity-100',
+                      )}
+                      aria-hidden={collapsed}
+                    >
+                      {item.label}
+                    </span>
+                  )}
                   {isActive ? (
                     <span
                       className={cn(
-                        'ml-auto size-1.5 rounded-full bg-primary lg:hidden xl:block',
-                        collapsed && !mobileView && 'xl:hidden',
+                        'absolute z-10 size-1.5 rounded-full bg-primary',
+                        !mobileView && !collapsed ? 'right-5' : 'right-3',
+                        collapsed && !mobileView && 'hidden',
                       )}
                     />
                   ) : null}
@@ -411,14 +492,11 @@ function NavigationGroups({
                 <li key={item.id}>
                   <Tooltip>
                     <TooltipTrigger asChild>{link}</TooltipTrigger>
-                    <TooltipContent
-                      side="right"
-                      className={
-                        mobileView ? 'hidden' : collapsed ? 'hidden xl:block' : 'xl:hidden'
-                      }
-                    >
-                      {item.label}
-                    </TooltipContent>
+                    {!mobileView && collapsed ? (
+                      <TooltipContent side="right" sideOffset={8}>
+                        {item.label}
+                      </TooltipContent>
+                    ) : null}
                   </Tooltip>
                 </li>
               );

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { CaregiverRetryButton } from '@app/web/components/caregiver-retry-button';
 import { formatLongDate } from '@app/web/i18n/format';
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 import { formatVisitDateTime, formatVisitTime, todayRange } from '@app/web/lib/care-date';
@@ -71,8 +72,15 @@ export default async function CareTodayPage() {
     )
     .sort((left, right) => left.plannedStart.localeCompare(right.plannedStart))[0];
   const recentTourPublication = tour && isRecent(tour.publishedAt, now);
+  const visitLoadFailed = Boolean(visitsResult.error || !visitsResult.data);
   const documentationUnavailable = Boolean(documentationResult.error || !documentationResult.data);
   const evidenceUnavailable = Boolean(evidenceResult.error || !evidenceResult.data);
+  const workflowStatusUnavailable = documentationUnavailable || evidenceUnavailable;
+  const employeeLinkRequired = [
+    visitsResult.error?.code,
+    documentationResult.error?.code,
+    evidenceResult.error?.code,
+  ].some((code) => code?.endsWith('EMPLOYEE_LINK_REQUIRED'));
 
   return (
     <div className="grid gap-5">
@@ -128,23 +136,53 @@ export default async function CareTodayPage() {
         </section>
       ) : null}
 
-      {visitsResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
-          {t('Caregiver.loadFailed')}
-        </p>
-      ) : null}
-      {!tour ? (
-        <p role="status" className="rounded-md border bg-white p-3 text-sm text-slate-700">
-          {t(tourResult.error ? 'Caregiver.tourUnavailable' : 'Caregiver.chronologicalFallback')}
-        </p>
-      ) : null}
-      {documentationResult.error || evidenceResult.error ? (
-        <p
-          role="status"
-          className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+      {visitLoadFailed ? (
+        <section
+          role="alert"
+          className="flex flex-col gap-3 rounded-xl border border-destructive/30 bg-card p-4 sm:flex-row sm:items-center sm:justify-between"
         >
-          {t('Caregiver.workflowStatusUnavailable')}
-        </p>
+          <p className="max-w-2xl text-sm text-foreground">
+            {employeeLinkRequired ? t('Caregiver.employeeLinkRequired') : t('Caregiver.loadFailed')}
+          </p>
+          <CaregiverRetryButton
+            label={t('Caregiver.retry')}
+            pendingLabel={t('Caregiver.retrying')}
+          />
+        </section>
+      ) : null}
+      {!tour && !visitLoadFailed ? (
+        <section
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 text-sm text-muted-foreground"
+        >
+          <p>
+            {t(tourResult.error ? 'Caregiver.tourUnavailable' : 'Caregiver.chronologicalFallback')}
+          </p>
+          {tourResult.error && !visitLoadFailed && !workflowStatusUnavailable ? (
+            <CaregiverRetryButton
+              label={t('Caregiver.retry')}
+              pendingLabel={t('Caregiver.retrying')}
+            />
+          ) : null}
+        </section>
+      ) : null}
+      {workflowStatusUnavailable && !visitLoadFailed ? (
+        <section
+          role="status"
+          className="flex flex-col gap-3 rounded-xl border border-warning/40 bg-warning-muted p-3 text-sm text-warning-foreground sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p>
+            {employeeLinkRequired
+              ? t('Caregiver.employeeLinkRequired')
+              : t('Caregiver.workflowStatusUnavailable')}
+          </p>
+          {!visitLoadFailed ? (
+            <CaregiverRetryButton
+              label={t('Caregiver.retry')}
+              pendingLabel={t('Caregiver.retrying')}
+            />
+          ) : null}
+        </section>
       ) : null}
 
       {orderedVisits.length > 0 ? (
@@ -267,13 +305,14 @@ export default async function CareTodayPage() {
             );
           })}
         </ol>
-      ) : visitsResult.error ? null : (
+      ) : visitLoadFailed ? null : (
         <section className="grid gap-2 rounded-lg border bg-white p-6">
           <h2 className="text-lg font-semibold">{t('Caregiver.noVisitsTitle')}</h2>
           <p className="text-slate-600">{t('Caregiver.noVisits')}</p>
-          <Button asChild variant="secondary" className="mt-2 min-h-11 w-fit">
-            <Link href="/care/today">{t('Caregiver.refresh')}</Link>
-          </Button>
+          <CaregiverRetryButton
+            label={t('Caregiver.refresh')}
+            pendingLabel={t('Caregiver.retrying')}
+          />
         </section>
       )}
     </div>

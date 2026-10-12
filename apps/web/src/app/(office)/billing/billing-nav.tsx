@@ -45,7 +45,7 @@ export async function BillingNavigation({
   return (
     <nav
       aria-label={t('navigation')}
-      className="flex max-w-full flex-wrap gap-1 border-b border-border pb-3 text-sm"
+      className="flex max-w-full min-w-0 flex-wrap gap-1 border-b border-border pb-3 text-sm"
     >
       {links
         .filter((link) => hasPermission(permissions, link.permission))

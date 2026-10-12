@@ -4,6 +4,10 @@
 :root {
   color-scheme: light;
   --radius: 0.9rem;
+  --sidebar-width-expanded: 19rem;
+  --sidebar-width-collapsed: 4.5rem;
+  --sidebar-transition-duration: 220ms;
+  --sidebar-transition-easing: cubic-bezier(0.2, 0, 0, 1);
   --background: oklch(0.975 0.008 164);
   --foreground: oklch(0.19 0.018 164);
   --card: oklch(1 0 0);
@@ -34,10 +38,10 @@
   --chart-3: oklch(0.71 0.11 91);
   --chart-4: oklch(0.62 0.15 34);
   --chart-5: oklch(0.56 0.12 275);
-  --sidebar: oklch(0.96 0.01 164);
+  --sidebar: oklch(0.99 0.006 164);
   --sidebar-foreground: oklch(0.2 0.02 164);
-  --sidebar-border: oklch(0.9 0.015 164);
-  --sidebar-accent: oklch(0.92 0.035 160);
+  --sidebar-border: oklch(0.91 0.012 164);
+  --sidebar-accent: oklch(0.94 0.032 160);
   --sidebar-accent-foreground: oklch(0.28 0.06 160);
 }
 
@@ -73,10 +77,10 @@
   --chart-3: oklch(0.8 0.12 91);
   --chart-4: oklch(0.72 0.15 34);
   --chart-5: oklch(0.72 0.12 275);
-  --sidebar: oklch(0.135 0.016 164);
+  --sidebar: oklch(0.195 0.016 164);
   --sidebar-foreground: oklch(0.9 0.012 164);
-  --sidebar-border: oklch(0.255 0.018 164);
-  --sidebar-accent: oklch(0.23 0.04 160);
+  --sidebar-border: oklch(0.31 0.018 164);
+  --sidebar-accent: oklch(0.275 0.04 160);
   --sidebar-accent-foreground: oklch(0.91 0.045 160);
 }
 
@@ -343,6 +347,14 @@ textarea {
 
 .text-slate-400 {
   color: var(--muted-foreground);
+}
+
+.office-sidebar-scroll {
+  scrollbar-width: none;
+}
+
+.office-sidebar-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

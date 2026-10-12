@@ -14,6 +14,7 @@ import { createDraftInvoiceAction } from './actions';
 import { BillingNavigation } from './billing-nav';
 import { euroInput, formatCents, lineAmountField } from './format';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { FilterDisclosure } from '@app/web/components/filter-disclosure';
 
 type Candidate = components['schemas']['BillingCandidateResponseDto'];
 type CandidateGroup = {
@@ -117,14 +118,14 @@ export default async function BillingWorklistPage({
   const error = query.error ?? candidateResult.error?.code;
 
   return (
-    <div className="mx-auto grid min-w-0 max-w-6xl gap-6">
+    <div className="mx-auto grid w-full min-w-0 max-w-6xl grid-cols-[minmax(0,1fr)] gap-6">
       <PageHeader eyebrow={t('section')} title={t('title')} description={t('description')} />
       <BillingNavigation permissions={permissions} />
       {error ? <Alert>{translate(errorMessageKey(error))}</Alert> : null}
       {updated ? <Status>{t('draftCreated')}</Status> : null}
 
-      <section aria-labelledby="worklist-title" id="worklist" className="grid gap-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <section aria-labelledby="worklist-title" id="worklist" className="grid min-w-0 gap-4">
+        <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
           <div>
             <h2 id="worklist-title" className="text-xl font-semibold">
               {t('worklistTitle')}
@@ -135,97 +136,99 @@ export default async function BillingWorklistPage({
             {t('candidateCount', { count: candidates.length })}
           </p>
         </div>
-        <form method="get" className="grid gap-3 rounded-lg border bg-white p-5 md:grid-cols-3">
-          <Field
-            id="billing-from"
-            name="from"
-            label={t('from')}
-            type="date"
-            defaultValue={from ?? ''}
-          />
-          <Field
-            id="billing-until"
-            name="until"
-            label={t('until')}
-            type="date"
-            defaultValue={until ?? ''}
-          />
-          <SelectField
-            id="billing-organization"
-            name="organizationId"
-            label={t('organizationFilter')}
-            defaultValue={organizationId ?? ''}
-          >
-            <option value="">{t('allOrganizations')}</option>
-            {(organizationResult.data ?? []).map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organization.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField
-            id="billing-facility"
-            name="facilityId"
-            label={t('facilityFilter')}
-            defaultValue={facilityId ?? ''}
-          >
-            <option value="">{t('allFacilities')}</option>
-            {(facilityResult.data ?? []).map((facility) => (
-              <option key={facility.id} value={facility.id}>
-                {facility.name}
-              </option>
-            ))}
-          </SelectField>
-          <div className="grid gap-2">
+        <FilterDisclosure title={t('filters')}>
+          <form method="get" className="grid min-w-0 gap-3 md:grid-cols-3">
             <Field
-              id="client-search"
-              name="clientSearch"
-              label={t('clientSearch')}
-              defaultValue={clientSearch ?? ''}
+              id="billing-from"
+              name="from"
+              label={t('from')}
+              type="date"
+              defaultValue={from ?? ''}
+            />
+            <Field
+              id="billing-until"
+              name="until"
+              label={t('until')}
+              type="date"
+              defaultValue={until ?? ''}
             />
             <SelectField
-              id="billing-client"
-              name="clientId"
-              label={t('clientFilter')}
-              defaultValue={clientId ?? ''}
+              id="billing-organization"
+              name="organizationId"
+              label={t('organizationFilter')}
+              defaultValue={organizationId ?? ''}
             >
-              <option value="">{t('allClients')}</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.preferredName || client.firstName} {client.lastName}
+              <option value="">{t('allOrganizations')}</option>
+              {(organizationResult.data ?? []).map((organization) => (
+                <option key={organization.id} value={organization.id}>
+                  {organization.name}
                 </option>
               ))}
             </SelectField>
-          </div>
-          <Field
-            id="funding-source"
-            name="fundingSourceId"
-            label={t('fundingSourceFilter')}
-            defaultValue={fundingSourceId ?? ''}
-          />
-          <SelectField
-            id="candidate-readiness"
-            name="ready"
-            label={t('readinessFilter')}
-            defaultValue={ready ?? ''}
-          >
-            <option value="">{t('allReadiness')}</option>
-            <option value="true">{t('ready')}</option>
-            <option value="false">{t('blocked')}</option>
-          </SelectField>
-          <Field
-            id="candidate-evidence"
-            name="evidenceStatus"
-            label={t('evidenceFilter')}
-            defaultValue={evidenceStatus ?? ''}
-          />
-          <div className="flex items-end gap-2 md:col-span-3">
-            <Button type="submit">{t('applyFilters')}</Button>
-            <Button asChild variant="secondary">
-              <Link href="/billing">{t('clearFilters')}</Link>
-            </Button>
-          </div>
-        </form>
+            <SelectField
+              id="billing-facility"
+              name="facilityId"
+              label={t('facilityFilter')}
+              defaultValue={facilityId ?? ''}
+            >
+              <option value="">{t('allFacilities')}</option>
+              {(facilityResult.data ?? []).map((facility) => (
+                <option key={facility.id} value={facility.id}>
+                  {facility.name}
+                </option>
+              ))}
+            </SelectField>
+            <div className="grid min-w-0 gap-2">
+              <Field
+                id="client-search"
+                name="clientSearch"
+                label={t('clientSearch')}
+                defaultValue={clientSearch ?? ''}
+              />
+              <SelectField
+                id="billing-client"
+                name="clientId"
+                label={t('clientFilter')}
+                defaultValue={clientId ?? ''}
+              >
+                <option value="">{t('allClients')}</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.preferredName || client.firstName} {client.lastName}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+            <Field
+              id="funding-source"
+              name="fundingSourceId"
+              label={t('fundingSourceFilter')}
+              defaultValue={fundingSourceId ?? ''}
+            />
+            <SelectField
+              id="candidate-readiness"
+              name="ready"
+              label={t('readinessFilter')}
+              defaultValue={ready ?? ''}
+            >
+              <option value="">{t('allReadiness')}</option>
+              <option value="true">{t('ready')}</option>
+              <option value="false">{t('blocked')}</option>
+            </SelectField>
+            <Field
+              id="candidate-evidence"
+              name="evidenceStatus"
+              label={t('evidenceFilter')}
+              defaultValue={evidenceStatus ?? ''}
+            />
+            <div className="flex min-w-0 flex-wrap items-end gap-2 md:col-span-3">
+              <Button type="submit">{t('applyFilters')}</Button>
+              <Button asChild variant="secondary">
+                <Link href="/billing">{t('clearFilters')}</Link>
+              </Button>
+            </div>
+          </form>
+        </FilterDisclosure>
 
         {canExport ? (
           <section className="flex flex-wrap items-center gap-2 rounded-lg border bg-white p-4">
@@ -285,12 +288,15 @@ export default async function BillingWorklistPage({
             {t('worklistEmpty')}
           </p>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid min-w-0 gap-4">
             {groups.map((group) => (
-              <section key={groupKey(group)} className="grid gap-3 rounded-lg border bg-white p-5">
-                <header className="grid gap-1">
-                  <h3 className="text-lg font-semibold">{group.clientName}</h3>
-                  <p className="text-sm text-slate-700">
+              <section
+                key={groupKey(group)}
+                className="grid min-w-0 gap-3 rounded-lg border bg-white p-5"
+              >
+                <header className="grid min-w-0 gap-1">
+                  <h3 className="break-words text-lg font-semibold">{group.clientName}</h3>
+                  <p className="break-words text-sm text-slate-700">
                     {group.organizationName} · {group.facilityName} ·{' '}
                     {t(group.recipientType === 'payer' ? 'payerInvoice' : 'clientInvoice')}
                     {group.recipientName ? ` · ${group.recipientName}` : ''}
@@ -309,34 +315,34 @@ export default async function BillingWorklistPage({
                         value={group.payerArrangementId}
                       />
                     ) : null}
-                    <ul className="grid gap-3">
+                    <ul className="grid min-w-0 gap-3">
                       {group.candidates.map((candidate) => (
                         <li
                           key={candidate.id}
-                          className="grid gap-3 rounded-md border p-4 md:grid-cols-[1fr_auto]"
+                          className="grid min-w-0 gap-3 rounded-md border p-4 md:grid-cols-[minmax(0,1fr)_auto]"
                         >
-                          <div className="grid gap-1">
-                            <p className="font-medium">
+                          <div className="grid min-w-0 gap-1">
+                            <p className="break-words font-medium">
                               {candidate.serviceName} · {formatDate(candidate.serviceDate, locale)}
                             </p>
-                            <p className="text-sm text-slate-700">
+                            <p className="break-words text-sm text-slate-700">
                               {candidate.quantity} {t(`unit.${candidate.unit}`)} ·{' '}
                               {candidate.fundingLabel ?? t('selfPay')} · {candidate.evidenceStatus}
                             </p>
-                            <p className="text-sm text-slate-700">
+                            <p className="break-words text-sm text-slate-700">
                               {t('unitPrice')}: {formatCents(candidate.unitPriceCents, locale)} ·{' '}
                               {t('remainingBillable')}:{' '}
                               {formatCents(candidate.remainingBillableAmountCents, locale)}
                             </p>
                             {candidate.blockers.length ? (
-                              <ul className="mt-1 grid gap-1 text-sm text-amber-900">
+                              <ul className="mt-1 grid min-w-0 gap-1 text-sm text-amber-900">
                                 {candidate.blockers.map((blocker) => (
                                   <li key={blocker}>{blockerLabel(t, blocker)}</li>
                                 ))}
                               </ul>
                             ) : null}
                           </div>
-                          <div className="grid content-start gap-2 md:min-w-52">
+                          <div className="grid min-w-0 content-start gap-2 md:min-w-52">
                             <label className="flex items-center gap-2 text-sm">
                               <input
                                 type="checkbox"
@@ -564,7 +570,7 @@ function Field({
   required?: boolean;
 }>) {
   return (
-    <label className="grid gap-2 text-sm">
+    <label className="grid min-w-0 gap-2 text-sm">
       <Label htmlFor={id}>{label}</Label>
       <Input
         id={id}
@@ -595,13 +601,13 @@ function SelectField({
   children: React.ReactNode;
 }>) {
   return (
-    <label className="grid gap-2 text-sm">
+    <label className="grid min-w-0 gap-2 text-sm">
       <Label htmlFor={id}>{label}</Label>
       <select
         id={id}
         name={name}
         defaultValue={defaultValue}
-        className="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2"
+        className="min-h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-3 py-2"
       >
         {children}
       </select>

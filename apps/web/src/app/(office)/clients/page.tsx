@@ -22,6 +22,7 @@ import {
   hasPermission,
 } from '@app/web/lib/api';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { FilterDisclosure } from '@app/web/components/filter-disclosure';
 
 type SearchParams = Promise<{
   q?: string;
@@ -110,13 +111,10 @@ export default async function ClientsPage({
         </p>
       ) : null}
 
-      <section aria-labelledby="client-filter-title" className="grid gap-3">
-        <h2 id="client-filter-title" className="text-lg font-semibold">
-          {t('Clients.searchAndFilter')}
-        </h2>
-        <Card>
-          <form method="get" className="grid gap-3 p-4 md:grid-cols-4">
-            <label className="grid gap-1 text-sm font-medium md:col-span-2">
+      <section aria-label={t('Clients.searchAndFilter')} className="grid gap-3">
+        <FilterDisclosure title={t('Clients.searchAndFilter')}>
+          <form method="get" className="grid min-w-0 gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
+            <label className="grid min-w-0 gap-1 text-sm font-medium md:col-span-2">
               {t('Clients.searchName')}
               <Input type="search" name="q" maxLength={120} defaultValue={text} />
             </label>
@@ -179,7 +177,7 @@ export default async function ClientsPage({
               </Button>
             </div>
           </form>
-        </Card>
+        </FilterDisclosure>
       </section>
 
       {clients?.items.length ? (
@@ -187,58 +185,107 @@ export default async function ClientsPage({
           <h2 id="client-list-title" className="text-lg font-semibold">
             {t('Clients.resultCount', { count: clients.total })}
           </h2>
-          <Card className="overflow-hidden">
-            <Table className="min-w-[720px] text-left">
-              <TableCaption className="sr-only">{t('Clients.listCaption')}</TableCaption>
-              <TableHeader className="bg-muted text-muted-foreground">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead scope="col">{t('Common.fields.name')}</TableHead>
-                  <TableHead scope="col">{t('Common.fields.dateOfBirth')}</TableHead>
-                  <TableHead scope="col">{t('Clients.careLevel')}</TableHead>
-                  <TableHead scope="col">{t('Clients.organizationFacility')}</TableHead>
-                  <TableHead scope="col">{t('Common.fields.status')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clients.items.map((client) => (
-                  <TableRow key={client.id}>
-                    <TableCell>
-                      <Link
-                        className="font-medium text-blue-900 underline-offset-4 hover:underline"
-                        href={`/clients/${client.id}`}
-                      >
-                        {client.preferredName || client.firstName} {client.lastName}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{formatDate(client.dateOfBirth, locale) ?? '—'}</TableCell>
-                    <TableCell>
+          <ul className="grid gap-2 lg:hidden">
+            {clients.items.map((client) => (
+              <li key={client.id} className="grid min-w-0 gap-3 rounded-xl border bg-card p-4">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <Link
+                    className="inline-flex min-h-11 min-w-0 items-center break-words font-semibold text-primary underline-offset-4 hover:underline"
+                    href={`/clients/${client.id}`}
+                  >
+                    {client.preferredName || client.firstName} {client.lastName}
+                  </Link>
+                  <StatusBadge status={client.status} label={t(statusLabelKey(client.status))} />
+                </div>
+                <dl className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted-foreground">
+                      {t('Common.fields.dateOfBirth')}
+                    </dt>
+                    <dd className="mt-0.5 truncate">
+                      {formatDate(client.dateOfBirth, locale) ?? '—'}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted-foreground">{t('Clients.careLevel')}</dt>
+                    <dd className="mt-0.5 truncate">
                       {client.currentPflegegrad
                         ? t('Clients.careLevelNumber', { grade: client.currentPflegegrad })
                         : '—'}
-                    </TableCell>
-                    <TableCell>
+                    </dd>
+                  </div>
+                  <div className="col-span-2 min-w-0">
+                    <dt className="text-xs text-muted-foreground">
+                      {t('Clients.organizationFacility')}
+                    </dt>
+                    <dd className="mt-0.5 break-words">
                       {client.organizationName && client.facilityName ? (
-                        <>
-                          {client.organizationName} / {client.facilityName}
-                        </>
+                        `${client.organizationName} / ${client.facilityName}`
                       ) : (
-                        <span className="font-medium text-amber-800">
+                        <span className="font-medium text-warning-foreground">
                           {t('Common.empty.unassigned')}
                         </span>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge
-                        status={client.status}
-                        label={t(statusLabelKey(client.status))}
-                      />
-                    </TableCell>
+                    </dd>
+                  </div>
+                </dl>
+              </li>
+            ))}
+          </ul>
+          <Card className="hidden overflow-hidden lg:block">
+            <div className="overflow-x-auto">
+              <Table className="min-w-[720px] text-left">
+                <TableCaption className="sr-only">{t('Clients.listCaption')}</TableCaption>
+                <TableHeader className="bg-muted text-muted-foreground">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead scope="col">{t('Common.fields.name')}</TableHead>
+                    <TableHead scope="col">{t('Common.fields.dateOfBirth')}</TableHead>
+                    <TableHead scope="col">{t('Clients.careLevel')}</TableHead>
+                    <TableHead scope="col">{t('Clients.organizationFacility')}</TableHead>
+                    <TableHead scope="col">{t('Common.fields.status')}</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {clients.items.map((client) => (
+                    <TableRow key={client.id}>
+                      <TableCell>
+                        <Link
+                          className="font-medium text-primary underline-offset-4 hover:underline"
+                          href={`/clients/${client.id}`}
+                        >
+                          {client.preferredName || client.firstName} {client.lastName}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{formatDate(client.dateOfBirth, locale) ?? '—'}</TableCell>
+                      <TableCell>
+                        {client.currentPflegegrad
+                          ? t('Clients.careLevelNumber', { grade: client.currentPflegegrad })
+                          : '—'}
+                      </TableCell>
+                      <TableCell>
+                        {client.organizationName && client.facilityName ? (
+                          <>
+                            {client.organizationName} / {client.facilityName}
+                          </>
+                        ) : (
+                          <span className="font-medium text-warning-foreground">
+                            {t('Common.empty.unassigned')}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge
+                          status={client.status}
+                          label={t(statusLabelKey(client.status))}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </Card>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-slate-600">
               {t('Common.pagination', {
                 page: new Intl.NumberFormat(locale).format(clients.page),
@@ -282,10 +329,10 @@ function SelectFilter({
   children: React.ReactNode;
 }>) {
   return (
-    <label className="grid gap-1 text-sm font-medium">
+    <label className="grid min-w-0 gap-1 text-sm font-medium">
       {label}
       <select
-        className="h-11 rounded-md border border-input bg-background px-3 font-normal text-foreground"
+        className="h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 font-normal text-foreground"
         name={name}
         defaultValue={value}
       >

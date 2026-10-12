@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { FilterDisclosure } from '@app/web/components/filter-disclosure';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate, formatDateTime } from '@app/web/i18n/format';
@@ -164,129 +165,218 @@ export default async function AdmissionsPage({
         </p>
       ) : null}
 
-      <form method="get" className="grid gap-3 rounded-lg border bg-white p-4 md:grid-cols-3">
-        <Field name="search" label={t('search')} type="search" defaultValue={search} />
-        {canReadOrganizations ? (
-          <SelectField name="organizationId" label={t('organization')} value={organizationId ?? ''}>
-            <option value="">{t('allOrganizations')}</option>
-            {organizations.map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organization.name}
-              </option>
-            ))}
-          </SelectField>
-        ) : null}
-        {canReadFacilities ? (
-          <SelectField name="facilityId" label={t('facility')} value={facilityId ?? ''}>
-            <option value="">{t('allFacilities')}</option>
-            {facilities.map((facility) => (
-              <option key={facility.id} value={facility.id}>
-                {facility.name}
-              </option>
-            ))}
-          </SelectField>
-        ) : null}
-        {canReadEmployees ? (
-          <SelectField name="ownerEmployeeId" label={t('owner')} value={ownerEmployeeId ?? ''}>
-            <option value="">{t('allOwners')}</option>
-            {employees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.preferredName || employee.firstName} {employee.lastName}
-              </option>
-            ))}
-          </SelectField>
-        ) : null}
-        <SelectField name="stage" label={t('stage')} value={stage ?? ''}>
-          <option value="">{t('allStages')}</option>
-          {stages.map((value) => (
-            <option key={value} value={value}>
-              {t(value === 'assessment' ? 'assessmentStage' : value)}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField name="readiness" label={t('readiness')} value={readiness ?? ''}>
-          <option value="">{t('allReadiness')}</option>
-          <option value="ready">{t('ready')}</option>
-          <option value="blocked">{t('blocked')}</option>
-        </SelectField>
-        <Field name="createdFrom" label={t('createdFrom')} type="date" defaultValue={createdFrom} />
-        <Field name="createdTo" label={t('createdTo')} type="date" defaultValue={createdTo} />
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input type="checkbox" name="overdue" value="true" defaultChecked={overdue} />
-          {t('overdue')}
-        </label>
-        <div className="flex gap-2 md:col-span-3">
-          <Button type="submit">{translate('Common.actions.apply')}</Button>
-          <Button asChild variant="secondary">
-            <Link href="/admissions">{translate('Common.actions.reset')}</Link>
-          </Button>
-        </div>
-      </form>
-
-      <section aria-label={t('worklist')} className="overflow-x-auto rounded-lg border bg-white">
-        {rows.length ? (
-          <table className="w-full text-left text-sm">
-            <thead className="border-b bg-slate-50 text-slate-700">
-              <tr>
-                <th className="p-3">{t('caseDetails')}</th>
-                <th className="p-3">{t('stage')}</th>
-                <th className="p-3">{t('preferredStartDate')}</th>
-                <th className="p-3">{t('blockers')}</th>
-                <th className="p-3">{t('admissionAge')}</th>
-                <th className="p-3">{t('followUp')}</th>
-                <th className="p-3">{t('owner')}</th>
-                <th className="p-3">{t('lastActivity')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td className="p-3">
-                    <Link
-                      className="font-semibold text-blue-800 underline"
-                      href={`/admissions/${row.id}`}
-                    >
-                      {row.firstName} {row.lastName}
-                    </Link>
-                    {row.clientId ? (
-                      <span className="ml-2 text-xs text-slate-600">
-                        {t('clientId')}: {row.clientId}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="p-3">
-                    {t(
-                      row.stage === 'assessment'
-                        ? 'assessmentStage'
-                        : (row.stage as (typeof stages)[number]),
-                    )}
-                  </td>
-                  <td className="p-3">{formatDate(row.preferredStartDate, locale as Locale)}</td>
-                  <td className="p-3">
-                    {row.readinessSummary?.blockerCount
-                      ? t('blockerCount', { count: row.readinessSummary.blockerCount })
-                      : t('noBlockers')}
-                  </td>
-                  <td className="p-3">
-                    {t('ageInDays', {
-                      count: admissionAgeInDays(row.createdAt),
-                    })}
-                  </td>
-                  <td className="p-3">
-                    {row.nextFollowUpAt
-                      ? formatDateTime(row.nextFollowUpAt, locale as Locale)
-                      : '—'}
-                  </td>
-                  <td className="p-3">
-                    {row.ownerEmployeeId
-                      ? (employeeNames.get(row.ownerEmployeeId) ?? row.ownerEmployeeId)
-                      : '—'}
-                  </td>
-                  <td className="p-3">{formatDate(row.lastActivityAt, locale as Locale)}</td>
-                </tr>
+      <FilterDisclosure title={t('filters')}>
+        <form method="get" className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <Field name="search" label={t('search')} type="search" defaultValue={search} />
+          {canReadOrganizations ? (
+            <SelectField
+              name="organizationId"
+              label={t('organization')}
+              value={organizationId ?? ''}
+            >
+              <option value="">{t('allOrganizations')}</option>
+              {organizations.map((organization) => (
+                <option key={organization.id} value={organization.id}>
+                  {organization.name}
+                </option>
               ))}
-            </tbody>
-          </table>
+            </SelectField>
+          ) : null}
+          {canReadFacilities ? (
+            <SelectField name="facilityId" label={t('facility')} value={facilityId ?? ''}>
+              <option value="">{t('allFacilities')}</option>
+              {facilities.map((facility) => (
+                <option key={facility.id} value={facility.id}>
+                  {facility.name}
+                </option>
+              ))}
+            </SelectField>
+          ) : null}
+          {canReadEmployees ? (
+            <SelectField name="ownerEmployeeId" label={t('owner')} value={ownerEmployeeId ?? ''}>
+              <option value="">{t('allOwners')}</option>
+              {employees.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.preferredName || employee.firstName} {employee.lastName}
+                </option>
+              ))}
+            </SelectField>
+          ) : null}
+          <SelectField name="stage" label={t('stage')} value={stage ?? ''}>
+            <option value="">{t('allStages')}</option>
+            {stages.map((value) => (
+              <option key={value} value={value}>
+                {t(value === 'assessment' ? 'assessmentStage' : value)}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField name="readiness" label={t('readiness')} value={readiness ?? ''}>
+            <option value="">{t('allReadiness')}</option>
+            <option value="ready">{t('ready')}</option>
+            <option value="blocked">{t('blocked')}</option>
+          </SelectField>
+          <Field
+            name="createdFrom"
+            label={t('createdFrom')}
+            type="date"
+            defaultValue={createdFrom}
+          />
+          <Field name="createdTo" label={t('createdTo')} type="date" defaultValue={createdTo} />
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" name="overdue" value="true" defaultChecked={overdue} />
+            {t('overdue')}
+          </label>
+          <div className="flex gap-2 md:col-span-3">
+            <Button type="submit">{translate('Common.actions.apply')}</Button>
+            <Button asChild variant="secondary">
+              <Link href="/admissions">{translate('Common.actions.reset')}</Link>
+            </Button>
+          </div>
+        </form>
+      </FilterDisclosure>
+
+      <section aria-label={t('worklist')} className="min-w-0">
+        {rows.length ? (
+          <>
+            <div className="grid gap-3 lg:hidden">
+              {rows.map((row) => (
+                <article key={row.id} className="grid min-w-0 gap-3 rounded-xl border bg-card p-4">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        className="inline-flex min-h-11 items-center break-words font-semibold text-primary underline-offset-4 hover:underline"
+                        href={`/admissions/${row.id}`}
+                      >
+                        {row.firstName} {row.lastName}
+                      </Link>
+                      {row.clientId ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t('clientId')}: {row.clientId}
+                        </p>
+                      ) : null}
+                    </div>
+                    <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium">
+                      {t(
+                        row.stage === 'assessment'
+                          ? 'assessmentStage'
+                          : (row.stage as (typeof stages)[number]),
+                      )}
+                    </span>
+                  </div>
+                  <dl className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted-foreground">{t('preferredStartDate')}</dt>
+                      <dd className="mt-0.5 break-words">
+                        {formatDate(row.preferredStartDate, locale as Locale)}
+                      </dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted-foreground">{t('blockers')}</dt>
+                      <dd className="mt-0.5 break-words">
+                        {row.readinessSummary?.blockerCount
+                          ? t('blockerCount', { count: row.readinessSummary.blockerCount })
+                          : t('noBlockers')}
+                      </dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted-foreground">{t('admissionAge')}</dt>
+                      <dd className="mt-0.5 break-words">
+                        {t('ageInDays', { count: admissionAgeInDays(row.createdAt) })}
+                      </dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted-foreground">{t('followUp')}</dt>
+                      <dd className="mt-0.5 break-words">
+                        {row.nextFollowUpAt
+                          ? formatDateTime(row.nextFollowUpAt, locale as Locale)
+                          : '—'}
+                      </dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted-foreground">{t('owner')}</dt>
+                      <dd className="mt-0.5 break-words">
+                        {row.ownerEmployeeId
+                          ? (employeeNames.get(row.ownerEmployeeId) ?? row.ownerEmployeeId)
+                          : '—'}
+                      </dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted-foreground">{t('lastActivity')}</dt>
+                      <dd className="mt-0.5 break-words">
+                        {formatDate(row.lastActivityAt, locale as Locale)}
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto rounded-lg border bg-white lg:block">
+              <table className="w-full min-w-[900px] text-left text-sm">
+                <thead className="border-b bg-slate-50 text-slate-700">
+                  <tr>
+                    <th className="p-3">{t('caseDetails')}</th>
+                    <th className="p-3">{t('stage')}</th>
+                    <th className="p-3">{t('preferredStartDate')}</th>
+                    <th className="p-3">{t('blockers')}</th>
+                    <th className="p-3">{t('admissionAge')}</th>
+                    <th className="p-3">{t('followUp')}</th>
+                    <th className="p-3">{t('owner')}</th>
+                    <th className="p-3">{t('lastActivity')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {rows.map((row) => (
+                    <tr key={row.id}>
+                      <td className="p-3">
+                        <Link
+                          className="font-semibold text-blue-800 underline"
+                          href={`/admissions/${row.id}`}
+                        >
+                          {row.firstName} {row.lastName}
+                        </Link>
+                        {row.clientId ? (
+                          <span className="ml-2 text-xs text-slate-600">
+                            {t('clientId')}: {row.clientId}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="p-3">
+                        {t(
+                          row.stage === 'assessment'
+                            ? 'assessmentStage'
+                            : (row.stage as (typeof stages)[number]),
+                        )}
+                      </td>
+                      <td className="p-3">
+                        {formatDate(row.preferredStartDate, locale as Locale)}
+                      </td>
+                      <td className="p-3">
+                        {row.readinessSummary?.blockerCount
+                          ? t('blockerCount', { count: row.readinessSummary.blockerCount })
+                          : t('noBlockers')}
+                      </td>
+                      <td className="p-3">
+                        {t('ageInDays', {
+                          count: admissionAgeInDays(row.createdAt),
+                        })}
+                      </td>
+                      <td className="p-3">
+                        {row.nextFollowUpAt
+                          ? formatDateTime(row.nextFollowUpAt, locale as Locale)
+                          : '—'}
+                      </td>
+                      <td className="p-3">
+                        {row.ownerEmployeeId
+                          ? (employeeNames.get(row.ownerEmployeeId) ?? row.ownerEmployeeId)
+                          : '—'}
+                      </td>
+                      <td className="p-3">{formatDate(row.lastActivityAt, locale as Locale)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
           <p className="p-5 text-slate-700">{t('noCases')}</p>
         )}
@@ -323,10 +413,10 @@ function Field({
   defaultValue?: string | undefined;
 }) {
   return (
-    <label className="grid gap-1 text-sm font-medium">
+    <label className="grid min-w-0 gap-1 text-sm font-medium">
       {label}
       <input
-        className="h-10 rounded-md border px-3 font-normal"
+        className="h-10 w-full min-w-0 rounded-md border px-3 font-normal"
         name={name}
         type={type}
         defaultValue={defaultValue}
@@ -348,10 +438,10 @@ function SelectField({
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-1 text-sm font-medium">
+    <label className="grid min-w-0 gap-1 text-sm font-medium">
       {label}
       <select
-        className="h-10 rounded-md border bg-white px-3 font-normal"
+        className="h-10 w-full min-w-0 rounded-md border bg-white px-3 font-normal"
         name={name}
         defaultValue={value}
       >
