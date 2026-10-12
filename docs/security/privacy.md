@@ -18,6 +18,12 @@ Billing profiles, payer mandates, invoice recipient and issuer snapshots, paymen
 
 Service-evidence packages contain only the service facts shown to a signatory and are immutable snapshots. Acknowledgement history snapshots the signatory's name and capacity. Decline notes are protected detail data and are omitted from audit, logs, and outbox events. Signature strokes are sensitive personal data stored in a private S3-compatible bucket; PostgreSQL holds an opaque key and SHA-256 digest. Authorized retrieval verifies the signature and package hashes and returns the stroke representation without a public or permanent object URL. Worklists expose no signature bytes. The current system retains signature artifacts with acknowledgement history and has no automatic deletion policy.
 
+API responses default to `Cache-Control: private, no-store`, and the server-side API client disables fetch caching. Authenticated application responses and document downloads therefore are not stored in shared HTTP or Next.js data caches by default.
+
+Routing is disabled by default. When enabled, route requests send visit coordinates to the configured OSRM endpoint. Production accepts the private Compose service over HTTP or an external endpoint over HTTPS; the provider and processing region still require operator and privacy review before real client locations are sent.
+
 ## Employee qualifications
 
 Employee qualification definitions and assignments, validity dates, and revocation history are sensitive personnel data. Employee detail and assignment endpoints require employee permissions and filter by the reader's organization or facility scope. Qualification data remains employee master data and is not interpreted as an authorization decision by the benefits or visit workflows.
+
+Caregiver form drafts are kept in browser `sessionStorage`, scoped to the signed-in user, tenant and visit, and expire after 24 hours. They are not encrypted and remain available to the active browser profile until submitted, cleared or expired. See the [data lifecycle inventory](data-lifecycle.md) for retained records, retired schemas and recovery copies.

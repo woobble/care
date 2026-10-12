@@ -888,21 +888,19 @@ export class OperationsDeadlineTaskScheduler {
     now: Date,
   ) {
     if (!items.length) return items;
-    const [policies, organizations] = await Promise.all([
-      transaction
-        .select({
-          organizationId: reminderPolicies.organizationId,
-          category: reminderPolicies.category,
-          offsetsDays: reminderPolicies.offsetsDays,
-          enabled: reminderPolicies.enabled,
-        })
-        .from(reminderPolicies)
-        .where(eq(reminderPolicies.tenantId, tenantId)),
-      transaction
-        .select({ id: organizationsTable.id, timezone: organizationsTable.timezone })
-        .from(organizationsTable)
-        .where(eq(organizationsTable.tenantId, tenantId)),
-    ]);
+    const policies = await transaction
+      .select({
+        organizationId: reminderPolicies.organizationId,
+        category: reminderPolicies.category,
+        offsetsDays: reminderPolicies.offsetsDays,
+        enabled: reminderPolicies.enabled,
+      })
+      .from(reminderPolicies)
+      .where(eq(reminderPolicies.tenantId, tenantId));
+    const organizations = await transaction
+      .select({ id: organizationsTable.id, timezone: organizationsTable.timezone })
+      .from(organizationsTable)
+      .where(eq(organizationsTable.tenantId, tenantId));
     const policyByOrgCategory = new Map(
       policies.map((policy) => [`${policy.organizationId}:${policy.category}`, policy]),
     );

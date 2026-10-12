@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.production.yml
+
+scrape_configs:
+  - job_name: care-api
+    static_configs:
+      - targets: [api:3002]
+  - job_name: care-worker
+    static_configs:
+      - targets: [worker:3003]
+  - job_name: otel-collector
+    static_configs:
+      - targets: [otel-collector:9464]

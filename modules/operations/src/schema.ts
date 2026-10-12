@@ -502,7 +502,7 @@ export const exceptionOccurrences = operations.table(
     check('operations_exception_occurrences_key_ck', sql`length(${table.issueKey}) = 64`),
     check(
       'operations_exception_occurrences_source_domain_ck',
-      sql`${table.sourceDomain} IN ('scheduling', 'care_documentation', 'service_evidence', 'benefits', 'billing', 'claims', 'onboarding', 'service_agreements', 'employee_qualifications')`,
+      sql`${table.sourceDomain} IN ('scheduling', 'visit_execution', 'care_documentation', 'service_evidence', 'benefits', 'billing', 'claims', 'onboarding', 'service_agreements', 'employee_qualifications')`,
     ),
     check(
       'operations_exception_occurrences_category_ck',

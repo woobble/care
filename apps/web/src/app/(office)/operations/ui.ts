@@ -20,6 +20,7 @@ const issueTitles: readonly OperationsIssueTitle[] = [
   'unpublished_schedule_changes',
   'documentation_documentation_required',
   'documentation_visit_execution_required',
+  'visit_execution_overdue',
   'documentation_service_evidence_required',
   'documentation_not_performed_reason_required',
   'documentation_partial_service_explanation_required',
@@ -76,6 +77,8 @@ export function categoryTranslationKey(
 export function workItemSourceHref(item: OperationsWorkItem): string {
   switch (item.sourceDomain) {
     case 'scheduling':
+      return `/visits/${item.sourceEntityId}`;
+    case 'visit_execution':
       return `/visits/${item.sourceEntityId}`;
     case 'care_documentation':
       return item.sourceEntityType === 'visit'

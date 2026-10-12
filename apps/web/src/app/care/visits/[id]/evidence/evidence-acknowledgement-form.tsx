@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import type { components } from '@care/api-client';
 import { acknowledgeEvidenceAction, declineEvidenceAction } from '@app/web/app/care/actions';
@@ -28,14 +28,55 @@ export function EvidenceAcknowledgementForm({
 }) {
   const t = useTranslations('ServiceEvidence.care.form');
   const careT = useTranslations('ServiceEvidence.care');
+  const draftT = useTranslations('Caregiver.drafts');
   const [signatory, setSignatory] = useState('client');
   const [method, setMethod] = useState<'touch_signature' | 'typed_confirmation'>('touch_signature');
   const [strokes, setStrokes] = useState<SignatureStrokes>([]);
+  const [online, setOnline] = useState(true);
+  const [submissionState, setSubmissionState] = useState<
+    'idle' | 'offline' | 'submitting' | 'uncertain'
+  >('idle');
+  const submissionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const submitting = submissionState === 'submitting';
   const signatoryName =
     signatory === 'client'
       ? clientName
       : eligibleSignatories.find((item) => `${item.signatoryType}:${item.contactId}` === signatory)
           ?.displayName;
+
+  useEffect(() => {
+    const updateOnline = () => {
+      const connected = navigator.onLine;
+      setOnline(connected);
+      if (connected) {
+        setSubmissionState((current) => (current === 'offline' ? 'idle' : current));
+      }
+    };
+    updateOnline();
+    window.addEventListener('online', updateOnline);
+    window.addEventListener('offline', updateOnline);
+    return () => {
+      window.removeEventListener('online', updateOnline);
+      window.removeEventListener('offline', updateOnline);
+      if (submissionTimer.current) clearTimeout(submissionTimer.current);
+    };
+  }, []);
+
+  function submit(event: FormEvent<HTMLFormElement>, prompt: string) {
+    if (!navigator.onLine) {
+      event.preventDefault();
+      setOnline(false);
+      setSubmissionState('offline');
+      return;
+    }
+    if (!window.confirm(prompt)) {
+      event.preventDefault();
+      return;
+    }
+    if (submissionTimer.current) clearTimeout(submissionTimer.current);
+    setSubmissionState('submitting');
+    submissionTimer.current = setTimeout(() => setSubmissionState('uncertain'), 15_000);
+  }
 
   return (
     <section className="grid gap-5 rounded-lg border bg-white p-4 sm:p-5">
@@ -50,7 +91,11 @@ export function EvidenceAcknowledgementForm({
           name="signatory"
           form="acknowledge-evidence"
           value={signatory}
-          onChange={(event) => setSignatory(event.currentTarget.value)}
+          onChange={(event) => {
+            setSignatory(event.currentTarget.value);
+            setStrokes([]);
+          }}
+          disabled={submitting}
           className="min-h-12 rounded-md border bg-white px-3"
           aria-label={t('selectSignatory')}
         >
@@ -66,7 +111,8 @@ export function EvidenceAcknowledgementForm({
       <form
         id="acknowledge-evidence"
         action={acknowledgeEvidenceAction}
-        onSubmit={(event) => confirmAcknowledgement(event, t('confirmPrompt'))}
+        aria-busy={submitting}
+        onSubmit={(event) => submit(event, t('confirmPrompt'))}
         className="grid gap-4"
       >
         <input type="hidden" name="visitId" value={visitId} />
@@ -85,6 +131,7 @@ export function EvidenceAcknowledgementForm({
               value="touch_signature"
               checked={method === 'touch_signature'}
               onChange={() => setMethod('touch_signature')}
+              disabled={submitting}
             />
             <span>{t('drawSignature')}</span>
           </label>
@@ -95,13 +142,14 @@ export function EvidenceAcknowledgementForm({
               value="typed_confirmation"
               checked={method === 'typed_confirmation'}
               onChange={() => setMethod('typed_confirmation')}
+              disabled={submitting}
             />
             <span>{t('enterName')}</span>
           </label>
         </fieldset>
 
         {method === 'touch_signature' ? (
-          <SignaturePad strokes={strokes} onChange={setStrokes} />
+          <SignaturePad strokes={strokes} onChange={setStrokes} disabled={submitting} />
         ) : (
           <label className="grid gap-1 text-sm font-medium">
             <span>{t('fullName')}</span>
@@ -112,6 +160,7 @@ export function EvidenceAcknowledgementForm({
               autoComplete="name"
               defaultValue={signatoryName ?? ''}
               key={signatory}
+              disabled={submitting}
               className="min-h-12 rounded-md border px-3"
             />
             <span className="font-normal text-slate-600">{t('nameMustMatch')}</span>
@@ -120,12 +169,31 @@ export function EvidenceAcknowledgementForm({
 
         <button
           type="submit"
-          disabled={method === 'touch_signature' && strokes.length === 0}
+          disabled={submitting || !online || (method === 'touch_signature' && strokes.length === 0)}
           className="min-h-12 rounded-md bg-blue-800 px-4 font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {method === 'touch_signature' ? t('confirmSignature') : t('recordConfirmation')}
+          {submitting
+            ? draftT('submitting')
+            : method === 'touch_signature'
+              ? t('confirmSignature')
+              : t('recordConfirmation')}
         </button>
       </form>
+      {submissionState === 'submitting' ? (
+        <p role="status" className="text-sm text-slate-600">
+          {draftT('submitting')}
+        </p>
+      ) : null}
+      {!online ? (
+        <p role="status" className="text-sm text-amber-900">
+          {draftT('offline')}
+        </p>
+      ) : null}
+      {submissionState === 'uncertain' ? (
+        <p role="status" className="text-sm text-amber-900">
+          {draftT('submissionUncertain')}
+        </p>
+      ) : null}
 
       <details className="rounded-md border p-3">
         <summary className="min-h-8 cursor-pointer font-medium">
@@ -133,7 +201,8 @@ export function EvidenceAcknowledgementForm({
         </summary>
         <form
           action={declineEvidenceAction}
-          onSubmit={(event) => confirmDecline(event, t('declinePrompt'))}
+          aria-busy={submitting}
+          onSubmit={(event) => submit(event, t('declinePrompt'))}
           className="mt-4 grid gap-3"
         >
           <input type="hidden" name="visitId" value={visitId} />
@@ -160,6 +229,7 @@ export function EvidenceAcknowledgementForm({
           </label>
           <button
             type="submit"
+            disabled={submitting || !online}
             className="min-h-12 rounded-md border border-slate-400 px-4 font-semibold text-slate-800"
           >
             {t('recordDecline')}
@@ -173,9 +243,11 @@ export function EvidenceAcknowledgementForm({
 function SignaturePad({
   strokes,
   onChange,
+  disabled,
 }: {
   strokes: SignatureStrokes;
   onChange: (strokes: SignatureStrokes) => void;
+  disabled: boolean;
 }) {
   const t = useTranslations('ServiceEvidence.care.form');
   const [activeStroke, setActiveStroke] = useState<SignaturePoint[]>([]);
@@ -190,7 +262,7 @@ function SignaturePad({
   }
 
   function start(event: PointerEvent<SVGSVGElement>) {
-    if (!event.isPrimary || event.button !== 0) return;
+    if (disabled || !event.isPrimary || event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     setActiveStroke([point(event)]);
   }
@@ -222,6 +294,8 @@ function SignaturePad({
         onPointerMove={move}
         onPointerUp={finish}
         onPointerCancel={() => setActiveStroke([])}
+        aria-describedby="signature-accessibility-help"
+        aria-disabled={disabled}
         className="h-36 w-full touch-none rounded-md border-2 border-dashed border-slate-400 bg-slate-50"
       >
         {allStrokes.map((stroke) => (
@@ -241,7 +315,7 @@ function SignaturePad({
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          disabled={!strokes.length && !activeStroke.length}
+          disabled={disabled || (!strokes.length && !activeStroke.length)}
           onClick={() => {
             onChange([]);
             setActiveStroke([]);
@@ -252,14 +326,16 @@ function SignaturePad({
         </button>
         <button
           type="button"
-          disabled={!strokes.length}
+          disabled={disabled || !strokes.length}
           onClick={() => onChange(strokes.slice(0, -1))}
           className="min-h-11 rounded-md border px-3 font-medium disabled:text-slate-400"
         >
           {t('removeLastStroke')}
         </button>
       </div>
-      <p className="text-sm text-slate-600">{t('signatureSavedAfterConfirmation')}</p>
+      <p id="signature-accessibility-help" className="text-sm text-slate-600">
+        {t('signatureSavedAfterConfirmation')}
+      </p>
     </div>
   );
 }
@@ -272,18 +348,6 @@ function strokePath(stroke: SignaturePoint[]): string {
 
 function clamp(value: number): number {
   return Math.max(0, Math.min(1, value));
-}
-
-function confirmAcknowledgement(event: FormEvent<HTMLFormElement>, prompt: string) {
-  if (!window.confirm(prompt)) {
-    event.preventDefault();
-  }
-}
-
-function confirmDecline(event: FormEvent<HTMLFormElement>, prompt: string) {
-  if (!window.confirm(prompt)) {
-    event.preventDefault();
-  }
 }
 
 function capacityKey(

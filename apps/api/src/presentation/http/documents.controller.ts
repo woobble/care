@@ -64,6 +64,7 @@ import { BillingApplicationService } from '@care/billing';
 import { OrganizationApplicationService } from '@care/organizations';
 import { SchedulingApplicationService } from '@care/scheduling';
 import { csvNumber, DOCUMENT_EXPORT_SCHEMAS, encodeCsv } from '@care/documents';
+import { apiMetrics } from '@app/api/operational-metrics';
 import {
   BENEFITS_APPLICATION,
   BILLING_APPLICATION,
@@ -506,15 +507,25 @@ export class DocumentsController {
     request: ApiRequest,
     preview: boolean,
   ) {
-    switch (command.sourceType) {
-      case 'evidence_package':
-        return this.generateEvidencePackage(principal, command, request, preview);
-      case 'evidence_period':
-        return this.generateEvidencePeriod(principal, command, request, preview);
-      case 'service_agreement':
-        return this.generateAgreement(principal, command, request, preview);
-      case 'benefit_overview':
-        return this.generateBenefitOverview(principal, command, request, preview);
+    try {
+      switch (command.sourceType) {
+        case 'evidence_package':
+          return await this.generateEvidencePackage(principal, command, request, preview);
+        case 'evidence_period':
+          return await this.generateEvidencePeriod(principal, command, request, preview);
+        case 'service_agreement':
+          return await this.generateAgreement(principal, command, request, preview);
+        case 'benefit_overview':
+          return await this.generateBenefitOverview(principal, command, request, preview);
+      }
+    } catch (error) {
+      if (error instanceof DocumentGenerationFailedError) {
+        apiMetrics.recordDocumentGenerationFailure(
+          command.sourceType,
+          preview ? 'preview' : 'generate',
+        );
+      }
+      throw error;
     }
   }
 

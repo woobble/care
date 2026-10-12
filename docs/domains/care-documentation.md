@@ -22,6 +22,10 @@ Every performed service, including an unplanned service, needs a separate eviden
 
 Completeness returns structured missing requirements, including missing evidence, missing non-performance reasons, and missing partial-service explanations. Finalization rejects incomplete documentation. Evidence never changes the performed-service outcome.
 
+The mobile visit form keeps selected unsent note, entry, deviation, and service-evidence fields in browser `sessionStorage` for up to 24 hours. Keys include the authenticated user, tenant, visit, form, and server revision. The form offers recovery only for the same revision and asks the caregiver to discard a draft from an older revision; it never replays a mutation. Successful server responses clear that form's draft. Logout and account or tenant changes clear drafts, and a privacy notice explains that browser storage is not encrypted against local device access. Only form values are stored; client records and unsubmitted signatures are not.
+
+When offline, the form retains its local draft and blocks submission. It reports pending, uncertain, and server-confirmed results distinctly; there is no background command queue. Each API command still enforces assignment, lifecycle, and expected-version checks, so a stale draft cannot overwrite a finalized document or a newer edit.
+
 ## Entries and incidents
 
 Generic entries use `care_note`, `observation`, `deviation`, or `incident`. Entries retain employee attribution, occurrence time when supplied, and their narrative content. Incidents require an occurrence time and an operational severity classification (`low`, `moderate`, `high`, or `critical`). These labels are operational metadata, not a validated clinical severity scale. The module does not infer diagnoses or clinical conclusions.

@@ -44,6 +44,8 @@ Package creation and supersession and acknowledgement creation, decline, and rev
 
 Caregivers review the displayed service list after documentation finalization, select the client or an eligible representative, then draw a signature, confirm a matching name, or record a decline. The tablet/mobile view has reset and undo controls and checks for horizontal overflow. Typed confirmation is the accessible alternative to pointer or touch capture.
 
+The mobile signature surface uses pointer capture and disables touch scrolling while drawing. Changing the selected signatory clears the unsubmitted strokes. The form disables repeat submissions while a request is pending and sends the existing idempotency key; strokes are never saved in local drafts. A decline remains a distinct recorded outcome and is not presented as accepted evidence.
+
 Office users can filter the `Leistungsnachweise` worklist, review package and acknowledgement history, view an authorized signature, and revoke a confirmation with a reason. The client timeline contains fixed acknowledgement, decline, and revocation summaries only.
 
 ## Deferred boundaries

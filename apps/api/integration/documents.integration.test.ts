@@ -124,6 +124,7 @@ describe('documents PostgreSQL integration', () => {
       async delete(key) {
         objects.delete(key);
       },
+      async check() {},
       async createSignedUrl(key) {
         return `memory://${key}`;
       },

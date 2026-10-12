@@ -31,6 +31,6 @@
   "devDependencies": {
     "@care/testing": "workspace:*",
     "pg": "^8.23.1",
-    "uuid": "^14.0.2"
+    "uuid": "^14.0.3"
   }
 }

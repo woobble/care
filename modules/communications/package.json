@@ -31,7 +31,7 @@
     "@care/scheduling": "workspace:*",
     "@care/service-agreements": "workspace:*",
     "drizzle-orm": "^0.45.4",
-    "uuid": "^14.0.2"
+    "uuid": "^14.0.3"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",

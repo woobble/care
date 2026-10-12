@@ -21,6 +21,6 @@
     "testcontainers": "^12.2.0"
   },
   "devDependencies": {
-    "uuid": "^14.0.2"
+    "uuid": "^14.0.3"
   }
 }

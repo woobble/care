@@ -15,6 +15,7 @@ const config = loadWebConfig(
   isBuild
     ? {
         ...process.env,
+        NODE_ENV: 'development',
         DATABASE_URL:
           process.env.DATABASE_URL ?? 'postgres://care_app:build-only@127.0.0.1:5432/care',
         OIDC_ISSUER:

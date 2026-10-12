@@ -52,11 +52,11 @@ entries:
       include_claims_in_id_token: true
       redirect_uris:
         - matching_mode: strict
-          url: http://localhost:3000/api/auth/callback/authentik
+          url: !Env OIDC_REDIRECT_URI
   - model: authentik_core.application
     identifiers:
       slug: care-platform
     attrs:
       name: Care Platform
       provider: !KeyOf care-platform-provider
-      meta_launch_url: http://localhost:3000
+      meta_launch_url: !Env WEB_ORIGIN

@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -10,6 +11,7 @@ export interface ObjectStorage {
   put(input: { key: string; body: Uint8Array; contentType: string }): Promise<void>;
   get(key: string): Promise<Uint8Array | null>;
   delete(key: string): Promise<void>;
+  check(): Promise<void>;
   createSignedUrl(key: string, expiresInSeconds?: number): Promise<string>;
 }
 
@@ -45,6 +47,11 @@ export function createS3ObjectStorage(config: {
     },
     async delete(key) {
       await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
+    },
+    async check() {
+      await client.send(new HeadBucketCommand({ Bucket: config.bucket }), {
+        abortSignal: AbortSignal.timeout(3_000),
+      });
     },
     async createSignedUrl(key, expiresInSeconds = 300) {
       return getSignedUrl(client, new GetObjectCommand({ Bucket: config.bucket, Key: key }), {

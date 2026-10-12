@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit --pretty false -p tsconfig.json"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1148.0",
-    "@aws-sdk/s3-request-presigner": "^3.1148.0"
+    "@aws-sdk/client-s3": "^3.1149.0",
+    "@aws-sdk/s3-request-presigner": "^3.1149.0"
   }
 }

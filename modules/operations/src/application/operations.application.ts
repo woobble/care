@@ -50,6 +50,7 @@ import {
   ServiceEvidenceVisitRelationshipRequiredError,
   type ServiceEvidenceApplicationService,
 } from '@care/service-evidence';
+import type { VisitExecutionApplicationService } from '@care/visit-execution';
 import { clientRecords } from '@care/clients';
 import {
   employeeFacilityAssignments,
@@ -129,6 +130,7 @@ export interface OperationsReminderPolicyInput {
 
 export interface OperationsSourceServices {
   scheduling: Pick<SchedulingApplicationService, 'getWorklist' | 'getWorklistForVisit'>;
+  execution: Pick<VisitExecutionApplicationService, 'operationsSummaries' | 'operationsIssueState'>;
   documentation: Pick<CareDocumentationApplicationService, 'worklist' | 'getForVisit'>;
   evidence: Pick<ServiceEvidenceApplicationService, 'worklist' | 'getPackage'>;
   benefits: Pick<BenefitsApplicationService, 'getWorklist' | 'listUnallocatedServices'>;
@@ -556,6 +558,7 @@ export class OperationsApplicationService {
     const deadlineUntil = addDaysToDate(todayUtc, lookaheadDays);
     const [
       schedule,
+      execution,
       documentation,
       evidence,
       benefitData,
@@ -576,6 +579,9 @@ export class OperationsApplicationService {
               page: 1,
               pageSize: 100,
             })
+          : null,
+        canRead('visit_execution.read')
+          ? this.sources.execution.operationsSummaries(principal, from, sourceUntil)
           : null,
         canRead('care_documentation.review')
           ? this.sources.documentation.worklist(principal, {
@@ -791,6 +797,7 @@ export class OperationsApplicationService {
       ],
       [
         'scheduling',
+        'visit_execution',
         'care_documentation',
         'service_evidence',
         'benefits',
@@ -814,6 +821,9 @@ export class OperationsApplicationService {
           schedule.items.map((row) => sourceEntityKey('visit', row.visit.id)),
         ),
       });
+    }
+    if (execution?.complete) {
+      completeDomains.set('visit_execution', { from, until: sourceUntil });
     }
     if (documentation && documentation.total <= documentation.items.length) {
       completeDomains.set('care_documentation', { from: documentationFrom, until: sourceUntil });
@@ -872,6 +882,7 @@ export class OperationsApplicationService {
       : new Map<string, { organizationId: string | null; facilityId: string | null }>();
     const organizationIds = [
       ...(schedule?.items.map((row) => row.visit.organizationId) ?? []),
+      ...(execution?.items.map((row) => row.organizationId) ?? []),
       ...(documentation?.items.map((row) => row.organizationId) ?? []),
       ...[...evidenceResources.values()].flatMap((resource) =>
         resource.organizationId ? [resource.organizationId] : [],
@@ -918,6 +929,28 @@ export class OperationsApplicationService {
             }),
           );
         }
+      }
+    }
+    if (execution) {
+      truncated ||= !execution.complete;
+      for (const summary of execution.items) {
+        items.push(
+          this.workItem({
+            sourceDomain: 'visit_execution',
+            entityType: 'visit',
+            entityId: summary.visitId,
+            issueCode: 'visit_execution_overdue',
+            category: 'visits',
+            severity: 'warning',
+            organizationId: summary.organizationId,
+            facilityId: summary.facilityId,
+            clientId: summary.clientId,
+            clientName: summary.clientDisplayName,
+            dueAt: summary.plannedEnd,
+            sourceAt: new Date(summary.actualStart),
+            descriptionCode: 'operations.issues.visit_execution.overdue',
+          }),
+        );
       }
     }
     if (documentation) {
@@ -2777,6 +2810,7 @@ export class OperationsApplicationService {
               lt(exceptionOccurrences.lastObservedAt, observedAt),
               inArray(exceptionOccurrences.sourceDomain, [
                 'scheduling',
+                'visit_execution',
                 'care_documentation',
                 'service_evidence',
                 'onboarding',
@@ -2883,6 +2917,13 @@ export class OperationsApplicationService {
         }
         throw error;
       }
+    }
+    if (occurrence.sourceDomain === 'visit_execution' && occurrence.sourceEntityType === 'visit') {
+      const state = await this.sources.execution.operationsIssueState(
+        principal,
+        occurrence.sourceEntityId,
+      );
+      return state.overdueIncomplete;
     }
     if (occurrence.sourceDomain === 'service_evidence') {
       if (occurrence.sourceEntityType === 'documentation') return false;
@@ -3584,6 +3625,8 @@ function exceptionReadPermission(sourceDomain: string, issueCode: string): Permi
       return 'employee.read';
     case 'scheduling':
       return 'schedule.read';
+    case 'visit_execution':
+      return 'visit_execution.read';
     case 'care_documentation':
       return 'care_documentation.review';
     case 'service_evidence':

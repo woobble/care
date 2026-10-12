@@ -1891,77 +1891,72 @@ export class OnboardingApplicationService {
         action: 'communications.read',
         resource: clientResource(client),
       });
-      const [documents, linkedTasks, communications, transitions] = await Promise.all([
-        documentsReadable
-          ? transaction
-              .select({
-                caseId: admissionDocuments.caseId,
-                id: documentArtifacts.id,
-                requirementCode: admissionDocuments.requirementCode,
-                status: documentArtifacts.status,
-              })
-              .from(admissionDocuments)
-              .innerJoin(
-                documentArtifacts,
-                and(
-                  eq(documentArtifacts.tenantId, admissionDocuments.tenantId),
-                  eq(documentArtifacts.id, admissionDocuments.documentArtifactId),
-                ),
-              )
-              .where(
-                and(
-                  eq(admissionDocuments.tenantId, principal.tenantId),
-                  inArray(admissionDocuments.caseId, caseIds),
-                ),
-              )
-          : Promise.resolve([]),
-        tasksReadable
-          ? transaction
-              .select({
-                caseId: admissionTasks.caseId,
-                id: tasks.id,
-                title: tasks.title,
-                status: tasks.status,
-                dueAt: tasks.dueAt,
-              })
-              .from(admissionTasks)
-              .innerJoin(
-                tasks,
-                and(
-                  eq(tasks.tenantId, admissionTasks.tenantId),
-                  eq(tasks.id, admissionTasks.taskId),
-                ),
-              )
-              .where(
-                and(
-                  eq(admissionTasks.tenantId, principal.tenantId),
-                  inArray(admissionTasks.caseId, caseIds),
-                ),
-              )
-          : Promise.resolve([]),
-        communicationsReadable
-          ? transaction
-              .select()
-              .from(prospectInteractions)
-              .where(
-                and(
-                  eq(prospectInteractions.tenantId, principal.tenantId),
-                  inArray(prospectInteractions.caseId, caseIds),
-                ),
-              )
-              .orderBy(desc(prospectInteractions.occurredAt), desc(prospectInteractions.id))
-          : Promise.resolve([]),
-        transaction
-          .select()
-          .from(admissionTransitions)
-          .where(
-            and(
-              eq(admissionTransitions.tenantId, principal.tenantId),
-              inArray(admissionTransitions.caseId, caseIds),
-            ),
-          )
-          .orderBy(asc(admissionTransitions.version)),
-      ]);
+      const documents = documentsReadable
+        ? await transaction
+            .select({
+              caseId: admissionDocuments.caseId,
+              id: documentArtifacts.id,
+              requirementCode: admissionDocuments.requirementCode,
+              status: documentArtifacts.status,
+            })
+            .from(admissionDocuments)
+            .innerJoin(
+              documentArtifacts,
+              and(
+                eq(documentArtifacts.tenantId, admissionDocuments.tenantId),
+                eq(documentArtifacts.id, admissionDocuments.documentArtifactId),
+              ),
+            )
+            .where(
+              and(
+                eq(admissionDocuments.tenantId, principal.tenantId),
+                inArray(admissionDocuments.caseId, caseIds),
+              ),
+            )
+        : [];
+      const linkedTasks = tasksReadable
+        ? await transaction
+            .select({
+              caseId: admissionTasks.caseId,
+              id: tasks.id,
+              title: tasks.title,
+              status: tasks.status,
+              dueAt: tasks.dueAt,
+            })
+            .from(admissionTasks)
+            .innerJoin(
+              tasks,
+              and(eq(tasks.tenantId, admissionTasks.tenantId), eq(tasks.id, admissionTasks.taskId)),
+            )
+            .where(
+              and(
+                eq(admissionTasks.tenantId, principal.tenantId),
+                inArray(admissionTasks.caseId, caseIds),
+              ),
+            )
+        : [];
+      const communications = communicationsReadable
+        ? await transaction
+            .select()
+            .from(prospectInteractions)
+            .where(
+              and(
+                eq(prospectInteractions.tenantId, principal.tenantId),
+                inArray(prospectInteractions.caseId, caseIds),
+              ),
+            )
+            .orderBy(desc(prospectInteractions.occurredAt), desc(prospectInteractions.id))
+        : [];
+      const transitions = await transaction
+        .select()
+        .from(admissionTransitions)
+        .where(
+          and(
+            eq(admissionTransitions.tenantId, principal.tenantId),
+            inArray(admissionTransitions.caseId, caseIds),
+          ),
+        )
+        .orderBy(asc(admissionTransitions.version));
       const documentsByCase = groupBy(documents, (row) => row.caseId);
       const tasksByCase = groupBy(linkedTasks, (row) => row.caseId);
       const communicationsByCase = groupBy(communications, (row) => row.caseId);
@@ -2003,26 +1998,24 @@ export class OnboardingApplicationService {
     if (!admissions.length) return new Map();
     const today = new Date().toISOString().slice(0, 10);
     const caseIds = admissions.map((admission) => admission.id);
-    const [assessmentRows, responseRows] = await Promise.all([
-      transaction
-        .select()
-        .from(admissionAssessments)
-        .where(
-          and(
-            eq(admissionAssessments.tenantId, principal.tenantId),
-            inArray(admissionAssessments.caseId, caseIds),
-          ),
+    const assessmentRows = await transaction
+      .select()
+      .from(admissionAssessments)
+      .where(
+        and(
+          eq(admissionAssessments.tenantId, principal.tenantId),
+          inArray(admissionAssessments.caseId, caseIds),
         ),
-      transaction
-        .select()
-        .from(checklistResponses)
-        .where(
-          and(
-            eq(checklistResponses.tenantId, principal.tenantId),
-            inArray(checklistResponses.caseId, caseIds),
-          ),
+      );
+    const responseRows = await transaction
+      .select()
+      .from(checklistResponses)
+      .where(
+        and(
+          eq(checklistResponses.tenantId, principal.tenantId),
+          inArray(checklistResponses.caseId, caseIds),
         ),
-    ]);
+      );
     const assessments = new Map(assessmentRows.map((row) => [row.caseId, row.data]));
     const responsesByCase = groupBy(responseRows, (row) => row.caseId);
 

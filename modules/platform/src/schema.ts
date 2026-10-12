@@ -23,4 +23,25 @@ export const outboxMessages = platform.table(
   (table) => [index('outbox_pending_idx').on(table.status, table.availableAt, table.createdAt)],
 );
 
-export const platformSchema = { outboxMessages };
+export const workerHealth = platform.table(
+  'worker_health',
+  {
+    workerId: text('worker_id').primaryKey(),
+    hostName: text('host_name').notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+    heartbeatAt: timestamp('heartbeat_at', { withTimezone: true }).notNull(),
+    schedulerStatus: text('scheduler_status')
+      .$type<'starting' | 'running' | 'degraded' | 'stopping' | 'stopped'>()
+      .notNull(),
+    lastScheduledSuccessAt: timestamp('last_scheduled_success_at', { withTimezone: true }),
+    lastScheduledFailureAt: timestamp('last_scheduled_failure_at', { withTimezone: true }),
+    lastScheduledFailureName: text('last_scheduled_failure_name'),
+    lastOutboxFailureAt: timestamp('last_outbox_failure_at', { withTimezone: true }),
+    lastOutboxFailureName: text('last_outbox_failure_name'),
+    pendingOutboxCount: integer('pending_outbox_count').notNull().default(0),
+    deadOutboxCount: integer('dead_outbox_count').notNull().default(0),
+  },
+  (table) => [index('worker_health_heartbeat_idx').on(table.heartbeatAt)],
+);
+
+export const platformSchema = { outboxMessages, workerHealth };

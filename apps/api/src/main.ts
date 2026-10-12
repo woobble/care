@@ -7,9 +7,10 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { loadApiConfig } from '@care/config';
 import { createLogger } from '@care/logging';
-import { startTelemetry } from '@care/observability';
+import { startMetricsServer, startTelemetry, stopMetricsServer } from '@care/observability';
 import { AppModule } from './app.module';
 import { configureApiHttp, createApiFastifyAdapter } from './http/fastify';
+import { apiMetrics } from './operational-metrics';
 
 async function bootstrap(): Promise<void> {
   const config = loadApiConfig();
@@ -17,7 +18,7 @@ async function bootstrap(): Promise<void> {
   const stopTelemetry = await startTelemetry('care-api', config.OTEL_EXPORTER_OTLP_ENDPOINT);
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    createApiFastifyAdapter(),
+    createApiFastifyAdapter(config.TRUSTED_PROXY_HOPS),
     { logger: false },
   );
   app.useLogger(false);
@@ -33,10 +34,16 @@ async function bootstrap(): Promise<void> {
 
   await app.listen(config.PORT, '0.0.0.0');
   logger.info({ port: config.PORT }, 'API started');
+  const metricsServer = await startMetricsServer(apiMetrics.registry, 3002);
+  logger.info({ port: 3002 }, 'Internal metrics endpoint started');
 
   const shutdown = async () => {
-    await app.close();
-    await stopTelemetry();
+    try {
+      await app.close();
+    } finally {
+      await stopMetricsServer(metricsServer);
+      await stopTelemetry();
+    }
   };
   process.once('SIGTERM', () => void shutdown());
   process.once('SIGINT', () => void shutdown());

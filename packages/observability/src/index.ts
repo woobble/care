@@ -1,6 +1,17 @@
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+export {
+  createApiMetrics,
+  createWorkerMetrics,
+  startMetricsServer,
+  stopMetricsServer,
+  type ApiDependencyState,
+  type ApiMetrics,
+  type DocumentGenerationSource,
+  type WorkerMetrics,
+  type WorkerSchedulerState,
+} from './metrics';
 
 export async function startTelemetry(
   serviceName: string,

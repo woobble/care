@@ -1,0 +1,393 @@
+name: care-platform
+
+services:
+  postgres:
+    ports: !override []
+    restart: unless-stopped
+    networks: !override [care-private]
+
+  redis:
+    ports: !override []
+    restart: unless-stopped
+    networks: !override [care-private]
+
+  authentik-server:
+    environment: !override
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?Set AUTHENTIK_SECRET_KEY in .env.production}
+      AUTHENTIK_POSTGRESQL__HOST: postgres
+      AUTHENTIK_POSTGRESQL__USER: care_owner
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_WEB__BASE_URL: ${AUTHENTIK_PUBLIC_URL:?Set AUTHENTIK_PUBLIC_URL in .env.production}
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:?Set AUTHENTIK_BOOTSTRAP_PASSWORD in .env.production}
+      AUTHENTIK_EMAIL__HOST: ${SMTP_HOST:?Set SMTP_HOST in .env.production}
+      AUTHENTIK_EMAIL__PORT: ${SMTP_PORT:-587}
+      AUTHENTIK_EMAIL__USE_TLS: 'true'
+      AUTHENTIK_EMAIL__USE_SSL: 'false'
+      AUTHENTIK_EMAIL__FROM: ${SMTP_FROM:?Set SMTP_FROM in .env.production}
+      AUTHENTIK_EMAIL__USERNAME: ${SMTP_USERNAME:?Set SMTP_USERNAME in .env.production}
+      AUTHENTIK_EMAIL__PASSWORD: ${SMTP_PASSWORD:?Set SMTP_PASSWORD in .env.production}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set OIDC_CLIENT_SECRET in .env.production}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:?Set OIDC_REDIRECT_URI in .env.production}
+      WEB_ORIGIN: ${WEB_ORIGIN:?Set WEB_ORIGIN in .env.production}
+    volumes: !override
+      - ./infra/authentik/blueprints/care-platform.yaml:/blueprints/custom/care-platform.yaml:ro
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports: !override []
+    restart: unless-stopped
+    networks: !override [care-private, care-edge]
+    healthcheck:
+      test: [CMD, ak, healthcheck]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  authentik-worker:
+    environment: !override
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?Set AUTHENTIK_SECRET_KEY in .env.production}
+      AUTHENTIK_POSTGRESQL__HOST: postgres
+      AUTHENTIK_POSTGRESQL__USER: care_owner
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_WEB__BASE_URL: ${AUTHENTIK_PUBLIC_URL:?Set AUTHENTIK_PUBLIC_URL in .env.production}
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:?Set AUTHENTIK_BOOTSTRAP_PASSWORD in .env.production}
+      AUTHENTIK_EMAIL__HOST: ${SMTP_HOST:?Set SMTP_HOST in .env.production}
+      AUTHENTIK_EMAIL__PORT: ${SMTP_PORT:-587}
+      AUTHENTIK_EMAIL__USE_TLS: 'true'
+      AUTHENTIK_EMAIL__USE_SSL: 'false'
+      AUTHENTIK_EMAIL__FROM: ${SMTP_FROM:?Set SMTP_FROM in .env.production}
+      AUTHENTIK_EMAIL__USERNAME: ${SMTP_USERNAME:?Set SMTP_USERNAME in .env.production}
+      AUTHENTIK_EMAIL__PASSWORD: ${SMTP_PASSWORD:?Set SMTP_PASSWORD in .env.production}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set OIDC_CLIENT_SECRET in .env.production}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:?Set OIDC_REDIRECT_URI in .env.production}
+      WEB_ORIGIN: ${WEB_ORIGIN:?Set WEB_ORIGIN in .env.production}
+    volumes: !override
+      - ./infra/authentik/blueprints/care-platform.yaml:/blueprints/custom/care-platform.yaml:ro
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: !override [care-private]
+
+  seaweedfs:
+    command:
+      - server
+      - -dir=/data
+      - -s3
+      - -s3.config=/run/secrets/seaweedfs_s3
+      - -s3.port=8333
+    ports: !override []
+    configs: !override []
+    secrets: [seaweedfs_s3]
+    restart: unless-stopped
+    networks: !override [care-private]
+
+  seaweedfs-init:
+    profiles: !override []
+    entrypoint: [/bin/sh, -eu, -c]
+    command:
+      - >-
+        export AWS_ACCESS_KEY_ID="$$(cat "$${S3_ACCESS_KEY_FILE}")";
+        export AWS_SECRET_ACCESS_KEY="$$(cat "$${S3_SECRET_KEY_FILE}")";
+        until aws s3api list-buckets --endpoint-url "$${S3_ENDPOINT}" >/dev/null 2>&1; do sleep 1; done;
+        if ! aws s3api head-bucket --bucket "$${S3_BUCKET}" --endpoint-url "$${S3_ENDPOINT}" >/dev/null 2>&1; then
+          aws s3api create-bucket --bucket "$${S3_BUCKET}" --endpoint-url "$${S3_ENDPOINT}";
+        fi
+    environment: !override
+      AWS_DEFAULT_REGION: ${S3_REGION:-eu-central-1}
+      AWS_EC2_METADATA_DISABLED: 'true'
+      S3_ENDPOINT: http://seaweedfs:8333
+      S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET in .env.production}
+      S3_ACCESS_KEY_FILE: /run/secrets/s3_init_access_key
+      S3_SECRET_KEY_FILE: /run/secrets/s3_init_secret_key
+    secrets: [s3_init_access_key, s3_init_secret_key]
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+    restart: 'no'
+    networks: !override [care-private]
+
+  mailpit:
+    profiles: !override [development]
+    ports: !override []
+
+  otel-collector:
+    profiles: !override [observability]
+    ports: !override []
+    networks: !override [care-private]
+
+  prometheus:
+    profiles: !override [observability]
+    ports: !override ['127.0.0.1:9090:9090']
+    networks: !override [care-private]
+    volumes: !override
+      - ./infra/observability/prometheus.production.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/observability/alerts.production.yml:/etc/prometheus/alerts.production.yml:ro
+      - care-prometheus:/prometheus
+
+  grafana:
+    profiles: !override [observability]
+    ports: !override ['127.0.0.1:3002:3000']
+    networks: !override [care-private]
+    environment: !override
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env.production}
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: [bun, apps/api/dist/migrate.js]
+    environment:
+      NODE_ENV: production
+      MIGRATION_DATABASE_URL_FILE: /run/secrets/migration_database_url
+    secrets: [migration_database_url]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+    networks: [care-private]
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runtime
+    environment: !override
+      NODE_ENV: production
+      DATABASE_URL_FILE: /run/secrets/care_database_url
+      OIDC_ISSUER: ${OIDC_ISSUER:?Set OIDC_ISSUER in .env.production}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?Set OIDC_CLIENT_ID in .env.production}
+      WEB_ORIGIN: ${WEB_ORIGIN:?Set WEB_ORIGIN in .env.production}
+      PORT: '3001'
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
+      SCHEDULE_GENERATION_HORIZON_DAYS: ${SCHEDULE_GENERATION_HORIZON_DAYS:-28}
+      ROUTING_OSRM_URL: ${ROUTING_OSRM_URL:-}
+      ROUTING_OSRM_PROBE_FROM: ${ROUTING_OSRM_PROBE_FROM:-}
+      ROUTING_OSRM_PROBE_TO: ${ROUTING_OSRM_PROBE_TO:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://seaweedfs:8333}
+      S3_REGION: ${S3_REGION:-eu-central-1}
+      S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET in .env.production}
+      S3_ACCESS_KEY_FILE: /run/secrets/s3_access_key
+      S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    secrets: [care_database_url, s3_access_key, s3_secret_key]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      seaweedfs-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    stop_grace_period: 30s
+    expose: ['3002']
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "const r = await fetch('http://127.0.0.1:3001/health/ready'); process.exit(r.ok ? 0 : 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [care-private, care-edge]
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    environment: !override
+      NODE_ENV: production
+      WORKER_DATABASE_URL_FILE: /run/secrets/worker_database_url
+      WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-1000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    secrets: [worker_database_url]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    stop_grace_period: 30s
+    expose: ['3002', '3003']
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "const r = await fetch('http://127.0.0.1:3002/health/ready'); process.exit(r.ok ? 0 : 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks: [care-private]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment: !override
+      NODE_ENV: production
+      DATABASE_URL_FILE: /run/secrets/care_database_url
+      OIDC_ISSUER: ${OIDC_ISSUER:?Set OIDC_ISSUER in .env.production}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?Set OIDC_CLIENT_ID in .env.production}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set OIDC_CLIENT_SECRET in .env.production}
+      AUTH_SECRET_FILE: /run/secrets/auth_secret
+      API_INTERNAL_URL: http://api:3001
+      WEB_ORIGIN: ${WEB_ORIGIN:?Set WEB_ORIGIN in .env.production}
+    secrets: [care_database_url, auth_secret]
+    depends_on:
+      api:
+        condition: service_healthy
+      authentik-server:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "const r = await fetch('http://127.0.0.1:3000'); process.exit(r.status < 500 ? 0 : 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [care-private, care-edge]
+
+  osrm:
+    ports: !override []
+    networks: !override [care-private]
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    environment:
+      CADDY_EMAIL: ${CADDY_EMAIL:?Set CADDY_EMAIL in .env.production}
+      WEB_HOST: ${WEB_HOST:?Set WEB_HOST in .env.production}
+      API_HOST: ${API_HOST:?Set API_HOST in .env.production}
+      AUTHENTIK_HOST: ${AUTHENTIK_HOST:?Set AUTHENTIK_HOST in .env.production}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - care-caddy-data:/data
+      - care-caddy-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      authentik-server:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, caddy, validate, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks: [care-edge]
+
+  operator:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: operator
+    command: [bun, apps/api/dist/ops/cli.js]
+    environment: !override
+      NODE_ENV: production
+      DATABASE_URL_FILE: /run/secrets/care_database_url
+      MIGRATION_DATABASE_URL_FILE: /run/secrets/migration_database_url
+      WORKER_DATABASE_URL_FILE: /run/secrets/worker_database_url
+      OIDC_ISSUER: ${OIDC_ISSUER:?Set OIDC_ISSUER in .env.production}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?Set OIDC_CLIENT_ID in .env.production}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set OIDC_CLIENT_SECRET in .env.production}
+      AUTH_SECRET_FILE: /run/secrets/auth_secret
+      WEB_ORIGIN: ${WEB_ORIGIN:?Set WEB_ORIGIN in .env.production}
+      API_INTERNAL_URL: http://api:3001
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://seaweedfs:8333}
+      S3_REGION: ${S3_REGION:-eu-central-1}
+      S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET in .env.production}
+      S3_ACCESS_KEY_FILE: /run/secrets/s3_access_key
+      S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      WEB_HOST: ${WEB_HOST:?Set WEB_HOST in .env.production}
+      API_HOST: ${API_HOST:?Set API_HOST in .env.production}
+      AUTHENTIK_HOST: ${AUTHENTIK_HOST:?Set AUTHENTIK_HOST in .env.production}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:?Set API_PUBLIC_URL in .env.production}
+      AUTHENTIK_PUBLIC_URL: ${AUTHENTIK_PUBLIC_URL:?Set AUTHENTIK_PUBLIC_URL in .env.production}
+      AUTHENTIK_WEB__BASE_URL: ${AUTHENTIK_WEB__BASE_URL:?Set AUTHENTIK_WEB__BASE_URL in .env.production}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:?Set OIDC_REDIRECT_URI in .env.production}
+      CADDY_EMAIL: ${CADDY_EMAIL:?Set CADDY_EMAIL in .env.production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+      CARE_APP_PASSWORD: ${CARE_APP_PASSWORD:?Set CARE_APP_PASSWORD in .env.production}
+      CARE_WORKER_PASSWORD: ${CARE_WORKER_PASSWORD:?Set CARE_WORKER_PASSWORD in .env.production}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?Set AUTHENTIK_SECRET_KEY in .env.production}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:?Set AUTHENTIK_BOOTSTRAP_PASSWORD in .env.production}
+      SMTP_HOST: ${SMTP_HOST:?Set SMTP_HOST in .env.production}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:?Set SMTP_FROM in .env.production}
+      SMTP_USERNAME: ${SMTP_USERNAME:?Set SMTP_USERNAME in .env.production}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?Set SMTP_PASSWORD in .env.production}
+      S3_INIT_ACCESS_KEY_FILE: /run/secrets/s3_init_access_key
+      S3_INIT_SECRET_KEY_FILE: /run/secrets/s3_init_secret_key
+      SEAWEEDFS_S3_CONFIG_FILE: /run/secrets/seaweedfs_s3
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      OPERATOR_SECRETS_DIR: /run/operator-secrets
+    secrets:
+      - care_database_url
+      - migration_database_url
+      - worker_database_url
+      - auth_secret
+      - s3_access_key
+      - s3_secret_key
+      - seaweedfs_s3
+      - s3_init_access_key
+      - s3_init_secret_key
+    volumes:
+      - ${BACKUP_DIR:?Set BACKUP_DIR in .env.production}:/backups
+      - ${OPERATOR_SECRETS_DIR:-./secrets}:/run/operator-secrets:ro
+    profiles: [operations]
+    networks: [care-private, care-edge]
+
+secrets:
+  care_database_url:
+    file: ${DATABASE_URL_FILE:?Set DATABASE_URL_FILE to a restricted secret file}
+  migration_database_url:
+    file: ${MIGRATION_DATABASE_URL_FILE:?Set MIGRATION_DATABASE_URL_FILE to a restricted secret file}
+  worker_database_url:
+    file: ${WORKER_DATABASE_URL_FILE:?Set WORKER_DATABASE_URL_FILE to a restricted secret file}
+  auth_secret:
+    file: ${AUTH_SECRET_FILE:?Set AUTH_SECRET_FILE to a restricted secret file}
+  s3_access_key:
+    file: ${S3_ACCESS_KEY_FILE:?Set S3_ACCESS_KEY_FILE to a restricted secret file}
+  s3_secret_key:
+    file: ${S3_SECRET_KEY_FILE:?Set S3_SECRET_KEY_FILE to a restricted secret file}
+  seaweedfs_s3:
+    file: ${SEAWEEDFS_S3_CONFIG_FILE:?Set SEAWEEDFS_S3_CONFIG_FILE to a restricted secret file}
+  s3_init_access_key:
+    file: ${S3_INIT_ACCESS_KEY_FILE:?Set S3_INIT_ACCESS_KEY_FILE to a restricted secret file}
+  s3_init_secret_key:
+    file: ${S3_INIT_SECRET_KEY_FILE:?Set S3_INIT_SECRET_KEY_FILE to a restricted secret file}
+
+networks:
+  care-private:
+    internal: true
+  care-edge:
+    driver: bridge
+
+volumes:
+  care-caddy-data:
+  care-caddy-config:

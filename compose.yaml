@@ -41,6 +41,9 @@ services:
       AUTHENTIK_POSTGRESQL__USER: care_owner
       AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:-care_owner_dev_only}
       AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_WEB__BASE_URL: ${AUTHENTIK_WEB__BASE_URL:-http://localhost:9000}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-http://localhost:3000/api/auth/callback/authentik}
       AUTHENTIK_REDIS__HOST: redis
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-local-admin-password-replace-before-deployment}
       AUTHENTIK_EMAIL__HOST: mailpit
@@ -57,7 +60,7 @@ services:
       mailpit:
         condition: service_started
     ports:
-      - '9000:9000'
+      - '${AUTHENTIK_HOST_PORT:-9000}:9000'
     volumes:
       - ./infra/authentik/blueprints:/blueprints/custom:ro
     restart: unless-stopped
@@ -88,13 +91,19 @@ services:
       - -s3.config=/etc/seaweedfs/s3.json
       - -s3.port=8333
     ports:
-      - '9002:8333'
-      - '9004:8888'
+      - '${SEAWEEDFS_S3_HOST_PORT:-9002}:8333'
+      - '${SEAWEEDFS_FILER_HOST_PORT:-9004}:8888'
     volumes:
       - care-seaweedfs:/data
     configs:
       - source: seaweedfs-s3
         target: /etc/seaweedfs/s3.json
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:8333/status]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
   seaweedfs-init:
@@ -120,12 +129,14 @@ services:
 
   mailpit:
     image: axllent/mailpit:v1.31.4
+    profiles: [development]
     ports:
       - '${MAILPIT_SMTP_PORT:-1026}:1025'
       - '8025:8025'
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.162.0
+    profiles: [observability]
     command: [--config=/etc/otelcol-contrib/config.yaml]
     ports:
       - '4317:4317'
@@ -140,6 +151,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v3.15.0
+    profiles: [observability]
     command: [--config.file=/etc/prometheus/prometheus.yml, --web.enable-lifecycle]
     ports:
       - '9090:9090'
@@ -149,6 +161,7 @@ services:
 
   grafana:
     image: grafana/grafana:13.2.3
+    profiles: [observability]
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-care-grafana-dev-only}
     ports:

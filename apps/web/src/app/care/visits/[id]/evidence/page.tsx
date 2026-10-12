@@ -9,6 +9,7 @@ import { formatNumber } from '@app/web/i18n/format';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { quantityUnitKey } from '@app/web/i18n/status';
 import { prepareEvidencePackageAction } from '@app/web/app/care/actions';
+import { CareForm } from '@app/web/app/care/care-form';
 import { EvidenceAcknowledgementForm } from './evidence-acknowledgement-form';
 
 type EvidencePackage = components['schemas']['EvidencePackageResponseDto'];
@@ -29,6 +30,7 @@ export default async function CareEvidencePage({
     params: { path: { visitId }, header },
   });
   const documentation = documentationResult.data?.documentation;
+  const documentationUnavailable = Boolean(documentationResult.error || !documentationResult.data);
   const finalized = documentation?.status === 'finalized';
   const packageResult = finalized
     ? await get('/api/v1/visits/{visitId}/evidence-package', {
@@ -37,8 +39,9 @@ export default async function CareEvidencePage({
     : null;
   const evidencePackage = packageResult?.data as EvidencePackage | undefined;
   const packageMissing = packageResult?.error?.code === 'EVIDENCE_PACKAGE_NOT_FOUND';
+  const packageUnavailable = Boolean(packageResult?.error && !packageMissing);
   const packageNeedsPreparation =
-    finalized && (!evidencePackage || evidencePackage.status === 'outdated');
+    finalized && !packageUnavailable && (!evidencePackage || evidencePackage.status === 'outdated');
 
   return (
     <div className="mx-auto grid max-w-3xl gap-5">
@@ -70,17 +73,21 @@ export default async function CareEvidencePage({
         </p>
       ) : null}
 
-      {!documentation ? (
+      {documentationUnavailable ? (
         <section className="grid gap-2 rounded-lg border bg-white p-4">
-          <h2 className="text-lg font-semibold">
-            {t('ServiceEvidence.care.documentationMissing')}
-          </h2>
-          <p className="text-slate-700">{t('ServiceEvidence.care.prepareAfterFinalization')}</p>
+          <h2 className="text-lg font-semibold">{t('CareDocumentation.visit.unavailable')}</h2>
           {documentationResult.error ? (
             <p className="text-sm text-slate-600">
               {t(errorMessageKey(documentationResult.error.code))}
             </p>
           ) : null}
+        </section>
+      ) : !documentation ? (
+        <section className="grid gap-2 rounded-lg border bg-white p-4">
+          <h2 className="text-lg font-semibold">
+            {t('ServiceEvidence.care.documentationMissing')}
+          </h2>
+          <p className="text-slate-700">{t('ServiceEvidence.care.prepareAfterFinalization')}</p>
         </section>
       ) : !finalized ? (
         <section className="grid gap-2 rounded-lg border bg-white p-4">
@@ -104,14 +111,14 @@ export default async function CareEvidencePage({
               : t('ServiceEvidence.care.readyToPrepare')}
           </p>
           {evidencePackage ? <EvidenceSnapshot packageData={evidencePackage} /> : null}
-          <form action={prepareEvidencePackageAction}>
+          <CareForm action={prepareEvidencePackageAction} notice={query.notice}>
             <input type="hidden" name="visitId" value={visitId} />
             <Button type="submit" className="min-h-12 w-full sm:w-fit">
               {evidencePackage
                 ? t('ServiceEvidence.care.createCurrentVersion')
                 : t('ServiceEvidence.care.create')}
             </Button>
-          </form>
+          </CareForm>
         </section>
       ) : null}
 
@@ -169,7 +176,7 @@ export default async function CareEvidencePage({
         </>
       ) : null}
 
-      {finalized && !evidencePackage && packageResult?.error && !packageMissing ? (
+      {finalized && packageUnavailable ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
           {t('ServiceEvidence.care.loadFailed')}
         </p>

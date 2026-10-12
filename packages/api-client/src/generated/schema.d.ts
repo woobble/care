@@ -4,6 +4,38 @@
  */
 
 export interface paths {
+    "/health/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["HealthController_liveness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["HealthController_readiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -4265,6 +4297,18 @@ export interface components {
             clientId: string;
             clientDisplayName: string;
             address?: string | null;
+            /** @description Visit planning note visible to assigned caregivers */
+            note?: string | null;
+            /**
+             * Format: date-time
+             * @description Last visit schedule update timestamp
+             */
+            updatedAt: string;
+            /**
+             * Format: date-time
+             * @description Timestamp this caregiver was assigned
+             */
+            assignmentAssignedAt: string;
             /** @enum {string} */
             status: "planned" | "confirmed" | "cancelled";
             /** Format: date-time */
@@ -4280,6 +4324,16 @@ export interface components {
             actualEnd?: string | null;
             services: components["schemas"]["CaregiverVisitServiceResponseDto"][];
         };
+        ExecutionClientTimeWindowResponseDto: {
+            /** @example 09:00 */
+            startsAt: string;
+            /** @example 11:00 */
+            endsAt: string;
+        };
+        ExecutionClientSchedulingPreferencesResponseDto: {
+            preferredWeekdays: number[];
+            preferredTimeWindows: components["schemas"]["ExecutionClientTimeWindowResponseDto"][];
+        };
         ExecutionVisitResponseDto: {
             /** Format: uuid */
             id: string;
@@ -4287,6 +4341,10 @@ export interface components {
             clientId: string;
             clientDisplayName: string;
             address?: string | null;
+            /** @description Visit planning note visible to assigned caregivers */
+            note?: string | null;
+            /** @description Scheduling preferences relevant to the assigned visit; employee preferences are omitted */
+            schedulingPreferences: components["schemas"]["ExecutionClientSchedulingPreferencesResponseDto"] | null;
             /** @enum {string} */
             status: "planned" | "confirmed" | "cancelled";
             /** Format: date-time */
@@ -7618,7 +7676,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    HealthController_health: {
+    HealthController_liveness: {
         parameters: {
             query?: never;
             header?: never;
@@ -7634,15 +7692,65 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        status: "ok";
-                        dependencies: {
-                            /** @enum {string} */
-                            database: "ready";
-                            /** @enum {string} */
-                            routing: "not_configured" | "unverified" | "ready" | "unavailable";
-                        };
+                        status?: "ok";
                     };
                 };
+            };
+        };
+    };
+    HealthController_readiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status?: string;
+                    };
+                };
+            };
+            /** @description A required dependency is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HealthController_health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status?: string;
+                    };
+                };
+            };
+            /** @description A required dependency is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

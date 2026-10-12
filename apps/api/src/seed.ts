@@ -1,13 +1,13 @@
 // oxlint-disable-next-line import/no-unassigned-import -- load dotenv before reading seed configuration
 import '@care/config/load-env';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 import { loadMigrationConfig } from '@care/config';
 import { createDatabase } from '@care/database';
 import { auditSchema } from '@care/audit';
 import { clientsSchema } from '@care/clients';
 import { employeesSchema, qualificationDefinitions } from '@care/employees';
-import { identitySchema } from '@care/identity';
+import { identitySchema, seedSystemRoles } from '@care/identity';
 import {
   organizationsSchema,
   facilities,
@@ -15,7 +15,6 @@ import {
   teams,
   tenants,
 } from '@care/organizations';
-import { PERMISSIONS } from '@care/permissions';
 import { platformSchema } from '@care/platform';
 import {
   serviceAvailability,
@@ -278,146 +277,7 @@ try {
     }
     // oxlint-enable no-await-in-loop
 
-    const definitions = {
-      Administrator: [...PERMISSIONS],
-      Office: [
-        'client.read',
-        'client.create',
-        'client.update',
-        'client.archive',
-        'communications.read',
-        'communications.create',
-        'communications.update',
-        'communications.amend',
-        'communications.preferences.manage',
-        'employee.read',
-        'employee.create',
-        'employee.update',
-        'employee.assign_facility',
-        'employee.assign_team',
-        'employee.link_user',
-        'employee.manage_qualifications',
-        'employee.manage_skills',
-        'employee.manage_employment',
-        'organization.read',
-        'facility.read',
-        'team.read',
-        'service.read',
-        'service.create',
-        'service.update',
-        'service.archive',
-        'service.manage_categories',
-        'service.manage_availability',
-        'service.manage_pricing',
-        'service_agreement.read',
-        'service_agreement.create',
-        'service_agreement.update',
-        'service_agreement.activate',
-        'service_agreement.suspend',
-        'service_agreement.end',
-        'service_agreement.manage_services',
-        'schedule.read',
-        'schedule.create',
-        'schedule.update',
-        'schedule.cancel',
-        'schedule.confirm',
-        'schedule.assign',
-        'schedule.generate',
-        'visit_execution.read',
-        'visit_execution.correct',
-        'care_documentation.read',
-        'care_documentation.review',
-        'care_documentation.amend',
-        'benefits.read',
-        'benefits.manage',
-        'benefits.adjust',
-        'benefits.allocate',
-        'benefits.review',
-        'billing.read',
-        'billing.manage',
-        'billing.issue',
-        'billing.correct',
-        'billing.payments.read',
-        'billing.payments.manage',
-        'billing.settings.manage',
-        'claims.read',
-        'claims.manage',
-        'claims.submit',
-        'claims.record_decision',
-        'claims.reconcile',
-        'claims.settings.manage',
-        'documents.read',
-        'documents.generate',
-        'documents.templates.manage',
-        'documents.exports.read',
-        'service_evidence.read',
-        'service_evidence.prepare',
-        'acknowledgement.read',
-        'acknowledgement.revoke',
-        'operations.read',
-        'operations.tasks.create',
-        'operations.tasks.manage',
-        'operations.tasks.assign',
-        'operations.exceptions.manage',
-        'operations.recurring_tasks.manage',
-        'operations.reminder_settings.manage',
-        'onboarding.read',
-        'onboarding.create',
-        'onboarding.manage',
-        'onboarding.admit',
-        'onboarding.templates.manage',
-      ] as const,
-      Caregiver: [
-        'client.read',
-        'employee.read',
-        'organization.read',
-        'facility.read',
-        'team.read',
-        'service.read',
-        'service_agreement.read',
-        'schedule.read',
-        'visit_execution.read',
-        'visit_execution.start',
-        'visit_execution.record_services',
-        'visit_execution.complete',
-        'care_documentation.read',
-        'care_documentation.create',
-        'care_documentation.update',
-        'care_documentation.finalize',
-        'service_evidence.read',
-        'documents.read',
-        'documents.generate',
-        'acknowledgement.read',
-        'acknowledgement.capture',
-      ] as const,
-    };
-    const roleDefinitions = Object.entries(definitions) as Array<
-      [keyof typeof definitions, readonly string[]]
-    >;
-    const seededRoles = await transaction
-      .insert(identitySchema.roles)
-      .values(roleDefinitions.map(([name]) => ({ id: uuidv7(), tenantId, name })))
-      .onConflictDoUpdate({
-        target: [identitySchema.roles.tenantId, identitySchema.roles.name],
-        set: { name: sql`excluded.name` },
-      })
-      .returning({ id: identitySchema.roles.id, name: identitySchema.roles.name });
-    if (seededRoles.length) {
-      await transaction.delete(identitySchema.rolePermissions).where(
-        inArray(
-          identitySchema.rolePermissions.roleId,
-          seededRoles.map((role) => role.id),
-        ),
-      );
-      await transaction.insert(identitySchema.rolePermissions).values(
-        seededRoles.flatMap((role) =>
-          definitions[role.name as keyof typeof definitions].map((permission) => ({
-            roleId: role.id,
-            permission,
-          })),
-        ),
-      );
-    }
+    await seedSystemRoles(transaction, tenantId);
     return {
       tenantId,
       organizationId,

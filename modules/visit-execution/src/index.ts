@@ -34,4 +34,7 @@ export {
   type CorrectExecutionTimesInput,
   type RecordPerformedServiceInput,
   type VisitExecutionDetail,
+  type VisitExecutionOperationsSummary,
+  type VisitExecutionOperationsSummaryResult,
+  type VisitExecutionOperationsIssueState,
 } from './application/visit-execution.application';

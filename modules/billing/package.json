@@ -31,6 +31,6 @@
     "@care/storage": "workspace:*",
     "@care/visit-execution": "workspace:*",
     "drizzle-orm": "^0.45.4",
-    "uuid": "^14.0.2"
+    "uuid": "^14.0.3"
   }
 }

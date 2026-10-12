@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.0",
   "paths": {
-    "/health": {
+    "/health/live": {
       "get": {
-        "operationId": "HealthController_health",
+        "operationId": "HealthController_liveness",
         "parameters": [],
         "responses": {
           "200": {
@@ -18,39 +18,69 @@
                       "enum": [
                         "ok"
                       ]
-                    },
-                    "dependencies": {
-                      "type": "object",
-                      "properties": {
-                        "database": {
-                          "type": "string",
-                          "enum": [
-                            "ready"
-                          ]
-                        },
-                        "routing": {
-                          "type": "string",
-                          "enum": [
-                            "not_configured",
-                            "unverified",
-                            "ready",
-                            "unavailable"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "database",
-                        "routing"
-                      ]
                     }
-                  },
-                  "required": [
-                    "status",
-                    "dependencies"
-                  ]
+                  }
                 }
               }
             }
+          }
+        },
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "HealthController_readiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required dependency is unavailable."
+          }
+        },
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "HealthController_health",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required dependency is unavailable."
           }
         },
         "tags": [
@@ -21844,6 +21874,21 @@
             "type": "string",
             "nullable": true
           },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "Visit planning note visible to assigned caregivers"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last visit schedule update timestamp"
+          },
+          "assignmentAssignedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp this caregiver was assigned"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -21892,12 +21937,54 @@
           "id",
           "clientId",
           "clientDisplayName",
+          "updatedAt",
+          "assignmentAssignedAt",
           "status",
           "plannedStart",
           "plannedEnd",
           "timezone",
           "executionStatus",
           "services"
+        ]
+      },
+      "ExecutionClientTimeWindowResponseDto": {
+        "type": "object",
+        "properties": {
+          "startsAt": {
+            "type": "string",
+            "example": "09:00"
+          },
+          "endsAt": {
+            "type": "string",
+            "example": "11:00"
+          }
+        },
+        "required": [
+          "startsAt",
+          "endsAt"
+        ]
+      },
+      "ExecutionClientSchedulingPreferencesResponseDto": {
+        "type": "object",
+        "properties": {
+          "preferredWeekdays": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "maximum": 7,
+              "minimum": 1
+            }
+          },
+          "preferredTimeWindows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExecutionClientTimeWindowResponseDto"
+            }
+          }
+        },
+        "required": [
+          "preferredWeekdays",
+          "preferredTimeWindows"
         ]
       },
       "ExecutionVisitResponseDto": {
@@ -21917,6 +22004,21 @@
           "address": {
             "type": "string",
             "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "Visit planning note visible to assigned caregivers"
+          },
+          "schedulingPreferences": {
+            "nullable": true,
+            "description": "Scheduling preferences relevant to the assigned visit; employee preferences are omitted",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionClientSchedulingPreferencesResponseDto"
+              }
+            ]
           },
           "status": {
             "type": "string",
@@ -21942,6 +22044,7 @@
           "id",
           "clientId",
           "clientDisplayName",
+          "schedulingPreferences",
           "status",
           "plannedStart",
           "plannedEnd",

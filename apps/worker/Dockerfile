@@ -20,12 +20,13 @@ RUN bunx turbo run build --filter=@care/worker...
 FROM oven/bun:1.4.2 AS runtime
 WORKDIR /repo
 ENV NODE_ENV=production
-COPY --from=dependencies /repo/node_modules ./node_modules
-COPY --from=dependencies /repo/apps ./apps
-COPY --from=dependencies /repo/modules ./modules
-COPY --from=dependencies /repo/packages ./packages
-COPY --from=build /repo/apps/worker/package.json ./apps/worker/package.json
-COPY --from=build /repo/apps/worker/dist ./apps/worker/dist
-COPY --from=build /repo/packages ./packages
-COPY --from=build /repo/modules ./modules
+COPY --from=dependencies --chown=bun:bun /repo/node_modules ./node_modules
+COPY --from=dependencies --chown=bun:bun /repo/apps ./apps
+COPY --from=dependencies --chown=bun:bun /repo/modules ./modules
+COPY --from=dependencies --chown=bun:bun /repo/packages ./packages
+COPY --from=build --chown=bun:bun /repo/apps/worker/package.json ./apps/worker/package.json
+COPY --from=build --chown=bun:bun /repo/apps/worker/dist ./apps/worker/dist
+COPY --from=build --chown=bun:bun /repo/packages ./packages
+COPY --from=build --chown=bun:bun /repo/modules ./modules
+USER bun
 CMD ["bun", "apps/worker/dist/main.js"]

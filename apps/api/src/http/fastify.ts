@@ -2,8 +2,10 @@ import helmet from '@fastify/helmet';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { FastifyRequest } from 'fastify';
 import type { IncomingMessage } from 'node:http';
+import type { Http2ServerRequest } from 'node:http2';
 import { v7 as uuidv7 } from 'uuid';
 import { createLogger } from '@care/logging';
+import { apiMetrics } from '@app/api/operational-metrics';
 import type { ApiRequest } from './request';
 
 const VALID_REQUEST_ID = /^[\w.-]{1,128}$/;
@@ -35,10 +37,11 @@ class ApiFastifyAdapter extends FastifyAdapter {
   }
 }
 
-export function createApiFastifyAdapter(): FastifyAdapter {
+export function createApiFastifyAdapter(trustedProxyHops = 0): FastifyAdapter {
   return new ApiFastifyAdapter({
+    trustProxy: trustedProxyHops > 0 ? (_address, hop) => hop < trustedProxyHops : false,
     multipart: true,
-    genReqId(request: IncomingMessage) {
+    genReqId(request: IncomingMessage | Http2ServerRequest) {
       const header = request.headers['x-request-id'];
       return typeof header === 'string' && VALID_REQUEST_ID.test(header) ? header : uuidv7();
     },
@@ -66,11 +69,19 @@ export async function configureApiHttp(
     apiRequest.context = { requestId, correlationId };
     reply.header('x-request-id', requestId);
     reply.header('x-correlation-id', correlationId);
-    if (logger) requestStartedAt.set(request, performance.now());
+    reply.header('Cache-Control', 'private, no-store');
+    requestStartedAt.set(request, performance.now());
   });
 
-  if (logger) {
-    fastify.addHook('onResponse', async (request, reply) => {
+  fastify.addHook('onResponse', async (request, reply) => {
+    const durationMs = performance.now() - (requestStartedAt.get(request) ?? performance.now());
+    apiMetrics.recordHttpRequest({
+      method: request.method,
+      route: request.routeOptions.url ?? 'unmatched',
+      statusCode: reply.statusCode,
+      durationSeconds: durationMs / 1000,
+    });
+    if (logger) {
       logger.info(
         {
           req: {
@@ -79,13 +90,13 @@ export async function configureApiHttp(
             url: request.url.split('?', 1)[0],
           },
           res: { statusCode: reply.statusCode },
-          responseTime: performance.now() - (requestStartedAt.get(request) ?? performance.now()),
+          responseTime: durationMs,
           correlationId: request.headers['x-care-correlation-id'],
         },
         'request completed',
       );
-    });
-  }
+    }
+  });
 
   await app.register(helmet);
   app.enableCors({

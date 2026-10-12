@@ -9,6 +9,7 @@ import { formatNumber } from '@app/web/i18n/format';
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 import { formatVisitDateTime, formatVisitTime } from '@app/web/lib/care-date';
 import type { Locale } from '@app/web/i18n/config';
+import { CareForm } from '@app/web/app/care/care-form';
 import {
   addDocumentationEntryAction,
   completeVisitAction,
@@ -45,42 +46,94 @@ export default async function CareVisitPage({
   }
 
   const { visit, execution, services } = data;
-  const documentationResult = await get('/api/v1/visits/{visitId}/documentation', {
-    params: { path: { visitId: id }, header },
-  });
+  const [documentationResult, availableResult] = await Promise.all([
+    get('/api/v1/visits/{visitId}/documentation', {
+      params: { path: { visitId: id }, header },
+    }),
+    execution.status === 'in_progress'
+      ? get('/api/v1/visits/{visitId}/execution/available-services', {
+          params: { path: { visitId: id }, header },
+        })
+      : Promise.resolve(null),
+  ]);
   const evidencePackageResult =
     documentationResult.data?.documentation?.status === 'finalized'
       ? await get('/api/v1/visits/{visitId}/evidence-package', {
           params: { path: { visitId: id }, header },
         })
       : null;
-  const availableResult =
-    execution.status === 'in_progress'
-      ? await get('/api/v1/visits/{visitId}/execution/available-services', {
-          params: { path: { visitId: id }, header },
-        })
-      : null;
+  const evidenceStatusUnavailable = Boolean(
+    evidencePackageResult &&
+    ((!evidencePackageResult.data &&
+      evidencePackageResult.error?.code !== 'EVIDENCE_PACKAGE_NOT_FOUND') ||
+      (evidencePackageResult.error &&
+        evidencePackageResult.error.code !== 'EVIDENCE_PACKAGE_NOT_FOUND')),
+  );
   const availableServices = availableResult?.data ?? [];
+  const availableServicesUnavailable = Boolean(
+    availableResult && (availableResult.error || !availableResult.data),
+  );
   const unresolved = services.some((service) => service.status === 'not_recorded');
   const startAllowed = execution.status === 'not_started' && visit.status !== 'cancelled';
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-5">
-      <header className="grid gap-3">
+    <div className="mx-auto grid grid-cols-1 max-w-3xl gap-5 min-w-0">
+      <header className="grid gap-3 min-w-0">
         <Link className="w-fit text-sm font-semibold text-blue-800 underline" href="/care/today">
           {t('VisitExecution.backToToday')}
         </Link>
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
             {t('VisitExecution.section')}
           </p>
-          <h1 className="mt-1 text-3xl font-semibold">{visit.clientDisplayName}</h1>
+          <h1 className="mt-1 text-3xl font-semibold wrap-anywhere">{visit.clientDisplayName}</h1>
         </div>
         <p className="text-slate-700">
           {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}–
           {formatVisitTime(visit.plannedEnd, visit.timezone, locale)}
         </p>
-        {visit.address ? <p className="text-slate-700">{visit.address}</p> : null}
+        {visit.address ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="break-words text-slate-700">{visit.address}</p>
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(visit.address)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="min-h-11 content-center font-semibold text-blue-800 underline"
+            >
+              {t('Caregiver.openNavigation')}
+            </a>
+          </div>
+        ) : null}
+        {visit.note ? (
+          <section className="grid gap-1 rounded-md border bg-white p-3">
+            <h2 className="font-semibold">{t('VisitExecution.visitNote')}</h2>
+            <p className="whitespace-pre-wrap text-slate-700 wrap-anywhere">{visit.note}</p>
+          </section>
+        ) : null}
+        {visit.schedulingPreferences &&
+        (visit.schedulingPreferences.preferredWeekdays.length > 0 ||
+          visit.schedulingPreferences.preferredTimeWindows.length > 0) ? (
+          <section className="grid gap-1 rounded-md border bg-white p-3">
+            <h2 className="font-semibold">{t('VisitExecution.clientSchedulingPreferences')}</h2>
+            {visit.schedulingPreferences.preferredWeekdays.length ? (
+              <p className="text-sm text-slate-700">
+                {t('VisitExecution.preferredWeekdays')}:{' '}
+                {visit.schedulingPreferences.preferredWeekdays
+                  .map((weekday) => weekdayName(weekday, locale))
+                  .join(', ')}
+              </p>
+            ) : null}
+            {visit.schedulingPreferences.preferredTimeWindows.length ? (
+              <p className="text-sm text-slate-700">
+                {t('VisitExecution.preferredTimeWindows')}:{' '}
+                {visit.schedulingPreferences.preferredTimeWindows
+                  .map((window) => `${window.startsAt}–${window.endsAt}`)
+                  .join(', ')}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
       </header>
 
       {query.error ? (
@@ -99,6 +152,10 @@ export default async function CareVisitPage({
           {t(noticeKey(query.notice))}
         </p>
       ) : null}
+
+      <p className="rounded-md border bg-white p-3 text-sm text-slate-600">
+        {t('Caregiver.drafts.disclosure')}
+      </p>
 
       <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -128,12 +185,12 @@ export default async function CareVisitPage({
           <p className="text-slate-600">{t('VisitExecution.arrivalCaptured')}</p>
         )}
         {startAllowed ? (
-          <form action={startVisitAction}>
+          <CareForm action={startVisitAction} notice={query.notice}>
             <input type="hidden" name="visitId" value={visit.id} />
             <Button type="submit" className="min-h-12 w-full text-base sm:w-fit">
               {t('VisitExecution.start')}
             </Button>
-          </form>
+          </CareForm>
         ) : null}
         {visit.status === 'cancelled' ? (
           <p className="rounded-md bg-slate-100 p-3 text-slate-700">
@@ -152,6 +209,13 @@ export default async function CareVisitPage({
         ) : null}
       </section>
 
+      <CompletionChecklist
+        executionStatus={execution.status}
+        serviceStatuses={services.map((service) => service.status)}
+        documentation={documentationResult.data}
+        documentationUnavailable={Boolean(documentationResult.error || !documentationResult.data)}
+      />
+
       <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
         <h2 className="text-xl font-semibold">{t('VisitExecution.plannedServices')}</h2>
         {services.filter((service) => !service.unplanned).length ? (
@@ -167,6 +231,7 @@ export default async function CareVisitPage({
                     performedServiceId={service.id ?? uuidv7()}
                     editable={execution.status === 'in_progress'}
                     locale={locale}
+                    notice={query.notice}
                   />
                 </li>
               ))}
@@ -188,6 +253,7 @@ export default async function CareVisitPage({
                   performedServiceId={service.id ?? uuidv7()}
                   editable={execution.status === 'in_progress'}
                   locale={locale}
+                  notice={query.notice}
                 />
               ))}
           </div>
@@ -198,8 +264,23 @@ export default async function CareVisitPage({
         <>
           <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
             <h2 className="text-xl font-semibold">{t('VisitExecution.unplannedService')}</h2>
-            {availableServices.length ? (
-              <form action={recordPerformedServiceAction} className="grid gap-4">
+            {availableServicesUnavailable ? (
+              <p role="status" className="text-amber-900">
+                {t('VisitExecution.availableServicesUnavailable')}
+              </p>
+            ) : availableServices.length ? (
+              <CareForm
+                action={recordPerformedServiceAction}
+                className="grid gap-4"
+                notice={query.notice}
+                successNotices={['service-saved']}
+                draft={{
+                  visitId: visit.id,
+                  formId: 'unplanned-service',
+                  revision: `execution:${execution.version}`,
+                  fields: ['serviceDefinitionId', 'status', 'actualQuantity', 'reasonCode'],
+                }}
+              >
                 <input type="hidden" name="visitId" value={visit.id} />
                 <input type="hidden" name="performedServiceId" value={uuidv7()} />
                 <input type="hidden" name="expectedVersion" value={execution.version} />
@@ -209,7 +290,7 @@ export default async function CareVisitPage({
                     id="serviceDefinitionId"
                     name="serviceDefinitionId"
                     required
-                    className="min-h-12 rounded-md border bg-white px-3"
+                    className="min-h-12 w-full min-w-0 rounded-md border bg-white px-3"
                   >
                     <option value="">{t('VisitExecution.selectService')}</option>
                     {availableServices.map((service) => (
@@ -220,8 +301,8 @@ export default async function CareVisitPage({
                   </select>
                 </div>
                 <DecisionFields
-                  status="performed"
-                  actualQuantity="1"
+                  status=""
+                  actualQuantity=""
                   reasonCode={null}
                   unit="unknown"
                   prefix="unplanned"
@@ -229,7 +310,7 @@ export default async function CareVisitPage({
                 <Button type="submit" variant="secondary" className="min-h-12 w-full sm:w-fit">
                   {t('VisitExecution.recordService')}
                 </Button>
-              </form>
+              </CareForm>
             ) : (
               <p className="text-slate-600">{t('VisitExecution.noMoreServices')}</p>
             )}
@@ -240,7 +321,7 @@ export default async function CareVisitPage({
             {unresolved ? (
               <p className="text-slate-600">{t('VisitExecution.completeVisitHint')}</p>
             ) : null}
-            <form action={completeVisitAction}>
+            <CareForm action={completeVisitAction} notice={query.notice}>
               <input type="hidden" name="visitId" value={visit.id} />
               <input type="hidden" name="expectedVersion" value={execution.version} />
               <Button
@@ -250,7 +331,7 @@ export default async function CareVisitPage({
               >
                 {t('VisitExecution.completeVisit')}
               </Button>
-            </form>
+            </CareForm>
           </section>
         </>
       ) : null}
@@ -259,9 +340,11 @@ export default async function CareVisitPage({
         detail={documentationResult.data}
         {...(documentationResult.error?.code ? { errorCode: documentationResult.error.code } : {})}
         evidenceStatus={evidencePackageResult?.data?.status ?? null}
+        evidenceStatusUnavailable={evidenceStatusUnavailable}
         visitId={visit.id}
         executionStatus={execution.status}
         locale={locale}
+        notice={query.notice}
       />
     </div>
   );
@@ -274,6 +357,7 @@ async function ServiceCard({
   performedServiceId,
   editable,
   locale,
+  notice,
 }: {
   visitId: string;
   version: number;
@@ -281,6 +365,7 @@ async function ServiceCard({
   performedServiceId: string;
   editable: boolean;
   locale: Locale;
+  notice?: string | undefined;
 }) {
   const t = await getTranslations();
   return (
@@ -320,7 +405,20 @@ async function ServiceCard({
         </dl>
       ) : null}
       {editable ? (
-        <form action={recordPerformedServiceAction} className="grid gap-4 border-t pt-3">
+        <CareForm
+          action={recordPerformedServiceAction}
+          className="grid gap-4 border-t pt-3"
+          notice={notice}
+          successNotices={['service-saved']}
+          draft={{
+            visitId,
+            formId: service.visitServiceId
+              ? `service:${service.visitServiceId}`
+              : `service:${performedServiceId}`,
+            revision: `execution:${version}`,
+            fields: ['status', 'actualQuantity', 'reasonCode'],
+          }}
+        >
           <input type="hidden" name="visitId" value={visitId} />
           <input type="hidden" name="performedServiceId" value={performedServiceId} />
           <input type="hidden" name="expectedVersion" value={version} />
@@ -328,8 +426,8 @@ async function ServiceCard({
             <input type="hidden" name="visitServiceId" value={service.visitServiceId} />
           ) : null}
           <DecisionFields
-            status={service.status === 'not_recorded' ? 'performed' : service.status}
-            actualQuantity={service.actualQuantity ?? service.plannedQuantity ?? '1'}
+            status={service.status === 'not_recorded' ? '' : service.status}
+            actualQuantity={service.status === 'not_recorded' ? '' : (service.actualQuantity ?? '')}
             reasonCode={service.reasonCode ?? null}
             unit={service.unit}
             prefix={service.visitServiceId ?? performedServiceId}
@@ -337,7 +435,7 @@ async function ServiceCard({
           <Button type="submit" variant="secondary" className="min-h-12 w-full sm:w-fit">
             {t('VisitExecution.saveOutcome')}
           </Button>
-        </form>
+        </CareForm>
       ) : null}
     </section>
   );
@@ -350,7 +448,7 @@ async function DecisionFields({
   unit,
   prefix,
 }: {
-  status: 'performed' | 'partially_performed' | 'not_performed';
+  status: '' | 'performed' | 'partially_performed' | 'not_performed';
   actualQuantity: string;
   reasonCode: string | null;
   unit: string;
@@ -367,9 +465,11 @@ async function DecisionFields({
           <select
             id={'status-' + prefix}
             name="status"
+            required
             defaultValue={status}
-            className="min-h-12 rounded-md border bg-white px-3"
+            className="min-h-12 w-full min-w-0 rounded-md border bg-white px-3"
           >
+            <option value="">{t('VisitExecution.selectOutcome')}</option>
             <option value="performed">{t('VisitExecution.performed')}</option>
             <option value="partially_performed">{t('VisitExecution.partiallyPerformed')}</option>
             <option value="not_performed">{t('VisitExecution.notPerformed')}</option>
@@ -396,7 +496,7 @@ async function DecisionFields({
           id={reasonId}
           name="reasonCode"
           defaultValue={reasonCode ?? ''}
-          className="min-h-12 rounded-md border bg-white px-3"
+          className="min-h-12 w-full min-w-0 rounded-md border bg-white px-3"
         >
           <option value="">{t('VisitExecution.noReason')}</option>
           <option value="client_declined">{t('VisitExecution.reasons.clientDeclined')}</option>
@@ -417,16 +517,20 @@ async function DocumentationSection({
   detail,
   errorCode,
   evidenceStatus,
+  evidenceStatusUnavailable,
   visitId,
   executionStatus: visitExecutionStatus,
   locale,
+  notice,
 }: {
   detail: components['schemas']['CareDocumentationDetailDto'] | undefined;
   errorCode?: string;
   evidenceStatus: 'ready' | 'acknowledged' | 'declined' | 'revoked' | 'outdated' | null;
+  evidenceStatusUnavailable: boolean;
   visitId: string;
   executionStatus: 'not_started' | 'in_progress' | 'completed';
   locale: Locale;
+  notice?: string | undefined;
 }) {
   const t = await getTranslations();
   if (errorCode || !detail) {
@@ -477,15 +581,17 @@ async function DocumentationSection({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-slate-50 p-3">
           <span className="text-sm font-medium">
             {t('CareDocumentation.visit.acknowledgement')}{' '}
-            {evidenceStatus === 'acknowledged'
-              ? t('CareDocumentation.visit.acknowledged')
-              : evidenceStatus === 'declined'
-                ? t('CareDocumentation.visit.declined')
-                : evidenceStatus === 'outdated'
-                  ? t('CareDocumentation.visit.newAcknowledgementRequired')
-                  : evidenceStatus === 'revoked'
-                    ? t('CareDocumentation.visit.revoked')
-                    : t('CareDocumentation.visit.pending')}
+            {evidenceStatusUnavailable
+              ? t('ServiceEvidence.care.loadFailed')
+              : evidenceStatus === 'acknowledged'
+                ? t('CareDocumentation.visit.acknowledged')
+                : evidenceStatus === 'declined'
+                  ? t('CareDocumentation.visit.declined')
+                  : evidenceStatus === 'outdated'
+                    ? t('CareDocumentation.visit.newAcknowledgementRequired')
+                    : evidenceStatus === 'revoked'
+                      ? t('CareDocumentation.visit.revoked')
+                      : t('CareDocumentation.visit.pending')}
           </span>
           <Link
             href={`/care/visits/${visitId}/evidence`}
@@ -502,12 +608,12 @@ async function DocumentationSection({
             {t('CareDocumentation.visit.startBeforeDocumentation')}
           </p>
         ) : (
-          <form action={createDocumentationAction}>
+          <CareForm action={createDocumentationAction} notice={notice}>
             <input type="hidden" name="visitId" value={visitId} />
             <Button type="submit" className="min-h-12 w-full sm:w-fit">
               {t('CareDocumentation.visit.startDocumentation')}
             </Button>
-          </form>
+          </CareForm>
         )
       ) : (
         <>
@@ -548,9 +654,17 @@ async function DocumentationSection({
                       </p>
                     ) : null}
                     {editable ? (
-                      <form
+                      <CareForm
                         action={recordServiceEvidenceAction}
                         className="grid gap-2 border-t pt-3"
+                        notice={notice}
+                        successNotices={['evidence-saved']}
+                        draft={{
+                          visitId,
+                          formId: `service-evidence:${service.performedServiceId}`,
+                          revision: `documentation:${document.id}:${document.version}`,
+                          fields: ['note'],
+                        }}
                       >
                         <input type="hidden" name="visitId" value={visitId} />
                         <input type="hidden" name="documentationId" value={document.id} />
@@ -578,7 +692,7 @@ async function DocumentationSection({
                         >
                           {t('CareDocumentation.visit.saveEvidence')}
                         </Button>
-                      </form>
+                      </CareForm>
                     ) : null}
                   </li>
                 ))}
@@ -605,9 +719,17 @@ async function DocumentationSection({
                           {entry.severity ? ` · ${t(severityKey(entry.severity))}` : ''}
                         </p>
                         {editable ? (
-                          <form
+                          <CareForm
                             action={updateDocumentationEntryAction}
                             className="mt-3 grid gap-2 border-t pt-3"
+                            notice={notice}
+                            successNotices={['entry-saved']}
+                            draft={{
+                              visitId,
+                              formId: `entry-update:${entry.id}`,
+                              revision: `documentation:${document.id}:${document.version}`,
+                              fields: ['content'],
+                            }}
                           >
                             <input type="hidden" name="visitId" value={visitId} />
                             <input type="hidden" name="documentationId" value={document.id} />
@@ -631,7 +753,7 @@ async function DocumentationSection({
                             >
                               {t('CareDocumentation.visit.saveAmendment')}
                             </Button>
-                          </form>
+                          </CareForm>
                         ) : null}
                       </li>
                     ))}
@@ -645,6 +767,7 @@ async function DocumentationSection({
                     documentationId={document.id}
                     version={document.version}
                     type={type}
+                    notice={notice}
                   />
                 ) : null}
               </section>
@@ -658,14 +781,14 @@ async function DocumentationSection({
               </h3>
               {detail.completeness.isComplete ? (
                 visitExecutionStatus === 'completed' ? (
-                  <form action={finalizeDocumentationAction}>
+                  <CareForm action={finalizeDocumentationAction} notice={notice}>
                     <input type="hidden" name="visitId" value={visitId} />
                     <input type="hidden" name="documentationId" value={document.id} />
                     <input type="hidden" name="expectedVersion" value={document.version} />
                     <Button type="submit" className="min-h-12 w-full sm:w-fit">
                       {t('CareDocumentation.visit.finalize')}
                     </Button>
-                  </form>
+                  </CareForm>
                 ) : (
                   <p className="text-slate-600">
                     {t('CareDocumentation.visit.finalizeAfterCompletion')}
@@ -708,15 +831,28 @@ async function EntryComposer({
   documentationId,
   version,
   type,
+  notice,
 }: {
   visitId: string;
   documentationId: string;
   version: number;
   type: 'care_note' | 'observation' | 'deviation' | 'incident';
+  notice?: string | undefined;
 }) {
   const t = await getTranslations();
   return (
-    <form action={addDocumentationEntryAction} className="grid gap-3 rounded-md bg-slate-50 p-3">
+    <CareForm
+      action={addDocumentationEntryAction}
+      className="grid gap-3 rounded-md bg-slate-50 p-3"
+      notice={notice}
+      successNotices={['entry-saved']}
+      draft={{
+        visitId,
+        formId: `entry-new:${type}`,
+        revision: `documentation:${documentationId}:${version}`,
+        fields: ['content', 'severity'],
+      }}
+    >
       <input type="hidden" name="visitId" value={visitId} />
       <input type="hidden" name="documentationId" value={documentationId} />
       <input type="hidden" name="expectedVersion" value={version} />
@@ -749,7 +885,113 @@ async function EntryComposer({
       <Button type="submit" variant="secondary" className="min-h-11 w-full sm:w-fit">
         {t('Common.actions.save')}
       </Button>
-    </form>
+    </CareForm>
+  );
+}
+
+async function CompletionChecklist({
+  executionStatus,
+  serviceStatuses,
+  documentation,
+  documentationUnavailable,
+}: {
+  executionStatus: 'not_started' | 'in_progress' | 'completed';
+  serviceStatuses: string[];
+  documentation: components['schemas']['CareDocumentationDetailDto'] | undefined;
+  documentationUnavailable: boolean;
+}) {
+  const t = await getTranslations();
+  const completedServices = serviceStatuses.filter((status) => status !== 'not_recorded').length;
+  const servicesComplete = completedServices === serviceStatuses.length;
+  const document = documentation?.documentation;
+  const documentationFinalized = document?.status === 'finalized';
+  const documentationComplete = documentation?.completeness.isComplete ?? false;
+  const documentationState = documentationUnavailable
+    ? 'warning'
+    : documentationFinalized
+      ? 'complete'
+      : documentationComplete
+        ? 'pending'
+        : document
+          ? 'warning'
+          : 'pending';
+
+  return (
+    <section
+      aria-labelledby="completion-checklist-title"
+      className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5"
+    >
+      <h2 id="completion-checklist-title" className="text-xl font-semibold">
+        {t('VisitExecution.readiness.title')}
+      </h2>
+      <ul className="grid gap-2 text-sm">
+        <ChecklistItem
+          label={t('VisitExecution.readiness.started')}
+          state={executionStatus === 'not_started' ? 'pending' : 'complete'}
+          value={t(
+            executionStatus === 'not_started'
+              ? 'VisitExecution.readiness.pending'
+              : 'VisitExecution.readiness.complete',
+          )}
+        />
+        <ChecklistItem
+          label={t('VisitExecution.readiness.services')}
+          state={servicesComplete ? 'complete' : 'warning'}
+          value={t('VisitExecution.readiness.serviceCount', {
+            completed: completedServices,
+            total: serviceStatuses.length,
+          })}
+        />
+        <ChecklistItem
+          label={t('VisitExecution.readiness.endTime')}
+          state={executionStatus === 'completed' ? 'complete' : 'pending'}
+          value={t(
+            executionStatus === 'completed'
+              ? 'VisitExecution.readiness.complete'
+              : 'VisitExecution.readiness.pending',
+          )}
+        />
+        <ChecklistItem
+          label={t('VisitExecution.readiness.documentation')}
+          state={documentationState}
+          value={t(
+            documentationUnavailable
+              ? 'CareDocumentation.visit.unavailable'
+              : documentationFinalized
+                ? 'VisitExecution.readiness.complete'
+                : documentationComplete
+                  ? 'VisitExecution.readiness.documentationReady'
+                  : document
+                    ? 'VisitExecution.readiness.documentationIncomplete'
+                    : 'VisitExecution.readiness.documentationMissing',
+          )}
+        />
+      </ul>
+      <p className="text-xs text-slate-600">{t('VisitExecution.readiness.source')}</p>
+    </section>
+  );
+}
+
+function ChecklistItem({
+  label,
+  value,
+  state,
+}: {
+  label: string;
+  value: string;
+  state: 'complete' | 'pending' | 'warning';
+}) {
+  const className =
+    state === 'complete'
+      ? 'text-green-900'
+      : state === 'warning'
+        ? 'text-amber-950'
+        : 'text-slate-600';
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 last:border-0 last:pb-0">
+      <span>{label}</span>
+      <span className={`font-medium ${className}`}>{value}</span>
+    </li>
   );
 }
 
@@ -787,6 +1029,11 @@ function unitKey(
     day: 'Common.units.day',
   } as const;
   return unit in keys ? keys[unit as keyof typeof keys] : 'Common.units.unknown';
+}
+
+function weekdayName(isoWeekday: number, locale: Locale): string {
+  const date = new Date(Date.UTC(2024, 0, isoWeekday));
+  return new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'long' }).format(date);
 }
 
 function serviceStatusKey(

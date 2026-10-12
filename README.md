@@ -37,19 +37,25 @@ Mailpit is at <http://localhost:8025> and accepts local SMTP on port `1026`. Pro
 
 ## Commands
 
-| Command                         | Purpose                                                                        |
-| ------------------------------- | ------------------------------------------------------------------------------ |
-| `bun install --frozen-lockfile` | Install root and workspace dependencies from `bun.lock`                        |
-| `bun run build`                 | Generate OpenAPI types and build all workspaces                                |
-| `bun run typecheck`             | Typecheck every workspace                                                      |
-| `bun run test`                  | Run unit tests                                                                 |
-| `bun run test:integration`      | Run PostgreSQL Testcontainers and API integration tests; Docker required       |
-| `bun run test:e2e`              | Start Compose, migrate and seed, then run Authentik, client, and workforce E2E |
-| `bun run migrate`               | Apply checked, transactional SQL migrations                                    |
-| `bun run seed`                  | Create demo tenant, organization, facility, and roles                          |
-| `bun run seed:identity`         | Grant a configured Authentik subject demo tenant access                        |
-| `bun run infra:down`            | Stop local services; keeps named volumes                                       |
-| `bun run reset`                 | Confirm and reset Compose data; reruns migrations and demo seed                |
+| Command                                 | Purpose                                                                                |
+| --------------------------------------- | -------------------------------------------------------------------------------------- |
+| `bun install --frozen-lockfile`         | Install root and workspace dependencies from `bun.lock`                                |
+| `bun run build`                         | Generate OpenAPI types and build all workspaces                                        |
+| `bun run typecheck`                     | Typecheck every workspace                                                              |
+| `bun run test`                          | Run unit tests                                                                         |
+| `bun run test:integration`              | Run PostgreSQL Testcontainers and API integration tests; Docker required               |
+| `bun run test:e2e`                      | Start the configured Compose project, migrate and seed, then run Authentik browser E2E |
+| `bun run migrate`                       | Apply checked, transactional SQL migrations                                            |
+| `bun run seed`                          | Create demo tenant, organization, facility, and roles                                  |
+| `bun run seed:identity`                 | Grant a configured Authentik subject demo tenant access                                |
+| `bun run infra:down`                    | Stop local services; keeps named volumes                                               |
+| `bun run reset`                         | Confirm and reset Compose data; reruns migrations and demo seed                        |
+| `bun run deploy:check`                  | Validate production Compose, configuration, dependencies and recovery destination      |
+| `bun run deploy:bootstrap-admin -- ...` | Create the first production tenant administrator on a fresh database                   |
+| `bun run backup:create -- ...`          | Create a quiesced, paired PostgreSQL and object-storage recovery set                   |
+| `bun run backup:verify -- <id>`         | Verify backup checksums and PostgreSQL dump readability                                |
+| `bun run backup:restore -- ...`         | Restore a verified set into fresh isolated database and storage targets                |
+| `bun run backup:prune`                  | Dry-run verified recovery-set retention                                                |
 
 If Bun reports `EROFS accessing temporary directory`, run from a writable checkout and point its temporary files and package cache at writable paths. For example:
 
@@ -64,7 +70,7 @@ If Next.js reports `ERR_SWC_NATIVE_CACHE`, set `SWC_NATIVE_BINDING_CACHE` to a u
 
 The same module-owned SQL migrations run in development and integration tests. Once applied, a migration's checksum is immutable; add a new numbered migration for schema changes. The identity module has an additional migration for membership and role RLS policies.
 
-The Playwright flow uses the local `AUTHENTIK_E2E_API_TOKEN` to create temporary Authentik identities, bootstraps one test administrator, invites a second identity, assigns Office access to Facility West, checks the audit UI and tenant scope, then removes its records. The local OIDC email mapping only emits `email_verified: true` when an Authentik administrator sets `care_email_verified: true`; the test does this only for its invitee. Do not use this local token in deployed environments. See [Authentik setup](infra/authentik/README.md) and [environment variables](docs/environment.md).
+The Playwright flow uses the local `AUTHENTIK_E2E_API_TOKEN` to create temporary Authentik identities, then exercises office onboarding and scheduling, caregiver visit execution and evidence acknowledgement, and billing through claims and payment. The local OIDC email mapping only emits `email_verified: true` when an Authentik administrator sets `care_email_verified: true`; the test does this only for its invitee. Keep E2E data in the isolated `care-platform-e2e` Compose project and remove its volumes after browser diagnostics. Do not use this local token in deployed environments. See [isolated E2E setup](docs/environment.md#isolated-authentik-browser-e2e), [Authentik setup](infra/authentik/README.md), and [environment variables](docs/environment.md).
 
 ## Tenant access administration
 
@@ -84,9 +90,11 @@ On Linux hosts missing browser libraries, install them through Playwright with `
 
 `openapi-typescript` requires TypeScript 5.x and currently fails against the workspace's TypeScript 7 AST API. The API client package therefore pins TypeScript 5.9.3 for schema generation; application workspaces use TypeScript 7.0.2. Keep the split until the generator supports the workspace compiler version.
 
-## Deployment images
+## Production pilot
 
-Build images from the repository root so each Dockerfile can access the workspace lockfile and sibling packages:
+Production uses [compose.production.yaml](compose.production.yaml) as an override to the local development Compose file. It removes host-published infrastructure ports, adds Caddy TLS, protected Compose secrets, migration gating, worker health and an isolated operator image. Start with the sanitized [.env.production.example](.env.production.example), then follow the [deployment and recovery runbook](docs/runbooks/pilot-operations.md). Use the [pilot readiness checklist](docs/pilot-readiness.md) to separate implemented and verified behavior from operator configuration and external review.
+
+The production images can also be built individually from the repository root so each Dockerfile can access the workspace lockfile and sibling packages:
 
 ```sh
 docker build -f apps/api/Dockerfile -t care-api .
@@ -94,7 +102,7 @@ docker build -f apps/worker/Dockerfile -t care-worker .
 docker build -f apps/web/Dockerfile -t care-web .
 ```
 
-Pass runtime settings through the deployment environment. Do not use `.env.example` secrets outside local development. Run migrations as a separate release step with the migration database role.
+Do not use `.env.example` secrets outside local development. The operator runbook documents production configuration, first-administrator setup, backup, restore and upgrades.
 
 ## Self-hosted routing
 

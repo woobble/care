@@ -4,7 +4,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": ["SWC_NATIVE_BINDING_CACHE"]
     },
     "openapi": {
       "dependsOn": ["^build"],
@@ -15,6 +16,7 @@
       "persistent": true,
       "env": [
         "NODE_ENV",
+        "SWC_NATIVE_BINDING_CACHE",
         "DATABASE_URL",
         "WORKER_DATABASE_URL",
         "OIDC_ISSUER",
@@ -26,10 +28,35 @@
         "OTEL_EXPORTER_OTLP_ENDPOINT",
         "PORT",
         "WORKER_POLL_INTERVAL_MS"
+      ],
+      "passThroughEnv": [
+        "S3_ENDPOINT",
+        "S3_REGION",
+        "S3_BUCKET",
+        "S3_ACCESS_KEY",
+        "S3_SECRET_KEY",
+        "S3_FORCE_PATH_STYLE"
       ]
     },
     "@care/web#dev": {
-      "with": ["@care/api#dev"]
+      "with": ["@care/api#dev"],
+      "env": [
+        "NODE_ENV",
+        "SWC_NATIVE_BINDING_CACHE",
+        "DATABASE_URL",
+        "OIDC_ISSUER",
+        "OIDC_CLIENT_ID",
+        "OIDC_CLIENT_SECRET",
+        "AUTH_SECRET",
+        "API_INTERNAL_URL",
+        "WEB_ORIGIN",
+        "S3_ENDPOINT",
+        "S3_REGION",
+        "S3_BUCKET",
+        "S3_ACCESS_KEY",
+        "S3_SECRET_KEY",
+        "S3_FORCE_PATH_STYLE"
+      ]
     },
     "lint": { "dependsOn": ["^lint"] },
     "typecheck": { "dependsOn": ["^typecheck"] },
@@ -40,6 +67,7 @@
       "cache": false,
       "env": [
         "NODE_ENV",
+        "SWC_NATIVE_BINDING_CACHE",
         "DATABASE_URL",
         "MIGRATION_DATABASE_URL",
         "OIDC_ISSUER",
@@ -51,7 +79,13 @@
         "WEB_ORIGIN",
         "DEV_SEED_OIDC_SUB",
         "PLAYWRIGHT_BASE_URL",
-        "PLAYWRIGHT_BROWSERS_PATH"
+        "PLAYWRIGHT_BROWSERS_PATH",
+        "S3_ENDPOINT",
+        "S3_REGION",
+        "S3_BUCKET",
+        "S3_ACCESS_KEY",
+        "S3_SECRET_KEY",
+        "S3_FORCE_PATH_STYLE"
       ]
     }
   }

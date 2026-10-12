@@ -204,6 +204,7 @@ describe('clients API', () => {
            ($1, 'care_documentation.read'), ($1, 'care_documentation.review'),
            ($1, 'care_documentation.amend'),
            ($1, 'service_evidence.read'), ($1, 'service_evidence.prepare'),
+           ($1, 'operations.read'),
            ($1, 'acknowledgement.read'), ($1, 'acknowledgement.revoke')`,
         [officeRoleId],
       );
@@ -304,7 +305,7 @@ describe('clients API', () => {
         (await appRole.query('SELECT membership_id FROM identity.membership_scopes')).rowCount,
       ).toBe(4);
       expect((await appRole.query('SELECT role_id FROM identity.role_permissions')).rowCount).toBe(
-        PERMISSIONS.length + 55,
+        PERMISSIONS.length + 56,
       );
       await appRole.query('COMMIT');
       expect((await appRole.query('SELECT id FROM identity.tenant_memberships')).rowCount).toBe(0);
@@ -2316,6 +2317,7 @@ describe('clients API', () => {
             localDate: executionDate,
             localStartTime: startTime,
             localEndTime: `${String(Number(startTime.slice(0, 2)) + 1).padStart(2, '0')}:00`,
+            note: 'Use the side entrance.',
             employeeIds: [employeeId],
             services: [{ serviceDefinitionId: service.id, plannedQuantity: '1' }],
           }),
@@ -2326,6 +2328,19 @@ describe('clients API', () => {
       const executionVisit = await createExecutionVisit('08:00', schedulingEmployee.id);
       const otherEmployeeVisit = await createExecutionVisit('10:00', unavailableEmployee.id);
       const cancelledExecutionVisit = await createExecutionVisit('12:00', schedulingEmployee.id);
+      await owner.query(
+        `INSERT INTO scheduling.client_scheduling_preferences
+          (id, tenant_id, client_id, preferred_weekdays, preferred_time_windows, updated_at, updated_by)
+         VALUES ($1, $2, $3, $4::smallint[], $5::jsonb, now(), $6)`,
+        [
+          uuidv7(),
+          tenantId,
+          executionClient.id,
+          [1, 3],
+          JSON.stringify([{ startsAt: '09:00', endsAt: '11:00' }]),
+          userId,
+        ],
+      );
       const cancelBeforeStart = await fetch(
         `${baseUrl}/api/v1/visits/${cancelledExecutionVisit.id}/cancel`,
         { method: 'POST', headers },
@@ -2352,9 +2367,21 @@ describe('clients API', () => {
         headers: caregiverHeaders,
       });
       expect(caregiverVisits.status).toBe(200);
-      expect(await caregiverVisits.json()).toEqual(
-        expect.arrayContaining([expect.objectContaining({ id: executionVisit.id })]),
+      const caregiverVisitItems = (await caregiverVisits.json()) as Array<{
+        id: string;
+        note: string | null;
+        updatedAt: string;
+        assignmentAssignedAt: string;
+      }>;
+      const caregiverExecutionVisit = caregiverVisitItems.find(
+        (item) => item.id === executionVisit.id,
       );
+      expect(caregiverExecutionVisit).toMatchObject({
+        id: executionVisit.id,
+        note: 'Use the side entrance.',
+        updatedAt: expect.any(String),
+        assignmentAssignedAt: expect.any(String),
+      });
 
       const unassignedStart = await fetch(
         `${baseUrl}/api/v1/visits/${otherEmployeeVisit.id}/execution/start`,
@@ -2362,6 +2389,39 @@ describe('clients API', () => {
       );
       expect(unassignedStart.status).toBe(403);
       expect((await unassignedStart.json()).code).toBe('VISIT_NOT_ASSIGNED_TO_EMPLOYEE');
+      const revokedAssignmentRowsResponse = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/assignments`,
+        { headers },
+      );
+      expect(revokedAssignmentRowsResponse.status).toBe(200);
+      const revokedAssignmentRows = (await revokedAssignmentRowsResponse.json()) as Array<{
+        id: string;
+        status: string;
+      }>;
+      const revokedAssignment = revokedAssignmentRows.find(
+        (assignment) => assignment.status === 'active',
+      );
+      if (!revokedAssignment) throw new Error('Execution visit has no active caregiver assignment');
+      const removeCaregiverAssignment = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/assignments/${revokedAssignment.id}`,
+        { method: 'DELETE', headers },
+      );
+      expect(removeCaregiverAssignment.status).toBe(204);
+      const staleAssignmentStart = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/start`,
+        { method: 'POST', headers: caregiverHeaders },
+      );
+      expect(staleAssignmentStart.status).toBe(403);
+      expect((await staleAssignmentStart.json()).code).toBe('VISIT_NOT_ASSIGNED_TO_EMPLOYEE');
+      const restoreCaregiverAssignment = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/assignments`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ employeeId: schedulingEmployee.id }),
+        },
+      );
+      expect(restoreCaregiverAssignment.status).toBe(201);
       const cancelledStart = await fetch(
         `${baseUrl}/api/v1/visits/${cancelledExecutionVisit.id}/execution/start`,
         { method: 'POST', headers: caregiverHeaders },
@@ -2385,6 +2445,12 @@ describe('clients API', () => {
       );
       expect(executionBeforeStart.status).toBe(200);
       expect(await executionBeforeStart.json()).toMatchObject({
+        visit: {
+          schedulingPreferences: {
+            preferredWeekdays: [1, 3],
+            preferredTimeWindows: [{ startsAt: '09:00', endsAt: '11:00' }],
+          },
+        },
         execution: { status: 'not_started', version: 0 },
         services: [expect.objectContaining({ status: 'not_recorded', plannedQuantity: '1.000' })],
       });
@@ -2435,6 +2501,26 @@ describe('clients API', () => {
       expect(startedDetails[0]?.execution).toEqual(startedDetails[1]?.execution);
       const executionId = startedDetails[0]!.execution.id;
       expect(startedDetails[0]!.execution.version).toBe(1);
+      const overdueVisitIssues = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?sourceDomain=visit_execution`,
+        { headers: officeHeaders },
+      );
+      expect(overdueVisitIssues.status).toBe(200);
+      const overdueVisitWorklist = (await overdueVisitIssues.json()) as {
+        items: Array<{
+          id: string;
+          issueCode: string;
+          sourceDomain: string;
+          sourceEntityId: string;
+        }>;
+      };
+      const overdueVisitIssue = overdueVisitWorklist.items.find(
+        (item) => item.issueCode === 'visit_execution_overdue',
+      );
+      expect(overdueVisitIssue).toMatchObject({
+        sourceDomain: 'visit_execution',
+        sourceEntityId: executionVisit.id,
+      });
       const executionAssignmentsResponse = await fetch(
         `${baseUrl}/api/v1/visits/${executionVisit.id}/assignments`,
         { headers },
@@ -2558,6 +2644,25 @@ describe('clients API', () => {
         (await completionRace.json()).code,
       );
       expect(await recordPlannedService.json()).toMatchObject({
+        version: 2,
+        service: { id: performedServiceId, status: 'partially_performed', actualQuantity: '0.500' },
+      });
+      const repeatedServiceSubmission = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/services/${performedServiceId}`,
+        {
+          method: 'PUT',
+          headers: caregiverHeaders,
+          body: JSON.stringify({
+            expectedVersion: 1,
+            visitServiceId,
+            status: 'partially_performed',
+            actualQuantity: '0.500',
+            reasonCode: null,
+          }),
+        },
+      );
+      expect(repeatedServiceSubmission.status).toBe(200);
+      expect(await repeatedServiceSubmission.json()).toMatchObject({
         version: 2,
         service: { id: performedServiceId, status: 'partially_performed', actualQuantity: '0.500' },
       });
@@ -3042,6 +3147,23 @@ describe('clients API', () => {
         status: 'completed',
         version: 4,
       });
+      const repeatedCompletion = await fetch(
+        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/complete`,
+        {
+          method: 'POST',
+          headers: caregiverHeaders,
+          body: JSON.stringify({ expectedVersion: 3 }),
+        },
+      );
+      expect(repeatedCompletion.status).toBe(200);
+      expect(await repeatedCompletion.json()).toMatchObject({
+        execution: {
+          id: executionId,
+          status: 'completed',
+          version: 4,
+          actualEnd: completedDetail.execution.actualEnd,
+        },
+      });
       expect(completedDetail.services).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -3060,6 +3182,26 @@ describe('clients API', () => {
           }),
         ]),
       );
+      const completedVisitWorklistResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?sourceDomain=visit_execution`,
+        { headers: officeHeaders },
+      );
+      expect(completedVisitWorklistResponse.status).toBe(200);
+      const completedVisitWorklist = (await completedVisitWorklistResponse.json()) as {
+        items: Array<{ issueCode: string; sourceEntityId: string }>;
+      };
+      expect(
+        completedVisitWorklist.items.some(
+          (item) =>
+            item.issueCode === 'visit_execution_overdue' &&
+            item.sourceEntityId === executionVisit.id,
+        ),
+      ).toBe(false);
+      const resolvedVisitIssue = await owner.query<{ resolved_at: Date | null }>(
+        `SELECT resolved_at FROM operations.exception_occurrences WHERE tenant_id = $1 AND issue_key = $2`,
+        [tenantId, overdueVisitIssue!.id],
+      );
+      expect(resolvedVisitIssue.rows[0]?.resolved_at).toBeTruthy();
 
       const finalizeIncompleteDocumentation = await fetch(
         `${baseUrl}/api/v1/care-documentation/${documentationId}/finalize`,
@@ -3767,19 +3909,6 @@ describe('clients API', () => {
         items: [
           expect.objectContaining({ visitId: executionVisit.id, documentationId, missing: [] }),
         ],
-      });
-
-      const repeatedCompletion = await fetch(
-        `${baseUrl}/api/v1/visits/${executionVisit.id}/execution/complete`,
-        {
-          method: 'POST',
-          headers: caregiverHeaders,
-          body: JSON.stringify({ expectedVersion: 3 }),
-        },
-      );
-      expect(repeatedCompletion.status).toBe(200);
-      expect(await repeatedCompletion.json()).toMatchObject({
-        execution: { id: executionId, status: 'completed', version: 4 },
       });
 
       const caregiverCannotCorrect = await fetch(

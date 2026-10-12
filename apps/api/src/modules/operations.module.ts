@@ -12,6 +12,7 @@ import type { OutboxWriter } from '@care/platform';
 import type { OnboardingApplicationService } from '@care/onboarding';
 import type { SchedulingApplicationService } from '@care/scheduling';
 import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
+import type { VisitExecutionApplicationService } from '@care/visit-execution';
 import { DatabaseModule } from '@app/api/database/database.module';
 import {
   AUDIT_WRITER,
@@ -26,6 +27,7 @@ import {
   SCHEDULING_APPLICATION,
   SERVICE_EVIDENCE_APPLICATION,
   UNIT_OF_WORK,
+  VISIT_EXECUTION_APPLICATION,
 } from '@app/api/tokens';
 import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import { OperationsController } from '@app/api/presentation/http/operations.controller';
@@ -38,6 +40,7 @@ import { PlatformModule } from './platform.module';
 import { SchedulingModule } from './scheduling.module';
 import { ServiceEvidenceModule } from './service-evidence.module';
 import { OnboardingModule } from './onboarding.module';
+import { VisitExecutionModule } from './visit-execution.module';
 
 @Module({
   imports: [
@@ -51,6 +54,7 @@ import { OnboardingModule } from './onboarding.module';
     BenefitsModule,
     BillingModule,
     OnboardingModule,
+    VisitExecutionModule,
   ],
   controllers: [OperationsController],
   providers: [
@@ -69,6 +73,7 @@ import { OnboardingModule } from './onboarding.module';
         BILLING_APPLICATION,
         BILLING_CLAIMS_APPLICATION,
         ONBOARDING_APPLICATION,
+        VISIT_EXECUTION_APPLICATION,
       ],
       useFactory: (
         unitOfWork: UnitOfWork,
@@ -81,6 +86,7 @@ import { OnboardingModule } from './onboarding.module';
         billing: BillingApplicationService,
         claims: BillingClaimsApplicationService,
         onboarding: OnboardingApplicationService,
+        execution: VisitExecutionApplicationService,
       ) =>
         createOperationsApplicationService(unitOfWork, audit, outbox, {
           scheduling,
@@ -90,6 +96,7 @@ import { OnboardingModule } from './onboarding.module';
           billing,
           claims,
           onboarding,
+          execution,
         }),
     },
     {

@@ -1,13 +1,19 @@
 // oxlint-disable-next-line import/no-unassigned-import -- load dotenv before reading worker configuration
 import '@care/config/load-env';
 import { hostname } from 'node:os';
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
+import { createServer } from 'node:http';
 import { EventDispatcher } from '@care/events';
 import { loadWorkerConfig } from '@care/config';
 import { createDatabase, createUnitOfWork } from '@care/database';
 import { createLogger } from '@care/logging';
-import { startTelemetry } from '@care/observability';
-import { DrizzleOutboxRepository, platformSchema } from '@care/platform';
+import { startMetricsServer, startTelemetry, stopMetricsServer } from '@care/observability';
+import {
+  DrizzleOutboxRepository,
+  outboxMessages,
+  platformSchema,
+  workerHealth,
+} from '@care/platform';
 import { DrizzleAuditWriter } from '@care/audit';
 import { billingSchema } from '@care/billing';
 import { benefitsSchema, createBenefitsApplicationService } from '@care/benefits';
@@ -20,10 +26,14 @@ import {
   OperationsRecurrenceApplicationService,
   operationsSchema,
 } from '@care/operations';
+import { workerMetrics } from './operational-metrics';
 
 const batchSize = 50;
 const leaseMs = 120_000;
 const maxAttempts = 10;
+const workerHealthPort = 3002;
+const heartbeatIntervalMs = 15_000;
+const staleHeartbeatMs = 90_000;
 
 async function main(): Promise<void> {
   const config = loadWorkerConfig();
@@ -180,12 +190,120 @@ async function main(): Promise<void> {
       logger.info({ eventType }, 'Domain event dispatched');
     });
   }
-  const workerId = `${hostname()}:${process.pid}`;
+  const startedAt = new Date();
+  const workerId = `${hostname()}:${process.pid}:${startedAt.getTime()}`;
+  const health = {
+    schedulerStatus: 'starting' as 'starting' | 'running' | 'degraded' | 'stopping' | 'stopped',
+    lastScheduledSuccessAt: null as Date | null,
+    lastScheduledFailureAt: null as Date | null,
+    lastScheduledFailureName: null as string | null,
+    lastOutboxFailureAt: null as Date | null,
+    lastOutboxFailureName: null as string | null,
+    lastPersistedAt: null as number | null,
+  };
+
+  const writeHealth = async (): Promise<void> => {
+    const counts = await database.db
+      .select({ status: outboxMessages.status, count: count() })
+      .from(outboxMessages)
+      .groupBy(outboxMessages.status);
+    const pendingOutboxCount = counts
+      .filter(({ status }) => status === 'pending' || status === 'processing')
+      .reduce((total, row) => total + Number(row.count), 0);
+    const deadOutboxCount = Number(counts.find(({ status }) => status === 'dead')?.count ?? 0);
+    const heartbeatAt = new Date();
+
+    await database.db
+      .insert(workerHealth)
+      .values({
+        workerId,
+        hostName: hostname(),
+        startedAt,
+        heartbeatAt,
+        schedulerStatus: health.schedulerStatus,
+        lastScheduledSuccessAt: health.lastScheduledSuccessAt,
+        lastScheduledFailureAt: health.lastScheduledFailureAt,
+        lastScheduledFailureName: health.lastScheduledFailureName,
+        lastOutboxFailureAt: health.lastOutboxFailureAt,
+        lastOutboxFailureName: health.lastOutboxFailureName,
+        pendingOutboxCount,
+        deadOutboxCount,
+      })
+      .onConflictDoUpdate({
+        target: workerHealth.workerId,
+        set: {
+          heartbeatAt,
+          schedulerStatus: health.schedulerStatus,
+          lastScheduledSuccessAt: health.lastScheduledSuccessAt,
+          lastScheduledFailureAt: health.lastScheduledFailureAt,
+          lastScheduledFailureName: health.lastScheduledFailureName,
+          lastOutboxFailureAt: health.lastOutboxFailureAt,
+          lastOutboxFailureName: health.lastOutboxFailureName,
+          pendingOutboxCount,
+          deadOutboxCount,
+        },
+      });
+    health.lastPersistedAt = heartbeatAt.getTime();
+    workerMetrics.recordHealth({
+      schedulerStatus: health.schedulerStatus,
+      heartbeatAt,
+      lastScheduledSuccessAt: health.lastScheduledSuccessAt,
+      lastScheduledFailureAt: health.lastScheduledFailureAt,
+      lastOutboxFailureAt: health.lastOutboxFailureAt,
+      pendingOutboxCount,
+      deadOutboxCount,
+    });
+  };
+
+  let healthWrite: Promise<void> | null = null;
+  const persistHealth = (): Promise<void> => {
+    if (healthWrite) return healthWrite;
+    healthWrite = writeHealth().finally(() => {
+      healthWrite = null;
+    });
+    return healthWrite;
+  };
+
+  const healthServer = createServer((request, response) => {
+    if (request.url !== '/health/live' && request.url !== '/health/ready') {
+      response.writeHead(404).end();
+      return;
+    }
+    const live = request.url === '/health/live';
+    const ready =
+      health.lastPersistedAt !== null &&
+      Date.now() - health.lastPersistedAt < staleHeartbeatMs &&
+      health.schedulerStatus !== 'starting' &&
+      health.schedulerStatus !== 'stopping' &&
+      health.schedulerStatus !== 'stopped';
+    const ok = live || ready;
+    response.writeHead(ok ? 200 : 503, {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'private, no-store',
+    });
+    response.end(JSON.stringify({ status: ok ? 'ok' : 'unavailable' }));
+  });
+
+  await persistHealth();
+  await new Promise<void>((resolve, reject) => {
+    healthServer.once('error', reject);
+    healthServer.listen(workerHealthPort, '0.0.0.0', resolve);
+  });
+  const metricsServer = await startMetricsServer(workerMetrics.registry, 3003);
+  health.schedulerStatus = 'running';
+  await persistHealth();
+  const heartbeatTimer = setInterval(() => {
+    void persistHealth().catch((error: unknown) => {
+      logger.error({ errorName: safeErrorName(error) }, 'Worker heartbeat update failed');
+    });
+  }, heartbeatIntervalMs);
+
   let stopping = false;
 
   const relay = async (): Promise<void> => {
     while (true) {
       if (stopping) break;
+      let scheduledFailureName: string | null = null;
       try {
         // Start each batch after the previous one settles to keep polling bounded.
         // oxlint-disable-next-line no-await-in-loop
@@ -200,11 +318,18 @@ async function main(): Promise<void> {
             await outbox.markDelivered(message);
             logger.info({ eventType: message.event.type }, 'Outbox event handled');
           } catch (error) {
+            health.lastOutboxFailureAt = new Date();
+            health.lastOutboxFailureName = safeErrorName(error);
+            workerMetrics.recordOutboxFailure('delivery');
+            logger.error(
+              { eventType: message.event.type, errorName: health.lastOutboxFailureName },
+              'Outbox event handling failed',
+            );
             try {
               await outbox.markFailed(message, error, maxAttempts);
             } catch (recordError) {
               logger.error(
-                { err: recordError, eventId: message.id },
+                { errorName: safeErrorName(recordError), eventId: message.id },
                 'Could not record outbox delivery failure',
               );
             }
@@ -228,6 +353,7 @@ async function main(): Promise<void> {
               );
             }
           } catch (error) {
+            scheduledFailureName ??= safeErrorName(error);
             logger.error(
               {
                 tenantId: tenant.id,
@@ -251,12 +377,14 @@ async function main(): Promise<void> {
               );
             }
             if ('failedDomains' in deadlineResult && deadlineResult.failedDomains.length > 0) {
+              scheduledFailureName ??= 'DeadlineSourceEvaluationFailed';
               logger.error(
                 { tenantId: tenant.id, failedDomains: deadlineResult.failedDomains },
                 'Some Operations deadline sources could not be evaluated',
               );
             }
           } catch (error) {
+            scheduledFailureName ??= safeErrorName(error);
             logger.error(
               {
                 tenantId: tenant.id,
@@ -267,8 +395,31 @@ async function main(): Promise<void> {
           }
         }
         // oxlint-enable no-await-in-loop
+        if (scheduledFailureName) {
+          health.schedulerStatus = 'degraded';
+          health.lastScheduledFailureAt = new Date();
+          health.lastScheduledFailureName = scheduledFailureName;
+          workerMetrics.recordSchedulerRun('failure');
+        } else {
+          health.schedulerStatus = 'running';
+          health.lastScheduledSuccessAt = new Date();
+          workerMetrics.recordSchedulerRun('success');
+        }
+        await persistHealth();
       } catch (error) {
-        logger.error({ err: error }, 'Outbox polling failed');
+        health.schedulerStatus = 'degraded';
+        health.lastOutboxFailureAt = new Date();
+        health.lastOutboxFailureName = safeErrorName(error);
+        workerMetrics.recordOutboxFailure('poll');
+        logger.error({ errorName: safeErrorName(error) }, 'Worker polling failed');
+        try {
+          await persistHealth();
+        } catch (healthError) {
+          logger.error(
+            { errorName: safeErrorName(healthError) },
+            'Worker health state could not be recorded',
+          );
+        }
       }
 
       if (!stopping) {
@@ -282,6 +433,7 @@ async function main(): Promise<void> {
   const relayPromise = relay();
   const shutdown = () => {
     stopping = true;
+    health.schedulerStatus = 'stopping';
   };
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);
@@ -289,6 +441,18 @@ async function main(): Promise<void> {
   try {
     await relayPromise;
   } finally {
+    clearInterval(heartbeatTimer);
+    health.schedulerStatus = 'stopped';
+    try {
+      await persistHealth();
+    } catch (error) {
+      logger.error(
+        { errorName: safeErrorName(error) },
+        'Worker shutdown state could not be recorded',
+      );
+    }
+    await new Promise<void>((resolve) => healthServer.close(() => resolve()));
+    await stopMetricsServer(metricsServer);
     await database.close();
     await stopTelemetry();
   }

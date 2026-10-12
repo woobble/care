@@ -97,6 +97,22 @@ export class CorrectExecutionTimesRequestDto {
   reason!: string;
 }
 
+export class ExecutionClientTimeWindowResponseDto {
+  @ApiProperty({ example: '09:00' })
+  startsAt!: string;
+
+  @ApiProperty({ example: '11:00' })
+  endsAt!: string;
+}
+
+export class ExecutionClientSchedulingPreferencesResponseDto {
+  @ApiProperty({ type: [Number], minimum: 1, maximum: 7 })
+  preferredWeekdays!: number[];
+
+  @ApiProperty({ type: [ExecutionClientTimeWindowResponseDto] })
+  preferredTimeWindows!: ExecutionClientTimeWindowResponseDto[];
+}
+
 export class ExecutionVisitResponseDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -109,6 +125,23 @@ export class ExecutionVisitResponseDto {
 
   @ApiPropertyOptional({ nullable: true })
   address!: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Visit planning note visible to assigned caregivers',
+  })
+  note!: string | null;
+
+  @ApiProperty({
+    type: ExecutionClientSchedulingPreferencesResponseDto,
+    nullable: true,
+    description:
+      'Scheduling preferences relevant to the assigned visit; employee preferences are omitted',
+  })
+  schedulingPreferences!: {
+    preferredWeekdays: number[];
+    preferredTimeWindows: Array<{ startsAt: string; endsAt: string }>;
+  } | null;
 
   @ApiProperty({ enum: ['planned', 'confirmed', 'cancelled'] })
   status!: 'planned' | 'confirmed' | 'cancelled';
@@ -263,6 +296,18 @@ export class CaregiverVisitResponseDto {
 
   @ApiPropertyOptional({ nullable: true })
   address!: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Visit planning note visible to assigned caregivers',
+  })
+  note!: string | null;
+
+  @ApiProperty({ format: 'date-time', description: 'Last visit schedule update timestamp' })
+  updatedAt!: string;
+
+  @ApiProperty({ format: 'date-time', description: 'Timestamp this caregiver was assigned' })
+  assignmentAssignedAt!: string;
 
   @ApiProperty({ enum: ['planned', 'confirmed', 'cancelled'] })
   status!: 'planned' | 'confirmed' | 'cancelled';

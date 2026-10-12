@@ -11,12 +11,14 @@
     "lint": "oxlint src",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "typecheck": "tsc --noEmit --pretty false -p tsconfig.json"
+    "typecheck": "tsc --noEmit --pretty false -p tsconfig.json",
+    "test": "bun test src"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/auto-instrumentations-node": "^0.81.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.223.0",
-    "@opentelemetry/sdk-node": "^0.223.0"
+    "@opentelemetry/sdk-node": "^0.223.0",
+    "prom-client": "^15.1.3"
   }
 }

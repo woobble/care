@@ -43,8 +43,40 @@ Copy `.env.example` to `.env` for local development. Compose reads it for infras
 
 Local service endpoints: Authentik `9000`, SeaweedFS S3 `9002`, SeaweedFS filer `9004`, Mailpit SMTP/UI `1026`/`8025`, OTLP `4317`/`4318`, Prometheus `9090`, Grafana `3002`, and optional loopback-only OSRM `5000` when the `routing` Compose profile is enabled. For a host-run API, set `ROUTING_OSRM_URL` to `http://localhost:<ROUTING_OSRM_PORT>`; an API container on the same Compose network uses `http://osrm:5000`. Set the probe coordinates to connected roads inside `OSRM_REGION`. See [self-hosted routing](../README.md#self-hosted-routing) for setup and update commands.
 
+## Production Compose
+
+Production uses `compose.yaml` with `compose.production.yaml` and a protected `.env.production` file. The override removes direct host ports for PostgreSQL, Redis, Authentik, SeaweedFS and OSRM; only Caddy publishes ports 80 and 443. Applications read supported secret files from Docker Compose mounts. Authentik SMTP credentials and bootstrap settings remain in the owner-only environment file because Authentik consumes those environment variables directly.
+
+Copy `.env.production.example` only as a configuration template, replace all placeholders, and create the referenced protected secret files. It is not a runnable deployment or evidence of production readiness. Follow the [pilot operations runbook](runbooks/pilot-operations.md) and [readiness checklist](pilot-readiness.md) before using real data.
+
 `REDIS_URL` is not required by the app worker. Redis remains in Compose for Authentik and future queue-backed jobs.
 
 Both seed commands are development-only and refuse any `NODE_ENV` other than `development`. The general seed creates the Demo Care tenant, organization, two facilities, and Administrator/Office/Caregiver system roles, but grants no user membership. `DEV_SEED_OIDC_SUB` is only used by `bun run seed:identity` to establish the first local administrator. After that bootstrap, tenant access is managed through Administration in the application.
 
 Before `bun run test:e2e`, install the Playwright browser with `bunx playwright install chromium`. On Linux, use `bunx playwright install --with-deps chromium` when system browser libraries are absent. The E2E API token and all bootstrap credentials are for local development only.
+
+## Isolated Authentik browser E2E
+
+Run the browser journey against its own Compose project so its PostgreSQL and Authentik data stay separate from the normal local stack. The Compose ports default to `9000` for Authentik, `9002` for SeaweedFS S3, and `9004` for its filer; override them when another local stack uses those ports. Keep `OIDC_ISSUER` and `S3_ENDPOINT` aligned with the chosen ports:
+
+```sh
+SWC_NATIVE_BINDING_CACHE="${XDG_RUNTIME_DIR:?Set a private runtime directory}/care-swc-cache" \
+AUTHENTIK_HOST_PORT=19000 \
+AUTHENTIK_WEB__BASE_URL=http://localhost:19000 \
+SEAWEEDFS_S3_HOST_PORT=19002 \
+SEAWEEDFS_FILER_HOST_PORT=19004 \
+OIDC_ISSUER=http://localhost:19000/application/o/care-platform/ \
+S3_ENDPOINT=http://localhost:19002 \
+COMPOSE_PROJECT_NAME=care-platform-e2e \
+bun run test:e2e
+```
+
+The command starts Compose, applies migrations, seeds the demo tenant, then Playwright starts the API and web app. The suite is one sequential browser journey covering office onboarding and scheduling, caregiver visit execution and acknowledgement, and billing, claims, and payment. It needs the local `AUTHENTIK_E2E_API_TOKEN` blueprint and the OIDC settings in `.env`. Use a private, user-owned SWC cache directory writable by the execution environment.
+
+The test uses run-scoped records and removes them on early failures. A failure after billing setup can retain records for diagnosis; keep them in the disposable E2E database until browser debugging is complete. Then remove only the isolated stack and its volumes:
+
+```sh
+COMPOSE_PROJECT_NAME=care-platform-e2e docker compose down --volumes
+```
+
+Do not use the general `bun run reset` command to clean E2E data. If SWC reports `ERR_SWC_NATIVE_CACHE`, point `SWC_NATIVE_BINDING_CACHE` at a private, user-owned directory the execution environment can write; do not weaken filesystem permissions.

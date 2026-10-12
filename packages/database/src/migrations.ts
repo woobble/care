@@ -50,6 +50,7 @@ const migrations = {
     '0002_uuidv7_rekey.sql',
     '0003_retire_clinical_modules.sql',
     '0004_worker_outbox_writer.sql',
+    '0005_worker_health.sql',
   ],
   'care-documentation': ['0001_care_documentation.sql'],
   'service-evidence': ['0001_service_evidence.sql'],
@@ -65,6 +66,7 @@ const migrations = {
     '0006_recurring_tasks.sql',
     '0007_deadline_projection.sql',
     '0008_deadline_projection_cursors.sql',
+    '0009_visit_execution_exception_source.sql',
   ],
   communications: [
     '0001_communications.sql',
@@ -85,46 +87,53 @@ export const migrationFiles: MigrationFile[] = Object.entries(migrations).flatMa
 );
 
 export async function applyMigrations(client: Client): Promise<void> {
-  await client.query('CREATE SCHEMA IF NOT EXISTS platform');
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS platform.migration_registry (
-      module text NOT NULL,
-      name text NOT NULL,
-      checksum text NOT NULL,
-      applied_at timestamptz NOT NULL DEFAULT now(),
-      PRIMARY KEY (module, name)
-    )
-  `);
+  const lockKeys: [number, number] = [1_481_851_208, 1];
+  await client.query('SELECT pg_advisory_lock($1, $2)', lockKeys);
+  try {
+    await client.query('CREATE SCHEMA IF NOT EXISTS platform');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS platform.migration_registry (
+        module text NOT NULL,
+        name text NOT NULL,
+        checksum text NOT NULL,
+        applied_at timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (module, name)
+      )
+    `);
 
-  // Run in declaration order because later migrations depend on earlier schemas.
-  // oxlint-disable no-await-in-loop
-  for (const migration of migrationFiles) {
-    const source = await readFile(migration.path, 'utf8');
-    const checksum = createHash('sha256').update(source).digest('hex');
-    const existing = await client.query<{ checksum: string }>(
-      'SELECT checksum FROM platform.migration_registry WHERE module = $1 AND name = $2',
-      [migration.module, migration.name],
-    );
-    if (existing.rows[0]) {
-      if (existing.rows[0].checksum !== checksum) {
-        throw new Error(`Applied migration changed: ${migration.module}/${migration.name}`);
-      }
-      continue;
-    }
-
-    await client.query('BEGIN');
-    try {
-      await client.query(source);
-      await client.query(
-        'INSERT INTO platform.migration_registry(module, name, checksum) VALUES ($1, $2, $3)',
-        [migration.module, migration.name, checksum],
+    // Run in declaration order because later migrations depend on earlier schemas.
+    // The session lock serializes separate deploy and operator migration commands.
+    // oxlint-disable no-await-in-loop
+    for (const migration of migrationFiles) {
+      const source = await readFile(migration.path, 'utf8');
+      const checksum = createHash('sha256').update(source).digest('hex');
+      const existing = await client.query<{ checksum: string }>(
+        'SELECT checksum FROM platform.migration_registry WHERE module = $1 AND name = $2',
+        [migration.module, migration.name],
       );
-      await client.query('COMMIT');
-      process.stdout.write(`Applied ${migration.module}/${migration.name}\n`);
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
+      if (existing.rows[0]) {
+        if (existing.rows[0].checksum !== checksum) {
+          throw new Error(`Applied migration changed: ${migration.module}/${migration.name}`);
+        }
+        continue;
+      }
+
+      await client.query('BEGIN');
+      try {
+        await client.query(source);
+        await client.query(
+          'INSERT INTO platform.migration_registry(module, name, checksum) VALUES ($1, $2, $3)',
+          [migration.module, migration.name, checksum],
+        );
+        await client.query('COMMIT');
+        process.stdout.write(`Applied ${migration.module}/${migration.name}\n`);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
     }
+    // oxlint-enable no-await-in-loop
+  } finally {
+    await client.query('SELECT pg_advisory_unlock($1, $2)', lockKeys);
   }
-  // oxlint-enable no-await-in-loop
 }

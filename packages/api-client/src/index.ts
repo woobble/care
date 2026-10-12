@@ -16,7 +16,11 @@ export function createCareApi(options: ApiClientOptions) {
   if (options.tenantId) headers['X-Tenant-Id'] = options.tenantId;
   if (options.requestId) headers['X-Request-Id'] = options.requestId;
   if (options.correlationId) headers['X-Correlation-Id'] = options.correlationId;
-  return createClient<paths>({ baseUrl: options.baseUrl, headers });
+  return createClient<paths>({
+    baseUrl: options.baseUrl,
+    headers,
+    fetch: (request: Request) => globalThis.fetch(new Request(request, { cache: 'no-store' })),
+  });
 }
 
 export type CareApi = ReturnType<typeof createCareApi>;

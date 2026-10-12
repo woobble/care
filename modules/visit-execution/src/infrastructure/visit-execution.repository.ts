@@ -1,8 +1,13 @@
-import { and, asc, eq, gt, inArray, isNull, lt, lte, or } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, or } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
 import { clientAddresses, clientRecords } from '@care/clients';
 import { employeeRecords, employeeTeamMemberships } from '@care/employees';
-import { visitAssignments, visits, visitServices } from '@care/scheduling';
+import {
+  clientSchedulingPreferences,
+  visitAssignments,
+  visits,
+  visitServices,
+} from '@care/scheduling';
 import { serviceAvailability, serviceDefinitions } from '@care/services';
 import { performedServices, visitExecutions } from '@module/visit-execution/schema';
 
@@ -13,6 +18,62 @@ export type PerformedServiceRow = typeof performedServices.$inferSelect;
 export type ServiceDefinitionRow = typeof serviceDefinitions.$inferSelect;
 
 export class VisitExecutionRepository {
+  async clientSchedulingPreferences(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    clientId: string,
+  ) {
+    const [preferences] = await transaction
+      .select({
+        preferredWeekdays: clientSchedulingPreferences.preferredWeekdays,
+        preferredTimeWindows: clientSchedulingPreferences.preferredTimeWindows,
+      })
+      .from(clientSchedulingPreferences)
+      .where(
+        and(
+          eq(clientSchedulingPreferences.tenantId, tenantId),
+          eq(clientSchedulingPreferences.clientId, clientId),
+        ),
+      )
+      .limit(1);
+    return preferences ?? null;
+  }
+
+  async operationalExecutions(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    from: Date,
+    until: Date,
+  ) {
+    return transaction
+      .select({
+        visit: visits,
+        execution: visitExecutions,
+        preferredName: clientRecords.preferredName,
+        firstName: clientRecords.firstName,
+        lastName: clientRecords.lastName,
+      })
+      .from(visitExecutions)
+      .innerJoin(
+        visits,
+        and(eq(visits.tenantId, visitExecutions.tenantId), eq(visits.id, visitExecutions.visitId)),
+      )
+      .innerJoin(
+        clientRecords,
+        and(eq(clientRecords.tenantId, visits.tenantId), eq(clientRecords.id, visits.clientId)),
+      )
+      .where(
+        and(
+          eq(visitExecutions.tenantId, tenantId),
+          eq(visitExecutions.status, 'in_progress'),
+          gte(visits.plannedEnd, from),
+          lt(visits.plannedEnd, until),
+        ),
+      )
+      .orderBy(asc(visits.plannedEnd), asc(visits.id))
+      .limit(101);
+  }
+
   async getVisit(
     transaction: DatabaseTransaction,
     tenantId: string,
@@ -343,6 +404,7 @@ export class VisitExecutionRepository {
         firstName: clientRecords.firstName,
         lastName: clientRecords.lastName,
         address: clientAddresses,
+        assignmentAssignedAt: visitAssignments.assignedAt,
       })
       .from(visits)
       .innerJoin(

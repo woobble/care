@@ -4,6 +4,7 @@ import { auth } from '@app/web/auth';
 import { getApiClient } from '@app/web/lib/api';
 import { Button, Label } from '@care/ui';
 import { LanguageSwitcher } from '@app/web/components/language-switcher';
+import { SignOutForm } from '@app/web/components/sign-out-form';
 import { signOutAction } from './actions/auth';
 import { selectTenantAction } from './actions/tenant';
 import { SignInButton } from './sign-in-button';
@@ -48,9 +49,9 @@ export default async function TenantSelectionPage({
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
           {authT('sessionExpired')}
         </p>
-        <form action={signOutAction}>
+        <SignOutForm action={signOutAction}>
           <Button type="submit">{authT('signInAgain')}</Button>
-        </form>
+        </SignOutForm>
       </main>
     );
   }

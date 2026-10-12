@@ -6,6 +6,7 @@ import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent, type DomainEvent } from '@care/events';
 import {
   assertCan,
+  can,
   type AuthorizationPrincipal,
   type Permission,
   type ResourceContext,
@@ -50,6 +51,11 @@ export interface VisitExecutionDetail {
     clientId: string;
     clientDisplayName: string;
     address: string | null;
+    note: string | null;
+    schedulingPreferences: {
+      preferredWeekdays: number[];
+      preferredTimeWindows: Array<{ startsAt: string; endsAt: string }>;
+    } | null;
     status: 'planned' | 'confirmed' | 'cancelled';
     plannedStart: string;
     plannedEnd: string;
@@ -88,6 +94,9 @@ export interface CaregiverVisitSummary {
   clientId: string;
   clientDisplayName: string;
   address: string | null;
+  note: string | null;
+  updatedAt: string;
+  assignmentAssignedAt: string;
   status: 'planned' | 'confirmed' | 'cancelled';
   plannedStart: string;
   plannedEnd: string;
@@ -109,6 +118,25 @@ export interface VisitExecutionSummary {
   executionStatus: 'not_started' | 'in_progress' | 'completed';
   actualStart: string | null;
   actualEnd: string | null;
+}
+
+export interface VisitExecutionOperationsSummary {
+  visitId: string;
+  clientId: string;
+  clientDisplayName: string;
+  organizationId: string;
+  facilityId: string;
+  plannedEnd: string;
+  actualStart: string;
+}
+
+export interface VisitExecutionOperationsSummaryResult {
+  items: VisitExecutionOperationsSummary[];
+  complete: boolean;
+}
+
+export interface VisitExecutionOperationsIssueState {
+  overdueIncomplete: boolean | null;
 }
 
 export class VisitExecutionApplicationService {
@@ -176,6 +204,106 @@ export class VisitExecutionApplicationService {
     });
   }
 
+  async operationsSummaries(
+    principal: AuthorizationPrincipal,
+    from: Date,
+    until: Date,
+  ): Promise<VisitExecutionOperationsSummaryResult> {
+    if (!validInstant(from) || !validInstant(until) || until <= from) {
+      throw new InvalidVisitExecutionQueryError();
+    }
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const rows = await this.repository.operationalExecutions(
+        transaction,
+        principal.tenantId,
+        from,
+        until,
+      );
+      const employee = principal.roles?.includes('Caregiver')
+        ? await this.requireEmployee(transaction, principal)
+        : null;
+      const allowed = [] as typeof rows;
+      // oxlint-disable no-await-in-loop
+      for (const row of rows) {
+        if (
+          !can(principal, {
+            action: 'visit_execution.read',
+            resource: await this.visitResourceContext(transaction, principal.tenantId, row.visit),
+          })
+        ) {
+          continue;
+        }
+        if (
+          employee &&
+          !(await this.repository.hasActiveAssignment(
+            transaction,
+            principal.tenantId,
+            row.visit.id,
+            employee.id,
+          ))
+        ) {
+          continue;
+        }
+        allowed.push(row);
+      }
+      // oxlint-enable no-await-in-loop
+      return {
+        items: allowed
+          .slice(0, 100)
+          .map(({ visit, execution, preferredName, firstName, lastName }) => ({
+            visitId: visit.id,
+            clientId: visit.clientId,
+            clientDisplayName: `${preferredName || firstName} ${lastName}`,
+            organizationId: visit.organizationId,
+            facilityId: visit.facilityId,
+            plannedEnd: visit.plannedEnd.toISOString(),
+            actualStart: execution.actualStart.toISOString(),
+          })),
+        complete: rows.length <= 100,
+      };
+    });
+  }
+
+  async operationsIssueState(
+    principal: AuthorizationPrincipal,
+    visitId: string,
+  ): Promise<VisitExecutionOperationsIssueState> {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const context = await this.repository.getVisit(transaction, principal.tenantId, visitId);
+      if (!context) return { overdueIncomplete: false };
+      if (
+        !can(principal, {
+          action: 'visit_execution.read',
+          resource: await this.visitResourceContext(transaction, principal.tenantId, context.visit),
+        })
+      ) {
+        return { overdueIncomplete: null };
+      }
+      if (principal.roles?.includes('Caregiver')) {
+        const employee = await this.requireEmployee(transaction, principal);
+        if (
+          !(await this.repository.hasActiveAssignment(
+            transaction,
+            principal.tenantId,
+            visitId,
+            employee.id,
+          ))
+        ) {
+          return { overdueIncomplete: null };
+        }
+      }
+      const execution = await this.repository.getExecution(
+        transaction,
+        principal.tenantId,
+        visitId,
+      );
+      return {
+        overdueIncomplete:
+          execution?.status === 'in_progress' && context.visit.plannedEnd.getTime() < Date.now(),
+      };
+    });
+  }
+
   async myVisits(
     principal: AuthorizationPrincipal,
     from: Date,
@@ -219,38 +347,43 @@ export class VisitExecutionApplicationService {
         executions.map((execution) => [execution.visitId, execution]),
       );
 
-      return rows.map(({ visit, preferredName, firstName, lastName, address }) => {
-        const execution = executionByVisit.get(visit.id);
-        return {
-          id: visit.id,
-          clientId: visit.clientId,
-          clientDisplayName: (preferredName || firstName) + ' ' + lastName,
-          address: address
-            ? [
-                address.street,
-                address.houseNumber,
-                address.addressAddition,
-                [address.postalCode, address.city].filter(Boolean).join(' '),
-              ]
-                .filter(Boolean)
-                .join(', ')
-            : null,
-          status: visit.status,
-          plannedStart: visit.plannedStart.toISOString(),
-          plannedEnd: visit.plannedEnd.toISOString(),
-          timezone: visit.timezone,
-          executionStatus: execution?.status ?? 'not_started',
-          actualStart: execution?.actualStart.toISOString() ?? null,
-          actualEnd: execution?.actualEnd?.toISOString() ?? null,
-          services: (servicesByVisit.get(visit.id) ?? []).map((service) => ({
-            id: service.id,
-            code: service.serviceCodeSnapshot,
-            name: service.serviceNameSnapshot,
-            unit: service.unitSnapshot,
-            plannedQuantity: service.plannedQuantity,
-          })),
-        };
-      });
+      return rows.map(
+        ({ visit, preferredName, firstName, lastName, address, assignmentAssignedAt }) => {
+          const execution = executionByVisit.get(visit.id);
+          return {
+            id: visit.id,
+            clientId: visit.clientId,
+            clientDisplayName: (preferredName || firstName) + ' ' + lastName,
+            address: address
+              ? [
+                  address.street,
+                  address.houseNumber,
+                  address.addressAddition,
+                  [address.postalCode, address.city].filter(Boolean).join(' '),
+                ]
+                  .filter(Boolean)
+                  .join(', ')
+              : null,
+            note: visit.note,
+            updatedAt: visit.updatedAt.toISOString(),
+            assignmentAssignedAt: assignmentAssignedAt.toISOString(),
+            status: visit.status,
+            plannedStart: visit.plannedStart.toISOString(),
+            plannedEnd: visit.plannedEnd.toISOString(),
+            timezone: visit.timezone,
+            executionStatus: execution?.status ?? 'not_started',
+            actualStart: execution?.actualStart.toISOString() ?? null,
+            actualEnd: execution?.actualEnd?.toISOString() ?? null,
+            services: (servicesByVisit.get(visit.id) ?? []).map((service) => ({
+              id: service.id,
+              code: service.serviceCodeSnapshot,
+              name: service.serviceNameSnapshot,
+              unit: service.unitSnapshot,
+              plannedQuantity: service.plannedQuantity,
+            })),
+          };
+        },
+      );
     });
   }
 
@@ -739,6 +872,11 @@ export class VisitExecutionApplicationService {
         ? await this.repository.getExecution(transaction, tenantId, context.visit.id)
         : execution;
     const planned = await this.repository.plannedServices(transaction, tenantId, context.visit.id);
+    const schedulingPreferences = await this.repository.clientSchedulingPreferences(
+      transaction,
+      tenantId,
+      context.visit.clientId,
+    );
     const recorded = current
       ? await this.repository.performedServiceRows(transaction, tenantId, current.id)
       : [];
@@ -761,6 +899,13 @@ export class VisitExecutionApplicationService {
         clientId: context.visit.clientId,
         clientDisplayName: context.clientDisplayName,
         address: context.address,
+        note: context.visit.note,
+        schedulingPreferences: schedulingPreferences
+          ? {
+              preferredWeekdays: schedulingPreferences.preferredWeekdays,
+              preferredTimeWindows: schedulingPreferences.preferredTimeWindows,
+            }
+          : null,
         status: context.visit.status,
         plannedStart: context.visit.plannedStart.toISOString(),
         plannedEnd: context.visit.plannedEnd.toISOString(),
@@ -845,19 +990,23 @@ export class VisitExecutionApplicationService {
     visit: VisitExecutionVisit,
     permission: Permission,
   ): Promise<void> {
-    const teamIds = await this.repository.teamIdsForVisit(
-      transaction,
-      principal.tenantId,
-      visit.id,
-    );
-    const resource: ResourceContext = {
+    const resource = await this.visitResourceContext(transaction, principal.tenantId, visit);
+    assertCan(principal, { action: permission, resource });
+  }
+
+  private async visitResourceContext(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    visit: VisitExecutionVisit,
+  ): Promise<ResourceContext> {
+    const teamIds = await this.repository.teamIdsForVisit(transaction, tenantId, visit.id);
+    return {
       tenantId: visit.tenantId,
       clientId: visit.clientId,
       organizationId: visit.organizationId,
       facilityId: visit.facilityId,
       teamIds,
     };
-    assertCan(principal, { action: permission, resource });
   }
 
   private async requireAssignedEmployee(

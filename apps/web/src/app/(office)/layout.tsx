@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
 import { LanguageSwitcher } from '@app/web/components/language-switcher';
+import { SignOutForm } from '@app/web/components/sign-out-form';
 import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
 import { signOutAction } from '@app/web/app/actions/auth';
 
@@ -82,11 +83,11 @@ export default async function OfficeLayout({ children }: Readonly<{ children: Re
             <Button asChild variant="secondary" size="sm">
               <Link href="/">{t('changeTenant')}</Link>
             </Button>
-            <form action={signOutAction}>
+            <SignOutForm action={signOutAction}>
               <Button variant="link" size="sm">
                 {t('signOut')}
               </Button>
-            </form>
+            </SignOutForm>
             <LanguageSwitcher locale={locale} />
           </div>
         </nav>

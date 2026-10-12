@@ -1,0 +1,69 @@
+groups:
+  - name: care-platform-availability
+    interval: 30s
+    rules:
+      - alert: CareApiScrapeMissing
+        expr: up{job="care-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Care API metrics endpoint is unavailable
+          description: Prometheus has been unable to scrape the Care API for at least two minutes.
+
+      - alert: CareApiNotReady
+        expr: care_api_readiness{service="care-api"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Care API dependencies are not ready
+          description: The Care API has reported an unavailable required dependency for five minutes.
+
+      - alert: CareWorkerScrapeMissing
+        expr: up{job="care-worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Care worker metrics endpoint is unavailable
+          description: Prometheus has been unable to scrape the Care worker for at least two minutes.
+
+      - alert: CareWorkerHeartbeatStale
+        expr: time() - care_worker_heartbeat_timestamp_seconds{service="care-worker"} > 90
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Care worker heartbeat is stale
+          description: The worker has not persisted a heartbeat within the expected 90-second window.
+
+  - name: care-platform-operations
+    interval: 30s
+    rules:
+      - alert: CareWorkerSchedulerDegraded
+        expr: care_worker_scheduler_status{service="care-worker", state="degraded"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Care worker scheduler is degraded
+          description: The scheduler has reported evaluation failures for at least five minutes.
+
+      - alert: CareWorkerDeadOutboxMessages
+        expr: care_worker_outbox_messages{service="care-worker", status="dead"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Care worker has dead-letter outbox messages
+          description: Dead-letter outbox messages have been present continuously for five minutes.
+
+      - alert: CareDocumentGenerationFailures
+        expr: sum(increase(care_document_generation_failures_total{service="care-api"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Care document generation is failing
+          description: At least one document generation failure occurred in the last 15 minutes.

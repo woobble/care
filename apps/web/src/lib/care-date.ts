@@ -4,13 +4,17 @@ export interface LocalDayRange {
   until: string;
 }
 
-export function todayRange(timezone = 'Europe/Berlin', now = new Date()): LocalDayRange {
+export function todayRange(
+  timezone = 'Europe/Berlin',
+  now = new Date(),
+): LocalDayRange & { now: number } {
   const date = dateKey(now, timezone);
   const nextDate = shiftDateKey(date, 1);
   return {
     date,
     from: localMidnight(date, timezone).toISOString(),
     until: localMidnight(nextDate, timezone).toISOString(),
+    now: now.getTime(),
   };
 }
 

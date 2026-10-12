@@ -22,9 +22,9 @@ export async function startVisitAction(formData: FormData): Promise<void> {
   const { error } = await api.POST('/api/v1/visits/{visitId}/execution/start', {
     params: { path: { visitId }, header: await getTenantHeader() },
   });
-  if (error) redirect(visitPath(visitId, error.code));
+  if (error) redirect(visitErrorPath(visitId, error.code));
   refresh(visitId);
-  redirect(visitPath(visitId, 'started'));
+  redirect(visitNoticePath(visitId, 'started'));
 }
 
 export async function recordPerformedServiceAction(formData: FormData): Promise<void> {
@@ -44,7 +44,7 @@ export async function recordPerformedServiceAction(formData: FormData): Promise<
     (!visitServiceId && !serviceDefinitionId) ||
     (reason !== '' && !(reasonCodes as readonly string[]).includes(reason))
   ) {
-    redirect(visitPath(visitId, 'INVALID_REQUEST'));
+    redirect(visitErrorPath(visitId, 'INVALID_REQUEST'));
   }
 
   const api = await getApiClient();
@@ -65,23 +65,23 @@ export async function recordPerformedServiceAction(formData: FormData): Promise<
       },
     },
   );
-  if (error) redirect(visitPath(visitId, error.code));
+  if (error) redirect(visitErrorPath(visitId, error.code));
   refresh(visitId);
-  redirect(visitPath(visitId, 'service-saved'));
+  redirect(visitNoticePath(visitId, 'service-saved'));
 }
 
 export async function completeVisitAction(formData: FormData): Promise<void> {
   const visitId = readUuid(formData.get('visitId'));
   const expectedVersion = readPositiveInteger(formData.get('expectedVersion'));
-  if (!visitId || !expectedVersion) redirect(visitPath(visitId, 'INVALID_REQUEST'));
+  if (!visitId || !expectedVersion) redirect(visitErrorPath(visitId, 'INVALID_REQUEST'));
   const api = await getApiClient();
   const { error } = await api.POST('/api/v1/visits/{visitId}/execution/complete', {
     params: { path: { visitId }, header: await getTenantHeader() },
     body: { expectedVersion },
   });
-  if (error) redirect(visitPath(visitId, error.code));
+  if (error) redirect(visitErrorPath(visitId, error.code));
   refresh(visitId);
-  redirect(visitPath(visitId, 'completed'));
+  redirect(visitNoticePath(visitId, 'completed'));
 }
 
 export async function createDocumentationAction(formData: FormData): Promise<void> {
@@ -91,9 +91,9 @@ export async function createDocumentationAction(formData: FormData): Promise<voi
   const { error } = await api.POST('/api/v1/visits/{visitId}/documentation', {
     params: { path: { visitId }, header: await getTenantHeader() },
   });
-  if (error) redirect(visitPath(visitId, error.code));
+  if (error) redirect(visitErrorPath(visitId, error.code));
   refresh(visitId);
-  redirect(visitPath(visitId, 'documentation-created'));
+  redirect(visitNoticePath(visitId, 'documentation-created'));
 }
 
 export async function addDocumentationEntryAction(formData: FormData): Promise<void> {
@@ -109,11 +109,11 @@ export async function addDocumentationEntryAction(formData: FormData): Promise<v
     !content ||
     !['care_note', 'observation', 'deviation', 'incident'].includes(type)
   ) {
-    redirect(visitPath(visitId, 'INVALID_REQUEST'));
+    redirect(visitErrorPath(visitId, 'INVALID_REQUEST'));
   }
   const severity = readString(formData, 'severity');
   if (type === 'incident' && !['low', 'moderate', 'high', 'critical'].includes(severity)) {
-    redirect(visitPath(visitId, 'INVALID_REQUEST'));
+    redirect(visitErrorPath(visitId, 'INVALID_REQUEST'));
   }
   const api = await getApiClient();
   const { error } = await api.POST('/api/v1/care-documentation/{id}/entries', {
@@ -130,9 +130,9 @@ export async function addDocumentationEntryAction(formData: FormData): Promise<v
         : {}),
     },
   });
-  if (error) redirect(visitPath(visitId, error.code));
+  if (error) redirect(visitErrorPath(visitId, error.code));
   refresh(visitId);
-  redirect(visitPath(visitId, 'entry-saved'));
+  redirect(visitNoticePath(visitId, 'entry-saved'));
 }
 
 export async function updateDocumentationEntryAction(formData: FormData): Promise<void> {
@@ -142,16 +142,16 @@ export async function updateDocumentationEntryAction(formData: FormData): Promis
   const expectedVersion = readPositiveInteger(formData.get('expectedVersion'));
   const content = readString(formData, 'content');
   if (!visitId || !documentationId || !entryId || !expectedVersion || !content) {
-    redirect(visitPath(visitId, 'INVALID_REQUEST'));
+    redirect(visitErrorPath(visitId, 'INVALID_REQUEST'));
   }
   const api = await getApiClient();
   const { error } = await api.PATCH('/api/v1/care-documentation/{id}/entries/{entryId}', {
     params: { path: { id: documentationId, entryId }, header: await getTenantHeader() },
     body: { expectedVersion, content },
   });
-  if (error) redirect(visitPath(visitId, error.code));
+  if (error) redirect(visitErrorPath(visitId, error.code));
   refresh(visitId);
-  redirect(visitPath(visitId, 'entry-saved'));
+  redirect(visitNoticePath(visitId, 'entry-saved'));
 }
 
 export async function removeDocumentationEntryAction(formData: FormData): Promise<void> {
@@ -160,7 +160,7 @@ export async function removeDocumentationEntryAction(formData: FormData): Promis
   const entryId = readUuid(formData.get('entryId'));
   const expectedVersion = readPositiveInteger(formData.get('expectedVersion'));
   if (!visitId || !documentationId || !entryId || !expectedVersion) {
-    redirect(visitPath(visitId, 'INVALID_REQUEST'));
+    redirect(visitErrorPath(visitId, 'INVALID_REQUEST'));
   }
   const { error } = await (
     await getApiClient()
@@ -168,9 +168,9 @@ export async function removeDocumentationEntryAction(formData: FormData): Promis
     params: { path: { id: documentationId, entryId }, header: await getTenantHeader() },
     body: { expectedVersion },
   });
-  if (error) redirect(visitPath(visitId, error.code));
+  if (error) redirect(visitErrorPath(visitId, error.code));
   refresh(visitId);
-  redirect(visitPath(visitId, 'entry-removed'));
+  redirect(visitNoticePath(visitId, 'entry-removed'));
 }
 
 export async function recordServiceEvidenceAction(formData: FormData): Promise<void> {
@@ -180,7 +180,7 @@ export async function recordServiceEvidenceAction(formData: FormData): Promise<v
   const expectedVersion = readPositiveInteger(formData.get('expectedVersion'));
   const note = readNullableString(formData, 'note');
   if (!visitId || !documentationId || !performedServiceId || !expectedVersion) {
-    redirect(visitPath(visitId, 'INVALID_REQUEST'));
+    redirect(visitErrorPath(visitId, 'INVALID_REQUEST'));
   }
   const api = await getApiClient();
   const { error } = await api.PUT('/api/v1/care-documentation/{id}/evidence/{performedServiceId}', {
@@ -190,9 +190,9 @@ export async function recordServiceEvidenceAction(formData: FormData): Promise<v
     },
     body: { expectedVersion, status: 'documented', note },
   });
-  if (error) redirect(visitPath(visitId, error.code));
+  if (error) redirect(visitErrorPath(visitId, error.code));
   refresh(visitId);
-  redirect(visitPath(visitId, 'evidence-saved'));
+  redirect(visitNoticePath(visitId, 'evidence-saved'));
 }
 
 export async function finalizeDocumentationAction(formData: FormData): Promise<void> {
@@ -200,16 +200,16 @@ export async function finalizeDocumentationAction(formData: FormData): Promise<v
   const documentationId = readUuid(formData.get('documentationId'));
   const expectedVersion = readPositiveInteger(formData.get('expectedVersion'));
   if (!visitId || !documentationId || !expectedVersion) {
-    redirect(visitPath(visitId, 'INVALID_REQUEST'));
+    redirect(visitErrorPath(visitId, 'INVALID_REQUEST'));
   }
   const api = await getApiClient();
   const { error } = await api.POST('/api/v1/care-documentation/{id}/finalize', {
     params: { path: { id: documentationId }, header: await getTenantHeader() },
     body: { expectedVersion },
   });
-  if (error) redirect(visitPath(visitId, error.code));
+  if (error) redirect(visitErrorPath(visitId, error.code));
   refresh(visitId);
-  redirect(visitPath(visitId, 'documentation-finalized'));
+  redirect(visitNoticePath(visitId, 'documentation-finalized'));
 }
 
 export async function prepareEvidencePackageAction(formData: FormData): Promise<void> {
@@ -221,9 +221,9 @@ export async function prepareEvidencePackageAction(formData: FormData): Promise<
     params: { path: { visitId }, header: await getTenantHeader() },
   });
   if (error || !data)
-    redirect(evidencePath(visitId, error?.code ?? 'EVIDENCE_PACKAGE_INVALID_STATE'));
+    redirect(evidenceErrorPath(visitId, error?.code ?? 'EVIDENCE_PACKAGE_INVALID_STATE'));
   revalidateEvidence(visitId, data.id);
-  redirect(evidencePath(visitId, 'package-prepared'));
+  redirect(evidenceNoticePath(visitId, 'package-prepared'));
 }
 
 export async function acknowledgeEvidenceAction(formData: FormData): Promise<void> {
@@ -233,7 +233,7 @@ export async function acknowledgeEvidenceAction(formData: FormData): Promise<voi
   const signatory = readSignatory(formData);
   const method = readString(formData, 'method');
   if (!visitId || !evidencePackageId || !idempotencyKey || !signatory) {
-    redirect(evidencePath(visitId, 'INVALID_REQUEST'));
+    redirect(evidenceErrorPath(visitId, 'INVALID_REQUEST'));
   }
 
   const api = await getApiClient();
@@ -259,10 +259,10 @@ export async function acknowledgeEvidenceAction(formData: FormData): Promise<voi
           })
         : null;
 
-  if (!result) redirect(evidencePath(visitId, 'INVALID_REQUEST'));
-  if (result.error) redirect(evidencePath(visitId, result.error.code));
+  if (!result) redirect(evidenceErrorPath(visitId, 'INVALID_REQUEST'));
+  if (result.error) redirect(evidenceErrorPath(visitId, result.error.code));
   revalidateEvidence(visitId, evidencePackageId);
-  redirect(evidencePath(visitId, 'acknowledged'));
+  redirect(evidenceNoticePath(visitId, 'acknowledged'));
 }
 
 export async function declineEvidenceAction(formData: FormData): Promise<void> {
@@ -285,7 +285,7 @@ export async function declineEvidenceAction(formData: FormData): Promise<void> {
     !signatory ||
     !(reasons as readonly string[]).includes(reasonCode)
   ) {
-    redirect(evidencePath(visitId, 'INVALID_REQUEST'));
+    redirect(evidenceErrorPath(visitId, 'INVALID_REQUEST'));
   }
 
   const { error } = await (
@@ -299,9 +299,9 @@ export async function declineEvidenceAction(formData: FormData): Promise<void> {
       note: readNullableString(formData, 'note'),
     },
   });
-  if (error) redirect(evidencePath(visitId, error.code));
+  if (error) redirect(evidenceErrorPath(visitId, error.code));
   revalidateEvidence(visitId, evidencePackageId);
-  redirect(evidencePath(visitId, 'declined'));
+  redirect(evidenceNoticePath(visitId, 'declined'));
 }
 
 function readUuid(value: FormDataEntryValue | null): string | null {
@@ -378,10 +378,16 @@ function parseSignatureStrokes(value: string): { x: number; y: number }[][] {
   return parsed as { x: number; y: number }[][];
 }
 
-function evidencePath(visitId: string | null, value: string): string {
+function evidenceNoticePath(visitId: string | null, notice: string): string {
   return visitId
-    ? `/care/visits/${visitId}/evidence?notice=${encodeURIComponent(value)}`
-    : '/care/today?error=' + encodeURIComponent(value);
+    ? `/care/visits/${visitId}/evidence?notice=${encodeURIComponent(notice)}`
+    : evidenceErrorPath(null, 'INVALID_REQUEST');
+}
+
+function evidenceErrorPath(visitId: string | null, error: string): string {
+  return visitId
+    ? `/care/visits/${visitId}/evidence?error=${encodeURIComponent(error)}`
+    : '/care/today?error=' + encodeURIComponent(error);
 }
 
 function revalidateEvidence(visitId: string, evidencePackageId: string): void {
@@ -392,10 +398,16 @@ function revalidateEvidence(visitId: string, evidencePackageId: string): void {
   revalidatePath('/service-evidence/' + evidencePackageId);
 }
 
-function visitPath(visitId: string | null, value: string): string {
+function visitNoticePath(visitId: string | null, notice: string): string {
   return visitId
-    ? '/care/visits/' + visitId + '?notice=' + encodeURIComponent(value)
-    : '/care/today?error=' + encodeURIComponent(value);
+    ? '/care/visits/' + visitId + '?notice=' + encodeURIComponent(notice)
+    : visitErrorPath(null, 'INVALID_REQUEST');
+}
+
+function visitErrorPath(visitId: string | null, error: string): string {
+  return visitId
+    ? '/care/visits/' + visitId + '?error=' + encodeURIComponent(error)
+    : '/care/today?error=' + encodeURIComponent(error);
 }
 
 function refresh(visitId: string): void {

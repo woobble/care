@@ -1348,27 +1348,26 @@ export class SchedulingApplicationService {
         from,
         until,
       );
-      return Promise.all(
-        rows.map(async (tour) => {
-          const publication = await this.repository.latestTourPublication(
-            transaction,
-            principal.tenantId,
-            tour.id,
-          );
-          const stops = await this.repository.tourStops(transaction, principal.tenantId, tour.id);
-          return {
-            id: tour.id,
-            employeeId: tour.employeeId,
-            organizationId: tour.organizationId,
-            localDate: tour.localDate,
-            timezone: tour.timezone,
-            status: tour.status,
-            version: tour.version,
-            stopCount: stops.length,
-            latestPublishedVersion: publication?.version ?? null,
-          };
-        }),
-      );
+      const summaries: Array<
+        (typeof rows)[number] & {
+          stopCount: number;
+          latestPublishedVersion: number | null;
+        }
+      > = [];
+      for (const tour of rows) {
+        const publication = await this.repository.latestTourPublication(
+          transaction,
+          principal.tenantId,
+          tour.id,
+        );
+        const stops = await this.repository.tourStops(transaction, principal.tenantId, tour.id);
+        summaries.push({
+          ...tour,
+          stopCount: stops.length,
+          latestPublishedVersion: publication?.version ?? null,
+        });
+      }
+      return summaries;
     });
   }
 

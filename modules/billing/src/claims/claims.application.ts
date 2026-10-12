@@ -413,67 +413,65 @@ export class BillingClaimsApplicationService {
     const claimIds = pageRows.map((claim) => claim.id);
     const summaries = claimIds.length
       ? await this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-          const [submissions, decisions, allocations, clients] = await Promise.all([
-            transaction
-              .select({
-                claimId: claimSubmissions.claimId,
-                submittedAt: claimSubmissions.submittedAt,
-              })
-              .from(claimSubmissions)
-              .where(
-                and(
-                  eq(claimSubmissions.tenantId, principal.tenantId),
-                  inArray(claimSubmissions.claimId, claimIds),
-                ),
-              )
-              .orderBy(desc(claimSubmissions.submittedAt), desc(claimSubmissions.id)),
-            transaction
-              .select({
-                claimId: claimDecisions.claimId,
-                acceptedCents: claimDecisions.acceptedCents,
-              })
-              .from(claimDecisions)
-              .where(
-                and(
-                  eq(claimDecisions.tenantId, principal.tenantId),
-                  inArray(claimDecisions.claimId, claimIds),
-                ),
-              )
-              .orderBy(desc(claimDecisions.createdAt), desc(claimDecisions.id)),
-            transaction
-              .select({
-                claimId: paymentAllocations.claimId,
-                amountCents: paymentAllocations.amountCents,
-                reversalId: paymentReversals.id,
-              })
-              .from(paymentAllocations)
-              .leftJoin(
-                paymentReversals,
-                and(
-                  eq(paymentReversals.tenantId, paymentAllocations.tenantId),
-                  eq(paymentReversals.allocationId, paymentAllocations.id),
-                ),
-              )
-              .where(
-                and(
-                  eq(paymentAllocations.tenantId, principal.tenantId),
-                  inArray(paymentAllocations.claimId, claimIds),
-                ),
+          const submissions = await transaction
+            .select({
+              claimId: claimSubmissions.claimId,
+              submittedAt: claimSubmissions.submittedAt,
+            })
+            .from(claimSubmissions)
+            .where(
+              and(
+                eq(claimSubmissions.tenantId, principal.tenantId),
+                inArray(claimSubmissions.claimId, claimIds),
               ),
-            transaction
-              .select({
-                id: clientRecords.id,
-                firstName: clientRecords.firstName,
-                lastName: clientRecords.lastName,
-              })
-              .from(clientRecords)
-              .where(
-                and(
-                  eq(clientRecords.tenantId, principal.tenantId),
-                  inArray(clientRecords.id, [...new Set(pageRows.map((claim) => claim.clientId))]),
-                ),
+            )
+            .orderBy(desc(claimSubmissions.submittedAt), desc(claimSubmissions.id));
+          const decisions = await transaction
+            .select({
+              claimId: claimDecisions.claimId,
+              acceptedCents: claimDecisions.acceptedCents,
+            })
+            .from(claimDecisions)
+            .where(
+              and(
+                eq(claimDecisions.tenantId, principal.tenantId),
+                inArray(claimDecisions.claimId, claimIds),
               ),
-          ]);
+            )
+            .orderBy(desc(claimDecisions.createdAt), desc(claimDecisions.id));
+          const allocations = await transaction
+            .select({
+              claimId: paymentAllocations.claimId,
+              amountCents: paymentAllocations.amountCents,
+              reversalId: paymentReversals.id,
+            })
+            .from(paymentAllocations)
+            .leftJoin(
+              paymentReversals,
+              and(
+                eq(paymentReversals.tenantId, paymentAllocations.tenantId),
+                eq(paymentReversals.allocationId, paymentAllocations.id),
+              ),
+            )
+            .where(
+              and(
+                eq(paymentAllocations.tenantId, principal.tenantId),
+                inArray(paymentAllocations.claimId, claimIds),
+              ),
+            );
+          const clients = await transaction
+            .select({
+              id: clientRecords.id,
+              firstName: clientRecords.firstName,
+              lastName: clientRecords.lastName,
+            })
+            .from(clientRecords)
+            .where(
+              and(
+                eq(clientRecords.tenantId, principal.tenantId),
+                inArray(clientRecords.id, [...new Set(pageRows.map((claim) => claim.clientId))]),
+              ),
+            );
           const submittedAtByClaim = new Map<string, Date>();
           for (const row of submissions) {
             if (!submittedAtByClaim.has(row.claimId)) {

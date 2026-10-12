@@ -12,10 +12,11 @@
     "lint": "oxlint src",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
+    "test": "bun test src",
     "typecheck": "tsc --noEmit --pretty false -p tsconfig.json"
   },
   "dependencies": {
-    "dotenv": "^18.0.6",
-    "zod": "^4.6.5"
+    "dotenv": "^18.0.7",
+    "zod": "^4.6.6"
   }
 }

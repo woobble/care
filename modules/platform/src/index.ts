@@ -1,4 +1,4 @@
-export { platformSchema, outboxMessages } from './schema';
+export { platformSchema, outboxMessages, workerHealth } from './schema';
 export {
   DrizzleOutboxRepository,
   type OutboxWriter,

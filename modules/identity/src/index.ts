@@ -1,4 +1,5 @@
 export { identitySchema, users, tenantMemberships } from './schema';
+export { seedSystemRoles } from './system-roles';
 export { betterAuthSchema } from './auth-schema';
 export { IdentityService } from './application/identity.service';
 export { TenantAccessService } from './application/tenant-access.service';

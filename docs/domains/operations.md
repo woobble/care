@@ -26,6 +26,8 @@ Schedules use an IANA time zone and local wall-clock time. Ambiguous fall-back t
 
 Projection windows and source queries are bounded. The response reports truncation so callers can narrow the worklist. Filters and ordering are deterministic; date filters use each organization's time zone. The assigned-employee filter matches deadlines with a linked follow-up task assigned to that employee; unassigned projections do not match. Source permissions are checked before data is returned, and opening a source record still invokes its owning module's authorization.
 
+The source-derived worklist also projects overdue in-progress visits from Visit Execution. A visit becomes actionable after its planned end time passes without an execution completion. The `visit_execution_overdue` occurrence links to the visit, requires `visit_execution.read` within the caller's resource scope, and reconciles against the current execution state on later worklist reads. The projection is bounded, and stale occurrences are checked against their source before resolution; unavailable or out-of-scope source records are left unresolved. Existing Care Documentation and Service Evidence projections continue to report their own missing requirements and acknowledgement state.
+
 The current data model has no explicit document review/expiry date, claim response follow-up date, or agreement review date. Those are not inferred. Onboarding follow-up and start-date reminders use the existing admission fields and are configurable under the onboarding category.
 
 ## Reminder policies and history

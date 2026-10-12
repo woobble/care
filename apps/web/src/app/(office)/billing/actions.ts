@@ -135,7 +135,7 @@ export async function issueInvoiceAction(formData: FormData): Promise<void> {
   });
   if (error) redirect(invoicePath(invoiceId, error.code));
   refreshBilling();
-  redirect(invoicePath(invoiceId, 'INVOICE_ISSUED'));
+  redirect(invoicePath(invoiceId, undefined, 'issued'));
 }
 
 export async function regenerateInvoicePdfAction(formData: FormData): Promise<void> {
@@ -267,7 +267,7 @@ export async function createPayerArrangementAction(formData: FormData): Promise<
   if (error) redirect(clientInvoicesPath(clientId, error.code));
   revalidatePath(`/clients/${clientId}`);
   revalidatePath(clientInvoicesPath(clientId));
-  redirect(clientInvoicesPath(clientId, 'PAYER_ARRANGEMENT_SAVED'));
+  redirect(clientInvoicesPath(clientId, undefined, 'PAYER_ARRANGEMENT_SAVED'));
 }
 
 export async function updatePayerArrangementAction(formData: FormData): Promise<void> {
@@ -301,7 +301,7 @@ export async function updatePayerArrangementAction(formData: FormData): Promise<
   });
   if (error) redirect(clientInvoicesPath(clientId, error.code));
   revalidatePath(clientInvoicesPath(clientId));
-  redirect(clientInvoicesPath(clientId, 'PAYER_ARRANGEMENT_SAVED'));
+  redirect(clientInvoicesPath(clientId, undefined, 'PAYER_ARRANGEMENT_SAVED'));
 }
 
 export async function createPayerDirectoryEntryAction(formData: FormData): Promise<void> {

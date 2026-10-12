@@ -9,7 +9,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { createApiFastifyAdapter } from './http/fastify';
 
-process.env.NODE_ENV ??= 'test';
+process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL ??= 'postgres://care_app:build-only@127.0.0.1:5432/care';
 process.env.OIDC_ISSUER ??= 'http://localhost:9000/application/o/care-platform/';
 process.env.OIDC_CLIENT_ID ??= 'care-platform';

@@ -16,6 +16,6 @@
   "dependencies": {
     "@care/contracts": "workspace:*",
     "pino": "^10.4.0",
-    "uuid": "^14.0.2"
+    "uuid": "^14.0.3"
   }
 }
