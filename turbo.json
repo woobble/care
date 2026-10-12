@@ -27,6 +27,7 @@
         "WEB_ORIGIN",
         "OTEL_EXPORTER_OTLP_ENDPOINT",
         "PORT",
+        "API_METRICS_PORT",
         "WORKER_POLL_INTERVAL_MS"
       ],
       "passThroughEnv": [

@@ -46,7 +46,9 @@ test('Authentik users can be invited and administered from the office UI', async
   let invitedPlatformUserId: string | undefined;
   let caregiverPlatformUserId: string | undefined;
   let tenantId: string | undefined;
+  let pilotTenantId: string | undefined;
   let adminMembershipId: string | undefined;
+  let pilotMembershipId: string | undefined;
   let invitedMembershipId: string | undefined;
   let caregiverMembershipId: string | undefined;
   let replacementEmployeeId: string | undefined;
@@ -1783,6 +1785,65 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.getByRole('button', { name: 'Revoke access' }).click();
     await expect(page.getByText('Revoked', { exact: true })).toBeVisible();
     await expect(page.getByText('Revoked memberships cannot be reactivated.')).toBeVisible();
+
+    const pilotTenant = await database.query<{ id: string }>(
+      "SELECT id FROM organizations.tenants WHERE slug = 'muster-betreuungsdienst-nrw' AND active = true",
+    );
+    pilotTenantId = pilotTenant.rows[0]?.id;
+    if (pilotTenantId) {
+      const pilotAdministrator = await database.query<{ id: string }>(
+        "SELECT id FROM identity.roles WHERE tenant_id = $1 AND name = 'Administrator'",
+        [pilotTenantId],
+      );
+      const pilotAdministratorRoleId = pilotAdministrator.rows[0]?.id;
+      if (!pilotAdministratorRoleId || !platformUserId) {
+        throw new Error('The pilot tenant or E2E administrator is missing');
+      }
+      pilotMembershipId = uuidv7();
+      await database.query('BEGIN');
+      try {
+        await database.query(
+          "INSERT INTO identity.tenant_memberships (id, user_id, tenant_id, status) VALUES ($1, $2, $3, 'active')",
+          [pilotMembershipId, platformUserId, pilotTenantId],
+        );
+        await database.query(
+          'INSERT INTO identity.membership_roles (membership_id, tenant_id, role_id) VALUES ($1, $2, $3)',
+          [pilotMembershipId, pilotTenantId, pilotAdministratorRoleId],
+        );
+        await database.query(
+          "INSERT INTO identity.membership_scopes (membership_id, tenant_id, scope_type, scope_id) VALUES ($1, $2, 'tenant', $2)",
+          [pilotMembershipId, pilotTenantId],
+        );
+        await database.query('COMMIT');
+      } catch (error) {
+        await database.query('ROLLBACK');
+        throw error;
+      }
+
+      await page.goto('/');
+      await page.locator('select[name="tenantId"]').selectOption(pilotTenantId);
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await expect(page).toHaveURL(/\/clients$/);
+      await page.goto('/operations/tasks?q=%5BSYNTHETIC%20PILOT%5D');
+      await expect(
+        page.getByRole('heading', { name: 'Manual tasks', exact: true, level: 1 }),
+      ).toBeVisible();
+      await expect(page.locator('section[aria-labelledby="task-list-title"] ul > li')).toHaveCount(
+        15,
+      );
+      const claimTaskTitle = '[SYNTHETIC PILOT] Review local claim exercise';
+      await page.getByRole('link', { name: /Review local claim exercise/ }).click();
+      await expect(page.getByRole('heading', { name: claimTaskTitle })).toBeVisible();
+      const claimSourceLink = page.getByRole('link', { name: 'Open source record' });
+      await expect(claimSourceLink).toHaveAttribute('href', /^\/billing\/claims\/[0-9a-f-]{36}$/i);
+      const claimSourceUrl = new URL((await claimSourceLink.getAttribute('href'))!, page.url())
+        .href;
+      await claimSourceLink.click();
+      await expect(page).toHaveURL(claimSourceUrl);
+      await expect(page.getByText('Accepted', { exact: true })).toBeVisible();
+      await page.goto('/operations/deadlines');
+      await expect(page.getByRole('heading', { name: 'Deadlines & Reminders' })).toBeVisible();
+    }
   } finally {
     try {
       await Promise.all(
@@ -1790,6 +1851,9 @@ test('Authentik users can be invited and administered from the office UI', async
           .filter((context): context is BrowserContext => context !== undefined)
           .map((context) => context.close().catch(() => undefined)),
       );
+      if (pilotTenantId && pilotMembershipId) {
+        await cleanupPilotMembership(database, pilotTenantId, pilotMembershipId);
+      }
       // Payer profiles and their actor references are retained with financial history in this
       // disposable Compose database, which is removed after the browser run.
       if (tenantId && !billingRecordsMayExist) {
@@ -2787,6 +2851,33 @@ async function cleanupAdmissionRecords(
       tenantId,
       caseId,
     ]);
+    await database.query('COMMIT');
+  } catch (error) {
+    await database.query('ROLLBACK');
+    throw error;
+  }
+}
+
+async function cleanupPilotMembership(
+  database: Client,
+  tenantId: string,
+  membershipId: string,
+): Promise<void> {
+  await database.query('BEGIN');
+  try {
+    await database.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+    await database.query(
+      'DELETE FROM identity.membership_scopes WHERE tenant_id = $1 AND membership_id = $2',
+      [tenantId, membershipId],
+    );
+    await database.query(
+      'DELETE FROM identity.membership_roles WHERE tenant_id = $1 AND membership_id = $2',
+      [tenantId, membershipId],
+    );
+    await database.query(
+      'DELETE FROM identity.tenant_memberships WHERE tenant_id = $1 AND id = $2',
+      [tenantId, membershipId],
+    );
     await database.query('COMMIT');
   } catch (error) {
     await database.query('ROLLBACK');

@@ -389,6 +389,7 @@ async function main(): Promise<void> {
               {
                 tenantId: tenant.id,
                 errorName: safeErrorName(error),
+                ...developmentErrorDetails(error, config.NODE_ENV),
               },
               'Agreement deadline Operations evaluation failed',
             );
@@ -462,6 +463,20 @@ function safeErrorName(error: unknown): string {
   return error instanceof Error && /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/.test(error.name)
     ? error.name
     : 'UnknownError';
+}
+
+function developmentErrorDetails(
+  error: unknown,
+  environment: string,
+): { errorMessage?: string; errorCode?: string } {
+  if (environment === 'production' || !(error instanceof Error)) return {};
+
+  const message = error.message.replace(/\s+/g, ' ').slice(0, 240);
+  const code = (error as Error & { code?: unknown }).code;
+  return {
+    ...(message ? { errorMessage: message } : {}),
+    ...(typeof code === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(code) ? { errorCode: code } : {}),
+  };
 }
 
 void main();

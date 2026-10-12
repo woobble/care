@@ -8,6 +8,7 @@
     "openapi": "bun run src/openapi.ts",
     "migrate": "bun run src/migrate.ts",
     "seed": "bun run src/seed.ts",
+    "pilot:seed": "bun run src/pilot-seed.ts",
     "seed:identity": "bun run src/seed-identity.ts",
     "test:integration": "bun test --timeout=300000 --parallel=1 ./integration",
     "lint": "oxlint src",

@@ -20,6 +20,8 @@
     "test:e2e": "bun run infra:up && bun run migrate && bun run seed && turbo run test:e2e",
     "migrate": "bun run --filter @care/api migrate",
     "seed": "bun run --filter @care/api seed",
+    "pilot:seed": "bun run --filter @care/api pilot:seed",
+    "pilot:seed:identity": "DEV_SEED_TENANT_SLUG=muster-betreuungsdienst-nrw DEV_SEED_ROLE=Office bun run --filter @care/api seed:identity",
     "seed:identity": "bun run --filter @care/api seed:identity",
     "infra:up": "docker compose --profile development up -d --wait && docker compose --profile development --profile bootstrap run --rm --no-deps seaweedfs-init",
     "infra:down": "docker compose down",

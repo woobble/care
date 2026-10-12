@@ -16,6 +16,7 @@ const migrations = {
     '0003_operational_structure.sql',
     '0004_scheduling_timezone.sql',
     '0005_worker_tenant_scan.sql',
+    '0006_worker_deadline_read.sql',
   ],
   identity: [
     '0001_initial.sql',
@@ -30,10 +31,20 @@ const migrations = {
     '0004_employee_qualification_lifecycle.sql',
     '0005_employee_qualification_expiry_index.sql',
     '0006_operations_worker_assignment_validation.sql',
+    '0007_worker_deadline_read.sql',
   ],
-  clients: ['0001_initial.sql', '0002_master_data.sql', '0003_scheduling_provider_reference.sql'],
+  clients: [
+    '0001_initial.sql',
+    '0002_master_data.sql',
+    '0003_scheduling_provider_reference.sql',
+    '0004_worker_deadline_read.sql',
+  ],
   services: ['0001_catalog.sql', '0002_benefit_classification_and_prices.sql'],
-  'service-agreements': ['0001_service_agreements.sql', '0002_scheduling_references.sql'],
+  'service-agreements': [
+    '0001_service_agreements.sql',
+    '0002_scheduling_references.sql',
+    '0003_worker_deadline_read.sql',
+  ],
   scheduling: [
     '0001_scheduling.sql',
     '0002_advanced_planning.sql',
@@ -54,9 +65,14 @@ const migrations = {
   ],
   'care-documentation': ['0001_care_documentation.sql'],
   'service-evidence': ['0001_service_evidence.sql'],
-  benefits: ['0001_benefits.sql', '0002_bucket_rule_version.sql'],
+  benefits: ['0001_benefits.sql', '0002_bucket_rule_version.sql', '0003_worker_deadline_read.sql'],
   documents: ['0001_documents.sql', '0002_claim_summary.sql'],
-  billing: ['0001_billing.sql', '0002_invoice_document_rendering.sql', '0003_claims.sql'],
+  billing: [
+    '0001_billing.sql',
+    '0002_invoice_document_rendering.sql',
+    '0003_claims.sql',
+    '0004_worker_deadline_read.sql',
+  ],
   operations: [
     '0001_operations.sql',
     '0002_operations_assignee_scope.sql',
@@ -67,13 +83,18 @@ const migrations = {
     '0007_deadline_projection.sql',
     '0008_deadline_projection_cursors.sql',
     '0009_visit_execution_exception_source.sql',
+    '0010_worker_deadline_projection.sql',
   ],
   communications: [
     '0001_communications.sql',
     '0002_communication_task_reference.sql',
     '0003_prospect_interactions.sql',
   ],
-  onboarding: ['0001_onboarding.sql', '0002_onboarding_readiness.sql'],
+  onboarding: [
+    '0001_onboarding.sql',
+    '0002_onboarding_readiness.sql',
+    '0003_worker_deadline_read.sql',
+  ],
 } as const;
 const migrationsRoot = resolve(import.meta.dirname, '../../../modules');
 

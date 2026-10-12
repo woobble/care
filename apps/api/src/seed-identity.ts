@@ -21,6 +21,16 @@ if (NODE_ENV !== 'development') {
 }
 const { OIDC_ISSUER } = loadApiConfig();
 const subject = process.env.DEV_SEED_OIDC_SUB?.trim();
+const tenantSlug = process.env.DEV_SEED_TENANT_SLUG?.trim() || 'demo-care';
+const roleName = process.env.DEV_SEED_ROLE?.trim() || 'Administrator';
+if (!['demo-care', 'muster-betreuungsdienst-nrw'].includes(tenantSlug)) {
+  throw new Error(
+    'DEV_SEED_TENANT_SLUG must be demo-care or muster-betreuungsdienst-nrw; no data was changed',
+  );
+}
+if (!['Administrator', 'Office'].includes(roleName)) {
+  throw new Error('DEV_SEED_ROLE must be Administrator or Office; no data was changed');
+}
 if (!subject)
   throw new Error('Set DEV_SEED_OIDC_SUB to the Authentik OIDC sub for the local test user');
 
@@ -39,9 +49,13 @@ try {
   const [tenant] = await database.db
     .select({ id: tenants.id })
     .from(tenants)
-    .where(eq(tenants.slug, 'demo-care'))
+    .where(eq(tenants.slug, tenantSlug))
     .limit(1);
-  if (!tenant) throw new Error('Run `bun run seed` before seeding a local identity');
+  if (!tenant) {
+    throw new Error(
+      `Run the development seed for tenant ${tenantSlug} before seeding a local identity`,
+    );
+  }
 
   await database.db.transaction(async (transaction) => {
     await transaction.execute(
@@ -95,22 +109,20 @@ try {
     if (!membership || membership.status === 'revoked') {
       throw new Error('This membership was revoked and cannot be restored by seeding');
     }
-    const [admin] = await transaction
+    const [role] = await transaction
       .select({ id: identitySchema.roles.id })
       .from(identitySchema.roles)
       .where(
-        and(
-          eq(identitySchema.roles.tenantId, tenant.id),
-          eq(identitySchema.roles.name, 'Administrator'),
-        ),
+        and(eq(identitySchema.roles.tenantId, tenant.id), eq(identitySchema.roles.name, roleName)),
       )
       .limit(1);
-    if (!admin || !membership)
-      throw new Error('Administrator role is missing; run `bun run seed` first');
+    if (!role || !membership) {
+      throw new Error(`Role ${roleName} is missing; run the development seed first`);
+    }
 
     await transaction
       .insert(identitySchema.membershipRoles)
-      .values({ membershipId: membership.id, tenantId: tenant.id, roleId: admin.id })
+      .values({ membershipId: membership.id, tenantId: tenant.id, roleId: role.id })
       .onConflictDoNothing();
     await transaction
       .insert(identitySchema.membershipScopes)
@@ -124,7 +136,7 @@ try {
   });
 
   process.stdout.write(
-    `Granted local Administrator access for issuer ${OIDC_ISSUER} and configured subject.\n`,
+    `Granted local ${roleName} access to ${tenantSlug} for issuer ${OIDC_ISSUER} and configured subject.\n`,
   );
 } finally {
   await database.close();

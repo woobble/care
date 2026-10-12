@@ -34,8 +34,8 @@ async function bootstrap(): Promise<void> {
 
   await app.listen(config.PORT, '0.0.0.0');
   logger.info({ port: config.PORT }, 'API started');
-  const metricsServer = await startMetricsServer(apiMetrics.registry, 3002);
-  logger.info({ port: 3002 }, 'Internal metrics endpoint started');
+  const metricsServer = await startMetricsServer(apiMetrics.registry, config.API_METRICS_PORT);
+  logger.info({ port: config.API_METRICS_PORT }, 'Internal metrics endpoint started');
 
   const shutdown = async () => {
     try {
