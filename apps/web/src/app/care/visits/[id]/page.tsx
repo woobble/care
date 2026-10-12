@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { v7 as uuidv7 } from 'uuid';
 import type { components } from '@care/api-client';
 import { Button, Input, Label } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatNumber } from '@app/web/i18n/format';
@@ -79,19 +80,16 @@ export default async function CareVisitPage({
   return (
     <div className="mx-auto grid grid-cols-1 max-w-3xl gap-5 min-w-0">
       <header className="grid gap-3 min-w-0">
-        <Link className="w-fit text-sm font-semibold text-blue-800 underline" href="/care/today">
-          {t('VisitExecution.backToToday')}
-        </Link>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('VisitExecution.section')}
-          </p>
-          <h1 className="mt-1 text-3xl font-semibold wrap-anywhere">{visit.clientDisplayName}</h1>
-        </div>
-        <p className="text-slate-700">
-          {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}–
-          {formatVisitTime(visit.plannedEnd, visit.timezone, locale)}
-        </p>
+        <PageHeader
+          eyebrow={t('VisitExecution.section')}
+          title={visit.clientDisplayName}
+          description={`${formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}–${formatVisitTime(visit.plannedEnd, visit.timezone, locale)}`}
+          actions={
+            <Button asChild variant="outline">
+              <Link href="/care/today">{t('VisitExecution.backToToday')}</Link>
+            </Button>
+          }
+        />
         {visit.address ? (
           <div className="flex flex-wrap items-center gap-3">
             <p className="break-words text-slate-700">{visit.address}</p>

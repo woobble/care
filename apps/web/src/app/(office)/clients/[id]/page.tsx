@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { auditActionKey } from '@app/web/i18n/audit';
 import { statusLabelKey } from '@app/web/i18n/status';
 import { errorMessageKey } from '@app/web/i18n/errors';
@@ -400,26 +401,24 @@ export default async function ClientDetailPage({
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            <Link href="/clients">{t('Clients.title')}</Link>
-          </p>
-          {client ? (
-            <>
-              <h1 className="text-3xl font-semibold">
-                {client.preferredName || client.firstName} {client.lastName}
-              </h1>
-              <StatusBadge status={client.status} label={t(statusLabelKey(client.status))} />
-            </>
-          ) : (
-            <h1 className="text-3xl font-semibold">{t('Clients.detail.detailTitle')}</h1>
-          )}
-        </div>
-        <Button asChild variant="secondary">
-          <Link href="/clients">{t('Clients.detail.backToList')}</Link>
-        </Button>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/clients">{t('Clients.title')}</Link>}
+        title={
+          client
+            ? `${client.preferredName || client.firstName} ${client.lastName}`
+            : t('Clients.detail.detailTitle')
+        }
+        meta={
+          client ? (
+            <StatusBadge status={client.status} label={t(statusLabelKey(client.status))} />
+          ) : null
+        }
+        actions={
+          <Button asChild variant="outline">
+            <Link href="/clients">{t('Clients.detail.backToList')}</Link>
+          </Button>
+        }
+      />
 
       {actionError ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">

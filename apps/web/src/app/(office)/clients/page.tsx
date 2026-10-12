@@ -1,6 +1,18 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button, StatusBadge } from '@care/ui';
+import {
+  Button,
+  Card,
+  Input,
+  StatusBadge,
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@care/ui';
 import { formatDate } from '@app/web/i18n/format';
 import { statusLabelKey } from '@app/web/i18n/status';
 import {
@@ -9,6 +21,7 @@ import {
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 
 type SearchParams = Promise<{
   q?: string;
@@ -75,19 +88,17 @@ export default async function ClientsPage({
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid gap-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('Clients.section')}
-          </p>
-          <h1 className="text-3xl font-semibold">{t('Clients.title')}</h1>
-        </div>
-        {canCreateClient ? (
-          <Button asChild>
-            <Link href="/clients/new">{t('Clients.create')}</Link>
-          </Button>
-        ) : null}
-      </div>
+      <PageHeader
+        eyebrow={t('Clients.section')}
+        title={t('Clients.title')}
+        actions={
+          canCreateClient ? (
+            <Button asChild>
+              <Link href="/clients/new">{t('Clients.create')}</Link>
+            </Button>
+          ) : null
+        }
+      />
       {query.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
           {t('Clients.actionFailed')}
@@ -103,76 +114,72 @@ export default async function ClientsPage({
         <h2 id="client-filter-title" className="text-lg font-semibold">
           {t('Clients.searchAndFilter')}
         </h2>
-        <form method="get" className="grid gap-3 rounded-lg border bg-white p-4 md:grid-cols-4">
-          <label className="grid gap-1 text-sm font-medium md:col-span-2">
-            {t('Clients.searchName')}
-            <input
-              className="h-10 rounded-md border px-3 font-normal"
-              type="search"
-              name="q"
-              maxLength={120}
-              defaultValue={text}
-            />
-          </label>
-          <SelectFilter label={t('Common.fields.status')} name="status" value={status ?? ''}>
-            <option value="">{t('Common.filters.allStatuses')}</option>
-            <option value="pending">{t('Common.status.pending')}</option>
-            <option value="active">{t('Common.status.active')}</option>
-            <option value="archived">{t('Common.status.archived')}</option>
-          </SelectFilter>
-          <SelectFilter
-            label={t('Common.fields.organization')}
-            name="organizationId"
-            value={organizationId ?? ''}
-          >
-            <option value="">{t('Common.filters.allOrganizations')}</option>
-            {(organizationsResult.data ?? []).map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organization.name}
-              </option>
-            ))}
-          </SelectFilter>
-          <SelectFilter
-            label={t('Common.fields.facility')}
-            name="facilityId"
-            value={facilityId ?? ''}
-          >
-            <option value="">{t('Common.filters.allFacilities')}</option>
-            {(facilitiesResult.data ?? []).map((facility) => (
-              <option key={facility.id} value={facility.id}>
-                {facility.name}
-              </option>
-            ))}
-          </SelectFilter>
-          <SelectFilter
-            label={t('Clients.careLevel')}
-            name="pflegegrad"
-            value={pflegegrad?.toString() ?? ''}
-          >
-            <option value="">{t('Clients.allCareLevels')}</option>
-            {[1, 2, 3, 4, 5].map((grade) => (
-              <option key={grade} value={grade}>
-                {t('Clients.careLevelNumber', { grade })}
-              </option>
-            ))}
-          </SelectFilter>
-          <SelectFilter label={t('Common.fields.sortBy')} name="sortBy" value={sortBy}>
-            <option value="lastName">{t('Common.fields.lastName')}</option>
-            <option value="firstName">{t('Common.fields.firstName')}</option>
-            <option value="createdAt">{t('Common.fields.created')}</option>
-            <option value="dateOfBirth">{t('Common.fields.dateOfBirth')}</option>
-          </SelectFilter>
-          <SelectFilter label={t('Common.fields.order')} name="sortOrder" value={sortOrder}>
-            <option value="asc">{t('Common.filters.ascending')}</option>
-            <option value="desc">{t('Common.filters.descending')}</option>
-          </SelectFilter>
-          <div className="flex items-end gap-2">
-            <Button type="submit">{t('Common.actions.apply')}</Button>
-            <Button asChild variant="secondary">
-              <Link href="/clients">{t('Common.actions.reset')}</Link>
-            </Button>
-          </div>
-        </form>
+        <Card>
+          <form method="get" className="grid gap-3 p-4 md:grid-cols-4">
+            <label className="grid gap-1 text-sm font-medium md:col-span-2">
+              {t('Clients.searchName')}
+              <Input type="search" name="q" maxLength={120} defaultValue={text} />
+            </label>
+            <SelectFilter label={t('Common.fields.status')} name="status" value={status ?? ''}>
+              <option value="">{t('Common.filters.allStatuses')}</option>
+              <option value="pending">{t('Common.status.pending')}</option>
+              <option value="active">{t('Common.status.active')}</option>
+              <option value="archived">{t('Common.status.archived')}</option>
+            </SelectFilter>
+            <SelectFilter
+              label={t('Common.fields.organization')}
+              name="organizationId"
+              value={organizationId ?? ''}
+            >
+              <option value="">{t('Common.filters.allOrganizations')}</option>
+              {(organizationsResult.data ?? []).map((organization) => (
+                <option key={organization.id} value={organization.id}>
+                  {organization.name}
+                </option>
+              ))}
+            </SelectFilter>
+            <SelectFilter
+              label={t('Common.fields.facility')}
+              name="facilityId"
+              value={facilityId ?? ''}
+            >
+              <option value="">{t('Common.filters.allFacilities')}</option>
+              {(facilitiesResult.data ?? []).map((facility) => (
+                <option key={facility.id} value={facility.id}>
+                  {facility.name}
+                </option>
+              ))}
+            </SelectFilter>
+            <SelectFilter
+              label={t('Clients.careLevel')}
+              name="pflegegrad"
+              value={pflegegrad?.toString() ?? ''}
+            >
+              <option value="">{t('Clients.allCareLevels')}</option>
+              {[1, 2, 3, 4, 5].map((grade) => (
+                <option key={grade} value={grade}>
+                  {t('Clients.careLevelNumber', { grade })}
+                </option>
+              ))}
+            </SelectFilter>
+            <SelectFilter label={t('Common.fields.sortBy')} name="sortBy" value={sortBy}>
+              <option value="lastName">{t('Common.fields.lastName')}</option>
+              <option value="firstName">{t('Common.fields.firstName')}</option>
+              <option value="createdAt">{t('Common.fields.created')}</option>
+              <option value="dateOfBirth">{t('Common.fields.dateOfBirth')}</option>
+            </SelectFilter>
+            <SelectFilter label={t('Common.fields.order')} name="sortOrder" value={sortOrder}>
+              <option value="asc">{t('Common.filters.ascending')}</option>
+              <option value="desc">{t('Common.filters.descending')}</option>
+            </SelectFilter>
+            <div className="flex items-end gap-2">
+              <Button type="submit">{t('Common.actions.apply')}</Button>
+              <Button asChild variant="secondary">
+                <Link href="/clients">{t('Common.actions.reset')}</Link>
+              </Button>
+            </div>
+          </form>
+        </Card>
       </section>
 
       {clients?.items.length ? (
@@ -180,46 +187,36 @@ export default async function ClientsPage({
           <h2 id="client-list-title" className="text-lg font-semibold">
             {t('Clients.resultCount', { count: clients.total })}
           </h2>
-          <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
-            <table className="w-full border-collapse text-left text-sm">
-              <caption className="sr-only">{t('Clients.listCaption')}</caption>
-              <thead className="border-b bg-slate-100 text-slate-700">
-                <tr>
-                  <th scope="col" className="px-4 py-3">
-                    {t('Common.fields.name')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
-                    {t('Common.fields.dateOfBirth')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
-                    {t('Clients.careLevel')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
-                    {t('Clients.organizationFacility')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
-                    {t('Common.fields.status')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+          <Card className="overflow-hidden">
+            <Table className="min-w-[720px] text-left">
+              <TableCaption className="sr-only">{t('Clients.listCaption')}</TableCaption>
+              <TableHeader className="bg-muted text-muted-foreground">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead scope="col">{t('Common.fields.name')}</TableHead>
+                  <TableHead scope="col">{t('Common.fields.dateOfBirth')}</TableHead>
+                  <TableHead scope="col">{t('Clients.careLevel')}</TableHead>
+                  <TableHead scope="col">{t('Clients.organizationFacility')}</TableHead>
+                  <TableHead scope="col">{t('Common.fields.status')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {clients.items.map((client) => (
-                  <tr key={client.id} className="border-b last:border-0">
-                    <td className="px-4 py-3">
+                  <TableRow key={client.id}>
+                    <TableCell>
                       <Link
                         className="font-medium text-blue-900 underline-offset-4 hover:underline"
                         href={`/clients/${client.id}`}
                       >
                         {client.preferredName || client.firstName} {client.lastName}
                       </Link>
-                    </td>
-                    <td className="px-4 py-3">{formatDate(client.dateOfBirth, locale) ?? '—'}</td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell>{formatDate(client.dateOfBirth, locale) ?? '—'}</TableCell>
+                    <TableCell>
                       {client.currentPflegegrad
                         ? t('Clients.careLevelNumber', { grade: client.currentPflegegrad })
                         : '—'}
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell>
                       {client.organizationName && client.facilityName ? (
                         <>
                           {client.organizationName} / {client.facilityName}
@@ -229,18 +226,18 @@ export default async function ClientsPage({
                           {t('Common.empty.unassigned')}
                         </span>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell>
                       <StatusBadge
                         status={client.status}
                         label={t(statusLabelKey(client.status))}
                       />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </Card>
           <div className="flex items-center justify-between">
             <p className="text-sm text-slate-600">
               {t('Common.pagination', {
@@ -267,7 +264,7 @@ export default async function ClientsPage({
           </div>
         </section>
       ) : !clientsResult.error ? (
-        <p className="rounded-lg border bg-white p-6 text-slate-700">{t('Clients.notFound')}</p>
+        <EmptyState title={t('Clients.notFound')} />
       ) : null}
     </div>
   );
@@ -288,7 +285,7 @@ function SelectFilter({
     <label className="grid gap-1 text-sm font-medium">
       {label}
       <select
-        className="h-10 rounded-md border bg-white px-3 font-normal"
+        className="h-11 rounded-md border border-input bg-background px-3 font-normal text-foreground"
         name={name}
         defaultValue={value}
       >

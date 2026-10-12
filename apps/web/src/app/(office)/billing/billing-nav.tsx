@@ -43,13 +43,16 @@ export async function BillingNavigation({
     },
   ];
   return (
-    <nav aria-label={t('navigation')} className="flex flex-wrap gap-2 border-b pb-3 text-sm">
+    <nav
+      aria-label={t('navigation')}
+      className="flex max-w-full flex-wrap gap-1 border-b border-border pb-3 text-sm"
+    >
       {links
         .filter((link) => hasPermission(permissions, link.permission))
         .map((link) => (
           <Link
             key={`${link.href}${link.hash ?? ''}`}
-            className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
+            className="min-h-10 rounded-md px-3 py-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             href={`${link.href}${link.hash ?? ''}`}
           >
             {link.label}

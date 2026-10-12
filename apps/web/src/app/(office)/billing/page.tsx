@@ -13,6 +13,7 @@ import {
 import { createDraftInvoiceAction } from './actions';
 import { BillingNavigation } from './billing-nav';
 import { euroInput, formatCents, lineAmountField } from './format';
+import { PageHeader } from '@app/web/components/page-patterns';
 
 type Candidate = components['schemas']['BillingCandidateResponseDto'];
 type CandidateGroup = {
@@ -116,14 +117,8 @@ export default async function BillingWorklistPage({
   const error = query.error ?? candidateResult.error?.code;
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          {t('section')}
-        </p>
-        <h1 className="text-3xl font-semibold">{t('title')}</h1>
-        <p className="text-slate-700">{t('description')}</p>
-      </header>
+    <div className="mx-auto grid min-w-0 max-w-6xl gap-6">
+      <PageHeader eyebrow={t('section')} title={t('title')} description={t('description')} />
       <BillingNavigation permissions={permissions} />
       {error ? <Alert>{translate(errorMessageKey(error))}</Alert> : null}
       {updated ? <Status>{t('draftCreated')}</Status> : null}

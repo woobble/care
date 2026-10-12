@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { formatLongDate } from '@app/web/i18n/format';
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 import { formatVisitDateTime, formatVisitTime, todayRange } from '@app/web/lib/care-date';
@@ -75,17 +76,13 @@ export default async function CareTodayPage() {
 
   return (
     <div className="grid gap-5">
-      <header className="grid gap-1">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          {t('Caregiver.todayLabel')}
-        </p>
-        <h1 className="text-3xl font-semibold">{t('Caregiver.visitsTitle')}</h1>
-        <p className="text-slate-600">
-          {t('Caregiver.visitsForDate', {
-            date: formatLongDate(range.from, locale, 'Europe/Berlin'),
-          })}
-        </p>
-      </header>
+      <PageHeader
+        eyebrow={t('Caregiver.todayLabel')}
+        title={t('Caregiver.visitsTitle')}
+        description={t('Caregiver.visitsForDate', {
+          date: formatLongDate(range.from, locale, 'Europe/Berlin'),
+        })}
+      />
 
       {visits.some((visit) => Boolean(visit.address)) ? (
         <p className="text-xs text-slate-600">{t('Caregiver.navigationPrivacy')}</p>
@@ -164,8 +161,8 @@ export default async function CareTodayPage() {
               <li key={visit.id}>
                 <article
                   className={
-                    'grid min-w-0 gap-3 rounded-lg border bg-white p-4 shadow-sm sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-start ' +
-                    (isFocusVisit ? 'border-blue-500 ring-1 ring-blue-200' : '')
+                    'grid min-w-0 gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-start ' +
+                    (isFocusVisit ? 'border-primary ring-1 ring-ring/30' : '')
                   }
                 >
                   <div className="grid gap-1">
@@ -285,7 +282,7 @@ export default async function CareTodayPage() {
 
 function FocusBadge({ children }: { children: ReactNode }) {
   return (
-    <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-900">
+    <span className="rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground">
       {children}
     </span>
   );

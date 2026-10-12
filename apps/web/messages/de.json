@@ -1196,8 +1196,23 @@
   },
   "Navigation": {
     "main": "Hauptnavigation",
+    "brand": "Care Platform",
+    "workspace": "Arbeitsbereich",
+    "servicesFinance": "Leistungen & Abrechnung",
+    "management": "Verwaltung",
+    "overview": "Übersicht",
+    "openMenu": "Navigation öffnen",
+    "closeMenu": "Navigation schließen",
+    "collapseSidebar": "Seitenleiste einklappen",
+    "expandSidebar": "Seitenleiste ausklappen",
+    "account": "Konto",
+    "appearance": "Darstellung",
+    "light": "Hell",
+    "dark": "Dunkel",
+    "system": "System",
     "services": "Leistungen",
     "operations": "Büroorganisation",
+    "clientRecords": "Klient:innen",
     "admissions": "Aufnahme",
     "communications": "Kommunikation",
     "planning": "Einsatzplanung",
@@ -1218,7 +1233,8 @@
     "qualifications": "Qualifikationen & Fähigkeiten",
     "audit": "Auditprotokoll",
     "documentTemplates": "Dokumentvorlagen",
-    "billing": "Abrechnung"
+    "billing": "Abrechnung",
+    "claims": "Kostenträgerabrechnung"
   },
   "Communications": {
     "title": "Kommunikation",

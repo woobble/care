@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 import { statusLabelKey } from '@app/web/i18n/status';
 
@@ -70,17 +71,15 @@ export default async function EmployeesPage({
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid gap-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('Employees.section')}
-          </p>
-          <h1 className="text-3xl font-semibold">{t('Employees.title')}</h1>
-        </div>
-        <Button asChild>
-          <Link href="/employees/new">{t('Employees.create')}</Link>
-        </Button>
-      </div>
+      <PageHeader
+        eyebrow={t('Employees.section')}
+        title={t('Employees.title')}
+        actions={
+          <Button asChild>
+            <Link href="/employees/new">{t('Employees.create')}</Link>
+          </Button>
+        }
+      />
       {query.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
           {t('Errors.generic')}

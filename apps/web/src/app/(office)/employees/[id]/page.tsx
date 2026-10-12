@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { statusLabelKey } from '@app/web/i18n/status';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate } from '@app/web/i18n/format';
@@ -177,46 +178,44 @@ export default async function EmployeeDetailPage({
 
   return (
     <div className="grid gap-8">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            <Link href="/employees">{t('Employees.title')}</Link>
-          </p>
+      <PageHeader
+        eyebrow={<Link href="/employees">{t('Employees.title')}</Link>}
+        title={`${employee.preferredName || employee.firstName} ${employee.lastName}`}
+        meta={
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-semibold">
-              {employee.preferredName || employee.firstName} {employee.lastName}
-            </h1>
             <StatusBadge status={employee.status} label={t(statusLabelKey(employee.status))} />
+            <p className="text-sm text-muted-foreground">
+              {employee.organizationName ?? t('Employees.detail.noOrganization')}
+              {employee.personnelNumber ? ` · ${employee.personnelNumber}` : ''}
+            </p>
           </div>
-          <p className="text-slate-600">
-            {employee.organizationName ?? t('Employees.detail.noOrganization')}
-            {employee.personnelNumber ? ` · ${employee.personnelNumber}` : ''}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {hasPermission(permissions, 'operations.read') ? (
-            <Button asChild variant="secondary">
-              <Link href={`/operations/deadlines?employeeId=${employee.id}`}>
-                {t('Operations.employeeDeadlines')}
-              </Link>
-            </Button>
-          ) : null}
-          {employee.status === 'active' ? (
-            <StatusForm id={id} operation="deactivate" label={t('Employees.detail.deactivate')} />
-          ) : employee.status === 'inactive' ? (
-            <StatusForm id={id} operation="activate" label={t('Employees.detail.activate')} />
-          ) : null}
-          {writable ? (
-            <form action={changeEmployeeStatusAction}>
-              <input type="hidden" name="id" value={id} />
-              <input type="hidden" name="operation" value="archive" />
-              <ConfirmSubmitButton confirmation={t('Employees.detail.archiveConfirmation')}>
-                {t('Employees.detail.archive')}
-              </ConfirmSubmitButton>
-            </form>
-          ) : null}
-        </div>
-      </header>
+        }
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {hasPermission(permissions, 'operations.read') ? (
+              <Button asChild variant="secondary">
+                <Link href={`/operations/deadlines?employeeId=${employee.id}`}>
+                  {t('Operations.employeeDeadlines')}
+                </Link>
+              </Button>
+            ) : null}
+            {employee.status === 'active' ? (
+              <StatusForm id={id} operation="deactivate" label={t('Employees.detail.deactivate')} />
+            ) : employee.status === 'inactive' ? (
+              <StatusForm id={id} operation="activate" label={t('Employees.detail.activate')} />
+            ) : null}
+            {writable ? (
+              <form action={changeEmployeeStatusAction}>
+                <input type="hidden" name="id" value={id} />
+                <input type="hidden" name="operation" value="archive" />
+                <ConfirmSubmitButton confirmation={t('Employees.detail.archiveConfirmation')}>
+                  {t('Employees.detail.archive')}
+                </ConfirmSubmitButton>
+              </form>
+            ) : null}
+          </div>
+        }
+      />
       <ActionNotice error={query.error} updated={query.updated} />
 
       <section

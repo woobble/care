@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button, Input, Label } from '@care/ui';
+import { Button, Card, Input, Label } from '@care/ui';
 import { errorMessageKey } from '@app/web/i18n/errors';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { formatCurrency, formatLongDate, formatTime } from '@app/web/i18n/format';
 import type { Locale } from '@app/web/i18n/config';
 import { visitStatusKey } from '@app/web/i18n/status';
@@ -369,28 +370,26 @@ export default async function PlanningPage({
   const estimate = estimateResult?.data;
 
   return (
-    <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid gap-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('Navigation.office')}
-          </p>
-          <h1 className="text-3xl font-semibold">{t('Planning.title')}</h1>
-          <p className="text-slate-700">{t('Planning.description')}</p>
-        </div>
-        <div className="flex gap-2">
-          <Button asChild variant={view === 'week' ? 'default' : 'secondary'} size="sm">
-            <Link href={viewHref({ ...query, date: selectedDate, view: 'week', page: '1' })}>
-              {t('Planning.week')}
-            </Link>
-          </Button>
-          <Button asChild variant={view === 'day' ? 'default' : 'secondary'} size="sm">
-            <Link href={viewHref({ ...query, date: selectedDate, view: 'day', page: '1' })}>
-              {t('Planning.day')}
-            </Link>
-          </Button>
-        </div>
-      </header>
+    <div className="grid min-w-0 gap-6">
+      <PageHeader
+        eyebrow={t('Navigation.office')}
+        title={t('Planning.title')}
+        description={t('Planning.description')}
+        actions={
+          <>
+            <Button asChild variant={view === 'week' ? 'default' : 'secondary'} size="sm">
+              <Link href={viewHref({ ...query, date: selectedDate, view: 'week', page: '1' })}>
+                {t('Planning.week')}
+              </Link>
+            </Button>
+            <Button asChild variant={view === 'day' ? 'default' : 'secondary'} size="sm">
+              <Link href={viewHref({ ...query, date: selectedDate, view: 'day', page: '1' })}>
+                {t('Planning.day')}
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
       {error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
@@ -413,7 +412,7 @@ export default async function PlanningPage({
 
       <section
         aria-label={t('Planning.calendarNavigation')}
-        className="flex flex-wrap items-center justify-between gap-3"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3"
       >
         <Button asChild variant="secondary">
           <Link
@@ -444,89 +443,88 @@ export default async function PlanningPage({
         </Button>
       </section>
 
-      <form
-        method="get"
-        className="grid gap-3 rounded-lg border bg-white p-4 md:grid-cols-3 lg:grid-cols-4"
-      >
-        <input type="hidden" name="view" value={view} />
-        <Field label={t('Planning.date')} name="date" type="date" defaultValue={selectedDate} />
-        <SelectField
-          label={t('Planning.organization')}
-          name="organizationId"
-          defaultValue={organizationId ?? ''}
-        >
-          <option value="">{t('Planning.allOrganizations')}</option>
-          {organizations.map((organization) => (
-            <option key={organization.id} value={organization.id}>
-              {organization.name}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField
-          label={t('Planning.facility')}
-          name="facilityId"
-          defaultValue={facilityId ?? ''}
-        >
-          <option value="">{t('Planning.allFacilities')}</option>
-          {facilities.map((facility) => (
-            <option key={facility.id} value={facility.id}>
-              {facility.name}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField label={t('Common.fields.team')} name="teamId" defaultValue={teamId ?? ''}>
-          <option value="">{t('Planning.allTeams')}</option>
-          {teams.map((team) => (
-            <option key={team.id} value={team.id}>
-              {team.name}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField
-          label={t('Planning.employees')}
-          name="employeeId"
-          defaultValue={employeeId ?? ''}
-        >
-          <option value="">{t('Planning.allEmployees')}</option>
-          {employees.map((employee) => (
-            <option key={employee.id} value={employee.id}>
-              {employee.preferredName || employee.firstName} {employee.lastName}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField label={t('Planning.status')} name="status" defaultValue={status ?? ''}>
-          <option value="">{t('Planning.allStatuses')}</option>
-          <option value="planned">{t('Common.status.planned')}</option>
-          <option value="confirmed">{t('Common.status.confirmed')}</option>
-          <option value="cancelled">{t('Common.status.cancelled')}</option>
-        </SelectField>
-        <SelectField label={t('Planning.assignment')} name="assigned" defaultValue={assigned}>
-          <option value="all">{t('Planning.allVisits')}</option>
-          <option value="unassigned">{t('Planning.openVisits')}</option>
-          <option value="assigned">{t('Planning.assigned')}</option>
-        </SelectField>
-        <SelectField
-          label={t('Planning.service')}
-          name="serviceDefinitionId"
-          defaultValue={serviceDefinitionId ?? ''}
-        >
-          <option value="">{t('Planning.allServices')}</option>
-          {services.map((service) => (
-            <option key={service.id} value={service.id}>
-              {service.code} · {service.name}
-            </option>
-          ))}
-        </SelectField>
-        {clientId ? <input type="hidden" name="clientId" value={clientId} /> : null}
-        <div className="flex items-end gap-2">
-          <Button type="submit" variant="secondary">
-            {t('Planning.applyFilters')}
-          </Button>
-          <Button asChild variant="link">
-            <Link href="/planning">{t('Planning.resetFilters')}</Link>
-          </Button>
-        </div>
-      </form>
+      <Card className="p-4">
+        <form method="get" className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+          <input type="hidden" name="view" value={view} />
+          <Field label={t('Planning.date')} name="date" type="date" defaultValue={selectedDate} />
+          <SelectField
+            label={t('Planning.organization')}
+            name="organizationId"
+            defaultValue={organizationId ?? ''}
+          >
+            <option value="">{t('Planning.allOrganizations')}</option>
+            {organizations.map((organization) => (
+              <option key={organization.id} value={organization.id}>
+                {organization.name}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            label={t('Planning.facility')}
+            name="facilityId"
+            defaultValue={facilityId ?? ''}
+          >
+            <option value="">{t('Planning.allFacilities')}</option>
+            {facilities.map((facility) => (
+              <option key={facility.id} value={facility.id}>
+                {facility.name}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label={t('Common.fields.team')} name="teamId" defaultValue={teamId ?? ''}>
+            <option value="">{t('Planning.allTeams')}</option>
+            {teams.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            label={t('Planning.employees')}
+            name="employeeId"
+            defaultValue={employeeId ?? ''}
+          >
+            <option value="">{t('Planning.allEmployees')}</option>
+            {employees.map((employee) => (
+              <option key={employee.id} value={employee.id}>
+                {employee.preferredName || employee.firstName} {employee.lastName}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label={t('Planning.status')} name="status" defaultValue={status ?? ''}>
+            <option value="">{t('Planning.allStatuses')}</option>
+            <option value="planned">{t('Common.status.planned')}</option>
+            <option value="confirmed">{t('Common.status.confirmed')}</option>
+            <option value="cancelled">{t('Common.status.cancelled')}</option>
+          </SelectField>
+          <SelectField label={t('Planning.assignment')} name="assigned" defaultValue={assigned}>
+            <option value="all">{t('Planning.allVisits')}</option>
+            <option value="unassigned">{t('Planning.openVisits')}</option>
+            <option value="assigned">{t('Planning.assigned')}</option>
+          </SelectField>
+          <SelectField
+            label={t('Planning.service')}
+            name="serviceDefinitionId"
+            defaultValue={serviceDefinitionId ?? ''}
+          >
+            <option value="">{t('Planning.allServices')}</option>
+            {services.map((service) => (
+              <option key={service.id} value={service.id}>
+                {service.code} · {service.name}
+              </option>
+            ))}
+          </SelectField>
+          {clientId ? <input type="hidden" name="clientId" value={clientId} /> : null}
+          <div className="flex items-end gap-2">
+            <Button type="submit" variant="secondary">
+              {t('Planning.applyFilters')}
+            </Button>
+            <Button asChild variant="link">
+              <Link href="/planning">{t('Planning.resetFilters')}</Link>
+            </Button>
+          </div>
+        </form>
+      </Card>
 
       {canEstimate ? (
         <section

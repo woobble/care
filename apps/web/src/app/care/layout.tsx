@@ -5,9 +5,11 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
 import { LanguageSwitcher } from '@app/web/components/language-switcher';
 import { SignOutForm } from '@app/web/components/sign-out-form';
+import { ThemeSwitcher } from '@app/web/components/theme-switcher';
 import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
 import { signOutAction } from '@app/web/app/actions/auth';
 import { CareDraftScope } from './draft-scope';
+import { HeartHandshake, LogOut } from 'lucide-react';
 
 export default async function CareLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const api = await getApiClient(false);
@@ -25,29 +27,45 @@ export default async function CareLayout({ children }: Readonly<{ children: Reac
 
   return (
     <CareDraftScope userId={user.id} tenantId={tenantId}>
-      <div className="min-h-screen bg-slate-50">
-        <header className="border-b bg-white">
+      <div className="min-h-dvh bg-background text-foreground">
+        <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
           <nav
-            className="mx-auto flex min-h-16 max-w-4xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2"
+            className="mx-auto flex min-h-14 w-full max-w-5xl items-center justify-between gap-2 px-4 sm:min-h-16"
             aria-label={t('main')}
           >
             <Link
-              className="min-h-11 content-center font-semibold text-blue-900"
+              className="flex min-h-11 min-w-0 items-center gap-2 font-semibold text-foreground"
               href="/care/today"
             >
-              {t('today')}
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <HeartHandshake className="size-4" aria-hidden="true" />
+              </span>
+              <span className="truncate">{t('today')}</span>
             </Link>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+              <ThemeSwitcher />
+              <LanguageSwitcher locale={locale} />
               <SignOutForm action={signOutAction}>
-                <Button variant="link" size="sm" className="min-h-11">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="sm:hidden"
+                  aria-label={t('signOut')}
+                  title={t('signOut')}
+                >
+                  <LogOut className="size-4" aria-hidden="true" />
+                </Button>
+                <Button variant="ghost" size="sm" className="hidden min-h-10 sm:inline-flex">
+                  <LogOut className="size-4" aria-hidden="true" />
                   {t('signOut')}
                 </Button>
               </SignOutForm>
-              <LanguageSwitcher locale={locale} />
             </div>
           </nav>
         </header>
-        <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-8">{children}</main>
+        <main className="mx-auto w-full max-w-5xl min-w-0 px-4 py-5 pb-8 sm:px-6 sm:py-7">
+          {children}
+        </main>
       </div>
     </CareDraftScope>
   );

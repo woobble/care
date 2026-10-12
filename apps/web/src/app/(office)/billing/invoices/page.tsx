@@ -7,6 +7,7 @@ import { formatDate } from '@app/web/i18n/format';
 import { getApiClient, getPermissionGrants, getTenantHeader } from '@app/web/lib/api';
 import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
 import { formatCents } from '@app/web/app/(office)/billing/format';
+import { PageHeader } from '@app/web/components/page-patterns';
 
 type SearchParams = Promise<{ page?: string; status?: string; error?: string; updated?: string }>;
 
@@ -34,13 +35,11 @@ export default async function BillingInvoicesPage({
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          {t('section')}
-        </p>
-        <h1 className="text-3xl font-semibold">{t('invoiceListTitle')}</h1>
-        <p className="text-slate-700">{t('invoiceListDescription')}</p>
-      </header>
+      <PageHeader
+        eyebrow={t('section')}
+        title={t('invoiceListTitle')}
+        description={t('invoiceListDescription')}
+      />
       <BillingNavigation permissions={permissions} />
       {(query.error ?? error?.code) ? (
         <Alert>{translate(errorMessageKey(query.error ?? error?.code ?? ''))}</Alert>

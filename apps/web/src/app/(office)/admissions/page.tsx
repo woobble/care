@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate, formatDateTime } from '@app/web/i18n/format';
@@ -132,27 +133,25 @@ export default async function AdmissionsPage({
 
   return (
     <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('title')}
-          </p>
-          <h1 className="text-3xl font-semibold">{t('worklist')}</h1>
-          <p className="max-w-3xl text-slate-700">{t('subtitle')}</p>
-        </div>
-        <div className="flex gap-2">
-          {canManageTemplates ? (
-            <Button asChild variant="secondary">
-              <Link href="/admissions/templates">{t('manageTemplates')}</Link>
-            </Button>
-          ) : null}
-          {canCreate ? (
-            <Button asChild>
-              <Link href="/admissions/new">{t('newCase')}</Link>
-            </Button>
-          ) : null}
-        </div>
-      </header>
+      <PageHeader
+        eyebrow={t('title')}
+        title={t('worklist')}
+        description={t('subtitle')}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {canManageTemplates ? (
+              <Button asChild variant="secondary">
+                <Link href="/admissions/templates">{t('manageTemplates')}</Link>
+              </Button>
+            ) : null}
+            {canCreate ? (
+              <Button asChild>
+                <Link href="/admissions/new">{t('newCase')}</Link>
+              </Button>
+            ) : null}
+          </div>
+        }
+      />
 
       {query.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">

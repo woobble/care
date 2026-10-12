@@ -11,6 +11,7 @@ import {
   hasPermission,
 } from '@app/web/lib/api';
 import { createTaskAction } from '@app/web/app/(office)/operations/actions';
+import { PageHeader } from '@app/web/components/page-patterns';
 
 type SearchParams = Promise<{
   page?: string;
@@ -182,18 +183,16 @@ export default async function OperationsTasksPage({
 
   return (
     <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid gap-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('title')}
-          </p>
-          <h1 className="text-3xl font-semibold">{t('tasksTitle')}</h1>
-          <p className="max-w-3xl text-slate-700">{t('manualTaskHelp')}</p>
-        </div>
-        <Button asChild variant="secondary">
-          <Link href="/operations/worklist">{t('openWorklist')}</Link>
-        </Button>
-      </header>
+      <PageHeader
+        eyebrow={t('title')}
+        title={t('tasksTitle')}
+        description={t('manualTaskHelp')}
+        actions={
+          <Button asChild variant="secondary">
+            <Link href="/operations/worklist">{t('openWorklist')}</Link>
+          </Button>
+        }
+      />
 
       {query.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">

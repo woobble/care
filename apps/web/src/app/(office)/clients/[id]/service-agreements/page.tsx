@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Badge, Button, Input, Label } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { auditActionKey } from '@app/web/i18n/audit';
 import { formatDate, formatDateTime, formatNumber } from '@app/web/i18n/format';
@@ -192,20 +193,20 @@ export default async function ClientServiceAgreementsPage({
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            <Link href={`/clients/${client.id}`}>{t('Clients.detail.detailTitle')}</Link>
-          </p>
-          <h1 className="text-3xl font-semibold">{t('ServiceAgreements.title')}</h1>
-          <p className="text-slate-700">
+      <PageHeader
+        eyebrow={<Link href={`/clients/${client.id}`}>{t('Clients.detail.detailTitle')}</Link>}
+        title={t('ServiceAgreements.title')}
+        meta={
+          <p className="text-sm text-muted-foreground">
             {client.preferredName || client.firstName} {client.lastName}
           </p>
-        </div>
-        <Button asChild variant="secondary">
-          <Link href={`/clients/${client.id}`}>{t('ServiceAgreements.backToClient')}</Link>
-        </Button>
-      </header>
+        }
+        actions={
+          <Button asChild variant="secondary">
+            <Link href={`/clients/${client.id}`}>{t('ServiceAgreements.backToClient')}</Link>
+          </Button>
+        }
+      />
 
       {error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">

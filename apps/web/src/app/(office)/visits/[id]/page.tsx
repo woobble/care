@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { auditActionKey } from '@app/web/i18n/audit';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
@@ -138,20 +139,20 @@ export default async function VisitDetailPage({
 
   return (
     <div className="mx-auto grid max-w-4xl gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            <Link href="/planning">{t('Visits.planning')}</Link>
-          </p>
-          <h1 className="text-3xl font-semibold">{visit.clientDisplayName}</h1>
-          <p className="text-slate-600">
+      <PageHeader
+        eyebrow={<Link href="/planning">{t('Visits.planning')}</Link>}
+        title={visit.clientDisplayName}
+        meta={
+          <p className="text-sm text-muted-foreground">
             {visit.facilityName} · {visit.organizationName}
           </p>
-        </div>
-        <Button asChild variant="secondary">
-          <Link href="/planning">{t('Visits.backToPlanning')}</Link>
-        </Button>
-      </header>
+        }
+        actions={
+          <Button asChild variant="secondary">
+            <Link href="/planning">{t('Visits.backToPlanning')}</Link>
+          </Button>
+        }
+      />
 
       {query.error ? (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">

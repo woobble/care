@@ -1,5 +1,4 @@
 import { cookies } from 'next/headers';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
@@ -7,6 +6,7 @@ import { LanguageSwitcher } from '@app/web/components/language-switcher';
 import { SignOutForm } from '@app/web/components/sign-out-form';
 import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
 import { signOutAction } from '@app/web/app/actions/auth';
+import { OfficeShell, type OfficeNavigationGroup } from '@app/web/components/office-shell';
 
 export default async function OfficeLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const api = await getApiClient(false);
@@ -16,83 +16,144 @@ export default async function OfficeLayout({ children }: Readonly<{ children: Re
   if (error || !tenantId || !tenants?.some((tenant) => tenant.id === tenantId)) redirect('/');
   const permissions = await getPermissionGrants(api);
   const [t, locale] = await Promise.all([getTranslations('Navigation'), getLocale()]);
+  const navigationLabels = {
+    workspace: t('workspace'),
+    servicesFinance: t('servicesFinance'),
+    management: t('management'),
+    overview: t('overview'),
+    operations: t('operations'),
+    planning: t('planning'),
+    clientRecords: t('clientRecords'),
+    admissions: t('admissions'),
+    employees: t('employees'),
+    services: t('services'),
+    benefits: t('benefits'),
+    billing: t('billing'),
+    claims: t('claims'),
+    documentation: t('documentation'),
+    serviceEvidence: t('serviceEvidence'),
+    communications: t('communications'),
+    administration: t('administration'),
+  };
+  const definitions = [
+    {
+      id: 'workspace',
+      key: 'workspace',
+      items: [
+        { id: 'overview', key: 'overview', href: '/operations', permission: 'operations.read' },
+        {
+          id: 'operations',
+          key: 'operations',
+          href: '/operations/worklist',
+          permission: 'operations.read',
+        },
+        { id: 'planning', key: 'planning', href: '/planning', permission: 'schedule.read' },
+        { id: 'clients', key: 'clientRecords', href: '/clients', permission: 'client.read' },
+        { id: 'admissions', key: 'admissions', href: '/admissions', permission: 'onboarding.read' },
+        { id: 'employees', key: 'employees', href: '/employees', permission: 'employee.read' },
+      ],
+    },
+    {
+      id: 'servicesFinance',
+      key: 'servicesFinance',
+      items: [
+        { id: 'services', key: 'services', href: '/services', permission: 'service.read' },
+        { id: 'benefits', key: 'benefits', href: '/benefits', permission: 'benefits.read' },
+        { id: 'billing', key: 'billing', href: '/billing', permission: 'billing.read' },
+        { id: 'claims', key: 'claims', href: '/billing/claims', permission: 'claims.read' },
+        {
+          id: 'documentation',
+          key: 'documentation',
+          href: '/documentation',
+          permission: 'care_documentation.review',
+        },
+        {
+          id: 'serviceEvidence',
+          key: 'serviceEvidence',
+          href: '/service-evidence',
+          permission: 'service_evidence.read',
+        },
+      ],
+    },
+    {
+      id: 'management',
+      key: 'management',
+      items: [
+        {
+          id: 'communications',
+          key: 'communications',
+          href: '/communications',
+          permission: 'communications.read',
+        },
+        {
+          id: 'administration',
+          key: 'administration',
+          href: '/administration/users',
+          permission: 'tenant.members.read',
+        },
+      ],
+    },
+  ] as const;
+  const tenantName = tenants.find((tenant) => tenant.id === tenantId)?.name ?? t('office');
+  const administrationLinks = [
+    { permission: 'tenant.members.read', href: '/administration/users' },
+    { permission: 'organization.read', href: '/administration/organizations' },
+    { permission: 'facility.read', href: '/administration/facilities' },
+    { permission: 'team.read', href: '/administration/teams' },
+    { permission: 'employee.read', href: '/administration/qualifications' },
+    { permission: 'documents.templates.manage', href: '/administration/document-templates' },
+    { permission: 'audit.read', href: '/administration/audit' },
+  ];
+  const canReadAdministration = administrationLinks.some(({ permission }) =>
+    permissions.some((grant) => grant.permission === permission),
+  );
+  const administrationHref =
+    administrationLinks.find(({ permission }) =>
+      permissions.some((grant) => grant.permission === permission),
+    )?.href ?? '/administration/users';
+  const groups: OfficeNavigationGroup[] = definitions
+    .map((group) => ({
+      id: group.id,
+      label: navigationLabels[group.key],
+      items: group.items
+        .filter((item) =>
+          item.id === 'administration'
+            ? canReadAdministration
+            : hasPermission(permissions, item.permission),
+        )
+        .map((item) => ({
+          id: item.id,
+          label: navigationLabels[item.key],
+          href: item.id === 'administration' ? administrationHref : item.href,
+        })),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b bg-white">
-        <nav
-          className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-4"
-          aria-label={t('main')}
-        >
-          <Link className="font-semibold text-blue-900" href="/clients">
-            Care Platform
-          </Link>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {hasPermission(permissions, 'service.read') ? (
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/services">{t('services')}</Link>
-              </Button>
-            ) : null}
-            {hasPermission(permissions, 'schedule.read') ? (
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/planning">{t('planning')}</Link>
-              </Button>
-            ) : null}
-            {hasPermission(permissions, 'operations.read') ? (
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/operations">{t('operations')}</Link>
-              </Button>
-            ) : null}
-            {hasPermission(permissions, 'onboarding.read') ? (
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/admissions">{t('admissions')}</Link>
-              </Button>
-            ) : null}
-            {hasPermission(permissions, 'communications.read') &&
-            hasPermission(permissions, 'client.read') ? (
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/communications">{t('communications')}</Link>
-              </Button>
-            ) : null}
-            {hasPermission(permissions, 'benefits.review') ? (
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/benefits">{t('benefits')}</Link>
-              </Button>
-            ) : null}
-            {hasPermission(permissions, 'billing.read') ? (
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/billing">{t('billing')}</Link>
-              </Button>
-            ) : null}
-            {hasPermission(permissions, 'care_documentation.review') ? (
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/documentation">{t('documentation')}</Link>
-              </Button>
-            ) : null}
-            {hasPermission(permissions, 'service_evidence.read') ? (
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/service-evidence">{t('serviceEvidence')}</Link>
-              </Button>
-            ) : null}
-            <Button asChild variant="secondary" size="sm">
-              <Link href="/employees">{t('employees')}</Link>
-            </Button>
-            <Button asChild variant="secondary" size="sm">
-              <Link href="/administration/users">{t('administration')}</Link>
-            </Button>
-            <Button asChild variant="secondary" size="sm">
-              <Link href="/">{t('changeTenant')}</Link>
-            </Button>
-            <SignOutForm action={signOutAction}>
-              <Button variant="link" size="sm">
-                {t('signOut')}
-              </Button>
-            </SignOutForm>
-            <LanguageSwitcher locale={locale} />
-          </div>
-        </nav>
-      </header>
-      <main className="mx-auto w-full max-w-6xl px-4 py-8">{children}</main>
-    </div>
+    <OfficeShell
+      groups={groups}
+      tenantName={tenantName}
+      language={<LanguageSwitcher locale={locale} />}
+      signOut={
+        <SignOutForm action={signOutAction}>
+          <Button variant="ghost" size="sm" className="w-full justify-start">
+            {t('signOut')}
+          </Button>
+        </SignOutForm>
+      }
+      labels={{
+        main: t('main'),
+        brand: t('brand'),
+        overview: t('overview'),
+        openMenu: t('openMenu'),
+        closeMenu: t('closeMenu'),
+        collapse: t('collapseSidebar'),
+        expand: t('expandSidebar'),
+        account: t('account'),
+        changeTenant: t('changeTenant'),
+      }}
+    >
+      {children}
+    </OfficeShell>
   );
 }

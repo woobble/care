@@ -12,6 +12,7 @@ import {
 } from '@app/web/lib/api';
 import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
 import { formatCents } from '@app/web/app/(office)/billing/format';
+import { PageHeader } from '@app/web/components/page-patterns';
 
 type ClaimStatus =
   | 'draft'
@@ -72,13 +73,7 @@ export default async function ClaimsWorklistPage({
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          {t('section')}
-        </p>
-        <h1 className="text-3xl font-semibold">{t('claims')}</h1>
-        <p className="text-slate-700">{t('claimsDescription')}</p>
-      </header>
+      <PageHeader eyebrow={t('section')} title={t('claims')} description={t('claimsDescription')} />
       <BillingNavigation permissions={permissions} />
       {error ? <Alert>{translate(errorMessageKey(error))}</Alert> : null}
       {query.updated === 'created' ? <Status>{t('claimCreated')}</Status> : null}

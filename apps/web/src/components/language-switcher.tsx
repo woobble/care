@@ -16,7 +16,7 @@ export function LanguageSwitcher({ locale }: Readonly<{ locale: Locale }>) {
       <span className="sr-only">{t('language')}</span>
       <select
         aria-label={t('language')}
-        className="min-h-9 rounded-md border border-slate-300 bg-white px-2"
+        className="min-h-10 max-w-32 rounded-md border border-input bg-background px-2 text-sm text-foreground"
         value={locale}
         disabled={pending}
         onChange={(event) => {
