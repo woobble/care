@@ -12,6 +12,8 @@ import { AppModule } from './app.module';
 import { configureApiHttp, createApiFastifyAdapter } from './http/fastify';
 import { apiMetrics } from './operational-metrics';
 
+const shutdownTimeoutMs = 10_000;
+
 async function bootstrap(): Promise<void> {
   const config = loadApiConfig();
   const logger = createLogger('care-api');
@@ -37,16 +39,44 @@ async function bootstrap(): Promise<void> {
   const metricsServer = await startMetricsServer(apiMetrics.registry, config.API_METRICS_PORT);
   logger.info({ port: config.API_METRICS_PORT }, 'Internal metrics endpoint started');
 
-  const shutdown = async () => {
-    try {
-      await app.close();
-    } finally {
-      await stopMetricsServer(metricsServer);
-      await stopTelemetry();
-    }
+  let shutdownPromise: Promise<void> | undefined;
+  const shutdown = (signal: NodeJS.Signals): Promise<void> => {
+    if (shutdownPromise) return shutdownPromise;
+
+    logger.info({ signal }, 'API shutdown requested');
+    const forceExitTimer = setTimeout(() => {
+      logger.error({ timeoutMs: shutdownTimeoutMs }, 'API shutdown timed out; exiting forcefully');
+      process.exit(1);
+    }, shutdownTimeoutMs);
+
+    shutdownPromise = (async () => {
+      let exitCode = 0;
+      const cleanup = async (name: string, operation: () => Promise<unknown>) => {
+        try {
+          await operation();
+        } catch (error) {
+          exitCode = 1;
+          logger.error(
+            { errorName: error instanceof Error ? error.name : 'UnknownError', cleanup: name },
+            'API shutdown cleanup failed',
+          );
+        }
+      };
+
+      await cleanup('http-server', () => app.close());
+      await cleanup('metrics-server', () => stopMetricsServer(metricsServer));
+      await cleanup('telemetry', () => stopTelemetry());
+
+      logger.info({ exitCode }, 'API shutdown complete');
+      await new Promise<void>((resolve) => logger.flush(() => resolve()));
+      clearTimeout(forceExitTimer);
+      process.exit(exitCode);
+    })();
+
+    return shutdownPromise;
   };
-  process.once('SIGTERM', () => void shutdown());
-  process.once('SIGINT', () => void shutdown());
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
+  process.once('SIGINT', () => void shutdown('SIGINT'));
 }
 
 void bootstrap();

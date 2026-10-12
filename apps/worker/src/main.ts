@@ -34,6 +34,21 @@ const maxAttempts = 10;
 const workerHealthPort = 3002;
 const heartbeatIntervalMs = 15_000;
 const staleHeartbeatMs = 90_000;
+const shutdownTimeoutMs = 10_000;
+
+function waitForNextPoll(delayMs: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, delayMs);
+    signal.addEventListener('abort', finish, { once: true });
+  });
+}
 
 async function main(): Promise<void> {
   const config = loadWorkerConfig();
@@ -299,6 +314,8 @@ async function main(): Promise<void> {
   }, heartbeatIntervalMs);
 
   let stopping = false;
+  const shutdownController = new AbortController();
+  let shutdownTimer: ReturnType<typeof setTimeout> | undefined;
 
   const relay = async (): Promise<void> => {
     while (true) {
@@ -426,36 +443,68 @@ async function main(): Promise<void> {
       if (!stopping) {
         // Wait between completed batches instead of scheduling overlapping polls.
         // oxlint-disable-next-line no-await-in-loop
-        await new Promise((resolve) => setTimeout(resolve, config.WORKER_POLL_INTERVAL_MS));
+        await waitForNextPoll(config.WORKER_POLL_INTERVAL_MS, shutdownController.signal);
       }
     }
   };
 
-  const relayPromise = relay();
-  const shutdown = () => {
+  const shutdown = (signal: NodeJS.Signals) => {
+    if (stopping) return;
     stopping = true;
     health.schedulerStatus = 'stopping';
+    logger.info({ signal }, 'Worker shutdown requested');
+    shutdownTimer = setTimeout(() => {
+      logger.error(
+        { timeoutMs: shutdownTimeoutMs },
+        'Worker shutdown timed out; exiting forcefully',
+      );
+      process.exit(1);
+    }, shutdownTimeoutMs);
+    shutdownController.abort();
   };
-  process.once('SIGTERM', shutdown);
-  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.once('SIGINT', () => shutdown('SIGINT'));
 
+  let exitCode = 0;
+  const cleanup = async (name: string, operation: () => Promise<unknown>) => {
+    try {
+      await operation();
+    } catch (error) {
+      exitCode = 1;
+      logger.error(
+        {
+          errorName: safeErrorName(error),
+          cleanup: name,
+        },
+        'Worker shutdown cleanup failed',
+      );
+    }
+  };
+
+  const relayPromise = relay();
   try {
     await relayPromise;
+  } catch (error) {
+    exitCode = 1;
+    logger.error({ errorName: safeErrorName(error) }, 'Worker relay stopped unexpectedly');
   } finally {
     clearInterval(heartbeatTimer);
     health.schedulerStatus = 'stopped';
-    try {
-      await persistHealth();
-    } catch (error) {
-      logger.error(
-        { errorName: safeErrorName(error) },
-        'Worker shutdown state could not be recorded',
-      );
-    }
-    await new Promise<void>((resolve) => healthServer.close(() => resolve()));
-    await stopMetricsServer(metricsServer);
-    await database.close();
-    await stopTelemetry();
+    await cleanup('health-state', () => persistHealth());
+    await cleanup(
+      'health-server',
+      () =>
+        new Promise<void>((resolve, reject) => {
+          healthServer.close((error) => (error ? reject(error) : resolve()));
+        }),
+    );
+    await cleanup('metrics-server', () => stopMetricsServer(metricsServer));
+    await cleanup('database', () => database.close());
+    await cleanup('telemetry', () => stopTelemetry());
+    logger.info({ exitCode }, 'Worker shutdown complete');
+    await new Promise<void>((resolve) => logger.flush(() => resolve()));
+    if (shutdownTimer) clearTimeout(shutdownTimer);
+    process.exit(exitCode);
   }
 }
 
