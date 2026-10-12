@@ -1,3 +1,12 @@
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+  TableCaption as ShadcnTableCaption,
+} from '@care/ui';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { auditActionKey } from '@app/web/i18n/audit';
@@ -25,39 +34,41 @@ export default async function AuditPage() {
         </p>
       ) : data?.items.length ? (
         <div className="overflow-x-auto rounded-lg border bg-white">
-          <table className="w-full border-collapse text-left text-sm">
-            <caption className="sr-only">{t('Audit.caption')}</caption>
-            <thead className="border-b bg-slate-100 text-slate-700">
-              <tr>
-                <th scope="col" className="px-4 py-3">
+          <ShadcnTable className="w-full border-collapse text-left text-sm">
+            <ShadcnTableCaption className="sr-only">{t('Audit.caption')}</ShadcnTableCaption>
+            <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+              <ShadcnTableRow>
+                <ShadcnTableHead scope="col" className="px-4 py-3">
                   {t('Audit.timestamp')}
-                </th>
-                <th scope="col" className="px-4 py-3">
+                </ShadcnTableHead>
+                <ShadcnTableHead scope="col" className="px-4 py-3">
                   {t('Audit.actor')}
-                </th>
-                <th scope="col" className="px-4 py-3">
+                </ShadcnTableHead>
+                <ShadcnTableHead scope="col" className="px-4 py-3">
                   {t('Audit.action')}
-                </th>
-                <th scope="col" className="px-4 py-3">
+                </ShadcnTableHead>
+                <ShadcnTableHead scope="col" className="px-4 py-3">
                   {t('Audit.resource')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+                </ShadcnTableHead>
+              </ShadcnTableRow>
+            </ShadcnTableHeader>
+            <ShadcnTableBody>
               {data.items.map((entry) => (
-                <tr key={entry.id} className="border-b last:border-0">
-                  <td className="whitespace-nowrap px-4 py-3">
+                <ShadcnTableRow key={entry.id} className="border-b last:border-0">
+                  <ShadcnTableCell className="whitespace-nowrap px-4 py-3">
                     {formatDateTime(entry.timestamp, locale) ?? '—'}
-                  </td>
-                  <td className="px-4 py-3">{entry.actorId}</td>
-                  <td className="px-4 py-3">{t(auditActionKey(entry.action))}</td>
-                  <td className="px-4 py-3">
+                  </ShadcnTableCell>
+                  <ShadcnTableCell className="px-4 py-3">{entry.actorId}</ShadcnTableCell>
+                  <ShadcnTableCell className="px-4 py-3">
+                    {t(auditActionKey(entry.action))}
+                  </ShadcnTableCell>
+                  <ShadcnTableCell className="px-4 py-3">
                     {entry.resourceType} · {entry.resourceId}
-                  </td>
-                </tr>
+                  </ShadcnTableCell>
+                </ShadcnTableRow>
               ))}
-            </tbody>
-          </table>
+            </ShadcnTableBody>
+          </ShadcnTable>
         </div>
       ) : (
         <p className="rounded-lg border bg-white p-5 text-slate-700">{t('Audit.empty')}</p>

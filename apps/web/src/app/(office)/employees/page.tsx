@@ -1,3 +1,13 @@
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+  TableCaption as ShadcnTableCaption,
+} from '@care/ui';
+import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
@@ -167,47 +177,53 @@ export default async function EmployeesPage({
             {t('Employees.resultCount', { count: employees.total })}
           </h2>
           <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
-            <table className="w-full border-collapse text-left text-sm">
-              <caption className="sr-only">{t('Employees.listCaption')}</caption>
-              <thead className="border-b bg-slate-100 text-slate-700">
-                <tr>
-                  <th scope="col" className="px-4 py-3">
+            <ShadcnTable className="w-full border-collapse text-left text-sm">
+              <ShadcnTableCaption className="sr-only">
+                {t('Employees.listCaption')}
+              </ShadcnTableCaption>
+              <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+                <ShadcnTableRow>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Common.fields.name')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Common.fields.organization')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Employees.personnelNumber')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Common.fields.status')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+                  </ShadcnTableHead>
+                </ShadcnTableRow>
+              </ShadcnTableHeader>
+              <ShadcnTableBody>
                 {employees.items.map((employee) => (
-                  <tr key={employee.id} className="border-b last:border-0">
-                    <td className="px-4 py-3">
+                  <ShadcnTableRow key={employee.id} className="border-b last:border-0">
+                    <ShadcnTableCell className="px-4 py-3">
                       <Link
                         className="font-medium text-blue-900 underline-offset-4 hover:underline"
                         href={`/employees/${employee.id}`}
                       >
                         {employee.preferredName || employee.firstName} {employee.lastName}
                       </Link>
-                    </td>
-                    <td className="px-4 py-3">{employee.organizationName ?? '—'}</td>
-                    <td className="px-4 py-3">{employee.personnelNumber ?? '—'}</td>
-                    <td className="px-4 py-3">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
+                      {employee.organizationName ?? '—'}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
+                      {employee.personnelNumber ?? '—'}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
                       <StatusBadge
                         status={employee.status}
                         label={t(statusLabelKey(employee.status))}
                       />
-                    </td>
-                  </tr>
+                    </ShadcnTableCell>
+                  </ShadcnTableRow>
                 ))}
-              </tbody>
-            </table>
+              </ShadcnTableBody>
+            </ShadcnTable>
           </div>
           <div className="flex items-center justify-between">
             <p className="text-sm text-slate-600">
@@ -252,9 +268,14 @@ function SelectFilter({
   return (
     <label className="grid gap-1 text-sm">
       {label}
-      <select className="h-10 rounded-md border bg-white px-3" name={name} defaultValue={value}>
+      <NativeSelect
+        selectClassName="h-10 rounded-md border bg-white px-3"
+        name={name}
+        defaultValue={value}
+        className="w-full"
+      >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

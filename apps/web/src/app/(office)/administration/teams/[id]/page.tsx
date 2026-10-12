@@ -1,3 +1,5 @@
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -54,7 +56,7 @@ export default async function TeamDetailPage({
         <h2 id="team-edit-title" className="text-xl font-semibold">
           {t('Teams.detailsTitle')}
         </h2>
-        <form action={updateTeamAction} className="grid gap-4 md:grid-cols-2">
+        <RHFActionForm action={updateTeamAction} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="id" value={team.id} />
           <div className="grid gap-2">
             <Label htmlFor="name">{t('Common.fields.name')}</Label>
@@ -62,11 +64,12 @@ export default async function TeamDetailPage({
           </div>
           <div className="grid gap-2">
             <Label htmlFor="facilityId">{t('Teams.facility')}</Label>
-            <select
+            <NativeSelect
               id="facilityId"
               name="facilityId"
-              className="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-white px-3"
               defaultValue={team.facilityId ?? ''}
+              className="w-full"
             >
               <option value="">{t('Teams.organizationWide')}</option>
               {facilities.map((facility) => (
@@ -74,12 +77,12 @@ export default async function TeamDetailPage({
                   {facility.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <div className="md:col-span-2">
             <Button type="submit">{t('Common.actions.save')}</Button>
           </div>
-        </form>
+        </RHFActionForm>
         {team.status === 'archived' ? (
           <form action={setTeamStatusAction}>
             <input type="hidden" name="id" value={id} />

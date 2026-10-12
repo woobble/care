@@ -1,3 +1,4 @@
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
@@ -55,7 +56,7 @@ export default async function QualificationsPage({
         <h2 id="qualifications-title" className="text-xl font-semibold">
           {t('Qualifications.qualificationsTitle')}
         </h2>
-        <form
+        <RHFActionForm
           action={createQualificationAction}
           className="grid gap-4 rounded-lg border bg-white p-5 md:grid-cols-3"
         >
@@ -84,7 +85,7 @@ export default async function QualificationsPage({
           <div className="md:col-span-3">
             <Button type="submit">{t('Qualifications.createQualification')}</Button>
           </div>
-        </form>
+        </RHFActionForm>
         {qualificationsResult.data?.length ? (
           <div className="grid gap-3">
             {qualificationsResult.data.map((definition) => (
@@ -107,7 +108,7 @@ export default async function QualificationsPage({
         <h2 id="skills-title" className="text-xl font-semibold">
           {t('Qualifications.skillsTitle')}
         </h2>
-        <form
+        <RHFActionForm
           action={createSkillAction}
           className="grid gap-4 rounded-lg border bg-white p-5 md:grid-cols-3"
         >
@@ -129,7 +130,7 @@ export default async function QualificationsPage({
           <div className="md:col-span-3">
             <Button type="submit">{t('Qualifications.createSkill')}</Button>
           </div>
-        </form>
+        </RHFActionForm>
         {skillsResult.data?.length ? (
           <div className="grid gap-3">
             {skillsResult.data.map((definition) => (
@@ -187,7 +188,7 @@ async function DefinitionCard({
         <StatusBadge status={definition.status} label={t(statusLabelKey(definition.status))} />
       </div>
       <div className="grid gap-3 md:grid-cols-3">
-        <form action={updateAction} className="grid gap-3 md:col-span-3 md:grid-cols-3">
+        <RHFActionForm action={updateAction} className="grid gap-3 md:col-span-3 md:grid-cols-3">
           <input type="hidden" name="id" value={definition.id} />
           <Field
             id={`${noun}-name-${definition.id}`}
@@ -216,7 +217,7 @@ async function DefinitionCard({
               {t('Qualifications.save')}
             </Button>
           </div>
-        </form>
+        </RHFActionForm>
         {definition.status === 'active' ? (
           <form action={archiveAction}>
             <input type="hidden" name="id" value={definition.id} />

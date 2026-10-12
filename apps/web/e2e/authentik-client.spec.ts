@@ -103,7 +103,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.getByRole('combobox', { name: 'Language' }).selectOption('de');
     await expect(page.locator('html')).toHaveAttribute('lang', 'de');
     await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'load' });
     await expect(page.getByRole('combobox', { name: 'Sprache' })).toHaveValue('de');
     await page.getByRole('combobox', { name: 'Sprache' }).selectOption('en');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
@@ -203,7 +203,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(
       page.getByRole('heading', { name: 'Klientinnen und Klienten', exact: true }),
     ).toBeVisible();
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'load' });
     await expect(page.getByRole('combobox', { name: 'Sprache' })).toHaveValue('de');
     await page.getByRole('combobox', { name: 'Sprache' }).selectOption('en');
     await expect(page).toHaveURL(/\/clients\?localeCheck=1$/);
@@ -279,7 +279,7 @@ test('Authentik users can be invited and administered from the office UI', async
       });
       await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible();
       await expect(page.locator('main h1')).toHaveAttribute('data-shell-node-check', 'kept');
-      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.reload({ waitUntil: 'load' });
       await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
       const keyboardCollapse = page.getByRole('button', { name: 'Collapse sidebar' });
       await keyboardCollapse.focus();
@@ -501,7 +501,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.locator('#new-address-postal').fill('10115');
     await page.locator('#new-address-city').fill('Berlin');
     const addressForm = page.locator('details').filter({ hasText: 'Add address' }).locator('form');
-    await addressForm.locator('input[name="isPrimary"]').check();
+    await addressForm.getByRole('checkbox', { name: 'Use as primary address' }).click();
     const clientPath = new URL(page.url()).pathname;
     const addressResponse = page.waitForResponse(
       (response) =>
@@ -517,11 +517,14 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.locator('summary').filter({ hasText: 'Add contact' }).click();
     await page.locator('#new-contact-first').fill('E2E');
     await page.locator('#new-contact-last').fill('Kontakt');
-    await page.locator('input[name="roles"][value="primary_contact"]').check();
-    await page.locator('input[name="roles"][value="emergency_contact"]').check();
+    await page.getByRole('checkbox', { name: 'Primary contact' }).click();
+    await page.getByRole('checkbox', { name: 'Emergency contact' }).click();
     await page.getByRole('button', { name: 'Add contact' }).click();
     await expect(page.getByRole('heading', { name: 'E2E Kontakt' })).toBeVisible();
-    await expect(page.getByRole('checkbox', { name: 'Emergency contact' })).toBeChecked();
+    const savedContact = page
+      .locator('article')
+      .filter({ has: page.getByRole('heading', { name: 'E2E Kontakt' }) });
+    await expect(savedContact.getByRole('checkbox', { name: 'Emergency contact' })).toBeChecked();
 
     await page.locator('summary').filter({ hasText: 'Add insurance relationship' }).click();
     const insuranceForm = page
@@ -530,7 +533,7 @@ test('Authentik users can be invited and administered from the office UI', async
       .locator('form');
     await insuranceForm.locator('#new-insurer-name').fill('E2E Demo Insurance');
     await insuranceForm.locator('#new-insurance-number').fill(`E2E-PRIVATE-${runId}`);
-    await insuranceForm.locator('input[name="isPrimary"]').check();
+    await insuranceForm.getByRole('checkbox', { name: 'Primary insurance' }).click();
     await insuranceForm.getByRole('button').click();
     await expect(page.getByRole('heading', { name: 'E2E Demo Insurance · Primary' })).toBeVisible();
 
@@ -684,8 +687,8 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.getByRole('button', { name: 'Create service' }).click();
     await expect(page.getByRole('heading', { name: `E2E Service ${runId}` })).toBeVisible();
     serviceId = new URL(page.url()).pathname.split('/').at(-1);
-    await page.locator(`input[name="organizationIds"][value="${e2eOrganizationId}"]`).check();
-    await page.locator(`input[name="facilityIds"][value="${e2eFacilityId}"]`).check();
+    await page.locator(`button[role="checkbox"][value="${e2eOrganizationId}"]`).click();
+    await page.locator(`button[role="checkbox"][value="${e2eFacilityId}"]`).click();
     await page.getByRole('button', { name: 'Save availability' }).click();
     await expect(page.getByRole('table').getByText(e2eFacilityName)).toBeVisible();
     const priceForm = page.locator('form').filter({ has: page.locator('#newPriceOrganizationId') });
@@ -823,7 +826,7 @@ test('Authentik users can be invited and administered from the office UI', async
       .locator('form');
     await benefitInsuranceForm.locator('#new-insurer-name').fill('E2E Pflegekasse');
     await benefitInsuranceForm.locator('#new-insurance-number').fill(`E2E-KASSE-${runId}`);
-    await benefitInsuranceForm.locator('input[name="isPrimary"]').check();
+    await benefitInsuranceForm.getByRole('checkbox', { name: 'Primary insurance' }).click();
     await benefitInsuranceForm.getByRole('button').click();
     await expect(page.getByRole('heading', { name: 'E2E Pflegekasse · Primary' })).toBeVisible();
 
@@ -945,7 +948,11 @@ test('Authentik users can be invited and administered from the office UI', async
       .selectOption('small_business');
     await billingProfileSection.locator('input[name="taxExemptionBasis"]').fill('§ 19 UStG');
     await billingProfileSection.locator('select[name="requiredInvoiceFormat"]').selectOption('pdf');
-    await billingProfileSection.locator('input[name="requireAcknowledgement"]').check();
+    await billingProfileSection
+      .getByRole('checkbox', {
+        name: 'Require current service acknowledgement before issuance',
+      })
+      .click();
     await billingProfileSection.getByRole('button', { name: 'Save billing profile' }).click();
     await expect(page.getByRole('status')).toContainText('Billing profile saved.');
 
@@ -994,8 +1001,8 @@ test('Authentik users can be invited and administered from the office UI', async
     const agreementServiceForm = page.locator('form').filter({ has: servicePicker });
     await agreementServiceForm.locator('input[name="quantity"]').fill('1');
     await agreementServiceForm.locator('select[name="cadence"]').selectOption('weekly');
-    await agreementServiceForm.locator('input[name="weekdays"][value="monday"]').check();
-    await agreementServiceForm.locator('input[name="weekdays"][value="wednesday"]').check();
+    await agreementServiceForm.getByRole('checkbox', { name: 'Monday' }).click();
+    await agreementServiceForm.getByRole('checkbox', { name: 'Wednesday' }).click();
     await agreementServiceForm.locator('input[name="preferredTimeStart"]').fill('08:00');
     await agreementServiceForm.locator('input[name="preferredTimeEnd"]').fill('09:00');
     await agreementServiceForm.getByRole('button', { name: 'Add service' }).click();
@@ -1881,9 +1888,9 @@ test('Authentik users can be invited and administered from the office UI', async
       .filter({ hasText: `E2E Service ${runId}` })
       .filter({ hasText: 'E2E Pflegekasse' })
       .first();
-    const includeCandidate = payerCandidate.locator('input[name="selectedLine"]');
+    const includeCandidate = payerCandidate.getByRole('checkbox', { name: 'Include this service' });
     await expect(includeCandidate).toBeEnabled();
-    await includeCandidate.check();
+    await includeCandidate.click();
     await payerInvoiceGroup.getByRole('button', { name: 'Create draft invoice' }).click();
     await expect(page).toHaveURL(/\/billing\/invoices\/[0-9a-f-]{36}\?updated=draft$/i);
     invoiceId = new URL(page.url()).pathname.split('/').at(-1);
@@ -2090,27 +2097,30 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.goto('/administration/users');
     await page.getByRole('link', { name: invitedName }).click();
     await expect(page.getByRole('heading', { name: invitedName })).toBeVisible();
-    await page.locator(`input[name="roleId"][value="${officeRoleId}"]`).check();
+    const officeRole = page.locator(`button[role="checkbox"][value="${officeRoleId}"]`);
+    await officeRole.click();
     await page.getByRole('button', { name: 'Save roles' }).click();
     await expect(page.getByRole('status')).toContainText('Access record updated.');
-    await page.locator(`input[name="roleId"][value="${officeRoleId}"]`).uncheck();
+    await officeRole.click();
     await page.getByRole('button', { name: 'Save roles' }).click();
     await expect(page.getByRole('status')).toContainText('Access record updated.');
-    await expect(page.locator(`input[name="roleId"][value="${officeRoleId}"]`)).not.toBeChecked();
-    await page.locator(`input[name="roleId"][value="${officeRoleId}"]`).check();
+    await expect(officeRole).not.toBeChecked();
+    await officeRole.click();
     await page.getByRole('button', { name: 'Save roles' }).click();
     await expect(page.getByRole('status')).toContainText('Access record updated.');
 
     await page.locator('input[name="scopeMode"][value="scoped"]').check();
-    const facilityScope = page.locator(`input[name="scope"][value="facility:${facilityWestId}"]`);
-    await facilityScope.check();
+    const facilityScope = page.locator(
+      `button[role="checkbox"][value="facility:${facilityWestId}"]`,
+    );
+    await facilityScope.click();
     await page.getByRole('button', { name: 'Save scopes' }).click();
     await expect(page.getByRole('status')).toContainText('Access record updated.');
-    await facilityScope.uncheck();
+    await facilityScope.click();
     await page.getByRole('button', { name: 'Save scopes' }).click();
     await expect(page.getByRole('status')).toContainText('Access record updated.');
     await expect(facilityScope).not.toBeChecked();
-    await facilityScope.check();
+    await facilityScope.click();
     await page.getByRole('button', { name: 'Save scopes' }).click();
     await expect(page.getByRole('status')).toContainText('Access record updated.');
     await page.getByRole('button', { name: 'Activate membership' }).click();

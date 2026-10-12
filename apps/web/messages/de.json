@@ -1,6 +1,7 @@
 {
   "Common": {
     "language": "Sprache",
+    "loadingPage": "Seite wird geladen",
     "languages": {
       "en": "English",
       "de": "Deutsch"

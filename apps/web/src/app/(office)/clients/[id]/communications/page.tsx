@@ -1,3 +1,6 @@
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -438,7 +441,10 @@ export default async function ClientCommunicationsPage({
               })}
             </p>
           </div>
-          <form action={saveCommunicationPreferencesAction} className="grid gap-4 md:grid-cols-2">
+          <RHFActionForm
+            action={saveCommunicationPreferencesAction}
+            className="grid gap-4 md:grid-cols-2"
+          >
             <input type="hidden" name="clientId" value={client.id} />
             <input type="hidden" name="expectedVersion" value={preferences.version} />
             <SelectField
@@ -511,7 +517,7 @@ export default async function ClientCommunicationsPage({
             <div className="md:col-span-2">
               <Button type="submit">{t('savePreferences')}</Button>
             </div>
-          </form>
+          </RHFActionForm>
         </section>
       ) : null}
 
@@ -525,7 +531,10 @@ export default async function ClientCommunicationsPage({
               <h2 id="new-interaction-title" className="text-xl font-semibold">
                 {t('newInteraction')}
               </h2>
-              <form action={createCommunicationAction} className="grid gap-4 md:grid-cols-2">
+              <RHFActionForm
+                action={createCommunicationAction}
+                className="grid gap-4 md:grid-cols-2"
+              >
                 <input type="hidden" name="clientId" value={client.id} />
                 <input type="hidden" name="timezone" value={timezone} />
                 <div className="grid gap-2 md:col-span-2">
@@ -627,7 +636,7 @@ export default async function ClientCommunicationsPage({
                 ) : null}
                 <div className="grid gap-2 md:col-span-2">
                   <Label htmlFor="communication-summary">{t('summary')}</Label>
-                  <textarea
+                  <Textarea
                     id="communication-summary"
                     name="summary"
                     maxLength={4000}
@@ -638,7 +647,7 @@ export default async function ClientCommunicationsPage({
                 <div className="md:col-span-2">
                   <Button type="submit">{t('saveInteraction')}</Button>
                 </div>
-              </form>
+              </RHFActionForm>
             </section>
           ) : null}
 
@@ -857,7 +866,7 @@ export default async function ClientCommunicationsPage({
                       </Button>
                     </div>
                     {canAmend ? (
-                      <form
+                      <RHFActionForm
                         action={amendCommunicationAction}
                         className="grid gap-3 border-t pt-4 md:grid-cols-2"
                       >
@@ -887,7 +896,7 @@ export default async function ClientCommunicationsPage({
                         </div>
                         <div className="grid gap-2 md:col-span-2">
                           <Label htmlFor={`amend-summary-${interaction.id}`}>{t('summary')}</Label>
-                          <textarea
+                          <Textarea
                             id={`amend-summary-${interaction.id}`}
                             name="summary"
                             maxLength={4000}
@@ -901,10 +910,10 @@ export default async function ClientCommunicationsPage({
                             {t('saveAmendment')}
                           </Button>
                         </div>
-                      </form>
+                      </RHFActionForm>
                     ) : null}
                     {canCreateTask && client.organizationId ? (
-                      <form
+                      <RHFActionForm
                         action={createCommunicationFollowUpAction}
                         className="grid gap-3 border-t pt-4 sm:grid-cols-2"
                       >
@@ -968,7 +977,7 @@ export default async function ClientCommunicationsPage({
                             {t('createFollowUp')}
                           </Button>
                         </div>
-                      </form>
+                      </RHFActionForm>
                     ) : null}
                   </li>
                 ))}
@@ -1089,14 +1098,15 @@ function SelectField({
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <select
+      <NativeSelect
         id={id}
         name={name}
         defaultValue={defaultValue}
-        className="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-white px-3"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </div>
   );
 }

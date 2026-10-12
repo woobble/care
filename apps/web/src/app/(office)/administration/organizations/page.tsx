@@ -1,3 +1,4 @@
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
@@ -49,7 +50,7 @@ export default async function OrganizationsPage({
           </h2>
           <p className="text-sm text-slate-600">{t('Organizations.createDescription')}</p>
         </div>
-        <form action={createOrganizationAction} className="grid gap-4 md:grid-cols-2">
+        <RHFActionForm action={createOrganizationAction} className="grid gap-4 md:grid-cols-2">
           <Field
             id="organization-name"
             name="name"
@@ -101,7 +102,7 @@ export default async function OrganizationsPage({
           <div className="md:col-span-2">
             <Button type="submit">{t('Organizations.createTitle')}</Button>
           </div>
-        </form>
+        </RHFActionForm>
       </section>
 
       <section aria-labelledby="organization-list-title" className="grid gap-3">

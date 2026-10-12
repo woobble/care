@@ -1,3 +1,5 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
@@ -372,8 +374,7 @@ export default async function OperationsWorklistPage({
           </SelectField>
         ) : null}
         <label className="flex min-h-10 items-center gap-2 text-sm">
-          <input
-            type="checkbox"
+          <ShadcnCheckbox
             name="assignedToMe"
             value="true"
             defaultChecked={assignedToMe === 'true'}
@@ -574,14 +575,15 @@ function SelectField({
   return (
     <label htmlFor={id} className="grid gap-1 text-sm">
       <span>{label}</span>
-      <select
+      <NativeSelect
         id={id}
         name={name}
         defaultValue={defaultValue}
-        className="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-white px-3"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

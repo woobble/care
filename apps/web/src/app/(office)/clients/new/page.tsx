@@ -1,3 +1,5 @@
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -47,7 +49,7 @@ export default async function NewClientPage({
           {t('Errors.generic')}
         </p>
       ) : null}
-      <form
+      <RHFActionForm
         action={createClientAction}
         className="grid gap-6 rounded-lg border bg-white p-5 shadow-sm"
       >
@@ -217,7 +219,7 @@ export default async function NewClientPage({
             <Link href="/clients">{t('Common.actions.cancel')}</Link>
           </Button>
         </div>
-      </form>
+      </RHFActionForm>
     </div>
   );
 }
@@ -273,15 +275,16 @@ function SelectField({
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <select
+      <NativeSelect
         id={id}
         name={name}
-        className="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-white px-3"
         required={required}
         defaultValue=""
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </div>
   );
 }

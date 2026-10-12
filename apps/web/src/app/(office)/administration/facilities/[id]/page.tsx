@@ -1,3 +1,4 @@
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -55,7 +56,7 @@ export default async function FacilityDetailPage({
         <h2 id="facility-edit-title" className="text-xl font-semibold">
           {t('Facilities.detailsTitle')}
         </h2>
-        <form action={updateFacilityAction} className="grid gap-4 md:grid-cols-2">
+        <RHFActionForm action={updateFacilityAction} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="id" value={facility.id} />
           <Field
             id="name"
@@ -106,7 +107,7 @@ export default async function FacilityDetailPage({
           <div className="md:col-span-2">
             <Button type="submit">{t('Common.actions.save')}</Button>
           </div>
-        </form>
+        </RHFActionForm>
         {facility.status === 'archived' ? (
           <StatusForm id={id} operation="activate" />
         ) : (
@@ -130,7 +131,7 @@ export default async function FacilityDetailPage({
           </h2>
           <p className="text-sm text-slate-600">{t('Facilities.teamsDescription')}</p>
         </div>
-        <form action={createTeamAction} className="flex flex-wrap items-end gap-3">
+        <RHFActionForm action={createTeamAction} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="organizationId" value={facility.organizationId} />
           <input type="hidden" name="facilityId" value={facility.id} />
           <div className="grid gap-2">
@@ -138,7 +139,7 @@ export default async function FacilityDetailPage({
             <Input id="team-name" name="name" required maxLength={160} />
           </div>
           <Button type="submit">{t('Facilities.createTeam')}</Button>
-        </form>
+        </RHFActionForm>
         {teamsResult.data?.length ? (
           <ul className="grid gap-2">
             {teamsResult.data.map((team) => (

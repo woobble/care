@@ -1,3 +1,14 @@
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+  TableCaption as ShadcnTableCaption,
+} from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
@@ -50,15 +61,16 @@ export default async function TeamsPage({
         <h2 id="team-create-title" className="text-xl font-semibold">
           {t('Teams.createTitle')}
         </h2>
-        <form action={createTeamAction} className="grid gap-4 md:grid-cols-3">
+        <RHFActionForm action={createTeamAction} className="grid gap-4 md:grid-cols-3">
           <div className="grid gap-2">
             <Label htmlFor="organizationId">{t('Teams.organization')}</Label>
-            <select
+            <NativeSelect
               id="organizationId"
               name="organizationId"
-              className="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-white px-3"
               required
               defaultValue={query.organizationId ?? ''}
+              className="w-full"
             >
               <option value="" disabled>
                 {t('Teams.selectOrganization')}
@@ -70,15 +82,16 @@ export default async function TeamsPage({
                     {organization.name}
                   </option>
                 ))}
-            </select>
+            </NativeSelect>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="facilityId">{t('Teams.facilityOptional')}</Label>
-            <select
+            <NativeSelect
               id="facilityId"
               name="facilityId"
-              className="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-white px-3"
               defaultValue={query.facilityId ?? ''}
+              className="w-full"
             >
               <option value="">{t('Teams.organizationWide')}</option>
               {facilities
@@ -88,7 +101,7 @@ export default async function TeamsPage({
                     {facility.organizationName} — {facility.name}
                   </option>
                 ))}
-            </select>
+            </NativeSelect>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="name">{t('Teams.name')}</Label>
@@ -97,7 +110,7 @@ export default async function TeamsPage({
           <div className="md:col-span-3">
             <Button type="submit">{t('Teams.createTitle')}</Button>
           </div>
-        </form>
+        </RHFActionForm>
       </section>
       <section aria-labelledby="team-list-title" className="grid gap-3">
         <h2 id="team-list-title" className="text-xl font-semibold">
@@ -105,46 +118,46 @@ export default async function TeamsPage({
         </h2>
         {teamsResult.data?.length ? (
           <div className="overflow-x-auto rounded-lg border bg-white">
-            <table className="w-full border-collapse text-left text-sm">
-              <caption className="sr-only">{t('Teams.caption')}</caption>
-              <thead className="border-b bg-slate-100 text-slate-700">
-                <tr>
-                  <th scope="col" className="px-4 py-3">
+            <ShadcnTable className="w-full border-collapse text-left text-sm">
+              <ShadcnTableCaption className="sr-only">{t('Teams.caption')}</ShadcnTableCaption>
+              <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+                <ShadcnTableRow>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Teams.team')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Teams.organizationField')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Teams.facility')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Common.fields.status')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+                  </ShadcnTableHead>
+                </ShadcnTableRow>
+              </ShadcnTableHeader>
+              <ShadcnTableBody>
                 {teamsResult.data.map((team) => (
-                  <tr key={team.id} className="border-b last:border-0">
-                    <td className="px-4 py-3">
+                  <ShadcnTableRow key={team.id} className="border-b last:border-0">
+                    <ShadcnTableCell className="px-4 py-3">
                       <Link
                         className="font-medium text-blue-900 underline"
                         href={`/administration/teams/${team.id}`}
                       >
                         {team.name}
                       </Link>
-                    </td>
-                    <td className="px-4 py-3">{team.organizationName}</td>
-                    <td className="px-4 py-3">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">{team.organizationName}</ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
                       {team.facilityName ?? t('Teams.organizationWide')}
-                    </td>
-                    <td className="px-4 py-3">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
                       <StatusBadge status={team.status} label={t(statusLabelKey(team.status))} />
-                    </td>
-                  </tr>
+                    </ShadcnTableCell>
+                  </ShadcnTableRow>
                 ))}
-              </tbody>
-            </table>
+              </ShadcnTableBody>
+            </ShadcnTable>
           </div>
         ) : (
           <p className="rounded-lg border bg-white p-5 text-slate-700">{t('Teams.empty')}</p>

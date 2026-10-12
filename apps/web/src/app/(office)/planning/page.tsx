@@ -1,3 +1,6 @@
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
@@ -909,7 +912,7 @@ export default async function PlanningPage({
                           </Button>
                         </form>
                       ) : null}
-                      <form
+                      <RHFActionForm
                         action={updateTourStopsAction}
                         className="grid gap-3 rounded-md border p-3"
                       >
@@ -922,11 +925,12 @@ export default async function PlanningPage({
                             <Label htmlFor={`tour-stop-${stop.id}`}>
                               {t('Planning.stopLabel', { sequence: stop.sequence })}
                             </Label>
-                            <select
+                            <NativeSelect
                               id={`tour-stop-${stop.id}`}
                               name="visitId"
                               defaultValue={stop.visitId}
-                              className="h-10 rounded-md border bg-white px-3 text-sm"
+                              selectClassName="h-10 rounded-md border bg-white px-3 text-sm"
+                              className="w-full"
                             >
                               {tour.stops.map((candidate) => (
                                 <option key={candidate.visitId} value={candidate.visitId}>
@@ -934,7 +938,7 @@ export default async function PlanningPage({
                                     ?.clientDisplayName ?? candidate.visitId}
                                 </option>
                               ))}
-                            </select>
+                            </NativeSelect>
                             <input
                               type="hidden"
                               name="dispatcherNote"
@@ -945,7 +949,7 @@ export default async function PlanningPage({
                         <Button type="submit" variant="secondary" className="w-fit">
                           {t('Planning.saveTourOrder')}
                         </Button>
-                      </form>
+                      </RHFActionForm>
                       <div className="flex flex-wrap gap-2">
                         <form action={suggestTourOrderAction}>
                           <input type="hidden" name="tourId" value={tour.id} />
@@ -1015,7 +1019,7 @@ export default async function PlanningPage({
             </div>
           ) : null}
           {clients.length && services.length ? (
-            <form action={createVisitAction} className="grid gap-4 md:grid-cols-2">
+            <RHFActionForm action={createVisitAction} className="grid gap-4 md:grid-cols-2">
               {admissionContextUsable && admission ? (
                 <>
                   <input type="hidden" name="admissionCaseId" value={admission.id} />
@@ -1091,7 +1095,7 @@ export default async function PlanningPage({
               ) : null}
               <div className="grid gap-2 md:col-span-2">
                 <Label htmlFor="visit-note">{t('Planning.planningNote')}</Label>
-                <textarea
+                <Textarea
                   id="visit-note"
                   name="note"
                   maxLength={2000}
@@ -1102,7 +1106,7 @@ export default async function PlanningPage({
               <Button type="submit" className="w-fit">
                 {t('Planning.createVisit')}
               </Button>
-            </form>
+            </RHFActionForm>
           ) : (
             <p className="text-sm text-slate-600">{t('Planning.createRequirements')}</p>
           )}
@@ -1163,17 +1167,18 @@ function SelectField({
   return (
     <div className="grid min-w-0 gap-2">
       <Label htmlFor={name}>{label}</Label>
-      <select
+      <NativeSelect
         id={name}
         name={name}
         defaultValue={defaultValue}
         required={required}
         multiple={multiple}
         size={multiple ? 4 : undefined}
-        className="min-h-10 w-full min-w-0 rounded-md border bg-white px-3 py-2"
+        selectClassName="min-h-10 w-full min-w-0 rounded-md border bg-white px-3 py-2"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </div>
   );
 }

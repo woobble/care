@@ -1,3 +1,13 @@
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -326,30 +336,34 @@ export default async function ClaimDetailPage({
           {t('claimLines')}
         </h2>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] text-left text-sm">
-            <thead>
-              <tr className="border-b text-slate-600">
-                <th className="p-2">{t('service')}</th>
-                <th className="p-2">{t('serviceDate')}</th>
-                <th className="p-2">{t('fundingSource')}</th>
-                <th className="p-2">{t('claimAmount')}</th>
-              </tr>
-            </thead>
-            <tbody>
+          <ShadcnTable className="w-full min-w-[40rem] text-left text-sm">
+            <ShadcnTableHeader>
+              <ShadcnTableRow className="border-b text-slate-600">
+                <ShadcnTableHead className="p-2">{t('service')}</ShadcnTableHead>
+                <ShadcnTableHead className="p-2">{t('serviceDate')}</ShadcnTableHead>
+                <ShadcnTableHead className="p-2">{t('fundingSource')}</ShadcnTableHead>
+                <ShadcnTableHead className="p-2">{t('claimAmount')}</ShadcnTableHead>
+              </ShadcnTableRow>
+            </ShadcnTableHeader>
+            <ShadcnTableBody>
               {detail.lines.map((line) => (
-                <tr key={line.id} className="border-b last:border-0">
-                  <td className="p-2">
+                <ShadcnTableRow key={line.id} className="border-b last:border-0">
+                  <ShadcnTableCell className="p-2">
                     {line.serviceNameSnapshot || line.invoiceLineId.slice(0, 8)}
-                  </td>
-                  <td className="p-2">
+                  </ShadcnTableCell>
+                  <ShadcnTableCell className="p-2">
                     {formatDate(line.serviceDate, locale as Locale) ?? line.serviceDate}
-                  </td>
-                  <td className="p-2">{line.fundingLabelSnapshot ?? '—'}</td>
-                  <td className="p-2">{formatCents(line.amountCents, locale as Locale)}</td>
-                </tr>
+                  </ShadcnTableCell>
+                  <ShadcnTableCell className="p-2">
+                    {line.fundingLabelSnapshot ?? '—'}
+                  </ShadcnTableCell>
+                  <ShadcnTableCell className="p-2">
+                    {formatCents(line.amountCents, locale as Locale)}
+                  </ShadcnTableCell>
+                </ShadcnTableRow>
               ))}
-            </tbody>
-          </table>
+            </ShadcnTableBody>
+          </ShadcnTable>
         </div>
       </section>
 
@@ -400,7 +414,7 @@ export default async function ClaimDetailPage({
           <h2 id="claim-submit" className="text-xl font-semibold">
             {t('recordManualSubmission')}
           </h2>
-          <form action={submitClaimAction} className="grid gap-3 md:grid-cols-2">
+          <RHFActionForm action={submitClaimAction} className="grid gap-3 md:grid-cols-2">
             <input type="hidden" name="claimId" value={claim.id} />
             <input type="hidden" name="expectedVersion" value={claim.version} />
             <Field
@@ -412,7 +426,7 @@ export default async function ClaimDetailPage({
             <Button type="submit" className="w-fit md:col-span-2">
               {t('recordSubmission')}
             </Button>
-          </form>
+          </RHFActionForm>
         </section>
       ) : null}
 
@@ -424,7 +438,7 @@ export default async function ClaimDetailPage({
           <h2 id="claim-decision" className="text-xl font-semibold">
             {t('recordPayerDecision')}
           </h2>
-          <form action={recordClaimDecisionAction} className="grid gap-4">
+          <RHFActionForm action={recordClaimDecisionAction} className="grid gap-4">
             <input type="hidden" name="claimId" value={claim.id} />
             <input type="hidden" name="expectedVersion" value={claim.version} />
             <div className="grid gap-3 md:grid-cols-2">
@@ -497,7 +511,7 @@ export default async function ClaimDetailPage({
             <Button type="submit" className="w-fit">
               {t('savePayerDecision')}
             </Button>
-          </form>
+          </RHFActionForm>
         </section>
       ) : null}
 
@@ -557,7 +571,7 @@ export default async function ClaimDetailPage({
               <div className="grid gap-3 border-t pt-3">
                 <h3 className="font-semibold">{t('matchIncomingPayment')}</h3>
                 {payments.map((paymentItem) => (
-                  <form
+                  <RHFActionForm
                     key={paymentItem.id}
                     action={allocatePaymentAction}
                     className="grid gap-3 rounded-md border p-3 md:grid-cols-[1fr_12rem_auto]"
@@ -587,7 +601,7 @@ export default async function ClaimDetailPage({
                     <Button type="submit" className="self-end">
                       {t('linkPayment')}
                     </Button>
-                  </form>
+                  </RHFActionForm>
                 ))}
               </div>
             ) : (
@@ -790,14 +804,15 @@ function SelectField({
   return (
     <label className="grid gap-1 text-sm" htmlFor={id}>
       {label}
-      <select
+      <NativeSelect
         id={id}
         name={name}
         defaultValue={defaultValue}
-        className="h-10 rounded-md border px-3"
+        selectClassName="h-10 rounded-md border px-3"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

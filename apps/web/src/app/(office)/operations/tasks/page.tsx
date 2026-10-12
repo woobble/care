@@ -1,3 +1,7 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
@@ -230,7 +234,7 @@ export default async function OperationsTasksPage({
             </h2>
             <p className="text-sm text-slate-600">{t('manualTaskHelp')}</p>
           </div>
-          <form action={createTaskAction} className="grid gap-4 md:grid-cols-2">
+          <RHFActionForm action={createTaskAction} className="grid gap-4 md:grid-cols-2">
             {admissionHandoffReady ? (
               <input type="hidden" name="admissionCaseId" value={admission!.id} />
             ) : null}
@@ -252,7 +256,7 @@ export default async function OperationsTasksPage({
             </div>
             <div className="grid gap-2 md:col-span-2">
               <Label htmlFor="task-description">{t('taskDescription')}</Label>
-              <textarea
+              <Textarea
                 id="task-description"
                 name="description"
                 maxLength={8000}
@@ -339,15 +343,16 @@ export default async function OperationsTasksPage({
                     : ''
                 }
               />
-              <select
+              <NativeSelect
                 name="timezone"
                 aria-label={t('timezone')}
-                className="h-10 rounded-md border bg-white px-3 text-sm"
+                selectClassName="h-10 rounded-md border bg-white px-3 text-sm"
                 defaultValue={
                   admission
                     ? (timezoneByOrganization.get(admission.organizationId) ?? '')
                     : (organizations[0]?.timezone ?? '')
                 }
+                className="w-full"
               >
                 {[...new Set(organizations.map((organization) => organization.timezone))].map(
                   (timezone) => (
@@ -356,14 +361,14 @@ export default async function OperationsTasksPage({
                     </option>
                   ),
                 )}
-              </select>
+              </NativeSelect>
             </div>
             <div className="flex items-end">
               <Button type="submit" className="min-h-11">
                 {t('createTask')}
               </Button>
             </div>
-          </form>
+          </RHFActionForm>
         </section>
       ) : null}
 
@@ -465,8 +470,7 @@ export default async function OperationsTasksPage({
             </SelectField>
           ) : null}
           <label className="flex min-h-10 items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <ShadcnCheckbox
               name="assignedToMe"
               value="true"
               defaultChecked={query.assignedToMe === 'true'}
@@ -554,15 +558,16 @@ function SelectField({
   return (
     <label htmlFor={id} className="grid gap-1 text-sm">
       <span>{label}</span>
-      <select
+      <NativeSelect
         id={id}
         name={name}
         required={required}
         defaultValue={defaultValue}
-        className="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-white px-3"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

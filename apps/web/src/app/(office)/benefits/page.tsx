@@ -1,3 +1,5 @@
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -222,7 +224,7 @@ export default async function BenefitsWorklistPage({
                     </p>
                   </div>
                   {canAllocate && options.length ? (
-                    <form
+                    <RHFActionForm
                       action={allocatePerformedServiceAction}
                       className="grid gap-3 rounded-md bg-slate-50 p-4"
                     >
@@ -299,7 +301,7 @@ export default async function BenefitsWorklistPage({
                       <Button type="submit" className="w-fit">
                         {t('Benefits.allocateService')}
                       </Button>
-                    </form>
+                    </RHFActionForm>
                   ) : (
                     <p className="text-sm text-slate-700">
                       {canAllocate
@@ -352,7 +354,10 @@ export default async function BenefitsWorklistPage({
             </p>
           ) : null}
           {organizations.length ? (
-            <form action={createProviderRecognitionAction} className="grid gap-3 md:grid-cols-2">
+            <RHFActionForm
+              action={createProviderRecognitionAction}
+              className="grid gap-3 md:grid-cols-2"
+            >
               <SelectField
                 id="recognition-organization"
                 name="organizationId"
@@ -394,7 +399,7 @@ export default async function BenefitsWorklistPage({
               <Button type="submit" className="w-fit">
                 {t('Benefits.createRecognition')}
               </Button>
-            </form>
+            </RHFActionForm>
           ) : (
             <p className="text-sm text-slate-600">{t('Benefits.noOrganizations')}</p>
           )}
@@ -456,15 +461,16 @@ function SelectField({
   return (
     <label className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <select
+      <NativeSelect
         id={id}
         name={name}
         defaultValue={defaultValue}
         required={required}
-        className="min-h-10 rounded-md border bg-white px-3 py-2"
+        selectClassName="min-h-10 rounded-md border bg-white px-3 py-2"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

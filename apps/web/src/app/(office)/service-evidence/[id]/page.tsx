@@ -1,3 +1,5 @@
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { components } from '@care/api-client';
@@ -143,7 +145,7 @@ export default async function ServiceEvidenceDetailPage({
         </p>
       ) : null}
       {canGenerateDocument ? (
-        <form
+        <RHFActionForm
           action={generateDocumentAction}
           className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4"
         >
@@ -152,14 +154,15 @@ export default async function ServiceEvidenceDetailPage({
           <input type="hidden" name="returnTo" value={`/service-evidence/${packageData.id}`} />
           <label className="grid gap-1 text-sm font-medium">
             <span>{t('Documents.language')}</span>
-            <select
+            <NativeSelect
               name="locale"
               defaultValue={locale}
-              className="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-white px-3"
+              className="w-full"
             >
               <option value="de">{t('Documents.languageOptions.german')}</option>
               <option value="en">{t('Documents.languageOptions.english')}</option>
-            </select>
+            </NativeSelect>
           </label>
           <Button type="submit">{t('Documents.generateEvidence')}</Button>
           <Button asChild variant="secondary">
@@ -171,7 +174,7 @@ export default async function ServiceEvidenceDetailPage({
               {t('Documents.preview')}
             </Link>
           </Button>
-        </form>
+        </RHFActionForm>
       ) : null}
 
       {query.notice ? (
@@ -334,7 +337,7 @@ export default async function ServiceEvidenceDetailPage({
                     </p>
                   ) : null}
                   {canRevoke ? (
-                    <form
+                    <RHFActionForm
                       action={revokeAcknowledgementAction}
                       className="grid gap-2 border-t pt-3 sm:grid-cols-[1fr_auto] sm:items-end"
                     >
@@ -355,7 +358,7 @@ export default async function ServiceEvidenceDetailPage({
                       >
                         {t('ServiceEvidence.office.detail.revokeAction')}
                       </ConfirmSubmitButton>
-                    </form>
+                    </RHFActionForm>
                   ) : null}
                 </li>
               );

@@ -1,3 +1,6 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input } from '@care/ui';
@@ -147,7 +150,7 @@ export default async function ReminderSettingsPage({
                 <h2 className="text-lg font-semibold">
                   {t(`reminderCategories.${policy.category as (typeof categories)[number]}`)}
                 </h2>
-                <form
+                <RHFActionForm
                   action={updateReminderPolicyAction}
                   className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
                 >
@@ -168,10 +171,11 @@ export default async function ReminderSettingsPage({
                   </label>
                   <label className="grid gap-1 text-sm">
                     <span>{t('assignee')}</span>
-                    <select
+                    <NativeSelect
                       name="assignedEmployeeId"
-                      className="h-10 rounded-md border px-3"
+                      selectClassName="h-10 rounded-md border px-3"
                       defaultValue={policy.assignedEmployeeId ?? ''}
+                      className="w-full"
                     >
                       <option value="">{t('unassigned')}</option>
                       {employees.map((employee) => (
@@ -179,17 +183,16 @@ export default async function ReminderSettingsPage({
                           {employee.preferredName ?? employee.firstName} {employee.lastName}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                   <div className="grid content-center gap-2">
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" name="enabled" defaultChecked={policy.enabled} />
+                      <ShadcnCheckbox name="enabled" defaultChecked={policy.enabled} />
                       {t('enabled')}
                     </label>
                     {policy.category === 'agreements' ? (
                       <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
+                        <ShadcnCheckbox
                           name="createFollowUpTask"
                           defaultChecked={policy.createFollowUpTask}
                         />
@@ -200,7 +203,7 @@ export default async function ReminderSettingsPage({
                   <div className="flex items-end">
                     <Button type="submit">{t('save')}</Button>
                   </div>
-                </form>
+                </RHFActionForm>
               </article>
             ))}
           </section>

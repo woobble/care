@@ -1,5 +1,6 @@
 import { getTranslations } from 'next-intl/server';
 import { errorMessageKey } from '@app/web/i18n/errors';
+import { Alert, AlertDescription } from '@care/ui';
 
 export async function ActionNotice({
   error,
@@ -9,17 +10,20 @@ export async function ActionNotice({
   return (
     <>
       {error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-          {t(errorMessageKey(error))}
-        </p>
+        <Alert
+          variant="destructive"
+          className="rounded-md border-red-300 bg-red-50 p-3 text-red-900"
+        >
+          <AlertDescription className="text-inherit">{t(errorMessageKey(error))}</AlertDescription>
+        </Alert>
       ) : null}
       {updated ? (
-        <p
+        <Alert
           role="status"
           className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
         >
-          {t('Errors.saved')}
-        </p>
+          <AlertDescription className="text-inherit">{t('Errors.saved')}</AlertDescription>
+        </Alert>
       ) : null}
     </>
   );

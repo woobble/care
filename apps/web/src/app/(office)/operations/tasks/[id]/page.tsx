@@ -1,3 +1,6 @@
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -206,7 +209,7 @@ export default async function OperationsTaskDetailPage({
           </dl>
 
           {canManage && !terminal ? (
-            <form action={updateTaskAction} className="grid gap-4 border-t pt-4">
+            <RHFActionForm action={updateTaskAction} className="grid gap-4 border-t pt-4">
               <input type="hidden" name="taskId" value={task.id} />
               <input type="hidden" name="expectedVersion" value={task.version} />
               <input type="hidden" name="timezone" value={timezone} />
@@ -216,7 +219,7 @@ export default async function OperationsTaskDetailPage({
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="description">{t('taskDescription')}</Label>
-                <textarea
+                <Textarea
                   id="description"
                   name="description"
                   maxLength={8000}
@@ -263,7 +266,7 @@ export default async function OperationsTaskDetailPage({
               <Button type="submit" className="w-fit">
                 {t('save')}
               </Button>
-            </form>
+            </RHFActionForm>
           ) : null}
 
           {canManage ? (
@@ -333,10 +336,10 @@ export default async function OperationsTaskDetailPage({
             <p className="text-sm text-slate-600">{t('noActivity')}</p>
           )}
           {canManage ? (
-            <form action={addTaskCommentAction} className="grid gap-2 border-t pt-4">
+            <RHFActionForm action={addTaskCommentAction} className="grid gap-2 border-t pt-4">
               <input type="hidden" name="taskId" value={task.id} />
               <Label htmlFor="comment">{t('comment')}</Label>
-              <textarea
+              <Textarea
                 id="comment"
                 name="comment"
                 required
@@ -347,7 +350,7 @@ export default async function OperationsTaskDetailPage({
               <Button type="submit" variant="secondary" className="w-fit">
                 {t('addComment')}
               </Button>
-            </form>
+            </RHFActionForm>
           ) : null}
         </section>
       </div>
@@ -394,14 +397,15 @@ function SelectField({
   return (
     <label htmlFor={id} className="grid gap-1 text-sm">
       <span>{label}</span>
-      <select
+      <NativeSelect
         id={id}
         name={name}
         defaultValue={defaultValue}
-        className="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-white px-3"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

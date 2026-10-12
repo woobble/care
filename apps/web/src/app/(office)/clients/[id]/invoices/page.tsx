@@ -1,3 +1,13 @@
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -180,26 +190,26 @@ export default async function ClientInvoicesPage({
         </div>
         {invoices.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[58rem] text-left text-sm">
-              <thead>
-                <tr className="border-b text-slate-600">
-                  <th className="p-2">{t('invoiceNumber')}</th>
-                  <th className="p-2">{t('recipient')}</th>
-                  <th className="p-2">{t('issueDate')}</th>
-                  <th className="p-2">{t('servicePeriod')}</th>
-                  <th className="p-2">{t('amount')}</th>
-                  <th className="p-2">{t('outstandingAmount')}</th>
-                  <th className="p-2">{t('paymentStatus')}</th>
-                  <th className="p-2">{t('fundingSource')}</th>
-                  <th className="p-2">{t('actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
+            <ShadcnTable className="w-full min-w-[58rem] text-left text-sm">
+              <ShadcnTableHeader>
+                <ShadcnTableRow className="border-b text-slate-600">
+                  <ShadcnTableHead className="p-2">{t('invoiceNumber')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('recipient')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('issueDate')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('servicePeriod')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('amount')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('outstandingAmount')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('paymentStatus')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('fundingSource')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('actions')}</ShadcnTableHead>
+                </ShadcnTableRow>
+              </ShadcnTableHeader>
+              <ShadcnTableBody>
                 {invoices.map((invoice) => (
                   <InvoiceRow key={invoice.id} invoice={invoice} locale={locale} t={t} />
                 ))}
-              </tbody>
-            </table>
+              </ShadcnTableBody>
+            </ShadcnTable>
           </div>
         ) : (
           <p className="text-sm text-slate-700">{t('invoiceHistoryEmpty')}</p>
@@ -221,50 +231,56 @@ export default async function ClientInvoicesPage({
             <Alert>{translate(errorMessageKey(claimsResult.error.code))}</Alert>
           ) : claims.length ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[50rem] text-left text-sm">
-                <thead>
-                  <tr className="border-b text-slate-600">
-                    <th className="p-2">{t('claim')}</th>
-                    <th className="p-2">{t('payer')}</th>
-                    <th className="p-2">{t('invoiceNumber')}</th>
-                    <th className="p-2">{t('claimStatusLabel')}</th>
-                    <th className="p-2">{t('submissionDate')}</th>
-                    <th className="p-2">{t('acceptedAmount')}</th>
-                    <th className="p-2">{t('paymentReceived')}</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <ShadcnTable className="w-full min-w-[50rem] text-left text-sm">
+                <ShadcnTableHeader>
+                  <ShadcnTableRow className="border-b text-slate-600">
+                    <ShadcnTableHead className="p-2">{t('claim')}</ShadcnTableHead>
+                    <ShadcnTableHead className="p-2">{t('payer')}</ShadcnTableHead>
+                    <ShadcnTableHead className="p-2">{t('invoiceNumber')}</ShadcnTableHead>
+                    <ShadcnTableHead className="p-2">{t('claimStatusLabel')}</ShadcnTableHead>
+                    <ShadcnTableHead className="p-2">{t('submissionDate')}</ShadcnTableHead>
+                    <ShadcnTableHead className="p-2">{t('acceptedAmount')}</ShadcnTableHead>
+                    <ShadcnTableHead className="p-2">{t('paymentReceived')}</ShadcnTableHead>
+                  </ShadcnTableRow>
+                </ShadcnTableHeader>
+                <ShadcnTableBody>
                   {claims.map((claim) => (
-                    <tr key={claim.id} className="border-b last:border-0">
-                      <td className="p-2">
+                    <ShadcnTableRow key={claim.id} className="border-b last:border-0">
+                      <ShadcnTableCell className="p-2">
                         <Link
                           className="text-blue-900 underline"
                           href={'/billing/claims/' + claim.id}
                         >
                           {claim.id.slice(0, 8)}
                         </Link>
-                      </td>
-                      <td className="p-2">{claim.payerName}</td>
-                      <td className="p-2">
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-2">{claim.payerName}</ShadcnTableCell>
+                      <ShadcnTableCell className="p-2">
                         <Link
                           className="text-blue-900 underline"
                           href={'/billing/invoices/' + claim.invoiceId}
                         >
                           {claim.invoiceNumber ?? claim.invoiceId.slice(0, 8)}
                         </Link>
-                      </td>
-                      <td className="p-2">{claimStatusLabel(t, claim.status)}</td>
-                      <td className="p-2">{formatDateTime(claim.submittedAt, locale) ?? '—'}</td>
-                      <td className="p-2">
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-2">
+                        {claimStatusLabel(t, claim.status)}
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-2">
+                        {formatDateTime(claim.submittedAt, locale) ?? '—'}
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-2">
                         {claim.acceptedCents === null
                           ? '—'
                           : formatCents(claim.acceptedCents, locale)}
-                      </td>
-                      <td className="p-2">{formatCents(claim.paidCents, locale)}</td>
-                    </tr>
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-2">
+                        {formatCents(claim.paidCents, locale)}
+                      </ShadcnTableCell>
+                    </ShadcnTableRow>
                   ))}
-                </tbody>
-              </table>
+                </ShadcnTableBody>
+              </ShadcnTable>
             </div>
           ) : (
             <p className="text-sm text-slate-700">{t('clientClaimHistoryEmpty')}</p>
@@ -312,7 +328,7 @@ export default async function ClientInvoicesPage({
                   ) : null}
                 </div>
                 {canManage ? (
-                  <form
+                  <RHFActionForm
                     action={updatePayerArrangementAction}
                     className="grid gap-3 border-t pt-3 md:grid-cols-2"
                   >
@@ -369,7 +385,7 @@ export default async function ClientInvoicesPage({
                     <Button type="submit" className="w-fit md:col-span-2">
                       {t('updatePayerArrangement')}
                     </Button>
-                  </form>
+                  </RHFActionForm>
                 ) : (
                   <p className="text-sm text-slate-700">
                     {t(`mandateStatuses.${mandateStatusKey(arrangement.mandateStatus)}`)}
@@ -382,7 +398,7 @@ export default async function ClientInvoicesPage({
           <p className="text-sm text-slate-700">{t('payerArrangementsEmpty')}</p>
         )}
         {canManage && client.organizationId ? (
-          <form
+          <RHFActionForm
             action={createPayerArrangementAction}
             className="grid gap-3 border-t pt-4 md:grid-cols-2"
           >
@@ -501,7 +517,7 @@ export default async function ClientInvoicesPage({
             <Button type="submit" className="w-fit md:col-span-2">
               {t('createPayerArrangement')}
             </Button>
-          </form>
+          </RHFActionForm>
         ) : null}
         {canManage && !client.organizationId ? (
           <Alert>{t('clientOrganizationMissing')}</Alert>
@@ -524,30 +540,36 @@ function InvoiceRow({
     ),
   ];
   return (
-    <tr className="border-b last:border-0">
-      <td className="p-2 font-medium">
+    <ShadcnTableRow className="border-b last:border-0">
+      <ShadcnTableCell className="p-2 font-medium">
         <Link className="text-blue-900 underline" href={`/billing/invoices/${invoice.id}`}>
           {invoice.invoiceNumber ?? t('draftIdentifier', { id: invoice.id.slice(0, 8) })}
         </Link>
-      </td>
-      <td className="p-2">
+      </ShadcnTableCell>
+      <ShadcnTableCell className="p-2">
         {invoice.recipientName ?? t(invoice.recipientType === 'payer' ? 'payer' : 'client')}
-      </td>
-      <td className="p-2">{formatDate(invoice.issueDate, locale) ?? '—'}</td>
-      <td className="p-2">
+      </ShadcnTableCell>
+      <ShadcnTableCell className="p-2">
+        {formatDate(invoice.issueDate, locale) ?? '—'}
+      </ShadcnTableCell>
+      <ShadcnTableCell className="p-2">
         {datePeriod(invoice.servicePeriodFrom, invoice.servicePeriodUntil, locale)}
-      </td>
-      <td className="p-2">{formatCents(invoice.grandTotalCents, locale)}</td>
-      <td className="p-2">
+      </ShadcnTableCell>
+      <ShadcnTableCell className="p-2">
+        {formatCents(invoice.grandTotalCents, locale)}
+      </ShadcnTableCell>
+      <ShadcnTableCell className="p-2">
         {invoice.outstandingCents === null ? '—' : formatCents(invoice.outstandingCents, locale)}
-      </td>
-      <td className="p-2">
+      </ShadcnTableCell>
+      <ShadcnTableCell className="p-2">
         {invoice.receivableStatus
           ? receivableStatusLabel(t, invoice.receivableStatus)
           : invoiceStatusLabel(t, invoice.status)}
-      </td>
-      <td className="p-2">{funding.length ? funding.join(', ') : t('selfPay')}</td>
-      <td className="p-2">
+      </ShadcnTableCell>
+      <ShadcnTableCell className="p-2">
+        {funding.length ? funding.join(', ') : t('selfPay')}
+      </ShadcnTableCell>
+      <ShadcnTableCell className="p-2">
         <div className="flex flex-wrap gap-2">
           {invoice.status === 'issued' && invoice.pdfStatus === 'ready' ? (
             <Button asChild variant="secondary" size="sm">
@@ -558,8 +580,8 @@ function InvoiceRow({
             <Link href={`/billing/invoices/${invoice.id}`}>{t('openInvoice')}</Link>
           </Button>
         </div>
-      </td>
-    </tr>
+      </ShadcnTableCell>
+    </ShadcnTableRow>
   );
 }
 
@@ -701,15 +723,16 @@ function SelectField({
   return (
     <label className="grid gap-2 text-sm">
       <Label htmlFor={id}>{label}</Label>
-      <select
+      <NativeSelect
         id={id}
         name={name}
         defaultValue={defaultValue}
         required={required}
-        className="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2"
+        selectClassName="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

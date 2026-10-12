@@ -1,3 +1,6 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
@@ -70,7 +73,10 @@ export default async function BillingSettingsPage({
                 </p>
               </div>
               {canManage ? (
-                <form action={saveBillingProfileAction} className="grid gap-4 md:grid-cols-2">
+                <RHFActionForm
+                  action={saveBillingProfileAction}
+                  className="grid gap-4 md:grid-cols-2"
+                >
                   <input type="hidden" name="organizationId" value={organization.organizationId} />
                   {profile ? (
                     <input type="hidden" name="expectedVersion" value={profile.version} />
@@ -176,8 +182,7 @@ export default async function BillingSettingsPage({
                     <option value="structured">{t('structuredInvoice')}</option>
                   </SelectField>
                   <label className="flex items-center gap-2 text-sm md:col-span-2">
-                    <input
-                      type="checkbox"
+                    <ShadcnCheckbox
                       name="requireAcknowledgement"
                       value="true"
                       defaultChecked={profile?.requireAcknowledgement ?? false}
@@ -190,7 +195,7 @@ export default async function BillingSettingsPage({
                   <Button type="submit" className="w-fit">
                     {t('saveBillingProfile')}
                   </Button>
-                </form>
+                </RHFActionForm>
               ) : (
                 <p className="text-sm text-slate-700">{t('noSettingsPermission')}</p>
               )}
@@ -290,15 +295,16 @@ function SelectField({
   return (
     <label className="grid gap-2 text-sm">
       <Label htmlFor={id}>{label}</Label>
-      <select
+      <NativeSelect
         id={id}
         name={name}
         defaultValue={defaultValue}
         required={required}
-        className="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2"
+        selectClassName="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

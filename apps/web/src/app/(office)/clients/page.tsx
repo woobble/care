@@ -1,3 +1,4 @@
+import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import {
@@ -331,13 +332,14 @@ function SelectFilter({
   return (
     <label className="grid min-w-0 gap-1 text-sm font-medium">
       {label}
-      <select
-        className="h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 font-normal text-foreground"
+      <NativeSelect
+        selectClassName="h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 font-normal text-foreground"
         name={name}
         defaultValue={value}
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

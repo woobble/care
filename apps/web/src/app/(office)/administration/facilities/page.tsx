@@ -1,3 +1,14 @@
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+  TableCaption as ShadcnTableCaption,
+} from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
@@ -43,15 +54,16 @@ export default async function FacilitiesPage({
         <h2 id="facility-create-title" className="text-xl font-semibold">
           {t('Facilities.createTitle')}
         </h2>
-        <form action={createFacilityAction} className="grid gap-4 md:grid-cols-2">
+        <RHFActionForm action={createFacilityAction} className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="organizationId">{t('Facilities.organization')}</Label>
-            <select
+            <NativeSelect
               id="organizationId"
               name="organizationId"
-              className="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-white px-3"
               required
               defaultValue=""
+              className="w-full"
             >
               <option value="" disabled>
                 {t('Facilities.selectOrganization')}
@@ -63,7 +75,7 @@ export default async function FacilitiesPage({
                     {organization.name}
                   </option>
                 ))}
-            </select>
+            </NativeSelect>
           </div>
           <Field id="name" name="name" label={t('Common.fields.name')} required maxLength={160} />
           <Field id="code" name="code" label={t('Common.fields.code')} maxLength={40} />
@@ -92,7 +104,7 @@ export default async function FacilitiesPage({
           <div className="md:col-span-2">
             <Button type="submit">{t('Facilities.createTitle')}</Button>
           </div>
-        </form>
+        </RHFActionForm>
       </section>
       <section aria-labelledby="facility-list-title" className="grid gap-3">
         <h2 id="facility-list-title" className="text-xl font-semibold">
@@ -100,43 +112,47 @@ export default async function FacilitiesPage({
         </h2>
         {facilitiesResult.data?.length ? (
           <div className="overflow-x-auto rounded-lg border bg-white">
-            <table className="w-full border-collapse text-left text-sm">
-              <caption className="sr-only">{t('Facilities.listCaption')}</caption>
-              <thead className="border-b bg-slate-100 text-slate-700">
-                <tr>
-                  <th scope="col" className="px-4 py-3">
+            <ShadcnTable className="w-full border-collapse text-left text-sm">
+              <ShadcnTableCaption className="sr-only">
+                {t('Facilities.listCaption')}
+              </ShadcnTableCaption>
+              <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+                <ShadcnTableRow>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Facilities.facility')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Facilities.organizationField')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Common.fields.status')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+                  </ShadcnTableHead>
+                </ShadcnTableRow>
+              </ShadcnTableHeader>
+              <ShadcnTableBody>
                 {facilitiesResult.data.map((facility) => (
-                  <tr key={facility.id} className="border-b last:border-0">
-                    <td className="px-4 py-3">
+                  <ShadcnTableRow key={facility.id} className="border-b last:border-0">
+                    <ShadcnTableCell className="px-4 py-3">
                       <Link
                         className="font-medium text-blue-900 underline"
                         href={`/administration/facilities/${facility.id}`}
                       >
                         {facility.name}
                       </Link>
-                    </td>
-                    <td className="px-4 py-3">{facility.organizationName}</td>
-                    <td className="px-4 py-3">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
+                      {facility.organizationName}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
                       <StatusBadge
                         status={facility.status}
                         label={t(statusLabelKey(facility.status))}
                       />
-                    </td>
-                  </tr>
+                    </ShadcnTableCell>
+                  </ShadcnTableRow>
                 ))}
-              </tbody>
-            </table>
+              </ShadcnTableBody>
+            </ShadcnTable>
           </div>
         ) : (
           <p className="rounded-lg border bg-white p-5 text-slate-700">{t('Facilities.empty')}</p>

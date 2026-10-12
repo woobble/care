@@ -1,3 +1,6 @@
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
@@ -64,7 +67,7 @@ export default async function NewAdmissionPage({
           {translate(errorMessageKey(query.error))}
         </p>
       ) : null}
-      <form
+      <RHFActionForm
         action={createAdmissionCaseAction}
         className="grid gap-6 rounded-lg border bg-white p-5"
       >
@@ -117,7 +120,7 @@ export default async function NewAdmissionPage({
           </SelectField>
           <label className="grid gap-1 text-sm font-medium md:col-span-2">
             {t('fundingPlanDetails')}
-            <textarea
+            <Textarea
               className="min-h-20 rounded-md border p-3 font-normal"
               name="fundingPlanDetails"
               maxLength={1000}
@@ -127,7 +130,7 @@ export default async function NewAdmissionPage({
           <Field name="nextFollowUpAt" label={t('followUp')} type="datetime-local" />
           <label className="grid gap-1 text-sm font-medium md:col-span-2">
             {t('requestedServices')}
-            <textarea
+            <Textarea
               className="min-h-24 rounded-md border p-3 font-normal"
               name="requestedServices"
               maxLength={1600}
@@ -141,7 +144,7 @@ export default async function NewAdmissionPage({
           />
           <label className="grid gap-1 text-sm font-medium md:col-span-2">
             {t('initialNotes')}
-            <textarea
+            <Textarea
               className="min-h-24 rounded-md border p-3 font-normal"
               name="initialNotes"
               maxLength={4000}
@@ -154,7 +157,7 @@ export default async function NewAdmissionPage({
             <Link href="/admissions">{translate('Common.actions.cancel')}</Link>
           </Button>
         </div>
-      </form>
+      </RHFActionForm>
     </div>
   );
 }
@@ -198,13 +201,14 @@ function SelectField({
   return (
     <label className="grid gap-1 text-sm font-medium">
       {label}
-      <select
-        className="h-10 rounded-md border bg-white px-3 font-normal"
+      <NativeSelect
+        selectClassName="h-10 rounded-md border bg-white px-3 font-normal"
         name={name}
         required={required}
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

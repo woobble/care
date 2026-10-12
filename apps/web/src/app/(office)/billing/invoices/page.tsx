@@ -1,3 +1,12 @@
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui';
+import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
@@ -48,16 +57,17 @@ export default async function BillingInvoicesPage({
       <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4">
         <label className="grid gap-2 text-sm">
           <span>{t('invoiceStatus')}</span>
-          <select
+          <NativeSelect
             name="status"
             defaultValue={status ?? ''}
-            className="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2"
+            selectClassName="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2"
+            className="w-full"
           >
             <option value="">{t('allInvoiceStatuses')}</option>
             <option value="draft">{t('status.draft')}</option>
             <option value="issued">{t('status.issued')}</option>
             <option value="cancelled">{t('status.cancelled')}</option>
-          </select>
+          </NativeSelect>
         </label>
         <Button type="submit">{t('applyFilters')}</Button>
         <Button asChild variant="secondary">
@@ -73,22 +83,22 @@ export default async function BillingInvoicesPage({
         </h2>
         {invoices.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[54rem] text-left text-sm">
-              <thead>
-                <tr className="border-b text-slate-600">
-                  <th className="p-2">{t('invoiceNumber')}</th>
-                  <th className="p-2">{t('client')}</th>
-                  <th className="p-2">{t('recipient')}</th>
-                  <th className="p-2">{t('servicePeriod')}</th>
-                  <th className="p-2">{t('amount')}</th>
-                  <th className="p-2">{t('invoiceStatus')}</th>
-                  <th className="p-2">{t('paymentStatus')}</th>
-                </tr>
-              </thead>
-              <tbody>
+            <ShadcnTable className="w-full min-w-[54rem] text-left text-sm">
+              <ShadcnTableHeader>
+                <ShadcnTableRow className="border-b text-slate-600">
+                  <ShadcnTableHead className="p-2">{t('invoiceNumber')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('client')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('recipient')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('servicePeriod')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('amount')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('invoiceStatus')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('paymentStatus')}</ShadcnTableHead>
+                </ShadcnTableRow>
+              </ShadcnTableHeader>
+              <ShadcnTableBody>
                 {invoices.map((invoice) => (
-                  <tr key={invoice.id} className="border-b last:border-0">
-                    <td className="p-2 font-medium">
+                  <ShadcnTableRow key={invoice.id} className="border-b last:border-0">
+                    <ShadcnTableCell className="p-2 font-medium">
                       <Link
                         className="text-blue-900 underline"
                         href={`/billing/invoices/${invoice.id}`}
@@ -96,33 +106,37 @@ export default async function BillingInvoicesPage({
                         {invoice.invoiceNumber ??
                           t('draftIdentifier', { id: invoice.id.slice(0, 8) })}
                       </Link>
-                    </td>
-                    <td className="p-2">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
                       <Link
                         className="text-blue-900 underline"
                         href={`/clients/${invoice.clientId}/invoices`}
                       >
                         {invoice.clientName}
                       </Link>
-                    </td>
-                    <td className="p-2">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
                       {invoice.recipientName ??
                         t(invoice.recipientType === 'payer' ? 'payer' : 'client')}
-                    </td>
-                    <td className="p-2">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
                       {period(invoice.servicePeriodFrom, invoice.servicePeriodUntil, locale)}
-                    </td>
-                    <td className="p-2">{formatCents(invoice.grandTotalCents, locale)}</td>
-                    <td className="p-2">{t(`status.${invoice.status}`)}</td>
-                    <td className="p-2">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
+                      {formatCents(invoice.grandTotalCents, locale)}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
+                      {t(`status.${invoice.status}`)}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
                       {invoice.receivableStatus
                         ? t(`receivableStatus.${invoice.receivableStatus}`)
                         : '—'}
-                    </td>
-                  </tr>
+                    </ShadcnTableCell>
+                  </ShadcnTableRow>
                 ))}
-              </tbody>
-            </table>
+              </ShadcnTableBody>
+            </ShadcnTable>
           </div>
         ) : (
           <p className="text-sm text-slate-700">{t('invoiceListEmpty')}</p>

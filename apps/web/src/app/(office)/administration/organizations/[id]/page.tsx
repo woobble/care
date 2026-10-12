@@ -1,3 +1,4 @@
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -56,7 +57,7 @@ export default async function OrganizationDetailPage({
         <h2 id="organization-edit-title" className="text-xl font-semibold">
           {t('Organizations.detailsTitle')}
         </h2>
-        <form action={updateOrganizationAction} className="grid gap-4 md:grid-cols-2">
+        <RHFActionForm action={updateOrganizationAction} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="id" value={organization.id} />
           <Field
             id="name"
@@ -114,7 +115,7 @@ export default async function OrganizationDetailPage({
           <div className="md:col-span-2">
             <Button type="submit">{t('Common.actions.save')}</Button>
           </div>
-        </form>
+        </RHFActionForm>
         <div className="flex flex-wrap items-center gap-3">
           {organization.status === 'archived' ? (
             <form action={setOrganizationStatusAction}>
@@ -146,7 +147,7 @@ export default async function OrganizationDetailPage({
           </h2>
           <p className="text-sm text-slate-600">{t('Organizations.facilitiesDescription')}</p>
         </div>
-        <form action={createFacilityAction} className="grid gap-4 md:grid-cols-2">
+        <RHFActionForm action={createFacilityAction} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="organizationId" value={organization.id} />
           <Field
             id="facility-name"
@@ -188,7 +189,7 @@ export default async function OrganizationDetailPage({
           <div className="md:col-span-2">
             <Button type="submit">{t('Organizations.createFacility')}</Button>
           </div>
-        </form>
+        </RHFActionForm>
         {facilitiesResult.data?.length ? (
           <ul className="grid gap-2">
             {facilitiesResult.data.map((facility) => (

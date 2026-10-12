@@ -1,5 +1,7 @@
 'use client';
 
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import type { components } from '@care/api-client';
@@ -87,7 +89,7 @@ export function EvidenceAcknowledgementForm({
 
       <label className="grid gap-1 text-sm font-medium">
         <span>{t('signatory')}</span>
-        <select
+        <NativeSelect
           name="signatory"
           form="acknowledge-evidence"
           value={signatory}
@@ -96,8 +98,9 @@ export function EvidenceAcknowledgementForm({
             setStrokes([]);
           }}
           disabled={submitting}
-          className="min-h-12 rounded-md border bg-white px-3"
+          selectClassName="min-h-12 rounded-md border bg-white px-3"
           aria-label={t('selectSignatory')}
+          className="w-full"
         >
           <option value="client">{t('client')}</option>
           {eligibleSignatories.map((person) => (
@@ -105,7 +108,7 @@ export function EvidenceAcknowledgementForm({
               {person.displayName} · {careT(capacityKey(person.capacity))}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </label>
 
       <form
@@ -211,17 +214,22 @@ export function EvidenceAcknowledgementForm({
           <input type="hidden" name="signatory" value={signatory} />
           <label className="grid gap-1 text-sm font-medium">
             <span>{t('reason')}</span>
-            <select name="reasonCode" required className="min-h-12 rounded-md border bg-white px-3">
+            <NativeSelect
+              name="reasonCode"
+              required
+              selectClassName="min-h-12 rounded-md border bg-white px-3"
+              className="w-full"
+            >
               <option value="declined_without_reason">{t('reasons.declinedWithoutReason')}</option>
               <option value="disagrees_with_record">{t('reasons.disagreesWithRecord')}</option>
               <option value="unable_to_sign">{t('reasons.unableToSign')}</option>
               <option value="signatory_not_available">{t('reasons.signatoryNotAvailable')}</option>
               <option value="other">{t('reasons.other')}</option>
-            </select>
+            </NativeSelect>
           </label>
           <label className="grid gap-1 text-sm font-medium">
             <span>{t('noteOptional')}</span>
-            <textarea
+            <Textarea
               name="note"
               maxLength={500}
               className="min-h-20 rounded-md border px-3 py-2"

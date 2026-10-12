@@ -1,3 +1,5 @@
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
@@ -70,7 +72,10 @@ export default async function BillingPaymentsPage({
           <h2 id="record-payment-title" className="text-xl font-semibold">
             {t('recordPayment')}
           </h2>
-          <form action={recordPaymentAction} className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <RHFActionForm
+            action={recordPaymentAction}
+            className="grid gap-3 md:grid-cols-2 lg:grid-cols-3"
+          >
             <SelectField
               id="payment-organization"
               name="organizationId"
@@ -113,7 +118,7 @@ export default async function BillingPaymentsPage({
             <div className="flex items-end">
               <Button type="submit">{t('recordPayment')}</Button>
             </div>
-          </form>
+          </RHFActionForm>
         </section>
       ) : null}
 
@@ -177,7 +182,7 @@ export default async function BillingPaymentsPage({
                               : ''}
                           </p>
                           {!allocation.reversedAt && canManage ? (
-                            <form
+                            <RHFActionForm
                               action={reversePaymentAllocationAction}
                               className="flex flex-wrap items-end gap-2"
                             >
@@ -195,7 +200,7 @@ export default async function BillingPaymentsPage({
                               <Button type="submit" variant="secondary">
                                 {t('reverseAllocation')}
                               </Button>
-                            </form>
+                            </RHFActionForm>
                           ) : null}
                         </div>
                       ))}
@@ -204,7 +209,7 @@ export default async function BillingPaymentsPage({
                     <p className="text-sm text-slate-600">{t('noPaymentAllocations')}</p>
                   )}
                   {payment.remainingCents > 0 && eligibleInvoices.length && canManage ? (
-                    <form
+                    <RHFActionForm
                       action={allocatePaymentAction}
                       className="grid gap-3 rounded-md bg-slate-50 p-4 md:grid-cols-[1fr_12rem_auto]"
                     >
@@ -240,7 +245,7 @@ export default async function BillingPaymentsPage({
                       <div className="flex items-end">
                         <Button type="submit">{t('allocatePayment')}</Button>
                       </div>
-                    </form>
+                    </RHFActionForm>
                   ) : null}
                 </li>
               );
@@ -350,15 +355,16 @@ function SelectField({
   return (
     <label className="grid gap-2 text-sm">
       <Label htmlFor={id}>{label}</Label>
-      <select
+      <NativeSelect
         id={id}
         name={name}
         defaultValue={defaultValue}
         required={required}
-        className="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2"
+        selectClassName="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

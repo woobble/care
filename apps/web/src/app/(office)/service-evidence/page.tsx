@@ -1,3 +1,12 @@
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui';
+import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { components } from '@care/api-client';
@@ -146,10 +155,11 @@ export default async function ServiceEvidenceWorklistPage({
         </label>
         <label className="grid gap-1 text-sm">
           <span>{t('ServiceEvidence.office.status')}</span>
-          <select
+          <NativeSelect
             name="status"
             defaultValue={filterValues.status}
-            className="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            className="w-full"
           >
             <option value="">{t('ServiceEvidence.office.allStatuses')}</option>
             <option value="awaiting_acknowledgement">
@@ -160,14 +170,15 @@ export default async function ServiceEvidenceWorklistPage({
             <option value="revoked">{t(evidenceStatusKey('revoked'))}</option>
             <option value="outdated">{t(evidenceStatusKey('outdated'))}</option>
             <option value="superseded">{t(evidenceStatusKey('superseded'))}</option>
-          </select>
+          </NativeSelect>
         </label>
         <label className="grid gap-1 text-sm">
           <span>{t('ServiceEvidence.office.organization')}</span>
-          <select
+          <NativeSelect
             name="organizationId"
             defaultValue={filterValues.organizationId}
-            className="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            className="w-full"
           >
             <option value="">{t('ServiceEvidence.office.allOrganizations')}</option>
             {organizations.map((organization) => (
@@ -175,14 +186,15 @@ export default async function ServiceEvidenceWorklistPage({
                 {organization.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="grid gap-1 text-sm">
           <span>{t('ServiceEvidence.office.facility')}</span>
-          <select
+          <NativeSelect
             name="facilityId"
             defaultValue={filterValues.facilityId}
-            className="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            className="w-full"
           >
             <option value="">{t('ServiceEvidence.office.allFacilities')}</option>
             {facilities.map((facility) => (
@@ -190,14 +202,15 @@ export default async function ServiceEvidenceWorklistPage({
                 {facility.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="grid gap-1 text-sm">
           <span>{t('ServiceEvidence.office.employees')}</span>
-          <select
+          <NativeSelect
             name="employeeId"
             defaultValue={filterValues.employeeId}
-            className="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            className="w-full"
           >
             <option value="">{t('ServiceEvidence.office.allEmployees')}</option>
             {employees.map((employee) => (
@@ -205,14 +218,15 @@ export default async function ServiceEvidenceWorklistPage({
                 {employee.preferredName ?? `${employee.firstName} ${employee.lastName}`}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="grid gap-1 text-sm">
           <span>{t('ServiceEvidence.office.signatory')}</span>
-          <select
+          <NativeSelect
             name="signatoryType"
             defaultValue={filterValues.signatoryType}
-            className="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            className="w-full"
           >
             <option value="">{t('ServiceEvidence.office.allSignatories')}</option>
             <option value="client">{t('ServiceEvidence.office.signatoryTypes.client')}</option>
@@ -222,7 +236,7 @@ export default async function ServiceEvidenceWorklistPage({
             <option value="other_authorized_person">
               {t('ServiceEvidence.office.signatoryTypes.other')}
             </option>
-          </select>
+          </NativeSelect>
         </label>
         <div className="flex items-end gap-2 lg:col-span-4">
           <Button type="submit" className="min-h-11">
@@ -243,26 +257,36 @@ export default async function ServiceEvidenceWorklistPage({
         </p>
         {items.length ? (
           <div className="overflow-x-auto rounded-lg border bg-white">
-            <table className="w-full min-w-[44rem] text-left text-sm">
-              <thead className="border-b bg-slate-50 text-slate-700">
-                <tr>
-                  <th className="p-3 font-semibold">{t('ServiceEvidence.office.visit')}</th>
-                  <th className="p-3 font-semibold">{t('ServiceEvidence.office.client')}</th>
-                  <th className="p-3 font-semibold">{t('ServiceEvidence.office.status')}</th>
-                  <th className="p-3 font-semibold">{t('ServiceEvidence.office.signatory')}</th>
-                  <th className="p-3 font-semibold">{t('ServiceEvidence.office.version')}</th>
-                </tr>
-              </thead>
-              <tbody>
+            <ShadcnTable className="w-full min-w-[44rem] text-left text-sm">
+              <ShadcnTableHeader className="border-b bg-slate-50 text-slate-700">
+                <ShadcnTableRow>
+                  <ShadcnTableHead className="p-3 font-semibold">
+                    {t('ServiceEvidence.office.visit')}
+                  </ShadcnTableHead>
+                  <ShadcnTableHead className="p-3 font-semibold">
+                    {t('ServiceEvidence.office.client')}
+                  </ShadcnTableHead>
+                  <ShadcnTableHead className="p-3 font-semibold">
+                    {t('ServiceEvidence.office.status')}
+                  </ShadcnTableHead>
+                  <ShadcnTableHead className="p-3 font-semibold">
+                    {t('ServiceEvidence.office.signatory')}
+                  </ShadcnTableHead>
+                  <ShadcnTableHead className="p-3 font-semibold">
+                    {t('ServiceEvidence.office.version')}
+                  </ShadcnTableHead>
+                </ShadcnTableRow>
+              </ShadcnTableHeader>
+              <ShadcnTableBody>
                 {items.map((item) => (
-                  <tr
+                  <ShadcnTableRow
                     key={`${item.evidencePackageId ?? item.visitId}-${item.packageVersion ?? 'none'}`}
                     className="border-b last:border-0"
                   >
-                    <td className="p-3">
+                    <ShadcnTableCell className="p-3">
                       {formatVisitDateTime(item.plannedStart, item.timezone, locale)}
-                    </td>
-                    <td className="p-3 font-medium">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-3 font-medium">
                       <Link
                         href={
                           item.evidencePackageId
@@ -273,20 +297,22 @@ export default async function ServiceEvidenceWorklistPage({
                       >
                         {item.clientName}
                       </Link>
-                    </td>
-                    <td className="p-3">{t(evidenceStatusKey(item.status))}</td>
-                    <td className="p-3">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-3">
+                      {t(evidenceStatusKey(item.status))}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-3">
                       {item.signatoryName
                         ? `${item.signatoryName} · ${item.capacity ? t(acknowledgementCapacityKey(item.capacity)) : ''}`
                         : '–'}
-                    </td>
-                    <td className="p-3">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-3">
                       {item.packageVersion ?? t('ServiceEvidence.office.notCreated')}
-                    </td>
-                  </tr>
+                    </ShadcnTableCell>
+                  </ShadcnTableRow>
                 ))}
-              </tbody>
-            </table>
+              </ShadcnTableBody>
+            </ShadcnTable>
           </div>
         ) : (
           <p className="rounded-lg border bg-white p-5 text-slate-700">

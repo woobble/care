@@ -1,3 +1,7 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -438,7 +442,7 @@ export default async function ClientServiceAgreementsPage({
                     ) : null}
 
                     {canGenerateDocument ? (
-                      <form
+                      <RHFActionForm
                         action={generateDocumentAction}
                         className="flex flex-wrap items-end gap-3 border-t pt-3"
                       >
@@ -451,14 +455,15 @@ export default async function ClientServiceAgreementsPage({
                         />
                         <label className="grid gap-1 text-sm font-medium">
                           <span>{t('Documents.language')}</span>
-                          <select
+                          <NativeSelect
                             name="locale"
                             defaultValue={locale}
-                            className="h-10 rounded-md border bg-white px-3"
+                            selectClassName="h-10 rounded-md border bg-white px-3"
+                            className="w-full"
                           >
                             <option value="de">{t('Documents.languageOptions.german')}</option>
                             <option value="en">{t('Documents.languageOptions.english')}</option>
-                          </select>
+                          </NativeSelect>
                         </label>
                         <Button type="submit">{t('Documents.generateAgreement')}</Button>
                         <Button asChild variant="secondary">
@@ -470,7 +475,7 @@ export default async function ClientServiceAgreementsPage({
                             {t('Documents.preview')}
                           </Link>
                         </Button>
-                      </form>
+                      </RHFActionForm>
                     ) : null}
 
                     <div className="flex flex-wrap gap-2">
@@ -842,7 +847,7 @@ async function ServiceFields({
 }) {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   return (
-    <form action={action} className="grid gap-4">
+    <RHFActionForm action={action} className="grid gap-4">
       <input type="hidden" name="clientId" value={clientId} />
       <input type="hidden" name="agreementId" value={agreementId} />
       {serviceId ? <input type="hidden" name="serviceId" value={serviceId} /> : null}
@@ -945,8 +950,7 @@ async function ServiceFields({
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           {(Object.keys(weekdayKeys) as Weekday[]).map((day) => (
             <label key={day} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <ShadcnCheckbox
                 name="weekdays"
                 value={day}
                 defaultChecked={
@@ -961,7 +965,7 @@ async function ServiceFields({
       <Button type="submit" className="w-fit">
         {submitLabel}
       </Button>
-    </form>
+    </RHFActionForm>
   );
 }
 
@@ -1108,7 +1112,7 @@ function TextAreaField({
   return (
     <div className="grid gap-2 md:col-span-2">
       <Label htmlFor={id}>{label}</Label>
-      <textarea
+      <Textarea
         id={id}
         name={name}
         defaultValue={defaultValue}
@@ -1137,15 +1141,16 @@ function SelectField({
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <select
+      <NativeSelect
         id={id}
         name={name}
         defaultValue={defaultValue}
         required={required}
-        className="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-white px-3"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </div>
   );
 }

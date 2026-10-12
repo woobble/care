@@ -1,3 +1,4 @@
+import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
@@ -172,10 +173,11 @@ export default async function OperationsDeadlinesPage({
       >
         <label className="grid gap-1 text-sm">
           <span>{t('organization')}</span>
-          <select
-            className="h-10 rounded-md border px-3"
+          <NativeSelect
+            selectClassName="h-10 rounded-md border px-3"
             name="organizationId"
             defaultValue={organizationId ?? ''}
+            className="w-full"
           >
             <option value="">{t('all')}</option>
             {organizations.map((org) => (
@@ -183,14 +185,15 @@ export default async function OperationsDeadlinesPage({
                 {org.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="grid gap-1 text-sm">
           <span>{t('facility')}</span>
-          <select
-            className="h-10 rounded-md border px-3"
+          <NativeSelect
+            selectClassName="h-10 rounded-md border px-3"
             name="facilityId"
             defaultValue={facilityId ?? ''}
+            className="w-full"
           >
             <option value="">{t('all')}</option>
             {facilities.map((facility) => (
@@ -198,14 +201,15 @@ export default async function OperationsDeadlinesPage({
                 {facility.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="grid gap-1 text-sm">
           <span>{t('category')}</span>
-          <select
-            className="h-10 rounded-md border px-3"
+          <NativeSelect
+            selectClassName="h-10 rounded-md border px-3"
             name="category"
             defaultValue={category ?? ''}
+            className="w-full"
           >
             <option value="">{t('all')}</option>
             {categories.map((value) => (
@@ -213,14 +217,15 @@ export default async function OperationsDeadlinesPage({
                 {t(categoryTranslationKey(value))}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="grid gap-1 text-sm">
           <span>{t('sourceDomain')}</span>
-          <select
-            className="h-10 rounded-md border px-3"
+          <NativeSelect
+            selectClassName="h-10 rounded-md border px-3"
             name="sourceDomain"
             defaultValue={sourceDomain ?? ''}
+            className="w-full"
           >
             <option value="">{t('all')}</option>
             {sources.map((value) => (
@@ -228,29 +233,39 @@ export default async function OperationsDeadlinesPage({
                 {t(`deadlineSources.${value}`)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="grid gap-1 text-sm">
           <span>{t('status')}</span>
-          <select className="h-10 rounded-md border px-3" name="status" defaultValue={status ?? ''}>
+          <NativeSelect
+            selectClassName="h-10 rounded-md border px-3"
+            name="status"
+            defaultValue={status ?? ''}
+            className="w-full"
+          >
             <option value="">{t('all')}</option>
             {states.map((value) => (
               <option key={value} value={value}>
                 {t(value === 'open' ? 'taskOpen' : value)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="grid gap-1 text-sm">
           <span>{t('dueDate')}</span>
-          <select className="h-10 rounded-md border px-3" name="due" defaultValue={due ?? ''}>
+          <NativeSelect
+            selectClassName="h-10 rounded-md border px-3"
+            name="due"
+            defaultValue={due ?? ''}
+            className="w-full"
+          >
             <option value="">{t('all')}</option>
             {dueFilters.map((value) => (
               <option key={value} value={value}>
                 {t(value === 'today' ? 'dueToday' : value)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         {hasPermission(permissions, 'client.read') ? (
           <label className="grid gap-1 text-sm">
@@ -277,10 +292,11 @@ export default async function OperationsDeadlinesPage({
         {canFilterByAssignee ? (
           <label className="grid gap-1 text-sm">
             <span>{t('assignedEmployeeFilter')}</span>
-            <select
-              className="h-10 rounded-md border px-3"
+            <NativeSelect
+              selectClassName="h-10 rounded-md border px-3"
               name="assignedEmployeeId"
               defaultValue={assignedEmployeeId ?? ''}
+              className="w-full"
             >
               <option value="">{t('all')}</option>
               {employees.map((employee) => (
@@ -288,7 +304,7 @@ export default async function OperationsDeadlinesPage({
                   {employee.firstName} {employee.lastName}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
         ) : null}
         <label className="grid gap-1 text-sm">

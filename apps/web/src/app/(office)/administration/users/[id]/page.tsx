@@ -1,3 +1,5 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -137,15 +139,14 @@ export default async function MemberDetailPage({
           </h2>
           <p className="text-sm text-slate-600">{t('Users.roleHelp')}</p>
         </div>
-        <form action={replaceMemberRolesAction} className="grid gap-4">
+        <RHFActionForm action={replaceMemberRolesAction} className="grid gap-4">
           <input type="hidden" name="membershipId" value={member.id} />
           <fieldset className="grid gap-4">
             <legend className="sr-only">{t('Users.availableRoles')}</legend>
             {roles.map((role) => (
               <label key={role.id} className="grid gap-1 rounded-md border p-3">
                 <span className="flex items-center gap-2 font-medium">
-                  <input
-                    type="checkbox"
+                  <ShadcnCheckbox
                     name="roleId"
                     value={role.id}
                     defaultChecked={assignedRoleIds.has(role.id)}
@@ -170,7 +171,7 @@ export default async function MemberDetailPage({
           <Button type="submit" disabled={member.status === 'revoked'}>
             {t('Users.saveRoles')}
           </Button>
-        </form>
+        </RHFActionForm>
       </section>
 
       <section aria-labelledby="scopes-title" className="grid gap-4 rounded-lg border bg-white p-5">
@@ -180,7 +181,7 @@ export default async function MemberDetailPage({
           </h2>
           <p className="text-sm text-slate-600">{t('Users.scopeHelp')}</p>
         </div>
-        <form action={replaceMemberScopesAction} className="grid gap-4">
+        <RHFActionForm action={replaceMemberScopesAction} className="grid gap-4">
           <input type="hidden" name="membershipId" value={member.id} />
           <fieldset className="grid gap-3">
             <legend className="font-medium">{t('Users.scope')}</legend>
@@ -197,8 +198,7 @@ export default async function MemberDetailPage({
             <legend className="font-medium">{t('Teams.title')}</legend>
             {teams.map((team) => (
               <label key={team.id} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
+                <ShadcnCheckbox
                   name="scope"
                   value={`team:${team.id}`}
                   defaultChecked={assignedScopes.has(`team:${team.id}`)}
@@ -214,8 +214,7 @@ export default async function MemberDetailPage({
             <legend className="font-medium">{t('Organizations.title')}</legend>
             {organizations.map((organization) => (
               <label key={organization.id} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
+                <ShadcnCheckbox
                   name="scope"
                   value={`organization:${organization.id}`}
                   defaultChecked={assignedScopes.has(`organization:${organization.id}`)}
@@ -231,8 +230,7 @@ export default async function MemberDetailPage({
             <legend className="font-medium">{t('Facilities.title')}</legend>
             {facilities.map((facility) => (
               <label key={facility.id} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
+                <ShadcnCheckbox
                   name="scope"
                   value={`facility:${facility.id}`}
                   defaultChecked={assignedScopes.has(`facility:${facility.id}`)}
@@ -247,7 +245,7 @@ export default async function MemberDetailPage({
           <Button type="submit" disabled={member.status === 'revoked'}>
             {t('Users.saveScopes')}
           </Button>
-        </form>
+        </RHFActionForm>
       </section>
 
       <section

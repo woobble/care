@@ -1,3 +1,6 @@
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -345,7 +348,10 @@ export default async function VisitDetailPage({
                   <summary className="cursor-pointer font-semibold">
                     {t('Visits.correctTimes')}
                   </summary>
-                  <form action={correctVisitExecutionTimesAction} className="mt-4 grid gap-4">
+                  <RHFActionForm
+                    action={correctVisitExecutionTimesAction}
+                    className="mt-4 grid gap-4"
+                  >
                     <input type="hidden" name="visitId" value={visit.id} />
                     <input type="hidden" name="clientId" value={visit.clientId} />
                     <input type="hidden" name="executionId" value={executionDetail.execution.id} />
@@ -387,7 +393,7 @@ export default async function VisitDetailPage({
                       <Label htmlFor="execution-correction-reason">
                         {t('Visits.correctionReason')}
                       </Label>
-                      <textarea
+                      <Textarea
                         id="execution-correction-reason"
                         name="reason"
                         required
@@ -398,7 +404,7 @@ export default async function VisitDetailPage({
                     <Button type="submit" className="min-h-11 w-fit">
                       {t('Visits.correctTimesAction')}
                     </Button>
-                  </form>
+                  </RHFActionForm>
                 </details>
               ) : null}
             </>
@@ -562,7 +568,7 @@ export default async function VisitDetailPage({
                   <summary className="cursor-pointer font-semibold">
                     {t('Visits.amendDocumentation')}
                   </summary>
-                  <form action={amendDocumentationAction} className="mt-4 grid gap-3">
+                  <RHFActionForm action={amendDocumentationAction} className="mt-4 grid gap-3">
                     <input type="hidden" name="visitId" value={visit.id} />
                     <input
                       type="hidden"
@@ -580,7 +586,7 @@ export default async function VisitDetailPage({
                     </label>
                     <label className="grid gap-1 text-sm">
                       <span>{t('Visits.correction')}</span>
-                      <textarea
+                      <Textarea
                         name="correction"
                         required
                         maxLength={4000}
@@ -590,7 +596,7 @@ export default async function VisitDetailPage({
                     <Button type="submit" className="min-h-11 w-fit">
                       {t('Visits.saveAmendment')}
                     </Button>
-                  </form>
+                  </RHFActionForm>
                 </details>
               ) : null}
             </>
@@ -606,7 +612,7 @@ export default async function VisitDetailPage({
           <h2 id="reschedule-title" className="text-xl font-semibold">
             {t('Visits.reschedule')}
           </h2>
-          <form action={updateVisitAction} className="grid gap-4 md:grid-cols-2">
+          <RHFActionForm action={updateVisitAction} className="grid gap-4 md:grid-cols-2">
             <input type="hidden" name="visitId" value={visit.id} />
             <Field
               label={t('Visits.date')}
@@ -631,7 +637,7 @@ export default async function VisitDetailPage({
             />
             <div className="grid gap-2 md:col-span-2">
               <Label htmlFor="visit-note">{t('Visits.planningNote')}</Label>
-              <textarea
+              <Textarea
                 id="visit-note"
                 name="note"
                 defaultValue={visit.note ?? ''}
@@ -642,7 +648,7 @@ export default async function VisitDetailPage({
             <Button type="submit" className="w-fit">
               {t('Visits.save')}
             </Button>
-          </form>
+          </RHFActionForm>
         </section>
       ) : null}
 
@@ -681,18 +687,19 @@ export default async function VisitDetailPage({
         )}
         {canAssign ? (
           employees.length ? (
-            <form
+            <RHFActionForm
               action={assignVisitAction}
               className="grid min-w-0 gap-3 sm:flex sm:flex-wrap sm:items-end"
             >
               <input type="hidden" name="visitId" value={visit.id} />
               <div className="grid min-w-0 gap-2">
                 <Label htmlFor="employeeId">{t('Visits.assignEmployee')}</Label>
-                <select
+                <NativeSelect
                   id="employeeId"
                   name="employeeId"
                   required
-                  className="h-10 w-full min-w-0 max-w-full rounded-md border bg-white px-3"
+                  selectClassName="h-10 w-full min-w-0 max-w-full rounded-md border bg-white px-3"
+                  className="w-full"
                 >
                   <option value="">{t('Visits.selectEmployee')}</option>
                   {employees.map((employee) => (
@@ -700,10 +707,10 @@ export default async function VisitDetailPage({
                       {employee.preferredName || employee.firstName} {employee.lastName}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
               <Button type="submit">{t('Visits.assign')}</Button>
-            </form>
+            </RHFActionForm>
           ) : (
             <p className="text-sm text-slate-600">{t('Visits.noActiveEmployees')}</p>
           )
@@ -755,7 +762,7 @@ export default async function VisitDetailPage({
             <h3 className="font-semibold">{t('Visits.proposeSubstitute')}</h3>
             {substituteCandidates.length ? (
               visit.assignments.map((assignment) => (
-                <form
+                <RHFActionForm
                   key={assignment.id}
                   action={proposeSubstitutionAction}
                   className="grid min-w-0 gap-3 rounded-md border p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_auto] md:items-end"
@@ -769,11 +776,12 @@ export default async function VisitDetailPage({
                     <Label htmlFor={`substitute-${assignment.id}`}>
                       {t('Visits.substituteEmployee')}
                     </Label>
-                    <select
+                    <NativeSelect
                       id={`substitute-${assignment.id}`}
                       name="substituteEmployeeId"
                       required
-                      className="h-10 w-full min-w-0 max-w-full rounded-md border bg-white px-3"
+                      selectClassName="h-10 w-full min-w-0 max-w-full rounded-md border bg-white px-3"
+                      className="w-full"
                     >
                       <option value="">{t('Visits.selectSubstitute')}</option>
                       {substituteCandidates.map((candidate) => (
@@ -782,7 +790,7 @@ export default async function VisitDetailPage({
                           {candidate.preferred ? ` · ${t('Visits.preferredCandidate')}` : ''}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </div>
                   <div className="grid min-w-0 gap-2">
                     <Label htmlFor={`substitution-reason-${assignment.id}`}>
@@ -796,7 +804,7 @@ export default async function VisitDetailPage({
                     />
                   </div>
                   <Button type="submit">{t('Visits.proposeSubstitute')}</Button>
-                </form>
+                </RHFActionForm>
               ))
             ) : (
               <p className="text-sm text-slate-600">{t('Visits.noSubstituteCandidates')}</p>

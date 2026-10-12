@@ -1,3 +1,4 @@
+import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -124,10 +125,11 @@ export default async function DocumentationWorklistPage({
         </label>
         <label className="grid gap-1 text-sm">
           <span>{t('Common.fields.facility')}</span>
-          <select
+          <NativeSelect
             name="facilityId"
             defaultValue={query.facilityId ?? ''}
-            className="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            className="w-full"
           >
             <option value="">{t('Common.filters.allFacilities')}</option>
             {facilities.map((facility) => (
@@ -135,14 +137,15 @@ export default async function DocumentationWorklistPage({
                 {facility.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="grid gap-1 text-sm">
           <span>{t('Common.fields.employee')}</span>
-          <select
+          <NativeSelect
             name="employeeId"
             defaultValue={query.employeeId ?? ''}
-            className="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            className="w-full"
           >
             <option value="">{t('CareDocumentation.allEmployees')}</option>
             {employees.map((employee) => (
@@ -150,19 +153,20 @@ export default async function DocumentationWorklistPage({
                 {employee.preferredName || employee.firstName} {employee.lastName}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="grid gap-1 text-sm">
           <span>{t('Common.fields.status')}</span>
-          <select
+          <NativeSelect
             name="status"
             defaultValue={query.status ?? ''}
-            className="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            className="w-full"
           >
             <option value="">{t('CareDocumentation.allStatuses')}</option>
             <option value="missing">{t('CareDocumentation.missingStatus')}</option>
             <option value="draft">{t('CareDocumentation.draftStatus')}</option>
-          </select>
+          </NativeSelect>
         </label>
         <Button type="submit" className="min-h-11 w-fit">
           {t('CareDocumentation.applyFilters')}

@@ -1,3 +1,7 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
@@ -127,19 +131,20 @@ export default async function RecurringTasksPage({
           <h2 id="recurring-create-title" className="text-xl font-semibold">
             {t('newRecurringTask')}
           </h2>
-          <form action={createRecurringTaskAction} className="grid gap-4 md:grid-cols-2">
+          <RHFActionForm action={createRecurringTaskAction} className="grid gap-4 md:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="recurring-title">{t('taskTitle')}</Label>
               <Input id="recurring-title" name="title" required maxLength={200} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="recurring-organization">{t('organization')}</Label>
-              <select
+              <NativeSelect
                 id="recurring-organization"
                 name="organizationId"
-                className="h-10 rounded-md border px-3"
+                selectClassName="h-10 rounded-md border px-3"
                 required
                 defaultValue=""
+                className="w-full"
               >
                 <option value="" disabled>
                   {t('selectOrganization')}
@@ -149,15 +154,16 @@ export default async function RecurringTasksPage({
                     {org.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="recurring-facility">{t('facility')}</Label>
-              <select
+              <NativeSelect
                 id="recurring-facility"
                 name="facilityId"
-                className="h-10 rounded-md border px-3"
+                selectClassName="h-10 rounded-md border px-3"
                 defaultValue=""
+                className="w-full"
               >
                 <option value="">{t('all')}</option>
                 {facilities.map((facility) => (
@@ -165,16 +171,17 @@ export default async function RecurringTasksPage({
                     {facility.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             {hasPermission(permissions, 'client.read') ? (
               <div className="grid gap-2">
                 <Label htmlFor="recurring-client">{t('client')}</Label>
-                <select
+                <NativeSelect
                   id="recurring-client"
                   name="clientId"
-                  className="h-10 rounded-md border px-3"
+                  selectClassName="h-10 rounded-md border px-3"
                   defaultValue=""
+                  className="w-full"
                 >
                   <option value="">{t('all')}</option>
                   {clients.map((client) => (
@@ -182,32 +189,34 @@ export default async function RecurringTasksPage({
                       {client.preferredName ?? client.firstName} {client.lastName}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
             ) : null}
             <div className="grid gap-2">
               <Label htmlFor="recurring-priority">{t('priority')}</Label>
-              <select
+              <NativeSelect
                 id="recurring-priority"
                 name="priority"
-                className="h-10 rounded-md border px-3"
+                selectClassName="h-10 rounded-md border px-3"
                 defaultValue="normal"
+                className="w-full"
               >
                 {(['low', 'normal', 'high', 'urgent'] as const).map((priority) => (
                   <option key={priority} value={priority}>
                     {t(priority)}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             {canAssign ? (
               <div className="grid gap-2">
                 <Label htmlFor="recurring-assignee">{t('assignee')}</Label>
-                <select
+                <NativeSelect
                   id="recurring-assignee"
                   name="assignedEmployeeId"
-                  className="h-10 rounded-md border px-3"
+                  selectClassName="h-10 rounded-md border px-3"
                   defaultValue=""
+                  className="w-full"
                 >
                   <option value="">{t('unassigned')}</option>
                   {employees.map((employee) => (
@@ -215,12 +224,12 @@ export default async function RecurringTasksPage({
                       {employee.preferredName ?? employee.firstName} {employee.lastName}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
             ) : null}
             <div className="grid gap-2 md:col-span-2">
               <Label htmlFor="recurring-description">{t('taskDescription')}</Label>
-              <textarea
+              <Textarea
                 id="recurring-description"
                 name="description"
                 maxLength={8000}
@@ -229,17 +238,18 @@ export default async function RecurringTasksPage({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="frequency">{t('recurrenceFrequency')}</Label>
-              <select
+              <NativeSelect
                 id="frequency"
                 name="frequency"
-                className="h-10 rounded-md border px-3"
+                selectClassName="h-10 rounded-md border px-3"
                 defaultValue="weekly"
+                className="w-full"
               >
                 <option value="daily">{t('daily')}</option>
                 <option value="weekly">{t('weekly')}</option>
                 <option value="monthly">{t('monthly')}</option>
                 <option value="yearly">{t('yearly')}</option>
-              </select>
+              </NativeSelect>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="interval">{t('interval')}</Label>
@@ -261,7 +271,7 @@ export default async function RecurringTasksPage({
               <div className="flex flex-wrap gap-3">
                 {weekdayNumbers.map((day) => (
                   <label key={day} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="weekdays" value={day} defaultChecked={day <= 5} />
+                    <ShadcnCheckbox name="weekdays" value={day} defaultChecked={day <= 5} />
                     {t(`weekdayNames.${day}`)}
                   </label>
                 ))}
@@ -280,18 +290,19 @@ export default async function RecurringTasksPage({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="month">{t('month')}</Label>
-              <select
+              <NativeSelect
                 id="month"
                 name="month"
-                className="h-10 rounded-md border px-3"
+                selectClassName="h-10 rounded-md border px-3"
                 defaultValue={Number(today.slice(5, 7))}
+                className="w-full"
               >
                 {Array.from({ length: 12 }, (_, index) => (
                   <option key={index + 1} value={index + 1}>
                     {index + 1}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="startDate">{t('startDate')}</Label>
@@ -307,20 +318,21 @@ export default async function RecurringTasksPage({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="generationPolicy">{t('generationPolicy')}</Label>
-              <select
+              <NativeSelect
                 id="generationPolicy"
                 name="generationPolicy"
-                className="h-10 rounded-md border px-3"
+                selectClassName="h-10 rounded-md border px-3"
                 defaultValue="generate_missed"
+                className="w-full"
               >
                 <option value="generate_missed">{t('generateMissed')}</option>
                 <option value="skip_missed">{t('skipMissed')}</option>
-              </select>
+              </NativeSelect>
             </div>
             <div className="md:col-span-2">
               <Button type="submit">{t('newRecurringTask')}</Button>
             </div>
-          </form>
+          </RHFActionForm>
         </section>
       ) : null}
 
@@ -379,7 +391,7 @@ export default async function RecurringTasksPage({
                   ) : null}
                 </div>
                 {canManage && item.status !== 'ended' ? (
-                  <form
+                  <RHFActionForm
                     action={updateRecurringTaskAction}
                     className="flex flex-wrap items-end gap-2 border-t pt-3"
                   >
@@ -391,22 +403,23 @@ export default async function RecurringTasksPage({
                     </label>
                     <label className="grid gap-1 text-sm">
                       <span>{t('priority')}</span>
-                      <select
+                      <NativeSelect
                         name="priority"
-                        className="h-10 rounded-md border px-3"
+                        selectClassName="h-10 rounded-md border px-3"
                         defaultValue={item.priority}
+                        className="w-full"
                       >
                         {(['low', 'normal', 'high', 'urgent'] as const).map((priority) => (
                           <option key={priority} value={priority}>
                             {t(priority)}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </label>
                     <Button size="sm" variant="secondary">
                       {t('save')}
                     </Button>
-                  </form>
+                  </RHFActionForm>
                 ) : null}
               </li>
             ))}

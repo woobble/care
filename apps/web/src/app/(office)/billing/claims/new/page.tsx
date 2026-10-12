@@ -1,3 +1,5 @@
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -137,17 +139,21 @@ export default async function NewClaimPage({
         </Alert>
       ) : null}
       {canCreate && eligibleArrangements.length ? (
-        <form action={createClaimAction} className="grid gap-5 rounded-lg border bg-white p-5">
+        <RHFActionForm
+          action={createClaimAction}
+          className="grid gap-5 rounded-lg border bg-white p-5"
+        >
           <input type="hidden" name="invoiceId" value={invoice.id} />
           <input type="hidden" name="expectedInvoiceVersion" value={invoice.version} />
           <label className="grid gap-1 text-sm" htmlFor="payer-arrangement">
             {t('claimPayerArrangement')}
-            <select
+            <NativeSelect
               id="payer-arrangement"
               name="payerArrangementId"
               required
               defaultValue={eligibleArrangements.length === 1 ? eligibleArrangements[0]!.id : ''}
-              className="h-10 rounded-md border px-3"
+              selectClassName="h-10 rounded-md border px-3"
+              className="w-full"
             >
               <option value="">{t('selectPayerArrangement')}</option>
               {eligibleArrangements.map((arrangement) => (
@@ -158,15 +164,16 @@ export default async function NewClaimPage({
                     : t('customerReimbursement')}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           <label className="grid gap-1 text-sm" htmlFor="payer-profile">
             {t('payerRequirementsProfile')}
-            <select
+            <NativeSelect
               id="payer-profile"
               name="payerBillingProfileId"
               defaultValue=""
-              className="h-10 rounded-md border px-3"
+              selectClassName="h-10 rounded-md border px-3"
+              className="w-full"
             >
               <option value="">{t('unconfiguredPayerRequirements')}</option>
               {profiles.map((profile) => (
@@ -181,7 +188,7 @@ export default async function NewClaimPage({
                   })}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
             {t('claimProfileReadinessNote')}
@@ -220,7 +227,7 @@ export default async function NewClaimPage({
           <Button type="submit" className="w-fit">
             {t('createClaimDraft')}
           </Button>
-        </form>
+        </RHFActionForm>
       ) : null}
     </div>
   );

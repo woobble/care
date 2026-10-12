@@ -1,3 +1,12 @@
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui';
+import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
@@ -92,11 +101,12 @@ export default async function ClaimsWorklistPage({
           <form action="/billing/claims" className="flex flex-wrap items-end gap-2">
             <label className="grid gap-1 text-sm" htmlFor="claim-status-filter">
               {t('claimStatusLabel')}
-              <select
+              <NativeSelect
                 id="claim-status-filter"
                 name="status"
                 defaultValue={status ?? ''}
-                className="h-10 rounded-md border px-3"
+                selectClassName="h-10 rounded-md border px-3"
+                className="w-full"
               >
                 <option value="">{t('allClaimStatuses')}</option>
                 {statuses.map((claimStatus) => (
@@ -104,7 +114,7 @@ export default async function ClaimsWorklistPage({
                     {statusLabel(t, claimStatus)}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
             <Button type="submit" variant="secondary">
               {t('applyClaimFilter')}
@@ -113,55 +123,59 @@ export default async function ClaimsWorklistPage({
         </div>
         {claims.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[54rem] text-left text-sm">
-              <thead>
-                <tr className="border-b text-slate-600">
-                  <th className="p-2">{t('claim')}</th>
-                  <th className="p-2">{t('client')}</th>
-                  <th className="p-2">{t('payer')}</th>
-                  <th className="p-2">{t('invoiceNumber')}</th>
-                  <th className="p-2">{t('amount')}</th>
-                  <th className="p-2">{t('claimStatusLabel')}</th>
-                  <th className="p-2">{t('claimCreatedAt')}</th>
-                </tr>
-              </thead>
-              <tbody>
+            <ShadcnTable className="w-full min-w-[54rem] text-left text-sm">
+              <ShadcnTableHeader>
+                <ShadcnTableRow className="border-b text-slate-600">
+                  <ShadcnTableHead className="p-2">{t('claim')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('client')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('payer')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('invoiceNumber')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('amount')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('claimStatusLabel')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('claimCreatedAt')}</ShadcnTableHead>
+                </ShadcnTableRow>
+              </ShadcnTableHeader>
+              <ShadcnTableBody>
                 {claims.map((claim) => (
-                  <tr key={claim.id} className="border-b last:border-0">
-                    <td className="p-2 font-medium">
+                  <ShadcnTableRow key={claim.id} className="border-b last:border-0">
+                    <ShadcnTableCell className="p-2 font-medium">
                       <Link
                         className="text-blue-900 underline"
                         href={'/billing/claims/' + claim.id}
                       >
                         {claim.id.slice(0, 8)}
                       </Link>
-                    </td>
-                    <td className="p-2">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
                       <Link
                         className="text-blue-900 underline"
                         href={'/clients/' + claim.clientId + '/invoices'}
                       >
                         {claim.clientName || claim.clientId.slice(0, 8)}
                       </Link>
-                    </td>
-                    <td className="p-2">{claim.payerName}</td>
-                    <td className="p-2">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">{claim.payerName}</ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
                       <Link
                         className="text-blue-900 underline"
                         href={'/billing/invoices/' + claim.invoiceId}
                       >
                         {claim.invoiceNumber ?? claim.invoiceId.slice(0, 8)}
                       </Link>
-                    </td>
-                    <td className="p-2">{formatCents(claim.amountCents, locale as Locale)}</td>
-                    <td className="p-2">{statusLabel(t, claim.status)}</td>
-                    <td className="p-2">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
+                      {formatCents(claim.amountCents, locale as Locale)}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
+                      {statusLabel(t, claim.status)}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
                       {formatDateTime(claim.createdAt, locale as Locale) ?? '—'}
-                    </td>
-                  </tr>
+                    </ShadcnTableCell>
+                  </ShadcnTableRow>
                 ))}
-              </tbody>
-            </table>
+              </ShadcnTableBody>
+            </ShadcnTable>
           </div>
         ) : (
           <p className="text-sm text-slate-700">

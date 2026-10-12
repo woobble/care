@@ -1,3 +1,5 @@
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { v7 as uuidv7 } from 'uuid';
@@ -284,11 +286,12 @@ export default async function CareVisitPage({
                 <input type="hidden" name="expectedVersion" value={execution.version} />
                 <div className="grid gap-2">
                   <Label htmlFor="serviceDefinitionId">{t('VisitExecution.service')}</Label>
-                  <select
+                  <NativeSelect
                     id="serviceDefinitionId"
                     name="serviceDefinitionId"
                     required
-                    className="min-h-12 w-full min-w-0 rounded-md border bg-white px-3"
+                    selectClassName="min-h-12 w-full min-w-0 rounded-md border bg-white px-3"
+                    className="w-full"
                   >
                     <option value="">{t('VisitExecution.selectService')}</option>
                     {availableServices.map((service) => (
@@ -296,7 +299,7 @@ export default async function CareVisitPage({
                         {service.code} · {service.name} ({t(unitKey(service.unit))})
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <DecisionFields
                   status=""
@@ -460,18 +463,19 @@ async function DecisionFields({
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor={'status-' + prefix}>{t('VisitExecution.outcome')}</Label>
-          <select
+          <NativeSelect
             id={'status-' + prefix}
             name="status"
             required
             defaultValue={status}
-            className="min-h-12 w-full min-w-0 rounded-md border bg-white px-3"
+            selectClassName="min-h-12 w-full min-w-0 rounded-md border bg-white px-3"
+            className="w-full"
           >
             <option value="">{t('VisitExecution.selectOutcome')}</option>
             <option value="performed">{t('VisitExecution.performed')}</option>
             <option value="partially_performed">{t('VisitExecution.partiallyPerformed')}</option>
             <option value="not_performed">{t('VisitExecution.notPerformed')}</option>
-          </select>
+          </NativeSelect>
         </div>
         <div className="grid gap-2">
           <Label htmlFor={quantityId}>
@@ -490,11 +494,12 @@ async function DecisionFields({
       </div>
       <div className="grid gap-2">
         <Label htmlFor={reasonId}>{t('VisitExecution.reasonRequired')}</Label>
-        <select
+        <NativeSelect
           id={reasonId}
           name="reasonCode"
           defaultValue={reasonCode ?? ''}
-          className="min-h-12 w-full min-w-0 rounded-md border bg-white px-3"
+          selectClassName="min-h-12 w-full min-w-0 rounded-md border bg-white px-3"
+          className="w-full"
         >
           <option value="">{t('VisitExecution.noReason')}</option>
           <option value="client_declined">{t('VisitExecution.reasons.clientDeclined')}</option>
@@ -505,7 +510,7 @@ async function DecisionFields({
           <option value="time_constraint">{t('VisitExecution.reasons.timeConstraint')}</option>
           <option value="provider_decision">{t('VisitExecution.reasons.providerDecision')}</option>
           <option value="other">{t('VisitExecution.reasons.other')}</option>
-        </select>
+        </NativeSelect>
       </div>
     </>
   );
@@ -675,7 +680,7 @@ async function DocumentationSection({
                         <Label htmlFor={`evidence-${service.performedServiceId}`}>
                           {t('CareDocumentation.visit.evidenceLabel')}
                         </Label>
-                        <textarea
+                        <Textarea
                           id={`evidence-${service.performedServiceId}`}
                           name="note"
                           defaultValue={service.evidence?.note ?? ''}
@@ -736,7 +741,7 @@ async function DocumentationSection({
                             <Label htmlFor={`entry-${entry.id}`}>
                               {t('CareDocumentation.visit.editEntry')}
                             </Label>
-                            <textarea
+                            <Textarea
                               id={`entry-${entry.id}`}
                               name="content"
                               defaultValue={entry.content}
@@ -856,7 +861,7 @@ async function EntryComposer({
       <input type="hidden" name="expectedVersion" value={version} />
       <input type="hidden" name="type" value={type} />
       <Label htmlFor={`new-${type}`}>{t('CareDocumentation.visit.newEntry')}</Label>
-      <textarea
+      <Textarea
         id={`new-${type}`}
         name="content"
         required
@@ -866,18 +871,19 @@ async function EntryComposer({
       {type === 'incident' ? (
         <div className="grid gap-2">
           <Label htmlFor="incident-severity">{t('CareDocumentation.visit.severity')}</Label>
-          <select
+          <NativeSelect
             id="incident-severity"
             name="severity"
             required
-            className="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            className="w-full"
           >
             <option value="">{t('CareDocumentation.visit.selectOption')}</option>
             <option value="low">{t('CareDocumentation.visit.severityLow')}</option>
             <option value="moderate">{t('CareDocumentation.visit.severityModerate')}</option>
             <option value="high">{t('CareDocumentation.visit.severityHigh')}</option>
             <option value="critical">{t('CareDocumentation.visit.severityCritical')}</option>
-          </select>
+          </NativeSelect>
         </div>
       ) : null}
       <Button type="submit" variant="secondary" className="min-h-11 w-full sm:w-fit">

@@ -1,5 +1,6 @@
 'use client';
 
+import { NativeSelect } from '@care/ui';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useTransition } from 'react';
@@ -12,11 +13,11 @@ export function LanguageSwitcher({ locale }: Readonly<{ locale: Locale }>) {
   const [pending, startTransition] = useTransition();
 
   return (
-    <label className="flex items-center gap-2 text-sm">
+    <label className="flex w-28 shrink-0 items-center gap-2 text-sm">
       <span className="sr-only">{t('language')}</span>
-      <select
+      <NativeSelect
         aria-label={t('language')}
-        className="min-h-10 max-w-32 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+        selectClassName="min-h-10 w-full rounded-md border border-input bg-background pl-2 pr-8 text-sm text-foreground"
         value={locale}
         disabled={pending}
         onChange={(event) => {
@@ -26,10 +27,11 @@ export function LanguageSwitcher({ locale }: Readonly<{ locale: Locale }>) {
             router.refresh();
           });
         }}
+        className="w-full"
       >
         <option value="en">{t('languages.en')}</option>
         <option value="de">{t('languages.de')}</option>
-      </select>
+      </NativeSelect>
     </label>
   );
 }

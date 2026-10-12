@@ -1,3 +1,14 @@
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+  TableCaption as ShadcnTableCaption,
+} from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
@@ -171,70 +182,78 @@ export default async function ServicesPage({
             {t('Services.resultCount', { count: services.total })}
           </h2>
           <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
-            <table className="w-full border-collapse text-left text-sm">
-              <caption className="sr-only">{t('Services.listCaption')}</caption>
-              <thead className="border-b bg-slate-100 text-slate-700">
-                <tr>
-                  <th scope="col" className="px-4 py-3">
+            <ShadcnTable className="w-full border-collapse text-left text-sm">
+              <ShadcnTableCaption className="sr-only">
+                {t('Services.listCaption')}
+              </ShadcnTableCaption>
+              <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+                <ShadcnTableRow>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Services.code')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Services.name')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Services.category')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Services.unit')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Services.duration')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Services.availability')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Services.validity')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Common.fields.status')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+                  </ShadcnTableHead>
+                </ShadcnTableRow>
+              </ShadcnTableHeader>
+              <ShadcnTableBody>
                 {services.items.map((service) => (
-                  <tr key={service.id} className="border-b last:border-0">
-                    <td className="px-4 py-3 font-mono text-xs">{service.code}</td>
-                    <td className="px-4 py-3">
+                  <ShadcnTableRow key={service.id} className="border-b last:border-0">
+                    <ShadcnTableCell className="px-4 py-3 font-mono text-xs">
+                      {service.code}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
                       <Link
                         className="font-medium text-blue-900 underline-offset-4 hover:underline"
                         href={`/services/${service.id}`}
                       >
                         {service.name}
                       </Link>
-                    </td>
-                    <td className="px-4 py-3">{service.categoryName}</td>
-                    <td className="px-4 py-3">{t(unitLabelKey(service.unit))}</td>
-                    <td className="px-4 py-3">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">{service.categoryName}</ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
+                      {t(unitLabelKey(service.unit))}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
                       {service.defaultDurationMinutes
                         ? t('Common.units.minutes', { count: service.defaultDurationMinutes })
                         : '—'}
-                    </td>
-                    <td className="px-4 py-3">{formatNumber(service.availabilityCount, locale)}</td>
-                    <td className="px-4 py-3">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
+                      {formatNumber(service.availabilityCount, locale)}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
                       {formatDate(service.validFrom, locale)} –{' '}
                       {formatDate(service.validUntil, locale) ?? t('Services.openEnded')}
-                    </td>
-                    <td className="px-4 py-3">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
                       <StatusBadge
                         status={service.status}
                         label={t(statusLabelKey(service.status))}
                       />
-                    </td>
-                  </tr>
+                    </ShadcnTableCell>
+                  </ShadcnTableRow>
                 ))}
-              </tbody>
-            </table>
+              </ShadcnTableBody>
+            </ShadcnTable>
           </div>
           <div className="flex items-center justify-between">
             <p className="text-sm text-slate-600">
@@ -279,7 +298,7 @@ export default async function ServicesPage({
           <p className="text-sm text-slate-600">{t('Services.categoriesDescription')}</p>
         </div>
         {canManageCategories ? (
-          <form
+          <RHFActionForm
             action={createServiceCategoryAction}
             className="grid gap-3 rounded-md bg-slate-50 p-4 md:grid-cols-4"
           >
@@ -296,7 +315,7 @@ export default async function ServicesPage({
             <div className="md:col-span-4">
               <Button type="submit">{t('Services.categoryCreate')}</Button>
             </div>
-          </form>
+          </RHFActionForm>
         ) : null}
         {categories.length ? (
           <ul className="grid gap-3">
@@ -304,7 +323,7 @@ export default async function ServicesPage({
               <li key={category.id} className="grid gap-3 rounded-md border p-4">
                 {canManageCategories ? (
                   <>
-                    <form
+                    <RHFActionForm
                       action={updateServiceCategoryAction}
                       className="grid gap-3 md:grid-cols-4"
                     >
@@ -345,7 +364,7 @@ export default async function ServicesPage({
                           {t('Services.categorySave')}
                         </Button>
                       </div>
-                    </form>
+                    </RHFActionForm>
                     {category.status === 'active' ? (
                       <form action={archiveServiceCategoryAction}>
                         <input type="hidden" name="categoryId" value={category.id} />
@@ -429,13 +448,14 @@ function SelectField({
   return (
     <label className="grid gap-1 text-sm font-medium">
       {label}
-      <select
-        className="h-10 rounded-md border bg-white px-3 font-normal"
+      <NativeSelect
+        selectClassName="h-10 rounded-md border bg-white px-3 font-normal"
         name={name}
         defaultValue={defaultValue}
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

@@ -1,3 +1,13 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui';
+import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
@@ -223,7 +233,7 @@ export default async function AdmissionsPage({
           />
           <Field name="createdTo" label={t('createdTo')} type="date" defaultValue={createdTo} />
           <label className="flex items-center gap-2 text-sm font-medium">
-            <input type="checkbox" name="overdue" value="true" defaultChecked={overdue} />
+            <ShadcnCheckbox name="overdue" value="true" defaultChecked={overdue} />
             {t('overdue')}
           </label>
           <div className="flex gap-2 md:col-span-3">
@@ -311,23 +321,23 @@ export default async function AdmissionsPage({
               ))}
             </div>
             <div className="hidden overflow-x-auto rounded-lg border bg-white lg:block">
-              <table className="w-full min-w-[900px] text-left text-sm">
-                <thead className="border-b bg-slate-50 text-slate-700">
-                  <tr>
-                    <th className="p-3">{t('caseDetails')}</th>
-                    <th className="p-3">{t('stage')}</th>
-                    <th className="p-3">{t('preferredStartDate')}</th>
-                    <th className="p-3">{t('blockers')}</th>
-                    <th className="p-3">{t('admissionAge')}</th>
-                    <th className="p-3">{t('followUp')}</th>
-                    <th className="p-3">{t('owner')}</th>
-                    <th className="p-3">{t('lastActivity')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
+              <ShadcnTable className="w-full min-w-[900px] text-left text-sm">
+                <ShadcnTableHeader className="border-b bg-slate-50 text-slate-700">
+                  <ShadcnTableRow>
+                    <ShadcnTableHead className="p-3">{t('caseDetails')}</ShadcnTableHead>
+                    <ShadcnTableHead className="p-3">{t('stage')}</ShadcnTableHead>
+                    <ShadcnTableHead className="p-3">{t('preferredStartDate')}</ShadcnTableHead>
+                    <ShadcnTableHead className="p-3">{t('blockers')}</ShadcnTableHead>
+                    <ShadcnTableHead className="p-3">{t('admissionAge')}</ShadcnTableHead>
+                    <ShadcnTableHead className="p-3">{t('followUp')}</ShadcnTableHead>
+                    <ShadcnTableHead className="p-3">{t('owner')}</ShadcnTableHead>
+                    <ShadcnTableHead className="p-3">{t('lastActivity')}</ShadcnTableHead>
+                  </ShadcnTableRow>
+                </ShadcnTableHeader>
+                <ShadcnTableBody className="divide-y">
                   {rows.map((row) => (
-                    <tr key={row.id}>
-                      <td className="p-3">
+                    <ShadcnTableRow key={row.id}>
+                      <ShadcnTableCell className="p-3">
                         <Link
                           className="font-semibold text-blue-800 underline"
                           href={`/admissions/${row.id}`}
@@ -339,42 +349,44 @@ export default async function AdmissionsPage({
                             {t('clientId')}: {row.clientId}
                           </span>
                         ) : null}
-                      </td>
-                      <td className="p-3">
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-3">
                         {t(
                           row.stage === 'assessment'
                             ? 'assessmentStage'
                             : (row.stage as (typeof stages)[number]),
                         )}
-                      </td>
-                      <td className="p-3">
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-3">
                         {formatDate(row.preferredStartDate, locale as Locale)}
-                      </td>
-                      <td className="p-3">
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-3">
                         {row.readinessSummary?.blockerCount
                           ? t('blockerCount', { count: row.readinessSummary.blockerCount })
                           : t('noBlockers')}
-                      </td>
-                      <td className="p-3">
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-3">
                         {t('ageInDays', {
                           count: admissionAgeInDays(row.createdAt),
                         })}
-                      </td>
-                      <td className="p-3">
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-3">
                         {row.nextFollowUpAt
                           ? formatDateTime(row.nextFollowUpAt, locale as Locale)
                           : '—'}
-                      </td>
-                      <td className="p-3">
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-3">
                         {row.ownerEmployeeId
                           ? (employeeNames.get(row.ownerEmployeeId) ?? row.ownerEmployeeId)
                           : '—'}
-                      </td>
-                      <td className="p-3">{formatDate(row.lastActivityAt, locale as Locale)}</td>
-                    </tr>
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-3">
+                        {formatDate(row.lastActivityAt, locale as Locale)}
+                      </ShadcnTableCell>
+                    </ShadcnTableRow>
                   ))}
-                </tbody>
-              </table>
+                </ShadcnTableBody>
+              </ShadcnTable>
             </div>
           </>
         ) : (
@@ -440,13 +452,14 @@ function SelectField({
   return (
     <label className="grid min-w-0 gap-1 text-sm font-medium">
       {label}
-      <select
-        className="h-10 w-full min-w-0 rounded-md border bg-white px-3 font-normal"
+      <NativeSelect
+        selectClassName="h-10 w-full min-w-0 rounded-md border bg-white px-3 font-normal"
         name={name}
         defaultValue={value}
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

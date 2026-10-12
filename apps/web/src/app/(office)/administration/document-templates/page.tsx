@@ -1,3 +1,6 @@
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
@@ -99,33 +102,35 @@ export default async function DocumentTemplatesPage({
       <form method="get" className="grid gap-4 rounded-lg border bg-white p-5 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor="template-organization">{t('Documents.templates.organization')}</Label>
-          <select
+          <NativeSelect
             id="template-organization"
             name="organizationId"
             defaultValue={selectedOrganization.id}
-            className="h-10 rounded-md border bg-white px-3"
+            selectClassName="h-10 rounded-md border bg-white px-3"
+            className="w-full"
           >
             {organizations.map((organization) => (
               <option key={organization.id} value={organization.id}>
                 {organization.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="template-type">{t('Documents.templates.documentType')}</Label>
-          <select
+          <NativeSelect
             id="template-type"
             name="type"
             defaultValue={selectedType}
-            className="h-10 rounded-md border bg-white px-3"
+            selectClassName="h-10 rounded-md border bg-white px-3"
+            className="w-full"
           >
             {documentTypes.map((type) => (
               <option key={type} value={type}>
                 {t(`Documents.documentTypes.${type}`)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <Button type="submit" variant="secondary" className="w-fit sm:col-span-2">
           {t('Documents.templates.choose')}
@@ -140,7 +145,7 @@ export default async function DocumentTemplatesPage({
           </p>
         </div>
 
-        <form
+        <RHFActionForm
           action={uploadDocumentLogoAction}
           className="grid gap-3 border-b pb-4 sm:grid-cols-[1fr_auto] sm:items-end"
         >
@@ -164,9 +169,9 @@ export default async function DocumentTemplatesPage({
           <Button type="submit" variant="secondary">
             {t('Documents.templates.uploadLogo')}
           </Button>
-        </form>
+        </RHFActionForm>
 
-        <form action={saveDocumentTemplateAction} className="grid gap-4 md:grid-cols-2">
+        <RHFActionForm action={saveDocumentTemplateAction} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="organizationId" value={selectedOrganization.id} />
           <input type="hidden" name="documentType" value={selectedType} />
           <input type="hidden" name="expectedVersion" value={template.version} />
@@ -182,15 +187,16 @@ export default async function DocumentTemplatesPage({
           </div>
           <div className="grid gap-2">
             <Label htmlFor="template-language">{t('Documents.templates.defaultLanguage')}</Label>
-            <select
+            <NativeSelect
               id="template-language"
               name="defaultLocale"
               defaultValue={template.defaultLocale}
-              className="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-white px-3"
+              className="w-full"
             >
               <option value="de">{t('Documents.languageOptions.german')}</option>
               <option value="en">{t('Documents.languageOptions.english')}</option>
-            </select>
+            </NativeSelect>
           </div>
           <TextField
             id="template-header"
@@ -230,7 +236,7 @@ export default async function DocumentTemplatesPage({
           />
           <label className="grid gap-2 md:col-span-2">
             <span className="text-sm font-medium">{t('Documents.templates.contractTerms')}</span>
-            <textarea
+            <Textarea
               name="contractTermsText"
               maxLength={8000}
               defaultValue={template.contractTermsText ?? ''}
@@ -240,7 +246,7 @@ export default async function DocumentTemplatesPage({
           <Button type="submit" className="w-fit md:col-span-2">
             {t('Documents.templates.save')}
           </Button>
-        </form>
+        </RHFActionForm>
       </section>
 
       <section

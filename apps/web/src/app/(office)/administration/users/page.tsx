@@ -1,3 +1,14 @@
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+  TableCaption as ShadcnTableCaption,
+} from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Label, StatusBadge } from '@care/ui';
@@ -74,7 +85,7 @@ export default async function UsersAccessPage({
           </h2>
           <p className="text-sm text-slate-600">{t('Users.inviteDescription')}</p>
         </div>
-        <form action={inviteUserAction} className="flex flex-wrap items-end gap-3">
+        <RHFActionForm action={inviteUserAction} className="flex flex-wrap items-end gap-3">
           <div className="grid gap-2">
             <Label htmlFor="invite-email">{t('Users.email')}</Label>
             <input
@@ -88,7 +99,7 @@ export default async function UsersAccessPage({
             />
           </div>
           <Button type="submit">{t('Users.createInvitation')}</Button>
-        </form>
+        </RHFActionForm>
       </section>
 
       <section aria-labelledby="members-title" className="grid gap-4">
@@ -99,18 +110,19 @@ export default async function UsersAccessPage({
           <form method="get" className="flex items-end gap-2">
             <label className="grid gap-1 text-sm" htmlFor="member-status">
               {t('Users.status')}
-              <select
+              <NativeSelect
                 id="member-status"
                 name="status"
                 defaultValue={status ?? ''}
-                className="h-10 rounded-md border bg-white px-3"
+                selectClassName="h-10 rounded-md border bg-white px-3"
+                className="w-full"
               >
                 <option value="">{t('Users.allStatuses')}</option>
                 <option value="pending">{t('Common.status.pending')}</option>
                 <option value="active">{t('Common.status.active')}</option>
                 <option value="inactive">{t('Common.status.inactive')}</option>
                 <option value="revoked">{t('Common.status.revoked')}</option>
-              </select>
+              </NativeSelect>
             </label>
             <Button variant="secondary" type="submit">
               {t('Users.filter')}
@@ -121,49 +133,51 @@ export default async function UsersAccessPage({
           <ErrorNotice code={membersResult.error.code} />
         ) : membersResult.data?.items.length ? (
           <div className="overflow-x-auto rounded-lg border bg-white">
-            <table className="w-full border-collapse text-left text-sm">
-              <caption className="sr-only">{t('Users.membersCaption')}</caption>
-              <thead className="border-b bg-slate-100 text-slate-700">
-                <tr>
-                  <th scope="col" className="px-4 py-3">
+            <ShadcnTable className="w-full border-collapse text-left text-sm">
+              <ShadcnTableCaption className="sr-only">
+                {t('Users.membersCaption')}
+              </ShadcnTableCaption>
+              <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+                <ShadcnTableRow>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Users.name')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Users.email')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Users.status')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Users.roles')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Users.scope')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+                  </ShadcnTableHead>
+                </ShadcnTableRow>
+              </ShadcnTableHeader>
+              <ShadcnTableBody>
                 {membersResult.data.items.map((member) => (
-                  <tr key={member.id} className="border-b last:border-0">
-                    <td className="px-4 py-3">
+                  <ShadcnTableRow key={member.id} className="border-b last:border-0">
+                    <ShadcnTableCell className="px-4 py-3">
                       <Link
                         className="font-medium text-blue-900 underline-offset-4 hover:underline"
                         href={`/administration/users/${member.id}`}
                       >
                         {member.displayName || member.email || member.userId}
                       </Link>
-                    </td>
-                    <td className="px-4 py-3">{member.email || '—'}</td>
-                    <td className="px-4 py-3">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">{member.email || '—'}</ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
                       <StatusBadge
                         status={member.status}
                         label={t(statusLabelKey(member.status))}
                       />
-                    </td>
-                    <td className="px-4 py-3">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
                       {member.roles.map((role) => t(roleLabelKey(role.name))).join(', ') || '—'}
-                    </td>
-                    <td className="px-4 py-3">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
                       {member.scopes
                         .map((scope) =>
                           scope.scopeType === 'tenant'
@@ -174,11 +188,11 @@ export default async function UsersAccessPage({
                               }),
                         )
                         .join(', ') || t('Users.noScope')}
-                    </td>
-                  </tr>
+                    </ShadcnTableCell>
+                  </ShadcnTableRow>
                 ))}
-              </tbody>
-            </table>
+              </ShadcnTableBody>
+            </ShadcnTable>
           </div>
         ) : (
           <p className="rounded-lg border bg-white p-5 text-slate-700">{t('Users.noMembers')}</p>
@@ -193,31 +207,37 @@ export default async function UsersAccessPage({
           <ErrorNotice code={invitationsResult.error.code} />
         ) : invitationsResult.data?.length ? (
           <div className="overflow-x-auto rounded-lg border bg-white">
-            <table className="w-full border-collapse text-left text-sm">
-              <caption className="sr-only">{t('Users.invitationsCaption')}</caption>
-              <thead className="border-b bg-slate-100 text-slate-700">
-                <tr>
-                  <th scope="col" className="px-4 py-3">
+            <ShadcnTable className="w-full border-collapse text-left text-sm">
+              <ShadcnTableCaption className="sr-only">
+                {t('Users.invitationsCaption')}
+              </ShadcnTableCaption>
+              <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+                <ShadcnTableRow>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Users.email')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Users.status')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Users.expires')}
-                  </th>
-                  <th scope="col" className="px-4 py-3">
+                  </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
                     <span className="sr-only">{t('Users.actions')}</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+                  </ShadcnTableHead>
+                </ShadcnTableRow>
+              </ShadcnTableHeader>
+              <ShadcnTableBody>
                 {invitationsResult.data.map((invitation) => (
-                  <tr key={invitation.id} className="border-b last:border-0">
-                    <td className="px-4 py-3">{invitation.email}</td>
-                    <td className="px-4 py-3">{t(statusLabelKey(invitation.status))}</td>
-                    <td className="px-4 py-3">{formatDate(invitation.expiresAt, locale)}</td>
-                    <td className="px-4 py-3 text-right">
+                  <ShadcnTableRow key={invitation.id} className="border-b last:border-0">
+                    <ShadcnTableCell className="px-4 py-3">{invitation.email}</ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
+                      {t(statusLabelKey(invitation.status))}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
+                      {formatDate(invitation.expiresAt, locale)}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3 text-right">
                       {invitation.status === 'pending' ? (
                         <form action={revokeInvitationAction}>
                           <input type="hidden" name="invitationId" value={invitation.id} />
@@ -228,11 +248,11 @@ export default async function UsersAccessPage({
                           </ConfirmSubmitButton>
                         </form>
                       ) : null}
-                    </td>
-                  </tr>
+                    </ShadcnTableCell>
+                  </ShadcnTableRow>
                 ))}
-              </tbody>
-            </table>
+              </ShadcnTableBody>
+            </ShadcnTable>
           </div>
         ) : (
           <p className="rounded-lg border bg-white p-5 text-slate-700">

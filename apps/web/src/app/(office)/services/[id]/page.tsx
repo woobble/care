@@ -1,3 +1,16 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+  TableCaption as ShadcnTableCaption,
+} from '@care/ui';
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -128,7 +141,7 @@ export default async function ServiceDetailPage({
 
       <section className="grid gap-5 rounded-lg border bg-white p-5 shadow-sm">
         {canUpdate ? (
-          <form action={updateServiceAction} className="grid gap-5">
+          <RHFActionForm action={updateServiceAction} className="grid gap-5">
             <input type="hidden" name="id" value={service.id} />
             <h2 className="text-xl font-semibold">{t('Services.detail.definition')}</h2>
             <div className="grid gap-4 md:grid-cols-2">
@@ -221,7 +234,7 @@ export default async function ServiceDetailPage({
               />
               <label className="grid gap-2 md:col-span-2">
                 <Label htmlFor="description">{t('Services.form.descriptionOptional')}</Label>
-                <textarea
+                <Textarea
                   id="description"
                   name="description"
                   className="min-h-24 rounded-md border px-3 py-2"
@@ -231,7 +244,7 @@ export default async function ServiceDetailPage({
               </label>
             </div>
             <Button type="submit">{t('Common.actions.save')}</Button>
-          </form>
+          </RHFActionForm>
         ) : (
           <div className="grid gap-3">
             <h2 className="text-xl font-semibold">{t('Services.detail.definition')}</h2>
@@ -312,27 +325,29 @@ export default async function ServiceDetailPage({
         <form method="get" className="grid gap-3 rounded-md border p-4 md:grid-cols-4">
           <label className="grid gap-2">
             <Label htmlFor="priceOrganizationId">{t('Common.fields.organization')}</Label>
-            <select
+            <NativeSelect
               id="priceOrganizationId"
               name="priceOrganizationId"
-              className="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-white px-3"
               defaultValue={priceOrganizationId ?? ''}
               required
+              className="w-full"
             >
               {organizations.map((organization) => (
                 <option key={organization.id} value={organization.id}>
                   {organization.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           <label className="grid gap-2">
             <Label htmlFor="priceFacilityId">{t('Common.fields.facility')}</Label>
-            <select
+            <NativeSelect
               id="priceFacilityId"
               name="priceFacilityId"
-              className="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-white px-3"
               defaultValue={priceFacilityId ?? ''}
+              className="w-full"
             >
               <option value="">{t('Services.pricing.organizationDefault')}</option>
               {facilities.map((facility) => (
@@ -340,7 +355,7 @@ export default async function ServiceDetailPage({
                   {facility.organizationName} — {facility.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           <Field
             id="priceDate"
@@ -384,33 +399,35 @@ export default async function ServiceDetailPage({
           <p className="text-sm text-slate-600">{t('Services.pricing.noneForDate')}</p>
         )}
         {canManagePricing ? (
-          <form action={recordServicePriceAction} className="grid gap-4 border-t pt-4">
+          <RHFActionForm action={recordServicePriceAction} className="grid gap-4 border-t pt-4">
             <input type="hidden" name="serviceId" value={service.id} />
             <h3 className="font-semibold">{t('Services.pricing.addTitle')}</h3>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="grid gap-2">
                 <Label htmlFor="newPriceOrganizationId">{t('Common.fields.organization')}</Label>
-                <select
+                <NativeSelect
                   id="newPriceOrganizationId"
                   name="organizationId"
-                  className="h-10 rounded-md border bg-white px-3"
+                  selectClassName="h-10 rounded-md border bg-white px-3"
                   defaultValue={priceOrganizationId ?? ''}
                   required
+                  className="w-full"
                 >
                   {organizations.map((organization) => (
                     <option key={organization.id} value={organization.id}>
                       {organization.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               <label className="grid gap-2">
                 <Label htmlFor="newPriceFacilityId">{t('Common.fields.facility')}</Label>
-                <select
+                <NativeSelect
                   id="newPriceFacilityId"
                   name="facilityId"
-                  className="h-10 rounded-md border bg-white px-3"
+                  selectClassName="h-10 rounded-md border bg-white px-3"
                   defaultValue=""
+                  className="w-full"
                 >
                   <option value="">{t('Services.pricing.organizationDefault')}</option>
                   {facilities.map((facility) => (
@@ -418,7 +435,7 @@ export default async function ServiceDetailPage({
                       {facility.organizationName} — {facility.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               <Field
                 id="price"
@@ -430,17 +447,18 @@ export default async function ServiceDetailPage({
               />
               <label className="grid gap-2">
                 <Label htmlFor="pricingUnit">{t('Services.pricing.unit')}</Label>
-                <select
+                <NativeSelect
                   id="pricingUnit"
                   name="pricingUnit"
-                  className="h-10 rounded-md border bg-white px-3"
+                  selectClassName="h-10 rounded-md border bg-white px-3"
                   required
+                  className="w-full"
                 >
                   <option value="hour">{t('Services.pricing.units.hour')}</option>
                   <option value="minute">{t('Services.pricing.units.minute')}</option>
                   <option value="visit">{t('Services.pricing.units.visit')}</option>
                   <option value="fixed">{t('Services.pricing.units.fixed')}</option>
-                </select>
+                </NativeSelect>
               </label>
               <Field
                 id="priceValidFrom"
@@ -465,7 +483,7 @@ export default async function ServiceDetailPage({
             >
               {t('Services.pricing.record')}
             </Button>
-          </form>
+          </RHFActionForm>
         ) : null}
       </section>
 
@@ -485,7 +503,7 @@ export default async function ServiceDetailPage({
           </p>
         ) : null}
         {canManageAvailability ? (
-          <form action={setServiceAvailabilityAction} className="grid gap-4">
+          <RHFActionForm action={setServiceAvailabilityAction} className="grid gap-4">
             <input type="hidden" name="id" value={service.id} />
             <div className="grid gap-4 md:grid-cols-2">
               <Field
@@ -506,8 +524,7 @@ export default async function ServiceDetailPage({
               {organizations.length ? (
                 organizations.map((organization) => (
                   <label key={organization.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
+                    <ShadcnCheckbox
                       name="organizationIds"
                       value={organization.id}
                       defaultChecked={selectedOrganizations.has(organization.id)}
@@ -524,8 +541,7 @@ export default async function ServiceDetailPage({
               {facilities.length ? (
                 facilities.map((facility) => (
                   <label key={facility.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
+                    <ShadcnCheckbox
                       name="facilityIds"
                       value={facility.id}
                       defaultChecked={selectedFacilities.has(facility.id)}
@@ -542,46 +558,56 @@ export default async function ServiceDetailPage({
                 {t('Services.detail.saveAvailability')}
               </Button>
             </div>
-          </form>
+          </RHFActionForm>
         ) : (
           <p className="text-sm text-slate-600">{t('Services.detail.readAvailability')}</p>
         )}
         {activeAvailability.length ? (
           <div className="overflow-x-auto rounded-md border">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">{t('Services.detail.currentAssignments')}</caption>
-              <thead className="border-b bg-slate-100">
-                <tr>
-                  <th className="px-3 py-2">{t('Services.detail.area')}</th>
-                  <th className="px-3 py-2">{t('Services.form.validFrom')}</th>
-                  <th className="px-3 py-2">{t('Services.form.validUntil')}</th>
-                </tr>
-              </thead>
-              <tbody>
+            <ShadcnTable className="w-full text-left text-sm">
+              <ShadcnTableCaption className="sr-only">
+                {t('Services.detail.currentAssignments')}
+              </ShadcnTableCaption>
+              <ShadcnTableHeader className="border-b bg-slate-100">
+                <ShadcnTableRow>
+                  <ShadcnTableHead className="px-3 py-2">
+                    {t('Services.detail.area')}
+                  </ShadcnTableHead>
+                  <ShadcnTableHead className="px-3 py-2">
+                    {t('Services.form.validFrom')}
+                  </ShadcnTableHead>
+                  <ShadcnTableHead className="px-3 py-2">
+                    {t('Services.form.validUntil')}
+                  </ShadcnTableHead>
+                </ShadcnTableRow>
+              </ShadcnTableHeader>
+              <ShadcnTableBody>
                 {activeAvailability.map((item) => {
                   const facility = facilities.find((candidate) => candidate.id === item.facilityId);
                   const organization = organizations.find(
                     (candidate) => candidate.id === item.organizationId,
                   );
                   return (
-                    <tr key={item.id} className="border-b last:border-0">
-                      <td className="px-3 py-2">
+                    <ShadcnTableRow key={item.id} className="border-b last:border-0">
+                      <ShadcnTableCell className="px-3 py-2">
                         {item.facilityId
                           ? (facility?.name ?? t('Services.detail.defaultFacility'))
                           : (organization?.name ?? t('Services.detail.defaultOrganization'))}
                         {item.facilityId
                           ? ` (${organization?.name ?? ''})`
                           : ` — ${t('Services.detail.allFacilities')}`}
-                      </td>
-                      <td className="px-3 py-2">{formatDate(item.validFrom, locale) ?? '—'}</td>
-                      <td className="px-3 py-2">
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="px-3 py-2">
+                        {formatDate(item.validFrom, locale) ?? '—'}
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="px-3 py-2">
                         {formatDate(item.validUntil, locale) ?? t('Services.openEnded')}
-                      </td>
-                    </tr>
+                      </ShadcnTableCell>
+                    </ShadcnTableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </ShadcnTableBody>
+            </ShadcnTable>
           </div>
         ) : (
           <p className="text-sm text-slate-600">{t('Services.detail.noAvailability')}</p>
@@ -647,15 +673,16 @@ function SelectField({
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <select
+      <NativeSelect
         id={id}
         name={name}
-        className="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-white px-3"
         defaultValue={defaultValue}
         required={required}
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </div>
   );
 }

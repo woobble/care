@@ -1,3 +1,13 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -227,44 +237,52 @@ export default async function BillingInvoiceDetailPage({
         </h2>
         {invoice.lines.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[52rem] text-left text-sm">
-              <thead>
-                <tr className="border-b text-slate-600">
-                  <th className="p-2">{t('service')}</th>
-                  <th className="p-2">{t('serviceDate')}</th>
-                  <th className="p-2">{t('quantity')}</th>
-                  <th className="p-2">{t('unitPrice')}</th>
-                  <th className="p-2">{t('fundingSource')}</th>
-                  <th className="p-2">{t('taxTreatment')}</th>
-                  <th className="p-2">{t('amount')}</th>
-                </tr>
-              </thead>
-              <tbody>
+            <ShadcnTable className="w-full min-w-[52rem] text-left text-sm">
+              <ShadcnTableHeader>
+                <ShadcnTableRow className="border-b text-slate-600">
+                  <ShadcnTableHead className="p-2">{t('service')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('serviceDate')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('quantity')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('unitPrice')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('fundingSource')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('taxTreatment')}</ShadcnTableHead>
+                  <ShadcnTableHead className="p-2">{t('amount')}</ShadcnTableHead>
+                </ShadcnTableRow>
+              </ShadcnTableHeader>
+              <ShadcnTableBody>
                 {invoice.lines.map((line) => (
-                  <tr key={line.id} className="border-b last:border-0">
-                    <td className="p-2">
+                  <ShadcnTableRow key={line.id} className="border-b last:border-0">
+                    <ShadcnTableCell className="p-2">
                       {line.serviceNameSnapshot}
                       <span className="block text-xs text-slate-600">
                         {line.serviceCodeSnapshot}
                       </span>
-                    </td>
-                    <td className="p-2">{formatDate(line.serviceDate, locale)}</td>
-                    <td className="p-2">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
+                      {formatDate(line.serviceDate, locale)}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
                       {line.quantity} {t(`unit.${line.unit}`)}
-                    </td>
-                    <td className="p-2">{formatCents(line.unitPriceCents, locale)}</td>
-                    <td className="p-2">{line.fundingLabelSnapshot ?? t('selfPay')}</td>
-                    <td className="p-2">
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
+                      {formatCents(line.unitPriceCents, locale)}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
+                      {line.fundingLabelSnapshot ?? t('selfPay')}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2">
                       {t(`taxTreatments.${line.taxTreatment}`)}
                       {line.taxRateBasisPoints
                         ? ` · ${(line.taxRateBasisPoints / 100).toFixed(2)}%`
                         : ''}
-                    </td>
-                    <td className="p-2 font-medium">{formatCents(line.grossCents, locale)}</td>
-                  </tr>
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="p-2 font-medium">
+                      {formatCents(line.grossCents, locale)}
+                    </ShadcnTableCell>
+                  </ShadcnTableRow>
                 ))}
-              </tbody>
-            </table>
+              </ShadcnTableBody>
+            </ShadcnTable>
           </div>
         ) : (
           <p className="text-sm text-slate-700">{t('noInvoiceLines')}</p>
@@ -284,7 +302,7 @@ export default async function BillingInvoiceDetailPage({
           </div>
           {canEdit ? (
             <div className="grid gap-4">
-              <form action={updateDraftInvoiceAction} className="grid gap-4">
+              <RHFActionForm action={updateDraftInvoiceAction} className="grid gap-4">
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <input type="hidden" name="expectedVersion" value={invoice.version} />
                 <input type="hidden" name="organizationId" value={invoice.organizationId} />
@@ -314,8 +332,7 @@ export default async function BillingInvoiceDetailPage({
                       </div>
                       <div className="grid gap-2">
                         <label className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
+                          <ShadcnCheckbox
                             name="selectedLine"
                             value={`${line.performedServiceId}|${line.fundingAllocationId ?? ''}`}
                             defaultChecked
@@ -352,8 +369,7 @@ export default async function BillingInvoiceDetailPage({
                       </div>
                       <div className="grid gap-2">
                         <label className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
+                          <ShadcnCheckbox
                             name="selectedLine"
                             value={`${candidate.performedServiceId}|${candidate.fundingAllocationId ?? ''}`}
                           />
@@ -381,7 +397,7 @@ export default async function BillingInvoiceDetailPage({
                 <Button type="submit" className="w-fit">
                   {t('saveDraft')}
                 </Button>
-              </form>
+              </RHFActionForm>
               <div className="flex flex-wrap gap-2">
                 {canIssue ? (
                   <form action={issueInvoiceAction}>
@@ -450,7 +466,7 @@ export default async function BillingInvoiceDetailPage({
               <h2 id="create-correction-title" className="text-xl font-semibold">
                 {t('createCorrection')}
               </h2>
-              <form action={correctInvoiceAction} className="grid gap-3">
+              <RHFActionForm action={correctInvoiceAction} className="grid gap-3">
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <Field
                   id="correction-reason"
@@ -469,7 +485,7 @@ export default async function BillingInvoiceDetailPage({
                       </p>
                       <div className="grid gap-2">
                         <label className="flex items-center gap-2 text-sm">
-                          <input type="checkbox" name="selectedCorrectionLine" value={line.id} />
+                          <ShadcnCheckbox name="selectedCorrectionLine" value={line.id} />
                           {t('correctLine')}
                         </label>
                         <Field
@@ -493,7 +509,7 @@ export default async function BillingInvoiceDetailPage({
                 <Button type="submit" className="w-fit">
                   {t('createCorrection')}
                 </Button>
-              </form>
+              </RHFActionForm>
             </section>
           ) : null}
           <section

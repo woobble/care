@@ -1,3 +1,5 @@
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
@@ -68,7 +70,7 @@ export default async function AdmissionTemplatesPage({
       ) : null}
       {templates.length ? (
         templates.map((template) => (
-          <form
+          <RHFActionForm
             key={template.id}
             action={updateAdmissionTemplateAction}
             className="grid gap-4 rounded-lg border bg-white p-5"
@@ -181,7 +183,7 @@ export default async function AdmissionTemplatesPage({
             <Button type="submit" className="justify-self-start">
               {t('saveTemplate')}
             </Button>
-          </form>
+          </RHFActionForm>
         ))
       ) : (
         <p className="rounded-lg border bg-white p-5 text-slate-700">{t('noTemplates')}</p>
@@ -237,13 +239,14 @@ function SelectField({
   return (
     <label className="grid gap-1 text-sm font-medium">
       {label}
-      <select
-        className="h-10 rounded-md border bg-white px-3 font-normal"
+      <NativeSelect
+        selectClassName="h-10 rounded-md border bg-white px-3 font-normal"
         name={name}
         defaultValue={value}
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

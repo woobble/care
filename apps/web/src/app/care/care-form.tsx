@@ -1,14 +1,9 @@
 'use client';
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type FormHTMLAttributes,
-  type ReactNode,
-} from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { Button } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import {
   careDraftPrefix,
   clearCareDrafts,
@@ -18,7 +13,7 @@ import {
 } from './drafts';
 import { useCareDraftScope } from './draft-scope';
 
-type ServerAction = NonNullable<FormHTMLAttributes<HTMLFormElement>['action']>;
+type ServerAction = (formData: FormData) => void | Promise<void>;
 type DraftOptions = {
   visitId: string;
   formId: string;
@@ -53,7 +48,7 @@ export function CareForm({
 }) {
   const t = useTranslations('Caregiver.drafts');
   const scope = useCareDraftScope();
-  const formRef = useRef<HTMLFormElement>(null);
+  const pendingFormRef = useRef<HTMLFormElement>(null);
   const submissionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draftState, setDraftState] = useState<DraftState>({ type: 'none' });
   const [formState, setFormState] = useState<'idle' | 'offline' | 'submitting' | 'uncertain'>(
@@ -134,8 +129,8 @@ export function CareForm({
     }
   }
 
-  function restore(record: CareDraftRecord) {
-    const form = formRef.current;
+  function restore(record: CareDraftRecord, trigger: HTMLButtonElement) {
+    const form = trigger.closest('form');
     if (!form || !draft) return;
     for (const name of draft.fields) {
       const value = record.values[name];
@@ -153,6 +148,8 @@ export function CareForm({
         } else {
           control.value = value;
         }
+        control.dispatchEvent(new Event('input', { bubbles: true }));
+        control.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }
     setDraftState({ type: 'saved', savedAt: record.savedAt });
@@ -169,21 +166,20 @@ export function CareForm({
     }
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
-    if (event.defaultPrevented) return;
+  function beforeSubmit(form: HTMLFormElement) {
     if (!navigator.onLine) {
-      event.preventDefault();
       setFormState('offline');
-      return;
+      return false;
     }
+    pendingFormRef.current = form;
     setFormState('submitting');
-    for (const button of event.currentTarget.querySelectorAll<HTMLButtonElement>(
+    for (const button of form.querySelectorAll<HTMLButtonElement>(
       'button[type="submit"],input[type="submit"]',
     )) {
       button.disabled = true;
     }
     if (prefix && draftKey) {
-      persist(event.currentTarget);
+      persist(form);
       try {
         window.sessionStorage.setItem(submittedMarkerPrefix + prefix, '1');
       } catch {
@@ -192,12 +188,13 @@ export function CareForm({
     }
     submissionTimer.current = setTimeout(() => {
       setFormState('uncertain');
-      for (const button of formRef.current?.querySelectorAll<HTMLButtonElement>(
+      for (const button of pendingFormRef.current?.querySelectorAll<HTMLButtonElement>(
         'button[type="submit"],input[type="submit"]',
       ) ?? []) {
         button.disabled = false;
       }
     }, 15_000);
+    return true;
   }
 
   const statusText =
@@ -216,14 +213,12 @@ export function CareForm({
                 : null;
 
   return (
-    <form
-      ref={formRef}
+    <RHFActionForm
       action={action}
       className={className}
-      aria-busy={formState === 'submitting'}
       onInput={(event) => persist(event.currentTarget)}
       onChange={(event) => persist(event.currentTarget)}
-      onSubmit={submit}
+      beforeAction={beforeSubmit}
     >
       {draftState.type === 'recoverable' ? (
         <aside className="grid gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm">
@@ -236,33 +231,25 @@ export function CareForm({
             })}
           </p>
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
-              onClick={() => restore(draftState.record)}
-              className="min-h-11 rounded-md border border-blue-800 px-3 font-semibold text-blue-900"
+              onClick={(event) => restore(draftState.record, event.currentTarget)}
+              variant="outline"
             >
               {t('restore')}
-            </button>
-            <button
-              type="button"
-              onClick={discardDraft}
-              className="min-h-11 rounded-md border px-3 font-medium"
-            >
+            </Button>
+            <Button type="button" onClick={discardDraft} variant="secondary">
               {t('discard')}
-            </button>
+            </Button>
           </div>
         </aside>
       ) : null}
       {draftState.type === 'stale' ? (
         <aside className="grid gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
           <p>{t('stale', { count: draftState.count })}</p>
-          <button
-            type="button"
-            onClick={discardDraft}
-            className="min-h-11 w-fit rounded-md border px-3 font-medium"
-          >
+          <Button type="button" onClick={discardDraft} variant="secondary">
             {t('discard')}
-          </button>
+          </Button>
         </aside>
       ) : null}
       {statusText ? (
@@ -276,6 +263,6 @@ export function CareForm({
         </p>
       ) : null}
       {children}
-    </form>
+    </RHFActionForm>
   );
 }

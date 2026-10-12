@@ -1,3 +1,7 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -360,7 +364,7 @@ export default async function EmployeeDetailPage({
             </p>
           ) : null}
           {canManageSchedule && employee.status === 'active' ? (
-            <form action={saveEmployeeAvailabilityAction} className="grid gap-4">
+            <RHFActionForm action={saveEmployeeAvailabilityAction} className="grid gap-4">
               <input type="hidden" name="employeeId" value={employee.id} />
               <input type="hidden" name="expectedVersion" value={availabilityVersion} />
               <div className="grid gap-4 md:grid-cols-3">
@@ -430,7 +434,7 @@ export default async function EmployeeDetailPage({
               <Button type="submit" className="w-fit">
                 {t('Employees.detail.saveAvailability')}
               </Button>
-            </form>
+            </RHFActionForm>
           ) : null}
 
           <div className="grid gap-3 border-t pt-4">
@@ -446,15 +450,17 @@ export default async function EmployeeDetailPage({
               </p>
             ) : null}
             {canManageSchedule && employee.status === 'active' ? (
-              <form action={saveEmployeeSchedulingPreferencesAction} className="grid gap-4">
+              <RHFActionForm
+                action={saveEmployeeSchedulingPreferencesAction}
+                className="grid gap-4"
+              >
                 <input type="hidden" name="employeeId" value={employee.id} />
                 <fieldset className="grid gap-2">
                   <legend className="font-medium">{t('Employees.detail.preferredWeekdays')}</legend>
                   <div className="flex flex-wrap gap-x-4 gap-y-2">
                     {weekdays.map(({ weekday, label }) => (
                       <label key={weekday} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
+                        <ShadcnCheckbox
                           name="preferredWeekdays"
                           value={weekday}
                           defaultChecked={schedulingPreferences?.preferredWeekdays.includes(
@@ -524,7 +530,7 @@ export default async function EmployeeDetailPage({
                 <Button type="submit" className="w-fit">
                   {t('Employees.detail.saveSchedulingPreferences')}
                 </Button>
-              </form>
+              </RHFActionForm>
             ) : null}
           </div>
 
@@ -561,7 +567,7 @@ export default async function EmployeeDetailPage({
               </p>
             )}
             {canManageSchedule && employee.status === 'active' && availability ? (
-              <form
+              <RHFActionForm
                 action={createAvailabilityExceptionAction}
                 className="grid gap-3 md:grid-cols-4"
               >
@@ -603,7 +609,7 @@ export default async function EmployeeDetailPage({
                 <Button type="submit" className="w-fit md:col-span-4">
                   {t('Employees.detail.addAvailabilityException')}
                 </Button>
-              </form>
+              </RHFActionForm>
             ) : null}
           </div>
 
@@ -651,7 +657,10 @@ export default async function EmployeeDetailPage({
               <p className="text-sm text-slate-600">{t('Employees.detail.noAbsences')}</p>
             )}
             {canManageSchedule && employee.status === 'active' ? (
-              <form action={createEmployeeAbsenceAction} className="grid gap-3 md:grid-cols-2">
+              <RHFActionForm
+                action={createEmployeeAbsenceAction}
+                className="grid gap-3 md:grid-cols-2"
+              >
                 <input type="hidden" name="employeeId" value={employee.id} />
                 <input type="hidden" name="timezone" value={availabilityTimezone} />
                 <SelectField
@@ -686,7 +695,7 @@ export default async function EmployeeDetailPage({
                 />
                 <div className="grid gap-2 md:col-span-2">
                   <Label htmlFor="absence-note">{t('Employees.detail.protectedAbsenceNote')}</Label>
-                  <textarea
+                  <Textarea
                     id="absence-note"
                     name="note"
                     maxLength={1000}
@@ -696,7 +705,7 @@ export default async function EmployeeDetailPage({
                 <Button type="submit" className="w-fit">
                   {t('Employees.detail.recordAbsence')}
                 </Button>
-              </form>
+              </RHFActionForm>
             ) : null}
           </div>
           {impactedVisits.length ? (
@@ -731,7 +740,7 @@ export default async function EmployeeDetailPage({
           </h2>
           <p className="text-sm text-slate-600">{t('Employees.detail.overviewDescription')}</p>
         </div>
-        <form action={updateEmployeeAction} className="grid gap-4 md:grid-cols-2">
+        <RHFActionForm action={updateEmployeeAction} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="id" value={employee.id} />
           <Field
             id="firstName"
@@ -815,7 +824,7 @@ export default async function EmployeeDetailPage({
               {t('Employees.detail.saveMasterData')}
             </Button>
           </div>
-        </form>
+        </RHFActionForm>
       </section>
 
       <section
@@ -869,16 +878,20 @@ export default async function EmployeeDetailPage({
                 <p className="text-sm text-slate-600">{t('Employees.detail.noFacility')}</p>
               )}
               {facilities.length ? (
-                <form action={assignFacilityAction} className="grid gap-3 rounded-md border p-3">
+                <RHFActionForm
+                  action={assignFacilityAction}
+                  className="grid gap-3 rounded-md border p-3"
+                >
                   <input type="hidden" name="employeeId" value={id} />
                   <div className="grid gap-2">
                     <Label htmlFor="facilityId">{t('Employees.detail.assignFacility')}</Label>
-                    <select
+                    <NativeSelect
                       id="facilityId"
                       name="facilityId"
-                      className="h-10 rounded-md border bg-white px-3"
+                      selectClassName="h-10 rounded-md border bg-white px-3"
                       required
                       defaultValue=""
+                      className="w-full"
                     >
                       <option value="" disabled>
                         {t('Employees.detail.selectFacility')}
@@ -888,11 +901,10 @@ export default async function EmployeeDetailPage({
                           {facility.name}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </div>
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="isPrimary" />{' '}
-                    {t('Employees.detail.setPrimaryFacility')}
+                    <ShadcnCheckbox name="isPrimary" /> {t('Employees.detail.setPrimaryFacility')}
                   </label>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field
@@ -911,7 +923,7 @@ export default async function EmployeeDetailPage({
                   <Button type="submit" disabled={!writable || employee.status !== 'active'}>
                     {t('Employees.detail.assignFacilityAction')}
                   </Button>
-                </form>
+                </RHFActionForm>
               ) : null}
             </div>
             <div className="grid content-start gap-3">
@@ -950,16 +962,20 @@ export default async function EmployeeDetailPage({
                 <p className="text-sm text-slate-600">{t('Employees.detail.noTeam')}</p>
               )}
               {teams.length ? (
-                <form action={assignTeamAction} className="grid gap-3 rounded-md border p-3">
+                <RHFActionForm
+                  action={assignTeamAction}
+                  className="grid gap-3 rounded-md border p-3"
+                >
                   <input type="hidden" name="employeeId" value={id} />
                   <div className="grid gap-2">
                     <Label htmlFor="teamId">{t('Employees.detail.assignTeam')}</Label>
-                    <select
+                    <NativeSelect
                       id="teamId"
                       name="teamId"
-                      className="h-10 rounded-md border bg-white px-3"
+                      selectClassName="h-10 rounded-md border bg-white px-3"
                       required
                       defaultValue=""
+                      className="w-full"
                     >
                       <option value="" disabled>
                         {t('Employees.detail.selectTeam')}
@@ -969,7 +985,7 @@ export default async function EmployeeDetailPage({
                           {team.name}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </div>
                   <Field
                     id="team-role"
@@ -994,7 +1010,7 @@ export default async function EmployeeDetailPage({
                   <Button type="submit" disabled={!writable || employee.status !== 'active'}>
                     {t('Employees.detail.assignTeamAction')}
                   </Button>
-                </form>
+                </RHFActionForm>
               ) : null}
             </div>
           </div>
@@ -1079,16 +1095,20 @@ export default async function EmployeeDetailPage({
           <p className="text-sm text-slate-600">{t('Employees.detail.noQualifications')}</p>
         )}
         {qualifications.length ? (
-          <form action={assignQualificationAction} className="grid gap-3 rounded-md border p-3">
+          <RHFActionForm
+            action={assignQualificationAction}
+            className="grid gap-3 rounded-md border p-3"
+          >
             <input type="hidden" name="employeeId" value={id} />
             <div className="grid gap-2">
               <Label htmlFor="qualificationId">{t('Employees.detail.addQualification')}</Label>
-              <select
+              <NativeSelect
                 id="qualificationId"
                 name="qualificationId"
-                className="h-10 rounded-md border bg-white px-3"
+                selectClassName="h-10 rounded-md border bg-white px-3"
                 required
                 defaultValue=""
+                className="w-full"
               >
                 <option value="" disabled>
                   {t('Employees.detail.selectQualification')}
@@ -1099,7 +1119,7 @@ export default async function EmployeeDetailPage({
                     {qualification.code ? ` (${qualification.code})` : ''}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <Field
@@ -1124,7 +1144,7 @@ export default async function EmployeeDetailPage({
             <Button type="submit" disabled={!writable}>
               {t('Employees.detail.saveQualification')}
             </Button>
-          </form>
+          </RHFActionForm>
         ) : (
           <p className="text-sm text-slate-600">
             <Link className="underline" href="/administration/qualifications">
@@ -1175,19 +1195,20 @@ export default async function EmployeeDetailPage({
           <p className="text-sm text-slate-600">{t('Employees.detail.noSkills')}</p>
         )}
         {skills.length ? (
-          <form
+          <RHFActionForm
             action={assignSkillAction}
             className="flex flex-wrap items-end gap-3 rounded-md border p-3"
           >
             <input type="hidden" name="employeeId" value={id} />
             <div className="grid gap-2">
               <Label htmlFor="skillId">{t('Employees.detail.addSkill')}</Label>
-              <select
+              <NativeSelect
                 id="skillId"
                 name="skillId"
-                className="h-10 rounded-md border bg-white px-3"
+                selectClassName="h-10 rounded-md border bg-white px-3"
                 required
                 defaultValue=""
+                className="w-full"
               >
                 <option value="" disabled>
                   {t('Employees.detail.selectSkill')}
@@ -1198,12 +1219,12 @@ export default async function EmployeeDetailPage({
                     {skill.code ? ` (${skill.code})` : ''}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             <Button type="submit" disabled={!writable}>
               {t('Employees.detail.assignSkill')}
             </Button>
-          </form>
+          </RHFActionForm>
         ) : (
           <p className="text-sm text-slate-600">
             <Link className="underline" href="/administration/qualifications">
@@ -1253,16 +1274,17 @@ export default async function EmployeeDetailPage({
             {t(errorMessageKey(linkableUsersResult.error.code))}
           </p>
         ) : linkableUsersResult.data?.length ? (
-          <form action={linkEmployeeUserAction} className="flex flex-wrap items-end gap-3">
+          <RHFActionForm action={linkEmployeeUserAction} className="flex flex-wrap items-end gap-3">
             <input type="hidden" name="employeeId" value={id} />
             <div className="grid gap-2">
               <Label htmlFor="userId">{t('Employees.detail.linkActiveUser')}</Label>
-              <select
+              <NativeSelect
                 id="userId"
                 name="userId"
-                className="h-10 rounded-md border bg-white px-3"
+                selectClassName="h-10 rounded-md border bg-white px-3"
                 required
                 defaultValue=""
+                className="w-full"
               >
                 <option value="" disabled>
                   {t('Employees.detail.selectUser')}
@@ -1273,12 +1295,12 @@ export default async function EmployeeDetailPage({
                     {user.email ? ` · ${user.email}` : ''}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             <Button type="submit" disabled={!writable}>
               {t('Employees.detail.linkUser')}
             </Button>
-          </form>
+          </RHFActionForm>
         ) : (
           <p className="text-sm text-slate-600">{t('Employees.detail.noLinkableUser')}</p>
         )}
@@ -1344,15 +1366,16 @@ function SelectField({
   return (
     <div className="grid gap-2">
       <Label htmlFor={name}>{label}</Label>
-      <select
+      <NativeSelect
         id={name}
         name={name}
         defaultValue={defaultValue}
         required={required}
-        className="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-white px-3"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </div>
   );
 }

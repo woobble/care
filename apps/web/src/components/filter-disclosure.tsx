@@ -1,18 +1,19 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { Button, Collapsible, CollapsibleContent, CollapsibleTrigger } from '@care/ui';
 
 export function FilterDisclosure({
   title,
   children,
 }: Readonly<{ title: string; children: ReactNode }>) {
-  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const [open, setOpen] = useState(true);
 
   useEffect(() => {
     const desktop = window.matchMedia('(min-width: 768px)');
     const syncDisclosureToViewport = () => {
-      if (detailsRef.current) detailsRef.current.open = desktop.matches;
+      setOpen(desktop.matches);
     };
     syncDisclosureToViewport();
     desktop.addEventListener('change', syncDisclosureToViewport);
@@ -20,19 +21,25 @@ export function FilterDisclosure({
   }, []);
 
   return (
-    <details
-      ref={detailsRef}
-      open
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
       className="group min-w-0 rounded-xl border border-border bg-card"
     >
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2 text-sm font-semibold md:hidden [&::-webkit-details-marker]:hidden">
-        {title}
-        <ChevronDown
-          className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none"
-          aria-hidden="true"
-        />
-      </summary>
-      <div className="p-4">{children}</div>
-    </details>
+      <CollapsibleTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          className="group flex min-h-11 w-full justify-between rounded-none px-4 py-2 text-left text-sm font-semibold md:hidden"
+        >
+          {title}
+          <ChevronDown
+            className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+            aria-hidden="true"
+          />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="p-4">{children}</CollapsibleContent>
+    </Collapsible>
   );
 }

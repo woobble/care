@@ -1,8 +1,19 @@
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { headers } from 'next/headers';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { auth } from '@app/web/auth';
 import { getApiClient } from '@app/web/lib/api';
-import { Button, Label } from '@care/ui';
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  Label,
+} from '@care/ui';
 import { HeartHandshake, ShieldCheck } from 'lucide-react';
 import { LanguageSwitcher } from '@app/web/components/language-switcher';
 import { SignOutForm } from '@app/web/components/sign-out-form';
@@ -36,22 +47,23 @@ export default async function TenantSelectionPage({
             </span>
             <span className="text-xl font-semibold tracking-tight">Care Platform</span>
           </div>
-          <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-xl shadow-foreground/5">
+          <Card className="overflow-hidden rounded-3xl border-border py-0 shadow-xl shadow-foreground/5">
             <div className="h-1 bg-primary" />
-            <div className="grid gap-7 p-6 sm:p-8">
-              <div className="grid gap-2">
-                <h1 className="text-2xl font-semibold tracking-tight">{authT('signIn')}</h1>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {authT('signInDescription')}
-                </p>
-              </div>
+            <CardHeader className="grid gap-2 px-6 pt-6 sm:px-8 sm:pt-8">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {authT('signIn')}
+              </h1>
+              <CardDescription className="text-sm leading-relaxed">
+                {authT('signInDescription')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-7 px-6 pb-6 sm:px-8 sm:pb-8">
               {params.error === 'auth' ? (
-                <p
-                  role="alert"
-                  className="rounded-xl border border-destructive/25 bg-destructive/10 p-4 text-sm text-destructive"
-                >
-                  {authT('sessionExpired')}
-                </p>
+                <Alert className="rounded-xl border border-destructive/25 bg-destructive/10 p-4 text-sm text-destructive">
+                  <AlertDescription className="text-inherit">
+                    {authT('sessionExpired')}
+                  </AlertDescription>
+                </Alert>
               ) : null}
               <SignInButton />
               <div className="flex items-start gap-3 border-t border-border pt-5">
@@ -62,8 +74,8 @@ export default async function TenantSelectionPage({
                   {authT('credentialsNote')}
                 </p>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </section>
       </main>
     );
@@ -102,30 +114,31 @@ export default async function TenantSelectionPage({
           {tenantT('loadFailed')}
         </p>
       ) : tenants?.length ? (
-        <form
+        <RHFActionForm
           action={selectTenantAction}
           className="grid gap-3 rounded-lg border bg-white p-5 shadow-sm"
         >
           <Label htmlFor="tenantId">{tenantT('label')}</Label>
-          <select
+          <NativeSelect
             id="tenantId"
             name="tenantId"
             required
-            className="min-h-11 rounded-md border border-slate-300 bg-white px-3"
+            selectClassName="min-h-11 rounded-md border border-slate-300 bg-white px-3"
+            className="w-full"
           >
             {tenants.map((tenant) => (
               <option key={tenant.id} value={tenant.id}>
                 {tenant.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           {params.error ? (
             <p role="alert" className="text-sm text-red-800">
               {tenantT('invalidSelection')}
             </p>
           ) : null}
           <Button type="submit">{tenantT('continue')}</Button>
-        </form>
+        </RHFActionForm>
       ) : (
         <p className="rounded-md border bg-white p-5 text-slate-700">{tenantT('noAccess')}</p>
       )}

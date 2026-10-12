@@ -1,3 +1,6 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -603,11 +606,12 @@ export default async function ClientDetailPage({
               >
                 <div className="grid gap-1">
                   <Label htmlFor="document-type-filter">{t('Documents.filterType')}</Label>
-                  <select
+                  <NativeSelect
                     id="document-type-filter"
                     name="documentType"
                     defaultValue={selectedDocumentType ?? ''}
-                    className="h-10 rounded-md border bg-white px-3"
+                    selectClassName="h-10 rounded-md border bg-white px-3"
+                    className="w-full"
                   >
                     <option value="">{t('Documents.allDocumentTypes')}</option>
                     {clientDocumentTypes.map((type) => (
@@ -615,7 +619,7 @@ export default async function ClientDetailPage({
                         {t(`Documents.documentTypes.${type}`)}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <Button type="submit" variant="secondary">
                   {t('Documents.applyFilter')}
@@ -878,7 +882,7 @@ export default async function ClientDetailPage({
                 <summary className="cursor-pointer font-semibold">
                   {t('Clients.detail.editPersonalData')}
                 </summary>
-                <form action={updateClientAction} className="mt-4 grid gap-4">
+                <RHFActionForm action={updateClientAction} className="mt-4 grid gap-4">
                   <input type="hidden" name="id" value={client.id} />
                   <div className="grid gap-4 md:grid-cols-2">
                     <TextField
@@ -963,7 +967,7 @@ export default async function ClientDetailPage({
                   <Button type="submit" className="w-fit">
                     {t('Clients.detail.savePersonalData')}
                   </Button>
-                </form>
+                </RHFActionForm>
               </details>
             ) : null}
 
@@ -980,7 +984,7 @@ export default async function ClientDetailPage({
                   : t('Clients.detail.legacyUnassigned')}
               </p>
               {canUpdateClient ? (
-                <form
+                <RHFActionForm
                   action={changeClientProviderContextAction}
                   className="mt-4 grid gap-4 md:grid-cols-2"
                 >
@@ -1020,7 +1024,7 @@ export default async function ClientDetailPage({
                   <Button type="submit" className="w-fit md:col-span-2">
                     {t('Clients.detail.saveAssignment')}
                   </Button>
-                </form>
+                </RHFActionForm>
               ) : null}
             </details>
 
@@ -1058,7 +1062,7 @@ export default async function ClientDetailPage({
                     {address.isPrimary ? ` · ${t('Clients.detail.primary')}` : ''}
                   </h3>
                   {canUpdateClient ? (
-                    <form action={updateClientAddressAction} className="grid gap-4">
+                    <RHFActionForm action={updateClientAddressAction} className="grid gap-4">
                       <input type="hidden" name="id" value={client.id} />
                       <input type="hidden" name="addressId" value={address.id} />
                       <div className="grid gap-4 md:grid-cols-3">
@@ -1129,11 +1133,7 @@ export default async function ClientDetailPage({
                         />
                       </div>
                       <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          name="isPrimary"
-                          defaultChecked={address.isPrimary}
-                        />{' '}
+                        <ShadcnCheckbox name="isPrimary" defaultChecked={address.isPrimary} />{' '}
                         {t('Clients.detail.primaryAddressCheckbox')}
                       </label>
                       <div className="flex gap-2">
@@ -1144,7 +1144,7 @@ export default async function ClientDetailPage({
                           {t('Clients.detail.removeAddress')}
                         </Button>
                       </div>
-                    </form>
+                    </RHFActionForm>
                   ) : (
                     <p className="text-sm text-slate-700">{formatAddress(address)}</p>
                   )}
@@ -1182,7 +1182,7 @@ export default async function ClientDetailPage({
                     </p>
                   ) : null}
                   {canUpdateClient ? (
-                    <form action={updateClientContactAction} className="mt-4 grid gap-4">
+                    <RHFActionForm action={updateClientContactAction} className="mt-4 grid gap-4">
                       <input type="hidden" name="id" value={client.id} />
                       <input type="hidden" name="contactId" value={contact.id} />
                       <div className="grid gap-4 md:grid-cols-2">
@@ -1248,7 +1248,7 @@ export default async function ClientDetailPage({
                       >
                         {t('Clients.detail.removeContact')}
                       </Button>
-                    </form>
+                    </RHFActionForm>
                   ) : null}
                 </article>
               ))}
@@ -1258,7 +1258,7 @@ export default async function ClientDetailPage({
                 <summary className="cursor-pointer font-semibold">
                   {t('Clients.detail.addContact')}
                 </summary>
-                <form action={addClientContactAction} className="mt-4 grid gap-4">
+                <RHFActionForm action={addClientContactAction} className="mt-4 grid gap-4">
                   <input type="hidden" name="id" value={client.id} />
                   <div className="grid gap-4 md:grid-cols-2">
                     <TextField
@@ -1349,7 +1349,7 @@ export default async function ClientDetailPage({
                   <Button type="submit" className="w-fit">
                     {t('Clients.detail.addContact')}
                   </Button>
-                </form>
+                </RHFActionForm>
               </details>
             ) : null}
           </section>
@@ -1370,7 +1370,7 @@ export default async function ClientDetailPage({
                     {insurance.isPrimary ? ` · ${t('Clients.detail.primary')}` : ''}
                   </h3>
                   {canUpdateClient ? (
-                    <form action={updateClientInsuranceAction} className="mt-4 grid gap-4">
+                    <RHFActionForm action={updateClientInsuranceAction} className="mt-4 grid gap-4">
                       <input type="hidden" name="id" value={client.id} />
                       <input type="hidden" name="insuranceId" value={insurance.id} />
                       <div className="grid gap-4 md:grid-cols-3">
@@ -1417,11 +1417,7 @@ export default async function ClientDetailPage({
                         />
                       </div>
                       <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          name="isPrimary"
-                          defaultChecked={insurance.isPrimary}
-                        />{' '}
+                        <ShadcnCheckbox name="isPrimary" defaultChecked={insurance.isPrimary} />{' '}
                         {t('Clients.detail.primaryInsurance')}
                       </label>
                       <p className="text-sm text-slate-600">
@@ -1430,7 +1426,7 @@ export default async function ClientDetailPage({
                       <Button type="submit" variant="secondary" className="w-fit">
                         {t('Clients.detail.saveInsurance')}
                       </Button>
-                    </form>
+                    </RHFActionForm>
                   ) : null}
                 </article>
               ))}
@@ -1440,7 +1436,7 @@ export default async function ClientDetailPage({
                 <summary className="cursor-pointer font-semibold">
                   {t('Clients.detail.addInsurance')}
                 </summary>
-                <form action={addClientInsuranceAction} className="mt-4 grid gap-4">
+                <RHFActionForm action={addClientInsuranceAction} className="mt-4 grid gap-4">
                   <input type="hidden" name="id" value={client.id} />
                   <div className="grid gap-4 md:grid-cols-3">
                     <SelectField
@@ -1482,13 +1478,12 @@ export default async function ClientDetailPage({
                     />
                   </div>
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="isPrimary" />{' '}
-                    {t('Clients.detail.primaryInsurance')}
+                    <ShadcnCheckbox name="isPrimary" /> {t('Clients.detail.primaryInsurance')}
                   </label>
                   <Button type="submit" className="w-fit">
                     {t('Clients.detail.addInsurance')}
                   </Button>
-                </form>
+                </RHFActionForm>
               </details>
             ) : null}
 
@@ -1512,7 +1507,7 @@ export default async function ClientDetailPage({
                           : ''}
                       </p>
                       {editableFuture && canUpdateClient ? (
-                        <form
+                        <RHFActionForm
                           action={updateFuturePflegegradAction}
                           className="grid gap-4 md:grid-cols-4"
                         >
@@ -1551,7 +1546,7 @@ export default async function ClientDetailPage({
                               {t('Clients.detail.gradePlanSave')}
                             </Button>
                           </div>
-                        </form>
+                        </RHFActionForm>
                       ) : (
                         <p className="text-sm text-slate-600">
                           {t('Clients.detail.gradeHistoryPolicy')}
@@ -1570,7 +1565,7 @@ export default async function ClientDetailPage({
                   <summary className="cursor-pointer font-semibold">
                     {t('Clients.detail.addCareLevel')}
                   </summary>
-                  <form
+                  <RHFActionForm
                     action={addClientPflegegradAction}
                     className="mt-4 grid gap-4 md:grid-cols-3"
                   >
@@ -1622,7 +1617,7 @@ export default async function ClientDetailPage({
                     <Button type="submit" className="w-fit md:col-span-3">
                       {t('Clients.detail.saveCareLevel')}
                     </Button>
-                  </form>
+                  </RHFActionForm>
                 </details>
               ) : null}
             </div>
@@ -1654,15 +1649,17 @@ export default async function ClientDetailPage({
                 </p>
               ) : null}
               {canManageSchedule ? (
-                <form action={saveClientSchedulingPreferencesAction} className="grid gap-4">
+                <RHFActionForm
+                  action={saveClientSchedulingPreferencesAction}
+                  className="grid gap-4"
+                >
                   <input type="hidden" name="id" value={client.id} />
                   <fieldset className="grid gap-2">
                     <legend className="font-medium">{t('Clients.detail.preferredWeekdays')}</legend>
                     <div className="flex flex-wrap gap-x-4 gap-y-2">
                       {planningWeekdays.map(({ weekday, label }) => (
                         <label key={weekday} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
+                          <ShadcnCheckbox
                             name="preferredWeekdays"
                             value={weekday}
                             defaultChecked={schedulingPreferences?.preferredWeekdays.includes(
@@ -1703,11 +1700,12 @@ export default async function ClientDetailPage({
                       <Label htmlFor="client-preferred-employee">
                         {t('Clients.detail.preferredEmployee')}
                       </Label>
-                      <select
+                      <NativeSelect
                         id="client-preferred-employee"
                         name="preferredEmployeeId"
                         defaultValue={schedulingPreferences?.preferredEmployeeId ?? ''}
-                        className="h-10 rounded-md border bg-white px-3"
+                        selectClassName="h-10 rounded-md border bg-white px-3"
+                        className="w-full"
                       >
                         <option value="">{t('Clients.detail.noPreferredEmployee')}</option>
                         {schedulingEmployees.map((employee) => (
@@ -1715,25 +1713,26 @@ export default async function ClientDetailPage({
                             {employee.preferredName || employee.firstName} {employee.lastName}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="client-avoided-employees">
                         {t('Clients.detail.avoidedEmployees')}
                       </Label>
-                      <select
+                      <NativeSelect
                         id="client-avoided-employees"
                         name="avoidedEmployeeIds"
                         multiple
                         defaultValue={schedulingPreferences?.avoidedEmployeeIds ?? []}
-                        className="min-h-24 rounded-md border bg-white px-3 py-2"
+                        selectClassName="min-h-24 rounded-md border bg-white px-3 py-2"
+                        className="w-full"
                       >
                         {schedulingEmployees.map((employee) => (
                           <option key={employee.id} value={employee.id}>
                             {employee.preferredName || employee.firstName} {employee.lastName}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </div>
                   </div>
                   {!schedulingEmployees.length ? (
@@ -1747,7 +1746,7 @@ export default async function ClientDetailPage({
                   <Button type="submit" className="w-fit">
                     {t('Clients.detail.saveSchedulingPreferences')}
                   </Button>
-                </form>
+                </RHFActionForm>
               ) : null}
 
               {canManageSchedule ? (
@@ -1996,7 +1995,7 @@ async function AddressForm({
 }) {
   const t = await getTranslations();
   return (
-    <form action={action} className="mt-4 grid gap-4">
+    <RHFActionForm action={action} className="mt-4 grid gap-4">
       <input type="hidden" name="id" value={clientId} />
       <div className="grid gap-4 md:grid-cols-3">
         <SelectField
@@ -2052,12 +2051,12 @@ async function AddressForm({
         />
       </div>
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="isPrimary" /> {t('Clients.detail.primaryAddressCheckbox')}
+        <ShadcnCheckbox name="isPrimary" /> {t('Clients.detail.primaryAddressCheckbox')}
       </label>
       <Button type="submit" className="w-fit">
         {t('Clients.detail.addAddress')}
       </Button>
-    </form>
+    </RHFActionForm>
   );
 }
 
@@ -2073,12 +2072,7 @@ async function RoleChecks({ selected }: { selected: readonly string[] }) {
           >
         ).map(([role, key]) => (
           <label key={role} className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="roles"
-              value={role}
-              defaultChecked={selected.includes(role)}
-            />{' '}
+            <ShadcnCheckbox name="roles" value={role} defaultChecked={selected.includes(role)} />{' '}
             {t(key)}
           </label>
         ))}
@@ -2176,15 +2170,16 @@ function SelectField({
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <select
+      <NativeSelect
         id={id}
         name={name}
-        className="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-white px-3"
         defaultValue={value}
         required={required}
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </div>
   );
 }

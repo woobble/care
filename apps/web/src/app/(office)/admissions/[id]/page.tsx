@@ -1,3 +1,6 @@
+import { Textarea } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -380,7 +383,7 @@ export default async function AdmissionCasePage({
         {canManage && admission.stage !== 'admitted' ? (
           <details>
             <summary className="cursor-pointer font-medium text-blue-800">{t('saveCase')}</summary>
-            <form
+            <RHFActionForm
               action={updateAdmissionCaseAction}
               className="mt-4 grid gap-4 rounded-md border p-4 md:grid-cols-2"
             >
@@ -496,11 +499,11 @@ export default async function AdmissionCasePage({
               <Button type="submit" className="md:col-span-2">
                 {t('saveCase')}
               </Button>
-            </form>
+            </RHFActionForm>
           </details>
         ) : null}
         {canManage && !admission.clientId ? (
-          <form
+          <RHFActionForm
             action={linkAdmissionClientAction}
             className="grid gap-3 rounded-md border p-4 sm:grid-cols-[1fr_1fr_auto]"
           >
@@ -510,7 +513,7 @@ export default async function AdmissionCasePage({
             <Button type="submit" className="self-end">
               {t('linkClient')}
             </Button>
-          </form>
+          </RHFActionForm>
         ) : null}
         {canManage && canCreateClient && !admission.clientId && admission.stage !== 'admitted' ? (
           admission.facilityId ? (
@@ -584,7 +587,7 @@ export default async function AdmissionCasePage({
           </div>
         ) : null}
         {canManage && allowedStages.length && admission.stage !== 'admitted' ? (
-          <form
+          <RHFActionForm
             action={transitionAdmissionAction}
             className="grid gap-3 rounded-md border p-4 sm:grid-cols-[1fr_1fr_auto]"
           >
@@ -600,7 +603,7 @@ export default async function AdmissionCasePage({
             <Button type="submit" className="self-end">
               {t('moveTo')}
             </Button>
-          </form>
+          </RHFActionForm>
         ) : null}
       </section>
 
@@ -612,7 +615,10 @@ export default async function AdmissionCasePage({
           {t('assessment')}
         </h2>
         {canManage && admission.stage !== 'admitted' ? (
-          <form action={saveAdmissionAssessmentAction} className="grid gap-4 md:grid-cols-2">
+          <RHFActionForm
+            action={saveAdmissionAssessmentAction}
+            className="grid gap-4 md:grid-cols-2"
+          >
             <HiddenCase admission={admission} />
             <TextArea
               name="requestedServicesAssessment"
@@ -684,7 +690,7 @@ export default async function AdmissionCasePage({
             <Button type="submit" className="md:col-span-2">
               {t('saveAssessment')}
             </Button>
-          </form>
+          </RHFActionForm>
         ) : admission.assessment ? (
           <p className="whitespace-pre-wrap text-sm text-slate-700">
             {assessmentSummary(admission.assessment)}
@@ -728,7 +734,7 @@ export default async function AdmissionCasePage({
                 </p>
               </div>
               {canManage && item.source === 'manual' && admission.stage !== 'admitted' ? (
-                <form
+                <RHFActionForm
                   action={respondAdmissionChecklistAction}
                   className="flex flex-wrap items-end gap-2"
                 >
@@ -748,7 +754,7 @@ export default async function AdmissionCasePage({
                     defaultValue={item.response?.reason ?? ''}
                   />
                   <Button type="submit">{t('saveResponse')}</Button>
-                </form>
+                </RHFActionForm>
               ) : null}
             </li>
           ))}
@@ -866,7 +872,10 @@ export default async function AdmissionCasePage({
           <h2 id="record-communication-title" className="text-xl font-semibold">
             {t('recordCommunication')}
           </h2>
-          <form action={recordAdmissionCommunicationAction} className="grid gap-4 md:grid-cols-2">
+          <RHFActionForm
+            action={recordAdmissionCommunicationAction}
+            className="grid gap-4 md:grid-cols-2"
+          >
             <HiddenCase admission={admission} timezone={timezone} />
             <SelectField name="direction" label={t('direction')} value="inbound">
               {(['inbound', 'outbound', 'internal'] as const).map((value) => (
@@ -966,7 +975,7 @@ export default async function AdmissionCasePage({
             <Button type="submit" className="md:col-span-2">
               {t('recordCommunication')}
             </Button>
-          </form>
+          </RHFActionForm>
         </section>
       ) : null}
 
@@ -1171,7 +1180,7 @@ function TextArea({
   return (
     <label className="grid gap-1 text-sm font-medium">
       {label}
-      <textarea
+      <Textarea
         className="min-h-20 rounded-md border p-3 font-normal"
         name={name}
         defaultValue={defaultValue}
@@ -1195,13 +1204,14 @@ function SelectField({
   return (
     <label className="grid gap-1 text-sm font-medium">
       {label}
-      <select
-        className="h-10 rounded-md border bg-white px-3 font-normal"
+      <NativeSelect
+        selectClassName="h-10 rounded-md border bg-white px-3 font-normal"
         name={name}
         defaultValue={value}
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }
@@ -1220,7 +1230,7 @@ function SourceForm({
   defaultSourceId?: string;
 }) {
   return (
-    <form action={linkAdmissionSourceAction} className="flex flex-wrap items-end gap-2">
+    <RHFActionForm action={linkAdmissionSourceAction} className="flex flex-wrap items-end gap-2">
       <HiddenCase admission={admission} />
       <input type="hidden" name="sourceKind" value={kind} />
       <Field
@@ -1251,7 +1261,7 @@ function SourceForm({
         </SelectField>
       ) : null}
       <Button type="submit">{t('linkAction')}</Button>
-    </form>
+    </RHFActionForm>
   );
 }
 

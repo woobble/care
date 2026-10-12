@@ -1,3 +1,6 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
@@ -303,7 +306,7 @@ export default async function BillingWorklistPage({
                   </p>
                 </header>
                 {canManage ? (
-                  <form action={createDraftInvoiceAction} className="grid gap-3">
+                  <RHFActionForm action={createDraftInvoiceAction} className="grid gap-3">
                     <input type="hidden" name="organizationId" value={group.organizationId} />
                     <input type="hidden" name="facilityId" value={group.facilityId} />
                     <input type="hidden" name="clientId" value={group.clientId} />
@@ -344,8 +347,7 @@ export default async function BillingWorklistPage({
                           </div>
                           <div className="grid min-w-0 content-start gap-2 md:min-w-52">
                             <label className="flex items-center gap-2 text-sm">
-                              <input
-                                type="checkbox"
+                              <ShadcnCheckbox
                                 name="selectedLine"
                                 value={`${candidate.performedServiceId}|${candidate.fundingAllocationId ?? ''}`}
                                 disabled={
@@ -389,7 +391,7 @@ export default async function BillingWorklistPage({
                     >
                       {t('createDraft')}
                     </Button>
-                  </form>
+                  </RHFActionForm>
                 ) : (
                   <p className="text-sm text-slate-700">{t('noManagePermission')}</p>
                 )}
@@ -603,14 +605,15 @@ function SelectField({
   return (
     <label className="grid min-w-0 gap-2 text-sm">
       <Label htmlFor={id}>{label}</Label>
-      <select
+      <NativeSelect
         id={id}
         name={name}
         defaultValue={defaultValue}
-        className="min-h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-3 py-2"
+        selectClassName="min-h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-3 py-2"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

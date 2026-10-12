@@ -1,3 +1,6 @@
+import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input } from '@care/ui';
@@ -208,7 +211,7 @@ export default async function ClaimsSettingsPage({
                     )}
                   </div>
                   {canManage ? (
-                    <form
+                    <RHFActionForm
                       action={savePayerRequirementsAction}
                       className="grid gap-3 border-t pt-3 md:grid-cols-2"
                     >
@@ -345,7 +348,7 @@ export default async function ClaimsSettingsPage({
                       <Button type="submit" className="w-fit md:col-span-2">
                         {t('savePayerRequirements')}
                       </Button>
-                    </form>
+                    </RHFActionForm>
                   ) : null}
                 </article>
               );
@@ -513,14 +516,15 @@ function SelectField({
   return (
     <label className="grid gap-1 text-sm" htmlFor={id}>
       {label}
-      <select
+      <NativeSelect
         id={id}
         name={name}
         defaultValue={defaultValue}
-        className="h-10 rounded-md border px-3"
+        selectClassName="h-10 rounded-md border px-3"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }
@@ -533,7 +537,7 @@ function Checkbox({
 }: Readonly<{ id: string; name: string; label: string; defaultChecked?: boolean }>) {
   return (
     <label className="flex items-center gap-2 text-sm" htmlFor={id}>
-      <input id={id} name={name} type="checkbox" value="true" defaultChecked={defaultChecked} />
+      <ShadcnCheckbox id={id} name={name} value="true" defaultChecked={defaultChecked} />
       {label}
     </label>
   );

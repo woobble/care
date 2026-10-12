@@ -1,3 +1,5 @@
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
@@ -32,16 +34,20 @@ export default async function NewEmployeePage({
           {t('Errors.generic')}
         </p>
       ) : null}
-      <form action={createEmployeeAction} className="grid gap-5 rounded-lg border bg-white p-5">
+      <RHFActionForm
+        action={createEmployeeAction}
+        className="grid gap-5 rounded-lg border bg-white p-5"
+      >
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="organizationId">{t('Employees.form.organization')}</Label>
-            <select
+            <NativeSelect
               id="organizationId"
               name="organizationId"
-              className="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-white px-3"
               required
               defaultValue=""
+              className="w-full"
             >
               <option value="" disabled>
                 {t('Employees.form.selectOrganization')}
@@ -51,7 +57,7 @@ export default async function NewEmployeePage({
                   {organization.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <Field
             id="firstName"
@@ -124,7 +130,7 @@ export default async function NewEmployeePage({
             <Link href="/employees">{t('Common.actions.cancel')}</Link>
           </Button>
         </div>
-      </form>
+      </RHFActionForm>
     </div>
   );
 }

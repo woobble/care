@@ -1,3 +1,13 @@
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui';
+import { NativeSelect } from '@care/ui';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -181,24 +191,28 @@ export default async function ClientBenefitsPage({
       {client && budget && (canGenerateDocument || canExportAllocations) ? (
         <section className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4">
           {canGenerateDocument ? (
-            <form action={generateDocumentAction} className="flex flex-wrap items-end gap-3">
+            <RHFActionForm
+              action={generateDocumentAction}
+              className="flex flex-wrap items-end gap-3"
+            >
               <input type="hidden" name="sourceType" value="benefit_overview" />
               <input type="hidden" name="clientId" value={client.id} />
               <input type="hidden" name="asOf" value={budget.asOf} />
               <input type="hidden" name="returnTo" value={`/clients/${client.id}/benefits`} />
               <label className="grid gap-1 text-sm font-medium">
                 <span>{t('Documents.language')}</span>
-                <select
+                <NativeSelect
                   name="locale"
                   defaultValue={locale}
-                  className="h-10 rounded-md border bg-white px-3"
+                  selectClassName="h-10 rounded-md border bg-white px-3"
+                  className="w-full"
                 >
                   <option value="de">{t('Documents.languageOptions.german')}</option>
                   <option value="en">{t('Documents.languageOptions.english')}</option>
-                </select>
+                </NativeSelect>
               </label>
               <Button type="submit">{t('Documents.generateBudget')}</Button>
-            </form>
+            </RHFActionForm>
           ) : null}
           {canExportAllocations && client.organizationId ? (
             <Button asChild variant="secondary">
@@ -390,40 +404,50 @@ export default async function ClientBenefitsPage({
             </h2>
             {budget.entitlements.length ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[42rem] text-left text-sm">
-                  <thead>
-                    <tr className="border-b text-slate-600">
-                      <th className="p-2">{t('Benefits.benefitType')}</th>
-                      <th className="p-2">{t('Benefits.fundingSource')}</th>
-                      <th className="p-2">{t('Common.fields.from')}</th>
-                      <th className="p-2">{t('Common.fields.until')}</th>
-                      <th className="p-2">{t('Common.fields.status')}</th>
-                      <th className="p-2">{t('Benefits.entitlementSource')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <ShadcnTable className="w-full min-w-[42rem] text-left text-sm">
+                  <ShadcnTableHeader>
+                    <ShadcnTableRow className="border-b text-slate-600">
+                      <ShadcnTableHead className="p-2">{t('Benefits.benefitType')}</ShadcnTableHead>
+                      <ShadcnTableHead className="p-2">
+                        {t('Benefits.fundingSource')}
+                      </ShadcnTableHead>
+                      <ShadcnTableHead className="p-2">{t('Common.fields.from')}</ShadcnTableHead>
+                      <ShadcnTableHead className="p-2">{t('Common.fields.until')}</ShadcnTableHead>
+                      <ShadcnTableHead className="p-2">{t('Common.fields.status')}</ShadcnTableHead>
+                      <ShadcnTableHead className="p-2">
+                        {t('Benefits.entitlementSource')}
+                      </ShadcnTableHead>
+                    </ShadcnTableRow>
+                  </ShadcnTableHeader>
+                  <ShadcnTableBody>
                     {budget.entitlements.map((entitlement) => (
-                      <tr key={entitlement.id} className="border-b last:border-0">
-                        <td className="p-2">
+                      <ShadcnTableRow key={entitlement.id} className="border-b last:border-0">
+                        <ShadcnTableCell className="p-2">
                           {benefitTypeLabel(benefitT, entitlement.benefitType)}
-                        </td>
-                        <td className="p-2">
+                        </ShadcnTableCell>
+                        <ShadcnTableCell className="p-2">
                           {sourceById.get(entitlement.fundingSourceId)?.label ??
                             sourceTypeLabel(
                               benefitT,
                               sourceById.get(entitlement.fundingSourceId)?.sourceType ?? 'other',
                             )}
-                        </td>
-                        <td className="p-2">{formatDate(entitlement.validFrom, locale)}</td>
-                        <td className="p-2">{formatDate(entitlement.validUntil, locale) ?? '—'}</td>
-                        <td className="p-2">
+                        </ShadcnTableCell>
+                        <ShadcnTableCell className="p-2">
+                          {formatDate(entitlement.validFrom, locale)}
+                        </ShadcnTableCell>
+                        <ShadcnTableCell className="p-2">
+                          {formatDate(entitlement.validUntil, locale) ?? '—'}
+                        </ShadcnTableCell>
+                        <ShadcnTableCell className="p-2">
                           {t(`Benefits.entitlementStatus.${entitlement.status}`)}
-                        </td>
-                        <td className="p-2">{sourceLabel(benefitT, entitlement.source)}</td>
-                      </tr>
+                        </ShadcnTableCell>
+                        <ShadcnTableCell className="p-2">
+                          {sourceLabel(benefitT, entitlement.source)}
+                        </ShadcnTableCell>
+                      </ShadcnTableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </ShadcnTableBody>
+                </ShadcnTable>
               </div>
             ) : (
               <p className="text-sm text-slate-600">{t('Benefits.noEntitlements')}</p>
@@ -540,47 +564,55 @@ export default async function ClientBenefitsPage({
             </form>
             {history?.items.length ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[48rem] text-left text-sm">
-                  <thead>
-                    <tr className="border-b text-slate-600">
-                      <th className="p-2">{t('Benefits.serviceDate')}</th>
-                      <th className="p-2">{t('Benefits.historyType')}</th>
-                      <th className="p-2">{t('Benefits.fundingSource')}</th>
-                      <th className="p-2">{benefitT('amount')}</th>
-                      <th className="p-2">{t('Benefits.historyReference')}</th>
-                      <th className="p-2">{t('Benefits.verification')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <ShadcnTable className="w-full min-w-[48rem] text-left text-sm">
+                  <ShadcnTableHeader>
+                    <ShadcnTableRow className="border-b text-slate-600">
+                      <ShadcnTableHead className="p-2">{t('Benefits.serviceDate')}</ShadcnTableHead>
+                      <ShadcnTableHead className="p-2">{t('Benefits.historyType')}</ShadcnTableHead>
+                      <ShadcnTableHead className="p-2">
+                        {t('Benefits.fundingSource')}
+                      </ShadcnTableHead>
+                      <ShadcnTableHead className="p-2">{benefitT('amount')}</ShadcnTableHead>
+                      <ShadcnTableHead className="p-2">
+                        {t('Benefits.historyReference')}
+                      </ShadcnTableHead>
+                      <ShadcnTableHead className="p-2">
+                        {t('Benefits.verification')}
+                      </ShadcnTableHead>
+                    </ShadcnTableRow>
+                  </ShadcnTableHeader>
+                  <ShadcnTableBody>
                     {history.items.map((entry) => (
-                      <tr key={entry.id} className="border-b last:border-0">
-                        <td className="p-2">
+                      <ShadcnTableRow key={entry.id} className="border-b last:border-0">
+                        <ShadcnTableCell className="p-2">
                           {formatDate(entry.effectiveDate, locale)}
                           <span className="block text-xs text-slate-500">
                             {formatDateTime(entry.recordedAt, locale)}
                           </span>
-                        </td>
-                        <td className="p-2">{t(`Benefits.entryTypes.${entry.entryType}`)}</td>
-                        <td className="p-2">
+                        </ShadcnTableCell>
+                        <ShadcnTableCell className="p-2">
+                          {t(`Benefits.entryTypes.${entry.entryType}`)}
+                        </ShadcnTableCell>
+                        <ShadcnTableCell className="p-2">
                           {sourceById.get(entry.fundingSourceId)?.label ??
                             sourceTypeLabel(
                               benefitT,
                               sourceById.get(entry.fundingSourceId)?.sourceType ?? 'other',
                             )}
-                        </td>
-                        <td className="p-2 font-medium">
+                        </ShadcnTableCell>
+                        <ShadcnTableCell className="p-2 font-medium">
                           {money(entry.amountCents, locale, true)}
-                        </td>
-                        <td className="p-2">
+                        </ShadcnTableCell>
+                        <ShadcnTableCell className="p-2">
                           {entry.reference ?? entry.performedServiceId ?? '—'}
-                        </td>
-                        <td className="p-2">
+                        </ShadcnTableCell>
+                        <ShadcnTableCell className="p-2">
                           {verificationLabel(benefitT, entry.verificationStatus)}
-                        </td>
-                      </tr>
+                        </ShadcnTableCell>
+                      </ShadcnTableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </ShadcnTableBody>
+                </ShadcnTable>
               </div>
             ) : (
               <p className="text-sm text-slate-600">{t('Benefits.noHistory')}</p>
@@ -615,7 +647,7 @@ export default async function ClientBenefitsPage({
               </h2>
               {canManage ? (
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <form
+                  <RHFActionForm
                     action={createFundingSourceAction}
                     className="grid content-start gap-3 rounded-md border p-4"
                   >
@@ -655,9 +687,9 @@ export default async function ClientBenefitsPage({
                     <Button type="submit" className="w-fit">
                       {t('Benefits.createFundingSource')}
                     </Button>
-                  </form>
+                  </RHFActionForm>
 
-                  <form
+                  <RHFActionForm
                     action={createEntitlementAction}
                     className="grid content-start gap-3 rounded-md border p-4"
                   >
@@ -724,11 +756,11 @@ export default async function ClientBenefitsPage({
                     >
                       {t('Benefits.createEntitlement')}
                     </Button>
-                  </form>
+                  </RHFActionForm>
                 </div>
               ) : null}
               {canAdjust && budget.fundingSources.some((source) => source.status === 'active') ? (
-                <form
+                <RHFActionForm
                   action={recordBenefitAdjustmentAction}
                   className="grid gap-3 rounded-md border p-4 md:grid-cols-2 lg:grid-cols-3"
                 >
@@ -842,7 +874,7 @@ export default async function ClientBenefitsPage({
                   <Button type="submit" className="w-fit">
                     {t('Benefits.recordAdjustment')}
                   </Button>
-                </form>
+                </RHFActionForm>
               ) : null}
             </section>
           ) : null}
@@ -911,15 +943,16 @@ function SelectField({
   return (
     <label className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <select
+      <NativeSelect
         id={id}
         name={name}
         defaultValue={defaultValue}
         required={required}
-        className="min-h-10 rounded-md border bg-white px-3 py-2"
+        selectClassName="min-h-10 rounded-md border bg-white px-3 py-2"
+        className="w-full"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   );
 }
