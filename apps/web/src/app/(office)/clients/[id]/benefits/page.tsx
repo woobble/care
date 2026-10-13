@@ -1,3 +1,4 @@
+import { ErrorNotice as Alert } from '@app/web/components/page-patterns';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -8,6 +9,7 @@ import {
 } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -169,27 +171,25 @@ export default async function ClientBenefitsPage({
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            <Link href={client ? `/clients/${client.id}` : '/clients'}>{t('Clients.title')}</Link>
-          </p>
-          <h1 className="text-3xl font-semibold">{t('Benefits.budgetTitle')}</h1>
-          {client ? (
-            <p className="text-slate-700">
-              {client.preferredName || client.firstName} {client.lastName}
-            </p>
-          ) : null}
-        </div>
-        <Button asChild variant="secondary">
-          <Link href={client ? `/clients/${client.id}` : '/clients'}>
-            {t('Benefits.backToClient')}
-          </Link>
-        </Button>
-      </header>
+      <PageHeader
+        eyebrow={
+          <Link href={client ? `/clients/${client.id}` : '/clients'}>{t('Clients.title')}</Link>
+        }
+        title={t('Benefits.budgetTitle')}
+        description={
+          client ? `${client.preferredName || client.firstName} ${client.lastName}` : undefined
+        }
+        actions={
+          <Button asChild variant="secondary">
+            <Link href={client ? `/clients/${client.id}` : '/clients'}>
+              {t('Benefits.backToClient')}
+            </Link>
+          </Button>
+        }
+      />
 
       {client && budget && (canGenerateDocument || canExportAllocations) ? (
-        <section className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4">
+        <section className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
           {canGenerateDocument ? (
             <RHFActionForm
               action={generateDocumentAction}
@@ -204,7 +204,7 @@ export default async function ClientBenefitsPage({
                 <NativeSelect
                   name="locale"
                   defaultValue={locale}
-                  selectClassName="h-10 rounded-md border bg-white px-3"
+                  selectClassName="h-10 rounded-md border bg-card px-3"
                   className="w-full"
                 >
                   <option value="de">{t('Documents.languageOptions.german')}</option>
@@ -235,7 +235,7 @@ export default async function ClientBenefitsPage({
       {updated ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {t('Benefits.saved')}
         </p>
@@ -246,18 +246,18 @@ export default async function ClientBenefitsPage({
         <>
           <section
             aria-labelledby="summary-title"
-            className="grid gap-3 rounded-lg border bg-white p-5"
+            className="grid gap-3 rounded-lg border bg-card p-5"
           >
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 id="summary-title" className="text-xl font-semibold">
                 {t('Benefits.budgetProjection')}
               </h2>
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 {t('Benefits.currentPeriod')}: {budget.currentPeriod.slice(0, 7)} ·{' '}
                 {formatDate(budget.asOf, locale)}
               </p>
             </div>
-            <p className="text-sm text-slate-700">
+            <p className="text-sm text-muted-foreground">
               {budget.careGrade === null
                 ? t('Benefits.missingCareGrade')
                 : t('Benefits.currentCareGrade', {
@@ -278,7 +278,7 @@ export default async function ClientBenefitsPage({
                           <h3 className="font-semibold">
                             {benefitTypeLabel(benefitT, line.benefitType)}
                           </h3>
-                          <p className="text-sm text-slate-600">
+                          <p className="text-sm text-muted-foreground">
                             {sourceTypeLabel(benefitT, source?.sourceType ?? 'other')}
                             {insurance
                               ? ` · ${insurance.insurerName}`
@@ -329,7 +329,7 @@ export default async function ClientBenefitsPage({
                           }
                         />
                       </dl>
-                      <div className="flex flex-wrap gap-1 text-xs text-slate-600">
+                      <div className="flex flex-wrap gap-1 text-xs text-muted-foreground">
                         <span>{t('Benefits.verification')}:</span>
                         {line.verificationStatuses.length ? (
                           line.verificationStatuses.map((status) => (
@@ -345,10 +345,10 @@ export default async function ClientBenefitsPage({
                   );
                 })
               ) : (
-                <p className="text-sm text-slate-600">{t('Benefits.noEntitlements')}</p>
+                <p className="text-sm text-muted-foreground">{t('Benefits.noEntitlements')}</p>
               )}
             </div>
-            <div className="rounded-md bg-blue-50 p-3 text-sm text-blue-950">
+            <div className="rounded-md bg-accent p-3 text-sm text-primary">
               <p>
                 <strong>{t('Benefits.plannedEligible')}:</strong>{' '}
                 {money(budget.plannedEligible45bCents, locale)}
@@ -359,7 +359,7 @@ export default async function ClientBenefitsPage({
 
           <section
             aria-labelledby="sources-title"
-            className="grid gap-3 rounded-lg border bg-white p-5"
+            className="grid gap-3 rounded-lg border bg-card p-5"
           >
             <h2 id="sources-title" className="text-xl font-semibold">
               {t('Benefits.fundingSources')}
@@ -380,7 +380,7 @@ export default async function ClientBenefitsPage({
                             ? ` · ${source.label}`
                             : ''}
                       </p>
-                      <p className="text-sm text-slate-600">
+                      <p className="text-sm text-muted-foreground">
                         {source.status === 'active'
                           ? t('Common.status.active')
                           : t('Benefits.entitlementStatus.ended')}
@@ -391,13 +391,13 @@ export default async function ClientBenefitsPage({
                 })}
               </ul>
             ) : (
-              <p className="text-sm text-slate-600">{t('Benefits.noFundingSources')}</p>
+              <p className="text-sm text-muted-foreground">{t('Benefits.noFundingSources')}</p>
             )}
           </section>
 
           <section
             aria-labelledby="entitlements-title"
-            className="grid gap-3 rounded-lg border bg-white p-5"
+            className="grid gap-3 rounded-lg border bg-card p-5"
           >
             <h2 id="entitlements-title" className="text-xl font-semibold">
               {t('Benefits.entitlements')}
@@ -406,7 +406,7 @@ export default async function ClientBenefitsPage({
               <div className="overflow-x-auto">
                 <ShadcnTable className="w-full min-w-[42rem] text-left text-sm">
                   <ShadcnTableHeader>
-                    <ShadcnTableRow className="border-b text-slate-600">
+                    <ShadcnTableRow className="border-b text-muted-foreground">
                       <ShadcnTableHead className="p-2">{t('Benefits.benefitType')}</ShadcnTableHead>
                       <ShadcnTableHead className="p-2">
                         {t('Benefits.fundingSource')}
@@ -450,7 +450,7 @@ export default async function ClientBenefitsPage({
                 </ShadcnTable>
               </div>
             ) : (
-              <p className="text-sm text-slate-600">{t('Benefits.noEntitlements')}</p>
+              <p className="text-sm text-muted-foreground">{t('Benefits.noEntitlements')}</p>
             )}
             {grades.length ? (
               <details className="rounded-md border p-3">
@@ -474,7 +474,7 @@ export default async function ClientBenefitsPage({
           {rules.length ? (
             <section
               aria-labelledby="rules-title"
-              className="grid gap-3 rounded-lg border bg-white p-5"
+              className="grid gap-3 rounded-lg border bg-card p-5"
             >
               <h2 id="rules-title" className="text-xl font-semibold">
                 {t('Benefits.ruleTitle')}
@@ -492,7 +492,7 @@ export default async function ClientBenefitsPage({
                         ? t('Benefits.unknownBalance')
                         : `${money(rule.monthlyAmountCents, locale)} / ${t('Common.units.month')}`}
                     </p>
-                    <p className="text-slate-600">
+                    <p className="text-muted-foreground">
                       {t('Benefits.ruleSource')}: {rule.sourceReference}
                     </p>
                   </li>
@@ -503,7 +503,7 @@ export default async function ClientBenefitsPage({
 
           <section
             aria-labelledby="history-title"
-            className="grid gap-3 rounded-lg border bg-white p-5"
+            className="grid gap-3 rounded-lg border bg-card p-5"
           >
             <h2 id="history-title" className="text-xl font-semibold">
               {t('Benefits.historyTitle')}
@@ -566,7 +566,7 @@ export default async function ClientBenefitsPage({
               <div className="overflow-x-auto">
                 <ShadcnTable className="w-full min-w-[48rem] text-left text-sm">
                   <ShadcnTableHeader>
-                    <ShadcnTableRow className="border-b text-slate-600">
+                    <ShadcnTableRow className="border-b text-muted-foreground">
                       <ShadcnTableHead className="p-2">{t('Benefits.serviceDate')}</ShadcnTableHead>
                       <ShadcnTableHead className="p-2">{t('Benefits.historyType')}</ShadcnTableHead>
                       <ShadcnTableHead className="p-2">
@@ -586,7 +586,7 @@ export default async function ClientBenefitsPage({
                       <ShadcnTableRow key={entry.id} className="border-b last:border-0">
                         <ShadcnTableCell className="p-2">
                           {formatDate(entry.effectiveDate, locale)}
-                          <span className="block text-xs text-slate-500">
+                          <span className="block text-xs text-muted-foreground">
                             {formatDateTime(entry.recordedAt, locale)}
                           </span>
                         </ShadcnTableCell>
@@ -604,7 +604,9 @@ export default async function ClientBenefitsPage({
                           {money(entry.amountCents, locale, true)}
                         </ShadcnTableCell>
                         <ShadcnTableCell className="p-2">
-                          {entry.reference ?? entry.performedServiceId ?? '—'}
+                          {entry.reference && !uuidPattern.test(entry.reference)
+                            ? entry.reference
+                            : (entry.performedServiceLabel ?? t('Resources.unavailableService'))}
                         </ShadcnTableCell>
                         <ShadcnTableCell className="p-2">
                           {verificationLabel(benefitT, entry.verificationStatus)}
@@ -615,7 +617,7 @@ export default async function ClientBenefitsPage({
                 </ShadcnTable>
               </div>
             ) : (
-              <p className="text-sm text-slate-600">{t('Benefits.noHistory')}</p>
+              <p className="text-sm text-muted-foreground">{t('Benefits.noHistory')}</p>
             )}
             {history && history.total > history.pageSize ? (
               <div className="flex justify-end gap-2">
@@ -640,7 +642,7 @@ export default async function ClientBenefitsPage({
           {canManage || canAdjust ? (
             <section
               aria-labelledby="manage-title"
-              className="grid gap-4 rounded-lg border bg-white p-5"
+              className="grid gap-4 rounded-lg border bg-card p-5"
             >
               <h2 id="manage-title" className="text-xl font-semibold">
                 {t('Benefits.manageTitle')}
@@ -868,7 +870,7 @@ export default async function ClientBenefitsPage({
                     name="reference"
                     label={t('Benefits.adjustmentReference')}
                   />
-                  <p className="text-sm text-slate-600 md:col-span-2 lg:col-span-3">
+                  <p className="text-sm text-muted-foreground md:col-span-2 lg:col-span-3">
                     {t('Benefits.adjustmentNote')}
                   </p>
                   <Button type="submit" className="w-fit">
@@ -887,7 +889,7 @@ export default async function ClientBenefitsPage({
 function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div>
-      <dt className="text-slate-600">{label}</dt>
+      <dt className="text-muted-foreground">{label}</dt>
       <dd className="font-medium">{value}</dd>
     </div>
   );
@@ -948,20 +950,12 @@ function SelectField({
         name={name}
         defaultValue={defaultValue}
         required={required}
-        selectClassName="min-h-10 rounded-md border bg-white px-3 py-2"
+        selectClassName="min-h-10 rounded-md border bg-card px-3 py-2"
         className="w-full"
       >
         {children}
       </NativeSelect>
     </label>
-  );
-}
-
-function Alert({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-      {children}
-    </p>
   );
 }
 

@@ -1,6 +1,8 @@
 import { Textarea } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -42,7 +44,7 @@ export default async function OperationsTaskDetailPage({
   const permissions = await getPermissionGrants(api);
   if (!hasPermission(permissions, 'operations.read'))
     return (
-      <p role="alert" className="rounded-md border bg-white p-5">
+      <p role="alert" className="rounded-md border bg-card p-5">
         {t('noAccess')}
       </p>
     );
@@ -54,21 +56,26 @@ export default async function OperationsTaskDetailPage({
   if (taskResult.error || !taskResult.data) {
     return (
       <div className="grid gap-4">
-        <Link className="text-sm text-blue-800 underline" href="/operations/tasks">
+        <Link className="text-sm text-primary underline" href="/operations/tasks">
           {t('tasksTitle')}
         </Link>
-        <p role="alert" className="rounded-md border bg-white p-5">
+        <p role="alert" className="rounded-md border bg-card p-5">
           {translate(errorMessageKey(taskResult.error?.code ?? 'OPERATIONS_TASK_NOT_FOUND'))}
         </p>
       </div>
     );
   }
   const task = taskResult.data;
-  const [activityResult, organizationResult, employeeResult, clientResult] = await Promise.all([
+  const [activityResult, organizationResult, facilityResult, employeeResult, clientResult] = await Promise.all([
     api.GET('/api/v1/operations/tasks/{id}/activity', { params: { path: { id }, header } }),
     api.GET('/api/v1/organizations/{id}', {
       params: { path: { id: task.organizationId }, header },
     }),
+    task.facilityId && hasPermission(permissions, 'facility.read')
+      ? api.GET('/api/v1/facilities/{id}', {
+          params: { path: { id: task.facilityId }, header },
+        })
+      : Promise.resolve({ data: undefined, error: undefined }),
     canAssign
       ? api.GET('/api/v1/employees', {
           params: {
@@ -102,35 +109,36 @@ export default async function OperationsTaskDetailPage({
 
   return (
     <div className="grid gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/operations/tasks">{t('tasksTitle')}</Link>
-        </p>
-        <h1 className="text-3xl font-semibold">{task.title}</h1>
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="rounded-full bg-slate-100 px-3 py-1">
-            {t(taskStatusTranslation(task.status))}
-          </span>
-          <span className="rounded-full bg-blue-50 px-3 py-1">{t(task.priority)}</span>
-          {task.dueAt ? (
-            <span className="text-slate-600">
-              {t('dueDate')}: {formatDateTime(task.dueAt, locale, timezone)}
+      <PageHeader
+        eyebrow={<Link href="/operations/tasks">{t('tasksTitle')}</Link>}
+        title={task.title}
+        meta={
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="rounded-full bg-muted px-3 py-1">
+              {t(taskStatusTranslation(task.status))}
             </span>
-          ) : (
-            <span className="text-slate-600">{t('noDueDate')}</span>
-          )}
-        </div>
-      </header>
+            <span className="rounded-full bg-accent px-3 py-1">{t(task.priority)}</span>
+            <span className="text-muted-foreground">
+              {task.dueAt
+                ? `${t('dueDate')}: ${formatDateTime(task.dueAt, locale, timezone)}`
+                : t('noDueDate')}
+            </span>
+          </div>
+        }
+      />
 
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {translate(errorMessageKey(query.error))}
         </p>
       ) : null}
       {query.updated ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {t('taskUpdated')}
         </p>
@@ -138,14 +146,14 @@ export default async function OperationsTaskDetailPage({
       {task.assignmentWarningCode === 'assignee_unavailable' && !task.assignedEmployeeId ? (
         <p
           role="alert"
-          className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-950"
+          className="rounded-md border border-warning/40 bg-warning-muted p-3 text-warning-foreground"
         >
           {t('assigneeUnavailableWarning')}
         </p>
       ) : null}
       {sourceHref ? (
         <Link
-          className="w-fit rounded-md border bg-white px-4 py-2 text-sm font-medium text-blue-900 underline"
+          className="w-fit rounded-md border bg-card px-4 py-2 text-sm font-medium text-primary underline"
           href={sourceHref}
         >
           {t('openSource')}
@@ -155,29 +163,43 @@ export default async function OperationsTaskDetailPage({
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
         <section
           aria-labelledby="task-edit-heading"
-          className="grid content-start gap-4 rounded-lg border bg-white p-5"
+          className="grid content-start gap-4 rounded-lg border bg-card p-5"
         >
           <h2 id="task-edit-heading" className="text-xl font-semibold">
             {t('taskDetails')}
           </h2>
           {task.description ? (
-            <p className="whitespace-pre-wrap text-slate-700">{task.description}</p>
+            <p className="whitespace-pre-wrap text-muted-foreground">{task.description}</p>
           ) : null}
           <dl className="grid gap-2 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-slate-600">{t('organization')}</dt>
-              <dd>{organizationResult.data?.name ?? task.organizationId}</dd>
+              <dt className="text-muted-foreground">{t('organization')}</dt>
+              <dd>
+                <ResourceReference
+                  label={organizationResult.data?.name ?? translate('Resources.unavailableOrganization')}
+                  href={organizationResult.data ? `/administration/organizations/${task.organizationId}` : null}
+                />
+              </dd>
             </div>
             <div>
-              <dt className="text-slate-600">{t('facility')}</dt>
-              <dd>{task.facilityId ?? t('all')}</dd>
+              <dt className="text-muted-foreground">{t('facility')}</dt>
+              <dd>
+                {task.facilityId ? (
+                  <ResourceReference
+                    label={facilityResult.data?.name ?? translate('Resources.unavailableFacility')}
+                    href={facilityResult.data ? `/administration/facilities/${task.facilityId}` : null}
+                  />
+                ) : (
+                  t('all')
+                )}
+              </dd>
             </div>
             <div>
-              <dt className="text-slate-600">{t('client')}</dt>
+              <dt className="text-muted-foreground">{t('client')}</dt>
               <dd>
                 {clientResult.data ? (
                   <Link
-                    className="text-blue-900 underline"
+                    className="text-primary underline"
                     href={`/clients/${clientResult.data.id}`}
                   >
                     {clientResult.data.preferredName || clientResult.data.firstName}{' '}
@@ -191,7 +213,7 @@ export default async function OperationsTaskDetailPage({
               </dd>
             </div>
             <div>
-              <dt className="text-slate-600">{t('assignee')}</dt>
+              <dt className="text-muted-foreground">{t('assignee')}</dt>
               <dd>
                 {task.assignedEmployeeId
                   ? (employeeName.get(task.assignedEmployeeId) ?? t('assigned'))
@@ -199,11 +221,11 @@ export default async function OperationsTaskDetailPage({
               </dd>
             </div>
             <div>
-              <dt className="text-slate-600">{t('createdAt')}</dt>
+              <dt className="text-muted-foreground">{t('createdAt')}</dt>
               <dd>{formatDateTime(task.createdAt, locale, timezone)}</dd>
             </div>
             <div>
-              <dt className="text-slate-600">{t('updatedAt')}</dt>
+              <dt className="text-muted-foreground">{t('updatedAt')}</dt>
               <dd>{formatDateTime(task.updatedAt, locale, timezone)}</dd>
             </div>
           </dl>
@@ -225,7 +247,7 @@ export default async function OperationsTaskDetailPage({
                   maxLength={8000}
                   rows={4}
                   defaultValue={task.description ?? ''}
-                  className="rounded-md border bg-white px-3 py-2"
+                  className="rounded-md border bg-card px-3 py-2"
                 />
               </div>
               <SelectField
@@ -310,30 +332,32 @@ export default async function OperationsTaskDetailPage({
         <section
           id="activity"
           aria-labelledby="activity-heading"
-          className="grid content-start gap-4 rounded-lg border bg-white p-5"
+          className="grid content-start gap-4 rounded-lg border bg-card p-5"
         >
           <h2 id="activity-heading" className="text-xl font-semibold">
             {t('activity')}
           </h2>
           {activityResult.error ? (
-            <p role="alert" className="text-sm text-red-800">
+            <p role="alert" className="text-sm text-destructive">
               {t('loadFailed')}
             </p>
           ) : null}
           {activityResult.data?.length ? (
             <ol className="grid gap-3">
               {activityResult.data.map((entry) => (
-                <li key={entry.id} className="border-l-2 border-slate-200 pl-3">
+                <li key={entry.id} className="border-l-2 border-border pl-3">
                   <p className="font-medium">{entry.comment ?? activityLabel(t, entry.kind)}</p>
-                  <p className="mt-1 text-xs text-slate-600">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {formatDateTime(entry.occurredAt, locale, timezone)} ·{' '}
-                    {t('activityBy', { userId: entry.actorUserId })}
+                    {t('activityBy', {
+                      name: entry.actorName ?? translate('Resources.unavailableUser'),
+                    })}
                   </p>
                 </li>
               ))}
             </ol>
           ) : (
-            <p className="text-sm text-slate-600">{t('noActivity')}</p>
+            <p className="text-sm text-muted-foreground">{t('noActivity')}</p>
           )}
           {canManage ? (
             <RHFActionForm action={addTaskCommentAction} className="grid gap-2 border-t pt-4">
@@ -345,7 +369,7 @@ export default async function OperationsTaskDetailPage({
                 required
                 maxLength={4000}
                 rows={3}
-                className="rounded-md border bg-white px-3 py-2"
+                className="rounded-md border bg-card px-3 py-2"
               />
               <Button type="submit" variant="secondary" className="w-fit">
                 {t('addComment')}
@@ -401,7 +425,7 @@ function SelectField({
         id={id}
         name={name}
         defaultValue={defaultValue}
-        selectClassName="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-card px-3"
         className="w-full"
       >
         {children}

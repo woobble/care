@@ -11,7 +11,7 @@ import { createDomainEvent } from '@care/events';
 import type { EventName, EventPayloadMap } from '@care/events';
 import { clientInsurances, clientRecords } from '@care/clients';
 import { organizationsTable } from '@care/organizations';
-import { assertCan } from '@care/permissions';
+import { assertCan, can } from '@care/permissions';
 import type { AuthorizationPrincipal, Permission, ResourceContext } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
 import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
@@ -459,19 +459,26 @@ export class BillingClaimsApplicationService {
                 inArray(paymentAllocations.claimId, claimIds),
               ),
             );
-          const clients = await transaction
-            .select({
-              id: clientRecords.id,
-              firstName: clientRecords.firstName,
-              lastName: clientRecords.lastName,
-            })
-            .from(clientRecords)
-            .where(
-              and(
-                eq(clientRecords.tenantId, principal.tenantId),
-                inArray(clientRecords.id, [...new Set(pageRows.map((claim) => claim.clientId))]),
-              ),
-            );
+          const readableClientIds = pageRows
+            .filter((claim) =>
+              can(principal, { action: 'client.read', resource: this.resourceForClaim(claim) }),
+            )
+            .map((claim) => claim.clientId);
+          const clients = readableClientIds.length
+            ? await transaction
+                .select({
+                  id: clientRecords.id,
+                  firstName: clientRecords.firstName,
+                  lastName: clientRecords.lastName,
+                })
+                .from(clientRecords)
+                .where(
+                  and(
+                    eq(clientRecords.tenantId, principal.tenantId),
+                    inArray(clientRecords.id, [...new Set(readableClientIds)]),
+                  ),
+                )
+            : [];
           const submittedAtByClaim = new Map<string, Date>();
           for (const row of submissions) {
             if (!submittedAtByClaim.has(row.claimId)) {

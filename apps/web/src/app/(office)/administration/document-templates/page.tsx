@@ -1,5 +1,6 @@
 import { Textarea } from '@care/ui';
 import { NativeSelect } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -77,36 +78,37 @@ export default async function DocumentTemplatesPage({
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          {t('Navigation.administration')}
-        </p>
-        <h1 className="text-3xl font-semibold">{t('Documents.templates.title')}</h1>
-        <p className="text-slate-700">{t('Documents.templates.description')}</p>
-      </header>
+      <PageHeader
+        eyebrow={t('Navigation.administration')}
+        title={t('Documents.templates.title')}
+        description={t('Documents.templates.description')}
+      />
 
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t(errorMessageKey(query.error))}
         </p>
       ) : null}
       {query.notice ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {t(`Documents.templates.notices.${query.notice === 'saved' ? 'saved' : 'logoUploaded'}`)}
         </p>
       ) : null}
 
-      <form method="get" className="grid gap-4 rounded-lg border bg-white p-5 sm:grid-cols-2">
+      <form method="get" className="grid gap-4 rounded-lg border bg-card p-5 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor="template-organization">{t('Documents.templates.organization')}</Label>
           <NativeSelect
             id="template-organization"
             name="organizationId"
             defaultValue={selectedOrganization.id}
-            selectClassName="h-10 rounded-md border bg-white px-3"
+            selectClassName="h-10 rounded-md border bg-card px-3"
             className="w-full"
           >
             {organizations.map((organization) => (
@@ -122,7 +124,7 @@ export default async function DocumentTemplatesPage({
             id="template-type"
             name="type"
             defaultValue={selectedType}
-            selectClassName="h-10 rounded-md border bg-white px-3"
+            selectClassName="h-10 rounded-md border bg-card px-3"
             className="w-full"
           >
             {documentTypes.map((type) => (
@@ -137,10 +139,10 @@ export default async function DocumentTemplatesPage({
         </Button>
       </form>
 
-      <section className="grid gap-4 rounded-lg border bg-white p-5">
+      <section className="grid gap-4 rounded-lg border bg-card p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-xl font-semibold">{t('Documents.templates.configuration')}</h2>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             {t('Documents.templates.version', { version: template.version })}
           </p>
         </div>
@@ -160,7 +162,7 @@ export default async function DocumentTemplatesPage({
               accept="image/png,image/jpeg"
               required
             />
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               {t('Documents.templates.currentLogo', {
                 id: logoAssetId || t('Documents.templates.noLogo'),
               })}
@@ -191,7 +193,7 @@ export default async function DocumentTemplatesPage({
               id="template-language"
               name="defaultLocale"
               defaultValue={template.defaultLocale}
-              selectClassName="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-card px-3"
               className="w-full"
             >
               <option value="de">{t('Documents.languageOptions.german')}</option>
@@ -251,7 +253,7 @@ export default async function DocumentTemplatesPage({
 
       <section
         aria-labelledby="template-preview-title"
-        className="grid gap-3 rounded-lg border bg-white p-5"
+        className="grid gap-3 rounded-lg border bg-card p-5"
       >
         <h2 id="template-preview-title" className="text-xl font-semibold">
           {t('Documents.templates.preview')}
@@ -267,9 +269,9 @@ export default async function DocumentTemplatesPage({
             {template.headerText || selectedOrganization.name}
           </p>
           <h3 className="text-2xl font-semibold">{t(`Documents.documentTypes.${selectedType}`)}</h3>
-          <p className="text-sm text-slate-600">{selectedOrganization.name}</p>
-          <div className="h-16 rounded bg-slate-50" />
-          <p className="border-t pt-3 text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">{selectedOrganization.name}</p>
+          <div className="h-16 rounded bg-background" />
+          <p className="border-t pt-3 text-sm text-muted-foreground">
             {template.footerText || t('Documents.templates.previewFooter')}
           </p>
         </div>

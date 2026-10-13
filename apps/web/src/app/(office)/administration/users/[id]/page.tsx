@@ -1,6 +1,7 @@
 import { Checkbox as ShadcnCheckbox } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
@@ -42,7 +43,10 @@ export default async function MemberDetailPage({
   if (memberResult.response.status === 404) notFound();
   if (!memberResult.data) {
     return (
-      <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+      <p
+        role="alert"
+        className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+      >
         {t('Users.loadFailed')}
       </p>
     );
@@ -60,30 +64,25 @@ export default async function MemberDetailPage({
 
   return (
     <div className="grid gap-8">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration/users">{t('Users.title')}</Link>
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-semibold">
-            {member.displayName || member.email || member.userId}
-          </h1>
-          <StatusBadge status={member.status} label={t(statusLabelKey(member.status))} />
-        </div>
-        <p className="text-slate-700">
-          {member.email || t('Users.noVerifiedEmail')} · {t('Users.userId', { id: member.userId })}
-        </p>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/administration/users">{t('Users.title')}</Link>}
+        title={member.displayName || member.email || t('Resources.unavailableUser')}
+        description={member.email || t('Users.noVerifiedEmail')}
+        meta={<StatusBadge status={member.status} label={t(statusLabelKey(member.status))} />}
+      />
 
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t(errorMessageKey(query.error))}
         </p>
       ) : null}
       {query.updated ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {t('Users.accessUpdated')}
         </p>
@@ -92,14 +91,17 @@ export default async function MemberDetailPage({
       organizationsResult.error ||
       facilitiesResult.error ||
       teamsResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t('Users.targetsLoadFailed')}
         </p>
       ) : null}
 
       <section
         aria-labelledby="lifecycle-title"
-        className="grid gap-3 rounded-lg border bg-white p-5"
+        className="grid gap-3 rounded-lg border bg-card p-5"
       >
         <h2 id="lifecycle-title" className="text-xl font-semibold">
           {t('Users.membershipLifecycle')}
@@ -127,17 +129,17 @@ export default async function MemberDetailPage({
               </ConfirmSubmitButton>
             </form>
           ) : (
-            <p className="text-sm text-slate-600">{t('Users.revokedCannotReactivate')}</p>
+            <p className="text-sm text-muted-foreground">{t('Users.revokedCannotReactivate')}</p>
           )}
         </div>
       </section>
 
-      <section aria-labelledby="roles-title" className="grid gap-4 rounded-lg border bg-white p-5">
+      <section aria-labelledby="roles-title" className="grid gap-4 rounded-lg border bg-card p-5">
         <div>
           <h2 id="roles-title" className="text-xl font-semibold">
             {t('Users.roles')}
           </h2>
-          <p className="text-sm text-slate-600">{t('Users.roleHelp')}</p>
+          <p className="text-sm text-muted-foreground">{t('Users.roleHelp')}</p>
         </div>
         <RHFActionForm action={replaceMemberRolesAction} className="grid gap-4">
           <input type="hidden" name="membershipId" value={member.id} />
@@ -153,7 +155,7 @@ export default async function MemberDetailPage({
                   />
                   {t(roleLabelKey(role.name))}
                 </span>
-                <span className="text-sm text-slate-600">
+                <span className="text-sm text-muted-foreground">
                   {t('Users.permissions')}:{' '}
                   {role.permissions
                     .map((permission) => {
@@ -174,12 +176,12 @@ export default async function MemberDetailPage({
         </RHFActionForm>
       </section>
 
-      <section aria-labelledby="scopes-title" className="grid gap-4 rounded-lg border bg-white p-5">
+      <section aria-labelledby="scopes-title" className="grid gap-4 rounded-lg border bg-card p-5">
         <div>
           <h2 id="scopes-title" className="text-xl font-semibold">
             {t('Users.scopesTitle')}
           </h2>
-          <p className="text-sm text-slate-600">{t('Users.scopeHelp')}</p>
+          <p className="text-sm text-muted-foreground">{t('Users.scopeHelp')}</p>
         </div>
         <RHFActionForm action={replaceMemberScopesAction} className="grid gap-4">
           <input type="hidden" name="membershipId" value={member.id} />
@@ -207,7 +209,7 @@ export default async function MemberDetailPage({
               </label>
             ))}
             {teams.length === 0 ? (
-              <p className="text-sm text-slate-600">{t('Users.noVisibleTeams')}</p>
+              <p className="text-sm text-muted-foreground">{t('Users.noVisibleTeams')}</p>
             ) : null}
           </fieldset>
           <fieldset className="grid gap-3">
@@ -223,7 +225,7 @@ export default async function MemberDetailPage({
               </label>
             ))}
             {organizations.length === 0 ? (
-              <p className="text-sm text-slate-600">{t('Users.noVisibleOrganizations')}</p>
+              <p className="text-sm text-muted-foreground">{t('Users.noVisibleOrganizations')}</p>
             ) : null}
           </fieldset>
           <fieldset className="grid gap-3">
@@ -239,7 +241,7 @@ export default async function MemberDetailPage({
               </label>
             ))}
             {facilities.length === 0 ? (
-              <p className="text-sm text-slate-600">{t('Users.noVisibleFacilities')}</p>
+              <p className="text-sm text-muted-foreground">{t('Users.noVisibleFacilities')}</p>
             ) : null}
           </fieldset>
           <Button type="submit" disabled={member.status === 'revoked'}>
@@ -250,12 +252,12 @@ export default async function MemberDetailPage({
 
       <section
         aria-labelledby="effective-title"
-        className="grid gap-2 rounded-lg border bg-white p-5"
+        className="grid gap-2 rounded-lg border bg-card p-5"
       >
         <h2 id="effective-title" className="text-xl font-semibold">
           {t('Users.effectivePermissions')}
         </h2>
-        <p className="text-sm text-slate-700">
+        <p className="text-sm text-muted-foreground">
           {member.permissions.length
             ? member.permissions
                 .map((permission) => {

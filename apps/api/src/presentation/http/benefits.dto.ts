@@ -309,6 +309,7 @@ export class BenefitLedgerEntryDto {
   @ApiProperty({ format: 'uuid', nullable: true }) allocationBucketId!: string | null;
   @ApiProperty({ format: 'uuid', nullable: true }) serviceAllocationId!: string | null;
   @ApiProperty({ format: 'uuid', nullable: true }) performedServiceId!: string | null;
+  @ApiProperty({ nullable: true }) performedServiceLabel!: string | null;
   @ApiProperty({
     enum: [
       'entitlement_allocated',
@@ -406,6 +407,10 @@ export class BenefitUnallocatedServiceDto {
   @ApiProperty({ format: 'uuid' }) performedServiceId!: string;
   @ApiProperty({ format: 'uuid' }) clientId!: string;
   @ApiProperty() clientName!: string;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true })
+  clientOrganizationId!: string | null;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true })
+  clientFacilityId!: string | null;
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
   @ApiProperty({ format: 'uuid', nullable: true }) facilityId!: string | null;
   @ApiProperty() serviceName!: string;
@@ -436,6 +441,29 @@ export class BenefitPagedServiceWorklistDto {
   @ApiProperty() total!: number;
 }
 
+export class BenefitWorklistAllocationOptionDto {
+  @ApiProperty({ format: 'uuid' }) entitlementId!: string;
+  @ApiProperty({ format: 'uuid' }) fundingSourceId!: string;
+  @ApiProperty({ enum: ['entlastungsbetrag_45b', 'umwandlungsanspruch_45a_4', 'private', 'other'] })
+  benefitType!: string;
+  @ApiProperty({ type: String, nullable: true }) fundingSourceLabel!: string | null;
+  @ApiProperty({
+    enum: [
+      'statutory_long_term_care_insurance',
+      'private_long_term_care_insurance',
+      'self_pay',
+      'other',
+    ],
+  })
+  fundingSourceType!: string;
+}
+
+export class BenefitWorklistServiceAllocationOptionsDto {
+  @ApiProperty({ format: 'uuid' }) performedServiceId!: string;
+  @ApiProperty({ type: [BenefitWorklistAllocationOptionDto] })
+  items!: BenefitWorklistAllocationOptionDto[];
+}
+
 export class BenefitUnallocatedServicesResponseDto {
   @ApiProperty({ type: [BenefitUnallocatedServiceDto] }) items!: BenefitUnallocatedServiceDto[];
   @ApiProperty() page!: number;
@@ -447,6 +475,8 @@ export class BenefitWorklistResponseDto {
   @ApiProperty({ type: BenefitPagedWorklistDto }) clients!: BenefitPagedWorklistDto;
   @ApiProperty({ type: BenefitPagedServiceWorklistDto })
   unallocatedServices!: BenefitPagedServiceWorklistDto;
+  @ApiProperty({ type: [BenefitWorklistServiceAllocationOptionsDto] })
+  allocationOptions!: BenefitWorklistServiceAllocationOptionsDto[];
 }
 
 export class BenefitEstimateOptionDto {

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui';
+import { Badge, Button } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { CaregiverRetryButton } from '@app/web/components/caregiver-retry-button';
 import { formatLongDate } from '@app/web/i18n/format';
@@ -71,6 +71,14 @@ export default async function CareTodayPage() {
         new Date(visit.plannedStart).getTime() >= now,
     )
     .sort((left, right) => left.plannedStart.localeCompare(right.plannedStart))[0];
+  const featuredVisits = [inProgressVisit, nextVisit]
+    .filter((visit): visit is NonNullable<typeof visit> => Boolean(visit))
+    .flatMap((focusVisit) => orderedVisits.filter(({ visit }) => visit.id === focusVisit.id));
+  const featuredVisitIds = new Set(featuredVisits.map(({ visit }) => visit.id));
+  const prioritizedVisits = [
+    ...featuredVisits,
+    ...orderedVisits.filter(({ visit }) => !featuredVisitIds.has(visit.id)),
+  ];
   const recentTourPublication = tour && isRecent(tour.publishedAt, now);
   const visitLoadFailed = Boolean(visitsResult.error || !visitsResult.data);
   const documentationUnavailable = Boolean(documentationResult.error || !documentationResult.data);
@@ -93,31 +101,32 @@ export default async function CareTodayPage() {
       />
 
       {visits.some((visit) => Boolean(visit.address)) ? (
-        <p className="text-xs text-slate-600">{t('Caregiver.navigationPrivacy')}</p>
+        <p className="text-xs text-muted-foreground">{t('Caregiver.navigationPrivacy')}</p>
       ) : null}
 
       {tour ? (
-        <section className="grid gap-2 rounded-lg border bg-white p-4" aria-labelledby="tour-title">
+        <section
+          className="grid gap-2 rounded-xl border border-border bg-card p-4"
+          aria-labelledby="tour-title"
+        >
           <div className="flex flex-wrap items-center gap-2">
             <h2 id="tour-title" className="text-lg font-semibold">
               {t('Caregiver.dailyTour')}
             </h2>
-            <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-900">
+            <Badge variant="secondary">
               {t('Caregiver.publishedTourVersion', { version: tour.version })}
-            </span>
+            </Badge>
             {recentTourPublication ? (
-              <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-950">
-                {t('Caregiver.recentTourChange')}
-              </span>
+              <Badge variant="warning">{t('Caregiver.recentTourChange')}</Badge>
             ) : null}
           </div>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             {t('Caregiver.schedulePublishedAt', {
               date: formatVisitDateTime(tour.publishedAt, tour.timezone, locale),
             })}
           </p>
           {tour.version > 1 ? (
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               {tour.changeSummary.length
                 ? t('Caregiver.publicationChanges', {
                     changes: tour.changeSummary
@@ -128,10 +137,10 @@ export default async function CareTodayPage() {
             </p>
           ) : null}
           {tourVisits.length === 0 ? (
-            <p className="text-sm text-slate-600">{t('Caregiver.noPublishedTourStops')}</p>
+            <p className="text-sm text-muted-foreground">{t('Caregiver.noPublishedTourStops')}</p>
           ) : null}
           {fallbackVisits.length > 0 ? (
-            <p className="text-sm text-slate-600">{t('Caregiver.fallbackVisitsIncluded')}</p>
+            <p className="text-sm text-muted-foreground">{t('Caregiver.fallbackVisitsIncluded')}</p>
           ) : null}
         </section>
       ) : null}
@@ -187,7 +196,7 @@ export default async function CareTodayPage() {
 
       {orderedVisits.length > 0 ? (
         <ol className="grid gap-3" aria-label={t('Caregiver.visitsTitle')}>
-          {orderedVisits.map(({ visit, stop, isFallback }) => {
+          {prioritizedVisits.map(({ visit, stop, isFallback }) => {
             const changedAt = laterDate(visit.assignmentAssignedAt, visit.updatedAt);
             const recentlyChanged = isRecent(changedAt.toISOString(), now);
             const isFocusVisit = inProgressVisit?.id === visit.id;
@@ -199,15 +208,15 @@ export default async function CareTodayPage() {
               <li key={visit.id}>
                 <article
                   className={
-                    'grid min-w-0 gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-start ' +
+                    'grid min-w-0 gap-3 rounded-xl border border-border bg-card p-4 transition-colors sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-start ' +
                     (isFocusVisit ? 'border-primary ring-1 ring-ring/30' : '')
                   }
                 >
                   <div className="grid gap-1">
-                    <span className="text-xl font-semibold tabular-nums text-blue-900">
+                    <span className="text-xl font-semibold tabular-nums text-foreground">
                       {formatVisitTime(visit.plannedStart, visit.timezone, locale)}
                     </span>
-                    <span className="text-sm tabular-nums text-slate-600">
+                    <span className="text-sm tabular-nums text-muted-foreground">
                       {formatVisitTime(visit.plannedEnd, visit.timezone, locale)}
                     </span>
                   </div>
@@ -215,7 +224,7 @@ export default async function CareTodayPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
                         href={'/care/visits/' + visit.id}
-                        className="min-h-11 content-center text-lg font-semibold text-blue-900 underline"
+                        className="min-h-11 content-center text-lg font-semibold text-primary underline decoration-primary/50 underline-offset-4"
                       >
                         {visit.clientDisplayName}
                       </Link>
@@ -227,15 +236,15 @@ export default async function CareTodayPage() {
                         <FocusBadge>{t('Caregiver.recentScheduleChange')}</FocusBadge>
                       ) : null}
                     </div>
-                    <p className="text-sm text-slate-700">
+                    <p className="text-sm text-muted-foreground">
                       {visit.services.map((service) => service.name).join(' · ') ||
                         t('Caregiver.noPlannedServices')}
                     </p>
-                    <p className="break-words text-sm text-slate-600">
+                    <p className="break-words text-sm text-muted-foreground">
                       {visit.address ?? t('Caregiver.addressUnavailable')}
                     </p>
                     {stop ? (
-                      <p className="text-sm text-slate-600">
+                      <p className="text-sm text-muted-foreground">
                         {t('Caregiver.stopNumber', { sequence: stop.sequence })}
                         {stop.estimatedTravelMinutes == null
                           ? ` · ${t('Caregiver.travelUnknown')}`
@@ -245,12 +254,12 @@ export default async function CareTodayPage() {
                           : ''}
                       </p>
                     ) : isFallback ? (
-                      <p className="text-sm text-slate-600">
+                      <p className="text-sm text-muted-foreground">
                         {t('Caregiver.chronologicalFallbackCard')}
                       </p>
                     ) : null}
                     {recentlyChanged ? (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted-foreground">
                         {t('Caregiver.scheduleChangedAt', {
                           date: formatVisitDateTime(
                             changedAt.toISOString(),
@@ -291,12 +300,16 @@ export default async function CareTodayPage() {
                         href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(visit.address)}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="min-h-11 content-center text-sm font-semibold text-blue-800 underline"
+                        className="min-h-11 content-center text-sm font-semibold text-primary underline"
                       >
                         {t('Caregiver.openNavigation')}
                       </a>
                     ) : null}
-                    <Button asChild className="min-h-11 w-full sm:w-auto">
+                    <Button
+                      asChild
+                      variant={isFocusVisit ? 'default' : 'outline'}
+                      className="min-h-11 w-full sm:w-auto"
+                    >
                       <Link href={'/care/visits/' + visit.id}>{t('Caregiver.openVisit')}</Link>
                     </Button>
                   </div>
@@ -306,9 +319,9 @@ export default async function CareTodayPage() {
           })}
         </ol>
       ) : visitLoadFailed ? null : (
-        <section className="grid gap-2 rounded-lg border bg-white p-6">
+        <section className="grid gap-2 rounded-xl border border-border bg-card p-6">
           <h2 className="text-lg font-semibold">{t('Caregiver.noVisitsTitle')}</h2>
-          <p className="text-slate-600">{t('Caregiver.noVisits')}</p>
+          <p className="text-muted-foreground">{t('Caregiver.noVisits')}</p>
           <CaregiverRetryButton
             label={t('Caregiver.refresh')}
             pendingLabel={t('Caregiver.retrying')}

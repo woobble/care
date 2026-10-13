@@ -12,6 +12,7 @@ import { redirect } from 'next/navigation';
 import type { components } from '@care/api-client';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { acknowledgementCapacityKey, evidenceStatusKey } from '@app/web/i18n/evidence';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatNumber } from '@app/web/i18n/format';
@@ -103,28 +104,29 @@ export default async function ServiceEvidenceWorklistPage({
 
   return (
     <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('ServiceEvidence.office.section')}
-          </p>
-          <h1 className="mt-1 text-3xl font-semibold">{t('ServiceEvidence.office.title')}</h1>
-          <p className="mt-2 text-slate-600">{t('ServiceEvidence.office.description')}</p>
-        </div>
-        <Button asChild variant="secondary">
-          <Link href="/documentation">{t('ServiceEvidence.office.documentationLink')}</Link>
-        </Button>
-      </header>
+      <PageHeader
+        eyebrow={t('ServiceEvidence.office.section')}
+        title={t('ServiceEvidence.office.title')}
+        description={t('ServiceEvidence.office.description')}
+        actions={
+          <Button asChild variant="secondary">
+            <Link href="/documentation">{t('ServiceEvidence.office.documentationLink')}</Link>
+          </Button>
+        }
+      />
 
       {query.error || listResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t(errorMessageKey(query.error ?? listResult.error?.code ?? ''))}
         </p>
       ) : null}
 
       <form
         method="get"
-        className="grid gap-3 rounded-lg border bg-white p-4 sm:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4"
       >
         <label className="grid gap-1 text-sm">
           <span>{t('ServiceEvidence.office.from')}</span>
@@ -158,7 +160,7 @@ export default async function ServiceEvidenceWorklistPage({
           <NativeSelect
             name="status"
             defaultValue={filterValues.status}
-            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-card px-3"
             className="w-full"
           >
             <option value="">{t('ServiceEvidence.office.allStatuses')}</option>
@@ -177,7 +179,7 @@ export default async function ServiceEvidenceWorklistPage({
           <NativeSelect
             name="organizationId"
             defaultValue={filterValues.organizationId}
-            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-card px-3"
             className="w-full"
           >
             <option value="">{t('ServiceEvidence.office.allOrganizations')}</option>
@@ -193,7 +195,7 @@ export default async function ServiceEvidenceWorklistPage({
           <NativeSelect
             name="facilityId"
             defaultValue={filterValues.facilityId}
-            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-card px-3"
             className="w-full"
           >
             <option value="">{t('ServiceEvidence.office.allFacilities')}</option>
@@ -209,7 +211,7 @@ export default async function ServiceEvidenceWorklistPage({
           <NativeSelect
             name="employeeId"
             defaultValue={filterValues.employeeId}
-            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-card px-3"
             className="w-full"
           >
             <option value="">{t('ServiceEvidence.office.allEmployees')}</option>
@@ -225,7 +227,7 @@ export default async function ServiceEvidenceWorklistPage({
           <NativeSelect
             name="signatoryType"
             defaultValue={filterValues.signatoryType}
-            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-card px-3"
             className="w-full"
           >
             <option value="">{t('ServiceEvidence.office.allSignatories')}</option>
@@ -249,16 +251,16 @@ export default async function ServiceEvidenceWorklistPage({
       </form>
 
       <section className="grid gap-3">
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-muted-foreground">
           {result
             ? t('ServiceEvidence.office.resultCount', { count: result.total })
             : t('ServiceEvidence.office.noRecords')}{' '}
           · {t('ServiceEvidence.office.page', { page: formatNumber(result?.page ?? page, locale) })}
         </p>
         {items.length ? (
-          <div className="overflow-x-auto rounded-lg border bg-white">
+          <div className="overflow-x-auto rounded-lg border bg-card">
             <ShadcnTable className="w-full min-w-[44rem] text-left text-sm">
-              <ShadcnTableHeader className="border-b bg-slate-50 text-slate-700">
+              <ShadcnTableHeader className="border-b bg-background text-muted-foreground">
                 <ShadcnTableRow>
                   <ShadcnTableHead className="p-3 font-semibold">
                     {t('ServiceEvidence.office.visit')}
@@ -293,7 +295,7 @@ export default async function ServiceEvidenceWorklistPage({
                             ? `/service-evidence/${item.evidencePackageId}`
                             : `/visits/${item.visitId}`
                         }
-                        className="text-blue-900 underline"
+                        className="text-primary underline"
                       >
                         {item.clientName}
                       </Link>
@@ -315,9 +317,7 @@ export default async function ServiceEvidenceWorklistPage({
             </ShadcnTable>
           </div>
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">
-            {t('ServiceEvidence.office.noResults')}
-          </p>
+          <EmptyState title={t('ServiceEvidence.office.noResults')} />
         )}
         <div className="flex justify-between">
           {page > 1 ? (

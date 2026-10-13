@@ -1,3 +1,4 @@
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -17,11 +18,13 @@ import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
+  hasClientPermission,
   hasPermission,
 } from '@app/web/lib/api';
 import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
 import { formatCents } from '@app/web/app/(office)/billing/format';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 
 type ClaimStatus =
   | 'draft'
@@ -37,6 +40,8 @@ type ClaimListItem = {
   id: string;
   clientId: string;
   clientName: string;
+  organizationId: string;
+  facilityId: string;
   invoiceId: string;
   invoiceNumber: string | null;
   payerName: string;
@@ -89,14 +94,14 @@ export default async function ClaimsWorklistPage({
       {!canRead ? <Alert>{t('noClaimsPermission')}</Alert> : null}
       <section
         aria-labelledby="claims-worklist-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="claims-worklist-title" className="text-xl font-semibold">
               {t('claimsWorklist')}
             </h2>
-            <p className="mt-1 text-sm text-slate-700">{t('claimsWorklistDescription')}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t('claimsWorklistDescription')}</p>
           </div>
           <form action="/billing/claims" className="flex flex-wrap items-end gap-2">
             <label className="grid gap-1 text-sm" htmlFor="claim-status-filter">
@@ -125,7 +130,7 @@ export default async function ClaimsWorklistPage({
           <div className="overflow-x-auto">
             <ShadcnTable className="w-full min-w-[54rem] text-left text-sm">
               <ShadcnTableHeader>
-                <ShadcnTableRow className="border-b text-slate-600">
+                <ShadcnTableRow className="border-b text-muted-foreground">
                   <ShadcnTableHead className="p-2">{t('claim')}</ShadcnTableHead>
                   <ShadcnTableHead className="p-2">{t('client')}</ShadcnTableHead>
                   <ShadcnTableHead className="p-2">{t('payer')}</ShadcnTableHead>
@@ -139,29 +144,43 @@ export default async function ClaimsWorklistPage({
                 {claims.map((claim) => (
                   <ShadcnTableRow key={claim.id} className="border-b last:border-0">
                     <ShadcnTableCell className="p-2 font-medium">
-                      <Link
-                        className="text-blue-900 underline"
-                        href={'/billing/claims/' + claim.id}
-                      >
-                        {claim.id.slice(0, 8)}
+                      <Link className="text-primary underline" href={'/billing/claims/' + claim.id}>
+                        {t('claim')}
                       </Link>
                     </ShadcnTableCell>
                     <ShadcnTableCell className="p-2">
-                      <Link
-                        className="text-blue-900 underline"
-                        href={'/clients/' + claim.clientId + '/invoices'}
-                      >
-                        {claim.clientName || claim.clientId.slice(0, 8)}
-                      </Link>
+                      <ResourceReference
+                        label={claim.clientName || translate('Resources.unavailableClient')}
+                        href={
+                          claim.clientName &&
+                          hasClientPermission(
+                            permissions,
+                            'client.read',
+                            header['X-Tenant-Id'],
+                            claim.organizationId,
+                            claim.facilityId,
+                          )
+                            ? `/clients/${claim.clientId}/invoices`
+                            : null
+                        }
+                      />
                     </ShadcnTableCell>
                     <ShadcnTableCell className="p-2">{claim.payerName}</ShadcnTableCell>
                     <ShadcnTableCell className="p-2">
-                      <Link
-                        className="text-blue-900 underline"
-                        href={'/billing/invoices/' + claim.invoiceId}
-                      >
-                        {claim.invoiceNumber ?? claim.invoiceId.slice(0, 8)}
-                      </Link>
+                      <ResourceReference
+                        label={claim.invoiceNumber ?? t('draftIdentifier')}
+                        href={
+                          hasClientPermission(
+                            permissions,
+                            'billing.read',
+                            header['X-Tenant-Id'],
+                            claim.organizationId,
+                            claim.facilityId,
+                          )
+                            ? `/billing/invoices/${claim.invoiceId}`
+                            : null
+                        }
+                      />
                     </ShadcnTableCell>
                     <ShadcnTableCell className="p-2">
                       {formatCents(claim.amountCents, locale as Locale)}
@@ -178,12 +197,12 @@ export default async function ClaimsWorklistPage({
             </ShadcnTable>
           </div>
         ) : (
-          <p className="text-sm text-slate-700">
+          <p className="text-sm text-muted-foreground">
             {result.error ? t('claimsUnavailable') : t('claimsEmpty')}
           </p>
         )}
         {response?.hasMore ? (
-          <p className="text-sm text-slate-600">{t('claimsFirstPageOnly')}</p>
+          <p className="text-sm text-muted-foreground">{t('claimsFirstPageOnly')}</p>
         ) : null}
       </section>
     </div>
@@ -214,20 +233,4 @@ function statusLabel(
     case 'cancelled':
       return t('claimStatus.cancelled');
   }
-}
-
-function Alert({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-      {children}
-    </p>
-  );
-}
-
-function Status({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="status" className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900">
-      {children}
-    </p>
-  );
 }

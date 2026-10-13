@@ -21,6 +21,7 @@ import {
   clientRecords,
   pflegegradRecords,
 } from '@care/clients';
+import { tenantMemberships, users } from '@care/identity';
 import { contactAuthorizationFor, interactions, prospectInteractions } from '@care/communications';
 import type { CommunicationsApplicationService, CommunicationInput } from '@care/communications';
 import type { RequestContext } from '@care/contracts';
@@ -280,11 +281,13 @@ export class OnboardingApplicationService {
           cursor = candidates[candidates.length - 1]!;
           if (candidates.length < batchSize) break;
         }
+        const items = matchingItems.map(({ admission, readiness }) => ({
+          ...redactCaseLinks(principal, admission),
+          readinessSummary: readinessSummary(readiness),
+        }));
+        const namedItems = await this.addCaseReferenceNames(transaction, principal, items);
         return {
-          items: matchingItems.map(({ admission, readiness }) => ({
-            ...redactCaseLinks(principal, admission),
-            readinessSummary: readinessSummary(readiness),
-          })),
+          items: namedItems,
           total,
           page,
           pageSize,
@@ -303,16 +306,145 @@ export class OnboardingApplicationService {
         .limit(pageSize)
         .offset((page - 1) * pageSize);
       const readinessByCase = await this.evaluateReadinessBatch(transaction, principal, items);
-      return {
-        items: items.map((admission) => ({
+      const namedItems = await this.addCaseReferenceNames(
+        transaction,
+        principal,
+        items.map((admission) => ({
           ...redactCaseLinks(principal, admission),
           readinessSummary: readinessSummary(readinessByCase.get(admission.id)!),
         })),
+      );
+      return {
+        items: namedItems,
         total,
         page,
         pageSize,
       };
     });
+  }
+
+  private async addCaseReferenceNames<
+    T extends {
+      id: string;
+      tenantId: string;
+      organizationId: string;
+      facilityId: string | null;
+      ownerEmployeeId: string | null;
+      clientId: string | null;
+    },
+  >(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    rows: T[],
+  ): Promise<
+    Array<
+      T & {
+        organizationName: string | null;
+        facilityName: string | null;
+        ownerEmployeeName: string | null;
+        clientName: string | null;
+      }
+    >
+  > {
+    if (!rows.length) return [];
+    const readable = <K extends 'organization' | 'facility' | 'employee' | 'client'>(
+      action: `${K}.read`,
+      idOf: (row: T) => string | null,
+    ) =>
+      new Set(
+        rows
+          .filter((row) => {
+            const id = idOf(row);
+            if (!id) return false;
+            const resource = caseResource(row);
+            return can(principal, { action, resource });
+          })
+          .map((row) => idOf(row)!)
+          .filter(Boolean),
+      );
+    const organizationIds = readable('organization.read', (row) => row.organizationId);
+    const facilityIds = readable('facility.read', (row) => row.facilityId);
+    const employeeIds = readable('employee.read', (row) => row.ownerEmployeeId);
+    const clientIds = readable('client.read', (row) => row.clientId);
+    const [organizationRows, facilityRows, employeeRows, clientRows] = await Promise.all([
+      organizationIds.size
+        ? transaction
+            .select({ id: organizationsTable.id, name: organizationsTable.name })
+            .from(organizationsTable)
+            .where(
+              and(
+                eq(organizationsTable.tenantId, principal.tenantId),
+                inArray(organizationsTable.id, [...organizationIds]),
+              ),
+            )
+        : [],
+      facilityIds.size
+        ? transaction
+            .select({ id: facilities.id, name: facilities.name })
+            .from(facilities)
+            .where(
+              and(
+                eq(facilities.tenantId, principal.tenantId),
+                inArray(facilities.id, [...facilityIds]),
+              ),
+            )
+        : [],
+      employeeIds.size
+        ? transaction
+            .select({
+              id: employeeRecords.id,
+              firstName: employeeRecords.firstName,
+              preferredName: employeeRecords.preferredName,
+              lastName: employeeRecords.lastName,
+            })
+            .from(employeeRecords)
+            .where(
+              and(
+                eq(employeeRecords.tenantId, principal.tenantId),
+                inArray(employeeRecords.id, [...employeeIds]),
+              ),
+            )
+        : [],
+      clientIds.size
+        ? transaction
+            .select({
+              id: clientRecords.id,
+              firstName: clientRecords.firstName,
+              preferredName: clientRecords.preferredName,
+              lastName: clientRecords.lastName,
+            })
+            .from(clientRecords)
+            .where(
+              and(
+                eq(clientRecords.tenantId, principal.tenantId),
+                inArray(clientRecords.id, [...clientIds]),
+              ),
+            )
+        : [],
+    ]);
+    const organizationNames = new Map(organizationRows.map((row) => [row.id, row.name]));
+    const facilityNames = new Map(facilityRows.map((row) => [row.id, row.name]));
+    const employeeNames = new Map(
+      employeeRows.map((row) => [
+        row.id,
+        `${row.preferredName || row.firstName} ${row.lastName}`,
+      ]),
+    );
+    const clientNames = new Map(
+      clientRows.map((row) => [
+        row.id,
+        `${row.preferredName || row.firstName} ${row.lastName}`,
+      ]),
+    );
+    return rows.map((row) => ({
+      ...row,
+      organizationName: organizationNames.get(row.organizationId) ?? null,
+      facilityName: row.facilityId ? (facilityNames.get(row.facilityId) ?? null) : null,
+      ownerEmployeeName: row.ownerEmployeeId
+        ? (employeeNames.get(row.ownerEmployeeId) ?? null)
+        : null,
+      clientName: row.clientId ? (clientNames.get(row.clientId) ?? null) : null,
+    }));
   }
 
   async create(
@@ -475,6 +607,24 @@ export class OnboardingApplicationService {
             ),
           )
           .orderBy(asc(admissionTransitions.version));
+        const actorIds = [...new Set(history.map((entry) => entry.actorUserId))];
+        const actorRows = actorIds.length
+          ? await transaction
+              .select({ id: users.id, displayName: users.displayName })
+              .from(tenantMemberships)
+              .innerJoin(users, eq(users.id, tenantMemberships.userId))
+              .where(
+                and(
+                  eq(tenantMemberships.tenantId, principal.tenantId),
+                  inArray(users.id, actorIds),
+                ),
+              )
+          : [];
+        const actorNames = new Map(
+          actorRows.flatMap((actor) =>
+            actor.displayName ? ([[actor.id, actor.displayName] as const]) : [],
+          ),
+        );
         const clientReadable = Boolean(
           admission.clientId &&
           can(principal, { action: 'client.read', resource: clientResource(admission) }),
@@ -576,8 +726,28 @@ export class OnboardingApplicationService {
           (left, right) =>
             right.interaction.occurredAt.getTime() - left.interaction.occurredAt.getTime(),
         );
+        const [namedAdmission] = await this.addCaseReferenceNames(transaction, principal, [
+          redactCaseLinks(principal, admission),
+        ]);
+        const canReadFirstVisit =
+          clientReadable &&
+          Boolean(admission.firstVisitId) &&
+          can(principal, { action: 'schedule.read', resource: clientResource(admission) });
+        const firstVisitRows = canReadFirstVisit
+          ? await transaction
+              .select({ id: visits.id, clientId: visits.clientId, plannedStart: visits.plannedStart })
+              .from(visits)
+              .where(
+                and(
+                  eq(visits.tenantId, principal.tenantId),
+                  eq(visits.id, admission.firstVisitId!),
+                  eq(visits.clientId, admission.clientId!),
+                ),
+              )
+          : [];
         return {
-          ...redactCaseLinks(principal, admission),
+          ...namedAdmission!,
+          firstVisitStartsAt: firstVisitRows[0]?.plannedStart ?? null,
           assessment: assessment?.data ?? null,
           checklist: items.map((item) => ({
             ...item,
@@ -585,9 +755,10 @@ export class OnboardingApplicationService {
             finding: readiness.findings.find((finding) => finding.code === item.code) ?? null,
           })),
           readiness,
-          history: history.map((entry) =>
-            clientReadable ? entry : { ...entry, readinessSnapshot: null },
-          ),
+          history: history.map((entry) => ({
+            ...(clientReadable ? entry : { ...entry, readinessSnapshot: null }),
+            actorName: actorNames.get(entry.actorUserId) ?? null,
+          })),
           documents,
           tasks: linkedTasks,
           communications,
@@ -1771,8 +1942,68 @@ export class OnboardingApplicationService {
         .from(checklistTemplateItems)
         .where(and(eq(checklistTemplateItems.tenantId, principal.tenantId), versions))
         .orderBy(asc(checklistTemplateItems.sortOrder));
+      const organizationIds = new Set(
+        templates
+          .filter((template) =>
+            can(principal, {
+              action: 'organization.read',
+              resource: {
+                tenantId: template.tenantId,
+                organizationId: template.organizationId,
+                ...(template.facilityId ? { facilityId: template.facilityId } : {}),
+              },
+            }),
+          )
+          .map((template) => template.organizationId),
+      );
+      const facilityIds = new Set(
+        templates
+          .filter(
+            (template) =>
+              template.facilityId &&
+              can(principal, {
+                action: 'facility.read',
+                resource: {
+                  tenantId: template.tenantId,
+                  organizationId: template.organizationId,
+                  facilityId: template.facilityId,
+                },
+              }),
+          )
+          .map((template) => template.facilityId!),
+      );
+      const [organizationRows, facilityRows] = await Promise.all([
+        organizationIds.size
+          ? transaction
+              .select({ id: organizationsTable.id, name: organizationsTable.name })
+              .from(organizationsTable)
+              .where(
+                and(
+                  eq(organizationsTable.tenantId, principal.tenantId),
+                  inArray(organizationsTable.id, [...organizationIds]),
+                ),
+              )
+          : [],
+        facilityIds.size
+          ? transaction
+              .select({ id: facilities.id, name: facilities.name })
+              .from(facilities)
+              .where(
+                and(
+                  eq(facilities.tenantId, principal.tenantId),
+                  inArray(facilities.id, [...facilityIds]),
+                ),
+              )
+          : [],
+      ]);
+      const organizationNames = new Map(organizationRows.map((row) => [row.id, row.name]));
+      const facilityNames = new Map(facilityRows.map((row) => [row.id, row.name]));
       return templates.map((template) => ({
         ...template,
+        organizationName: organizationNames.get(template.organizationId) ?? null,
+        facilityName: template.facilityId
+          ? (facilityNames.get(template.facilityId) ?? null)
+          : null,
         items: items.filter((item) => item.templateId === template.id),
       }));
     });
@@ -1957,27 +2188,77 @@ export class OnboardingApplicationService {
           ),
         )
         .orderBy(asc(admissionTransitions.version));
+      const namedCases = await this.addCaseReferenceNames(transaction, principal, cases);
+      const namedCaseById = new Map(namedCases.map((admission) => [admission.id, admission]));
+      const readableVisitIds = cases
+        .filter(
+          (admission) =>
+            admission.firstVisitId &&
+            can(principal, { action: 'schedule.read', resource: clientResource(admission) }),
+        )
+        .map((admission) => admission.firstVisitId!);
+      const firstVisits = readableVisitIds.length
+        ? await transaction
+            .select({ id: visits.id, plannedStart: visits.plannedStart })
+            .from(visits)
+            .where(
+              and(
+                eq(visits.tenantId, principal.tenantId),
+                eq(visits.clientId, clientId),
+                inArray(visits.id, readableVisitIds),
+              ),
+            )
+        : [];
+      const firstVisitById = new Map(firstVisits.map((visit) => [visit.id, visit]));
+      const actorIds = [...new Set(transitions.map((entry) => entry.actorUserId))];
+      const actorRows = actorIds.length
+        ? await transaction
+            .select({ id: users.id, displayName: users.displayName })
+            .from(tenantMemberships)
+            .innerJoin(users, eq(users.id, tenantMemberships.userId))
+            .where(
+              and(
+                eq(tenantMemberships.tenantId, principal.tenantId),
+                inArray(users.id, actorIds),
+              ),
+            )
+        : [];
+      const actorNames = new Map(
+        actorRows.flatMap((actor) =>
+          actor.displayName ? ([[actor.id, actor.displayName] as const]) : [],
+        ),
+      );
       const documentsByCase = groupBy(documents, (row) => row.caseId);
       const tasksByCase = groupBy(linkedTasks, (row) => row.caseId);
       const communicationsByCase = groupBy(communications, (row) => row.caseId);
       const historyByCase = groupBy(transitions, (row) => row.caseId);
-      return cases.map((admission) => ({
-        id: admission.id,
-        stage: admission.stage,
-        admittedAt: admission.admittedAt,
-        ownerEmployeeId: admission.ownerEmployeeId,
-        createdAt: admission.createdAt,
-        firstVisitId: can(principal, {
+      return cases.map((admission) => {
+        const firstVisitId = can(principal, {
           action: 'schedule.read',
           resource: clientResource(admission),
         })
           ? admission.firstVisitId
-          : null,
-        documents: documentsByCase.get(admission.id) ?? [],
-        tasks: tasksByCase.get(admission.id) ?? [],
-        communications: communicationsByCase.get(admission.id) ?? [],
-        history: historyByCase.get(admission.id) ?? [],
-      }));
+          : null;
+        return {
+          id: admission.id,
+          stage: admission.stage,
+          admittedAt: admission.admittedAt,
+          ownerEmployeeId: admission.ownerEmployeeId,
+          ownerEmployeeName: namedCaseById.get(admission.id)?.ownerEmployeeName ?? null,
+          createdAt: admission.createdAt,
+          firstVisitId,
+          firstVisitStartsAt: firstVisitId
+            ? (firstVisitById.get(firstVisitId)?.plannedStart ?? null)
+            : null,
+          documents: documentsByCase.get(admission.id) ?? [],
+          tasks: tasksByCase.get(admission.id) ?? [],
+          communications: communicationsByCase.get(admission.id) ?? [],
+          history: (historyByCase.get(admission.id) ?? []).map((entry) => ({
+            ...entry,
+            actorName: actorNames.get(entry.actorUserId) ?? null,
+          })),
+        };
+      });
     });
   }
 

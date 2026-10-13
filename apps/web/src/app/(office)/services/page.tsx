@@ -12,6 +12,7 @@ import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { formatDate, formatNumber } from '@app/web/i18n/format';
 import { statusLabelKey, unitLabelKey } from '@app/web/i18n/status';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
@@ -95,24 +96,25 @@ export default async function ServicesPage({
 
   return (
     <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid gap-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('Services.section')}
-          </p>
-          <h1 className="text-3xl font-semibold">{t('Services.catalogTitle')}</h1>
-          <p className="max-w-2xl text-slate-700">{t('Services.catalogDescription')}</p>
-        </div>
-        {canCreateService ? (
-          <Button asChild>
-            <Link href="/services/new">{t('Services.create')}</Link>
-          </Button>
-        ) : null}
-      </header>
+      <PageHeader
+        eyebrow={t('Services.section')}
+        title={t('Services.catalogTitle')}
+        description={t('Services.catalogDescription')}
+        actions={
+          canCreateService ? (
+            <Button asChild>
+              <Link href="/services/new">{t('Services.create')}</Link>
+            </Button>
+          ) : undefined
+        }
+      />
 
       <ActionNotice error={query.error} updated={query.updated} />
       {servicesResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+        >
           {t('Errors.generic')}
         </p>
       ) : null}
@@ -123,7 +125,7 @@ export default async function ServicesPage({
         </h2>
         <form
           method="get"
-          className="grid gap-3 rounded-lg border bg-white p-4 md:grid-cols-3 lg:grid-cols-4"
+          className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-3 lg:grid-cols-4"
         >
           <Field label={t('Services.nameOrCode')} name="q" defaultValue={q ?? ''} maxLength={120} />
           <SelectField label={t('Common.fields.status')} name="status" defaultValue={status}>
@@ -181,12 +183,12 @@ export default async function ServicesPage({
           <h2 id="service-list-title" className="text-lg font-semibold">
             {t('Services.resultCount', { count: services.total })}
           </h2>
-          <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
+          <div className="overflow-x-auto rounded-lg border bg-card shadow-sm">
             <ShadcnTable className="w-full border-collapse text-left text-sm">
               <ShadcnTableCaption className="sr-only">
                 {t('Services.listCaption')}
               </ShadcnTableCaption>
-              <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+              <ShadcnTableHeader className="border-b bg-muted text-muted-foreground">
                 <ShadcnTableRow>
                   <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Services.code')}
@@ -222,7 +224,7 @@ export default async function ServicesPage({
                     </ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">
                       <Link
-                        className="font-medium text-blue-900 underline-offset-4 hover:underline"
+                        className="font-medium text-primary underline-offset-4 hover:underline"
                         href={`/services/${service.id}`}
                       >
                         {service.name}
@@ -256,7 +258,7 @@ export default async function ServicesPage({
             </ShadcnTable>
           </div>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               {t('Common.pagination', {
                 page: formatNumber(services.page, locale),
                 pages: formatNumber(
@@ -284,23 +286,25 @@ export default async function ServicesPage({
           </div>
         </section>
       ) : !servicesResult.error ? (
-        <p className="rounded-lg border bg-white p-6 text-slate-700">{t('Services.noResults')}</p>
+        <p className="rounded-lg border bg-card p-6 text-muted-foreground">
+          {t('Services.noResults')}
+        </p>
       ) : null}
 
       <section
         aria-labelledby="service-categories-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <div>
           <h2 id="service-categories-title" className="text-xl font-semibold">
             {t('Services.categories')}
           </h2>
-          <p className="text-sm text-slate-600">{t('Services.categoriesDescription')}</p>
+          <p className="text-sm text-muted-foreground">{t('Services.categoriesDescription')}</p>
         </div>
         {canManageCategories ? (
           <RHFActionForm
             action={createServiceCategoryAction}
-            className="grid gap-3 rounded-md bg-slate-50 p-4 md:grid-cols-4"
+            className="grid gap-3 rounded-md bg-background p-4 md:grid-cols-4"
           >
             <Field label={t('Common.fields.name')} name="name" required maxLength={120} />
             <Field label={t('Services.optionalCode')} name="code" maxLength={40} />
@@ -379,7 +383,7 @@ export default async function ServicesPage({
                     <div>
                       <h3 className="font-medium">{category.name}</h3>
                       {category.description ? (
-                        <p className="text-sm text-slate-600">{category.description}</p>
+                        <p className="text-sm text-muted-foreground">{category.description}</p>
                       ) : null}
                     </div>
                     <StatusBadge
@@ -392,11 +396,11 @@ export default async function ServicesPage({
             ))}
           </ul>
         ) : categoriesResult.error ? (
-          <p role="alert" className="text-sm text-red-800">
+          <p role="alert" className="text-sm text-destructive">
             {t('Services.categoryLoadFailed')}
           </p>
         ) : (
-          <p className="text-sm text-slate-600">{t('Services.noCategories')}</p>
+          <p className="text-sm text-muted-foreground">{t('Services.noCategories')}</p>
         )}
       </section>
     </div>
@@ -426,7 +430,7 @@ function Field({
     <label className="grid gap-1 text-sm font-medium">
       {label}
       <input
-        className="h-10 rounded-md border bg-white px-3 font-normal"
+        className="h-10 rounded-md border bg-card px-3 font-normal"
         name={name}
         type={type}
         defaultValue={defaultValue}
@@ -449,7 +453,7 @@ function SelectField({
     <label className="grid gap-1 text-sm font-medium">
       {label}
       <NativeSelect
-        selectClassName="h-10 rounded-md border bg-white px-3 font-normal"
+        selectClassName="h-10 rounded-md border bg-card px-3 font-normal"
         name={name}
         defaultValue={defaultValue}
         className="w-full"

@@ -1,5 +1,6 @@
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
@@ -11,6 +12,7 @@ import {
   hasPermission,
 } from '@app/web/lib/api';
 import { updateAdmissionTemplateAction } from '@app/web/app/(office)/admissions/actions';
+import { ResourceReference } from '@app/web/components/resource-reference';
 
 type TemplateItem = {
   code: string;
@@ -24,6 +26,8 @@ type Template = {
   id: string;
   organizationId: string;
   facilityId: string | null;
+  organizationName?: string | null;
+  facilityName?: string | null;
   name: string;
   currentVersion: number;
   items: TemplateItem[];
@@ -41,7 +45,7 @@ export default async function AdmissionTemplatesPage({
   const permissions = await getPermissionGrants(api);
   if (!hasPermission(permissions, 'onboarding.templates.manage')) {
     return (
-      <p role="alert" className="rounded-md border bg-white p-5">
+      <p role="alert" className="rounded-md border bg-card p-5">
         {t('noAccess')}
       </p>
     );
@@ -51,20 +55,24 @@ export default async function AdmissionTemplatesPage({
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/admissions">{t('title')}</Link>
-        </p>
-        <h1 className="text-3xl font-semibold">{t('manageTemplates')}</h1>
-        <p className="text-slate-700">{t('templateHelp')}</p>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/admissions">{t('title')}</Link>}
+        title={t('manageTemplates')}
+        description={t('templateHelp')}
+      />
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {translate(errorMessageKey(query.error))}
         </p>
       ) : null}
       {result.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+        >
           {t('loadFailed')}
         </p>
       ) : null}
@@ -73,7 +81,7 @@ export default async function AdmissionTemplatesPage({
           <RHFActionForm
             key={template.id}
             action={updateAdmissionTemplateAction}
-            className="grid gap-4 rounded-lg border bg-white p-5"
+            className="grid gap-4 rounded-lg border bg-card p-5"
           >
             <input type="hidden" name="templateId" value={template.id} />
             <input type="hidden" name="expectedVersion" value={template.currentVersion} />
@@ -88,9 +96,21 @@ export default async function AdmissionTemplatesPage({
                   required
                 />
               </label>
-              <p className="text-sm text-slate-600">
-                {t('templateScope')}: {template.organizationId}
-                {template.facilityId ? ` · ${template.facilityId}` : ''} · {t('templateVersion')}{' '}
+              <p className="text-sm text-muted-foreground">
+                {t('templateScope')}:{' '}
+                <ResourceReference
+                  label={template.organizationName ?? translate('Resources.unavailableOrganization')}
+                  href={template.organizationName ? `/administration/organizations/${template.organizationId}` : null}
+                />
+                {template.facilityId ? (
+                  <>
+                    {' · '}
+                    <ResourceReference
+                      label={template.facilityName ?? translate('Resources.unavailableFacility')}
+                      href={template.facilityName ? `/administration/facilities/${template.facilityId}` : null}
+                    />
+                  </>
+                ) : null}{' · '}{t('templateVersion')}{' '}
                 {template.currentVersion}
               </p>
             </header>
@@ -186,7 +206,7 @@ export default async function AdmissionTemplatesPage({
           </RHFActionForm>
         ))
       ) : (
-        <p className="rounded-lg border bg-white p-5 text-slate-700">{t('noTemplates')}</p>
+        <EmptyState title={t('noTemplates')} />
       )}
       <Button asChild variant="secondary" className="justify-self-start">
         <Link href="/admissions">{t('backToWorklist')}</Link>
@@ -240,7 +260,7 @@ function SelectField({
     <label className="grid gap-1 text-sm font-medium">
       {label}
       <NativeSelect
-        selectClassName="h-10 rounded-md border bg-white px-3 font-normal"
+        selectClassName="h-10 rounded-md border bg-card px-3 font-normal"
         name={name}
         defaultValue={value}
         className="w-full"

@@ -1,6 +1,7 @@
 import { Textarea } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -360,17 +361,17 @@ export default async function ClientCommunicationsPage({
     ...invoices.map((invoice) => ({
       type: 'invoice' as const,
       id: invoice.id,
-      label: `${t('sourceTypes.invoice')} · ${invoice.id.slice(0, 8)}`,
+      label: `${t('sourceTypes.invoice')} · ${invoice.invoiceNumber ?? common('Resources.draftInvoice')}`,
     })),
     ...claims.map((claim) => ({
       type: 'claim' as const,
       id: claim.id,
-      label: `${t('sourceTypes.claim')} · ${claim.id.slice(0, 8)}`,
+      label: t('sourceTypes.claim'),
     })),
     ...documents.map((document) => ({
       type: 'document' as const,
       id: document.id,
-      label: `${t('sourceTypes.document')} · ${document.documentType ?? document.id.slice(0, 8)}`,
+      label: `${t('sourceTypes.document')} · ${document.documentType ?? common('Resources.unavailableDocument')}`,
     })),
   ];
   const linkedTasks = new Map<string, Task[]>();
@@ -384,28 +385,33 @@ export default async function ClientCommunicationsPage({
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
-      <header className="grid gap-3 sm:flex sm:items-end sm:justify-between">
-        <div className="grid gap-1">
-          <Link className="text-sm font-semibold text-blue-800" href={`/clients/${client.id}`}>
+      <PageHeader
+        eyebrow={
+          <Link href={`/clients/${client.id}`}>
             {client.preferredName || client.firstName} {client.lastName}
           </Link>
-          <h1 className="text-3xl font-semibold">{t('title')}</h1>
-          <p className="max-w-3xl text-slate-700">{t('description')}</p>
-        </div>
-        <Button asChild variant="secondary">
-          <Link href={`/clients/${client.id}`}>{common('Clients.detail.backToList')}</Link>
-        </Button>
-      </header>
+        }
+        title={t('title')}
+        description={t('description')}
+        actions={
+          <Button asChild variant="secondary">
+            <Link href={`/clients/${client.id}`}>{common('Clients.detail.backToList')}</Link>
+          </Button>
+        }
+      />
 
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {query.error === 'COMMUNICATION_INVALID_INPUT' ? t('loadFailed') : t('loadFailed')}
         </p>
       ) : null}
       {query.updated ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {query.updated === 'recorded'
             ? t('recorded')
@@ -420,7 +426,7 @@ export default async function ClientCommunicationsPage({
       ) : null}
 
       {!canRead && !canManagePreferences ? (
-        <p role="alert" className="rounded-md border bg-white p-5">
+        <p role="alert" className="rounded-md border bg-card p-5">
           {t('noAccess')}
         </p>
       ) : null}
@@ -428,14 +434,14 @@ export default async function ClientCommunicationsPage({
       {canManagePreferences && preferences ? (
         <section
           aria-labelledby="communication-preferences-title"
-          className="grid gap-4 rounded-lg border bg-white p-5"
+          className="grid gap-4 rounded-lg border bg-card p-5"
         >
           <div>
             <h2 id="communication-preferences-title" className="text-xl font-semibold">
               {t('preferences')}
             </h2>
-            <p className="text-sm text-slate-600">{t('preferencesDescription')}</p>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">{t('preferencesDescription')}</p>
+            <p className="text-sm text-muted-foreground">
               {t('consentStatus', {
                 status: t(`consentStatuses.${preferences.consentStatus}`),
               })}
@@ -526,7 +532,7 @@ export default async function ClientCommunicationsPage({
           {canCreate ? (
             <section
               aria-labelledby="new-interaction-title"
-              className="grid gap-4 rounded-lg border bg-white p-5"
+              className="grid gap-4 rounded-lg border bg-card p-5"
             >
               <h2 id="new-interaction-title" className="text-xl font-semibold">
                 {t('newInteraction')}
@@ -641,7 +647,7 @@ export default async function ClientCommunicationsPage({
                     name="summary"
                     maxLength={4000}
                     rows={3}
-                    className="rounded-md border bg-white px-3 py-2"
+                    className="rounded-md border bg-card px-3 py-2"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -654,7 +660,7 @@ export default async function ClientCommunicationsPage({
           {selectedInteraction ? (
             <section
               aria-labelledby="amendment-history-title"
-              className="grid gap-3 rounded-lg border bg-white p-5"
+              className="grid gap-3 rounded-lg border bg-card p-5"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 id="amendment-history-title" className="text-xl font-semibold">
@@ -672,14 +678,14 @@ export default async function ClientCommunicationsPage({
                   {selectedHistory.amendments.map((amendment, index) => (
                     <li key={String(amendment.id ?? index)} className="rounded-md border p-3">
                       <p className="font-medium">{String(amendment.subject ?? '')}</p>
-                      <p className="text-sm text-slate-600">
+                      <p className="text-sm text-muted-foreground">
                         {t('priorVersion', { version: Number(amendment.version ?? 0) })} ·{' '}
                         {String(amendment.reason ?? '')}
                       </p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted-foreground">
                         {t('amendedBy', {
                           userId: String(
-                            amendment.recordedByName ?? amendment.recordedByUserId ?? '',
+                            amendment.recordedByName ?? common('Resources.unavailableUser'),
                           ),
                         })}
                         {typeof amendment.recordedAt === 'string'
@@ -695,7 +701,7 @@ export default async function ClientCommunicationsPage({
                   ))}
                 </ol>
               ) : (
-                <p className="text-sm text-slate-600">{t('noAmendments')}</p>
+                <p className="text-sm text-muted-foreground">{t('noAmendments')}</p>
               )}
             </section>
           ) : null}
@@ -705,13 +711,13 @@ export default async function ClientCommunicationsPage({
               <h2 id="communication-history-title" className="text-xl font-semibold">
                 {common('Clients.detail.communicationsSummary')}
               </h2>
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 {interactionResult.data?.total ?? interactions.length}
               </p>
             </div>
             <form
               method="get"
-              className="grid gap-3 rounded-lg border bg-white p-4 sm:grid-cols-2 lg:grid-cols-5"
+              className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5"
             >
               <input type="hidden" name="page" value="1" />
               <div className="grid gap-2">
@@ -774,24 +780,24 @@ export default async function ClientCommunicationsPage({
               </div>
             </form>
             {interactionResult.error ? (
-              <p role="alert" className="rounded-md border bg-white p-4">
+              <p role="alert" className="rounded-md border bg-card p-4">
                 {t('loadFailed')}
               </p>
             ) : null}
             {interactions.length ? (
               <ul className="grid gap-3">
                 {interactions.map((interaction) => (
-                  <li key={interaction.id} className="grid gap-4 rounded-lg border bg-white p-4">
+                  <li key={interaction.id} className="grid gap-4 rounded-lg border bg-card p-4">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="grid gap-1">
                         <h3 className="font-semibold">{interaction.subject}</h3>
-                        <p className="text-sm text-slate-600">
+                        <p className="text-sm text-muted-foreground">
                           {formatDateTime(interaction.occurredAt, locale)} ·{' '}
                           {t(`channels.${interaction.channel}`)} ·{' '}
                           {t(`categories.${interaction.category}`)}
                         </p>
                       </div>
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs">
+                      <span className="rounded-full bg-muted px-3 py-1 text-xs">
                         {t(`directions.${interaction.direction}`)}
                       </span>
                     </div>
@@ -812,7 +818,7 @@ export default async function ClientCommunicationsPage({
                       <div>
                         <dt className="inline font-medium">{t('recordedBy')}: </dt>
                         <dd className="inline">
-                          {interaction.recordedByName ?? interaction.recordedByUserId}
+                          {interaction.recordedByName ?? common('Resources.unavailableUser')}
                         </dd>
                       </div>
                       {interaction.contactLabel ? (
@@ -827,7 +833,7 @@ export default async function ClientCommunicationsPage({
                           <dd className="inline">
                             {sourceHref(interaction.source, client.id) ? (
                               <Link
-                                className="text-blue-800 underline"
+                                className="text-primary underline"
                                 href={sourceHref(interaction.source, client.id)!}
                               >
                                 {typeof interaction.source.type === 'string'
@@ -844,10 +850,10 @@ export default async function ClientCommunicationsPage({
                       ) : null}
                     </dl>
                     {linkedTasks.get(interaction.id)?.map((task) => (
-                      <p key={task.id} className="rounded-md bg-blue-50 p-3 text-sm">
+                      <p key={task.id} className="rounded-md bg-accent p-3 text-sm">
                         {t('followUpTask')}:{' '}
                         <Link
-                          className="font-medium text-blue-900 underline"
+                          className="font-medium text-primary underline"
                           href={`/operations/tasks/${task.id}`}
                         >
                           {task.title}
@@ -902,7 +908,7 @@ export default async function ClientCommunicationsPage({
                             maxLength={4000}
                             rows={2}
                             defaultValue={interaction.summary ?? ''}
-                            className="rounded-md border bg-white px-3 py-2"
+                            className="rounded-md border bg-card px-3 py-2"
                           />
                         </div>
                         <div className="md:col-span-2">
@@ -983,11 +989,11 @@ export default async function ClientCommunicationsPage({
                 ))}
               </ul>
             ) : (
-              <p className="rounded-lg border bg-white p-5 text-slate-700">{t('empty')}</p>
+              <EmptyState title={t('empty')} />
             )}
             {interactionResult.data && interactionResult.data.total > 25 ? (
               <nav aria-label={t('historyPages')} className="flex items-center justify-between">
-                <p className="text-sm text-slate-600">
+                <p className="text-sm text-muted-foreground">
                   {historyPage} / {Math.ceil(interactionResult.data.total / 25)}
                 </p>
                 <div className="flex gap-2">
@@ -1102,7 +1108,7 @@ function SelectField({
         id={id}
         name={name}
         defaultValue={defaultValue}
-        selectClassName="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-card px-3"
         className="w-full"
       >
         {children}

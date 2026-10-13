@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceCardLink, ResourceReference } from '@app/web/components/resource-reference';
 import { auditActionKey } from '@app/web/i18n/audit';
 import { statusLabelKey } from '@app/web/i18n/status';
 import { errorMessageKey } from '@app/web/i18n/errors';
@@ -241,9 +242,16 @@ export default async function ClientDetailPage({
     stage: string;
     admittedAt: string | null;
     ownerEmployeeId: string | null;
+    ownerEmployeeName?: string | null;
     createdAt: string;
     firstVisitId: string | null;
-    history: Array<{ version: number; toStage: string; occurredAt: string }>;
+    firstVisitStartsAt?: string | null;
+    history: Array<{
+      version: number;
+      toStage: string;
+      occurredAt: string;
+      actorName?: string | null;
+    }>;
     documents: Array<{ id: string; requirementCode: string; status: string }>;
     tasks: Array<{ id: string; title: string; status: string; dueAt: string | null }>;
     communications: Array<{
@@ -403,7 +411,7 @@ export default async function ClientDetailPage({
   ];
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-6">
+    <div className="mx-auto grid max-w-6xl gap-5">
       <PageHeader
         eyebrow={<Link href="/clients">{t('Clients.title')}</Link>}
         title={
@@ -413,25 +421,97 @@ export default async function ClientDetailPage({
         }
         meta={
           client ? (
-            <StatusBadge status={client.status} label={t(statusLabelKey(client.status))} />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+              <StatusBadge status={client.status} label={t(statusLabelKey(client.status))} />
+              <span>
+                {client.organizationId
+                  ? (() => {
+                      const name = organizationName(
+                        organizations,
+                        client.organizationId,
+                        t('Clients.detail.unknownOrganization'),
+                      );
+                      return (
+                        <ResourceReference
+                          label={name}
+                          href={
+                            organizations.some((item) => item.id === client.organizationId) &&
+                            hasClientPermission(
+                              permissions,
+                              'organization.read',
+                              tenantId,
+                              client.organizationId,
+                              null,
+                            )
+                              ? `/administration/organizations/${client.organizationId}`
+                              : null
+                          }
+                        />
+                      );
+                    })()
+                  : t('Clients.detail.legacyUnassigned')}
+              </span>
+              {client.primaryFacilityId ? (
+                <span>
+                  ·{' '}
+                  {(() => {
+                    const name = facilityName(
+                      facilities,
+                      client.primaryFacilityId,
+                      t('Clients.detail.unknownFacility'),
+                    );
+                    return (
+                      <ResourceReference
+                        label={name}
+                        href={
+                          facilities.some((item) => item.id === client.primaryFacilityId) &&
+                          client.organizationId &&
+                          hasClientPermission(
+                            permissions,
+                            'facility.read',
+                            tenantId,
+                            client.organizationId,
+                            client.primaryFacilityId,
+                          )
+                            ? `/administration/facilities/${client.primaryFacilityId}`
+                            : null
+                        }
+                      />
+                    );
+                  })()}
+                </span>
+              ) : null}
+            </div>
           ) : null
         }
         actions={
-          <Button asChild variant="outline">
-            <Link href="/clients">{t('Clients.detail.backToList')}</Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {client && canManageSchedule ? (
+              <Button asChild className="min-h-11">
+                <Link href={`/planning?clientId=${encodeURIComponent(client.id)}`}>
+                  {t('Planning.createVisit')}
+                </Link>
+              </Button>
+            ) : null}
+            <Button asChild variant="outline" className="min-h-11">
+              <Link href="/clients">{t('Clients.detail.backToList')}</Link>
+            </Button>
+          </div>
         }
       />
 
       {actionError ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-destructive"
+        >
           {t(errorMessageKey(actionError))}
         </p>
       ) : null}
       {query.updated === 'scheduling_preferences' || query.updated === 'routing_location' ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/30 bg-success-muted p-3 text-success-foreground"
         >
           {query.updated === 'scheduling_preferences'
             ? t('Clients.detail.schedulingPreferencesSaved')
@@ -439,14 +519,17 @@ export default async function ClientDetailPage({
         </p>
       ) : null}
       {!client ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+        >
           {t('Clients.detail.loadFailed')}
         </p>
       ) : (
         <>
           <nav
             aria-label={t('Clients.detail.navigationLabel')}
-            className="flex flex-wrap gap-2 border-b pb-3 text-sm"
+            className="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-border py-1 text-sm [scrollbar-width:thin]"
           >
             <SectionLink href="#overview">{t('Clients.detail.overviewTab')}</SectionLink>
             <SectionLink href="#contacts">{t('Clients.detail.contactsTab')}</SectionLink>
@@ -455,14 +538,14 @@ export default async function ClientDetailPage({
               <SectionLink href="#documents">{t('Documents.title')}</SectionLink>
             ) : null}
             <Link
-              className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
+              className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
               href={`/clients/${client.id}/service-agreements`}
             >
               {t('Clients.detail.servicePlanningTab')}
             </Link>
             {hasPermission(permissions, 'operations.read') ? (
               <Link
-                className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
+                className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 href={`/operations/deadlines?clientId=${client.id}`}
               >
                 {t('Operations.clientDeadlines')}
@@ -470,7 +553,7 @@ export default async function ClientDetailPage({
             ) : null}
             {canReadBenefits ? (
               <Link
-                className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
+                className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 href={`/clients/${client.id}/benefits`}
               >
                 {t('Clients.detail.benefitsTab')}
@@ -478,7 +561,7 @@ export default async function ClientDetailPage({
             ) : null}
             {canReadBilling ? (
               <Link
-                className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
+                className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 href={`/clients/${client.id}/invoices`}
               >
                 {t('Clients.detail.invoicesTab')}
@@ -487,7 +570,7 @@ export default async function ClientDetailPage({
             <SectionLink href="#visits">{t('Clients.detail.visitsTab')}</SectionLink>
             {canReadCommunications ? (
               <Link
-                className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50"
+                className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 href={`/clients/${client.id}/communications`}
               >
                 {t('Clients.detail.communicationsTab')}
@@ -499,325 +582,6 @@ export default async function ClientDetailPage({
             <SectionLink href="#timeline">{t('Clients.detail.timelineTab')}</SectionLink>
           </nav>
 
-          {canReadCommunications ? (
-            <section className="grid gap-3 rounded-lg border bg-white p-4 sm:grid-cols-[1fr_auto]">
-              <div className="grid gap-2">
-                <div>
-                  <h2 className="font-semibold">{t('Clients.detail.communicationsSummary')}</h2>
-                  <p className="text-sm text-slate-600">
-                    {t('Clients.detail.communicationsSummaryDescription')}
-                  </p>
-                </div>
-                <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
-                  {communicationsSummary?.preferredChannel ? (
-                    <div>
-                      <dt className="inline font-medium">
-                        {t('Communications.preferredChannel')}:{' '}
-                      </dt>
-                      <dd className="inline">
-                        {communicationChannelLabels[communicationsSummary.preferredChannel] ??
-                          communicationsSummary.preferredChannel}
-                      </dd>
-                    </div>
-                  ) : null}
-                  {communicationsSummary?.preferredContactName ? (
-                    <div>
-                      <dt className="inline font-medium">
-                        {t('Communications.preferredContact')}:{' '}
-                      </dt>
-                      <dd className="inline">{communicationsSummary.preferredContactName}</dd>
-                    </div>
-                  ) : null}
-                  {communicationsSummary?.primaryAuthorizedContact ? (
-                    <div>
-                      <dt className="inline font-medium">
-                        {t('Communications.primaryAuthorizedContact')}:{' '}
-                      </dt>
-                      <dd className="inline">
-                        {communicationsSummary.primaryAuthorizedContact.name} ·{' '}
-                        {contactAuthorizationLabels[
-                          communicationsSummary.primaryAuthorizedContact.authorization
-                        ] ?? communicationsSummary.primaryAuthorizedContact.authorization}
-                      </dd>
-                    </div>
-                  ) : null}
-                  {communicationsSummary?.mostRecentInteraction ? (
-                    <div>
-                      <dt className="inline font-medium">
-                        {t('Communications.mostRecentInteraction')}:{' '}
-                      </dt>
-                      <dd className="inline">
-                        {communicationsSummary.mostRecentInteraction.subject} ·{' '}
-                        {formatDateTime(
-                          communicationsSummary.mostRecentInteraction.occurredAt,
-                          locale,
-                        )}
-                      </dd>
-                    </div>
-                  ) : null}
-                </dl>
-                {canReadCommunicationTasks && communicationsSummary?.openFollowUps.length ? (
-                  <div className="grid gap-1">
-                    <p className="text-sm font-medium">{t('Communications.openFollowUps')}</p>
-                    <ul className="grid gap-1 text-sm">
-                      {communicationsSummary.openFollowUps.map((task) => (
-                        <li key={task.id}>
-                          <Link
-                            className="text-blue-900 underline"
-                            href={`/operations/tasks/${task.id}`}
-                          >
-                            {task.title}
-                          </Link>
-                          {' · '}
-                          {operationTaskStatusLabels[task.status] ?? task.status}
-                          {task.dueAt ? ` · ${formatDateTime(task.dueAt, locale)}` : ''}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-              <Button asChild variant="secondary">
-                <Link href={`/clients/${client.id}/communications`}>
-                  {t('Clients.detail.openCommunications')}
-                </Link>
-              </Button>
-            </section>
-          ) : null}
-
-          {canReadDocuments ? (
-            <section
-              id="documents"
-              aria-labelledby="documents-title"
-              className="grid gap-3 rounded-lg border bg-white p-5 scroll-mt-6"
-            >
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 id="documents-title" className="text-xl font-semibold">
-                  {t('Documents.title')}
-                </h2>
-                <p className="text-sm text-slate-600">
-                  {t('Documents.historyCount', { count: documents.length })}
-                </p>
-              </div>
-              <form
-                method="get"
-                action={`/clients/${client.id}`}
-                className="flex flex-wrap items-end gap-2"
-              >
-                <div className="grid gap-1">
-                  <Label htmlFor="document-type-filter">{t('Documents.filterType')}</Label>
-                  <NativeSelect
-                    id="document-type-filter"
-                    name="documentType"
-                    defaultValue={selectedDocumentType ?? ''}
-                    selectClassName="h-10 rounded-md border bg-white px-3"
-                    className="w-full"
-                  >
-                    <option value="">{t('Documents.allDocumentTypes')}</option>
-                    {clientDocumentTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {t(`Documents.documentTypes.${type}`)}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                </div>
-                <Button type="submit" variant="secondary">
-                  {t('Documents.applyFilter')}
-                </Button>
-              </form>
-              {documents.length ? (
-                <ul className="grid gap-2">
-                  {documents.map((document) => (
-                    <li
-                      key={document.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
-                    >
-                      <div>
-                        <h3 className="font-medium">
-                          {t(`Documents.documentTypes.${document.documentType}`)}
-                        </h3>
-                        <p className="text-sm text-slate-600">
-                          {formatDateTime(document.generatedAt ?? document.createdAt, locale)} ·{' '}
-                          {t(`Documents.status.${document.status}`)} ·{' '}
-                          {document.locale.toUpperCase()}
-                        </p>
-                      </div>
-                      {document.status === 'ready' ? (
-                        <Button asChild variant="secondary">
-                          <Link href={`/documents/${document.id}/pdf`}>
-                            {t('Documents.download')}
-                          </Link>
-                        </Button>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-slate-700">
-                  {selectedDocumentType
-                    ? t('Documents.historyFilterEmpty')
-                    : t('Documents.historyEmpty')}
-                </p>
-              )}
-              {documentPage > 1 || documentList?.hasMore ? (
-                <nav aria-label={t('Documents.historyPagination')} className="flex gap-2">
-                  {documentPage > 1 ? (
-                    <Button asChild variant="secondary">
-                      <Link
-                        href={clientDocumentsHref(
-                          client.id,
-                          documentPage - 1,
-                          selectedDocumentType,
-                        )}
-                      >
-                        {t('Documents.previousPage')}
-                      </Link>
-                    </Button>
-                  ) : null}
-                  {documentList?.hasMore ? (
-                    <Button asChild variant="secondary">
-                      <Link
-                        href={clientDocumentsHref(
-                          client.id,
-                          documentPage + 1,
-                          selectedDocumentType,
-                        )}
-                      >
-                        {t('Documents.nextPage')}
-                      </Link>
-                    </Button>
-                  ) : null}
-                </nav>
-              ) : null}
-            </section>
-          ) : null}
-
-          {canReadAdmissions ? (
-            <section
-              id="admissions"
-              aria-labelledby="admissions-title"
-              className="grid gap-3 scroll-mt-6"
-            >
-              <h2 id="admissions-title" className="text-xl font-semibold">
-                {t('Onboarding.title')}
-              </h2>
-              {admissionHistoryResult?.error ? (
-                <p role="alert" className="rounded-lg border bg-white p-5">
-                  {t('Onboarding.loadFailed')}
-                </p>
-              ) : admissionHistory.length ? (
-                <ul className="grid gap-3">
-                  {admissionHistory.map((entry) => (
-                    <li key={entry.id} className="rounded-lg border bg-white p-4">
-                      <Link
-                        className="font-semibold text-blue-800 underline"
-                        href={`/admissions/${entry.id}`}
-                      >
-                        {t('Onboarding.stage')}:{' '}
-                        {t(
-                          `Onboarding.${entry.stage === 'assessment' ? 'assessmentStage' : entry.stage}` as 'Onboarding.inquiry',
-                        )}
-                      </Link>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {entry.admittedAt
-                          ? t('Onboarding.admitted') +
-                            ' · ' +
-                            formatDateTime(entry.admittedAt, locale)
-                          : formatDate(entry.createdAt, locale)}
-                      </p>
-                      {entry.ownerEmployeeId ? (
-                        <p className="mt-1 text-sm text-slate-600">
-                          {t('Onboarding.ownerEmployee')}: {entry.ownerEmployeeId}
-                        </p>
-                      ) : null}
-                      {entry.firstVisitId ? (
-                        <p className="mt-1 text-sm">
-                          {t('Onboarding.firstScheduledVisit')}:{' '}
-                          <Link
-                            className="text-blue-800 underline"
-                            href={`/visits/${entry.firstVisitId}`}
-                          >
-                            {entry.firstVisitId}
-                          </Link>
-                        </p>
-                      ) : null}
-                      {entry.history.length ? (
-                        <div className="mt-3 border-t pt-3">
-                          <h3 className="font-medium">{t('Onboarding.admissionHistory')}</h3>
-                          <ol className="mt-2 grid gap-1 text-sm text-slate-600">
-                            {entry.history.map((transition) => (
-                              <li key={`${entry.id}-${transition.version}`}>
-                                {t(
-                                  `Onboarding.${transition.toStage === 'assessment' ? 'assessmentStage' : transition.toStage}` as 'Onboarding.inquiry',
-                                )}{' '}
-                                · {formatDateTime(transition.occurredAt, locale)}
-                              </li>
-                            ))}
-                          </ol>
-                        </div>
-                      ) : null}
-                      {entry.documents.length ? (
-                        <div className="mt-3 border-t pt-3">
-                          <h3 className="font-medium">{t('Onboarding.admissionDocuments')}</h3>
-                          <ul className="mt-2 grid gap-1 text-sm text-slate-600">
-                            {entry.documents.map((document) => (
-                              <li key={document.id}>
-                                {document.requirementCode} · {document.status} · {document.id}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                      {entry.tasks.some(
-                        (task) => !['completed', 'cancelled'].includes(task.status),
-                      ) ? (
-                        <div className="mt-3 border-t pt-3">
-                          <h3 className="font-medium">{t('Onboarding.admissionTasks')}</h3>
-                          <ul className="mt-2 grid gap-1 text-sm">
-                            {entry.tasks
-                              .filter((task) => !['completed', 'cancelled'].includes(task.status))
-                              .map((task) => (
-                                <li key={task.id}>
-                                  <Link
-                                    className="text-blue-800 underline"
-                                    href={`/operations/tasks/${task.id}`}
-                                  >
-                                    {task.title}
-                                  </Link>{' '}
-                                  · {task.status}
-                                  {task.dueAt ? ` · ${formatDateTime(task.dueAt, locale)}` : ''}
-                                </li>
-                              ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                      {entry.communications.length ? (
-                        <ul className="mt-3 grid gap-2 border-t pt-3 text-sm">
-                          {entry.communications.map((interaction) => (
-                            <li key={interaction.id}>
-                              <p className="font-medium">
-                                {interaction.subject} ·{' '}
-                                {formatDateTime(interaction.occurredAt, locale)}
-                              </p>
-                              {interaction.summary ? (
-                                <p className="whitespace-pre-wrap text-slate-600">
-                                  {interaction.summary}
-                                </p>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="rounded-lg border bg-white p-5 text-slate-700">
-                  {t('Onboarding.noHistory')}
-                </p>
-              )}
-            </section>
-          ) : null}
           <section
             id="overview"
             aria-labelledby="overview-title"
@@ -826,7 +590,7 @@ export default async function ClientDetailPage({
             <h2 id="overview-title" className="text-xl font-semibold">
               {t('Clients.detail.overview')}
             </h2>
-            <dl className="grid gap-4 rounded-lg border bg-white p-5 sm:grid-cols-2 lg:grid-cols-3">
+            <dl className="grid gap-4 rounded-lg border bg-card p-5 sm:grid-cols-2 lg:grid-cols-3">
               <Field label={t('Clients.form.firstName')} value={client.firstName} />
               <Field label={t('Clients.form.lastName')} value={client.lastName} />
               <Field label={t('Clients.form.preferredName')} value={client.preferredName} />
@@ -878,7 +642,7 @@ export default async function ClientDetailPage({
             </dl>
 
             {canUpdateClient ? (
-              <details className="rounded-lg border bg-white p-5">
+              <details className="rounded-lg border bg-card p-5">
                 <summary className="cursor-pointer font-semibold">
                   {t('Clients.detail.editPersonalData')}
                 </summary>
@@ -972,13 +736,13 @@ export default async function ClientDetailPage({
             ) : null}
 
             <details
-              className="rounded-lg border bg-white p-5"
+              className="rounded-lg border bg-card p-5"
               open={!client.organizationId || !client.primaryFacilityId}
             >
               <summary className="cursor-pointer font-semibold">
                 {t('Clients.detail.providerContext')}
               </summary>
-              <p className="mt-2 text-sm text-slate-700">
+              <p className="mt-2 text-sm text-muted-foreground">
                 {client.organizationId && client.primaryFacilityId
                   ? `${organizationName(organizations, client.organizationId, t('Clients.detail.unknownOrganization'))} / ${facilityName(facilities, client.primaryFacilityId, t('Clients.detail.unknownFacility'))}`
                   : t('Clients.detail.legacyUnassigned')}
@@ -1056,7 +820,7 @@ export default async function ClientDetailPage({
             </h2>
             <div className="grid gap-4">
               {addresses.map((address) => (
-                <article key={address.id} className="grid gap-3 rounded-lg border bg-white p-5">
+                <article key={address.id} className="grid gap-3 rounded-lg border bg-card p-5">
                   <h3 className="font-semibold">
                     {t(addressTypeKey(address.addressType))}
                     {address.isPrimary ? ` · ${t('Clients.detail.primary')}` : ''}
@@ -1146,13 +910,13 @@ export default async function ClientDetailPage({
                       </div>
                     </RHFActionForm>
                   ) : (
-                    <p className="text-sm text-slate-700">{formatAddress(address)}</p>
+                    <p className="text-sm text-muted-foreground">{formatAddress(address)}</p>
                   )}
                 </article>
               ))}
             </div>
             {canUpdateClient ? (
-              <details className="rounded-lg border bg-white p-5">
+              <details className="rounded-lg border bg-card p-5">
                 <summary className="cursor-pointer font-semibold">
                   {t('Clients.detail.addAddress')}
                 </summary>
@@ -1166,17 +930,17 @@ export default async function ClientDetailPage({
 
             <div className="grid gap-4">
               {contacts.map((contact) => (
-                <article key={contact.id} className="rounded-lg border bg-white p-5">
+                <article key={contact.id} className="rounded-lg border bg-card p-5">
                   <h3 className="font-semibold">
                     {contact.firstName} {contact.lastName}
                   </h3>
-                  <p className="mt-1 text-sm text-slate-700">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     {t(relationshipKey(contact.relationshipType))} ·{' '}
                     {contact.roles.map((role) => t(contactRoleKeys[role])).join(', ') ||
                       t('Clients.detail.noContactRole')}
                   </p>
                   {!canUpdateClient ? (
-                    <p className="mt-2 text-sm text-slate-700">
+                    <p className="mt-2 text-sm text-muted-foreground">
                       {[contact.phone, contact.mobile, contact.email].filter(Boolean).join(' · ') ||
                         t('Clients.detail.noContactDetails')}
                     </p>
@@ -1254,7 +1018,7 @@ export default async function ClientDetailPage({
               ))}
             </div>
             {canUpdateClient ? (
-              <details className="rounded-lg border bg-white p-5">
+              <details className="rounded-lg border bg-card p-5">
                 <summary className="cursor-pointer font-semibold">
                   {t('Clients.detail.addContact')}
                 </summary>
@@ -1343,7 +1107,7 @@ export default async function ClientDetailPage({
                     label={t('Clients.detail.contactNotes')}
                     maxLength={500}
                   />
-                  <p className="text-sm text-slate-600">
+                  <p className="text-sm text-muted-foreground">
                     {t('Clients.detail.medicalInformationWarning')}
                   </p>
                   <Button type="submit" className="w-fit">
@@ -1364,7 +1128,7 @@ export default async function ClientDetailPage({
             </h2>
             <div className="grid gap-4">
               {insurances.map((insurance) => (
-                <article key={insurance.id} className="rounded-lg border bg-white p-5">
+                <article key={insurance.id} className="rounded-lg border bg-card p-5">
                   <h3 className="font-semibold">
                     {insurance.insurerName}
                     {insurance.isPrimary ? ` · ${t('Clients.detail.primary')}` : ''}
@@ -1420,7 +1184,7 @@ export default async function ClientDetailPage({
                         <ShadcnCheckbox name="isPrimary" defaultChecked={insurance.isPrimary} />{' '}
                         {t('Clients.detail.primaryInsurance')}
                       </label>
-                      <p className="text-sm text-slate-600">
+                      <p className="text-sm text-muted-foreground">
                         {t('Clients.detail.protectedInsuranceNumber')}
                       </p>
                       <Button type="submit" variant="secondary" className="w-fit">
@@ -1432,7 +1196,7 @@ export default async function ClientDetailPage({
               ))}
             </div>
             {canUpdateClient ? (
-              <details className="rounded-lg border bg-white p-5">
+              <details className="rounded-lg border bg-card p-5">
                 <summary className="cursor-pointer font-semibold">
                   {t('Clients.detail.addInsurance')}
                 </summary>
@@ -1493,12 +1257,12 @@ export default async function ClientDetailPage({
                 grades.map((grade) => {
                   const editableFuture = grade.status === 'pending' && grade.validFrom > today;
                   return (
-                    <article key={grade.id} className="grid gap-3 rounded-lg border bg-white p-5">
+                    <article key={grade.id} className="grid gap-3 rounded-lg border bg-card p-5">
                       <h4 className="font-semibold">
                         {t('Clients.careLevelNumber', { grade: grade.grade })} ·{' '}
                         {t(statusLabelKey(grade.status))}
                       </h4>
-                      <p className="text-sm text-slate-700">
+                      <p className="text-sm text-muted-foreground">
                         {t('Clients.detail.validFrom')} {formatDate(grade.validFrom, locale)}{' '}
                         {t('Clients.detail.validUntil').toLowerCase()}{' '}
                         {formatDate(grade.validUntil, locale)}
@@ -1548,7 +1312,7 @@ export default async function ClientDetailPage({
                           </div>
                         </RHFActionForm>
                       ) : (
-                        <p className="text-sm text-slate-600">
+                        <p className="text-sm text-muted-foreground">
                           {t('Clients.detail.gradeHistoryPolicy')}
                         </p>
                       )}
@@ -1556,12 +1320,12 @@ export default async function ClientDetailPage({
                   );
                 })
               ) : (
-                <p className="rounded-lg border bg-white p-5 text-slate-700">
+                <p className="rounded-lg border bg-card p-5 text-muted-foreground">
                   {t('Clients.detail.noCareLevelHistory')}
                 </p>
               )}
               {canUpdateClient ? (
-                <details className="rounded-lg border bg-white p-5">
+                <details className="rounded-lg border bg-card p-5">
                   <summary className="cursor-pointer font-semibold">
                     {t('Clients.detail.addCareLevel')}
                   </summary>
@@ -1627,18 +1391,18 @@ export default async function ClientDetailPage({
             <section
               id="scheduling"
               aria-labelledby="scheduling-title"
-              className="grid gap-4 rounded-lg border bg-white p-5 scroll-mt-6"
+              className="grid gap-4 rounded-lg border bg-card p-5 scroll-mt-6"
             >
               <div>
                 <h2 id="scheduling-title" className="text-xl font-semibold">
                   {t('Clients.detail.schedulingPreferences')}
                 </h2>
-                <p className="text-sm text-slate-600">
+                <p className="text-sm text-muted-foreground">
                   {t('Clients.detail.schedulingPreferencesDescription')}
                 </p>
               </div>
               {schedulingPreferencesResult?.error || routingLocationResult?.error ? (
-                <p role="alert" className="text-sm text-red-800">
+                <p role="alert" className="text-sm text-destructive">
                   {t(
                     errorMessageKey(
                       schedulingPreferencesResult?.error?.code ??
@@ -1704,7 +1468,7 @@ export default async function ClientDetailPage({
                         id="client-preferred-employee"
                         name="preferredEmployeeId"
                         defaultValue={schedulingPreferences?.preferredEmployeeId ?? ''}
-                        selectClassName="h-10 rounded-md border bg-white px-3"
+                        selectClassName="h-10 rounded-md border bg-card px-3"
                         className="w-full"
                       >
                         <option value="">{t('Clients.detail.noPreferredEmployee')}</option>
@@ -1724,7 +1488,7 @@ export default async function ClientDetailPage({
                         name="avoidedEmployeeIds"
                         multiple
                         defaultValue={schedulingPreferences?.avoidedEmployeeIds ?? []}
-                        selectClassName="min-h-24 rounded-md border bg-white px-3 py-2"
+                        selectClassName="min-h-24 rounded-md border bg-card px-3 py-2"
                         className="w-full"
                       >
                         {schedulingEmployees.map((employee) => (
@@ -1736,11 +1500,11 @@ export default async function ClientDetailPage({
                     </div>
                   </div>
                   {!schedulingEmployees.length ? (
-                    <p className="text-sm text-slate-600">
+                    <p className="text-sm text-muted-foreground">
                       {t('Clients.detail.employeeChoicesUnavailable')}
                     </p>
                   ) : null}
-                  <p className="text-sm text-slate-600">
+                  <p className="text-sm text-muted-foreground">
                     {t('Clients.detail.preferencesAreAdvisory')}
                   </p>
                   <Button type="submit" className="w-fit">
@@ -1753,7 +1517,9 @@ export default async function ClientDetailPage({
                 <div className="grid gap-3 border-t pt-4">
                   <div>
                     <h3 className="font-semibold">{t('Clients.detail.routingLocation')}</h3>
-                    <p className="text-sm text-slate-600">{t('Clients.detail.routingPrivacy')}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {t('Clients.detail.routingPrivacy')}
+                    </p>
                   </div>
                   {canManageSchedule ? (
                     <form
@@ -1788,11 +1554,11 @@ export default async function ClientDetailPage({
                       </Button>
                     </form>
                   ) : routingLocation ? (
-                    <p className="text-sm text-slate-600">
+                    <p className="text-sm text-muted-foreground">
                       {routingLocation.latitude}, {routingLocation.longitude}
                     </p>
                   ) : (
-                    <p className="text-sm text-slate-600">
+                    <p className="text-sm text-muted-foreground">
                       {t('Clients.detail.routingLocationUnavailable')}
                     </p>
                   )}
@@ -1813,18 +1579,27 @@ export default async function ClientDetailPage({
               </Button>
             </div>
             {upcomingVisitsResult.error ? (
-              <p className="rounded-lg border bg-white p-4 text-sm text-slate-600">
+              <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
                 {t('Clients.detail.visitsUnavailable')}
               </p>
             ) : visitItems.length ? (
               <ol className="grid gap-2">
                 {visitItems.map((visit) => {
                   const execution = executionByVisitId.get(visit.id);
+                  const visitHref = hasClientPermission(
+                    permissions,
+                    'schedule.read',
+                    tenantId,
+                    visit.organizationId,
+                    visit.facilityId,
+                  )
+                    ? `/visits/${visit.id}`
+                    : null;
                   return (
                     <li key={visit.id}>
-                      <Link
-                        className="grid gap-1 rounded-lg border bg-white p-4 hover:border-blue-400 sm:grid-cols-[12rem_1fr_auto]"
-                        href={`/visits/${visit.id}`}
+                      <ResourceCardLink
+                        className="grid gap-1 rounded-lg border bg-card p-4 hover:border-primary/40 sm:grid-cols-[12rem_1fr_auto]"
+                        href={visitHref}
                       >
                         <time dateTime={visit.plannedStart}>
                           {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
@@ -1833,7 +1608,7 @@ export default async function ClientDetailPage({
                           <strong>
                             {visit.services.map((service) => service.serviceName).join(' · ')}
                           </strong>
-                          <span className="block text-sm text-slate-600">
+                          <span className="block text-sm text-muted-foreground">
                             {visit.assignments.length
                               ? visit.assignments
                                   .map((assignment) => assignment.employeeDisplayName)
@@ -1841,7 +1616,7 @@ export default async function ClientDetailPage({
                               : t('Clients.detail.unassigned')}
                           </span>
                           {execution ? (
-                            <span className="block text-sm text-slate-600">
+                            <span className="block text-sm text-muted-foreground">
                               {t('Clients.detail.execution')}{' '}
                               {execution.executionStatus === 'completed'
                                 ? t('Common.status.completed')
@@ -1863,7 +1638,7 @@ export default async function ClientDetailPage({
                               ) : null}
                             </span>
                           ) : executionSummariesResult.error ? (
-                            <span className="block text-sm text-slate-600">
+                            <span className="block text-sm text-muted-foreground">
                               {t('Clients.detail.executionStatusUnavailable')}
                             </span>
                           ) : null}
@@ -1875,22 +1650,22 @@ export default async function ClientDetailPage({
                               ? t('Common.status.confirmed')
                               : t('Common.status.planned')}
                         </span>
-                      </Link>
+                      </ResourceCardLink>
                     </li>
                   );
                 })}
               </ol>
             ) : (
-              <p className="rounded-lg border bg-white p-4 text-slate-600">
+              <p className="rounded-lg border bg-card p-4 text-muted-foreground">
                 {t('Clients.detail.noUpcomingVisits')}
               </p>
             )}
             {recentVisitsResult.error ? (
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 {t('Clients.detail.pastExecutionsUnavailable')}
               </p>
             ) : recentExecutionSummariesResult.error ? (
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 {t('Clients.detail.pastExecutionStatusUnavailable')}
               </p>
             ) : recentExecutionItems.length ? (
@@ -1900,11 +1675,20 @@ export default async function ClientDetailPage({
                   {recentExecutionItems.map((visit) => {
                     const execution = recentExecutionByVisitId.get(visit.id);
                     if (!execution) return null;
+                    const visitHref = hasClientPermission(
+                      permissions,
+                      'schedule.read',
+                      tenantId,
+                      visit.organizationId,
+                      visit.facilityId,
+                    )
+                      ? `/visits/${visit.id}`
+                      : null;
                     return (
                       <li key={visit.id}>
-                        <Link
-                          className="grid gap-1 rounded-lg border bg-white p-4 hover:border-blue-400"
-                          href={`/visits/${visit.id}`}
+                        <ResourceCardLink
+                          className="grid gap-1 rounded-lg border bg-card p-4 hover:border-primary/40"
+                          href={visitHref}
                         >
                           <time dateTime={visit.plannedStart}>
                             {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
@@ -1912,7 +1696,7 @@ export default async function ClientDetailPage({
                           <strong>
                             {visit.services.map((service) => service.serviceName).join(' · ')}
                           </strong>
-                          <span className="text-sm text-slate-600">
+                          <span className="text-sm text-muted-foreground">
                             {t('Clients.detail.execution')}{' '}
                             {execution.executionStatus === 'completed'
                               ? t('Common.status.completed')
@@ -1924,7 +1708,7 @@ export default async function ClientDetailPage({
                               ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone, locale)}`
                               : ''}
                           </span>
-                        </Link>
+                        </ResourceCardLink>
                       </li>
                     );
                   })}
@@ -1932,26 +1716,364 @@ export default async function ClientDetailPage({
               </div>
             ) : null}
             {recentCancelledVisitsResult.data?.items.length ? (
-              <details className="rounded-lg border bg-white p-4">
+              <details className="rounded-lg border bg-card p-4">
                 <summary className="cursor-pointer font-semibold">
                   {t('Clients.detail.recentlyCancelledVisits', {
                     count: recentCancelledVisitsResult.data.items.length,
                   })}
                 </summary>
                 <ul className="mt-3 grid gap-2">
-                  {recentCancelledVisitsResult.data.items.map((visit) => (
-                    <li key={visit.id}>
-                      <Link className="text-blue-900 underline" href={`/visits/${visit.id}`}>
-                        {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)} ·{' '}
-                        {visit.services.map((service) => service.serviceName).join(', ')}
-                      </Link>
-                    </li>
-                  ))}
+                  {recentCancelledVisitsResult.data.items.map((visit) => {
+                    const visitHref = hasClientPermission(
+                      permissions,
+                      'schedule.read',
+                      tenantId,
+                      visit.organizationId,
+                      visit.facilityId,
+                    )
+                      ? `/visits/${visit.id}`
+                      : null;
+                    return (
+                      <li key={visit.id}>
+                        <ResourceCardLink href={visitHref} className="text-primary underline">
+                          {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)} ·{' '}
+                          {visit.services.map((service) => service.serviceName).join(', ')}
+                        </ResourceCardLink>
+                      </li>
+                    );
+                  })}
                 </ul>
               </details>
             ) : null}
           </section>
 
+          {canReadCommunications ? (
+            <section className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-[1fr_auto]">
+              <div className="grid gap-2">
+                <div>
+                  <h2 className="font-semibold">{t('Clients.detail.communicationsSummary')}</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {t('Clients.detail.communicationsSummaryDescription')}
+                  </p>
+                </div>
+                <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+                  {communicationsSummary?.preferredChannel ? (
+                    <div>
+                      <dt className="inline font-medium">
+                        {t('Communications.preferredChannel')}:{' '}
+                      </dt>
+                      <dd className="inline">
+                        {communicationChannelLabels[communicationsSummary.preferredChannel] ??
+                          communicationsSummary.preferredChannel}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {communicationsSummary?.preferredContactName ? (
+                    <div>
+                      <dt className="inline font-medium">
+                        {t('Communications.preferredContact')}:{' '}
+                      </dt>
+                      <dd className="inline">{communicationsSummary.preferredContactName}</dd>
+                    </div>
+                  ) : null}
+                  {communicationsSummary?.primaryAuthorizedContact ? (
+                    <div>
+                      <dt className="inline font-medium">
+                        {t('Communications.primaryAuthorizedContact')}:{' '}
+                      </dt>
+                      <dd className="inline">
+                        {communicationsSummary.primaryAuthorizedContact.name} ·{' '}
+                        {contactAuthorizationLabels[
+                          communicationsSummary.primaryAuthorizedContact.authorization
+                        ] ?? communicationsSummary.primaryAuthorizedContact.authorization}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {communicationsSummary?.mostRecentInteraction ? (
+                    <div>
+                      <dt className="inline font-medium">
+                        {t('Communications.mostRecentInteraction')}:{' '}
+                      </dt>
+                      <dd className="inline">
+                        {communicationsSummary.mostRecentInteraction.subject} ·{' '}
+                        {formatDateTime(
+                          communicationsSummary.mostRecentInteraction.occurredAt,
+                          locale,
+                        )}
+                      </dd>
+                    </div>
+                  ) : null}
+                </dl>
+                {canReadCommunicationTasks && communicationsSummary?.openFollowUps.length ? (
+                  <div className="grid gap-1">
+                    <p className="text-sm font-medium">{t('Communications.openFollowUps')}</p>
+                    <ul className="grid gap-1 text-sm">
+                      {communicationsSummary.openFollowUps.map((task) => (
+                        <li key={task.id}>
+                          <Link
+                            className="text-primary underline"
+                            href={`/operations/tasks/${task.id}`}
+                          >
+                            {task.title}
+                          </Link>
+                          {' · '}
+                          {operationTaskStatusLabels[task.status] ?? task.status}
+                          {task.dueAt ? ` · ${formatDateTime(task.dueAt, locale)}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+              <Button asChild variant="secondary">
+                <Link href={`/clients/${client.id}/communications`}>
+                  {t('Clients.detail.openCommunications')}
+                </Link>
+              </Button>
+            </section>
+          ) : null}
+
+          {canReadDocuments ? (
+            <section
+              id="documents"
+              aria-labelledby="documents-title"
+              className="grid gap-3 rounded-lg border bg-card p-5 scroll-mt-6"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 id="documents-title" className="text-xl font-semibold">
+                  {t('Documents.title')}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {t('Documents.historyCount', { count: documents.length })}
+                </p>
+              </div>
+              <form
+                method="get"
+                action={`/clients/${client.id}`}
+                className="flex flex-wrap items-end gap-2"
+              >
+                <div className="grid gap-1">
+                  <Label htmlFor="document-type-filter">{t('Documents.filterType')}</Label>
+                  <NativeSelect
+                    id="document-type-filter"
+                    name="documentType"
+                    defaultValue={selectedDocumentType ?? ''}
+                    selectClassName="h-10 rounded-md border bg-card px-3"
+                    className="w-full"
+                  >
+                    <option value="">{t('Documents.allDocumentTypes')}</option>
+                    {clientDocumentTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {t(`Documents.documentTypes.${type}`)}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </div>
+                <Button type="submit" variant="secondary">
+                  {t('Documents.applyFilter')}
+                </Button>
+              </form>
+              {documents.length ? (
+                <ul className="grid gap-2">
+                  {documents.map((document) => (
+                    <li
+                      key={document.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+                    >
+                      <div>
+                        <h3 className="font-medium">
+                          {t(`Documents.documentTypes.${document.documentType}`)}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {formatDateTime(document.generatedAt ?? document.createdAt, locale)} ·{' '}
+                          {t(`Documents.status.${document.status}`)} ·{' '}
+                          {document.locale.toUpperCase()}
+                        </p>
+                      </div>
+                      {document.status === 'ready' ? (
+                        <Button asChild variant="secondary">
+                          <Link href={`/documents/${document.id}/pdf`}>
+                            {t('Documents.download')}
+                          </Link>
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {selectedDocumentType
+                    ? t('Documents.historyFilterEmpty')
+                    : t('Documents.historyEmpty')}
+                </p>
+              )}
+              {documentPage > 1 || documentList?.hasMore ? (
+                <nav aria-label={t('Documents.historyPagination')} className="flex gap-2">
+                  {documentPage > 1 ? (
+                    <Button asChild variant="secondary">
+                      <Link
+                        href={clientDocumentsHref(
+                          client.id,
+                          documentPage - 1,
+                          selectedDocumentType,
+                        )}
+                      >
+                        {t('Documents.previousPage')}
+                      </Link>
+                    </Button>
+                  ) : null}
+                  {documentList?.hasMore ? (
+                    <Button asChild variant="secondary">
+                      <Link
+                        href={clientDocumentsHref(
+                          client.id,
+                          documentPage + 1,
+                          selectedDocumentType,
+                        )}
+                      >
+                        {t('Documents.nextPage')}
+                      </Link>
+                    </Button>
+                  ) : null}
+                </nav>
+              ) : null}
+            </section>
+          ) : null}
+
+          {canReadAdmissions ? (
+            <section
+              id="admissions"
+              aria-labelledby="admissions-title"
+              className="grid gap-3 scroll-mt-6"
+            >
+              <h2 id="admissions-title" className="text-xl font-semibold">
+                {t('Onboarding.title')}
+              </h2>
+              {admissionHistoryResult?.error ? (
+                <p role="alert" className="rounded-lg border bg-card p-5">
+                  {t('Onboarding.loadFailed')}
+                </p>
+              ) : admissionHistory.length ? (
+                <ul className="grid gap-3">
+                  {admissionHistory.map((entry) => (
+                    <li key={entry.id} className="rounded-lg border bg-card p-4">
+                      <Link
+                        className="font-semibold text-primary underline"
+                        href={`/admissions/${entry.id}`}
+                      >
+                        {t('Onboarding.stage')}:{' '}
+                        {t(
+                          `Onboarding.${entry.stage === 'assessment' ? 'assessmentStage' : entry.stage}` as 'Onboarding.inquiry',
+                        )}
+                      </Link>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {entry.admittedAt
+                          ? t('Onboarding.admitted') +
+                            ' · ' +
+                            formatDateTime(entry.admittedAt, locale)
+                          : formatDate(entry.createdAt, locale)}
+                      </p>
+                      {entry.ownerEmployeeId ? (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {t('Onboarding.ownerEmployee')}:{' '}
+                          <ResourceReference
+                            label={entry.ownerEmployeeName ?? t('Resources.unavailableEmployee')}
+                            href={
+                              entry.ownerEmployeeName ? `/employees/${entry.ownerEmployeeId}` : null
+                            }
+                          />
+                        </p>
+                      ) : null}
+                      {entry.firstVisitId && entry.firstVisitStartsAt ? (
+                        <p className="mt-1 text-sm">
+                          {t('Onboarding.firstScheduledVisit')}:{' '}
+                          <ResourceReference
+                            label={
+                              formatDateTime(entry.firstVisitStartsAt, locale) ??
+                              t('Resources.unavailableVisit')
+                            }
+                            href={canReadSchedule ? `/visits/${entry.firstVisitId}` : null}
+                          />
+                        </p>
+                      ) : null}
+                      {entry.history.length ? (
+                        <div className="mt-3 border-t pt-3">
+                          <h3 className="font-medium">{t('Onboarding.admissionHistory')}</h3>
+                          <ol className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                            {entry.history.map((transition) => (
+                              <li key={`${entry.id}-${transition.version}`}>
+                                {t(
+                                  `Onboarding.${transition.toStage === 'assessment' ? 'assessmentStage' : transition.toStage}` as 'Onboarding.inquiry',
+                                )}{' '}
+                                · {formatDateTime(transition.occurredAt, locale)} ·{' '}
+                                {transition.actorName ?? t('Resources.unavailableUser')}
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      ) : null}
+                      {entry.documents.length ? (
+                        <div className="mt-3 border-t pt-3">
+                          <h3 className="font-medium">{t('Onboarding.admissionDocuments')}</h3>
+                          <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                            {entry.documents.map((document) => (
+                              <li key={document.id}>
+                                {document.requirementCode} · {document.status}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {entry.tasks.some(
+                        (task) => !['completed', 'cancelled'].includes(task.status),
+                      ) ? (
+                        <div className="mt-3 border-t pt-3">
+                          <h3 className="font-medium">{t('Onboarding.admissionTasks')}</h3>
+                          <ul className="mt-2 grid gap-1 text-sm">
+                            {entry.tasks
+                              .filter((task) => !['completed', 'cancelled'].includes(task.status))
+                              .map((task) => (
+                                <li key={task.id}>
+                                  <Link
+                                    className="text-primary underline"
+                                    href={`/operations/tasks/${task.id}`}
+                                  >
+                                    {task.title}
+                                  </Link>{' '}
+                                  · {task.status}
+                                  {task.dueAt ? ` · ${formatDateTime(task.dueAt, locale)}` : ''}
+                                </li>
+                              ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {entry.communications.length ? (
+                        <ul className="mt-3 grid gap-2 border-t pt-3 text-sm">
+                          {entry.communications.map((interaction) => (
+                            <li key={interaction.id}>
+                              <p className="font-medium">
+                                {interaction.subject} ·{' '}
+                                {formatDateTime(interaction.occurredAt, locale)}
+                              </p>
+                              {interaction.summary ? (
+                                <p className="whitespace-pre-wrap text-muted-foreground">
+                                  {interaction.summary}
+                                </p>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="rounded-lg border bg-card p-5 text-muted-foreground">
+                  {t('Onboarding.noHistory')}
+                </p>
+              )}
+            </section>
+          ) : null}
           <section
             id="timeline"
             aria-labelledby="timeline-title"
@@ -1961,19 +2083,21 @@ export default async function ClientDetailPage({
               {t('Clients.detail.timeline')}
             </h2>
             {timeline.length ? (
-              <ol className="grid gap-3 border-l-2 border-blue-200 pl-5">
+              <ol className="grid gap-3 border-l-2 border-primary/30 pl-5">
                 {timeline.map((entry) => (
-                  <li key={entry.id} className="rounded-lg border bg-white p-4">
+                  <li key={entry.id} className="rounded-lg border bg-card p-4">
                     <p className="font-medium">{t(auditActionKey(entry.action))}</p>
-                    <p className="mt-1 text-sm text-slate-600">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       {formatDateTime(entry.occurredAt, locale)} ·{' '}
-                      {t('Clients.detail.editedBy', { actor: entry.actorId })}
+                      {t('Clients.detail.editedBy', {
+                        actor: t('Resources.unavailableUser'),
+                      })}
                     </p>
                   </li>
                 ))}
               </ol>
             ) : (
-              <p className="rounded-lg border bg-white p-5 text-slate-700">
+              <p className="rounded-lg border bg-card p-5 text-muted-foreground">
                 {t('Clients.detail.noTimeline')}
               </p>
             )}
@@ -2077,7 +2201,7 @@ async function RoleChecks({ selected }: { selected: readonly string[] }) {
           </label>
         ))}
       </div>
-      <span className="text-sm text-slate-600">{t('Clients.detail.roleUniqueness')}</span>
+      <span className="text-sm text-muted-foreground">{t('Clients.detail.roleUniqueness')}</span>
     </fieldset>
   );
 }
@@ -2173,7 +2297,7 @@ function SelectField({
       <NativeSelect
         id={id}
         name={name}
-        selectClassName="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-card px-3"
         defaultValue={value}
         required={required}
         className="w-full"
@@ -2187,7 +2311,7 @@ function SelectField({
 function Field({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="grid gap-1">
-      <dt className="text-sm text-slate-600">{label}</dt>
+      <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="break-words font-medium">{value || '—'}</dd>
     </div>
   );
@@ -2195,7 +2319,10 @@ function Field({ label, value }: { label: string; value: string | null }) {
 
 function SectionLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50" href={href}>
+    <Link
+      className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
+      href={href}
+    >
       {children}
     </Link>
   );

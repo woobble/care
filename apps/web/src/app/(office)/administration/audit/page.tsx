@@ -9,6 +9,7 @@ import {
 } from '@care/ui';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { auditActionKey } from '@app/web/i18n/audit';
 import { formatDateTime } from '@app/web/i18n/format';
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
@@ -22,21 +23,22 @@ export default async function AuditPage() {
   });
   return (
     <div className="grid gap-6">
-      <header className="grid gap-1">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration/users">{t('Navigation.administration')}</Link>
-        </p>
-        <h1 className="text-3xl font-semibold">{t('Audit.title')}</h1>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/administration/users">{t('Navigation.administration')}</Link>}
+        title={t('Audit.title')}
+      />
       {error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+        >
           {t('Audit.loadFailed')}
         </p>
       ) : data?.items.length ? (
-        <div className="overflow-x-auto rounded-lg border bg-white">
+        <div className="overflow-x-auto rounded-lg border bg-card">
           <ShadcnTable className="w-full border-collapse text-left text-sm">
             <ShadcnTableCaption className="sr-only">{t('Audit.caption')}</ShadcnTableCaption>
-            <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+            <ShadcnTableHeader className="border-b bg-muted text-muted-foreground">
               <ShadcnTableRow>
                 <ShadcnTableHead scope="col" className="px-4 py-3">
                   {t('Audit.timestamp')}
@@ -58,12 +60,14 @@ export default async function AuditPage() {
                   <ShadcnTableCell className="whitespace-nowrap px-4 py-3">
                     {formatDateTime(entry.timestamp, locale) ?? '—'}
                   </ShadcnTableCell>
-                  <ShadcnTableCell className="px-4 py-3">{entry.actorId}</ShadcnTableCell>
+                  <ShadcnTableCell className="px-4 py-3">
+                    {t('Resources.unavailableUser')}
+                  </ShadcnTableCell>
                   <ShadcnTableCell className="px-4 py-3">
                     {t(auditActionKey(entry.action))}
                   </ShadcnTableCell>
                   <ShadcnTableCell className="px-4 py-3">
-                    {entry.resourceType} · {entry.resourceId}
+                    {t('Resources.unavailableResource')}
                   </ShadcnTableCell>
                 </ShadcnTableRow>
               ))}
@@ -71,7 +75,7 @@ export default async function AuditPage() {
           </ShadcnTable>
         </div>
       ) : (
-        <p className="rounded-lg border bg-white p-5 text-slate-700">{t('Audit.empty')}</p>
+        <EmptyState title={t('Audit.empty')} />
       )}
     </div>
   );

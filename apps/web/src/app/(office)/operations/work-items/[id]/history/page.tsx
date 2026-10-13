@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { formatDateTime } from '@app/web/i18n/format';
 import {
   getApiClient,
@@ -21,10 +22,11 @@ export default async function OperationsDeadlineHistoryPage({
   params,
   searchParams,
 }: Readonly<{ params: Promise<{ id: string }>; searchParams: SearchParams }>) {
-  const [{ id }, query, t, locale] = await Promise.all([
+  const [{ id }, query, t, translate, locale] = await Promise.all([
     params,
     searchParams,
     getTranslations('Operations'),
+    getTranslations(),
     getLocale(),
   ]);
   if (!issueIdPattern.test(id)) notFound();
@@ -34,7 +36,7 @@ export default async function OperationsDeadlineHistoryPage({
   const permissions = await getPermissionGrants(api);
   if (!hasPermission(permissions, 'operations.read'))
     return (
-      <p role="alert" className="rounded-md border bg-white p-5">
+      <p role="alert" className="rounded-md border bg-card p-5">
         {t('noAccess')}
       </p>
     );
@@ -53,25 +55,26 @@ export default async function OperationsDeadlineHistoryPage({
 
   return (
     <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid gap-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('deadlinesTitle')}
-          </p>
-          <h1 className="text-3xl font-semibold">{t('deadlineHistoryTitle')}</h1>
-        </div>
-        <Button asChild variant="secondary">
-          <Link href="/operations/deadlines">{t('deadlinesTitle')}</Link>
-        </Button>
-      </header>
+      <PageHeader
+        eyebrow={t('deadlinesTitle')}
+        title={t('deadlineHistoryTitle')}
+        actions={
+          <Button asChild variant="secondary">
+            <Link href="/operations/deadlines">{t('deadlinesTitle')}</Link>
+          </Button>
+        }
+      />
 
       {error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t('loadFailed')}
         </p>
       ) : null}
       {!data.occurrences.length && !data.interactions.length ? (
-        <p className="rounded-lg border bg-white p-5">{t('noDeadlineHistory')}</p>
+        <EmptyState title={t('noDeadlineHistory')} />
       ) : (
         <>
           <section aria-labelledby="occurrences-title" className="grid gap-3">
@@ -83,7 +86,7 @@ export default async function OperationsDeadlineHistoryPage({
                 {data.occurrences.map((occurrence) => (
                   <li
                     key={occurrence.id}
-                    className="grid gap-1 rounded-lg border bg-white p-4 text-sm"
+                    className="grid gap-1 rounded-lg border bg-card p-4 text-sm"
                   >
                     <strong>
                       {t(occurrence.resolvedAt ? 'resolvedOccurrence' : 'currentOccurrence')}
@@ -114,7 +117,7 @@ export default async function OperationsDeadlineHistoryPage({
                 ))}
               </ol>
             ) : (
-              <p className="rounded-lg border bg-white p-4">{t('noDeadlineHistory')}</p>
+              <EmptyState title={t('noDeadlineHistory')} />
             )}
           </section>
 
@@ -127,14 +130,16 @@ export default async function OperationsDeadlineHistoryPage({
                 {data.interactions.map((interaction) => (
                   <li
                     key={interaction.id}
-                    className="grid gap-1 rounded-lg border bg-white p-4 text-sm"
+                    className="grid gap-1 rounded-lg border bg-card p-4 text-sm"
                   >
                     <strong>
                       {interaction.action === 'acknowledged' ? t('acknowledged') : t('snoozed')}
                     </strong>
                     <span>
                       {formatDateTime(interaction.occurredAt, locale as 'en' | 'de')} ·{' '}
-                      {t('activityBy', { userId: interaction.actorUserId })}
+                      {t('activityBy', {
+                        name: translate('Resources.unavailableUser'),
+                      })}
                     </span>
                     {interaction.snoozedUntil ? (
                       <span>
@@ -147,7 +152,7 @@ export default async function OperationsDeadlineHistoryPage({
                 ))}
               </ol>
             ) : (
-              <p className="rounded-lg border bg-white p-4">{t('noActivity')}</p>
+              <EmptyState title={t('noActivity')} />
             )}
           </section>
 
@@ -155,24 +160,24 @@ export default async function OperationsDeadlineHistoryPage({
             <nav aria-label={t('issuePages')} className="flex items-center justify-between">
               {page > 1 ? (
                 <Link
-                  className="text-blue-800 underline"
+                  className="text-primary underline"
                   href={`/operations/work-items/${id}/history?page=${page - 1}`}
                 >
                   {t('previousPage')}
                 </Link>
               ) : (
-                <span className="text-slate-400">{t('previousPage')}</span>
+                <span className="text-muted-foreground">{t('previousPage')}</span>
               )}
               <span>{t('pageOf', { page: data.page, pages: pageCount })}</span>
               {page < pageCount ? (
                 <Link
-                  className="text-blue-800 underline"
+                  className="text-primary underline"
                   href={`/operations/work-items/${id}/history?page=${page + 1}`}
                 >
                   {t('nextPage')}
                 </Link>
               ) : (
-                <span className="text-slate-400">{t('nextPage')}</span>
+                <span className="text-muted-foreground">{t('nextPage')}</span>
               )}
             </nav>
           ) : null}

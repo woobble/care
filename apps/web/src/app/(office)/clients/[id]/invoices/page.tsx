@@ -1,3 +1,4 @@
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -8,6 +9,7 @@ import {
 } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -98,12 +100,10 @@ export default async function ClientInvoicesPage({
   if (!canRead) {
     return (
       <div className="mx-auto grid max-w-5xl gap-6">
-        <header className="grid gap-2">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            <Link href={`/clients/${client.id}`}>{t('backToClient')}</Link>
-          </p>
-          <h1 className="text-3xl font-semibold">{t('clientInvoicesTitle')}</h1>
-        </header>
+        <PageHeader
+          eyebrow={<Link href={`/clients/${client.id}`}>{t('backToClient')}</Link>}
+          title={t('clientInvoicesTitle')}
+        />
         <Alert>{t('noBillingPermission')}</Alert>
       </div>
     );
@@ -160,39 +160,35 @@ export default async function ClientInvoicesPage({
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
+      <PageHeader
+        eyebrow={<Link href={`/clients/${client.id}`}>{t('backToClient')}</Link>}
+        title={t('clientInvoicesTitle')}
+        description={`${client.preferredName || client.firstName} ${client.lastName}`}
+        actions={
+          <Button asChild variant="secondary">
             <Link href={`/clients/${client.id}`}>{t('backToClient')}</Link>
-          </p>
-          <h1 className="text-3xl font-semibold">{t('clientInvoicesTitle')}</h1>
-          <p className="text-slate-700">
-            {client.preferredName || client.firstName} {client.lastName}
-          </p>
-        </div>
-        <Button asChild variant="secondary">
-          <Link href={`/clients/${client.id}`}>{t('backToClient')}</Link>
-        </Button>
-      </header>
+          </Button>
+        }
+      />
       <BillingNavigation permissions={permissions} />
       {error ? <Alert>{translate(errorMessageKey(error))}</Alert> : null}
       {updated ? <Status>{t('payerArrangementSaved')}</Status> : null}
 
       <section
         aria-labelledby="client-invoice-history"
-        className="grid gap-3 rounded-lg border bg-white p-5"
+        className="grid gap-3 rounded-lg border bg-card p-5"
       >
         <div>
           <h2 id="client-invoice-history" className="text-xl font-semibold">
             {t('invoiceHistory')}
           </h2>
-          <p className="mt-1 text-sm text-slate-700">{t('clientInvoicesDescription')}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('clientInvoicesDescription')}</p>
         </div>
         {invoices.length ? (
           <div className="overflow-x-auto">
             <ShadcnTable className="w-full min-w-[58rem] text-left text-sm">
               <ShadcnTableHeader>
-                <ShadcnTableRow className="border-b text-slate-600">
+                <ShadcnTableRow className="border-b text-muted-foreground">
                   <ShadcnTableHead className="p-2">{t('invoiceNumber')}</ShadcnTableHead>
                   <ShadcnTableHead className="p-2">{t('recipient')}</ShadcnTableHead>
                   <ShadcnTableHead className="p-2">{t('issueDate')}</ShadcnTableHead>
@@ -212,20 +208,22 @@ export default async function ClientInvoicesPage({
             </ShadcnTable>
           </div>
         ) : (
-          <p className="text-sm text-slate-700">{t('invoiceHistoryEmpty')}</p>
+          <p className="text-sm text-muted-foreground">{t('invoiceHistoryEmpty')}</p>
         )}
       </section>
 
       {canReadClaims ? (
         <section
           aria-labelledby="client-claims-title"
-          className="grid gap-3 rounded-lg border bg-white p-5"
+          className="grid gap-3 rounded-lg border bg-card p-5"
         >
           <div>
             <h2 id="client-claims-title" className="text-xl font-semibold">
               {t('clientClaimHistory')}
             </h2>
-            <p className="mt-1 text-sm text-slate-700">{t('clientClaimHistoryDescription')}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t('clientClaimHistoryDescription')}
+            </p>
           </div>
           {claimsResult?.error ? (
             <Alert>{translate(errorMessageKey(claimsResult.error.code))}</Alert>
@@ -233,7 +231,7 @@ export default async function ClientInvoicesPage({
             <div className="overflow-x-auto">
               <ShadcnTable className="w-full min-w-[50rem] text-left text-sm">
                 <ShadcnTableHeader>
-                  <ShadcnTableRow className="border-b text-slate-600">
+                  <ShadcnTableRow className="border-b text-muted-foreground">
                     <ShadcnTableHead className="p-2">{t('claim')}</ShadcnTableHead>
                     <ShadcnTableHead className="p-2">{t('payer')}</ShadcnTableHead>
                     <ShadcnTableHead className="p-2">{t('invoiceNumber')}</ShadcnTableHead>
@@ -248,19 +246,19 @@ export default async function ClientInvoicesPage({
                     <ShadcnTableRow key={claim.id} className="border-b last:border-0">
                       <ShadcnTableCell className="p-2">
                         <Link
-                          className="text-blue-900 underline"
+                          className="text-primary underline"
                           href={'/billing/claims/' + claim.id}
                         >
-                          {claim.id.slice(0, 8)}
+                          {t('claim')}
                         </Link>
                       </ShadcnTableCell>
                       <ShadcnTableCell className="p-2">{claim.payerName}</ShadcnTableCell>
                       <ShadcnTableCell className="p-2">
                         <Link
-                          className="text-blue-900 underline"
+                          className="text-primary underline"
                           href={'/billing/invoices/' + claim.invoiceId}
                         >
-                          {claim.invoiceNumber ?? claim.invoiceId.slice(0, 8)}
+                          {claim.invoiceNumber ?? t('draftIdentifier')}
                         </Link>
                       </ShadcnTableCell>
                       <ShadcnTableCell className="p-2">
@@ -283,19 +281,19 @@ export default async function ClientInvoicesPage({
               </ShadcnTable>
             </div>
           ) : (
-            <p className="text-sm text-slate-700">{t('clientClaimHistoryEmpty')}</p>
+            <p className="text-sm text-muted-foreground">{t('clientClaimHistoryEmpty')}</p>
           )}
         </section>
       ) : null}
       <section
         aria-labelledby="payer-arrangements-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <div>
           <h2 id="payer-arrangements-title" className="text-xl font-semibold">
             {t('payerArrangements')}
           </h2>
-          <p className="mt-1 text-sm text-slate-700">{t('payerArrangementsDescription')}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('payerArrangementsDescription')}</p>
         </div>
         {arrangements.length ? (
           <ul className="grid gap-3">
@@ -306,23 +304,23 @@ export default async function ClientInvoicesPage({
                     {arrangement.recipientName ??
                       t(`recipientTypes.${recipientTypeKey(arrangement.recipientType)}`)}
                   </h3>
-                  <p className="text-sm text-slate-700">
+                  <p className="text-sm text-muted-foreground">
                     {t(`payerTypes.${payerTypeKey(arrangement.payerType)}`)} ·{' '}
                     {t(`arrangementTypes.${arrangementTypeKey(arrangement.arrangementType)}`)} ·{' '}
                     {formatDate(arrangement.validFrom, locale)} –{' '}
                     {formatDate(arrangement.validUntil, locale) ?? '—'}
                   </p>
-                  <p className="text-sm text-slate-700">
+                  <p className="text-sm text-muted-foreground">
                     {t('payerDirectoryEntry')}:{' '}
                     {payerNames.get(arrangement.payerId ?? '') ?? t('payerNotLinked')}
                   </p>
                   {arrangement.payerReference ? (
-                    <p className="text-sm text-slate-700">
+                    <p className="text-sm text-muted-foreground">
                       {t('payerReference')}: {arrangement.payerReference}
                     </p>
                   ) : null}
                   {arrangement.recipientAddress ? (
-                    <p className="whitespace-pre-line text-sm text-slate-700">
+                    <p className="whitespace-pre-line text-sm text-muted-foreground">
                       {arrangement.recipientAddress}
                     </p>
                   ) : null}
@@ -387,7 +385,7 @@ export default async function ClientInvoicesPage({
                     </Button>
                   </RHFActionForm>
                 ) : (
-                  <p className="text-sm text-slate-700">
+                  <p className="text-sm text-muted-foreground">
                     {t(`mandateStatuses.${mandateStatusKey(arrangement.mandateStatus)}`)}
                   </p>
                 )}
@@ -395,7 +393,7 @@ export default async function ClientInvoicesPage({
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-700">{t('payerArrangementsEmpty')}</p>
+          <p className="text-sm text-muted-foreground">{t('payerArrangementsEmpty')}</p>
         )}
         {canManage && client.organizationId ? (
           <RHFActionForm
@@ -513,7 +511,7 @@ export default async function ClientInvoicesPage({
               name="documentedReference"
               label={t('documentedReference')}
             />
-            <p className="text-sm text-amber-900 md:col-span-2">{t('payerMandateNote')}</p>
+            <p className="text-sm text-warning-foreground md:col-span-2">{t('payerMandateNote')}</p>
             <Button type="submit" className="w-fit md:col-span-2">
               {t('createPayerArrangement')}
             </Button>
@@ -542,8 +540,8 @@ function InvoiceRow({
   return (
     <ShadcnTableRow className="border-b last:border-0">
       <ShadcnTableCell className="p-2 font-medium">
-        <Link className="text-blue-900 underline" href={`/billing/invoices/${invoice.id}`}>
-          {invoice.invoiceNumber ?? t('draftIdentifier', { id: invoice.id.slice(0, 8) })}
+        <Link className="text-primary underline" href={`/billing/invoices/${invoice.id}`}>
+          {invoice.invoiceNumber ?? t('draftIdentifier')}
         </Link>
       </ShadcnTableCell>
       <ShadcnTableCell className="p-2">
@@ -666,22 +664,6 @@ function claimStatusLabel(t: BillingTranslator, status: string): string {
   }
 }
 
-function Alert({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-      {children}
-    </p>
-  );
-}
-
-function Status({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="status" className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900">
-      {children}
-    </p>
-  );
-}
-
 function Field({
   id,
   name,
@@ -728,7 +710,7 @@ function SelectField({
         name={name}
         defaultValue={defaultValue}
         required={required}
-        selectClassName="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2"
+        selectClassName="min-h-10 rounded-md border border-border bg-card px-3 py-2"
         className="w-full"
       >
         {children}

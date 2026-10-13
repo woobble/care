@@ -5,8 +5,10 @@ import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
+import type { ReactNode } from 'react';
 import { Badge, Button, Input, Label } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { auditActionKey } from '@app/web/i18n/audit';
 import { formatDate, formatDateTime, formatNumber } from '@app/web/i18n/format';
@@ -90,7 +92,10 @@ export default async function ClientServiceAgreementsPage({
   const client = clientResult.data;
   if (!client) {
     return (
-      <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+      <p
+        role="alert"
+        className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+      >
         {t('ServiceAgreements.loadClientFailed')}
       </p>
     );
@@ -213,14 +218,17 @@ export default async function ClientServiceAgreementsPage({
       />
 
       {error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t(errorMessageKey(error))}
         </p>
       ) : null}
       {generationSummary ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {t('ServiceAgreements.generationDone')} {generationSummary}
         </p>
@@ -230,13 +238,13 @@ export default async function ClientServiceAgreementsPage({
         aria-label={t('ServiceAgreements.navigationLabel')}
         className="flex flex-wrap gap-2 border-b pb-3 text-sm"
       >
-        <a className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50" href="#agreements">
+        <a className="rounded-md px-3 py-2 text-primary hover:bg-accent" href="#agreements">
           {t('ServiceAgreements.agreementsTab')}
         </a>
-        <a className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50" href="#history">
+        <a className="rounded-md px-3 py-2 text-primary hover:bg-accent" href="#history">
           {t('ServiceAgreements.historyTab')}
         </a>
-        <Link className="rounded-md px-3 py-2 text-blue-900 hover:bg-blue-50" href="#overview">
+        <Link className="rounded-md px-3 py-2 text-primary hover:bg-accent" href="#overview">
           {t('ServiceAgreements.overviewTab')}
         </Link>
       </nav>
@@ -245,20 +253,32 @@ export default async function ClientServiceAgreementsPage({
         <h2 id="overview-title" className="text-xl font-semibold">
           {t('ServiceAgreements.providerContext')}
         </h2>
-        <dl className="grid gap-3 rounded-lg border bg-white p-4 sm:grid-cols-2">
+        <dl className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2">
           <Field
             label={t('ServiceAgreements.organization')}
-            value={organizationName ?? client.organizationId}
+            value={
+              <ResourceReference
+                label={organizationName ?? t('Resources.unavailableOrganization')}
+                href={organizationName ? `/administration/organizations/${client.organizationId}` : null}
+              />
+            }
           />
           <Field
             label={t('ServiceAgreements.facility')}
-            value={facilityName ?? client.primaryFacilityId}
+            value={
+              client.primaryFacilityId ? (
+                <ResourceReference
+                  label={facilityName ?? t('Resources.unavailableFacility')}
+                  href={facilityName ? `/administration/facilities/${client.primaryFacilityId}` : null}
+                />
+              ) : null
+            }
           />
         </dl>
       </section>
 
       {canCreate ? (
-        <details className="rounded-lg border bg-white p-5">
+        <details className="rounded-lg border bg-card p-5">
           <summary className="cursor-pointer font-semibold">
             {t('ServiceAgreements.createTitle')}
           </summary>
@@ -290,7 +310,7 @@ export default async function ClientServiceAgreementsPage({
                 maxLength={2000}
               />
             </div>
-            <p className="text-sm text-slate-600">{t('ServiceAgreements.startsDraft')}</p>
+            <p className="text-sm text-muted-foreground">{t('ServiceAgreements.startsDraft')}</p>
             <Button type="submit" className="w-fit">
               {t('ServiceAgreements.createDraft')}
             </Button>
@@ -307,30 +327,30 @@ export default async function ClientServiceAgreementsPage({
           <h2 id="agreements-title" className="text-xl font-semibold">
             {t('ServiceAgreements.agreementsTab')}
           </h2>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             {t('ServiceAgreements.agreementCount', { count: agreementsResult.data?.total ?? 0 })}
           </p>
         </div>
         {agreementsResult.error ? (
-          <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+          >
             {t(errorMessageKey(agreementsResult.error.code))}
           </p>
         ) : agreements.length ? (
           <div className="grid gap-4">
-            {await Promise.all(
+        {await Promise.all(
               agreements.map(async (agreement) => {
-                const [serviceResult, providerOrganizationResult, providerFacilityResult] =
-                  await Promise.all([
-                    get('/api/v1/service-agreements/{id}/services', {
-                      params: { path: { id: agreement.id }, header },
-                    }),
-                    get('/api/v1/organizations/{id}', {
-                      params: { path: { id: agreement.organizationId }, header },
-                    }),
-                    get('/api/v1/facilities/{id}', {
-                      params: { path: { id: agreement.facilityId }, header },
-                    }),
-                  ]);
+                const serviceResult = await get('/api/v1/service-agreements/{id}/services', {
+                  params: { path: { id: agreement.id }, header },
+                });
+                const providerOrganizationName = organizations.find(
+                  (item) => item.id === agreement.organizationId,
+                )?.name;
+                const providerFacilityName = facilities.find(
+                  (item) => item.id === agreement.facilityId,
+                )?.name;
                 const services = serviceResult.data ?? [];
                 const canUpdate =
                   client.status !== 'archived' &&
@@ -406,25 +426,28 @@ export default async function ClientServiceAgreementsPage({
                   <article
                     key={agreement.id}
                     id={`agreement-${agreement.id}`}
-                    className="grid gap-4 rounded-lg border bg-white p-5 shadow-sm"
+                    className="grid gap-4 rounded-lg border bg-card p-5 shadow-sm"
                   >
                     <header className="flex flex-wrap items-start justify-between gap-3">
                       <div className="grid gap-1">
                         <h3 className="text-lg font-semibold">
-                          {agreement.reference ||
-                            t('ServiceAgreements.fallbackAgreement', {
-                              id: agreement.id.slice(0, 8),
-                            })}
+                          {agreement.reference || t('ServiceAgreements.fallbackAgreement')}
                         </h3>
-                        <p className="text-sm text-slate-600">
+                        <p className="text-sm text-muted-foreground">
                           {formatDate(agreement.validFrom, locale)} –{' '}
                           {formatDate(agreement.validUntil ?? null, locale) ??
                             t('ServiceAgreements.unlimited')}
                         </p>
-                        <p className="text-sm text-slate-600">
-                          {providerOrganizationResult.data?.name ?? agreement.organizationId}
+                        <p className="text-sm text-muted-foreground">
+                          <ResourceReference
+                            label={providerOrganizationName ?? t('Resources.unavailableOrganization')}
+                            href={providerOrganizationName ? `/administration/organizations/${agreement.organizationId}` : null}
+                          />
                           {' · '}
-                          {providerFacilityResult.data?.name ?? agreement.facilityId}
+                          <ResourceReference
+                            label={providerFacilityName ?? t('Resources.unavailableFacility')}
+                            href={providerFacilityName ? `/administration/facilities/${agreement.facilityId}` : null}
+                          />
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -436,7 +459,7 @@ export default async function ClientServiceAgreementsPage({
                     </header>
 
                     {agreement.description ? (
-                      <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+                      <p className="rounded-md bg-background p-3 text-sm text-muted-foreground">
                         {agreement.description}
                       </p>
                     ) : null}
@@ -458,7 +481,7 @@ export default async function ClientServiceAgreementsPage({
                           <NativeSelect
                             name="locale"
                             defaultValue={locale}
-                            selectClassName="h-10 rounded-md border bg-white px-3"
+                            selectClassName="h-10 rounded-md border bg-card px-3"
                             className="w-full"
                           >
                             <option value="de">{t('Documents.languageOptions.german')}</option>
@@ -519,10 +542,10 @@ export default async function ClientServiceAgreementsPage({
 
                     {canGenerate && generationUntil >= generationFrom ? (
                       <details className="rounded-md border border-dashed p-4">
-                        <summary className="cursor-pointer font-semibold text-blue-900">
+                        <summary className="cursor-pointer font-semibold text-primary">
                           {t('ServiceAgreements.generateVisits')}
                         </summary>
-                        <p className="mt-2 text-sm text-slate-600">
+                        <p className="mt-2 text-sm text-muted-foreground">
                           {t('ServiceAgreements.generateDescription')}
                         </p>
                         <form
@@ -554,7 +577,7 @@ export default async function ClientServiceAgreementsPage({
 
                     {agreement.status !== 'ended' && canUpdate ? (
                       <details>
-                        <summary className="cursor-pointer text-sm font-semibold text-blue-900">
+                        <summary className="cursor-pointer text-sm font-semibold text-primary">
                           {t('ServiceAgreements.editPlanning')}
                         </summary>
                         <form action={updateServiceAgreementAction} className="mt-3 grid gap-4">
@@ -601,7 +624,7 @@ export default async function ClientServiceAgreementsPage({
                         {t('ServiceAgreements.plannedServices')}
                       </h4>
                       {serviceResult.error ? (
-                        <p role="alert" className="text-sm text-red-800">
+                        <p role="alert" className="text-sm text-destructive">
                           {t(errorMessageKey(serviceResult.error.code))}
                         </p>
                       ) : services.length ? (
@@ -611,19 +634,19 @@ export default async function ClientServiceAgreementsPage({
                               <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
                                   <h5 className="font-medium">{service.serviceName}</h5>
-                                  <p className="text-sm text-slate-600">
+                                  <p className="text-sm text-muted-foreground">
                                     {service.serviceCode} · {t(unitLabelKey(service.serviceUnit))}
                                     {service.quantity !== null && service.quantity !== undefined
                                       ? ` · ${t(quantityUnitKey(service.serviceUnit), { count: Number(service.quantity) })}`
                                       : ''}
                                   </p>
-                                  <p className="text-sm text-slate-600">
+                                  <p className="text-sm text-muted-foreground">
                                     {cadenceLabel(service.scheduleRule)}
                                     {service.preferredTimeStart && service.preferredTimeEnd
                                       ? ` · ${t('ServiceAgreements.preferred')} ${service.preferredTimeStart}–${service.preferredTimeEnd}`
                                       : ''}
                                   </p>
-                                  <p className="text-sm text-slate-600">
+                                  <p className="text-sm text-muted-foreground">
                                     {formatDate(service.validFrom ?? agreement.validFrom, locale)} –{' '}
                                     {formatDate(
                                       service.validUntil ?? agreement.validUntil ?? null,
@@ -645,7 +668,7 @@ export default async function ClientServiceAgreementsPage({
                               canManageServices &&
                               agreement.status !== 'ended' ? (
                                 <details>
-                                  <summary className="cursor-pointer text-sm font-semibold text-blue-900">
+                                  <summary className="cursor-pointer text-sm font-semibold text-primary">
                                     {t('ServiceAgreements.editPlanning')}
                                   </summary>
                                   <ServiceFields
@@ -686,7 +709,7 @@ export default async function ClientServiceAgreementsPage({
                           ))}
                         </div>
                       ) : (
-                        <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+                        <p className="rounded-md bg-background p-3 text-sm text-muted-foreground">
                           {t('ServiceAgreements.noServices')}
                         </p>
                       )}
@@ -729,7 +752,7 @@ export default async function ClientServiceAgreementsPage({
                           </form>
                           {canSearchServices ? (
                             serviceOptionsResult?.error ? (
-                              <p role="alert" className="text-sm text-red-800">
+                              <p role="alert" className="text-sm text-destructive">
                                 {t(errorMessageKey(serviceOptionsResult.error.code))}
                               </p>
                             ) : serviceOptions.length ? (
@@ -744,20 +767,20 @@ export default async function ClientServiceAgreementsPage({
                                 submitLabel={t('ServiceAgreements.addService')}
                               />
                             ) : (
-                              <p className="text-sm text-slate-600">
+                              <p className="text-sm text-muted-foreground">
                                 {t('ServiceAgreements.noMatchingServices')}
                               </p>
                             )
                           ) : selectedAgreement?.id === agreement.id && !servicePeriodValid ? (
-                            <p role="alert" className="text-sm text-red-800">
+                            <p role="alert" className="text-sm text-destructive">
                               {t('ServiceAgreements.servicePeriodInvalid')}
                             </p>
                           ) : selectedAgreement?.id === agreement.id ? (
-                            <p className="text-sm text-slate-600">
+                            <p className="text-sm text-muted-foreground">
                               {t('ServiceAgreements.serviceSearchDenied')}
                             </p>
                           ) : (
-                            <p className="text-sm text-slate-600">
+                            <p className="text-sm text-muted-foreground">
                               {t('ServiceAgreements.choosePeriod')}
                             </p>
                           )}
@@ -770,7 +793,7 @@ export default async function ClientServiceAgreementsPage({
             )}
           </div>
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">
+          <p className="rounded-lg border bg-card p-5 text-muted-foreground">
             {t('ServiceAgreements.noAgreements')}
           </p>
         )}
@@ -781,24 +804,26 @@ export default async function ClientServiceAgreementsPage({
           {t('ServiceAgreements.history')}
         </h2>
         {timeline.length ? (
-          <ol className="grid gap-3 border-l-2 border-blue-200 pl-5">
+          <ol className="grid gap-3 border-l-2 border-primary/20 pl-5">
             {timeline.map((entry) => (
-              <li key={entry.id} className="rounded-lg border bg-white p-4">
+              <li key={entry.id} className="rounded-lg border bg-card p-4">
                 <p className="font-medium">{t(auditActionKey(entry.action))}</p>
-                <p className="mt-1 text-sm text-slate-600">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {formatDateTime(entry.occurredAt, locale)} ·{' '}
-                  {t('Clients.detail.editedBy', { actor: entry.actorId })}
+                  {t('Clients.detail.editedBy', {
+                    actor: t('Resources.unavailableUser'),
+                  })}
                 </p>
               </li>
             ))}
           </ol>
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">
+          <p className="rounded-lg border bg-card p-5 text-muted-foreground">
             {t('ServiceAgreements.noHistory')}
           </p>
         )}
         <p className="text-sm">
-          <Link className="text-blue-900 underline" href={`/clients/${client.id}#timeline`}>
+          <Link className="text-primary underline" href={`/clients/${client.id}#timeline`}>
             {t('ServiceAgreements.openFullTimeline')}
           </Link>
         </p>
@@ -1009,10 +1034,10 @@ async function AgreementStatusBadge({
   return <Badge variant={variant}>{t(serviceAgreementStatusKey(status))}</Badge>;
 }
 
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
+function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="grid gap-1">
-      <dt className="text-sm text-slate-600">{label}</dt>
+      <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="break-words font-medium">{value || '—'}</dd>
     </div>
   );
@@ -1146,7 +1171,7 @@ function SelectField({
         name={name}
         defaultValue={defaultValue}
         required={required}
-        selectClassName="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-card px-3"
         className="w-full"
       >
         {children}

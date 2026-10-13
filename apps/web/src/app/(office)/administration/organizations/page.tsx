@@ -1,4 +1,5 @@
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
@@ -26,29 +27,30 @@ export default async function OrganizationsPage({
 
   return (
     <div className="grid gap-8">
-      <header className="grid gap-1">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration">{t('Organizations.section')}</Link>
-        </p>
-        <h1 className="text-3xl font-semibold">{t('Organizations.title')}</h1>
-        <p className="text-slate-700">{t('Organizations.description')}</p>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/administration">{t('Organizations.section')}</Link>}
+        title={t('Organizations.title')}
+        description={t('Organizations.description')}
+      />
       <ActionNotice error={query.error} updated={query.updated} />
       {organizationsResult.error || facilitiesResult.error || teamsResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+        >
           {t('Organizations.loadFailed')}
         </p>
       ) : null}
 
       <section
         aria-labelledby="organization-create-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <div>
           <h2 id="organization-create-title" className="text-xl font-semibold">
             {t('Organizations.createTitle')}
           </h2>
-          <p className="text-sm text-slate-600">{t('Organizations.createDescription')}</p>
+          <p className="text-sm text-muted-foreground">{t('Organizations.createDescription')}</p>
         </div>
         <RHFActionForm action={createOrganizationAction} className="grid gap-4 md:grid-cols-2">
           <Field
@@ -98,7 +100,9 @@ export default async function OrganizationsPage({
             required
             maxLength={100}
           />
-          <p className="text-sm text-slate-600 md:col-span-2">{t('Organizations.timezoneHint')}</p>
+          <p className="text-sm text-muted-foreground md:col-span-2">
+            {t('Organizations.timezoneHint')}
+          </p>
           <div className="md:col-span-2">
             <Button type="submit">{t('Organizations.createTitle')}</Button>
           </div>
@@ -111,10 +115,10 @@ export default async function OrganizationsPage({
             {t('Organizations.listTitle')}
           </h2>
           <div className="flex gap-3 text-sm">
-            <Link className="text-blue-900 underline" href="/administration/facilities">
+            <Link className="text-primary underline" href="/administration/facilities">
               {t('Organizations.facilitiesLink')}
             </Link>
-            <Link className="text-blue-900 underline" href="/administration/teams">
+            <Link className="text-primary underline" href="/administration/teams">
               {t('Organizations.teamsLink')}
             </Link>
           </div>
@@ -128,21 +132,21 @@ export default async function OrganizationsPage({
               (team) => team.organizationId === organization.id,
             );
             return (
-              <article key={organization.id} className="rounded-lg border bg-white p-5">
+              <article key={organization.id} className="rounded-lg border bg-card p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="grid gap-1">
                     <h3 className="font-semibold">
                       <Link
-                        className="text-blue-900 underline-offset-4 hover:underline"
+                        className="text-primary underline-offset-4 hover:underline"
                         href={`/administration/organizations/${organization.id}`}
                       >
                         {organization.name}
                       </Link>
                     </h3>
                     {organization.legalName ? (
-                      <p className="text-sm text-slate-600">{organization.legalName}</p>
+                      <p className="text-sm text-muted-foreground">{organization.legalName}</p>
                     ) : null}
-                    <p className="text-sm text-slate-600">
+                    <p className="text-sm text-muted-foreground">
                       {t('Organizations.facilityAndTeamCount', {
                         facilities: formatNumber(facilities.length, locale),
                         teams: formatNumber(teams.length, locale),
@@ -158,9 +162,7 @@ export default async function OrganizationsPage({
             );
           })
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">
-            {t('Organizations.empty')}
-          </p>
+          <EmptyState title={t('Organizations.empty')} />
         )}
       </section>
     </div>

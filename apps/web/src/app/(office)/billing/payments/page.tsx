@@ -1,5 +1,7 @@
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
@@ -53,13 +55,11 @@ export default async function BillingPaymentsPage({
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          {t('section')}
-        </p>
-        <h1 className="text-3xl font-semibold">{t('payments')}</h1>
-        <p className="text-slate-700">{t('paymentsDescription')}</p>
-      </header>
+      <PageHeader
+        eyebrow={t('section')}
+        title={t('payments')}
+        description={t('paymentsDescription')}
+      />
       <BillingNavigation permissions={permissions} />
       {error ? <Alert>{translate(errorMessageKey(error))}</Alert> : null}
       {updated ? <Status>{t(`paymentUpdated.${updated}`)}</Status> : null}
@@ -67,7 +67,7 @@ export default async function BillingPaymentsPage({
       {canManage ? (
         <section
           aria-labelledby="record-payment-title"
-          className="grid gap-3 rounded-lg border bg-white p-5"
+          className="grid gap-3 rounded-lg border bg-card p-5"
         >
           <h2 id="record-payment-title" className="text-xl font-semibold">
             {t('recordPayment')}
@@ -124,7 +124,7 @@ export default async function BillingPaymentsPage({
 
       <section
         aria-labelledby="payments-title"
-        className="grid gap-3 rounded-lg border bg-white p-5"
+        className="grid gap-3 rounded-lg border bg-card p-5"
       >
         <h2 id="payments-title" className="text-xl font-semibold">
           {t('paymentHistory')}
@@ -146,16 +146,16 @@ export default async function BillingPaymentsPage({
                       <h3 className="font-semibold">
                         {payment.payerNameSnapshot ?? payment.payerReference ?? t('unknownPayer')}
                       </h3>
-                      <p className="text-sm text-slate-700">
+                      <p className="text-sm text-muted-foreground">
                         {formatDateTime(payment.receivedAt, locale)} ·{' '}
                         {t(`paymentMethods.${payment.method}`)}
                         {payment.reference ? ` · ${payment.reference}` : ''}
                       </p>
                     </div>
                     <dl className="grid gap-1 text-right text-sm">
-                      <dt className="text-slate-600">{t('amount')}</dt>
+                      <dt className="text-muted-foreground">{t('amount')}</dt>
                       <dd className="font-medium">{formatCents(payment.amountCents, locale)}</dd>
-                      <dt className="text-slate-600">{t('unallocatedAmount')}</dt>
+                      <dt className="text-muted-foreground">{t('unallocatedAmount')}</dt>
                       <dd className="font-medium">{formatCents(payment.remainingCents, locale)}</dd>
                     </dl>
                   </div>
@@ -169,11 +169,11 @@ export default async function BillingPaymentsPage({
                         >
                           <p>
                             <Link
-                              className="text-blue-900 underline"
+                              className="text-primary underline"
                               href={`/billing/invoices/${allocation.invoiceId}`}
                             >
                               {allocation.invoiceNumber ??
-                                t('draftIdentifier', { id: allocation.invoiceId.slice(0, 8) })}
+                                t('draftIdentifier')}
                             </Link>
                             {' · '}
                             {formatCents(allocation.amountCents, locale)}
@@ -206,12 +206,12 @@ export default async function BillingPaymentsPage({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-slate-600">{t('noPaymentAllocations')}</p>
+                    <p className="text-sm text-muted-foreground">{t('noPaymentAllocations')}</p>
                   )}
                   {payment.remainingCents > 0 && eligibleInvoices.length && canManage ? (
                     <RHFActionForm
                       action={allocatePaymentAction}
-                      className="grid gap-3 rounded-md bg-slate-50 p-4 md:grid-cols-[1fr_12rem_auto]"
+                      className="grid gap-3 rounded-md bg-background p-4 md:grid-cols-[1fr_12rem_auto]"
                     >
                       <input type="hidden" name="paymentId" value={payment.id} />
                       <SelectField
@@ -225,7 +225,7 @@ export default async function BillingPaymentsPage({
                         {eligibleInvoices.map((invoice) => (
                           <option key={invoice.id} value={invoice.id}>
                             {invoice.invoiceNumber ??
-                              t('draftIdentifier', { id: invoice.id.slice(0, 8) })}{' '}
+                              t('draftIdentifier')}{' '}
                             · {invoice.clientName} · {formatCents(invoice.outstandingCents, locale)}
                           </option>
                         ))}
@@ -252,7 +252,7 @@ export default async function BillingPaymentsPage({
             })}
           </ul>
         ) : (
-          <p className="text-sm text-slate-700">{t('paymentsEmpty')}</p>
+          <p className="text-sm text-muted-foreground">{t('paymentsEmpty')}</p>
         )}
       </section>
     </div>
@@ -278,22 +278,6 @@ function validUuid(value: string | undefined): string | undefined {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
     ? value
     : undefined;
-}
-
-function Alert({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-      {children}
-    </p>
-  );
-}
-
-function Status({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="status" className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900">
-      {children}
-    </p>
-  );
 }
 
 function Field({
@@ -360,7 +344,7 @@ function SelectField({
         name={name}
         defaultValue={defaultValue}
         required={required}
-        selectClassName="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2"
+        selectClassName="min-h-10 rounded-md border border-border bg-card px-3 py-2"
         className="w-full"
       >
         {children}

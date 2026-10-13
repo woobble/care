@@ -15,6 +15,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import { formatCurrency, formatDate } from '@app/web/i18n/format';
 import { statusLabelKey, unitLabelKey } from '@app/web/i18n/status';
 import { todayDateKey } from '@app/web/lib/care-date';
@@ -30,6 +32,7 @@ import {
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
+  hasClientPermission,
   hasTenantPermission,
 } from '@app/web/lib/api';
 
@@ -121,25 +124,24 @@ export default async function ServiceDetailPage({
 
   return (
     <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid gap-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            <Link href="/services">{t('Services.catalogTitle')}</Link>
-          </p>
-          <h1 className="text-3xl font-semibold">{service.name}</h1>
-          <p className="font-mono text-sm text-slate-600">{service.code}</p>
-        </div>
-        <StatusBadge status={service.status} label={t(statusLabelKey(service.status))} />
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/services">{t('Services.catalogTitle')}</Link>}
+        title={service.name}
+        description={<span className="font-mono">{service.code}</span>}
+        meta={<StatusBadge status={service.status} label={t(statusLabelKey(service.status))} />}
+      />
 
       <ActionNotice error={query.error} updated={query.updated} />
       {categoriesResult.error || organizationsResult.error || facilitiesResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t('Services.detail.categoriesUnavailable')}
         </p>
       ) : null}
 
-      <section className="grid gap-5 rounded-lg border bg-white p-5 shadow-sm">
+      <section className="grid gap-5 rounded-lg border bg-card p-5 shadow-sm">
         {canUpdate ? (
           <RHFActionForm action={updateServiceAction} className="grid gap-5">
             <input type="hidden" name="id" value={service.id} />
@@ -300,24 +302,26 @@ export default async function ServiceDetailPage({
               </Button>
             </form>
           ) : null}
-          <span className="text-sm text-slate-600">{t('Services.detail.archiveHistory')}</span>
+          <span className="text-sm text-muted-foreground">
+            {t('Services.detail.archiveHistory')}
+          </span>
         </div>
       </section>
 
       <section
         aria-labelledby="pricing-title"
-        className="grid gap-4 rounded-lg border bg-white p-5 shadow-sm"
+        className="grid gap-4 rounded-lg border bg-card p-5 shadow-sm"
       >
         <div>
           <h2 id="pricing-title" className="text-xl font-semibold">
             {t('Services.pricing.title')}
           </h2>
-          <p className="text-sm text-slate-600">{t('Services.pricing.description')}</p>
+          <p className="text-sm text-muted-foreground">{t('Services.pricing.description')}</p>
         </div>
         {query.updated === 'price' ? (
           <p
             role="status"
-            className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+            className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
           >
             {t('Services.pricing.saved')}
           </p>
@@ -328,7 +332,7 @@ export default async function ServiceDetailPage({
             <NativeSelect
               id="priceOrganizationId"
               name="priceOrganizationId"
-              selectClassName="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-card px-3"
               defaultValue={priceOrganizationId ?? ''}
               required
               className="w-full"
@@ -345,7 +349,7 @@ export default async function ServiceDetailPage({
             <NativeSelect
               id="priceFacilityId"
               name="priceFacilityId"
-              selectClassName="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-card px-3"
               defaultValue={priceFacilityId ?? ''}
               className="w-full"
             >
@@ -372,7 +376,10 @@ export default async function ServiceDetailPage({
           </div>
         </form>
         {pricesResult?.error ? (
-          <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+          >
             {t('Services.pricing.loadFailed')}
           </p>
         ) : prices.length ? (
@@ -383,10 +390,29 @@ export default async function ServiceDetailPage({
                   {formatCurrency(price.priceCents / 100, locale)}
                 </span>
                 <span> / {t(`Services.pricing.units.${price.pricingUnit}`)}</span>
-                <span className="block text-slate-600">
+                <span className="block text-muted-foreground">
                   {price.facilityId
-                    ? (facilities.find((facility) => facility.id === price.facilityId)?.name ??
-                      t('Services.pricing.facilityPrice'))
+                    ? (() => {
+                        const facility = facilities.find((item) => item.id === price.facilityId);
+                        return facility ? (
+                          <ResourceReference
+                            label={facility.name}
+                            href={
+                              hasClientPermission(
+                                permissions,
+                                'facility.read',
+                                tenantId,
+                                facility.organizationId,
+                                facility.id,
+                              )
+                                ? `/administration/facilities/${facility.id}`
+                                : null
+                            }
+                          />
+                        ) : (
+                          t('Services.pricing.facilityPrice')
+                        );
+                      })()
                     : t('Services.pricing.organizationDefault')}
                   {' · '}
                   {formatDate(price.validFrom, locale)} –{' '}
@@ -396,7 +422,7 @@ export default async function ServiceDetailPage({
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-600">{t('Services.pricing.noneForDate')}</p>
+          <p className="text-sm text-muted-foreground">{t('Services.pricing.noneForDate')}</p>
         )}
         {canManagePricing ? (
           <RHFActionForm action={recordServicePriceAction} className="grid gap-4 border-t pt-4">
@@ -408,7 +434,7 @@ export default async function ServiceDetailPage({
                 <NativeSelect
                   id="newPriceOrganizationId"
                   name="organizationId"
-                  selectClassName="h-10 rounded-md border bg-white px-3"
+                  selectClassName="h-10 rounded-md border bg-card px-3"
                   defaultValue={priceOrganizationId ?? ''}
                   required
                   className="w-full"
@@ -425,7 +451,7 @@ export default async function ServiceDetailPage({
                 <NativeSelect
                   id="newPriceFacilityId"
                   name="facilityId"
-                  selectClassName="h-10 rounded-md border bg-white px-3"
+                  selectClassName="h-10 rounded-md border bg-card px-3"
                   defaultValue=""
                   className="w-full"
                 >
@@ -450,7 +476,7 @@ export default async function ServiceDetailPage({
                 <NativeSelect
                   id="pricingUnit"
                   name="pricingUnit"
-                  selectClassName="h-10 rounded-md border bg-white px-3"
+                  selectClassName="h-10 rounded-md border bg-card px-3"
                   required
                   className="w-full"
                 >
@@ -475,7 +501,9 @@ export default async function ServiceDetailPage({
                 type="date"
               />
             </div>
-            <p className="text-sm text-slate-600">{t('Services.pricing.priceHistoryNote')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('Services.pricing.priceHistoryNote')}
+            </p>
             <Button
               type="submit"
               className="w-fit"
@@ -489,16 +517,21 @@ export default async function ServiceDetailPage({
 
       <section
         aria-labelledby="availability-title"
-        className="grid gap-4 rounded-lg border bg-white p-5 shadow-sm"
+        className="grid gap-4 rounded-lg border bg-card p-5 shadow-sm"
       >
         <div>
           <h2 id="availability-title" className="text-xl font-semibold">
             {t('Services.detail.organizationalAvailability')}
           </h2>
-          <p className="text-sm text-slate-600">{t('Services.detail.availabilityDescription')}</p>
+          <p className="text-sm text-muted-foreground">
+            {t('Services.detail.availabilityDescription')}
+          </p>
         </div>
         {availabilityResult.error ? (
-          <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+          >
             {t('Services.detail.availabilityLoadFailed')}
           </p>
         ) : null}
@@ -533,7 +566,9 @@ export default async function ServiceDetailPage({
                   </label>
                 ))
               ) : (
-                <p className="text-sm text-slate-600">{t('Services.detail.noOrganizations')}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t('Services.detail.noOrganizations')}
+                </p>
               )}
             </fieldset>
             <fieldset className="grid gap-3">
@@ -550,7 +585,7 @@ export default async function ServiceDetailPage({
                   </label>
                 ))
               ) : (
-                <p className="text-sm text-slate-600">{t('Services.detail.noFacilities')}</p>
+                <p className="text-sm text-muted-foreground">{t('Services.detail.noFacilities')}</p>
               )}
             </fieldset>
             <div>
@@ -560,7 +595,7 @@ export default async function ServiceDetailPage({
             </div>
           </RHFActionForm>
         ) : (
-          <p className="text-sm text-slate-600">{t('Services.detail.readAvailability')}</p>
+          <p className="text-sm text-muted-foreground">{t('Services.detail.readAvailability')}</p>
         )}
         {activeAvailability.length ? (
           <div className="overflow-x-auto rounded-md border">
@@ -568,7 +603,7 @@ export default async function ServiceDetailPage({
               <ShadcnTableCaption className="sr-only">
                 {t('Services.detail.currentAssignments')}
               </ShadcnTableCaption>
-              <ShadcnTableHeader className="border-b bg-slate-100">
+              <ShadcnTableHeader className="border-b bg-muted">
                 <ShadcnTableRow>
                   <ShadcnTableHead className="px-3 py-2">
                     {t('Services.detail.area')}
@@ -590,12 +625,68 @@ export default async function ServiceDetailPage({
                   return (
                     <ShadcnTableRow key={item.id} className="border-b last:border-0">
                       <ShadcnTableCell className="px-3 py-2">
-                        {item.facilityId
-                          ? (facility?.name ?? t('Services.detail.defaultFacility'))
-                          : (organization?.name ?? t('Services.detail.defaultOrganization'))}
-                        {item.facilityId
-                          ? ` (${organization?.name ?? ''})`
-                          : ` — ${t('Services.detail.allFacilities')}`}
+                        {item.facilityId && facility ? (
+                          <ResourceReference
+                            label={facility.name}
+                            href={
+                              hasClientPermission(
+                                permissions,
+                                'facility.read',
+                                tenantId,
+                                item.organizationId,
+                                facility.id,
+                              )
+                                ? `/administration/facilities/${facility.id}`
+                                : null
+                            }
+                          />
+                        ) : item.facilityId ? (
+                          t('Services.detail.defaultFacility')
+                        ) : organization ? (
+                          <ResourceReference
+                            label={organization.name}
+                            href={
+                              hasClientPermission(
+                                permissions,
+                                'organization.read',
+                                tenantId,
+                                organization.id,
+                                null,
+                              )
+                                ? `/administration/organizations/${organization.id}`
+                                : null
+                            }
+                          />
+                        ) : (
+                          t('Services.detail.defaultOrganization')
+                        )}
+                        {item.facilityId ? (
+                          organization ? (
+                            <>
+                              {' '}
+                              (
+                              <ResourceReference
+                                label={organization.name}
+                                href={
+                                  hasClientPermission(
+                                    permissions,
+                                    'organization.read',
+                                    tenantId,
+                                    organization.id,
+                                    null,
+                                  )
+                                    ? `/administration/organizations/${organization.id}`
+                                    : null
+                                }
+                              />
+                              )
+                            </>
+                          ) : (
+                            ''
+                          )
+                        ) : (
+                          ` — ${t('Services.detail.allFacilities')}`
+                        )}
                       </ShadcnTableCell>
                       <ShadcnTableCell className="px-3 py-2">
                         {formatDate(item.validFrom, locale) ?? '—'}
@@ -610,7 +701,7 @@ export default async function ServiceDetailPage({
             </ShadcnTable>
           </div>
         ) : (
-          <p className="text-sm text-slate-600">{t('Services.detail.noAvailability')}</p>
+          <p className="text-sm text-muted-foreground">{t('Services.detail.noAvailability')}</p>
         )}
       </section>
     </div>
@@ -676,7 +767,7 @@ function SelectField({
       <NativeSelect
         id={id}
         name={name}
-        selectClassName="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-card px-3"
         defaultValue={defaultValue}
         required={required}
         className="w-full"
@@ -690,7 +781,7 @@ function SelectField({
 function ReadOnlyField({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div className="grid gap-1">
-      <dt className="text-sm text-slate-600">{label}</dt>
+      <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="font-medium">{value}</dd>
     </div>
   );

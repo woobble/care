@@ -1,5 +1,6 @@
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
@@ -21,22 +22,23 @@ export default async function NewEmployeePage({
   });
   return (
     <div className="grid max-w-3xl gap-6">
-      <header className="grid gap-1">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/employees">{t('Employees.title')}</Link>
-        </p>
-        <h1 className="text-3xl font-semibold">{t('Employees.createTitle')}</h1>
-        <p className="text-slate-700">{t('Employees.createDescription')}</p>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/employees">{t('Employees.title')}</Link>}
+        title={t('Employees.createTitle')}
+        description={t('Employees.createDescription')}
+      />
       <ActionNotice error={query.error} />
       {error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t('Errors.generic')}
         </p>
       ) : null}
       <RHFActionForm
         action={createEmployeeAction}
-        className="grid gap-5 rounded-lg border bg-white p-5"
+        className="grid gap-5 rounded-lg border bg-card p-5"
       >
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
@@ -44,7 +46,7 @@ export default async function NewEmployeePage({
             <NativeSelect
               id="organizationId"
               name="organizationId"
-              selectClassName="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-card px-3"
               required
               defaultValue=""
               className="w-full"

@@ -1,11 +1,18 @@
 import { NativeSelect } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
 import { statusLabelKey } from '@app/web/i18n/status';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+} from '@app/web/lib/api';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import {
   setTeamStatusAction,
@@ -26,32 +33,55 @@ export default async function TeamDetailPage({
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
-  const [teamResult, facilitiesResult, employeesResult] = await Promise.all([
+  const [teamResult, facilitiesResult, employeesResult, permissions] = await Promise.all([
     get('/api/v1/teams/{id}', { params: { path: { id }, header } }),
     get('/api/v1/facilities', { params: { header } }),
     get('/api/v1/employees', { params: { query: { teamId: id, page: 1, pageSize: 50 }, header } }),
+    getPermissionGrants(api),
   ]);
   if (!teamResult.data) notFound();
   const team = teamResult.data;
+  const tenantId = header['X-Tenant-Id'];
+  const canReadEmployees = hasClientPermission(
+    permissions,
+    'employee.read',
+    tenantId,
+    team.organizationId,
+    team.facilityId,
+  );
   const facilities = (facilitiesResult.data ?? []).filter(
     (facility) => facility.organizationId === team.organizationId && facility.status === 'active',
   );
 
   return (
     <div className="grid gap-8">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration/teams">{t('Teams.title')}</Link> · {team.organizationName}
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-semibold">{team.name}</h1>
-          <StatusBadge status={team.status} label={t(statusLabelKey(team.status))} />
-        </div>
-      </header>
+      <PageHeader
+        eyebrow={
+          <>
+            <Link href="/administration/teams">{t('Teams.title')}</Link> ·{' '}
+            <ResourceReference
+              label={team.organizationName}
+              href={
+                hasClientPermission(
+                  permissions,
+                  'organization.read',
+                  tenantId,
+                  team.organizationId,
+                  null,
+                )
+                  ? `/administration/organizations/${team.organizationId}`
+                  : null
+              }
+            />
+          </>
+        }
+        title={team.name}
+        meta={<StatusBadge status={team.status} label={t(statusLabelKey(team.status))} />}
+      />
       <ActionNotice error={query.error} updated={query.updated} />
       <section
         aria-labelledby="team-edit-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <h2 id="team-edit-title" className="text-xl font-semibold">
           {t('Teams.detailsTitle')}
@@ -67,7 +97,7 @@ export default async function TeamDetailPage({
             <NativeSelect
               id="facilityId"
               name="facilityId"
-              selectClassName="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-card px-3"
               defaultValue={team.facilityId ?? ''}
               className="w-full"
             >
@@ -106,7 +136,10 @@ export default async function TeamDetailPage({
           {t('Teams.employeesTitle')}
         </h2>
         {employeesResult.error ? (
-          <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+          >
             {t('Teams.employeeLoadFailed')}
           </p>
         ) : employeesResult.data?.items.length ? (
@@ -114,20 +147,28 @@ export default async function TeamDetailPage({
             {employeesResult.data.items.map((employee) => (
               <li
                 key={employee.id}
-                className="flex justify-between gap-3 rounded-md border bg-white p-3"
+                className="flex justify-between gap-3 rounded-md border bg-card p-3"
               >
-                <Link
-                  className="font-medium text-blue-900 underline"
-                  href={`/employees/${employee.id}`}
-                >
-                  {employee.firstName} {employee.lastName}
-                </Link>
+                {canReadEmployees ? (
+                  <Link
+                    className="font-medium text-primary underline"
+                    href={`/employees/${employee.id}`}
+                  >
+                    {employee.firstName} {employee.lastName}
+                  </Link>
+                ) : (
+                  <span className="font-medium">
+                    {employee.firstName} {employee.lastName}
+                  </span>
+                )}
                 <StatusBadge status={employee.status} label={t(statusLabelKey(employee.status))} />
               </li>
             ))}
           </ul>
         ) : (
-          <p className="rounded-lg border bg-white p-4 text-slate-700">{t('Teams.noEmployees')}</p>
+          <p className="rounded-lg border bg-card p-4 text-muted-foreground">
+            {t('Teams.noEmployees')}
+          </p>
         )}
       </section>
     </div>

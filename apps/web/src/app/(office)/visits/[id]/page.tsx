@@ -26,6 +26,7 @@ import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
+  hasClientPermission,
   hasPermission,
 } from '@app/web/lib/api';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
@@ -59,13 +60,17 @@ export default async function VisitDetailPage({
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const api = await getApiClient();
   const header = await getTenantHeader();
+  const tenantId = header['X-Tenant-Id'];
   const get = api.GET;
   const visitResult = await get('/api/v1/visits/{id}', { params: { path: { id }, header } });
   if (visitResult.error?.code === 'VISIT_NOT_FOUND') notFound();
   const visit = visitResult.data;
   if (!visit) {
     return (
-      <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+      <p
+        role="alert"
+        className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+      >
         {t('Visits.loadFailed')}
       </p>
     );
@@ -158,7 +163,10 @@ export default async function VisitDetailPage({
       />
 
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {query.error === 'VISIT_EMPLOYEE_CONFLICT' && conflictInterval
             ? t('Visits.employeeConflict', {
                 employee: conflictEmployee
@@ -173,7 +181,7 @@ export default async function VisitDetailPage({
       {query.updated ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {query.updated === 'substitution_proposed'
             ? t('Visits.substitutionProposed')
@@ -187,7 +195,7 @@ export default async function VisitDetailPage({
 
       <section
         aria-labelledby="visit-title"
-        className="grid min-w-0 gap-4 rounded-lg border bg-white p-5"
+        className="grid min-w-0 gap-4 rounded-lg border bg-card p-5"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="visit-title" className="text-xl font-semibold">
@@ -213,12 +221,26 @@ export default async function VisitDetailPage({
             label={t('Visits.manuallyAdjusted')}
             value={visit.manuallyAdjusted ? t('Visits.yes') : t('Visits.no')}
           />
-          {visit.serviceAgreementId ? (
+          {visit.serviceAgreementId &&
+          hasClientPermission(
+            permissions,
+            'client.read',
+            tenantId,
+            visit.organizationId,
+            visit.facilityId,
+          ) &&
+          hasClientPermission(
+            permissions,
+            'service_agreement.read',
+            tenantId,
+            visit.organizationId,
+            visit.facilityId,
+          ) ? (
             <Detail
               label={t('Visits.serviceAgreement')}
               value={
                 <Link
-                  className="text-blue-800 underline"
+                  className="text-primary underline"
                   href={`/clients/${visit.clientId}/service-agreements#agreement-${visit.serviceAgreementId}`}
                 >
                   {t('Visits.openAgreement')}
@@ -231,7 +253,7 @@ export default async function VisitDetailPage({
           <h3 className="font-semibold">{t('Visits.plannedServices')}</h3>
           <ul className="mt-2 grid min-w-0 gap-2">
             {visit.services.map((service) => (
-              <li key={service.id} className="min-w-0 break-words rounded-md bg-slate-50 p-3">
+              <li key={service.id} className="min-w-0 break-words rounded-md bg-background p-3">
                 {service.serviceCode} · {service.serviceName} ·{' '}
                 {quantity(service.plannedQuantity, service.unit)}
                 {service.plannedDurationMinutes
@@ -244,7 +266,9 @@ export default async function VisitDetailPage({
         {visit.note ? (
           <div>
             <h3 className="font-semibold">{t('Visits.planningNote')}</h3>
-            <p className="mt-1 break-words whitespace-pre-wrap text-slate-700">{visit.note}</p>
+            <p className="mt-1 break-words whitespace-pre-wrap text-muted-foreground">
+              {visit.note}
+            </p>
           </div>
         ) : null}
       </section>
@@ -252,7 +276,7 @@ export default async function VisitDetailPage({
       {canReadExecution ? (
         <section
           aria-labelledby="execution-title"
-          className="grid min-w-0 gap-4 rounded-lg border bg-white p-5"
+          className="grid min-w-0 gap-4 rounded-lg border bg-card p-5"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 id="execution-title" className="text-xl font-semibold">
@@ -265,7 +289,7 @@ export default async function VisitDetailPage({
             ) : null}
           </div>
           {executionResult?.error ? (
-            <p role="alert" className="text-sm text-red-800">
+            <p role="alert" className="text-sm text-destructive">
               {t('Visits.executionLoadFailed')} {t(errorMessageKey(executionResult.error.code))}
             </p>
           ) : null}
@@ -308,13 +332,13 @@ export default async function VisitDetailPage({
                           service.visitServiceId ??
                           service.serviceDefinitionId + index
                         }
-                        className="grid gap-1 rounded-md bg-slate-50 p-3"
+                        className="grid gap-1 rounded-md bg-background p-3"
                       >
                         <span className="font-medium">
                           {service.serviceName}
                           {service.unplanned ? ` · ${t('Visits.unplanned')}` : ''}
                         </span>
-                        <span className="text-sm text-slate-700">
+                        <span className="text-sm text-muted-foreground">
                           {t(executionServiceStatusKey(service.status))} · {t('Visits.planned')}{' '}
                           {service.plannedQuantity == null
                             ? '–'
@@ -325,12 +349,12 @@ export default async function VisitDetailPage({
                             : quantity(service.actualQuantity, service.unit)}
                         </span>
                         {service.reasonCode ? (
-                          <span className="text-sm text-slate-700">
+                          <span className="text-sm text-muted-foreground">
                             {t('Visits.reason')}: {t(executionReasonKey(service.reasonCode))}
                           </span>
                         ) : null}
                         {service.performedByEmployeeName ? (
-                          <span className="text-sm text-slate-600">
+                          <span className="text-sm text-muted-foreground">
                             {t('Visits.capturedBy')} {service.performedByEmployeeName}
                           </span>
                         ) : null}
@@ -338,7 +362,7 @@ export default async function VisitDetailPage({
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-slate-600">{t('Visits.noServiceOutcomes')}</p>
+                  <p className="mt-2 text-muted-foreground">{t('Visits.noServiceOutcomes')}</p>
                 )}
               </div>
               {canCorrectExecution &&
@@ -415,7 +439,7 @@ export default async function VisitDetailPage({
       {canReadDocumentation ? (
         <section
           aria-labelledby="documentation-title"
-          className="grid min-w-0 gap-4 rounded-lg border bg-white p-5"
+          className="grid min-w-0 gap-4 rounded-lg border bg-card p-5"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 id="documentation-title" className="text-xl font-semibold">
@@ -430,7 +454,7 @@ export default async function VisitDetailPage({
             ) : null}
           </div>
           {documentationResult?.error ? (
-            <p role="alert" className="text-sm text-red-800">
+            <p role="alert" className="text-sm text-destructive">
               {t('Visits.documentationLoadFailed')}{' '}
               {t(errorMessageKey(documentationResult.error.code))}
             </p>
@@ -465,10 +489,10 @@ export default async function VisitDetailPage({
                   />
                 </dl>
               ) : (
-                <p className="text-amber-900">{t('Visits.noDocumentation')}</p>
+                <p className="text-warning-foreground">{t('Visits.noDocumentation')}</p>
               )}
               {!documentationDetail.completeness.isComplete ? (
-                <ul className="grid gap-1 rounded-md bg-amber-50 p-3 text-sm text-amber-950">
+                <ul className="grid gap-1 rounded-md bg-warning-muted p-3 text-sm text-warning-foreground">
                   {documentationDetail.completeness.missing.map((missing, index) => (
                     <li key={`${missing.code}-${missing.performedServiceId ?? index}`}>
                       {t(documentationRequirementKey(missing.code))}
@@ -486,7 +510,7 @@ export default async function VisitDetailPage({
                     {documentationDetail.services.map((service) => (
                       <li
                         key={service.performedServiceId}
-                        className="grid gap-1 rounded-md bg-slate-50 p-3"
+                        className="grid gap-1 rounded-md bg-background p-3"
                       >
                         <span className="font-medium">
                           {service.serviceName} ·{' '}
@@ -495,7 +519,7 @@ export default async function VisitDetailPage({
                             : t('Visits.evidenceMissing')}
                         </span>
                         {service.evidence?.documentedByEmployeeName ? (
-                          <span className="text-sm text-slate-600">
+                          <span className="text-sm text-muted-foreground">
                             {t('Visits.capturedBy')} {service.evidence.documentedByEmployeeName}
                           </span>
                         ) : null}
@@ -506,7 +530,7 @@ export default async function VisitDetailPage({
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-slate-600">{t('Visits.noServiceResults')}</p>
+                  <p className="mt-2 text-muted-foreground">{t('Visits.noServiceResults')}</p>
                 )}
               </div>
               <div>
@@ -514,7 +538,7 @@ export default async function VisitDetailPage({
                 {documentationDetail.entries.length ? (
                   <ul className="mt-2 grid gap-2">
                     {documentationDetail.entries.map((entry) => (
-                      <li key={entry.id} className="rounded-md bg-slate-50 p-3">
+                      <li key={entry.id} className="rounded-md bg-background p-3">
                         <p className="text-sm font-semibold">
                           {t(documentationEntryTypeKey(entry.type))}
                           {entry.severity
@@ -522,7 +546,7 @@ export default async function VisitDetailPage({
                             : ''}
                         </p>
                         <p className="mt-1 whitespace-pre-wrap">{entry.content}</p>
-                        <p className="mt-2 text-xs text-slate-500">
+                        <p className="mt-2 text-xs text-muted-foreground">
                           {entry.authorEmployeeName ?? t('Visits.employee')} ·{' '}
                           {dateTime(entry.createdAt, visit.timezone)}
                         </p>
@@ -530,7 +554,7 @@ export default async function VisitDetailPage({
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-slate-600">{t('Visits.noEntries')}</p>
+                  <p className="mt-2 text-muted-foreground">{t('Visits.noEntries')}</p>
                 )}
               </div>
               {documentationDetail.amendments.length ? (
@@ -538,10 +562,10 @@ export default async function VisitDetailPage({
                   <h3 className="font-semibold">{t('Visits.amendments')}</h3>
                   <ul className="mt-2 grid gap-2">
                     {documentationDetail.amendments.map((amendment) => (
-                      <li key={amendment.id} className="rounded-md bg-slate-50 p-3">
+                      <li key={amendment.id} className="rounded-md bg-background p-3">
                         <p className="font-medium">{amendment.reason}</p>
                         <p className="mt-1 whitespace-pre-wrap">{amendment.correction}</p>
-                        <p className="mt-2 text-xs text-slate-500">
+                        <p className="mt-2 text-xs text-muted-foreground">
                           {dateTime(amendment.createdAt, visit.timezone)}
                         </p>
                       </li>
@@ -552,7 +576,7 @@ export default async function VisitDetailPage({
               {documentationDetail.history.length ? (
                 <div>
                   <h3 className="font-semibold">{t('Visits.history')}</h3>
-                  <ul className="mt-2 grid gap-1 text-sm text-slate-600">
+                  <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
                     {documentationDetail.history.map((entry) => (
                       <li key={entry.id}>
                         {t(auditActionKey(entry.action))} ·{' '}
@@ -607,7 +631,7 @@ export default async function VisitDetailPage({
       {canUpdate ? (
         <section
           aria-labelledby="reschedule-title"
-          className="grid gap-3 rounded-lg border bg-white p-5"
+          className="grid gap-3 rounded-lg border bg-card p-5"
         >
           <h2 id="reschedule-title" className="text-xl font-semibold">
             {t('Visits.reschedule')}
@@ -654,7 +678,7 @@ export default async function VisitDetailPage({
 
       <section
         aria-labelledby="assignments-title"
-        className="grid min-w-0 gap-3 rounded-lg border bg-white p-5"
+        className="grid min-w-0 gap-3 rounded-lg border bg-card p-5"
       >
         <h2 id="assignments-title" className="text-xl font-semibold">
           {t('Visits.employees')}
@@ -683,7 +707,7 @@ export default async function VisitDetailPage({
             ))}
           </ul>
         ) : (
-          <p className="text-slate-600">{t('Visits.noAssignees')}</p>
+          <p className="text-muted-foreground">{t('Visits.noAssignees')}</p>
         )}
         {canAssign ? (
           employees.length ? (
@@ -698,7 +722,7 @@ export default async function VisitDetailPage({
                   id="employeeId"
                   name="employeeId"
                   required
-                  selectClassName="h-10 w-full min-w-0 max-w-full rounded-md border bg-white px-3"
+                  selectClassName="h-10 w-full min-w-0 max-w-full rounded-md border bg-card px-3"
                   className="w-full"
                 >
                   <option value="">{t('Visits.selectEmployee')}</option>
@@ -712,11 +736,11 @@ export default async function VisitDetailPage({
               <Button type="submit">{t('Visits.assign')}</Button>
             </RHFActionForm>
           ) : (
-            <p className="text-sm text-slate-600">{t('Visits.noActiveEmployees')}</p>
+            <p className="text-sm text-muted-foreground">{t('Visits.noActiveEmployees')}</p>
           )
         ) : null}
         {proposedSubstitutions.length ? (
-          <div className="grid gap-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <div className="grid gap-3 rounded-md border border-warning/40 bg-warning-muted p-3">
             <h3 className="font-semibold">{t('Visits.substitutionPending')}</h3>
             {proposedSubstitutions.map((substitution) => {
               const candidate = substituteCandidates.find(
@@ -729,7 +753,7 @@ export default async function VisitDetailPage({
                 >
                   <p className="text-sm">
                     {t('Visits.substitutionProposedFor', {
-                      employee: candidate?.displayName ?? substitution.substituteEmployeeId,
+                      employee: candidate?.displayName ?? t('Resources.unavailableEmployee'),
                     })}
                     {' · '}
                     {substitution.reason}
@@ -780,7 +804,7 @@ export default async function VisitDetailPage({
                       id={`substitute-${assignment.id}`}
                       name="substituteEmployeeId"
                       required
-                      selectClassName="h-10 w-full min-w-0 max-w-full rounded-md border bg-white px-3"
+                      selectClassName="h-10 w-full min-w-0 max-w-full rounded-md border bg-card px-3"
                       className="w-full"
                     >
                       <option value="">{t('Visits.selectSubstitute')}</option>
@@ -807,7 +831,7 @@ export default async function VisitDetailPage({
                 </RHFActionForm>
               ))
             ) : (
-              <p className="text-sm text-slate-600">{t('Visits.noSubstituteCandidates')}</p>
+              <p className="text-sm text-muted-foreground">{t('Visits.noSubstituteCandidates')}</p>
             )}
           </div>
         ) : null}
@@ -833,10 +857,7 @@ export default async function VisitDetailPage({
         </section>
       ) : null}
 
-      <section
-        aria-labelledby="history-title"
-        className="grid gap-3 rounded-lg border bg-white p-5"
-      >
+      <section aria-labelledby="history-title" className="grid gap-3 rounded-lg border bg-card p-5">
         <h2 id="history-title" className="text-xl font-semibold">
           {t('Visits.history')}
         </h2>
@@ -845,15 +866,15 @@ export default async function VisitDetailPage({
             {visit.history.map((entry) => (
               <li key={entry.id} className="flex flex-wrap justify-between gap-2 border-b pb-2">
                 <span>{t(auditActionKey(entry.action))}</span>
-                <span className="text-sm text-slate-600">
-                  {t('Visits.editedBy', { actor: entry.actorId })}
+                <span className="text-sm text-muted-foreground">
+                  {t('Visits.editedBy', { actor: t('Resources.unavailableUser') })}
                 </span>
                 <time dateTime={entry.timestamp}>{dateTime(entry.timestamp, visit.timezone)}</time>
               </li>
             ))}
           </ol>
         ) : (
-          <p className="text-slate-600">{t('Visits.noChanges')}</p>
+          <p className="text-muted-foreground">{t('Visits.noChanges')}</p>
         )}
       </section>
     </div>
@@ -884,7 +905,7 @@ function Field({
 function Detail({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-sm text-slate-600">{label}</dt>
+      <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="font-medium">{value}</dd>
     </div>
   );

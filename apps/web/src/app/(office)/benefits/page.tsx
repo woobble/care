@@ -1,5 +1,7 @@
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -41,38 +43,35 @@ export default async function BenefitsWorklistPage({
     : null;
   const organizations = organizationResult?.data ?? [];
   const serviceItems = worklist?.unallocatedServices.items ?? [];
-  const clientIds = [...new Set(serviceItems.map((service) => service.clientId))];
-  const budgetResults = await Promise.all(
-    clientIds.map(async (clientId) => {
-      const result = await get('/api/v1/clients/{clientId}/budgets', {
-        params: { path: { clientId }, header },
-      });
-      return [clientId, result.data ?? null] as const;
-    }),
+  const allocationOptionsByService = new Map(
+    (worklist?.allocationOptions ?? []).map(({ performedServiceId, items }) => [
+      performedServiceId,
+      items,
+    ]),
   );
-  const budgetByClient = new Map(budgetResults);
   const error = query.error ?? worklistError?.code;
   const updated = query.updated === 'allocation' || query.updated === 'recognition';
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          {t('Navigation.office')}
-        </p>
-        <h1 className="text-3xl font-semibold">{t('Benefits.worklistTitle')}</h1>
-        <p className="text-slate-700">{t('Benefits.description')}</p>
-      </header>
+      <PageHeader
+        eyebrow={t('Navigation.office')}
+        title={t('Benefits.worklistTitle')}
+        description={t('Benefits.description')}
+      />
 
       {error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t(errorMessageKey(error))}
         </p>
       ) : null}
       {updated ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {t(
             query.updated === 'allocation'
@@ -82,21 +81,37 @@ export default async function BenefitsWorklistPage({
         </p>
       ) : null}
 
-      <section
-        aria-labelledby="clients-title"
-        className="grid gap-3 rounded-lg border bg-white p-5"
-      >
+      <section aria-labelledby="clients-title" className="grid gap-3 rounded-lg border bg-card p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="clients-title" className="text-xl font-semibold">
             {t('Benefits.worklistTitle')}
           </h2>
           {worklist?.clients ? (
-            <p className="text-sm text-slate-600">{worklist.clients.total}</p>
+            <p className="text-sm text-muted-foreground">{worklist.clients.total}</p>
           ) : null}
         </div>
         {worklistError ? null : worklist?.clients.items.length ? (
           <ul className="grid gap-3">
             {worklist.clients.items.map((client) => {
+              const canReadClient = hasClientPermission(
+                permissions,
+                'client.read',
+                tenantId,
+                client.organizationId,
+                client.facilityId,
+              );
+              const canReadBenefits = hasClientPermission(
+                permissions,
+                'benefits.read',
+                tenantId,
+                client.organizationId,
+                client.facilityId,
+              );
+              const clientHref = canReadClient
+                ? canReadBenefits
+                  ? `/clients/${client.clientId}/benefits`
+                  : `/clients/${client.clientId}`
+                : null;
               const flags = [
                 ...(client.expiringCarryoverCents > 0 ? [t('Benefits.expiringCarryover')] : []),
                 ...(client.lowRecordedBalance ? [t('Benefits.lowBalance')] : []),
@@ -108,13 +123,12 @@ export default async function BenefitsWorklistPage({
                 <li key={client.clientId} className="rounded-md border p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="grid gap-2">
-                      <Link
-                        className="font-semibold text-blue-900 underline"
-                        href={`/clients/${client.clientId}/benefits`}
-                      >
-                        {client.clientName}
-                      </Link>
-                      <p className="text-sm text-slate-700">
+                      <ResourceReference
+                        className="font-semibold"
+                        label={client.clientName}
+                        href={clientHref}
+                      />
+                      <p className="text-sm text-muted-foreground">
                         {client.careGrade === null
                           ? t('Benefits.missingPflegegrad')
                           : t('Benefits.currentCareGrade', {
@@ -126,26 +140,28 @@ export default async function BenefitsWorklistPage({
                           flags.map((flag) => (
                             <span
                               key={flag}
-                              className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-950"
+                              className="rounded-full border border-warning/40 bg-warning-muted px-2 py-1 text-xs text-warning-foreground"
                             >
                               {flag}
                             </span>
                           ))
                         ) : (
-                          <span className="text-sm text-slate-600">
+                          <span className="text-sm text-muted-foreground">
                             {t('Benefits.noReviewNeeded')}
                           </span>
                         )}
                       </div>
                     </div>
                     <dl className="grid gap-1 text-sm sm:text-right">
-                      <dt className="text-slate-600">{t('Benefits.estimatedRemaining')}</dt>
+                      <dt className="text-muted-foreground">{t('Benefits.estimatedRemaining')}</dt>
                       <dd className="font-medium">
                         {money(client.recordedRemainingCents, locale)}
                       </dd>
                       {client.expiringCarryoverCents > 0 ? (
                         <>
-                          <dt className="text-slate-600">{t('Benefits.expiringCarryover')}</dt>
+                          <dt className="text-muted-foreground">
+                            {t('Benefits.expiringCarryover')}
+                          </dt>
                           <dd className="font-medium">
                             {money(client.expiringCarryoverCents, locale)}
                           </dd>
@@ -158,7 +174,7 @@ export default async function BenefitsWorklistPage({
             })}
           </ul>
         ) : (
-          <p className="text-sm text-slate-600">{t('Benefits.worklistEmpty')}</p>
+          <EmptyState title={t('Benefits.worklistEmpty')} />
         )}
         {worklist?.clients && worklist.clients.total > worklist.clients.pageSize ? (
           <div className="flex justify-end gap-2">
@@ -178,7 +194,7 @@ export default async function BenefitsWorklistPage({
 
       <section
         aria-labelledby="services-title"
-        className="grid gap-3 rounded-lg border bg-white p-5"
+        className="grid gap-3 rounded-lg border bg-card p-5"
       >
         <h2 id="services-title" className="text-xl font-semibold">
           {t('Benefits.serviceWorklistTitle')}
@@ -186,7 +202,21 @@ export default async function BenefitsWorklistPage({
         {worklistError ? null : serviceItems.length ? (
           <ul className="grid gap-4">
             {serviceItems.map((service) => {
-              const budget = budgetByClient.get(service.clientId);
+              const options = allocationOptionsByService.get(service.performedServiceId) ?? [];
+              const canReadClient = hasClientPermission(
+                permissions,
+                'client.read',
+                tenantId,
+                service.clientOrganizationId,
+                service.clientFacilityId,
+              );
+              const canReadBenefits = hasClientPermission(
+                permissions,
+                'benefits.read',
+                tenantId,
+                service.clientOrganizationId,
+                service.clientFacilityId,
+              );
               const canAllocate = hasClientPermission(
                 permissions,
                 'benefits.allocate',
@@ -194,25 +224,22 @@ export default async function BenefitsWorklistPage({
                 service.organizationId,
                 service.facilityId,
               );
-              const options = (budget?.entitlements ?? []).filter(
-                (entitlement) =>
-                  ['confirmed', 'provisional'].includes(entitlement.status) &&
-                  entitlement.validFrom <= service.serviceDate &&
-                  (entitlement.validUntil === null ||
-                    entitlement.validUntil >= service.serviceDate),
-              );
               return (
                 <li key={service.performedServiceId} className="grid gap-3 rounded-md border p-4">
                   <div className="grid gap-1">
                     <h3 className="font-semibold">
-                      {service.serviceName} · {service.clientName}
+                      {service.serviceName} ·{' '}
+                      <ResourceReference
+                        label={service.clientName}
+                        href={canReadClient ? `/clients/${service.clientId}` : null}
+                      />
                     </h3>
-                    <p className="text-sm text-slate-700">
+                    <p className="text-sm text-muted-foreground">
                       {formatDate(service.serviceDate, locale)} · {t('Benefits.actualQuantity')}:{' '}
                       {service.actualQuantity ?? '—'} {service.unit} ·{' '}
                       {categoryLabel(benefitT, service.serviceCategory)}
                     </p>
-                    <p className="text-sm text-slate-700">
+                    <p className="text-sm text-muted-foreground">
                       {t('Benefits.serviceAmount')}:{' '}
                       {service.serviceAmountCents === null
                         ? t('Benefits.priceUnknown')
@@ -226,7 +253,7 @@ export default async function BenefitsWorklistPage({
                   {canAllocate && options.length ? (
                     <RHFActionForm
                       action={allocatePerformedServiceAction}
-                      className="grid gap-3 rounded-md bg-slate-50 p-4"
+                      className="grid gap-3 rounded-md bg-background p-4"
                     >
                       <input
                         type="hidden"
@@ -247,7 +274,7 @@ export default async function BenefitsWorklistPage({
                         {[0, 1, 2].map((index) => (
                           <div
                             key={index}
-                            className="grid content-start gap-2 rounded border bg-white p-3"
+                            className="grid content-start gap-2 rounded border bg-card p-3"
                           >
                             <input
                               type="hidden"
@@ -261,16 +288,13 @@ export default async function BenefitsWorklistPage({
                             >
                               <option value="">{t('Benefits.selectFundingSource')}</option>
                               {options.map((entitlement) => {
-                                const source = budget?.fundingSources.find(
-                                  (item) => item.id === entitlement.fundingSourceId,
-                                );
                                 const title =
-                                  source?.label ??
-                                  sourceLabel(benefitT, source?.sourceType ?? 'other');
+                                  entitlement.fundingSourceLabel ??
+                                  sourceLabel(benefitT, entitlement.fundingSourceType);
                                 return (
                                   <option
-                                    key={entitlement.id}
-                                    value={`${entitlement.fundingSourceId}|${entitlement.id}`}
+                                    key={entitlement.entitlementId}
+                                    value={`${entitlement.fundingSourceId}|${entitlement.entitlementId}`}
                                   >
                                     {title} · {benefitTypeLabel(benefitT, entitlement.benefitType)}
                                   </option>
@@ -297,22 +321,26 @@ export default async function BenefitsWorklistPage({
                           </div>
                         ))}
                       </div>
-                      <p className="text-sm text-slate-600">{t('Benefits.allocationNote')}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {t('Benefits.allocationNote')}
+                      </p>
                       <Button type="submit" className="w-fit">
                         {t('Benefits.allocateService')}
                       </Button>
                     </RHFActionForm>
                   ) : (
-                    <p className="text-sm text-slate-700">
+                    <p className="text-sm text-muted-foreground">
                       {canAllocate
                         ? t('Benefits.noEligibleEntitlement')
                         : t('Benefits.noAllocationPermission')}{' '}
-                      <Link
-                        className="font-medium text-blue-900 underline"
-                        href={`/clients/${service.clientId}/benefits`}
-                      >
-                        {t('Benefits.openClientBudget')}
-                      </Link>
+                      {canReadClient && canReadBenefits ? (
+                        <Link
+                          className="font-medium text-primary underline"
+                          href={`/clients/${service.clientId}/benefits`}
+                        >
+                          {t('Benefits.openClientBudget')}
+                        </Link>
+                      ) : null}
                     </p>
                   )}
                 </li>
@@ -320,7 +348,7 @@ export default async function BenefitsWorklistPage({
             })}
           </ul>
         ) : (
-          <p className="text-sm text-slate-600">{t('Benefits.servicesEmpty')}</p>
+          <EmptyState title={t('Benefits.servicesEmpty')} />
         )}
         {worklist?.unallocatedServices &&
         worklist.unallocatedServices.total > worklist.unallocatedServices.pageSize ? (
@@ -342,14 +370,14 @@ export default async function BenefitsWorklistPage({
       {hasPermission(permissions, 'benefits.manage') ? (
         <section
           aria-labelledby="recognition-title"
-          className="grid gap-3 rounded-lg border bg-white p-5"
+          className="grid gap-3 rounded-lg border bg-card p-5"
         >
           <h2 id="recognition-title" className="text-xl font-semibold">
             {t('Benefits.recognitionTitle')}
           </h2>
-          <p className="text-sm text-slate-700">{t('Benefits.recognitionDescription')}</p>
+          <p className="text-sm text-muted-foreground">{t('Benefits.recognitionDescription')}</p>
           {organizationResult?.error ? (
-            <p role="alert" className="text-sm text-red-800">
+            <p role="alert" className="text-sm text-destructive">
               {t(errorMessageKey(organizationResult.error.code))}
             </p>
           ) : null}
@@ -401,7 +429,7 @@ export default async function BenefitsWorklistPage({
               </Button>
             </RHFActionForm>
           ) : (
-            <p className="text-sm text-slate-600">{t('Benefits.noOrganizations')}</p>
+            <p className="text-sm text-muted-foreground">{t('Benefits.noOrganizations')}</p>
           )}
         </section>
       ) : null}
@@ -466,7 +494,7 @@ function SelectField({
         name={name}
         defaultValue={defaultValue}
         required={required}
-        selectClassName="min-h-10 rounded-md border bg-white px-3 py-2"
+        selectClassName="min-h-10 rounded-md border bg-card px-3 py-2"
         className="w-full"
       >
         {children}

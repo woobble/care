@@ -62,7 +62,7 @@ export default async function OperationsTasksPage({
   const permissions = await getPermissionGrants(api);
   if (!hasPermission(permissions, 'operations.read')) {
     return (
-      <p role="alert" className="rounded-md border bg-white p-5">
+      <p role="alert" className="rounded-md border bg-card p-5">
         {t('noAccess')}
       </p>
     );
@@ -199,26 +199,35 @@ export default async function OperationsTasksPage({
       />
 
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {translate(errorMessageKey(query.error))}
         </p>
       ) : null}
       {query.updated === 'created' ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {t('taskCreated')}
         </p>
       ) : null}
       {taskResult.error || organizationResult.error || facilityResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t('loadFailed')}
         </p>
       ) : null}
 
       {admissionHandoffRequested && !admissionHandoffReady ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {onboardingT('taskContextUnavailable')}
         </p>
       ) : null}
@@ -226,13 +235,13 @@ export default async function OperationsTasksPage({
       {canCreate && (!admissionHandoffRequested || admissionHandoffReady) ? (
         <section
           aria-labelledby="create-task-title"
-          className="grid gap-4 rounded-lg border bg-white p-5"
+          className="grid gap-4 rounded-lg border bg-card p-5"
         >
           <div className="grid gap-1">
             <h2 id="create-task-title" className="text-xl font-semibold">
               {t('newTaskTitle')}
             </h2>
-            <p className="text-sm text-slate-600">{t('manualTaskHelp')}</p>
+            <p className="text-sm text-muted-foreground">{t('manualTaskHelp')}</p>
           </div>
           <RHFActionForm action={createTaskAction} className="grid gap-4 md:grid-cols-2">
             {admissionHandoffReady ? (
@@ -261,7 +270,7 @@ export default async function OperationsTasksPage({
                 name="description"
                 maxLength={8000}
                 rows={3}
-                className="rounded-md border bg-white px-3 py-2"
+                className="rounded-md border bg-card px-3 py-2"
               />
             </div>
             <SelectField
@@ -346,7 +355,7 @@ export default async function OperationsTasksPage({
               <NativeSelect
                 name="timezone"
                 aria-label={t('timezone')}
-                selectClassName="h-10 rounded-md border bg-white px-3 text-sm"
+                selectClassName="h-10 rounded-md border bg-card px-3 text-sm"
                 defaultValue={
                   admission
                     ? (timezoneByOrganization.get(admission.organizationId) ?? '')
@@ -376,7 +385,7 @@ export default async function OperationsTasksPage({
         <h2 id="task-list-title" className="text-xl font-semibold">
           {t('tasksTitle')}
         </h2>
-        <form method="get" className="grid gap-3 rounded-lg border bg-white p-4 md:grid-cols-4">
+        <form method="get" className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-4">
           <label className="grid gap-1 text-sm">
             <span>{t('searchTasks')}</span>
             <Input type="search" name="q" maxLength={120} defaultValue={search} />
@@ -488,11 +497,11 @@ export default async function OperationsTasksPage({
               <li key={task.id}>
                 <Link
                   href={`/operations/tasks/${task.id}`}
-                  className="grid gap-3 rounded-lg border bg-white p-4 hover:border-blue-400 sm:grid-cols-[1fr_auto] sm:items-center"
+                  className="grid gap-3 rounded-lg border bg-card p-4 hover:border-primary/40 sm:grid-cols-[1fr_auto] sm:items-center"
                 >
                   <span className="grid gap-1">
                     <span className="font-semibold">{task.title}</span>
-                    <span className="text-sm text-slate-600">
+                    <span className="text-sm text-muted-foreground">
                       {t('manualTask')} ·{' '}
                       {task.priority === 'urgent'
                         ? t('urgent')
@@ -511,7 +520,7 @@ export default async function OperationsTasksPage({
                         : t('noDueDate')}
                     </span>
                   </span>
-                  <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-sm">
+                  <span className="w-fit rounded-full bg-muted px-3 py-1 text-sm">
                     {taskStatusLabel(t, task.status)}
                   </span>
                 </Link>
@@ -519,7 +528,7 @@ export default async function OperationsTasksPage({
             ))}
           </ul>
         ) : (
-          <div className="rounded-lg border bg-white p-6">
+          <div className="rounded-lg border bg-card p-6">
             <p>{t('tasksEmpty')}</p>
           </div>
         )}
@@ -563,7 +572,7 @@ function SelectField({
         name={name}
         required={required}
         defaultValue={defaultValue}
-        selectClassName="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-card px-3"
         className="w-full"
       >
         {children}
@@ -641,7 +650,7 @@ function Pagination({
     <nav aria-label={label} className="flex justify-between">
       {page > 1 ? (
         <Link
-          className="rounded-md border bg-white px-3 py-2"
+          className="rounded-md border bg-card px-3 py-2"
           href={`/operations/tasks?${withPage(params, page - 1)}`}
         >
           {previousLabel}
@@ -651,7 +660,7 @@ function Pagination({
       )}
       {page * pageSize < total ? (
         <Link
-          className="rounded-md border bg-white px-3 py-2"
+          className="rounded-md border bg-card px-3 py-2"
           href={`/operations/tasks?${withPage(params, page + 1)}`}
         >
           {nextLabel}

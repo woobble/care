@@ -50,9 +50,7 @@ export default async function TenantSelectionPage({
           <Card className="overflow-hidden rounded-3xl border-border py-0 shadow-xl shadow-foreground/5">
             <div className="h-1 bg-primary" />
             <CardHeader className="grid gap-2 px-6 pt-6 sm:px-8 sm:pt-8">
-              <h1 className="text-2xl font-semibold tracking-tight">
-                {authT('signIn')}
-              </h1>
+              <h1 className="text-2xl font-semibold tracking-tight">{authT('signIn')}</h1>
               <CardDescription className="text-sm leading-relaxed">
                 {authT('signInDescription')}
               </CardDescription>
@@ -86,7 +84,10 @@ export default async function TenantSelectionPage({
         <div className="flex justify-end">
           <LanguageSwitcher locale={locale} />
         </div>
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+        >
           {authT('sessionExpired')}
         </p>
         <SignOutForm action={signOutAction}>
@@ -105,25 +106,28 @@ export default async function TenantSelectionPage({
         <LanguageSwitcher locale={locale} />
       </div>
       <div className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">Care Platform</p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-primary">Care Platform</p>
         <h1 className="text-3xl font-semibold">{tenantT('selectTitle')}</h1>
-        <p className="text-slate-600">{tenantT('selectDescription')}</p>
+        <p className="text-muted-foreground">{tenantT('selectDescription')}</p>
       </div>
       {error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+        >
           {tenantT('loadFailed')}
         </p>
       ) : tenants?.length ? (
         <RHFActionForm
           action={selectTenantAction}
-          className="grid gap-3 rounded-lg border bg-white p-5 shadow-sm"
+          className="grid gap-3 rounded-lg border bg-card p-5 shadow-sm"
         >
           <Label htmlFor="tenantId">{tenantT('label')}</Label>
           <NativeSelect
             id="tenantId"
             name="tenantId"
             required
-            selectClassName="min-h-11 rounded-md border border-slate-300 bg-white px-3"
+            selectClassName="min-h-11 rounded-md border border-border bg-card px-3"
             className="w-full"
           >
             {tenants.map((tenant) => (
@@ -133,14 +137,14 @@ export default async function TenantSelectionPage({
             ))}
           </NativeSelect>
           {params.error ? (
-            <p role="alert" className="text-sm text-red-800">
+            <p role="alert" className="text-sm text-destructive">
               {tenantT('invalidSelection')}
             </p>
           ) : null}
           <Button type="submit">{tenantT('continue')}</Button>
         </RHFActionForm>
       ) : (
-        <p className="rounded-md border bg-white p-5 text-slate-700">{tenantT('noAccess')}</p>
+        <p className="rounded-md border bg-card p-5 text-muted-foreground">{tenantT('noAccess')}</p>
       )}
     </main>
   );

@@ -19,6 +19,7 @@ import {
   type Resolver,
 } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useTranslations } from 'next-intl';
 import { z } from 'zod';
 import {
   Field,
@@ -37,7 +38,20 @@ const permissiveFormSchema = z.record(z.string(), z.unknown());
 
 type NativeControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
-function buildNativeSchema(controls: NativeControl[]) {
+function buildNativeSchema(
+  controls: NativeControl[],
+  messages: {
+    required: string;
+    checked: string;
+    selectOne: string;
+    selectAtLeastOne: string;
+    validEmail: string;
+    validUrl: string;
+    numberRange: string;
+    minLength: (count: number) => string;
+    maxLength: (count: number) => string;
+  },
+) {
   const byName = new Map<string, NativeControl[]>();
   for (const control of controls) {
     if (
@@ -67,11 +81,15 @@ function buildNativeSchema(controls: NativeControl[]) {
       checkboxGroup ||
       (inputs.length === 1 && first instanceof HTMLInputElement && first.type === 'checkbox')
     ) {
-      let validator: z.ZodType = checkboxGroup ? z.array(z.string()) : z.boolean();
+      let validator: z.ZodType = checkboxGroup
+        ? z.array(z.string())
+        : z.union([z.boolean(), z.string()]);
       if (group.some((control) => control.required)) {
         validator = checkboxGroup
-          ? z.array(z.string()).min(1)
-          : z.boolean().refine(Boolean, { message: 'Select this option.' });
+          ? z.array(z.string()).min(1, { message: messages.checked })
+          : validator.refine((value) => value === true || value === 'true' || value === 'on', {
+              message: messages.checked,
+            });
       }
       validators.set(name, validator);
       continue;
@@ -84,7 +102,7 @@ function buildNativeSchema(controls: NativeControl[]) {
     if (first instanceof HTMLSelectElement && first.multiple) {
       let validator: z.ZodType = z.array(z.string());
       if (group.some((control) => control.required)) {
-        validator = z.array(z.string()).min(1, { message: 'Select at least one option.' });
+        validator = z.array(z.string()).min(1, { message: messages.selectAtLeastOne });
       }
       validators.set(name, validator);
       continue;
@@ -93,17 +111,17 @@ function buildNativeSchema(controls: NativeControl[]) {
     let validator = z.string();
     if (group.some((control) => control.required)) {
       validator = z.string().refine((value) => value.trim().length > 0, {
-        message: 'This field is required.',
+        message: messages.required,
       });
     }
     if (first instanceof HTMLInputElement && first.type === 'email') {
       validator = validator.refine(
         (value) => value === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
-        { message: 'Enter a valid email address.' },
+        { message: messages.validEmail },
       );
     } else if (first instanceof HTMLInputElement && first.type === 'url') {
       validator = validator.refine((value) => value === '' || URL.canParse(value), {
-        message: 'Enter a valid URL.',
+        message: messages.validUrl,
       });
     } else if (first instanceof HTMLInputElement && first.type === 'number') {
       const minimum = first.min === '' ? undefined : Number(first.min);
@@ -118,7 +136,7 @@ function buildNativeSchema(controls: NativeControl[]) {
             (maximum === undefined || number <= maximum)
           );
         },
-        { message: 'Enter a number within the allowed range.' },
+        { message: messages.numberRange },
       );
     }
 
@@ -126,16 +144,16 @@ function buildNativeSchema(controls: NativeControl[]) {
     const maxLength = Number(first.getAttribute('maxlength'));
     if (Number.isFinite(minLength) && minLength > 0) {
       validator = validator.refine((value) => value === '' || value.length >= minLength, {
-        message: `Use at least ${minLength} characters.`,
+        message: messages.minLength(minLength),
       });
     }
     if (Number.isFinite(maxLength) && maxLength > 0) {
       validator = validator.refine((value) => value.length <= maxLength, {
-        message: `Use no more than ${maxLength} characters.`,
+        message: messages.maxLength(maxLength),
       });
     }
     if (radioGroup && group.some((control) => control.required)) {
-      validator = z.string().min(1, { message: 'Select an option.' });
+      validator = z.string().min(1, { message: messages.selectOne });
     }
     validators.set(name, validator);
   }
@@ -183,6 +201,7 @@ export function RHFActionForm({
   onChange?: FormHTMLAttributes<HTMLFormElement>['onChange'];
   children: ReactNode;
 }) {
+  const t = useTranslations('Common.formValidation');
   const formRef = useRef<HTMLFormElement>(null);
   const [nativeSchema, setNativeSchema] = useState<z.ZodType>(permissiveFormSchema);
   const methods = useForm<FormValues>({
@@ -210,12 +229,24 @@ export function RHFActionForm({
       registration.ref(control);
       registeredRefs.push(registration.ref);
     }
-    setNativeSchema(buildNativeSchema(controls));
+    setNativeSchema(
+      buildNativeSchema(controls, {
+        required: t('required'),
+        checked: t('checked'),
+        selectOne: t('selectOne'),
+        selectAtLeastOne: t('selectAtLeastOne'),
+        validEmail: t('validEmail'),
+        validUrl: t('validUrl'),
+        numberRange: t('numberRange'),
+        minLength: (count) => t('minLength', { count }),
+        maxLength: (count) => t('maxLength', { count }),
+      }),
+    );
 
     return () => {
       for (const ref of registeredRefs) ref(null);
     };
-  }, [register]);
+  }, [register, t]);
 
   async function submit(_values: FormValues, event?: { nativeEvent?: unknown }) {
     const form = formRef.current;
@@ -292,6 +323,11 @@ export function RHFActionForm({
         onSubmit={handleSubmit}
       >
         {children}
+        {methods.formState.isSubmitting ? (
+          <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+            {t('saving')}
+          </p>
+        ) : null}
         {collectErrorMessages(methods.formState.errors).length ? (
           <div
             role="alert"

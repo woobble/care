@@ -1,10 +1,17 @@
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
 import { statusLabelKey } from '@app/web/i18n/status';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+} from '@app/web/lib/api';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import {
   createTeamAction,
@@ -26,32 +33,61 @@ export default async function FacilityDetailPage({
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
-  const [facilityResult, teamsResult, employeesResult] = await Promise.all([
+  const [facilityResult, teamsResult, employeesResult, permissions] = await Promise.all([
     get('/api/v1/facilities/{id}', { params: { path: { id }, header } }),
     get('/api/v1/teams', { params: { query: { facilityId: id }, header } }),
     get('/api/v1/employees', {
       params: { query: { facilityId: id, page: 1, pageSize: 50 }, header },
     }),
+    getPermissionGrants(api),
   ]);
   if (!facilityResult.data) notFound();
   const facility = facilityResult.data;
+  const tenantId = header['X-Tenant-Id'];
+  const canReadTeams = hasClientPermission(
+    permissions,
+    'team.read',
+    tenantId,
+    facility.organizationId,
+    facility.id,
+  );
+  const canReadEmployees = hasClientPermission(
+    permissions,
+    'employee.read',
+    tenantId,
+    facility.organizationId,
+    facility.id,
+  );
 
   return (
     <div className="grid gap-8">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration/facilities">{t('Facilities.title')}</Link> ·{' '}
-          {facility.organizationName}
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-semibold">{facility.name}</h1>
-          <StatusBadge status={facility.status} label={t(statusLabelKey(facility.status))} />
-        </div>
-      </header>
+      <PageHeader
+        eyebrow={
+          <>
+            <Link href="/administration/facilities">{t('Facilities.title')}</Link> ·{' '}
+            <ResourceReference
+              label={facility.organizationName}
+              href={
+                hasClientPermission(
+                  permissions,
+                  'organization.read',
+                  tenantId,
+                  facility.organizationId,
+                  null,
+                )
+                  ? `/administration/organizations/${facility.organizationId}`
+                  : null
+              }
+            />
+          </>
+        }
+        title={facility.name}
+        meta={<StatusBadge status={facility.status} label={t(statusLabelKey(facility.status))} />}
+      />
       <ActionNotice error={query.error} updated={query.updated} />
       <section
         aria-labelledby="facility-edit-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <h2 id="facility-edit-title" className="text-xl font-semibold">
           {t('Facilities.detailsTitle')}
@@ -103,7 +139,9 @@ export default async function FacilityDetailPage({
             defaultValue={facility.timezone ?? ''}
             maxLength={100}
           />
-          <p className="text-sm text-slate-600 md:col-span-2">{t('Facilities.timezoneHint')}</p>
+          <p className="text-sm text-muted-foreground md:col-span-2">
+            {t('Facilities.timezoneHint')}
+          </p>
           <div className="md:col-span-2">
             <Button type="submit">{t('Common.actions.save')}</Button>
           </div>
@@ -123,13 +161,13 @@ export default async function FacilityDetailPage({
 
       <section
         aria-labelledby="facility-teams-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <div>
           <h2 id="facility-teams-title" className="text-xl font-semibold">
             {t('Facilities.teamsTitle')}
           </h2>
-          <p className="text-sm text-slate-600">{t('Facilities.teamsDescription')}</p>
+          <p className="text-sm text-muted-foreground">{t('Facilities.teamsDescription')}</p>
         </div>
         <RHFActionForm action={createTeamAction} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="organizationId" value={facility.organizationId} />
@@ -144,18 +182,22 @@ export default async function FacilityDetailPage({
           <ul className="grid gap-2">
             {teamsResult.data.map((team) => (
               <li key={team.id} className="flex justify-between gap-3 rounded-md border p-3">
-                <Link
-                  className="font-medium text-blue-900 underline"
-                  href={`/administration/teams/${team.id}`}
-                >
-                  {team.name}
-                </Link>
+                {canReadTeams ? (
+                  <Link
+                    className="font-medium text-primary underline"
+                    href={`/administration/teams/${team.id}`}
+                  >
+                    {team.name}
+                  </Link>
+                ) : (
+                  <span className="font-medium">{team.name}</span>
+                )}
                 <StatusBadge status={team.status} label={t(statusLabelKey(team.status))} />
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-600">{t('Facilities.noTeams')}</p>
+          <p className="text-sm text-muted-foreground">{t('Facilities.noTeams')}</p>
         )}
       </section>
 
@@ -164,7 +206,10 @@ export default async function FacilityDetailPage({
           {t('Facilities.employeesTitle')}
         </h2>
         {employeesResult.error ? (
-          <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+          >
             {t('Facilities.employeeLoadFailed')}
           </p>
         ) : employeesResult.data?.items.length ? (
@@ -172,20 +217,26 @@ export default async function FacilityDetailPage({
             {employeesResult.data.items.map((employee) => (
               <li
                 key={employee.id}
-                className="flex justify-between gap-3 rounded-md border bg-white p-3"
+                className="flex justify-between gap-3 rounded-md border bg-card p-3"
               >
-                <Link
-                  className="font-medium text-blue-900 underline"
-                  href={`/employees/${employee.id}`}
-                >
-                  {employee.firstName} {employee.lastName}
-                </Link>
+                {canReadEmployees ? (
+                  <Link
+                    className="font-medium text-primary underline"
+                    href={`/employees/${employee.id}`}
+                  >
+                    {employee.firstName} {employee.lastName}
+                  </Link>
+                ) : (
+                  <span className="font-medium">
+                    {employee.firstName} {employee.lastName}
+                  </span>
+                )}
                 <StatusBadge status={employee.status} label={t(statusLabelKey(employee.status))} />
               </li>
             ))}
           </ul>
         ) : (
-          <p className="rounded-lg border bg-white p-4 text-slate-700">
+          <p className="rounded-lg border bg-card p-4 text-muted-foreground">
             {t('Facilities.noEmployees')}
           </p>
         )}

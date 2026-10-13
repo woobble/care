@@ -9,11 +9,18 @@ import {
 } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
 import { statusLabelKey } from '@app/web/i18n/status';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+} from '@app/web/lib/api';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import { createTeamAction } from '@app/web/app/(office)/administration/actions';
 
@@ -32,31 +39,34 @@ export default async function TeamsPage({
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
-  const [organizationsResult, facilitiesResult, teamsResult] = await Promise.all([
+  const [organizationsResult, facilitiesResult, teamsResult, permissions] = await Promise.all([
     get('/api/v1/organizations', { params: { header } }),
     get('/api/v1/facilities', { params: { header } }),
     get('/api/v1/teams', { params: { header } }),
+    getPermissionGrants(api),
   ]);
   const organizations = organizationsResult.data ?? [];
   const facilities = facilitiesResult.data ?? [];
+  const tenantId = header['X-Tenant-Id'];
 
   return (
     <div className="grid gap-8">
-      <header className="grid gap-1">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration/organizations">{t('Teams.section')}</Link>
-        </p>
-        <h1 className="text-3xl font-semibold">{t('Teams.title')}</h1>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/administration/organizations">{t('Teams.section')}</Link>}
+        title={t('Teams.title')}
+      />
       <ActionNotice error={query.error} updated={query.updated} />
       {organizationsResult.error || facilitiesResult.error || teamsResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+        >
           {t('Teams.loadFailed')}
         </p>
       ) : null}
       <section
         aria-labelledby="team-create-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <h2 id="team-create-title" className="text-xl font-semibold">
           {t('Teams.createTitle')}
@@ -67,7 +77,7 @@ export default async function TeamsPage({
             <NativeSelect
               id="organizationId"
               name="organizationId"
-              selectClassName="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-card px-3"
               required
               defaultValue={query.organizationId ?? ''}
               className="w-full"
@@ -89,7 +99,7 @@ export default async function TeamsPage({
             <NativeSelect
               id="facilityId"
               name="facilityId"
-              selectClassName="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-card px-3"
               defaultValue={query.facilityId ?? ''}
               className="w-full"
             >
@@ -117,10 +127,10 @@ export default async function TeamsPage({
           {t('Teams.listTitle')}
         </h2>
         {teamsResult.data?.length ? (
-          <div className="overflow-x-auto rounded-lg border bg-white">
+          <div className="overflow-x-auto rounded-lg border bg-card">
             <ShadcnTable className="w-full border-collapse text-left text-sm">
               <ShadcnTableCaption className="sr-only">{t('Teams.caption')}</ShadcnTableCaption>
-              <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+              <ShadcnTableHeader className="border-b bg-muted text-muted-foreground">
                 <ShadcnTableRow>
                   <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Teams.team')}
@@ -141,15 +151,47 @@ export default async function TeamsPage({
                   <ShadcnTableRow key={team.id} className="border-b last:border-0">
                     <ShadcnTableCell className="px-4 py-3">
                       <Link
-                        className="font-medium text-blue-900 underline"
+                        className="font-medium text-primary underline"
                         href={`/administration/teams/${team.id}`}
                       >
                         {team.name}
                       </Link>
                     </ShadcnTableCell>
-                    <ShadcnTableCell className="px-4 py-3">{team.organizationName}</ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">
-                      {team.facilityName ?? t('Teams.organizationWide')}
+                      <ResourceReference
+                        label={team.organizationName}
+                        href={
+                          hasClientPermission(
+                            permissions,
+                            'organization.read',
+                            tenantId,
+                            team.organizationId,
+                            null,
+                          )
+                            ? `/administration/organizations/${team.organizationId}`
+                            : null
+                        }
+                      />
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
+                      {team.facilityName && team.facilityId ? (
+                        <ResourceReference
+                          label={team.facilityName}
+                          href={
+                            hasClientPermission(
+                              permissions,
+                              'facility.read',
+                              tenantId,
+                              team.organizationId,
+                              team.facilityId,
+                            )
+                              ? `/administration/facilities/${team.facilityId}`
+                              : null
+                          }
+                        />
+                      ) : (
+                        t('Teams.organizationWide')
+                      )}
                     </ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">
                       <StatusBadge status={team.status} label={t(statusLabelKey(team.status))} />
@@ -160,7 +202,7 @@ export default async function TeamsPage({
             </ShadcnTable>
           </div>
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">{t('Teams.empty')}</p>
+          <EmptyState title={t('Teams.empty')} />
         )}
       </section>
     </div>

@@ -1,6 +1,8 @@
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
 import { Checkbox as ShadcnCheckbox } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
@@ -36,19 +38,17 @@ export default async function BillingSettingsPage({
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          {t('section')}
-        </p>
-        <h1 className="text-3xl font-semibold">{t('settings')}</h1>
-        <p className="text-slate-700">{t('settingsDescription')}</p>
-      </header>
+      <PageHeader
+        eyebrow={t('section')}
+        title={t('settings')}
+        description={t('settingsDescription')}
+      />
       <BillingNavigation permissions={permissions} />
       {(query.error ?? error?.code) ? (
         <Alert>{translate(errorMessageKey(query.error ?? error?.code ?? ''))}</Alert>
       ) : null}
       {query.updated === 'saved' ? <Status>{t('billingProfileSaved')}</Status> : null}
-      <p className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
+      <p className="rounded-md border border-primary/20 bg-accent p-3 text-sm text-primary">
         {t('organizationAddressNote')}{' '}
         <Link className="font-medium underline" href="/administration/organizations">
           {t('manageOrganizations')}
@@ -61,13 +61,13 @@ export default async function BillingSettingsPage({
             <section
               key={organization.organizationId}
               aria-labelledby={`profile-${organization.organizationId}`}
-              className="grid gap-4 rounded-lg border bg-white p-5"
+              className="grid gap-4 rounded-lg border bg-card p-5"
             >
               <div className="grid gap-1">
                 <h2 id={`profile-${organization.organizationId}`} className="text-xl font-semibold">
                   {organization.organizationName}
                 </h2>
-                <p className="text-sm text-slate-700">
+                <p className="text-sm text-muted-foreground">
                   {organization.legalName ?? organization.organizationName} ·{' '}
                   {organization.organizationAddress ?? t('addressMissing')}
                 </p>
@@ -189,7 +189,7 @@ export default async function BillingSettingsPage({
                     />
                     {t('requireAcknowledgement')}
                   </label>
-                  <p className="text-sm text-slate-700 md:col-span-2">
+                  <p className="text-sm text-muted-foreground md:col-span-2">
                     {t('taxConfigurationNote')}
                   </p>
                   <Button type="submit" className="w-fit">
@@ -197,39 +197,23 @@ export default async function BillingSettingsPage({
                   </Button>
                 </RHFActionForm>
               ) : (
-                <p className="text-sm text-slate-700">{t('noSettingsPermission')}</p>
+                <p className="text-sm text-muted-foreground">{t('noSettingsPermission')}</p>
               )}
             </section>
           );
         })
       ) : (
-        <p className="rounded-lg border bg-white p-5 text-sm text-slate-700">
+        <p className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">
           {t('noOrganizations')}
         </p>
       )}
-      <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+      <p className="rounded-md border border-warning/40 bg-warning-muted p-3 text-sm text-warning-foreground">
         {t('structuredFormatWarning')}
       </p>
-      <p className="text-xs text-slate-600">
+      <p className="text-xs text-muted-foreground">
         {locale === 'de' ? t('taxSourceNoteDe') : t('taxSourceNoteEn')}
       </p>
     </div>
-  );
-}
-
-function Alert({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-      {children}
-    </p>
-  );
-}
-
-function Status({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="status" className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900">
-      {children}
-    </p>
   );
 }
 
@@ -300,7 +284,7 @@ function SelectField({
         name={name}
         defaultValue={defaultValue}
         required={required}
-        selectClassName="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2"
+        selectClassName="min-h-10 rounded-md border border-border bg-card px-3 py-2"
         className="w-full"
       >
         {children}

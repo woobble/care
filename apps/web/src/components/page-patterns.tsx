@@ -12,7 +12,7 @@ export function PageHeader({
 }: {
   eyebrow?: ReactNode;
   title: string;
-  description?: string;
+  description?: ReactNode;
   meta?: ReactNode;
   actions?: ReactNode;
 }) {
@@ -98,5 +98,28 @@ export function EmptyState({ title, description }: { title: string; description?
       <p className="font-medium">{title}</p>
       {description ? <p className="max-w-md text-sm text-muted-foreground">{description}</p> : null}
     </div>
+  );
+}
+
+export function ErrorNotice({ children }: { children: ReactNode }) {
+  return (
+    <p
+      role="alert"
+      className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+    >
+      {children}
+    </p>
+  );
+}
+
+export function SuccessNotice({ children }: { children: ReactNode }) {
+  return (
+    <p
+      role="status"
+      aria-live="polite"
+      className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
+    >
+      {children}
+    </p>
   );
 }

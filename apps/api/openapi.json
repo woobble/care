@@ -29864,6 +29864,10 @@
             "format": "uuid",
             "nullable": true
           },
+          "performedServiceLabel": {
+            "type": "string",
+            "nullable": true
+          },
           "entryType": {
             "type": "string",
             "enum": [
@@ -29906,6 +29910,7 @@
           "allocationBucketId",
           "serviceAllocationId",
           "performedServiceId",
+          "performedServiceLabel",
           "entryType",
           "amountCents",
           "effectiveDate",
@@ -30386,6 +30391,16 @@
           "clientName": {
             "type": "string"
           },
+          "clientOrganizationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "clientFacilityId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
           "organizationId": {
             "type": "string",
             "format": "uuid"
@@ -30446,6 +30461,8 @@
           "performedServiceId",
           "clientId",
           "clientName",
+          "clientOrganizationId",
+          "clientFacilityId",
           "organizationId",
           "facilityId",
           "serviceName",
@@ -30487,6 +30504,67 @@
           "total"
         ]
       },
+      "BenefitWorklistAllocationOptionDto": {
+        "type": "object",
+        "properties": {
+          "entitlementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fundingSourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "benefitType": {
+            "type": "string",
+            "enum": [
+              "entlastungsbetrag_45b",
+              "umwandlungsanspruch_45a_4",
+              "private",
+              "other"
+            ]
+          },
+          "fundingSourceLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "fundingSourceType": {
+            "type": "string",
+            "enum": [
+              "statutory_long_term_care_insurance",
+              "private_long_term_care_insurance",
+              "self_pay",
+              "other"
+            ]
+          }
+        },
+        "required": [
+          "entitlementId",
+          "fundingSourceId",
+          "benefitType",
+          "fundingSourceLabel",
+          "fundingSourceType"
+        ]
+      },
+      "BenefitWorklistServiceAllocationOptionsDto": {
+        "type": "object",
+        "properties": {
+          "performedServiceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BenefitWorklistAllocationOptionDto"
+            }
+          }
+        },
+        "required": [
+          "performedServiceId",
+          "items"
+        ]
+      },
       "BenefitWorklistResponseDto": {
         "type": "object",
         "properties": {
@@ -30495,11 +30573,18 @@
           },
           "unallocatedServices": {
             "$ref": "#/components/schemas/BenefitPagedServiceWorklistDto"
+          },
+          "allocationOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BenefitWorklistServiceAllocationOptionsDto"
+            }
           }
         },
         "required": [
           "clients",
-          "unallocatedServices"
+          "unallocatedServices",
+          "allocationOptions"
         ]
       },
       "BenefitUnallocatedServicesResponseDto": {
@@ -33306,6 +33391,10 @@
             "type": "string",
             "format": "uuid"
           },
+          "actorName": {
+            "type": "string",
+            "nullable": true
+          },
           "kind": {
             "type": "string",
             "enum": [
@@ -33336,6 +33425,7 @@
           "tenantId",
           "taskId",
           "actorUserId",
+          "actorName",
           "kind",
           "details",
           "comment",

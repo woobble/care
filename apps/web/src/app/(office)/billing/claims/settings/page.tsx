@@ -1,6 +1,8 @@
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
 import { Checkbox as ShadcnCheckbox } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input } from '@care/ui';
@@ -105,13 +107,11 @@ export default async function ClaimsSettingsPage({
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/billing/claims">{t('claims')}</Link>
-        </p>
-        <h1 className="text-3xl font-semibold">{t('claimsSettings')}</h1>
-        <p className="text-slate-700">{t('claimsSettingsDescription')}</p>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/billing/claims">{t('claims')}</Link>}
+        title={t('claimsSettings')}
+        description={t('claimsSettingsDescription')}
+      />
       <BillingNavigation permissions={permissions} />
       {query.error || organizationResult.error?.code ? (
         <Alert>
@@ -127,13 +127,13 @@ export default async function ClaimsSettingsPage({
           <section
             key={organization.id}
             aria-labelledby={'payers-' + organization.id}
-            className="grid gap-4 rounded-lg border bg-white p-5"
+            className="grid gap-4 rounded-lg border bg-card p-5"
           >
             <div className="grid gap-1">
               <h2 id={'payers-' + organization.id} className="text-xl font-semibold">
                 {organization.name}
               </h2>
-              <p className="text-sm text-slate-700">{t('payerDirectoryDescription')}</p>
+              <p className="text-sm text-muted-foreground">{t('payerDirectoryDescription')}</p>
             </div>
             {error ? <Alert>{translate(errorMessageKey(error))}</Alert> : null}
             {payers.map((payer) => {
@@ -142,15 +142,15 @@ export default async function ClaimsSettingsPage({
                 <article key={payer.id} className="grid gap-4 rounded-md border p-4">
                   <div className="grid gap-1">
                     <h3 className="font-semibold">{payer.name}</h3>
-                    <p className="text-sm text-slate-700">
+                    <p className="text-sm text-muted-foreground">
                       {payerTypeLabel(t, payer.payerType)} · {payerStatusLabel(t, payer.status)} ·{' '}
                       {t('payerVersion')}: {payer.version}
                     </p>
-                    <p className="text-sm text-slate-700">
+                    <p className="text-sm text-muted-foreground">
                       {t('payerIdentifier')}:{' '}
                       {payer.payerIdentifier ?? t('identifierNotConfigured')}
                     </p>
-                    <p className="whitespace-pre-line text-sm text-slate-700">
+                    <p className="whitespace-pre-line text-sm text-muted-foreground">
                       {payer.addressText ?? '—'}
                     </p>
                   </div>
@@ -196,7 +196,7 @@ export default async function ClaimsSettingsPage({
                             </p>
                             {profile.sourceUrl ? (
                               <a
-                                className="break-all text-blue-900 underline"
+                                className="break-all text-primary underline"
                                 href={profile.sourceUrl}
                                 rel="noreferrer"
                               >
@@ -207,7 +207,7 @@ export default async function ClaimsSettingsPage({
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-sm text-slate-700">{t('payerProfilesEmpty')}</p>
+                      <p className="text-sm text-muted-foreground">{t('payerProfilesEmpty')}</p>
                     )}
                   </div>
                   {canManage ? (
@@ -342,7 +342,7 @@ export default async function ClaimsSettingsPage({
                           label={t('requiresProviderRecognition')}
                         />
                       </div>
-                      <p className="text-sm text-slate-700 md:col-span-2">
+                      <p className="text-sm text-muted-foreground md:col-span-2">
                         {t('requirementsSourceNote')}
                       </p>
                       <Button type="submit" className="w-fit md:col-span-2">
@@ -353,7 +353,9 @@ export default async function ClaimsSettingsPage({
                 </article>
               );
             })}
-            {!payers.length ? <p className="text-sm text-slate-700">{t('payersEmpty')}</p> : null}
+            {!payers.length ? (
+              <p className="text-sm text-muted-foreground">{t('payersEmpty')}</p>
+            ) : null}
             {canManage ? (
               <form
                 action={createPayerDirectoryEntryAction}
@@ -370,11 +372,11 @@ export default async function ClaimsSettingsPage({
           </section>
         ))}
       {canRead && !providerData.length ? (
-        <p className="rounded-lg border bg-white p-5 text-sm text-slate-700">
+        <p className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">
           {t('noOrganizations')}
         </p>
       ) : null}
-      <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+      <p className="rounded-md border border-warning/40 bg-warning-muted p-3 text-sm text-warning-foreground">
         {t('payerRequirementsDisclaimer')}
       </p>
     </div>
@@ -602,20 +604,4 @@ function fundingTypeLabel(
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function Alert({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-      {children}
-    </p>
-  );
-}
-
-function Status({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="status" className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900">
-      {children}
-    </p>
-  );
 }

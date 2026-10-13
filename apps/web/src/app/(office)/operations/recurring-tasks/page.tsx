@@ -2,6 +2,7 @@ import { Checkbox as ShadcnCheckbox } from '@care/ui';
 import { Textarea } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
@@ -37,7 +38,7 @@ export default async function RecurringTasksPage({
   const permissions = await getPermissionGrants(api);
   if (!hasPermission(permissions, 'operations.read'))
     return (
-      <p role="alert" className="rounded-md border bg-white p-5">
+      <p role="alert" className="rounded-md border bg-card p-5">
         {t('noAccess')}
       </p>
     );
@@ -92,40 +93,44 @@ export default async function RecurringTasksPage({
 
   return (
     <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid gap-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('title')}
-          </p>
-          <h1 className="text-3xl font-semibold">{t('recurringTasks')}</h1>
-          <p className="max-w-3xl text-slate-700">{t('recurringTasksDescription')}</p>
-        </div>
-        <Button asChild variant="secondary">
-          <Link href="/operations">{t('dashboardTitle')}</Link>
-        </Button>
-      </header>
+      <PageHeader
+        eyebrow={t('title')}
+        title={t('recurringTasks')}
+        description={t('recurringTasksDescription')}
+        actions={
+          <Button asChild variant="secondary">
+            <Link href="/operations">{t('dashboardTitle')}</Link>
+          </Button>
+        }
+      />
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {translate(errorMessageKey(query.error))}
         </p>
       ) : null}
       {query.updated ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {query.updated === 'created' ? t('recurrenceCreated') : t('recurrenceUpdated')}
         </p>
       ) : null}
       {taskResult.error || organizationResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t('loadFailed')}
         </p>
       ) : null}
 
       {canCreate ? (
         <section
-          className="grid gap-4 rounded-lg border bg-white p-5"
+          className="grid gap-4 rounded-lg border bg-card p-5"
           aria-labelledby="recurring-create-title"
         >
           <h2 id="recurring-create-title" className="text-xl font-semibold">
@@ -263,7 +268,9 @@ export default async function RecurringTasksPage({
                   defaultValue={1}
                   required
                 />
-                <span className="self-center text-sm text-slate-600">{t('intervalUnit')}</span>
+                <span className="self-center text-sm text-muted-foreground">
+                  {t('intervalUnit')}
+                </span>
               </div>
             </div>
             <fieldset className="grid gap-2 md:col-span-2">
@@ -343,16 +350,16 @@ export default async function RecurringTasksPage({
         {recurrences.length ? (
           <ul className="grid gap-3">
             {recurrences.map((item) => (
-              <li key={item.id} className="grid gap-3 rounded-lg border bg-white p-4">
+              <li key={item.id} className="grid gap-3 rounded-lg border bg-card p-4">
                 <div className="flex flex-wrap justify-between gap-3">
                   <div className="grid gap-1">
                     <Link
-                      className="font-semibold text-blue-900 underline"
+                      className="font-semibold text-primary underline"
                       href={`/operations/recurring-tasks/${item.id}`}
                     >
                       {item.title}
                     </Link>
-                    <span className="text-sm text-slate-600">
+                    <span className="text-sm text-muted-foreground">
                       {t(
                         item.status === 'active'
                           ? 'recurrenceActive'
@@ -425,7 +432,7 @@ export default async function RecurringTasksPage({
             ))}
           </ul>
         ) : (
-          <p className="rounded-lg border bg-white p-5">{t('recurrencesEmpty')}</p>
+          <p className="rounded-lg border bg-card p-5">{t('recurrencesEmpty')}</p>
         )}
       </section>
     </div>

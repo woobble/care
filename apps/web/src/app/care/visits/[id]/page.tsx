@@ -42,7 +42,10 @@ export default async function CareVisitPage({
   if (error?.code === 'VISIT_EXECUTION_NOT_FOUND') notFound();
   if (!data) {
     return (
-      <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+      <p
+        role="alert"
+        className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+      >
         {t('VisitExecution.loadFailed')} {error?.code ? t(errorMessageKey(error.code)) : null}
       </p>
     );
@@ -94,30 +97,30 @@ export default async function CareVisitPage({
         />
         {visit.address ? (
           <div className="flex flex-wrap items-center gap-3">
-            <p className="break-words text-slate-700">{visit.address}</p>
+            <p className="break-words text-muted-foreground">{visit.address}</p>
             <a
               href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(visit.address)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="min-h-11 content-center font-semibold text-blue-800 underline"
+              className="min-h-11 content-center font-semibold text-primary underline"
             >
               {t('Caregiver.openNavigation')}
             </a>
           </div>
         ) : null}
         {visit.note ? (
-          <section className="grid gap-1 rounded-md border bg-white p-3">
+          <section className="grid gap-1 rounded-md border bg-card p-3">
             <h2 className="font-semibold">{t('VisitExecution.visitNote')}</h2>
-            <p className="whitespace-pre-wrap text-slate-700 wrap-anywhere">{visit.note}</p>
+            <p className="whitespace-pre-wrap text-muted-foreground wrap-anywhere">{visit.note}</p>
           </section>
         ) : null}
         {visit.schedulingPreferences &&
         (visit.schedulingPreferences.preferredWeekdays.length > 0 ||
           visit.schedulingPreferences.preferredTimeWindows.length > 0) ? (
-          <section className="grid gap-1 rounded-md border bg-white p-3">
+          <section className="grid gap-1 rounded-md border bg-card p-3">
             <h2 className="font-semibold">{t('VisitExecution.clientSchedulingPreferences')}</h2>
             {visit.schedulingPreferences.preferredWeekdays.length ? (
-              <p className="text-sm text-slate-700">
+              <p className="text-sm text-muted-foreground">
                 {t('VisitExecution.preferredWeekdays')}:{' '}
                 {visit.schedulingPreferences.preferredWeekdays
                   .map((weekday) => weekdayName(weekday, locale))
@@ -125,7 +128,7 @@ export default async function CareVisitPage({
               </p>
             ) : null}
             {visit.schedulingPreferences.preferredTimeWindows.length ? (
-              <p className="text-sm text-slate-700">
+              <p className="text-sm text-muted-foreground">
                 {t('VisitExecution.preferredTimeWindows')}:{' '}
                 {visit.schedulingPreferences.preferredTimeWindows
                   .map((window) => `${window.startsAt}–${window.endsAt}`)
@@ -137,7 +140,10 @@ export default async function CareVisitPage({
       </header>
 
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t('VisitExecution.changeFailed')} {t(errorMessageKey(query.error))}
           {query.error === 'VISIT_EXECUTION_VERSION_CONFLICT'
             ? ` ${t('VisitExecution.retryAfterConflict')}`
@@ -147,20 +153,20 @@ export default async function CareVisitPage({
       {query.notice ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {t(noticeKey(query.notice))}
         </p>
       ) : null}
 
-      <p className="rounded-md border bg-white p-3 text-sm text-slate-600">
+      <p className="rounded-md border bg-card p-3 text-sm text-muted-foreground">
         {t('Caregiver.drafts.disclosure')}
       </p>
 
-      <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
+      <section className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-xl font-semibold">{t('VisitExecution.execution')}</h2>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium">
+          <span className="rounded-full bg-muted px-3 py-1 text-sm font-medium">
             {t(executionStatusKey(execution.status))}
           </span>
         </div>
@@ -182,7 +188,7 @@ export default async function CareVisitPage({
             ) : null}
           </dl>
         ) : (
-          <p className="text-slate-600">{t('VisitExecution.arrivalCaptured')}</p>
+          <p className="text-muted-foreground">{t('VisitExecution.arrivalCaptured')}</p>
         )}
         {startAllowed ? (
           <CareForm action={startVisitAction} notice={query.notice}>
@@ -193,17 +199,17 @@ export default async function CareVisitPage({
           </CareForm>
         ) : null}
         {visit.status === 'cancelled' ? (
-          <p className="rounded-md bg-slate-100 p-3 text-slate-700">
+          <p className="rounded-md bg-muted p-3 text-muted-foreground">
             {t('VisitExecution.cancelled')}
           </p>
         ) : null}
         {execution.startedByEmployeeName ? (
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             {t('VisitExecution.startedBy', { employee: execution.startedByEmployeeName })}
           </p>
         ) : null}
         {execution.completedByEmployeeName ? (
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             {t('VisitExecution.completedBy', { employee: execution.completedByEmployeeName })}
           </p>
         ) : null}
@@ -216,7 +222,7 @@ export default async function CareVisitPage({
         documentationUnavailable={Boolean(documentationResult.error || !documentationResult.data)}
       />
 
-      <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
+      <section className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
         <h2 className="text-xl font-semibold">{t('VisitExecution.plannedServices')}</h2>
         {services.filter((service) => !service.unplanned).length ? (
           <ul className="grid gap-4">
@@ -237,7 +243,7 @@ export default async function CareVisitPage({
               ))}
           </ul>
         ) : (
-          <p className="text-slate-600">{t('VisitExecution.noPlannedServices')}</p>
+          <p className="text-muted-foreground">{t('VisitExecution.noPlannedServices')}</p>
         )}
         {services.some((service) => service.unplanned) ? (
           <div className="grid gap-3 border-t pt-4">
@@ -262,10 +268,10 @@ export default async function CareVisitPage({
 
       {execution.status === 'in_progress' ? (
         <>
-          <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
+          <section className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
             <h2 className="text-xl font-semibold">{t('VisitExecution.unplannedService')}</h2>
             {availableServicesUnavailable ? (
-              <p role="status" className="text-amber-900">
+              <p role="status" className="text-warning-foreground">
                 {t('VisitExecution.availableServicesUnavailable')}
               </p>
             ) : availableServices.length ? (
@@ -290,7 +296,7 @@ export default async function CareVisitPage({
                     id="serviceDefinitionId"
                     name="serviceDefinitionId"
                     required
-                    selectClassName="min-h-12 w-full min-w-0 rounded-md border bg-white px-3"
+                    selectClassName="min-h-12 w-full min-w-0 rounded-md border bg-card px-3"
                     className="w-full"
                   >
                     <option value="">{t('VisitExecution.selectService')}</option>
@@ -313,14 +319,14 @@ export default async function CareVisitPage({
                 </Button>
               </CareForm>
             ) : (
-              <p className="text-slate-600">{t('VisitExecution.noMoreServices')}</p>
+              <p className="text-muted-foreground">{t('VisitExecution.noMoreServices')}</p>
             )}
           </section>
 
-          <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
+          <section className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
             <h2 className="text-xl font-semibold">{t('VisitExecution.completeVisit')}</h2>
             {unresolved ? (
-              <p className="text-slate-600">{t('VisitExecution.completeVisitHint')}</p>
+              <p className="text-muted-foreground">{t('VisitExecution.completeVisitHint')}</p>
             ) : null}
             <CareForm action={completeVisitAction} notice={query.notice}>
               <input type="hidden" name="visitId" value={visit.id} />
@@ -374,7 +380,7 @@ async function ServiceCard({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="font-semibold">{service.serviceName}</h3>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             {service.serviceCode} · {t('VisitExecution.planned')}{' '}
             {service.plannedQuantity == null
               ? '–'
@@ -382,14 +388,14 @@ async function ServiceCard({
             {t(unitKey(service.unit))}
           </p>
         </div>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-sm">
+        <span className="rounded-full bg-muted px-3 py-1 text-sm">
           {t(serviceStatusKey(service.status))}
         </span>
       </div>
       {service.status !== 'not_recorded' ? (
         <dl className="grid gap-2 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-slate-600">{t('VisitExecution.actual')}</dt>
+            <dt className="text-muted-foreground">{t('VisitExecution.actual')}</dt>
             <dd className="font-medium">
               {service.actualQuantity == null
                 ? '–'
@@ -399,7 +405,7 @@ async function ServiceCard({
           </div>
           {service.reasonCode ? (
             <div>
-              <dt className="text-slate-600">{t('VisitExecution.reason')}</dt>
+              <dt className="text-muted-foreground">{t('VisitExecution.reason')}</dt>
               <dd className="font-medium">{t(reasonKey(service.reasonCode))}</dd>
             </div>
           ) : null}
@@ -468,7 +474,7 @@ async function DecisionFields({
             name="status"
             required
             defaultValue={status}
-            selectClassName="min-h-12 w-full min-w-0 rounded-md border bg-white px-3"
+            selectClassName="min-h-12 w-full min-w-0 rounded-md border bg-card px-3"
             className="w-full"
           >
             <option value="">{t('VisitExecution.selectOutcome')}</option>
@@ -498,7 +504,7 @@ async function DecisionFields({
           id={reasonId}
           name="reasonCode"
           defaultValue={reasonCode ?? ''}
-          selectClassName="min-h-12 w-full min-w-0 rounded-md border bg-white px-3"
+          selectClassName="min-h-12 w-full min-w-0 rounded-md border bg-card px-3"
           className="w-full"
         >
           <option value="">{t('VisitExecution.noReason')}</option>
@@ -538,9 +544,9 @@ async function DocumentationSection({
   const t = await getTranslations();
   if (errorCode || !detail) {
     return (
-      <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
+      <section className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
         <h2 className="text-xl font-semibold">{t('CareDocumentation.visit.title')}</h2>
-        <p role="alert" className="text-red-800">
+        <p role="alert" className="text-destructive">
           {t('CareDocumentation.visit.unavailable')}
         </p>
       </section>
@@ -555,11 +561,11 @@ async function DocumentationSection({
   );
 
   return (
-    <section className="grid gap-4 rounded-lg border bg-white p-4 sm:p-5">
+    <section className="grid gap-4 rounded-lg border bg-card p-4 sm:p-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">{t('CareDocumentation.visit.title')}</h2>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 text-sm text-muted-foreground">
             {finalized
               ? t('CareDocumentation.visit.finalizedAt', {
                   date: document.finalizedAt
@@ -574,14 +580,14 @@ async function DocumentationSection({
           </p>
         </div>
         {finalized ? (
-          <span className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-900">
+          <span className="rounded-full bg-success-muted px-3 py-1 text-sm text-success-foreground">
             {t('CareDocumentation.visit.finalized')}
           </span>
         ) : null}
       </header>
 
       {finalized ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-slate-50 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-background p-3">
           <span className="text-sm font-medium">
             {t('CareDocumentation.visit.acknowledgement')}{' '}
             {evidenceStatusUnavailable
@@ -598,7 +604,7 @@ async function DocumentationSection({
           </span>
           <Link
             href={`/care/visits/${visitId}/evidence`}
-            className="min-h-10 rounded-md border border-slate-400 px-3 py-2 text-sm font-semibold text-blue-900 underline"
+            className="min-h-10 rounded-md border border-border px-3 py-2 text-sm font-semibold text-primary underline"
           >
             {t('CareDocumentation.visit.reviewEvidence')}
           </Link>
@@ -607,7 +613,7 @@ async function DocumentationSection({
 
       {!document ? (
         visitExecutionStatus === 'not_started' ? (
-          <p className="rounded-md bg-slate-50 p-3 text-slate-700">
+          <p className="rounded-md bg-background p-3 text-muted-foreground">
             {t('CareDocumentation.visit.startBeforeDocumentation')}
           </p>
         ) : (
@@ -629,7 +635,7 @@ async function DocumentationSection({
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h4 className="font-medium">{service.serviceName}</h4>
-                        <p className="text-sm text-slate-600">
+                        <p className="text-sm text-muted-foreground">
                           {t(serviceStatusKey(service.status))} · {service.actualQuantity ?? '–'}{' '}
                           {t(unitKey(service.unit))}
                         </p>
@@ -637,8 +643,8 @@ async function DocumentationSection({
                       <span
                         className={
                           service.evidence
-                            ? 'text-sm text-green-800'
-                            : 'text-sm font-medium text-amber-900'
+                            ? 'text-sm text-success-foreground'
+                            : 'text-sm font-medium text-warning-foreground'
                         }
                       >
                         {service.evidence
@@ -650,7 +656,7 @@ async function DocumentationSection({
                       <p className="whitespace-pre-wrap text-sm">{service.evidence.note}</p>
                     ) : null}
                     {service.evidence?.documentedByEmployeeName ? (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted-foreground">
                         {t('CareDocumentation.visit.documentedBy', {
                           employee: service.evidence.documentedByEmployeeName,
                         })}
@@ -701,7 +707,7 @@ async function DocumentationSection({
                 ))}
               </ul>
             ) : (
-              <p className="text-slate-600">{t('CareDocumentation.visit.noServices')}</p>
+              <p className="text-muted-foreground">{t('CareDocumentation.visit.noServices')}</p>
             )}
           </section>
 
@@ -716,7 +722,7 @@ async function DocumentationSection({
                     {entries.map((entry) => (
                       <li key={entry.id} className="rounded-md border p-3">
                         <p className="whitespace-pre-wrap">{entry.content}</p>
-                        <p className="mt-2 text-xs text-slate-500">
+                        <p className="mt-2 text-xs text-muted-foreground">
                           {entry.authorEmployeeName ?? t('Common.fields.employee')} ·{' '}
                           {formatVisitDateTime(entry.createdAt, detail.visit.timezone, locale)}
                           {entry.severity ? ` · ${t(severityKey(entry.severity))}` : ''}
@@ -762,7 +768,9 @@ async function DocumentationSection({
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-sm text-slate-600">{t('CareDocumentation.visit.noEntries')}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {t('CareDocumentation.visit.noEntries')}
+                  </p>
                 )}
                 {editable ? (
                   <EntryComposer
@@ -793,12 +801,12 @@ async function DocumentationSection({
                     </Button>
                   </CareForm>
                 ) : (
-                  <p className="text-slate-600">
+                  <p className="text-muted-foreground">
                     {t('CareDocumentation.visit.finalizeAfterCompletion')}
                   </p>
                 )
               ) : (
-                <ul className="grid gap-2 text-sm text-amber-950">
+                <ul className="grid gap-2 text-sm text-warning-foreground">
                   {detail.completeness.missing.map((missing, index) => (
                     <li key={`${missing.code}-${missing.performedServiceId ?? index}`}>
                       {missing.performedServiceId
@@ -816,7 +824,7 @@ async function DocumentationSection({
             <section className="grid gap-3 border-t pt-4">
               <h3 className="text-lg font-semibold">{t('CareDocumentation.visit.amendments')}</h3>
               {detail.amendments.map((amendment) => (
-                <article key={amendment.id} className="rounded-md bg-slate-50 p-3">
+                <article key={amendment.id} className="rounded-md bg-background p-3">
                   <p className="text-sm font-semibold">{amendment.reason}</p>
                   <p className="mt-1 whitespace-pre-wrap">{amendment.correction}</p>
                 </article>
@@ -846,7 +854,7 @@ async function EntryComposer({
   return (
     <CareForm
       action={addDocumentationEntryAction}
-      className="grid gap-3 rounded-md bg-slate-50 p-3"
+      className="grid gap-3 rounded-md bg-background p-3"
       notice={notice}
       successNotices={['entry-saved']}
       draft={{
@@ -866,7 +874,7 @@ async function EntryComposer({
         name="content"
         required
         maxLength={4000}
-        className="min-h-20 rounded-md border bg-white px-3 py-2"
+        className="min-h-20 rounded-md border bg-card px-3 py-2"
       />
       {type === 'incident' ? (
         <div className="grid gap-2">
@@ -875,7 +883,7 @@ async function EntryComposer({
             id="incident-severity"
             name="severity"
             required
-            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-card px-3"
             className="w-full"
           >
             <option value="">{t('CareDocumentation.visit.selectOption')}</option>
@@ -923,7 +931,7 @@ async function CompletionChecklist({
   return (
     <section
       aria-labelledby="completion-checklist-title"
-      className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5"
+      className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5"
     >
       <h2 id="completion-checklist-title" className="text-xl font-semibold">
         {t('VisitExecution.readiness.title')}
@@ -971,7 +979,7 @@ async function CompletionChecklist({
           )}
         />
       </ul>
-      <p className="text-xs text-slate-600">{t('VisitExecution.readiness.source')}</p>
+      <p className="text-xs text-muted-foreground">{t('VisitExecution.readiness.source')}</p>
     </section>
   );
 }
@@ -987,10 +995,10 @@ function ChecklistItem({
 }) {
   const className =
     state === 'complete'
-      ? 'text-green-900'
+      ? 'text-success-foreground'
       : state === 'warning'
-        ? 'text-amber-950'
-        : 'text-slate-600';
+        ? 'text-warning-foreground'
+        : 'text-muted-foreground';
   return (
     <li className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 last:border-0 last:pb-0">
       <span>{label}</span>
@@ -1012,7 +1020,7 @@ function Time({
 }) {
   return (
     <div>
-      <dt className="text-slate-600">{label}</dt>
+      <dt className="text-muted-foreground">{label}</dt>
       <dd className="font-medium">{formatVisitDateTime(value, timezone, locale)}</dd>
     </div>
   );

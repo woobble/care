@@ -9,6 +9,7 @@ import {
 } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Label, StatusBadge } from '@care/ui';
@@ -52,19 +53,17 @@ export default async function UsersAccessPage({
 
   return (
     <div className="grid gap-8">
-      <header className="grid gap-1">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration">{t('Organizations.section')}</Link>
-        </p>
-        <h1 className="text-3xl font-semibold">{t('Users.title')}</h1>
-        <p className="text-slate-700">{t('Users.description')}</p>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/administration">{t('Organizations.section')}</Link>}
+        title={t('Users.title')}
+        description={t('Users.description')}
+      />
 
       {params.error ? <ErrorNotice code={params.error} /> : null}
       {params.invited ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {t('Users.invitationCreated')}
         </p>
@@ -72,18 +71,18 @@ export default async function UsersAccessPage({
       {params.updated ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {t('Users.accessUpdated')}
         </p>
       ) : null}
 
-      <section aria-labelledby="invite-title" className="grid gap-4 rounded-lg border bg-white p-5">
+      <section aria-labelledby="invite-title" className="grid gap-4 rounded-lg border bg-card p-5">
         <div>
           <h2 id="invite-title" className="text-xl font-semibold">
             {t('Users.inviteTitle')}
           </h2>
-          <p className="text-sm text-slate-600">{t('Users.inviteDescription')}</p>
+          <p className="text-sm text-muted-foreground">{t('Users.inviteDescription')}</p>
         </div>
         <RHFActionForm action={inviteUserAction} className="flex flex-wrap items-end gap-3">
           <div className="grid gap-2">
@@ -114,7 +113,7 @@ export default async function UsersAccessPage({
                 id="member-status"
                 name="status"
                 defaultValue={status ?? ''}
-                selectClassName="h-10 rounded-md border bg-white px-3"
+                selectClassName="h-10 rounded-md border bg-card px-3"
                 className="w-full"
               >
                 <option value="">{t('Users.allStatuses')}</option>
@@ -132,12 +131,12 @@ export default async function UsersAccessPage({
         {membersResult.error ? (
           <ErrorNotice code={membersResult.error.code} />
         ) : membersResult.data?.items.length ? (
-          <div className="overflow-x-auto rounded-lg border bg-white">
+          <div className="overflow-x-auto rounded-lg border bg-card">
             <ShadcnTable className="w-full border-collapse text-left text-sm">
               <ShadcnTableCaption className="sr-only">
                 {t('Users.membersCaption')}
               </ShadcnTableCaption>
-              <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+              <ShadcnTableHeader className="border-b bg-muted text-muted-foreground">
                 <ShadcnTableRow>
                   <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Users.name')}
@@ -161,10 +160,10 @@ export default async function UsersAccessPage({
                   <ShadcnTableRow key={member.id} className="border-b last:border-0">
                     <ShadcnTableCell className="px-4 py-3">
                       <Link
-                        className="font-medium text-blue-900 underline-offset-4 hover:underline"
+                        className="font-medium text-primary underline-offset-4 hover:underline"
                         href={`/administration/users/${member.id}`}
                       >
-                        {member.displayName || member.email || member.userId}
+                        {member.displayName || member.email || t('Resources.unavailableUser')}
                       </Link>
                     </ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">{member.email || '—'}</ShadcnTableCell>
@@ -183,7 +182,7 @@ export default async function UsersAccessPage({
                           scope.scopeType === 'tenant'
                             ? t('Users.entireTenant')
                             : t('Users.scopeLabel', {
-                                name: scope.name || scope.scopeId,
+                                name: scope.name || t('Resources.unavailableScope'),
                                 scope: t(scopeTypeLabelKey(scope.scopeType)),
                               }),
                         )
@@ -195,7 +194,9 @@ export default async function UsersAccessPage({
             </ShadcnTable>
           </div>
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">{t('Users.noMembers')}</p>
+          <p className="rounded-lg border bg-card p-5 text-muted-foreground">
+            {t('Users.noMembers')}
+          </p>
         )}
       </section>
 
@@ -206,12 +207,12 @@ export default async function UsersAccessPage({
         {invitationsResult.error ? (
           <ErrorNotice code={invitationsResult.error.code} />
         ) : invitationsResult.data?.length ? (
-          <div className="overflow-x-auto rounded-lg border bg-white">
+          <div className="overflow-x-auto rounded-lg border bg-card">
             <ShadcnTable className="w-full border-collapse text-left text-sm">
               <ShadcnTableCaption className="sr-only">
                 {t('Users.invitationsCaption')}
               </ShadcnTableCaption>
-              <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+              <ShadcnTableHeader className="border-b bg-muted text-muted-foreground">
                 <ShadcnTableRow>
                   <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Users.email')}
@@ -255,7 +256,7 @@ export default async function UsersAccessPage({
             </ShadcnTable>
           </div>
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">
+          <p className="rounded-lg border bg-card p-5 text-muted-foreground">
             {t('Users.noInvitations')}
           </p>
         )}
@@ -267,7 +268,10 @@ export default async function UsersAccessPage({
 async function ErrorNotice({ code }: Readonly<{ code: string }>) {
   const t = await getTranslations();
   return (
-    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+    <p
+      role="alert"
+      className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+    >
       {t(errorMessageKey(code))}
     </p>
   );

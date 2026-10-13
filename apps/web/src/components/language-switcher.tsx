@@ -1,11 +1,19 @@
 'use client';
 
-import { NativeSelect } from '@care/ui';
+import { Languages } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useTransition } from 'react';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@care/ui';
 import { setLocaleAction } from '@app/web/app/actions/locale';
-import type { Locale } from '@app/web/i18n/config';
+import { isLocale, type Locale } from '@app/web/i18n/config';
 
 export function LanguageSwitcher({ locale }: Readonly<{ locale: Locale }>) {
   const t = useTranslations('Common');
@@ -13,25 +21,35 @@ export function LanguageSwitcher({ locale }: Readonly<{ locale: Locale }>) {
   const [pending, startTransition] = useTransition();
 
   return (
-    <label className="flex w-28 shrink-0 items-center gap-2 text-sm">
-      <span className="sr-only">{t('language')}</span>
-      <NativeSelect
-        aria-label={t('language')}
-        selectClassName="min-h-10 w-full rounded-md border border-input bg-background pl-2 pr-8 text-sm text-foreground"
-        value={locale}
-        disabled={pending}
-        onChange={(event) => {
-          const selectedLocale = event.currentTarget.value;
-          startTransition(async () => {
-            await setLocaleAction(selectedLocale);
-            router.refresh();
-          });
-        }}
-        className="w-full"
-      >
-        <option value="en">{t('languages.en')}</option>
-        <option value="de">{t('languages.de')}</option>
-      </NativeSelect>
-    </label>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          aria-label={t('language')}
+          title={t('language')}
+          disabled={pending}
+          className="h-10 min-h-10 shrink-0 gap-1.5 rounded-full px-2 sm:px-2.5"
+        >
+          <Languages className="size-4 text-muted-foreground" aria-hidden="true" />
+          <span className="text-xs font-medium uppercase text-muted-foreground">{locale}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-36">
+        <DropdownMenuRadioGroup
+          value={locale}
+          onValueChange={(value) => {
+            if (!isLocale(value)) return;
+            startTransition(async () => {
+              await setLocaleAction(value);
+              router.refresh();
+            });
+          }}
+        >
+          <DropdownMenuRadioItem value="en">{t('languages.en')}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="de">{t('languages.de')}</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

@@ -1,3 +1,4 @@
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -8,6 +9,7 @@ import {
 } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -161,6 +163,13 @@ export default async function ClaimDetailPage({
     claim.organizationId,
     claim.facilityId,
   );
+  const canReadInvoice = hasClientPermission(
+    permissions,
+    'billing.read',
+    header['X-Tenant-Id'],
+    claim.organizationId,
+    claim.facilityId,
+  );
   const canSubmit = hasClientPermission(
     permissions,
     'claims.submit',
@@ -213,10 +222,10 @@ export default async function ClaimDetailPage({
     paymentResult.error?.code ??
     paymentsResult?.error?.code;
   const invoiceNumber =
-    snapshotText(claim.invoiceSnapshot, 'invoiceNumber') ?? claim.invoiceId.slice(0, 8);
+    snapshotText(claim.invoiceSnapshot, 'invoiceNumber') ?? t('draftIdentifier');
   const payerName = snapshotText(claim.payerSnapshot, 'name') ?? t('payer');
   const clientName =
-    snapshotText(claim.invoiceSnapshot, 'clientName') ?? claim.clientId.slice(0, 8);
+    snapshotText(claim.invoiceSnapshot, 'clientName') ?? translate('Resources.unavailableClient');
   const canDecide = canRecordDecision && claim.status === 'submitted';
   const canPrepare = canManage && claim.status === 'draft';
   const canSubmitNow = canSubmit && claim.status === 'ready';
@@ -232,30 +241,23 @@ export default async function ClaimDetailPage({
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            <Link href="/billing/claims">{t('claims')}</Link>
-          </p>
-          <h1 className="text-3xl font-semibold">
-            {t('claim')} · {invoiceNumber}
-          </h1>
-          <p className="text-slate-700">
-            {clientName} · {payerName} · {claimStatus(t, claim.status)}
-          </p>
-        </div>
-        <Button asChild variant="secondary">
-          <Link href={'/billing/invoices/' + claim.invoiceId}>{t('openInvoice')}</Link>
-        </Button>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/billing/claims">{t('claims')}</Link>}
+        title={`${t('claim')} · ${invoiceNumber}`}
+        description={`${clientName} · ${payerName} · ${claimStatus(t, claim.status)}`}
+        actions={
+          canReadInvoice ? (
+          <Button asChild variant="secondary">
+            <Link href={'/billing/invoices/' + claim.invoiceId}>{t('openInvoice')}</Link>
+          </Button>
+          ) : undefined
+        }
+      />
       <BillingNavigation permissions={permissions} />
       {error ? <Alert>{translate(errorMessageKey(error))}</Alert> : null}
       {query.updated ? <Status>{updatedLabel(t, query.updated)}</Status> : null}
 
-      <section
-        aria-labelledby="claim-summary"
-        className="grid gap-4 rounded-lg border bg-white p-5"
-      >
+      <section aria-labelledby="claim-summary" className="grid gap-4 rounded-lg border bg-card p-5">
         <h2 id="claim-summary" className="text-xl font-semibold">
           {t('claimSummary')}
         </h2>
@@ -279,33 +281,33 @@ export default async function ClaimDetailPage({
           />
           <Metric label={t('claimPackageHash')} value={claim.packageHash ?? '—'} />
         </dl>
-        <p className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
+        <p className="rounded-md border border-primary/20 bg-accent p-3 text-sm text-primary">
           {t('manualSubmissionNotice')}
         </p>
       </section>
 
       <section
         aria-labelledby="claim-readiness"
-        className="grid gap-3 rounded-lg border bg-white p-5"
+        className="grid gap-3 rounded-lg border bg-card p-5"
       >
         <h2 id="claim-readiness" className="text-xl font-semibold">
           {t('claimReadiness')}
         </h2>
         {readiness?.ready ? (
-          <p className="text-sm text-green-800">{t('claimReady')}</p>
+          <p className="text-sm text-success-foreground">{t('claimReady')}</p>
         ) : readiness?.blockers.length ? (
           <ul className="grid gap-2">
             {readiness.blockers.map((blocker, index) => (
               <li
                 key={blocker.code + '-' + index}
-                className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+                className="rounded-md border border-warning/40 bg-warning-muted p-3 text-sm text-warning-foreground"
               >
                 <strong>{blocker.field}</strong>: {blocker.detail}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-700">{t('claimReadinessUnavailable')}</p>
+          <p className="text-sm text-muted-foreground">{t('claimReadinessUnavailable')}</p>
         )}
         {canPrepare || canCancel ? (
           <div className="flex flex-wrap gap-2">
@@ -331,14 +333,14 @@ export default async function ClaimDetailPage({
         ) : null}
       </section>
 
-      <section aria-labelledby="claim-lines" className="grid gap-3 rounded-lg border bg-white p-5">
+      <section aria-labelledby="claim-lines" className="grid gap-3 rounded-lg border bg-card p-5">
         <h2 id="claim-lines" className="text-xl font-semibold">
           {t('claimLines')}
         </h2>
         <div className="overflow-x-auto">
           <ShadcnTable className="w-full min-w-[40rem] text-left text-sm">
             <ShadcnTableHeader>
-              <ShadcnTableRow className="border-b text-slate-600">
+              <ShadcnTableRow className="border-b text-muted-foreground">
                 <ShadcnTableHead className="p-2">{t('service')}</ShadcnTableHead>
                 <ShadcnTableHead className="p-2">{t('serviceDate')}</ShadcnTableHead>
                 <ShadcnTableHead className="p-2">{t('fundingSource')}</ShadcnTableHead>
@@ -349,7 +351,7 @@ export default async function ClaimDetailPage({
               {detail.lines.map((line) => (
                 <ShadcnTableRow key={line.id} className="border-b last:border-0">
                   <ShadcnTableCell className="p-2">
-                    {line.serviceNameSnapshot || line.invoiceLineId.slice(0, 8)}
+                    {line.serviceNameSnapshot || translate('Resources.unavailableService')}
                   </ShadcnTableCell>
                   <ShadcnTableCell className="p-2">
                     {formatDate(line.serviceDate, locale as Locale) ?? line.serviceDate}
@@ -370,7 +372,7 @@ export default async function ClaimDetailPage({
       {claim.packageVersion > 0 ? (
         <section
           aria-labelledby="claim-documents"
-          className="grid gap-3 rounded-lg border bg-white p-5"
+          className="grid gap-3 rounded-lg border bg-card p-5"
         >
           <h2 id="claim-documents" className="text-xl font-semibold">
             {t('claimPackage')}
@@ -384,7 +386,7 @@ export default async function ClaimDetailPage({
                 >
                   <div>
                     <p className="font-medium">{document.fileName}</p>
-                    <p className="break-all text-xs text-slate-600">
+                    <p className="break-all text-xs text-muted-foreground">
                       {t('claimDocumentMetadata', {
                         kind: document.documentKind,
                         version: document.packageVersion,
@@ -401,7 +403,7 @@ export default async function ClaimDetailPage({
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-slate-700">{t('claimPackageEmpty')}</p>
+            <p className="text-sm text-muted-foreground">{t('claimPackageEmpty')}</p>
           )}
         </section>
       ) : null}
@@ -409,7 +411,7 @@ export default async function ClaimDetailPage({
       {canSubmitNow ? (
         <section
           aria-labelledby="claim-submit"
-          className="grid gap-3 rounded-lg border bg-white p-5"
+          className="grid gap-3 rounded-lg border bg-card p-5"
         >
           <h2 id="claim-submit" className="text-xl font-semibold">
             {t('recordManualSubmission')}
@@ -433,7 +435,7 @@ export default async function ClaimDetailPage({
       {canDecide ? (
         <section
           aria-labelledby="claim-decision"
-          className="grid gap-3 rounded-lg border bg-white p-5"
+          className="grid gap-3 rounded-lg border bg-card p-5"
         >
           <h2 id="claim-decision" className="text-xl font-semibold">
             {t('recordPayerDecision')}
@@ -475,7 +477,7 @@ export default async function ClaimDetailPage({
                 label={t('protectedExplanation')}
               />
             </div>
-            <p className="text-sm text-slate-700">{t('claimDecisionLinesNote')}</p>
+            <p className="text-sm text-muted-foreground">{t('claimDecisionLinesNote')}</p>
             <div className="grid gap-2">
               {detail.lines.map((line) => (
                 <div
@@ -484,7 +486,7 @@ export default async function ClaimDetailPage({
                 >
                   <input type="hidden" name="claimLineId" value={line.id} />
                   <p className="self-center text-sm">
-                    {line.serviceNameSnapshot || line.invoiceLineId.slice(0, 8)} ·{' '}
+                    {line.serviceNameSnapshot || translate('Resources.unavailableService')} ·{' '}
                     {formatCents(line.amountCents, locale as Locale)}
                   </p>
                   <Field
@@ -518,12 +520,12 @@ export default async function ClaimDetailPage({
       {canResubmit ? (
         <section
           aria-labelledby="claim-resubmit"
-          className="grid gap-3 rounded-lg border bg-white p-5"
+          className="grid gap-3 rounded-lg border bg-card p-5"
         >
           <h2 id="claim-resubmit" className="text-xl font-semibold">
             {t('resubmission')}
           </h2>
-          <p className="text-sm text-slate-700">{t('resubmissionDescription')}</p>
+          <p className="text-sm text-muted-foreground">{t('resubmissionDescription')}</p>
           <form action={resubmitClaimAction}>
             <input type="hidden" name="claimId" value={claim.id} />
             <input type="hidden" name="expectedVersion" value={claim.version} />
@@ -535,7 +537,7 @@ export default async function ClaimDetailPage({
       {payment ? (
         <section
           aria-labelledby="claim-payment"
-          className="grid gap-3 rounded-lg border bg-white p-5"
+          className="grid gap-3 rounded-lg border bg-card p-5"
         >
           <h2 id="claim-payment" className="text-xl font-semibold">
             {t('claimPaymentReconciliation')}
@@ -558,7 +560,7 @@ export default async function ClaimDetailPage({
             <ul className="grid gap-2">
               {payment.allocations.map((allocation) => (
                 <li key={allocation.allocationId} className="rounded-md border p-3 text-sm">
-                  {allocation.paymentReference ?? allocation.paymentId.slice(0, 8)} ·{' '}
+                  {allocation.paymentReference ?? t('paymentReceived')} ·{' '}
                   {formatCents(allocation.amountCents, locale as Locale)} ·{' '}
                   {formatDateTime(allocation.allocatedAt, locale as Locale) ?? '—'}
                   {allocation.reversedAt ? ' · ' + t('allocationReversed') : ''}
@@ -580,7 +582,7 @@ export default async function ClaimDetailPage({
                     <input type="hidden" name="invoiceId" value={claim.invoiceId} />
                     <input type="hidden" name="paymentId" value={paymentItem.id} />
                     <p className="self-center text-sm">
-                      {paymentItem.reference ?? paymentItem.id.slice(0, 8)} ·{' '}
+                      {paymentItem.reference ?? t('paymentReceived')} ·{' '}
                       {formatDateTime(paymentItem.receivedAt, locale as Locale) ?? '—'} ·{' '}
                       {t('paymentRemaining')}:{' '}
                       {formatCents(paymentItem.remainingCents, locale as Locale)}
@@ -605,16 +607,13 @@ export default async function ClaimDetailPage({
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-slate-700">{t('noUnallocatedPayments')}</p>
+              <p className="text-sm text-muted-foreground">{t('noUnallocatedPayments')}</p>
             )
           ) : null}
         </section>
       ) : null}
 
-      <section
-        aria-labelledby="claim-history"
-        className="grid gap-3 rounded-lg border bg-white p-5"
-      >
+      <section aria-labelledby="claim-history" className="grid gap-3 rounded-lg border bg-card p-5">
         <h2 id="claim-history" className="text-xl font-semibold">
           {t('claimHistory')}
         </h2>
@@ -633,7 +632,7 @@ export default async function ClaimDetailPage({
             ))}
           </ol>
         ) : (
-          <p className="text-sm text-slate-700">{t('claimHistoryEmpty')}</p>
+          <p className="text-sm text-muted-foreground">{t('claimHistoryEmpty')}</p>
         )}
       </section>
     </div>
@@ -744,7 +743,7 @@ function historyLabel(
 function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div className="grid gap-1">
-      <dt className="text-slate-600">{label}</dt>
+      <dt className="text-muted-foreground">{label}</dt>
       <dd className="break-words font-medium">{value}</dd>
     </div>
   );
@@ -814,21 +813,5 @@ function SelectField({
         {children}
       </NativeSelect>
     </label>
-  );
-}
-
-function Alert({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-      {children}
-    </p>
-  );
-}
-
-function Status({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="status" className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900">
-      {children}
-    </p>
   );
 }

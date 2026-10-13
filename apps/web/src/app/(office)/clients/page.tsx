@@ -16,11 +16,13 @@ import {
 } from '@care/ui';
 import { formatDate } from '@app/web/i18n/format';
 import { statusLabelKey } from '@app/web/i18n/status';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
+  hasClientPermission,
 } from '@app/web/lib/api';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { FilterDisclosure } from '@app/web/components/filter-disclosure';
@@ -63,6 +65,7 @@ export default async function ClientsPage({
   const api = await getApiClient();
   const header = await getTenantHeader();
   const permissions = await getPermissionGrants(api);
+  const tenantId = header['X-Tenant-Id'];
   const canCreateClient = hasPermission(permissions, 'client.create');
   const get = api.GET;
   const [clientsResult, organizationsResult, facilitiesResult] = await Promise.all([
@@ -102,12 +105,18 @@ export default async function ClientsPage({
         }
       />
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t('Clients.actionFailed')}
         </p>
       ) : null}
       {clientsResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+        >
           {t('Clients.loadFailed')}
         </p>
       ) : null}
@@ -221,7 +230,40 @@ export default async function ClientsPage({
                     </dt>
                     <dd className="mt-0.5 break-words">
                       {client.organizationName && client.facilityName ? (
-                        `${client.organizationName} / ${client.facilityName}`
+                        <>
+                          <ResourceReference
+                            label={client.organizationName}
+                            href={
+                              client.organizationId &&
+                              hasClientPermission(
+                                permissions,
+                                'organization.read',
+                                tenantId,
+                                client.organizationId,
+                                null,
+                              )
+                                ? `/administration/organizations/${client.organizationId}`
+                                : null
+                            }
+                          />{' '}
+                          /{' '}
+                          <ResourceReference
+                            label={client.facilityName}
+                            href={
+                              client.primaryFacilityId &&
+                              client.organizationId &&
+                              hasClientPermission(
+                                permissions,
+                                'facility.read',
+                                tenantId,
+                                client.organizationId,
+                                client.primaryFacilityId,
+                              )
+                                ? `/administration/facilities/${client.primaryFacilityId}`
+                                : null
+                            }
+                          />
+                        </>
                       ) : (
                         <span className="font-medium text-warning-foreground">
                           {t('Common.empty.unassigned')}
@@ -266,7 +308,38 @@ export default async function ClientsPage({
                       <TableCell>
                         {client.organizationName && client.facilityName ? (
                           <>
-                            {client.organizationName} / {client.facilityName}
+                            <ResourceReference
+                              label={client.organizationName}
+                              href={
+                                client.organizationId &&
+                                hasClientPermission(
+                                  permissions,
+                                  'organization.read',
+                                  tenantId,
+                                  client.organizationId,
+                                  null,
+                                )
+                                  ? `/administration/organizations/${client.organizationId}`
+                                  : null
+                              }
+                            />{' '}
+                            /{' '}
+                            <ResourceReference
+                              label={client.facilityName}
+                              href={
+                                client.primaryFacilityId &&
+                                client.organizationId &&
+                                hasClientPermission(
+                                  permissions,
+                                  'facility.read',
+                                  tenantId,
+                                  client.organizationId,
+                                  client.primaryFacilityId,
+                                )
+                                  ? `/administration/facilities/${client.primaryFacilityId}`
+                                  : null
+                              }
+                            />
                           </>
                         ) : (
                           <span className="font-medium text-warning-foreground">
@@ -287,7 +360,7 @@ export default async function ClientsPage({
             </div>
           </Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               {t('Common.pagination', {
                 page: new Intl.NumberFormat(locale).format(clients.page),
                 pages: new Intl.NumberFormat(locale).format(

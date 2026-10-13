@@ -2,6 +2,8 @@ import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDateTime } from '@app/web/i18n/format';
 import {
@@ -48,7 +50,7 @@ export default async function OperationsDeadlinesPage({
   const permissions = await getPermissionGrants(api);
   if (!hasPermission(permissions, 'operations.read')) {
     return (
-      <p role="alert" className="rounded-md border bg-white p-5">
+      <p role="alert" className="rounded-md border bg-card p-5">
         {t('noAccess')}
       </p>
     );
@@ -68,7 +70,14 @@ export default async function OperationsDeadlinesPage({
   const fromDate = validDate(query.fromDate);
   const untilDate = validDate(query.untilDate);
   const page = Math.max(1, Math.min(100_000, Number.parseInt(query.page ?? '1', 10) || 1));
-  const [deadlineResult, organizationResult, facilityResult, employeeResult] = await Promise.all([
+  const [
+    deadlineResult,
+    organizationResult,
+    facilityResult,
+    employeeResult,
+    selectedClientResult,
+    selectedEmployeeResult,
+  ] = await Promise.all([
     api.GET('/api/v1/operations/deadlines', {
       params: {
         query: {
@@ -110,6 +119,12 @@ export default async function OperationsDeadlinesPage({
           },
         })
       : Promise.resolve({ data: undefined, error: undefined }),
+    clientId && hasPermission(permissions, 'client.read')
+      ? api.GET('/api/v1/clients/{id}', { params: { path: { id: clientId }, header } })
+      : Promise.resolve({ data: undefined, error: undefined }),
+    employeeId && hasPermission(permissions, 'employee.read')
+      ? api.GET('/api/v1/employees/{id}', { params: { path: { id: employeeId }, header } })
+      : Promise.resolve({ data: undefined, error: undefined }),
   ]);
   const items = deadlineResult.data?.items ?? [];
   const organizations = organizationResult.data ?? [];
@@ -122,46 +137,50 @@ export default async function OperationsDeadlinesPage({
 
   return (
     <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid gap-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('title')}
-          </p>
-          <h1 className="text-3xl font-semibold">{t('deadlinesTitle')}</h1>
-          <p className="max-w-3xl text-slate-700">{t('deadlinesDescription')}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="secondary">
-            <Link href="/operations">{t('dashboardTitle')}</Link>
-          </Button>
-          <Button asChild variant="secondary">
-            <Link href="/operations/recurring-tasks">{t('recurringTasks')}</Link>
-          </Button>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow={t('title')}
+        title={t('deadlinesTitle')}
+        description={t('deadlinesDescription')}
+        actions={
+          <>
+            <Button asChild variant="secondary">
+              <Link href="/operations">{t('dashboardTitle')}</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/operations/recurring-tasks">{t('recurringTasks')}</Link>
+            </Button>
+          </>
+        }
+      />
 
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {translate(errorMessageKey(query.error))}
         </p>
       ) : null}
       {query.updated ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {query.updated === 'acknowledged' ? t('acknowledged') : t('snoozed')}
         </p>
       ) : null}
       {deadlineResult.error || organizationResult.error || facilityResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t('loadFailed')}
         </p>
       ) : null}
       {result?.truncated ? (
         <p
           role="status"
-          className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-950"
+          className="rounded-md border border-warning/40 bg-warning-muted p-3 text-warning-foreground"
         >
           {t('truncated')}
         </p>
@@ -169,7 +188,7 @@ export default async function OperationsDeadlinesPage({
 
       <form
         method="get"
-        className="grid gap-3 rounded-lg border bg-white p-4 sm:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4"
       >
         <label className="grid gap-1 text-sm">
           <span>{t('organization')}</span>
@@ -270,23 +289,45 @@ export default async function OperationsDeadlinesPage({
         {hasPermission(permissions, 'client.read') ? (
           <label className="grid gap-1 text-sm">
             <span>{t('client')}</span>
-            <input
-              className="h-10 rounded-md border px-3"
-              name="clientId"
-              defaultValue={clientId ?? ''}
-              aria-label={t('clientIdFilter')}
-            />
+            {clientId ? (
+              <>
+                <input type="hidden" name="clientId" value={clientId} />
+                <ResourceReference
+                  label={
+                    selectedClientResult.data
+                      ? `${selectedClientResult.data.preferredName || selectedClientResult.data.firstName} ${selectedClientResult.data.lastName}`
+                      : translate('Resources.unavailableClient')
+                  }
+                  href={selectedClientResult.data ? `/clients/${clientId}` : null}
+                />
+              </>
+            ) : (
+              <span className="h-10 rounded-md border px-3 py-2 text-muted-foreground">
+                {t('all')}
+              </span>
+            )}
           </label>
         ) : null}
         {hasPermission(permissions, 'employee.read') ? (
           <label className="grid gap-1 text-sm">
             <span>{t('employee')}</span>
-            <input
-              className="h-10 rounded-md border px-3"
-              name="employeeId"
-              defaultValue={employeeId ?? ''}
-              aria-label={t('employeeIdFilter')}
-            />
+            {employeeId ? (
+              <>
+                <input type="hidden" name="employeeId" value={employeeId} />
+                <ResourceReference
+                  label={
+                    selectedEmployeeResult.data
+                      ? `${selectedEmployeeResult.data.preferredName || selectedEmployeeResult.data.firstName} ${selectedEmployeeResult.data.lastName}`
+                      : translate('Resources.unavailableEmployee')
+                  }
+                  href={selectedEmployeeResult.data ? `/employees/${employeeId}` : null}
+                />
+              </>
+            ) : (
+              <span className="h-10 rounded-md border px-3 py-2 text-muted-foreground">
+                {t('all')}
+              </span>
+            )}
           </label>
         ) : null}
         {canFilterByAssignee ? (
@@ -341,28 +382,28 @@ export default async function OperationsDeadlinesPage({
             const timezone =
               timezoneByOrganization.get(item.organizationId ?? '') ?? 'Europe/Berlin';
             return (
-              <li key={item.id} className="grid gap-3 rounded-lg border bg-white p-4">
+              <li key={item.id} className="grid gap-3 rounded-lg border bg-card p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="grid gap-1">
                     <Link
-                      className="font-semibold text-blue-900 underline"
+                      className="font-semibold text-primary underline"
                       href={workItemSourceHref(item)}
                     >
                       {t(`issueTitles.${issueTitleKey(item.issueCode)}`)}
                     </Link>
-                    <span className="text-sm text-slate-700">
+                    <span className="text-sm text-muted-foreground">
                       {subjectName}
                       {item.dueAt
                         ? ` · ${formatDateTime(item.dueAt, locale as 'en' | 'de', timezone)}`
                         : ''}
                     </span>
-                    <span className="text-xs text-slate-600">
+                    <span className="text-xs text-muted-foreground">
                       {t(`deadlineSources.${item.sourceDomain as (typeof sources)[number]}`)} ·{' '}
                       {t(item.status === 'open' ? 'taskOpen' : item.status)} · {t(item.severity)}
                     </span>
                   </div>
                   <Link
-                    className="text-sm font-medium text-blue-800 underline"
+                    className="text-sm font-medium text-primary underline"
                     href={`/operations/work-items/${item.id}/history`}
                   >
                     {t('issuePages')}
@@ -405,7 +446,7 @@ export default async function OperationsDeadlinesPage({
           })}
         </ul>
       ) : (
-        <p className="rounded-lg border bg-white p-5">{t('deadlinesEmpty')}</p>
+        <EmptyState title={t('deadlinesEmpty')} />
       )}
 
       {result && result.total > result.pageSize ? (
@@ -442,9 +483,9 @@ function PageLink({
     if (value && key !== 'page') params.set(key, value);
   params.set('page', String(page));
   return disabled ? (
-    <span className="text-slate-400">{label}</span>
+    <span className="text-muted-foreground">{label}</span>
   ) : (
-    <Link className="text-blue-800 underline" href={`/operations/deadlines?${params}`}>
+    <Link className="text-primary underline" href={`/operations/deadlines?${params}`}>
       {label}
     </Link>
   );

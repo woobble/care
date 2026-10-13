@@ -1,4 +1,9 @@
 import {
+  EmptyState,
+  ErrorNotice as Alert,
+  SuccessNotice as Status,
+} from '@app/web/components/page-patterns';
+import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
   TableBody as ShadcnTableBody,
@@ -13,7 +18,12 @@ import { Button } from '@care/ui';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate } from '@app/web/i18n/format';
-import { getApiClient, getPermissionGrants, getTenantHeader } from '@app/web/lib/api';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+} from '@app/web/lib/api';
 import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
 import { formatCents } from '@app/web/app/(office)/billing/format';
 import { PageHeader } from '@app/web/components/page-patterns';
@@ -41,6 +51,7 @@ export default async function BillingInvoicesPage({
   });
   const invoices = data?.items ?? [];
   const permissions = await getPermissionGrants(api);
+  const tenantId = header['X-Tenant-Id'];
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
@@ -54,13 +65,13 @@ export default async function BillingInvoicesPage({
         <Alert>{translate(errorMessageKey(query.error ?? error?.code ?? ''))}</Alert>
       ) : null}
       {query.updated === 'invoice' ? <Status>{t('invoiceListUpdated')}</Status> : null}
-      <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4">
+      <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
         <label className="grid gap-2 text-sm">
           <span>{t('invoiceStatus')}</span>
           <NativeSelect
             name="status"
             defaultValue={status ?? ''}
-            selectClassName="min-h-10 rounded-md border border-slate-300 bg-white px-3 py-2"
+            selectClassName="min-h-10 rounded-md border border-border bg-card px-3 py-2"
             className="w-full"
           >
             <option value="">{t('allInvoiceStatuses')}</option>
@@ -76,7 +87,7 @@ export default async function BillingInvoicesPage({
       </form>
       <section
         aria-labelledby="invoices-title"
-        className="grid gap-3 rounded-lg border bg-white p-5"
+        className="grid gap-3 rounded-lg border bg-card p-5"
       >
         <h2 id="invoices-title" className="text-xl font-semibold">
           {t('invoices')}
@@ -85,7 +96,7 @@ export default async function BillingInvoicesPage({
           <div className="overflow-x-auto">
             <ShadcnTable className="w-full min-w-[54rem] text-left text-sm">
               <ShadcnTableHeader>
-                <ShadcnTableRow className="border-b text-slate-600">
+                <ShadcnTableRow className="border-b text-muted-foreground">
                   <ShadcnTableHead className="p-2">{t('invoiceNumber')}</ShadcnTableHead>
                   <ShadcnTableHead className="p-2">{t('client')}</ShadcnTableHead>
                   <ShadcnTableHead className="p-2">{t('recipient')}</ShadcnTableHead>
@@ -100,20 +111,29 @@ export default async function BillingInvoicesPage({
                   <ShadcnTableRow key={invoice.id} className="border-b last:border-0">
                     <ShadcnTableCell className="p-2 font-medium">
                       <Link
-                        className="text-blue-900 underline"
+                        className="text-primary underline"
                         href={`/billing/invoices/${invoice.id}`}
                       >
-                        {invoice.invoiceNumber ??
-                          t('draftIdentifier', { id: invoice.id.slice(0, 8) })}
+                        {invoice.invoiceNumber ?? t('draftIdentifier')}
                       </Link>
                     </ShadcnTableCell>
                     <ShadcnTableCell className="p-2">
-                      <Link
-                        className="text-blue-900 underline"
-                        href={`/clients/${invoice.clientId}/invoices`}
-                      >
-                        {invoice.clientName}
-                      </Link>
+                      {hasClientPermission(
+                        permissions,
+                        'client.read',
+                        tenantId,
+                        invoice.organizationId,
+                        invoice.facilityId,
+                      ) ? (
+                        <Link
+                          className="text-primary underline"
+                          href={`/clients/${invoice.clientId}/invoices`}
+                        >
+                          {invoice.clientName}
+                        </Link>
+                      ) : (
+                        invoice.clientName
+                      )}
                     </ShadcnTableCell>
                     <ShadcnTableCell className="p-2">
                       {invoice.recipientName ??
@@ -139,7 +159,7 @@ export default async function BillingInvoicesPage({
             </ShadcnTable>
           </div>
         ) : (
-          <p className="text-sm text-slate-700">{t('invoiceListEmpty')}</p>
+          <EmptyState title={t('invoiceListEmpty')} />
         )}
         <div className="flex justify-end gap-2">
           {page > 1 ? (
@@ -174,20 +194,4 @@ function positivePage(value: string | undefined): number {
   if (!value || !/^\d+$/.test(value)) return 1;
   const page = Number(value);
   return Number.isSafeInteger(page) && page > 0 && page <= 100_000 ? page : 1;
-}
-
-function Alert({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-      {children}
-    </p>
-  );
-}
-
-function Status({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="status" className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900">
-      {children}
-    </p>
-  );
 }

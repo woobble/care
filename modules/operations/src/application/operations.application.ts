@@ -30,6 +30,7 @@ import {
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
+import { tenantMemberships, users } from '@care/identity';
 import type { OutboxWriter } from '@care/platform';
 import {
   assertCan,
@@ -1844,7 +1845,25 @@ export class OperationsApplicationService {
         .where(and(eq(taskActivity.tenantId, principal.tenantId), eq(taskActivity.taskId, task.id)))
         .orderBy(asc(taskActivity.occurredAt), asc(taskActivity.id))
         .limit(200);
-      return rows;
+      const actorIds = [...new Set(rows.map((row) => row.actorUserId))];
+      const actorRows = actorIds.length
+        ? await transaction
+            .select({ id: users.id, displayName: users.displayName })
+            .from(tenantMemberships)
+            .innerJoin(users, eq(users.id, tenantMemberships.userId))
+            .where(
+              and(
+                eq(tenantMemberships.tenantId, principal.tenantId),
+                inArray(users.id, actorIds),
+              ),
+            )
+        : [];
+      const actorNames = new Map(
+        actorRows.flatMap((actor) =>
+          actor.displayName ? ([[actor.id, actor.displayName] as const]) : [],
+        ),
+      );
+      return rows.map((row) => ({ ...row, actorName: actorNames.get(row.actorUserId) ?? null }));
     });
   }
 

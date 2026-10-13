@@ -1,4 +1,5 @@
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
@@ -39,16 +40,17 @@ export default async function QualificationsPage({
   ]);
   return (
     <div className="grid gap-8">
-      <header className="grid gap-1">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration">{t('Organizations.section')}</Link>
-        </p>
-        <h1 className="text-3xl font-semibold">{t('Qualifications.title')}</h1>
-        <p className="text-slate-700">{t('Qualifications.description')}</p>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/administration">{t('Organizations.section')}</Link>}
+        title={t('Qualifications.title')}
+        description={t('Qualifications.description')}
+      />
       <ActionNotice error={query.error} updated={query.updated} />
       {qualificationsResult.error || skillsResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+        >
           {t('Qualifications.loadFailed')}
         </p>
       ) : null}
@@ -58,7 +60,7 @@ export default async function QualificationsPage({
         </h2>
         <RHFActionForm
           action={createQualificationAction}
-          className="grid gap-4 rounded-lg border bg-white p-5 md:grid-cols-3"
+          className="grid gap-4 rounded-lg border bg-card p-5 md:grid-cols-3"
         >
           <h3 className="text-lg font-medium md:col-span-3">
             {t('Qualifications.createQualification')}
@@ -99,7 +101,7 @@ export default async function QualificationsPage({
             ))}
           </div>
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">
+          <p className="rounded-lg border bg-card p-5 text-muted-foreground">
             {t('Qualifications.noQualifications')}
           </p>
         )}
@@ -110,7 +112,7 @@ export default async function QualificationsPage({
         </h2>
         <RHFActionForm
           action={createSkillAction}
-          className="grid gap-4 rounded-lg border bg-white p-5 md:grid-cols-3"
+          className="grid gap-4 rounded-lg border bg-card p-5 md:grid-cols-3"
         >
           <h3 className="text-lg font-medium md:col-span-3">{t('Qualifications.createSkill')}</h3>
           <Field
@@ -144,7 +146,7 @@ export default async function QualificationsPage({
             ))}
           </div>
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">
+          <p className="rounded-lg border bg-card p-5 text-muted-foreground">
             {t('Qualifications.noSkills')}
           </p>
         )}
@@ -174,7 +176,7 @@ async function DefinitionCard({
       ? t('Qualifications.archiveQualificationConfirmation')
       : t('Qualifications.archiveSkillConfirmation');
   return (
-    <article className="grid gap-3 rounded-lg border bg-white p-4">
+    <article className="grid gap-3 rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="font-semibold">
@@ -182,7 +184,7 @@ async function DefinitionCard({
             {definition.code ? ` · ${definition.code}` : ''}
           </h3>
           {definition.description ? (
-            <p className="text-sm text-slate-600">{definition.description}</p>
+            <p className="text-sm text-muted-foreground">{definition.description}</p>
           ) : null}
         </div>
         <StatusBadge status={definition.status} label={t(statusLabelKey(definition.status))} />

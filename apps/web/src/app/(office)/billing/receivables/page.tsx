@@ -1,3 +1,4 @@
+import { ErrorNotice as Alert } from '@app/web/components/page-patterns';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -9,9 +10,15 @@ import {
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate } from '@app/web/i18n/format';
-import { getApiClient, getPermissionGrants, getTenantHeader } from '@app/web/lib/api';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+} from '@app/web/lib/api';
 import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
 import { formatCents } from '@app/web/app/(office)/billing/format';
 
@@ -36,23 +43,22 @@ export default async function BillingReceivablesPage({
     getPermissionGrants(api),
   ]);
   const items = data?.items ?? [];
+  const tenantId = header['X-Tenant-Id'];
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          {t('section')}
-        </p>
-        <h1 className="text-3xl font-semibold">{t('receivables')}</h1>
-        <p className="text-slate-700">{t('receivablesDescription')}</p>
-      </header>
+      <PageHeader
+        eyebrow={t('section')}
+        title={t('receivables')}
+        description={t('receivablesDescription')}
+      />
       <BillingNavigation permissions={permissions} />
       {(query.error ?? error?.code) ? (
         <Alert>{translate(errorMessageKey(query.error ?? error?.code ?? ''))}</Alert>
       ) : null}
       <section
         aria-labelledby="receivables-title"
-        className="grid gap-3 rounded-lg border bg-white p-5"
+        className="grid gap-3 rounded-lg border bg-card p-5"
       >
         <h2 id="receivables-title" className="text-xl font-semibold">
           {t('openReceivables')}
@@ -61,7 +67,7 @@ export default async function BillingReceivablesPage({
           <div className="overflow-x-auto">
             <ShadcnTable className="w-full min-w-[54rem] text-left text-sm">
               <ShadcnTableHeader>
-                <ShadcnTableRow className="border-b text-slate-600">
+                <ShadcnTableRow className="border-b text-muted-foreground">
                   <ShadcnTableHead className="p-2">{t('invoiceNumber')}</ShadcnTableHead>
                   <ShadcnTableHead className="p-2">{t('client')}</ShadcnTableHead>
                   <ShadcnTableHead className="p-2">{t('recipient')}</ShadcnTableHead>
@@ -77,20 +83,29 @@ export default async function BillingReceivablesPage({
                   <ShadcnTableRow key={invoice.id} className="border-b last:border-0">
                     <ShadcnTableCell className="p-2 font-medium">
                       <Link
-                        className="text-blue-900 underline"
+                        className="text-primary underline"
                         href={`/billing/invoices/${invoice.id}`}
                       >
-                        {invoice.invoiceNumber ??
-                          t('draftIdentifier', { id: invoice.id.slice(0, 8) })}
+                        {invoice.invoiceNumber ?? t('draftIdentifier')}
                       </Link>
                     </ShadcnTableCell>
                     <ShadcnTableCell className="p-2">
-                      <Link
-                        className="text-blue-900 underline"
-                        href={`/clients/${invoice.clientId}/invoices`}
-                      >
-                        {invoice.clientName}
-                      </Link>
+                      {hasClientPermission(
+                        permissions,
+                        'client.read',
+                        tenantId,
+                        invoice.organizationId,
+                        invoice.facilityId,
+                      ) ? (
+                        <Link
+                          className="text-primary underline"
+                          href={`/clients/${invoice.clientId}/invoices`}
+                        >
+                          {invoice.clientName}
+                        </Link>
+                      ) : (
+                        invoice.clientName
+                      )}
                     </ShadcnTableCell>
                     <ShadcnTableCell className="p-2">
                       {invoice.recipientName ??
@@ -123,7 +138,7 @@ export default async function BillingReceivablesPage({
             </ShadcnTable>
           </div>
         ) : (
-          <p className="text-sm text-slate-700">{t('receivablesEmpty')}</p>
+          <p className="text-sm text-muted-foreground">{t('receivablesEmpty')}</p>
         )}
         <div className="flex justify-end gap-2">
           {page > 1 ? (
@@ -146,12 +161,4 @@ function positivePage(value: string | undefined): number {
   if (!value || !/^\d+$/.test(value)) return 1;
   const page = Number(value);
   return Number.isSafeInteger(page) && page > 0 && page <= 100_000 ? page : 1;
-}
-
-function Alert({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-      {children}
-    </p>
-  );
 }

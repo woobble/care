@@ -144,9 +144,9 @@ export function CareForm({
       );
       for (const control of controls) {
         if (control instanceof HTMLInputElement && ['checkbox', 'radio'].includes(control.type)) {
-          control.checked = control.value === value;
+          setNativeChecked(control, control.value === value);
         } else {
-          control.value = value;
+          setNativeValue(control, value);
         }
         control.dispatchEvent(new Event('input', { bubbles: true }));
         control.dispatchEvent(new Event('change', { bubbles: true }));
@@ -221,7 +221,7 @@ export function CareForm({
       beforeAction={beforeSubmit}
     >
       {draftState.type === 'recoverable' ? (
-        <aside className="grid gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm">
+        <aside className="grid gap-2 rounded-md border border-primary/20 bg-accent p-3 text-sm">
           <p>
             {t('recoverable', {
               time: new Intl.DateTimeFormat(undefined, {
@@ -245,7 +245,7 @@ export function CareForm({
         </aside>
       ) : null}
       {draftState.type === 'stale' ? (
-        <aside className="grid gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+        <aside className="grid gap-2 rounded-md border border-warning/40 bg-warning-muted p-3 text-sm">
           <p>{t('stale', { count: draftState.count })}</p>
           <Button type="button" onClick={discardDraft} variant="secondary">
             {t('discard')}
@@ -253,16 +253,36 @@ export function CareForm({
         </aside>
       ) : null}
       {statusText ? (
-        <p role="status" className="rounded-md bg-slate-50 p-2 text-sm text-slate-700">
+        <p role="status" className="rounded-md bg-background p-2 text-sm text-muted-foreground">
           {statusText}
         </p>
       ) : null}
       {!online && formState !== 'offline' ? (
-        <p role="status" className="text-sm text-amber-900">
+        <p role="status" className="text-sm text-warning-foreground">
           {t('offline')}
         </p>
       ) : null}
       {children}
     </RHFActionForm>
+  );
+}
+
+function setNativeValue(
+  control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
+  value: string,
+) {
+  const prototype =
+    control instanceof HTMLInputElement
+      ? HTMLInputElement.prototype
+      : control instanceof HTMLSelectElement
+        ? HTMLSelectElement.prototype
+        : HTMLTextAreaElement.prototype;
+  Object.getOwnPropertyDescriptor(prototype, 'value')?.set?.call(control, value);
+}
+
+function setNativeChecked(control: HTMLInputElement, checked: boolean) {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked')?.set?.call(
+    control,
+    checked,
   );
 }

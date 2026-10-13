@@ -54,7 +54,7 @@ export default async function OperationsWorklistPage({
   const permissions = await getPermissionGrants(api);
   if (!hasPermission(permissions, 'operations.read')) {
     return (
-      <p role="alert" className="rounded-md border bg-white p-5">
+      <p role="alert" className="rounded-md border bg-card p-5">
         {t('noAccess')}
       </p>
     );
@@ -204,19 +204,25 @@ export default async function OperationsWorklistPage({
       />
 
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {translate(errorMessageKey(query.error))}
         </p>
       ) : null}
       {workItemsResult.error || tasksResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t('loadFailed')}
         </p>
       ) : null}
       {workItemsResult.data?.truncated ? (
         <p
           role="status"
-          className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-950"
+          className="rounded-md border border-warning/40 bg-warning-muted p-3 text-warning-foreground"
         >
           {t('truncated')}
         </p>
@@ -224,7 +230,7 @@ export default async function OperationsWorklistPage({
 
       <form
         method="get"
-        className="grid gap-3 rounded-lg border bg-white p-4 sm:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4"
       >
         <label className="grid gap-1 text-sm">
           <span>{t('search')}</span>
@@ -391,37 +397,37 @@ export default async function OperationsWorklistPage({
           <h2 id="exceptions-heading" className="text-xl font-semibold">
             {t('systemIssues')}
           </h2>
-          <p className="text-sm text-slate-600">{t('systemIssueHelp')}</p>
+          <p className="text-sm text-muted-foreground">{t('systemIssueHelp')}</p>
         </div>
         {workItems.length ? (
           <ul className="grid gap-3">
             {workItems.map((item) => (
               <li
                 key={item.id}
-                className="grid gap-3 rounded-lg border bg-white p-4 lg:grid-cols-[1fr_auto] lg:items-center"
+                className="grid gap-3 rounded-lg border bg-card p-4 lg:grid-cols-[1fr_auto] lg:items-center"
               >
                 <div className="grid gap-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-900">
+                    <span className="rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-primary">
                       {t(categoryTranslationKey(item.category))}
                     </span>
                     <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.severity === 'critical' ? 'bg-red-100 text-red-900' : item.severity === 'warning' ? 'bg-amber-100 text-amber-950' : 'bg-slate-100 text-slate-800'}`}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.severity === 'critical' ? 'bg-destructive/15 text-destructive' : item.severity === 'warning' ? 'bg-warning-muted text-warning-foreground' : 'bg-muted text-foreground'}`}
                     >
                       {t(item.severity)}
                     </span>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs">
+                    <span className="rounded-full bg-muted px-2.5 py-1 text-xs">
                       {exceptionStatusLabel(t, item.status)}
                     </span>
                   </div>
                   <Link
-                    className="font-semibold text-blue-900 underline"
+                    className="font-semibold text-primary underline"
                     href={workItemSourceHref(item)}
                   >
                     {t(`issueTitles.${issueTitleKey(item.issueCode)}`)}
                   </Link>
-                  <p className="text-sm text-slate-700">{t('issueActionHelp')}</p>
-                  <p className="text-sm text-slate-600">
+                  <p className="text-sm text-muted-foreground">{t('issueActionHelp')}</p>
+                  <p className="text-sm text-muted-foreground">
                     {item.clientName ?? t('noClient')} ·{' '}
                     {item.dueAt
                       ? formatDateTime(
@@ -438,7 +444,7 @@ export default async function OperationsWorklistPage({
                     )}
                   </p>
                   <Link
-                    className="w-fit text-sm font-medium text-blue-800 underline"
+                    className="w-fit text-sm font-medium text-primary underline"
                     href={workItemSourceHref(item)}
                   >
                     {t('openSource')}
@@ -466,7 +472,7 @@ export default async function OperationsWorklistPage({
             ))}
           </ul>
         ) : (
-          <div className="rounded-lg border bg-white p-5">
+          <div className="rounded-lg border bg-card p-5">
             <p>{t('worklistEmpty')}</p>
           </div>
         )}
@@ -489,9 +495,9 @@ export default async function OperationsWorklistPage({
             <h2 id="tasks-heading" className="text-xl font-semibold">
               {t('tasksTitle')}
             </h2>
-            <p className="text-sm text-slate-600">{t('manualTaskHelp')}</p>
+            <p className="text-sm text-muted-foreground">{t('manualTaskHelp')}</p>
           </div>
-          <Link className="text-sm font-medium text-blue-800 underline" href="/operations/tasks">
+          <Link className="text-sm font-medium text-primary underline" href="/operations/tasks">
             {t('openTasks')}
           </Link>
         </div>
@@ -502,16 +508,16 @@ export default async function OperationsWorklistPage({
               return (
                 <li
                   key={task.id}
-                  className="grid gap-3 rounded-lg border bg-white p-4 sm:grid-cols-[1fr_auto] sm:items-center"
+                  className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-[1fr_auto] sm:items-center"
                 >
                   <div className="grid gap-1">
                     <Link
-                      className="font-semibold text-blue-900 underline"
+                      className="font-semibold text-primary underline"
                       href={`/operations/tasks/${task.id}`}
                     >
                       {task.title}
                     </Link>
-                    <span className="text-sm text-slate-600">
+                    <span className="text-sm text-muted-foreground">
                       {t('manualTask')} · {t(task.priority)} ·{' '}
                       {t(taskStatusTranslation(task.status))} ·{' '}
                       {task.dueAt
@@ -523,7 +529,7 @@ export default async function OperationsWorklistPage({
                         : t('noDueDate')}
                     </span>
                     {sourceHref ? (
-                      <Link href={sourceHref} className="w-fit text-sm text-blue-800 underline">
+                      <Link href={sourceHref} className="w-fit text-sm text-primary underline">
                         {t('openSource')}
                       </Link>
                     ) : null}
@@ -539,7 +545,7 @@ export default async function OperationsWorklistPage({
             })}
           </ul>
         ) : (
-          <div className="rounded-lg border bg-white p-5">
+          <div className="rounded-lg border bg-card p-5">
             <p>{t('tasksEmpty')}</p>
           </div>
         )}
@@ -579,7 +585,7 @@ function SelectField({
         id={id}
         name={name}
         defaultValue={defaultValue}
-        selectClassName="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-card px-3"
         className="w-full"
       >
         {children}
@@ -623,7 +629,7 @@ function Pagination({
     <nav aria-label={label} className="flex justify-between">
       {page > 1 ? (
         <Link
-          className="rounded-md border bg-white px-3 py-2"
+          className="rounded-md border bg-card px-3 py-2"
           href={`/operations/worklist?${withPage(params, page - 1)}`}
         >
           {previousLabel}
@@ -633,7 +639,7 @@ function Pagination({
       )}
       {page * pageSize < total ? (
         <Link
-          className="rounded-md border bg-white px-3 py-2"
+          className="rounded-md border bg-card px-3 py-2"
           href={`/operations/worklist?${withPage(params, page + 1)}`}
         >
           {nextLabel}

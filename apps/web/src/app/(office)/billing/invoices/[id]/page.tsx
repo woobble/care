@@ -1,3 +1,4 @@
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
 import { Checkbox as ShadcnCheckbox } from '@care/ui';
 import {
   Table as ShadcnTable,
@@ -8,6 +9,7 @@ import {
   TableCell as ShadcnTableCell,
 } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -82,6 +84,13 @@ export default async function BillingInvoiceDetailPage({
     invoice.organizationId,
     invoice.facilityId,
   );
+  const canReadClient = hasClientPermission(
+    permissions,
+    'client.read',
+    header['X-Tenant-Id'],
+    invoice.organizationId,
+    invoice.facilityId,
+  );
   const candidateResult =
     invoice.status === 'draft'
       ? await api.GET('/api/v1/billing/candidates', {
@@ -127,26 +136,20 @@ export default async function BillingInvoiceDetailPage({
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            <Link href="/billing/invoices">{t('invoices')}</Link>
-          </p>
-          <h1 className="text-3xl font-semibold">
-            {invoice.invoiceNumber ?? t('draftIdentifier', { id: invoice.id.slice(0, 8) })}
-          </h1>
-          <p className="text-slate-700">
-            {invoice.clientName} ·{' '}
-            {snapshotString(recipient, 'name') ??
-              invoice.recipientName ??
-              t(invoice.recipientType === 'payer' ? 'payer' : 'client')}{' '}
-            · {t(`status.${invoice.status}`)}
-          </p>
-        </div>
-        <Button asChild variant="secondary">
-          <Link href={`/clients/${invoice.clientId}/invoices`}>{t('clientInvoiceHistory')}</Link>
-        </Button>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/billing/invoices">{t('invoices')}</Link>}
+        title={invoice.invoiceNumber ?? t('draftIdentifier')}
+        description={`${invoice.clientName} · ${snapshotString(recipient, 'name') ?? invoice.recipientName ?? t(invoice.recipientType === 'payer' ? 'payer' : 'client')} · ${t(`status.${invoice.status}`)}`}
+        actions={
+          canReadClient ? (
+            <Button asChild variant="secondary">
+              <Link href={`/clients/${invoice.clientId}/invoices`}>
+                {t('clientInvoiceHistory')}
+              </Link>
+            </Button>
+          ) : null
+        }
+      />
       <BillingNavigation permissions={permissions} />
       {detailError ? <Alert>{translate(errorMessageKey(detailError))}</Alert> : null}
       {updated ? <Status>{t(`invoiceUpdated.${updated}`)}</Status> : null}
@@ -154,7 +157,7 @@ export default async function BillingInvoiceDetailPage({
 
       <section
         aria-labelledby="invoice-summary-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <h2 id="invoice-summary-title" className="text-xl font-semibold">
           {t('invoiceSummary')}
@@ -224,14 +227,14 @@ export default async function BillingInvoiceDetailPage({
                   </Button>
                 </form>
               ) : (
-                <p className="text-sm text-amber-900">{t('pdfUnavailable')}</p>
+                <p className="text-sm text-warning-foreground">{t('pdfUnavailable')}</p>
               )
             ) : null}
           </div>
         ) : null}
       </section>
 
-      <section aria-labelledby="lines-title" className="grid gap-3 rounded-lg border bg-white p-5">
+      <section aria-labelledby="lines-title" className="grid gap-3 rounded-lg border bg-card p-5">
         <h2 id="lines-title" className="text-xl font-semibold">
           {t('invoiceLines')}
         </h2>
@@ -239,7 +242,7 @@ export default async function BillingInvoiceDetailPage({
           <div className="overflow-x-auto">
             <ShadcnTable className="w-full min-w-[52rem] text-left text-sm">
               <ShadcnTableHeader>
-                <ShadcnTableRow className="border-b text-slate-600">
+                <ShadcnTableRow className="border-b text-muted-foreground">
                   <ShadcnTableHead className="p-2">{t('service')}</ShadcnTableHead>
                   <ShadcnTableHead className="p-2">{t('serviceDate')}</ShadcnTableHead>
                   <ShadcnTableHead className="p-2">{t('quantity')}</ShadcnTableHead>
@@ -254,7 +257,7 @@ export default async function BillingInvoiceDetailPage({
                   <ShadcnTableRow key={line.id} className="border-b last:border-0">
                     <ShadcnTableCell className="p-2">
                       {line.serviceNameSnapshot}
-                      <span className="block text-xs text-slate-600">
+                      <span className="block text-xs text-muted-foreground">
                         {line.serviceCodeSnapshot}
                       </span>
                     </ShadcnTableCell>
@@ -285,20 +288,20 @@ export default async function BillingInvoiceDetailPage({
             </ShadcnTable>
           </div>
         ) : (
-          <p className="text-sm text-slate-700">{t('noInvoiceLines')}</p>
+          <p className="text-sm text-muted-foreground">{t('noInvoiceLines')}</p>
         )}
       </section>
 
       {invoice.status === 'draft' ? (
         <section
           aria-labelledby="draft-actions-title"
-          className="grid gap-4 rounded-lg border bg-white p-5"
+          className="grid gap-4 rounded-lg border bg-card p-5"
         >
           <div>
             <h2 id="draft-actions-title" className="text-xl font-semibold">
               {t('editDraft')}
             </h2>
-            <p className="mt-1 text-sm text-slate-700">{t('editDraftDescription')}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t('editDraftDescription')}</p>
           </div>
           {canEdit ? (
             <div className="grid gap-4">
@@ -324,7 +327,7 @@ export default async function BillingInvoiceDetailPage({
                     >
                       <div>
                         <p className="font-medium">{line.serviceNameSnapshot}</p>
-                        <p className="text-sm text-slate-700">
+                        <p className="text-sm text-muted-foreground">
                           {formatDate(line.serviceDate, locale)} ·{' '}
                           {line.fundingLabelSnapshot ?? t('selfPay')} ·{' '}
                           {formatCents(line.grossCents, locale)}
@@ -361,7 +364,7 @@ export default async function BillingInvoiceDetailPage({
                         <p className="font-medium">
                           {t('availableService')}: {candidate.serviceName}
                         </p>
-                        <p className="text-sm text-slate-700">
+                        <p className="text-sm text-muted-foreground">
                           {formatDate(candidate.serviceDate, locale)} ·{' '}
                           {candidate.fundingLabel ?? t('selfPay')} ·{' '}
                           {formatCents(candidate.remainingBillableAmountCents, locale)}
@@ -392,7 +395,7 @@ export default async function BillingInvoiceDetailPage({
                   ))}
                 </ul>
                 {addableCandidates.length === 0 ? (
-                  <p className="text-sm text-slate-700">{t('noAdditionalServices')}</p>
+                  <p className="text-sm text-muted-foreground">{t('noAdditionalServices')}</p>
                 ) : null}
                 <Button type="submit" className="w-fit">
                   {t('saveDraft')}
@@ -418,7 +421,7 @@ export default async function BillingInvoiceDetailPage({
               </div>
             </div>
           ) : (
-            <p className="text-sm text-slate-700">{t('noManagePermission')}</p>
+            <p className="text-sm text-muted-foreground">{t('noManagePermission')}</p>
           )}
         </section>
       ) : null}
@@ -427,7 +430,7 @@ export default async function BillingInvoiceDetailPage({
         <>
           <section
             aria-labelledby="corrections-title"
-            className="grid gap-3 rounded-lg border bg-white p-5"
+            className="grid gap-3 rounded-lg border bg-card p-5"
           >
             <h2 id="corrections-title" className="text-xl font-semibold">
               {t('corrections')}
@@ -455,13 +458,13 @@ export default async function BillingInvoiceDetailPage({
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-slate-700">{t('correctionsEmpty')}</p>
+              <p className="text-sm text-muted-foreground">{t('correctionsEmpty')}</p>
             )}
           </section>
           {canCorrect && invoice.outstandingCents !== null && invoice.outstandingCents > 0 ? (
             <section
               aria-labelledby="create-correction-title"
-              className="grid gap-3 rounded-lg border bg-white p-5"
+              className="grid gap-3 rounded-lg border bg-card p-5"
             >
               <h2 id="create-correction-title" className="text-xl font-semibold">
                 {t('createCorrection')}
@@ -501,7 +504,7 @@ export default async function BillingInvoiceDetailPage({
                     </li>
                   ))}
                 </ul>
-                <p className="text-sm text-slate-700">
+                <p className="text-sm text-muted-foreground">
                   {t('correctionOutstandingLimit', {
                     amount: formatCents(invoice.outstandingCents, locale),
                   })}
@@ -514,7 +517,7 @@ export default async function BillingInvoiceDetailPage({
           ) : null}
           <section
             aria-labelledby="payment-history-title"
-            className="grid gap-3 rounded-lg border bg-white p-5"
+            className="grid gap-3 rounded-lg border bg-card p-5"
           >
             <h2 id="payment-history-title" className="text-xl font-semibold">
               {t('paymentHistory')}
@@ -534,7 +537,7 @@ export default async function BillingInvoiceDetailPage({
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-slate-700">{t('noPaymentAllocations')}</p>
+              <p className="text-sm text-muted-foreground">{t('noPaymentAllocations')}</p>
             )}
             <Button asChild variant="secondary">
               <Link href={`/billing/payments?invoiceId=${invoice.id}`}>
@@ -568,23 +571,12 @@ function daysAgo(days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-function Alert({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-      {children}
-    </p>
-  );
-}
-function Status({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="status" className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900">
-      {children}
-    </p>
-  );
-}
 function Warning({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <p role="alert" className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-950">
+    <p
+      role="alert"
+      className="rounded-md border border-warning/40 bg-warning-muted p-3 text-warning-foreground"
+    >
       {children}
     </p>
   );
@@ -592,7 +584,7 @@ function Warning({ children }: Readonly<{ children: React.ReactNode }>) {
 function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div>
-      <dt className="text-slate-600">{label}</dt>
+      <dt className="text-muted-foreground">{label}</dt>
       <dd className="font-medium">{value}</dd>
     </div>
   );

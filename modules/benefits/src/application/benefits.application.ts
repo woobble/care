@@ -653,11 +653,52 @@ export class BenefitsApplicationService {
         .orderBy(desc(benefitLedgerEntries.effectiveDate), desc(benefitLedgerEntries.recordedAt))
         .limit(input.pageSize)
         .offset((input.page - 1) * input.pageSize);
+      const performedServiceIds = [
+        ...new Set(
+          items.flatMap((entry) => (entry.performedServiceId ? [entry.performedServiceId] : [])),
+        ),
+      ];
+      const serviceRows = performedServiceIds.length
+        ? await transaction
+            .select({
+              id: performedServices.id,
+              serviceCode: performedServices.serviceCodeSnapshot,
+              serviceName: performedServices.serviceNameSnapshot,
+            })
+            .from(performedServices)
+            .innerJoin(
+              visits,
+              and(
+                eq(visits.tenantId, performedServices.tenantId),
+                eq(visits.id, performedServices.visitId),
+              ),
+            )
+            .where(
+              and(
+                eq(performedServices.tenantId, principal.tenantId),
+                eq(visits.clientId, clientId),
+                inArray(performedServices.id, performedServiceIds),
+              ),
+            )
+        : [];
+      const serviceLabels = new Map(
+        serviceRows.map((service) => [service.id, service.serviceName || service.serviceCode]),
+      );
       const [total] = await transaction
         .select({ count: count() })
         .from(benefitLedgerEntries)
         .where(and(...filters));
-      return { items, page: input.page, pageSize: input.pageSize, total: total?.count ?? 0 };
+      return {
+        items: items.map((entry) => ({
+          ...entry,
+          performedServiceLabel: entry.performedServiceId
+            ? (serviceLabels.get(entry.performedServiceId) ?? null)
+            : null,
+        })),
+        page: input.page,
+        pageSize: input.pageSize,
+        total: total?.count ?? 0,
+      };
     });
   }
 
@@ -862,7 +903,103 @@ export class BenefitsApplicationService {
       page,
       pageSize,
     );
-    return { clients: clientItems, unallocatedServices };
+    const allocationOptions = await this.worklistAllocationOptions(
+      principal,
+      unallocatedServices.items,
+    );
+    return { clients: clientItems, unallocatedServices, allocationOptions };
+  }
+
+  private async worklistAllocationOptions(
+    principal: AuthorizationPrincipal,
+    services: readonly { performedServiceId: string; clientId: string; serviceDate: string }[],
+  ) {
+    const clientIds = [...new Set(services.map((service) => service.clientId))];
+    if (!clientIds.length) return [];
+
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const clients = await transaction
+        .select({
+          id: clientRecords.id,
+          organizationId: clientRecords.organizationId,
+          facilityId: clientRecords.primaryFacilityId,
+        })
+        .from(clientRecords)
+        .where(
+          and(eq(clientRecords.tenantId, principal.tenantId), inArray(clientRecords.id, clientIds)),
+        );
+      const readableClientIds = new Set(
+        clients
+          .filter((client) =>
+            can(principal, {
+              action: 'benefits.read',
+              resource: {
+                tenantId: principal.tenantId,
+                clientId: client.id,
+                ...(client.organizationId ? { organizationId: client.organizationId } : {}),
+                ...(client.facilityId ? { facilityId: client.facilityId } : {}),
+              },
+            }),
+          )
+          .map((client) => client.id),
+      );
+      if (!readableClientIds.size) {
+        return services.map((service) => ({
+          performedServiceId: service.performedServiceId,
+          items: [],
+        }));
+      }
+
+      const entitlements = await transaction
+        .select()
+        .from(clientBenefitEntitlements)
+        .where(
+          and(
+            eq(clientBenefitEntitlements.tenantId, principal.tenantId),
+            inArray(clientBenefitEntitlements.clientId, [...readableClientIds]),
+          ),
+        );
+      const fundingSources = await transaction
+        .select()
+        .from(benefitFundingSources)
+        .where(
+          and(
+            eq(benefitFundingSources.tenantId, principal.tenantId),
+            inArray(benefitFundingSources.clientId, [...readableClientIds]),
+          ),
+        );
+      const sourceById = new Map(fundingSources.map((source) => [source.id, source]));
+      const entitlementsByClient = new Map<string, typeof entitlements>();
+      for (const entitlement of entitlements) {
+        const clientEntitlements = entitlementsByClient.get(entitlement.clientId) ?? [];
+        clientEntitlements.push(entitlement);
+        entitlementsByClient.set(entitlement.clientId, clientEntitlements);
+      }
+
+      return services.map((service) => ({
+        performedServiceId: service.performedServiceId,
+        items: (entitlementsByClient.get(service.clientId) ?? [])
+          .filter(
+            (entitlement) =>
+              ['confirmed', 'provisional'].includes(entitlement.status) &&
+              entitlement.validFrom <= service.serviceDate &&
+              (entitlement.validUntil === null || entitlement.validUntil >= service.serviceDate),
+          )
+          .flatMap((entitlement) => {
+            const source = sourceById.get(entitlement.fundingSourceId);
+            if (!source) return [];
+            return [
+              {
+                entitlementId: entitlement.id,
+                fundingSourceId: entitlement.fundingSourceId,
+                benefitType: entitlement.benefitType,
+                fundingSourceLabel: source.label,
+                fundingSourceType: source.sourceType,
+              },
+            ];
+          }),
+      }));
+    });
   }
 
   async operationsCarryoverDeadlines(
@@ -1625,37 +1762,83 @@ export class BenefitsApplicationService {
         }),
       );
       const selected = visible.slice((page - 1) * pageSize, page * pageSize);
+      const selectedIds = selected.map((row) => row.performed.id);
+      const serviceDates = new Map(
+        selected.map((row) => [
+          row.performed.id,
+          serviceDate(row.execution.actualEnd ?? row.visit.plannedStart, row.visit.timezone),
+        ]),
+      );
+      const allocationRows = selectedIds.length
+        ? await transaction
+            .select({
+              performedServiceId: serviceAllocations.performedServiceId,
+              amountCents: serviceAllocations.amountCents,
+            })
+            .from(serviceAllocations)
+            .leftJoin(
+              serviceAllocationReversals,
+              and(
+                eq(serviceAllocationReversals.tenantId, serviceAllocations.tenantId),
+                eq(serviceAllocationReversals.allocationId, serviceAllocations.id),
+              ),
+            )
+            .where(
+              and(
+                eq(serviceAllocations.tenantId, principal.tenantId),
+                inArray(serviceAllocations.performedServiceId, selectedIds),
+                isNull(serviceAllocationReversals.id),
+              ),
+            )
+        : [];
+      const priceContexts = selected.map((row) => {
+        const date = serviceDates.get(row.performed.id)!;
+        return and(
+          eq(servicePrices.serviceId, row.performed.serviceDefinitionId),
+          eq(servicePrices.organizationId, row.visit.organizationId),
+          lte(servicePrices.validFrom, date),
+          or(isNull(servicePrices.validUntil), gt(servicePrices.validUntil, date)),
+          row.visit.facilityId
+            ? or(
+                isNull(servicePrices.facilityId),
+                eq(servicePrices.facilityId, row.visit.facilityId),
+              )
+            : isNull(servicePrices.facilityId),
+        );
+      });
+      const priceRows = priceContexts.length
+        ? await transaction
+            .select()
+            .from(servicePrices)
+            .where(and(eq(servicePrices.tenantId, principal.tenantId), or(...priceContexts)))
+        : [];
+      const allocatedByService = new Map<string, number>();
+      for (const allocation of allocationRows) {
+        allocatedByService.set(
+          allocation.performedServiceId,
+          addCents(
+            allocatedByService.get(allocation.performedServiceId) ?? 0,
+            allocation.amountCents,
+          ),
+        );
+      }
       const items = [];
       for (const row of selected) {
-        const allocations = await transaction
-          .select({
-            id: serviceAllocations.id,
-            amountCents: serviceAllocations.amountCents,
-            serviceAmountCents: serviceAllocations.serviceAmountCents,
-          })
-          .from(serviceAllocations)
-          .leftJoin(
-            serviceAllocationReversals,
-            and(
-              eq(serviceAllocationReversals.tenantId, serviceAllocations.tenantId),
-              eq(serviceAllocationReversals.allocationId, serviceAllocations.id),
-            ),
-          )
-          .where(
-            and(
-              eq(serviceAllocations.tenantId, principal.tenantId),
-              eq(serviceAllocations.performedServiceId, row.performed.id),
-              isNull(serviceAllocationReversals.id),
-            ),
-          );
-        const price = await this.effectivePrice(
-          transaction,
-          principal.tenantId,
-          row.performed.serviceDefinitionId,
-          row.visit.organizationId,
-          row.visit.facilityId,
-          serviceDate(row.execution.actualEnd ?? row.visit.plannedStart, row.visit.timezone),
+        const date = serviceDates.get(row.performed.id)!;
+        const candidatePrices = priceRows.filter(
+          (price) =>
+            price.serviceId === row.performed.serviceDefinitionId &&
+            price.organizationId === row.visit.organizationId &&
+            price.validFrom <= date &&
+            (price.validUntil === null || price.validUntil > date) &&
+            (price.facilityId === null || price.facilityId === row.visit.facilityId),
         );
+        const price =
+          (row.visit.facilityId
+            ? candidatePrices.find((candidate) => candidate.facilityId === row.visit.facilityId)
+            : undefined) ??
+          candidatePrices.find((candidate) => candidate.facilityId === null) ??
+          null;
         const qty = row.performed.actualQuantity;
         let serviceAmountCents: number | null = null;
         if (price && qty) {
@@ -1670,15 +1853,14 @@ export class BenefitsApplicationService {
             serviceAmountCents = null;
           }
         }
-        const allocatedCents = allocations.reduce(
-          (sum, allocation) => addCents(sum, allocation.amountCents),
-          0,
-        );
+        const allocatedCents = allocatedByService.get(row.performed.id) ?? 0;
         if (serviceAmountCents !== null && allocatedCents >= serviceAmountCents) continue;
         items.push({
           performedServiceId: row.performed.id,
           clientId: row.client.id,
           clientName: `${row.client.preferredName ?? row.client.firstName} ${row.client.lastName}`,
+          clientOrganizationId: row.client.organizationId,
+          clientFacilityId: row.client.primaryFacilityId,
           organizationId: row.visit.organizationId,
           facilityId: row.visit.facilityId,
           serviceName: row.performed.serviceNameSnapshot,

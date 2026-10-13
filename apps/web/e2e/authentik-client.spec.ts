@@ -1,4 +1,7 @@
 import { v7 as uuidv7 } from 'uuid';
+import { mkdir } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
 import { devices, expect, test } from '@playwright/test';
 import type { BrowserContext, Page } from '@playwright/test';
@@ -7,12 +10,17 @@ import { createS3ObjectStorage } from '@care/storage';
 
 const retiredModuleNavigationName =
   /^(?:Medications?|Clinical Documentation|Care Planning|Competency Policies|Workforce Compliance|Medikamente?|Klinische Dokumentation|Pflegeplanung|Kompetenzrichtlinien|Personal Compliance)$/i;
+const reviewDirectory = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../artifacts/ui-foundation-review',
+);
 
 test('Authentik users can be invited and administered from the office UI', async ({
   page,
   browser,
 }, testInfo) => {
   test.setTimeout(600_000);
+  await mkdir(reviewDirectory, { recursive: true });
   page.setDefaultTimeout(15_000);
   await page.addInitScript(() => {
     const hideNextDevToolbar = () => {
@@ -100,12 +108,14 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
-    await page.getByRole('combobox', { name: 'Language' }).selectOption('de');
+    await page.getByRole('button', { name: 'Language' }).click();
+    await page.getByRole('menuitemradio', { name: 'Deutsch' }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'de');
     await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
     await page.reload({ waitUntil: 'load' });
-    await expect(page.getByRole('combobox', { name: 'Sprache' })).toHaveValue('de');
-    await page.getByRole('combobox', { name: 'Sprache' }).selectOption('en');
+    await expect(page.getByRole('button', { name: 'Sprache' })).toBeVisible();
+    await page.getByRole('button', { name: 'Sprache' }).click();
+    await page.getByRole('menuitemradio', { name: 'English' }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 
     const createdUser = await createAuthentikUser(authentikOrigin, apiToken, {
@@ -197,15 +207,17 @@ test('Authentik users can be invited and administered from the office UI', async
       page.locator('nav[aria-label]').getByRole('link', { name: retiredModuleNavigationName }),
     ).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible();
-    await page.getByRole('combobox', { name: 'Language' }).selectOption('de');
+    await page.getByRole('button', { name: 'Language' }).click();
+    await page.getByRole('menuitemradio', { name: 'Deutsch' }).click();
     await expect(page).toHaveURL(/\/clients\?localeCheck=1$/);
     await expect(page.locator('html')).toHaveAttribute('lang', 'de');
     await expect(
       page.getByRole('heading', { name: 'Klientinnen und Klienten', exact: true }),
     ).toBeVisible();
     await page.reload({ waitUntil: 'load' });
-    await expect(page.getByRole('combobox', { name: 'Sprache' })).toHaveValue('de');
-    await page.getByRole('combobox', { name: 'Sprache' }).selectOption('en');
+    await expect(page.getByRole('button', { name: 'Sprache' })).toBeVisible();
+    await page.getByRole('button', { name: 'Sprache' }).click();
+    await page.getByRole('menuitemradio', { name: 'English' }).click();
     await expect(page).toHaveURL(/\/clients\?localeCheck=1$/);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible();
@@ -256,16 +268,16 @@ test('Authentik users can be invited and administered from the office UI', async
         .locator('main')
         .evaluate((element) => element.getBoundingClientRect().left);
       expect(transitioningSidebarWidth).toBeGreaterThan(72);
-      expect(transitioningSidebarWidth).toBeLessThan(304);
+      expect(transitioningSidebarWidth).toBeLessThan(256);
       expect(transitioningMainLeft).toBeGreaterThan(72);
-      expect(transitioningMainLeft).toBeLessThan(304);
+      expect(transitioningMainLeft).toBeLessThan(256);
       await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
       await expect(topbarBrand).toBeHidden();
       await page.waitForFunction(() => {
         const element = document.querySelector('#office-sidebar');
         return (
           element instanceof HTMLElement &&
-          Math.abs(element.getBoundingClientRect().width - 304) < 1
+          Math.abs(element.getBoundingClientRect().width - 256) < 1
         );
       });
       await expect(activeLabel).toHaveAttribute('aria-hidden', 'false');
@@ -367,7 +379,14 @@ test('Authentik users can be invited and administered from the office UI', async
       await page.getByRole('button', { name: 'Appearance' }).click();
       await page.getByRole('menuitemradio', { name: 'Light' }).click();
 
-      await page.setViewportSize({ width: 1024, height: 900 });
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await page.getByRole('button', { name: 'Appearance' }).click();
+      await page.getByRole('menuitemradio', { name: 'System' }).click();
+      await expect(page.locator('html')).toHaveClass(/dark/);
+      await page.emulateMedia({ colorScheme: 'light' });
+      await expect(page.locator('html')).not.toHaveClass(/dark/);
+
+      await page.setViewportSize({ width: 1024, height: 768 });
       await expect(sidebar).toBeVisible();
       await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
       await expect(page.getByRole('button', { name: 'Open navigation' })).toHaveCount(0);
@@ -383,6 +402,16 @@ test('Authentik users can be invited and administered from the office UI', async
       await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath('office-768-tablet.png'), fullPage: true });
       await expectMobileLayoutToFit(page);
+      await page.getByRole('button', { name: 'Appearance' }).click();
+      await expect(page.getByRole('menuitemradio', { name: 'Dark' })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await page.getByRole('button', { name: 'Language' }).click();
+      await expect(page.getByRole('menuitemradio', { name: 'Deutsch' })).toBeVisible();
+      await page.keyboard.press('Escape');
+      const tabletAccountTrigger = page.getByRole('button', { name: /Account: / });
+      await tabletAccountTrigger.click();
+      await expect(page.getByRole('menu').getByText(email, { exact: true })).toBeVisible();
+      await page.keyboard.press('Escape');
       await page.getByRole('button', { name: 'Expand sidebar' }).click();
       await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
       await expectMobileLayoutToFit(page);
@@ -441,6 +470,7 @@ test('Authentik users can be invited and administered from the office UI', async
       path: testInfo.outputPath('operations-1440-light.png'),
       fullPage: true,
     });
+    await captureReviewScreenshot(page, 'office-dashboard-desktop-expanded-light.png');
     await expectMobileLayoutToFit(page);
     await page.getByRole('button', { name: 'Appearance' }).click();
     await page.getByRole('menuitemradio', { name: 'Dark' }).click();
@@ -452,13 +482,43 @@ test('Authentik users can be invited and administered from the office UI', async
       path: testInfo.outputPath('operations-1440-dark.png'),
       fullPage: true,
     });
+    await captureReviewScreenshot(page, 'office-dashboard-desktop-expanded-dark.png');
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+    await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+    await page.waitForFunction(() => {
+      const element = document.querySelector('#office-sidebar');
+      return (
+        element instanceof HTMLElement && Math.abs(element.getBoundingClientRect().width - 72) < 1
+      );
+    });
+    await captureReviewScreenshot(page, 'office-dashboard-desktop-collapsed-dark.png');
+    await page.getByRole('button', { name: 'Expand sidebar' }).click();
+    await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
     await page.getByRole('button', { name: 'Appearance' }).click();
     await page.getByRole('menuitemradio', { name: 'Light' }).click();
-    await page.setViewportSize({ width: 1024, height: 900 });
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+    await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+    await page.waitForFunction(() => {
+      const element = document.querySelector('#office-sidebar');
+      return (
+        element instanceof HTMLElement && Math.abs(element.getBoundingClientRect().width - 72) < 1
+      );
+    });
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.waitForFunction(() => {
+      const element = document.querySelector('#office-sidebar');
+      return (
+        element instanceof HTMLElement && Math.abs(element.getBoundingClientRect().width - 72) < 1
+      );
+    });
+    await captureReviewScreenshot(page, 'office-dashboard-1024-compact.png');
     await page.screenshot({
       path: testInfo.outputPath('operations-1024.png'),
       fullPage: true,
     });
+    await expectMobileLayoutToFit(page);
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await captureReviewScreenshot(page, 'office-dashboard-tablet-768.png');
     await expectMobileLayoutToFit(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => {
@@ -468,6 +528,7 @@ test('Authentik users can be invited and administered from the office UI', async
       path: testInfo.outputPath('operations-390-mobile.png'),
       fullPage: true,
     });
+    await captureReviewScreenshot(page, 'office-dashboard-mobile-390.png', true);
     await expectMobileLayoutToFit(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     const scheduledVisits = page.getByRole('link', { name: /Today's scheduled visits:/ });
@@ -547,6 +608,28 @@ test('Authentik users can be invited and administered from the office UI', async
 
     await page.getByRole('button', { name: 'Activate' }).click();
     await expect(page.locator('span').filter({ hasText: /^Active$/ })).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    if ((await sidebar.getAttribute('data-collapsed')) === 'true') {
+      await page.getByRole('button', { name: 'Expand sidebar' }).click();
+    }
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await page.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    await captureReviewScreenshot(page, 'client-detail-desktop-dark.png', true);
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Light' }).click();
+    await expect(page.locator('html')).not.toHaveClass(/dark/);
+    await page.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    await captureReviewScreenshot(page, 'client-detail-desktop-light.png', true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'client-detail-mobile-390.png', true);
+    await page.setViewportSize({ width: 1440, height: 900 });
     const clientArchivePath = new URL(page.url()).pathname;
     const clientArchiveResponse = page.waitForResponse(
       (response) =>
@@ -561,6 +644,14 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page.locator('span').filter({ hasText: /^Archived$/ })).toBeVisible();
 
     await page.goto('/administration/organizations');
+    await captureReviewScreenshot(page, 'administration-organizations-desktop-light.png');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'administration-organizations-mobile-390.png', true);
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'administration-organizations-tablet-768.png', true);
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.getByLabel('Name', { exact: true }).fill(e2eOrganizationName);
     await page.getByLabel('Legal name').fill(`E2E Betreuungsdienst ${runId}`);
     await page.getByLabel('Address').fill('E2E Provider Street 1, 10115 Berlin');
@@ -728,6 +819,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/admissions/${admissionCaseId}`);
     await expect(page.getByRole('heading', { name: `Admission E2E ${runId}` })).toBeVisible();
+    await expectVisibleTextToOmitIds(page, [admissionCaseId, e2eOrganizationId, e2eFacilityId]);
 
     await page.getByRole('button', { name: 'Register prospect as pending client' }).click();
     const admissionClientLink = page.locator('a[href^="/clients/"]').first();
@@ -744,18 +836,21 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.getByRole('button', { name: 'Activate' }).click();
     await expect(page.locator('span').filter({ hasText: /^Active$/ })).toBeVisible();
     await page.goto(`/admissions/${admissionCaseId}`);
+    await expectVisibleTextToOmitIds(page, [admissionCaseId, admissionClientId]);
 
     const admissionStageForm = page.locator('form').filter({
       has: page.getByRole('button', { name: 'Move to stage' }),
     });
     await admissionStageForm.getByLabel('Move to stage').selectOption('assessment');
     await admissionStageForm.getByRole('button', { name: 'Move to stage' }).click();
+    await page.reload();
     await expect(page.getByText(/Assessment · Stage/)).toBeVisible();
     const preparationStageForm = page.locator('form').filter({
       has: page.getByRole('button', { name: 'Move to stage' }),
     });
     await preparationStageForm.getByLabel('Move to stage').selectOption('preparation');
     await preparationStageForm.getByRole('button', { name: 'Move to stage' }).click();
+    await page.reload();
     await expect(page.getByText(/Preparation · Stage/)).toBeVisible();
 
     await page.getByRole('link', { name: 'Plan first visit' }).click();
@@ -774,7 +869,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page).toHaveURL(
       new RegExp(`/admissions/${admissionCaseId}\\?updated=first_visit$`),
     );
-    await expect(page.getByRole('status')).toContainText('First visit planned');
+    await expect(page.getByRole('status').filter({ hasText: 'First visit planned' })).toBeVisible();
     const firstVisitLink = await database.query<{ first_visit_id: string | null }>(
       'SELECT first_visit_id FROM onboarding.cases WHERE tenant_id = $1 AND id = $2',
       [tenantId, admissionCaseId],
@@ -786,10 +881,16 @@ test('Authentik users can be invited and administered from the office UI', async
       [tenantId, admissionVisitId, admissionVisitMarker],
     );
     expect(scheduledAdmissionVisit.rows[0]?.id).toBe(admissionVisitId);
-    await expect(page.getByRole('link', { name: admissionVisitId })).toHaveAttribute(
-      'href',
-      `/visits/${admissionVisitId}`,
-    );
+    const firstVisitReference = page.locator(`a[href="/visits/${admissionVisitId}"]`);
+    await expect(firstVisitReference).toBeVisible();
+    await expect(firstVisitReference).not.toHaveText(admissionVisitId);
+    await expectVisibleTextToOmitIds(page, [
+      admissionCaseId,
+      admissionClientId,
+      admissionVisitId,
+      e2eOrganizationId,
+      e2eFacilityId,
+    ]);
 
     await page.goto('/clients/new');
     await page.getByLabel('Organization').selectOption(e2eOrganizationId);
@@ -870,6 +971,14 @@ test('Authentik users can be invited and administered from the office UI', async
 
     await page.goto('/billing/claims/settings');
     await expect(page.getByRole('heading', { name: 'Claims settings' })).toBeVisible();
+    await captureReviewScreenshot(page, 'billing-claims-settings-desktop-light.png');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'billing-claims-settings-mobile-390.png', true);
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'billing-claims-settings-tablet-768.png', true);
+    await page.setViewportSize({ width: 1440, height: 900 });
     const payerOrganizationSection = page.getByRole('region', { name: e2eOrganizationName });
     const payerCreationForm = payerOrganizationSection.locator('form').filter({
       has: page.getByRole('button', { name: 'Create payer' }),
@@ -881,7 +990,10 @@ test('Authentik users can be invited and administered from the office UI', async
       .fill(`E2E Payer Street 1, 10115 Berlin`);
     billingRecordsMayExist = true;
     await payerCreationForm.getByRole('button', { name: 'Create payer' }).click();
-    await expect(page.getByRole('status')).toContainText('Payer directory entry saved.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Payer directory entry saved.' }),
+    ).toBeVisible();
+    await page.reload();
     const payerArticle = page.locator('article').filter({ hasText: e2ePayerName });
     const payerRequirementsForm = payerArticle.locator('form').filter({
       has: page.getByRole('button', { name: 'Save new requirements version' }),
@@ -899,7 +1011,9 @@ test('Authentik users can be invited and administered from the office UI', async
     await payerRequirementsForm
       .getByRole('button', { name: 'Save new requirements version' })
       .click();
-    await expect(page.getByRole('status')).toContainText('Payer requirements version saved.');
+    await expect(
+      page.getByText('Payer requirements version saved.', { exact: true }),
+    ).toBeVisible();
 
     await page.goto(`/clients/${agreementClientId}/invoices`);
     const payerArrangementForm = page.locator('form').filter({
@@ -935,7 +1049,9 @@ test('Authentik users can be invited and administered from the office UI', async
       .fill(`E2E mandate ${runId}`);
     await payerArrangementForm.getByRole('button', { name: 'Save payer arrangement' }).click();
     await expect(page).toHaveURL(/updated=PAYER_ARRANGEMENT_SAVED/);
-    await expect(page.getByRole('status')).toContainText('Payer arrangement saved.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Payer arrangement saved.' }),
+    ).toBeVisible();
 
     await page.goto('/billing/settings');
     const billingProfileSection = page.getByRole('region', { name: e2eOrganizationName });
@@ -954,7 +1070,9 @@ test('Authentik users can be invited and administered from the office UI', async
       })
       .click();
     await billingProfileSection.getByRole('button', { name: 'Save billing profile' }).click();
-    await expect(page.getByRole('status')).toContainText('Billing profile saved.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Billing profile saved.' }),
+    ).toBeVisible();
 
     await page.goto('/benefits');
     const recognitionForm = page
@@ -967,7 +1085,9 @@ test('Authentik users can be invited and administered from the office UI', async
     await recognitionForm.locator('#recognition-valid-from').fill(serviceValidFrom);
     await recognitionForm.locator('#recognition-reference').fill(`E2E Anerkennung ${runId}`);
     await recognitionForm.getByRole('button', { name: 'Record recognition' }).click();
-    await expect(page.getByRole('status')).toContainText('Provider recognition recorded.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Provider recognition recorded.' }),
+    ).toBeVisible();
 
     await page.goto(
       `/planning?date=${serviceValidFrom}&estimateClientId=${agreementClientId}&estimateServiceId=${serviceId}&estimateDate=${serviceValidFrom}&estimateQuantity=1`,
@@ -1061,6 +1181,28 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.goto(`/clients/${agreementClientId}`);
     await expect(page.getByRole('heading', { name: 'Upcoming visits' })).toBeVisible();
     await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    if ((await sidebar.getAttribute('data-collapsed')) === 'true') {
+      await page.getByRole('button', { name: 'Expand sidebar' }).click();
+    }
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await page.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    await captureReviewScreenshot(page, 'client-detail-desktop-dark.png', true);
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Light' }).click();
+    await expect(page.locator('html')).not.toHaveClass(/dark/);
+    await page.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    await captureReviewScreenshot(page, 'client-detail-desktop-light.png', true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'client-detail-mobile-390.png', true);
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/employees/${caregiverEmployeeId}`);
     await expect(page.getByRole('heading', { name: 'Upcoming visits' })).toBeVisible();
     await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true })).toBeVisible();
@@ -1234,6 +1376,16 @@ test('Authentik users can be invited and administered from the office UI', async
     if (!executionVisitId) {
       throw new Error('The Office UI reported success but the execution visit was not persisted');
     }
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'planning-1024-compact.png');
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'planning-tablet-768.png');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'planning-mobile-390.png', true);
+    await page.setViewportSize({ width: 1440, height: 900 });
 
     await caregiverPage.goto('/');
     await caregiverPage.locator('select[name="tenantId"]').selectOption(tenantId);
@@ -1259,6 +1411,17 @@ test('Authentik users can be invited and administered from the office UI', async
       path: testInfo.outputPath('caregiver-mobile-today.png'),
       fullPage: true,
     });
+    await captureReviewScreenshot(caregiverPage, 'caregiver-today-mobile-light.png', true);
+    await caregiverPage.getByRole('button', { name: 'Appearance' }).click();
+    await caregiverPage.getByRole('menuitemradio', { name: 'Dark' }).click();
+    await expect(caregiverPage.locator('html')).toHaveClass(/dark/);
+    await caregiverPage.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    await captureReviewScreenshot(caregiverPage, 'caregiver-today-mobile-dark.png', true);
+    await caregiverPage.getByRole('button', { name: 'Appearance' }).click();
+    await caregiverPage.getByRole('menuitemradio', { name: 'Light' }).click();
+    await expect(caregiverPage.locator('html')).not.toHaveClass(/dark/);
     await expectMobileLayoutToFit(caregiverPage);
     await expect(mobileVisitRow).toContainText('Next visit');
     await expect(mobileVisitRow).toContainText('Not started');
@@ -1379,6 +1542,8 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     await caregiverPage.goto('/care/today');
     await caregiverPage.goto(`/care/visits/${executionVisitId}`);
+    await expectMobileLayoutToFit(caregiverPage);
+    await captureReviewScreenshot(caregiverPage, 'caregiver-visit-detail-mobile-390.png', true);
     const recoveredObservationForm = caregiverPage
       .getByRole('heading', { name: 'Observations', level: 3 })
       .locator('..')
@@ -1406,9 +1571,11 @@ test('Authentik users can be invited and administered from the office UI', async
         .locator('li > p')
         .filter({ hasText: observationText }),
     ).toBeVisible();
-    await expect(recoveredObservationForm.getByRole('status')).toContainText(
-      'The server confirmed this submission.',
-    );
+    await expect(
+      recoveredObservationForm
+        .getByRole('status')
+        .filter({ hasText: 'The server confirmed this submission.' }),
+    ).toBeVisible();
     const remainingObservationDrafts = await caregiverPage.evaluate((visitId) => {
       const visitPart = encodeURIComponent(visitId);
       const formPart = encodeURIComponent('entry-new:observation');
@@ -1518,6 +1685,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await caregiverPage.getByRole('button', { name: 'Create service evidence' }).click();
     await expect(caregiverPage.getByText('Version 1', { exact: true })).toBeVisible();
     await expectMobileLayoutToFit(caregiverPage);
+    await captureReviewScreenshot(caregiverPage, 'caregiver-evidence-mobile-390.png', true);
     await expect(
       caregiverPage.getByText(`E2E Service ${runId}`, { exact: true }).first(),
     ).toBeVisible();
@@ -1714,7 +1882,9 @@ test('Authentik users can be invited and administered from the office UI', async
     await revokeForm.locator('input[name="reason"]').fill(`E2E revocation ${runId}`);
     await page.once('dialog', (dialog) => dialog.accept());
     await revokeForm.getByRole('button', { name: 'Revoke acknowledgement' }).click();
-    await expect(page.getByRole('status')).toContainText('The acknowledgement was revoked.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'The acknowledgement was revoked.' }),
+    ).toBeVisible();
     await expect(page.getByText('Revoked', { exact: true }).first()).toBeVisible();
 
     await caregiverPage.goto(`/care/visits/${executionVisitId}/evidence`);
@@ -1822,10 +1992,14 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(employeeExecutionRow).toContainText('Actual');
 
     await page.goto('/benefits');
+    await expectVisibleTextToOmitIds(page, [agreementClientId, executionVisitId, serviceId]);
     const completedService = page
       .getByRole('heading', { name: `E2E Service ${runId} · Agreement E2E ${runId}` })
       .first()
       .locator('xpath=ancestor::li[1]');
+    await expect(
+      completedService.getByRole('link', { name: `Agreement E2E ${runId}` }),
+    ).toHaveAttribute('href', `/clients/${agreementClientId}`);
     const allocationForm = completedService.locator('form');
     const allocationSourceOption = await allocationForm
       .locator('select[name="allocation-0-selection"] option')
@@ -1839,9 +2013,9 @@ test('Authentik users can be invited and administered from the office UI', async
     await allocationForm.locator('input[name="allocation-0-amount"]').fill('45');
     await allocationForm.locator('select[name="allocation-0-status"]').selectOption('confirmed');
     await allocationForm.getByRole('button', { name: 'Allocate funding' }).click();
-    await expect(page.getByRole('status')).toContainText('Service funding was allocated.', {
-      timeout: 30_000,
-    });
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Service funding was allocated.' }),
+    ).toBeVisible({ timeout: 30_000 });
 
     await page.goto(`/clients/${agreementClientId}/benefits`);
     const budgetHistory = page.locator('section[aria-labelledby="history-title"]');
@@ -1951,6 +2125,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page).toHaveURL(/\/billing\/claims\/[0-9a-f-]{36}\?updated=created$/i);
     claimId = new URL(page.url()).pathname.split('/').at(-1);
     if (!claimId) throw new Error('The issued invoice did not create a payer claim draft');
+    await expectVisibleTextToOmitIds(page, [claimId, invoiceId, agreementClientId]);
     await expect(page.getByRole('heading', { name: 'Readiness' })).toBeVisible();
     await expect(page.getByText('All configured readiness checks are satisfied.')).toBeVisible();
     const prepareClaimButton = page.getByRole('button', { name: 'Prepare submission package' });
@@ -1982,7 +2157,9 @@ test('Authentik users can be invited and administered from the office UI', async
       .locator('input[name="protectedNote"]')
       .fill('Submitted manually through the payer portal.');
     await claimSubmissionForm.getByRole('button', { name: 'Record submission' }).click();
-    await expect(page.getByRole('status')).toContainText('Manual submission recorded.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Manual submission recorded.' }),
+    ).toBeVisible();
     const claimDecisionForm = page.locator('form').filter({
       has: page.getByRole('button', { name: 'Save payer decision' }),
     });
@@ -2003,7 +2180,7 @@ test('Authentik users can be invited and administered from the office UI', async
     const paymentReference = `E2E-CLAIM-PAYMENT-${runId}`;
     await paymentEntryForm.locator('input[name="reference"]').fill(paymentReference);
     await paymentEntryForm.getByRole('button', { name: 'Record payment' }).click();
-    await expect(page.getByRole('status')).toContainText('Payment recorded.');
+    await expect(page.getByRole('status').filter({ hasText: 'Payment recorded.' })).toBeVisible();
 
     await page.goto(`/billing/claims/${claimId}`);
     const claimPaymentForm = page
@@ -2014,12 +2191,15 @@ test('Authentik users can be invited and administered from the office UI', async
       .filter({ hasText: paymentReference });
     await expect(claimPaymentForm).toBeVisible();
     await claimPaymentForm.getByRole('button', { name: 'Link payment' }).click();
-    await expect(page.getByRole('status')).toContainText('Payment linked to claim.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Payment linked to claim.' }),
+    ).toBeVisible();
 
     await page.goto(`/billing/invoices/${invoiceId}`);
     const invoiceSummary = page.locator('section[aria-labelledby="invoice-summary-title"]');
     await expect(invoiceSummary).toContainText('Paid');
     await page.goto(`/clients/${agreementClientId}/invoices`);
+    await expectVisibleTextToOmitIds(page, [agreementClientId, invoiceId, claimId]);
     const clientInvoiceRow = page
       .locator('section[aria-labelledby="client-invoice-history"]')
       .getByRole('row')
@@ -2100,14 +2280,20 @@ test('Authentik users can be invited and administered from the office UI', async
     const officeRole = page.locator(`button[role="checkbox"][value="${officeRoleId}"]`);
     await officeRole.click();
     await page.getByRole('button', { name: 'Save roles' }).click();
-    await expect(page.getByRole('status')).toContainText('Access record updated.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Access record updated.' }),
+    ).toBeVisible();
     await officeRole.click();
     await page.getByRole('button', { name: 'Save roles' }).click();
-    await expect(page.getByRole('status')).toContainText('Access record updated.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Access record updated.' }),
+    ).toBeVisible();
     await expect(officeRole).not.toBeChecked();
     await officeRole.click();
     await page.getByRole('button', { name: 'Save roles' }).click();
-    await expect(page.getByRole('status')).toContainText('Access record updated.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Access record updated.' }),
+    ).toBeVisible();
 
     await page.locator('input[name="scopeMode"][value="scoped"]').check();
     const facilityScope = page.locator(
@@ -2115,14 +2301,20 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     await facilityScope.click();
     await page.getByRole('button', { name: 'Save scopes' }).click();
-    await expect(page.getByRole('status')).toContainText('Access record updated.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Access record updated.' }),
+    ).toBeVisible();
     await facilityScope.click();
     await page.getByRole('button', { name: 'Save scopes' }).click();
-    await expect(page.getByRole('status')).toContainText('Access record updated.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Access record updated.' }),
+    ).toBeVisible();
     await expect(facilityScope).not.toBeChecked();
     await facilityScope.click();
     await page.getByRole('button', { name: 'Save scopes' }).click();
-    await expect(page.getByRole('status')).toContainText('Access record updated.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Access record updated.' }),
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Activate membership' }).click();
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
     await expect(page.getByText('Office', { exact: true })).toBeVisible();
@@ -2132,6 +2324,7 @@ test('Authentik users can be invited and administered from the office UI', async
 
     await page.goto('/administration/audit');
     await expect(page.getByText('Membership activated', { exact: true })).toBeVisible();
+    await expectVisibleTextToOmitIds(page, [platformUserId, invitedMembershipId]);
 
     await invitedPage.goto('/');
     await invitedPage.locator('select[name="tenantId"]').selectOption(tenantId);
@@ -2139,6 +2332,11 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(invitedPage).toHaveURL(/\/clients$/);
     await invitedPage.goto('/administration/facilities');
     await expect(invitedPage.getByText('Facility West', { exact: true })).toBeVisible();
+    await expect(
+      invitedPage.locator(`a[href^="/administration/facilities/"]`).filter({
+        hasText: 'Facility West',
+      }),
+    ).toBeVisible();
     await expect(invitedPage.getByText('Main Office', { exact: true })).toHaveCount(0);
 
     await page.goto(`/administration/users/${invitedMembershipId}`);
@@ -3319,6 +3517,24 @@ async function expectMobileLayoutToFit(page: Page): Promise<void> {
     };
   });
   expect(documentWidth, JSON.stringify(overflowCandidates)).toBeLessThanOrEqual(visualWidth);
+}
+
+async function expectVisibleTextToOmitIds(
+  page: Page,
+  ids: Array<string | undefined>,
+): Promise<void> {
+  const visibleText = await page.evaluate(() => document.body.innerText);
+  for (const id of ids) {
+    if (id) expect(visibleText).not.toContain(id);
+  }
+}
+
+async function captureReviewScreenshot(
+  page: Page,
+  filename: string,
+  fullPage = false,
+): Promise<void> {
+  await page.screenshot({ path: resolve(reviewDirectory, filename), fullPage });
 }
 
 async function retryCareToday(page: Page, buttonName: string): Promise<void> {

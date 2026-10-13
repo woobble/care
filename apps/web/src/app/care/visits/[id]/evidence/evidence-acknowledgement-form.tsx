@@ -81,10 +81,10 @@ export function EvidenceAcknowledgementForm({
   }
 
   return (
-    <section className="grid gap-5 rounded-lg border bg-white p-4 sm:p-5">
+    <section className="grid gap-5 rounded-lg border bg-card p-4 sm:p-5">
       <header className="grid gap-2">
         <h2 className="text-xl font-semibold">{t('title')}</h2>
-        <p className="text-slate-700">{statementText}</p>
+        <p className="text-muted-foreground">{statementText}</p>
       </header>
 
       <label className="grid gap-1 text-sm font-medium">
@@ -98,7 +98,7 @@ export function EvidenceAcknowledgementForm({
             setStrokes([]);
           }}
           disabled={submitting}
-          selectClassName="min-h-12 rounded-md border bg-white px-3"
+          selectClassName="min-h-12 rounded-md border bg-card px-3"
           aria-label={t('selectSignatory')}
           className="w-full"
         >
@@ -166,14 +166,14 @@ export function EvidenceAcknowledgementForm({
               disabled={submitting}
               className="min-h-12 rounded-md border px-3"
             />
-            <span className="font-normal text-slate-600">{t('nameMustMatch')}</span>
+            <span className="font-normal text-muted-foreground">{t('nameMustMatch')}</span>
           </label>
         )}
 
         <button
           type="submit"
           disabled={submitting || !online || (method === 'touch_signature' && strokes.length === 0)}
-          className="min-h-12 rounded-md bg-blue-800 px-4 font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="min-h-12 rounded-md bg-primary px-4 font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:bg-muted-foreground"
         >
           {submitting
             ? draftT('submitting')
@@ -183,17 +183,17 @@ export function EvidenceAcknowledgementForm({
         </button>
       </form>
       {submissionState === 'submitting' ? (
-        <p role="status" className="text-sm text-slate-600">
+        <p role="status" className="text-sm text-muted-foreground">
           {draftT('submitting')}
         </p>
       ) : null}
       {!online ? (
-        <p role="status" className="text-sm text-amber-900">
+        <p role="status" className="text-sm text-warning-foreground">
           {draftT('offline')}
         </p>
       ) : null}
       {submissionState === 'uncertain' ? (
-        <p role="status" className="text-sm text-amber-900">
+        <p role="status" className="text-sm text-warning-foreground">
           {draftT('submissionUncertain')}
         </p>
       ) : null}
@@ -217,7 +217,7 @@ export function EvidenceAcknowledgementForm({
             <NativeSelect
               name="reasonCode"
               required
-              selectClassName="min-h-12 rounded-md border bg-white px-3"
+              selectClassName="min-h-12 rounded-md border bg-card px-3"
               className="w-full"
             >
               <option value="declined_without_reason">{t('reasons.declinedWithoutReason')}</option>
@@ -238,7 +238,7 @@ export function EvidenceAcknowledgementForm({
           <button
             type="submit"
             disabled={submitting || !online}
-            className="min-h-12 rounded-md border border-slate-400 px-4 font-semibold text-slate-800"
+            className="min-h-12 rounded-md border border-border px-4 font-semibold text-foreground"
           >
             {t('recordDecline')}
           </button>
@@ -304,7 +304,7 @@ function SignaturePad({
         onPointerCancel={() => setActiveStroke([])}
         aria-describedby="signature-accessibility-help"
         aria-disabled={disabled}
-        className="h-36 w-full touch-none rounded-md border-2 border-dashed border-slate-400 bg-slate-50"
+        className="h-36 w-full touch-none rounded-md border-2 border-dashed border-border bg-background"
       >
         {allStrokes.map((stroke) => (
           <path
@@ -316,7 +316,7 @@ function SignaturePad({
             strokeLinecap="round"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
-            className="text-slate-900"
+            className="text-foreground"
           />
         ))}
       </svg>
@@ -328,7 +328,7 @@ function SignaturePad({
             onChange([]);
             setActiveStroke([]);
           }}
-          className="min-h-11 rounded-md border px-3 font-medium disabled:text-slate-400"
+          className="min-h-11 rounded-md border px-3 font-medium disabled:text-muted-foreground"
         >
           {t('clearSignature')}
         </button>
@@ -336,12 +336,12 @@ function SignaturePad({
           type="button"
           disabled={disabled || !strokes.length}
           onClick={() => onChange(strokes.slice(0, -1))}
-          className="min-h-11 rounded-md border px-3 font-medium disabled:text-slate-400"
+          className="min-h-11 rounded-md border px-3 font-medium disabled:text-muted-foreground"
         >
           {t('removeLastStroke')}
         </button>
       </div>
-      <p id="signature-accessibility-help" className="text-sm text-slate-600">
+      <p id="signature-accessibility-help" className="text-sm text-muted-foreground">
         {t('signatureSavedAfterConfirmation')}
       </p>
     </div>

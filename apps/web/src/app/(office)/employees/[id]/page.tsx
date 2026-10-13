@@ -7,6 +7,7 @@ import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceCardLink, ResourceReference } from '@app/web/components/resource-reference';
 import { statusLabelKey } from '@app/web/i18n/status';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate } from '@app/web/i18n/format';
@@ -17,6 +18,7 @@ import {
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
+  hasClientPermission,
 } from '@app/web/lib/api';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
@@ -53,6 +55,7 @@ export default async function EmployeeDetailPage({
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const api = await getApiClient();
   const header = await getTenantHeader();
+  const tenantId = header['X-Tenant-Id'];
   const get = api.GET;
   const permissions = await getPermissionGrants(api);
   const canReadSchedule = hasPermission(permissions, 'schedule.read');
@@ -189,7 +192,25 @@ export default async function EmployeeDetailPage({
           <div className="flex flex-wrap items-center gap-3">
             <StatusBadge status={employee.status} label={t(statusLabelKey(employee.status))} />
             <p className="text-sm text-muted-foreground">
-              {employee.organizationName ?? t('Employees.detail.noOrganization')}
+              {employee.organizationName ? (
+                <ResourceReference
+                  label={employee.organizationName}
+                  href={
+                    employee.organizationId &&
+                    hasClientPermission(
+                      permissions,
+                      'organization.read',
+                      tenantId,
+                      employee.organizationId,
+                      null,
+                    )
+                      ? `/administration/organizations/${employee.organizationId}`
+                      : null
+                  }
+                />
+              ) : (
+                t('Employees.detail.noOrganization')
+              )}
               {employee.personnelNumber ? ` · ${employee.personnelNumber}` : ''}
             </p>
           </div>
@@ -224,7 +245,7 @@ export default async function EmployeeDetailPage({
 
       <section
         aria-labelledby="schedule-title"
-        className="grid gap-3 rounded-lg border bg-white p-5"
+        className="grid gap-3 rounded-lg border bg-card p-5"
       >
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="schedule-title" className="text-xl font-semibold">
@@ -237,27 +258,36 @@ export default async function EmployeeDetailPage({
           </Button>
         </div>
         {visitsResult.error ? (
-          <p className="text-sm text-slate-600">{t('Employees.detail.visitsUnavailable')}</p>
+          <p className="text-sm text-muted-foreground">{t('Employees.detail.visitsUnavailable')}</p>
         ) : visitItems.length ? (
           <ol className="grid gap-2">
             {visitItems.map((visit) => {
               const execution = executionByVisitId.get(visit.id);
+              const visitHref = hasClientPermission(
+                permissions,
+                'schedule.read',
+                tenantId,
+                visit.organizationId,
+                visit.facilityId,
+              )
+                ? `/visits/${visit.id}`
+                : null;
               return (
                 <li key={visit.id}>
-                  <Link
-                    className="grid gap-1 rounded-md border p-3 hover:border-blue-400 sm:grid-cols-[12rem_1fr_auto]"
-                    href={`/visits/${visit.id}`}
+                  <ResourceCardLink
+                    className="grid gap-1 rounded-md border p-3 hover:border-primary/40 sm:grid-cols-[12rem_1fr_auto]"
+                    href={visitHref}
                   >
                     <time dateTime={visit.plannedStart}>
                       {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
                     </time>
                     <span>
                       <strong>{visit.clientDisplayName}</strong>
-                      <span className="block text-sm text-slate-600">
+                      <span className="block text-sm text-muted-foreground">
                         {visit.services.map((service) => service.serviceName).join(' · ')}
                       </span>
                       {execution ? (
-                        <span className="block text-sm text-slate-600">
+                        <span className="block text-sm text-muted-foreground">
                           {t('Employees.detail.execution')}{' '}
                           {execution.executionStatus === 'completed'
                             ? t('Common.status.completed')
@@ -275,7 +305,7 @@ export default async function EmployeeDetailPage({
                           ) : null}
                         </span>
                       ) : executionSummariesResult.error ? (
-                        <span className="block text-sm text-slate-600">
+                        <span className="block text-sm text-muted-foreground">
                           {t('Employees.detail.executionStatusUnavailable')}
                         </span>
                       ) : null}
@@ -287,20 +317,20 @@ export default async function EmployeeDetailPage({
                           ? t('Common.status.confirmed')
                           : t('Common.status.planned')}
                     </span>
-                  </Link>
+                  </ResourceCardLink>
                 </li>
               );
             })}
           </ol>
         ) : (
-          <p className="text-sm text-slate-600">{t('Employees.detail.noAssignedVisits')}</p>
+          <p className="text-sm text-muted-foreground">{t('Employees.detail.noAssignedVisits')}</p>
         )}
         {recentVisitsResult.error ? (
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             {t('Employees.detail.pastExecutionsUnavailable')}
           </p>
         ) : recentExecutionSummariesResult.error ? (
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             {t('Employees.detail.pastExecutionStatusUnavailable')}
           </p>
         ) : recentExecutionItems.length ? (
@@ -310,20 +340,29 @@ export default async function EmployeeDetailPage({
               {recentExecutionItems.map((visit) => {
                 const execution = recentExecutionByVisitId.get(visit.id);
                 if (!execution) return null;
+                const visitHref = hasClientPermission(
+                  permissions,
+                  'schedule.read',
+                  tenantId,
+                  visit.organizationId,
+                  visit.facilityId,
+                )
+                  ? `/visits/${visit.id}`
+                  : null;
                 return (
                   <li key={visit.id}>
-                    <Link
-                      className="grid gap-1 rounded-md border p-3 hover:border-blue-400"
-                      href={`/visits/${visit.id}`}
+                    <ResourceCardLink
+                      className="grid gap-1 rounded-md border p-3 hover:border-primary/40"
+                      href={visitHref}
                     >
                       <time dateTime={visit.plannedStart}>
                         {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
                       </time>
                       <strong>{visit.clientDisplayName}</strong>
-                      <span className="text-sm text-slate-600">
+                      <span className="text-sm text-muted-foreground">
                         {visit.services.map((service) => service.serviceName).join(' · ')}
                       </span>
-                      <span className="text-sm text-slate-600">
+                      <span className="text-sm text-muted-foreground">
                         {t('Employees.detail.execution')}{' '}
                         {execution.executionStatus === 'completed'
                           ? t('Common.status.completed')
@@ -335,7 +374,7 @@ export default async function EmployeeDetailPage({
                           ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone, locale)}`
                           : ''}
                       </span>
-                    </Link>
+                    </ResourceCardLink>
                   </li>
                 );
               })}
@@ -348,18 +387,18 @@ export default async function EmployeeDetailPage({
         <section
           id="availability"
           aria-labelledby="availability-title"
-          className="grid gap-4 rounded-lg border bg-white p-5"
+          className="grid gap-4 rounded-lg border bg-card p-5"
         >
           <div>
             <h2 id="availability-title" className="text-xl font-semibold">
               {t('Employees.detail.availabilityTitle')}
             </h2>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               {t('Employees.detail.availabilityDescription')}
             </p>
           </div>
           {availabilityResult?.error ? (
-            <p role="alert" className="text-sm text-red-800">
+            <p role="alert" className="text-sm text-destructive">
               {t(errorMessageKey(availabilityResult.error.code))}
             </p>
           ) : null}
@@ -440,12 +479,12 @@ export default async function EmployeeDetailPage({
           <div className="grid gap-3 border-t pt-4">
             <div>
               <h3 className="font-semibold">{t('Employees.detail.schedulingPreferences')}</h3>
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 {t('Employees.detail.schedulingPreferencesDescription')}
               </p>
             </div>
             {preferencesResult?.error ? (
-              <p role="alert" className="text-sm text-red-800">
+              <p role="alert" className="text-sm text-destructive">
                 {t(errorMessageKey(preferencesResult.error.code))}
               </p>
             ) : null}
@@ -498,7 +537,7 @@ export default async function EmployeeDetailPage({
                 </div>
                 <div>
                   <p className="font-medium">{t('Employees.detail.preferredStartLocation')}</p>
-                  <p className="mb-2 text-sm text-slate-600">
+                  <p className="mb-2 text-sm text-muted-foreground">
                     {t('Employees.detail.preferredStartLocationDescription')}
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -526,7 +565,9 @@ export default async function EmployeeDetailPage({
                     />
                   </div>
                 </div>
-                <p className="text-sm text-slate-600">{t('Employees.detail.travelModeDriving')}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t('Employees.detail.travelModeDriving')}
+                </p>
                 <Button type="submit" className="w-fit">
                   {t('Employees.detail.saveSchedulingPreferences')}
                 </Button>
@@ -562,7 +603,7 @@ export default async function EmployeeDetailPage({
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 {t('Employees.detail.noAvailabilityExceptions')}
               </p>
             )}
@@ -616,14 +657,14 @@ export default async function EmployeeDetailPage({
           <div className="grid gap-3 border-t pt-4">
             <div>
               <h3 className="font-semibold">{t('Employees.detail.absences')}</h3>
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 {t('Employees.detail.impactedVisitCount', {
                   count: absencesResult?.data?.impactedVisitCount ?? 0,
                 })}
               </p>
             </div>
             {absencesResult?.error ? (
-              <p className="text-sm text-red-800">
+              <p className="text-sm text-destructive">
                 {t(errorMessageKey(absencesResult.error.code))}
               </p>
             ) : absences.length ? (
@@ -654,7 +695,7 @@ export default async function EmployeeDetailPage({
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-slate-600">{t('Employees.detail.noAbsences')}</p>
+              <p className="text-sm text-muted-foreground">{t('Employees.detail.noAbsences')}</p>
             )}
             {canManageSchedule && employee.status === 'active' ? (
               <RHFActionForm
@@ -712,17 +753,28 @@ export default async function EmployeeDetailPage({
             <div className="grid gap-2 border-t pt-4">
               <h3 className="font-semibold">{t('Employees.detail.visitsNeedingAction')}</h3>
               <ul className="grid gap-2">
-                {impactedVisits.map((visit) => (
-                  <li key={visit.id}>
-                    <Link
-                      className="block rounded-md border p-3 hover:border-blue-400"
-                      href={`/visits/${visit.id}`}
-                    >
-                      {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)} ·{' '}
-                      {visit.clientDisplayName}
-                    </Link>
-                  </li>
-                ))}
+                {impactedVisits.map((visit) => {
+                  const visitHref = hasClientPermission(
+                    permissions,
+                    'schedule.read',
+                    tenantId,
+                    visit.organizationId,
+                    visit.facilityId,
+                  )
+                    ? `/visits/${visit.id}`
+                    : null;
+                  return (
+                    <li key={visit.id}>
+                      <ResourceCardLink
+                        className="block rounded-md border p-3 hover:border-primary/40"
+                        href={visitHref}
+                      >
+                        {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)} ·{' '}
+                        {visit.clientDisplayName}
+                      </ResourceCardLink>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ) : null}
@@ -732,13 +784,15 @@ export default async function EmployeeDetailPage({
       <section
         id="overview"
         aria-labelledby="overview-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <div>
           <h2 id="overview-title" className="text-xl font-semibold">
             {t('Employees.detail.overview')}
           </h2>
-          <p className="text-sm text-slate-600">{t('Employees.detail.overviewDescription')}</p>
+          <p className="text-sm text-muted-foreground">
+            {t('Employees.detail.overviewDescription')}
+          </p>
         </div>
         <RHFActionForm action={updateEmployeeAction} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="id" value={employee.id} />
@@ -830,13 +884,15 @@ export default async function EmployeeDetailPage({
       <section
         id="assignments"
         aria-labelledby="assignments-title"
-        className="grid gap-5 rounded-lg border bg-white p-5"
+        className="grid gap-5 rounded-lg border bg-card p-5"
       >
         <div>
           <h2 id="assignments-title" className="text-xl font-semibold">
             {t('Employees.detail.assignments')}
           </h2>
-          <p className="text-sm text-slate-600">{t('Employees.detail.assignmentsDescription')}</p>
+          <p className="text-sm text-muted-foreground">
+            {t('Employees.detail.assignmentsDescription')}
+          </p>
         </div>
         {employee.organizationId ? (
           <div className="grid gap-5 lg:grid-cols-2">
@@ -850,10 +906,23 @@ export default async function EmployeeDetailPage({
                   >
                     <div>
                       <p className="font-medium">
-                        {assignment.facilityName}
+                        <ResourceReference
+                          label={assignment.facilityName}
+                          href={
+                            hasClientPermission(
+                              permissions,
+                              'facility.read',
+                              tenantId,
+                              assignment.organizationId,
+                              assignment.facilityId,
+                            )
+                              ? `/administration/facilities/${assignment.facilityId}`
+                              : null
+                          }
+                        />
                         {assignment.isPrimary ? ` · ${t('Employees.detail.primaryFacility')}` : ''}
                       </p>
-                      <p className="text-sm text-slate-600">
+                      <p className="text-sm text-muted-foreground">
                         {dateRange(
                           assignment.validFrom,
                           assignment.validUntil,
@@ -875,7 +944,7 @@ export default async function EmployeeDetailPage({
                   </article>
                 ))
               ) : (
-                <p className="text-sm text-slate-600">{t('Employees.detail.noFacility')}</p>
+                <p className="text-sm text-muted-foreground">{t('Employees.detail.noFacility')}</p>
               )}
               {facilities.length ? (
                 <RHFActionForm
@@ -888,7 +957,7 @@ export default async function EmployeeDetailPage({
                     <NativeSelect
                       id="facilityId"
                       name="facilityId"
-                      selectClassName="h-10 rounded-md border bg-white px-3"
+                      selectClassName="h-10 rounded-md border bg-card px-3"
                       required
                       defaultValue=""
                       className="w-full"
@@ -935,8 +1004,23 @@ export default async function EmployeeDetailPage({
                     className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
                   >
                     <div>
-                      <p className="font-medium">{membership.teamName}</p>
-                      <p className="text-sm text-slate-600">
+                      <p className="font-medium">
+                        <ResourceReference
+                          label={membership.teamName}
+                          href={
+                            hasClientPermission(
+                              permissions,
+                              'team.read',
+                              tenantId,
+                              employee.organizationId,
+                              membership.facilityId,
+                            )
+                              ? `/administration/teams/${membership.teamId}`
+                              : null
+                          }
+                        />
+                      </p>
+                      <p className="text-sm text-muted-foreground">
                         {membership.role || t('Employees.detail.member')} ·{' '}
                         {dateRange(
                           membership.validFrom,
@@ -959,7 +1043,7 @@ export default async function EmployeeDetailPage({
                   </article>
                 ))
               ) : (
-                <p className="text-sm text-slate-600">{t('Employees.detail.noTeam')}</p>
+                <p className="text-sm text-muted-foreground">{t('Employees.detail.noTeam')}</p>
               )}
               {teams.length ? (
                 <RHFActionForm
@@ -972,7 +1056,7 @@ export default async function EmployeeDetailPage({
                     <NativeSelect
                       id="teamId"
                       name="teamId"
-                      selectClassName="h-10 rounded-md border bg-white px-3"
+                      selectClassName="h-10 rounded-md border bg-card px-3"
                       required
                       defaultValue=""
                       className="w-full"
@@ -1017,7 +1101,7 @@ export default async function EmployeeDetailPage({
         ) : (
           <p
             role="alert"
-            className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900"
+            className="rounded-md border border-warning/40 bg-warning-muted p-3 text-warning-foreground"
           >
             {t('Employees.detail.organizationRequired')}
           </p>
@@ -1027,13 +1111,13 @@ export default async function EmployeeDetailPage({
       <section
         id="qualifications"
         aria-labelledby="qualifications-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <div>
           <h2 id="qualifications-title" className="text-xl font-semibold">
             {t('Employees.detail.qualifications')}
           </h2>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             {t('Employees.detail.qualificationsDescription')}
           </p>
         </div>
@@ -1052,7 +1136,7 @@ export default async function EmployeeDetailPage({
                       {qualification.name}
                       {qualification.code ? ` (${qualification.code})` : ''}
                     </p>
-                    <p className="text-sm text-slate-600">
+                    <p className="text-sm text-muted-foreground">
                       {dateRange(
                         qualification.validFrom,
                         qualification.validUntil,
@@ -1092,7 +1176,7 @@ export default async function EmployeeDetailPage({
             })}
           </ul>
         ) : (
-          <p className="text-sm text-slate-600">{t('Employees.detail.noQualifications')}</p>
+          <p className="text-sm text-muted-foreground">{t('Employees.detail.noQualifications')}</p>
         )}
         {qualifications.length ? (
           <RHFActionForm
@@ -1105,7 +1189,7 @@ export default async function EmployeeDetailPage({
               <NativeSelect
                 id="qualificationId"
                 name="qualificationId"
-                selectClassName="h-10 rounded-md border bg-white px-3"
+                selectClassName="h-10 rounded-md border bg-card px-3"
                 required
                 defaultValue=""
                 className="w-full"
@@ -1146,7 +1230,7 @@ export default async function EmployeeDetailPage({
             </Button>
           </RHFActionForm>
         ) : (
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             <Link className="underline" href="/administration/qualifications">
               {t('Employees.detail.manageQualifications')}
             </Link>
@@ -1157,13 +1241,13 @@ export default async function EmployeeDetailPage({
       <section
         id="skills"
         aria-labelledby="skills-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <div>
           <h2 id="skills-title" className="text-xl font-semibold">
             {t('Employees.detail.skills')}
           </h2>
-          <p className="text-sm text-slate-600">{t('Employees.detail.skillsDescription')}</p>
+          <p className="text-sm text-muted-foreground">{t('Employees.detail.skillsDescription')}</p>
         </div>
         {employee.skills.length ? (
           <ul className="grid gap-2">
@@ -1192,7 +1276,7 @@ export default async function EmployeeDetailPage({
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-600">{t('Employees.detail.noSkills')}</p>
+          <p className="text-sm text-muted-foreground">{t('Employees.detail.noSkills')}</p>
         )}
         {skills.length ? (
           <RHFActionForm
@@ -1205,7 +1289,7 @@ export default async function EmployeeDetailPage({
               <NativeSelect
                 id="skillId"
                 name="skillId"
-                selectClassName="h-10 rounded-md border bg-white px-3"
+                selectClassName="h-10 rounded-md border bg-card px-3"
                 required
                 defaultValue=""
                 className="w-full"
@@ -1226,7 +1310,7 @@ export default async function EmployeeDetailPage({
             </Button>
           </RHFActionForm>
         ) : (
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             <Link className="underline" href="/administration/qualifications">
               {t('Employees.detail.manageSkills')}
             </Link>
@@ -1237,16 +1321,18 @@ export default async function EmployeeDetailPage({
       <section
         id="access"
         aria-labelledby="access-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 id="access-title" className="text-xl font-semibold">
               {t('Employees.detail.access')}
             </h2>
-            <p className="text-sm text-slate-600">{t('Employees.detail.accessDescription')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('Employees.detail.accessDescription')}
+            </p>
           </div>
-          <Link className="text-sm text-blue-900 underline" href="/administration/users">
+          <Link className="text-sm text-primary underline" href="/administration/users">
             {t('Employees.detail.manageAccess')}
           </Link>
         </div>
@@ -1255,9 +1341,9 @@ export default async function EmployeeDetailPage({
             <p className="font-medium">
               {employee.linkedUser.displayName ||
                 employee.linkedUser.email ||
-                employee.linkedUser.id}
+                t('Resources.unavailableUser')}
             </p>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               {employee.linkedUser.email ?? t('Employees.detail.noEmail')} ·{' '}
               {t('Employees.detail.tenantMembership')}{' '}
               {t(statusLabelKey(employee.linkedUser.membershipStatus))}
@@ -1270,7 +1356,7 @@ export default async function EmployeeDetailPage({
             </form>
           </div>
         ) : linkableUsersResult.error ? (
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             {t(errorMessageKey(linkableUsersResult.error.code))}
           </p>
         ) : linkableUsersResult.data?.length ? (
@@ -1281,7 +1367,7 @@ export default async function EmployeeDetailPage({
               <NativeSelect
                 id="userId"
                 name="userId"
-                selectClassName="h-10 rounded-md border bg-white px-3"
+                selectClassName="h-10 rounded-md border bg-card px-3"
                 required
                 defaultValue=""
                 className="w-full"
@@ -1291,7 +1377,7 @@ export default async function EmployeeDetailPage({
                 </option>
                 {linkableUsersResult.data.map((user) => (
                   <option key={user.id} value={user.id}>
-                    {user.displayName || user.email || user.id}
+                    {user.displayName || user.email || t('Resources.unavailableUser')}
                     {user.email ? ` · ${user.email}` : ''}
                   </option>
                 ))}
@@ -1302,7 +1388,7 @@ export default async function EmployeeDetailPage({
             </Button>
           </RHFActionForm>
         ) : (
-          <p className="text-sm text-slate-600">{t('Employees.detail.noLinkableUser')}</p>
+          <p className="text-sm text-muted-foreground">{t('Employees.detail.noLinkableUser')}</p>
         )}
       </section>
     </div>
@@ -1371,7 +1457,7 @@ function SelectField({
         name={name}
         defaultValue={defaultValue}
         required={required}
-        selectClassName="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-card px-3"
         className="w-full"
       >
         {children}

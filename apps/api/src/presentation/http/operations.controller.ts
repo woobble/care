@@ -530,6 +530,8 @@ export class OperationsTaskActivityResponseDto {
   taskId!: string;
   @ApiProperty({ format: 'uuid' })
   actorUserId!: string;
+  @ApiProperty({ type: String, nullable: true })
+  actorName!: string | null;
   @ApiProperty({
     enum: [
       'created',

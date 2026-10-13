@@ -9,11 +9,18 @@ import {
 } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
 import { statusLabelKey } from '@app/web/i18n/status';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+} from '@app/web/lib/api';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import { createFacilityAction } from '@app/web/app/(office)/administration/actions';
 
@@ -27,29 +34,32 @@ export default async function FacilitiesPage({
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
-  const [organizationsResult, facilitiesResult] = await Promise.all([
+  const [organizationsResult, facilitiesResult, permissions] = await Promise.all([
     get('/api/v1/organizations', { params: { header } }),
     get('/api/v1/facilities', { params: { header } }),
+    getPermissionGrants(api),
   ]);
   const organizations = organizationsResult.data ?? [];
+  const tenantId = header['X-Tenant-Id'];
 
   return (
     <div className="grid gap-8">
-      <header className="grid gap-1">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration/organizations">{t('Facilities.section')}</Link>
-        </p>
-        <h1 className="text-3xl font-semibold">{t('Facilities.title')}</h1>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/administration/organizations">{t('Facilities.section')}</Link>}
+        title={t('Facilities.title')}
+      />
       <ActionNotice error={query.error} updated={query.updated} />
       {organizationsResult.error || facilitiesResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+        >
           {t('Facilities.loadFailed')}
         </p>
       ) : null}
       <section
         aria-labelledby="facility-create-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <h2 id="facility-create-title" className="text-xl font-semibold">
           {t('Facilities.createTitle')}
@@ -60,7 +70,7 @@ export default async function FacilitiesPage({
             <NativeSelect
               id="organizationId"
               name="organizationId"
-              selectClassName="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-card px-3"
               required
               defaultValue=""
               className="w-full"
@@ -100,7 +110,9 @@ export default async function FacilitiesPage({
             label={t('Facilities.timezoneLabel')}
             maxLength={100}
           />
-          <p className="text-sm text-slate-600 md:col-span-2">{t('Facilities.timezoneHint')}</p>
+          <p className="text-sm text-muted-foreground md:col-span-2">
+            {t('Facilities.timezoneHint')}
+          </p>
           <div className="md:col-span-2">
             <Button type="submit">{t('Facilities.createTitle')}</Button>
           </div>
@@ -111,12 +123,12 @@ export default async function FacilitiesPage({
           {t('Facilities.listTitle')}
         </h2>
         {facilitiesResult.data?.length ? (
-          <div className="overflow-x-auto rounded-lg border bg-white">
+          <div className="overflow-x-auto rounded-lg border bg-card">
             <ShadcnTable className="w-full border-collapse text-left text-sm">
               <ShadcnTableCaption className="sr-only">
                 {t('Facilities.listCaption')}
               </ShadcnTableCaption>
-              <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+              <ShadcnTableHeader className="border-b bg-muted text-muted-foreground">
                 <ShadcnTableRow>
                   <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Facilities.facility')}
@@ -134,14 +146,27 @@ export default async function FacilitiesPage({
                   <ShadcnTableRow key={facility.id} className="border-b last:border-0">
                     <ShadcnTableCell className="px-4 py-3">
                       <Link
-                        className="font-medium text-blue-900 underline"
+                        className="font-medium text-primary underline"
                         href={`/administration/facilities/${facility.id}`}
                       >
                         {facility.name}
                       </Link>
                     </ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">
-                      {facility.organizationName}
+                      <ResourceReference
+                        label={facility.organizationName}
+                        href={
+                          hasClientPermission(
+                            permissions,
+                            'organization.read',
+                            tenantId,
+                            facility.organizationId,
+                            null,
+                          )
+                            ? `/administration/organizations/${facility.organizationId}`
+                            : null
+                        }
+                      />
                     </ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">
                       <StatusBadge
@@ -155,7 +180,7 @@ export default async function FacilitiesPage({
             </ShadcnTable>
           </div>
         ) : (
-          <p className="rounded-lg border bg-white p-5 text-slate-700">{t('Facilities.empty')}</p>
+          <EmptyState title={t('Facilities.empty')} />
         )}
       </section>
     </div>

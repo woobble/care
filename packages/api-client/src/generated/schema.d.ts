@@ -6565,6 +6565,7 @@ export interface components {
             serviceAllocationId: string | null;
             /** Format: uuid */
             performedServiceId: string | null;
+            performedServiceLabel: string | null;
             /** @enum {string} */
             entryType: "entitlement_allocated" | "opening_balance_adjusted" | "external_consumption_recorded" | "service_consumption_allocated" | "service_consumption_reversed" | "manual_adjustment" | "benefit_expired";
             /** @description Signed integer EUR cents */
@@ -6707,6 +6708,10 @@ export interface components {
             clientId: string;
             clientName: string;
             /** Format: uuid */
+            clientOrganizationId: string | null;
+            /** Format: uuid */
+            clientFacilityId: string | null;
+            /** Format: uuid */
             organizationId: string;
             /** Format: uuid */
             facilityId: string | null;
@@ -6731,9 +6736,26 @@ export interface components {
             pageSize: number;
             total: number;
         };
+        BenefitWorklistAllocationOptionDto: {
+            /** Format: uuid */
+            entitlementId: string;
+            /** Format: uuid */
+            fundingSourceId: string;
+            /** @enum {string} */
+            benefitType: "entlastungsbetrag_45b" | "umwandlungsanspruch_45a_4" | "private" | "other";
+            fundingSourceLabel: string | null;
+            /** @enum {string} */
+            fundingSourceType: "statutory_long_term_care_insurance" | "private_long_term_care_insurance" | "self_pay" | "other";
+        };
+        BenefitWorklistServiceAllocationOptionsDto: {
+            /** Format: uuid */
+            performedServiceId: string;
+            items: components["schemas"]["BenefitWorklistAllocationOptionDto"][];
+        };
         BenefitWorklistResponseDto: {
             clients: components["schemas"]["BenefitPagedWorklistDto"];
             unallocatedServices: components["schemas"]["BenefitPagedServiceWorklistDto"];
+            allocationOptions: components["schemas"]["BenefitWorklistServiceAllocationOptionsDto"][];
         };
         BenefitUnallocatedServicesResponseDto: {
             items: components["schemas"]["BenefitUnallocatedServiceDto"][];
@@ -7524,6 +7546,7 @@ export interface components {
             taskId: string;
             /** Format: uuid */
             actorUserId: string;
+            actorName: string | null;
             /** @enum {string} */
             kind: "created" | "edited" | "assigned" | "priority_changed" | "due_date_changed" | "status_changed" | "comment";
             details: {

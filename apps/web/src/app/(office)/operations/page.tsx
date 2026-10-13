@@ -5,14 +5,16 @@ import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitl
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDateTime } from '@app/web/i18n/format';
-import { todayRange } from '@app/web/lib/care-date';
+import { formatVisitTime, todayRange } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
+  hasClientPermission,
   hasPermission,
 } from '@app/web/lib/api';
 import { EmptyState, PageHeader, SectionHeader } from '@app/web/components/page-patterns';
+import { ResourceCardLink } from '@app/web/components/resource-reference';
 import { categoryTranslationKey, issueTitleKey, workItemSourceHref } from './ui';
 
 type SearchParams = Promise<{ organizationId?: string; facilityId?: string }>;
@@ -46,6 +48,7 @@ export default async function OperationsDashboardPage({
   };
   const api = await getApiClient();
   const header = await getTenantHeader();
+  const tenantId = header['X-Tenant-Id'];
   const permissions = await getPermissionGrants(api);
   if (!hasPermission(permissions, 'operations.read')) {
     return (
@@ -86,8 +89,10 @@ export default async function OperationsDashboardPage({
                 from: workday.from,
                 until: workday.until,
                 page: 1,
-                pageSize: 1,
+                pageSize: 6,
                 status,
+                sortBy: 'plannedStart',
+                sortOrder: 'asc',
                 ...(organizationId ? { organizationId } : {}),
                 ...(facilityId ? { facilityId } : {}),
               },
@@ -102,6 +107,12 @@ export default async function OperationsDashboardPage({
   )
     ? scheduledVisitsResults.reduce((total, result) => total + (result.data?.total ?? 0), 0)
     : null;
+  const todayVisits = (scheduledVisitsResults ?? [])
+    .flatMap((result) => result.data?.items ?? [])
+    .sort((left, right) => left.plannedStart.localeCompare(right.plannedStart));
+  const scheduleUnavailable = Boolean(
+    canReadSchedule && scheduledVisitsResults?.some((result) => result.error || !result.data),
+  );
 
   return (
     <div className="grid min-w-0 gap-5">
@@ -154,10 +165,10 @@ export default async function OperationsDashboardPage({
               value={dashboard.categoryCounts.visits ?? 0}
             />
             <MetricTile
-              href={operationsHref('/operations/deadlines', scope, { due: 'overdue' })}
+              href={operationsHref('/operations/tasks', scope, { due: 'overdue' })}
               icon={ClipboardCheck}
-              label={t('overdueDeadlines')}
-              value={dashboard.deadlineCounts.overdue ?? 0}
+              label={t('overdueTasks')}
+              value={dashboard.tasks.overdue ?? 0}
               emphasis
               className="hidden sm:block"
             />
@@ -170,8 +181,103 @@ export default async function OperationsDashboardPage({
             />
           </div>
 
-          <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.8fr)]">
-            <Card>
+          <div
+            className={`grid min-w-0 gap-4 ${canReadSchedule ? 'lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.9fr)]' : ''}`}
+          >
+            {canReadSchedule ? (
+              <Card className="order-2 lg:order-1">
+                <CardHeader>
+                  <SectionHeader
+                    title={t('scheduleTitle')}
+                    description={t('scheduleDescription')}
+                    action={
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={operationsHref('/planning', scope)}>{t('openSchedule')}</Link>
+                      </Button>
+                    }
+                  />
+                </CardHeader>
+                <CardContent>
+                  {scheduleUnavailable ? (
+                    <p
+                      role="status"
+                      className="rounded-lg border border-warning/40 bg-warning-muted p-3 text-sm text-warning-foreground"
+                    >
+                      {t('scheduleUnavailable')}
+                    </p>
+                  ) : todayVisits.length ? (
+                    <ol className="grid gap-2" aria-label={t('scheduleTitle')}>
+                      {todayVisits.slice(0, 5).map((visit) => {
+                        const visitHref = hasClientPermission(
+                          permissions,
+                          'schedule.read',
+                          tenantId,
+                          visit.organizationId,
+                          visit.facilityId,
+                        )
+                          ? `/visits/${visit.id}`
+                          : null;
+                        const assignedEmployees = visit.assignments
+                          .filter((assignment) => assignment.status === 'active')
+                          .map((assignment) => assignment.employeeDisplayName);
+                        return (
+                          <li key={visit.id}>
+                            <ResourceCardLink
+                              href={visitHref}
+                              className="grid min-w-0 gap-2 rounded-lg border border-border bg-card px-3 py-3 transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-center sm:px-4"
+                            >
+                              <time
+                                dateTime={visit.plannedStart}
+                                className="text-sm font-semibold tabular-nums text-foreground"
+                              >
+                                {formatVisitTime(visit.plannedStart, visit.timezone, locale)}
+                                <span className="px-1 text-muted-foreground" aria-hidden="true">
+                                  –
+                                </span>
+                                {formatVisitTime(visit.plannedEnd, visit.timezone, locale)}
+                              </time>
+                              <span className="grid min-w-0 gap-0.5">
+                                <span className="truncate text-sm font-semibold">
+                                  {visit.clientDisplayName}
+                                </span>
+                                <span className="truncate text-xs text-muted-foreground sm:text-sm">
+                                  {visit.services.map((service) => service.serviceName).join(' · ')}
+                                  {assignedEmployees.length
+                                    ? ` · ${assignedEmployees.join(', ')}`
+                                    : ` · ${t('unassignedEmployee')}`}
+                                </span>
+                              </span>
+                              <Badge
+                                variant={visit.status === 'confirmed' ? 'secondary' : 'outline'}
+                              >
+                                {translate(
+                                  visit.status === 'confirmed'
+                                    ? 'Common.status.confirmed'
+                                    : 'Common.status.planned',
+                                )}
+                              </Badge>
+                            </ResourceCardLink>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  ) : scheduledVisitCount === 0 ? (
+                    <EmptyState title={t('noVisitsToday')} />
+                  ) : (
+                    <p role="status" className="text-sm text-muted-foreground">
+                      {t('scheduleUnavailable')}
+                    </p>
+                  )}
+                  {scheduledVisitCount !== null && scheduledVisitCount > 5 ? (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {t('moreVisits', { count: scheduledVisitCount - 5 })}
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+
+            <Card className={canReadSchedule ? 'order-1 lg:order-2' : undefined}>
               <CardHeader>
                 <SectionHeader
                   title={t('mostRelevant')}
@@ -221,7 +327,9 @@ export default async function OperationsDashboardPage({
               </CardContent>
             </Card>
 
-            <div className="grid min-w-0 content-start gap-4 sm:grid-cols-2 xl:grid-cols-1">
+            <div
+              className={`order-3 grid min-w-0 content-start gap-4 sm:grid-cols-2 ${canReadSchedule ? 'lg:order-3 lg:col-span-2' : ''}`}
+            >
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">{t('deadlinesTitle')}</CardTitle>

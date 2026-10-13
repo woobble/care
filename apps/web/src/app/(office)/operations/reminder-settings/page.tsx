@@ -4,6 +4,7 @@ import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input } from '@care/ui';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
@@ -27,7 +28,7 @@ export default async function ReminderSettingsPage({
   const permissions = await getPermissionGrants(api);
   if (!hasPermission(permissions, 'operations.reminder_settings.manage'))
     return (
-      <p role="alert" className="rounded-md border bg-white p-5">
+      <p role="alert" className="rounded-md border bg-card p-5">
         {t('noAccess')}
       </p>
     );
@@ -72,40 +73,44 @@ export default async function ReminderSettingsPage({
 
   return (
     <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid gap-1">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('title')}
-          </p>
-          <h1 className="text-3xl font-semibold">{t('reminderSettings')}</h1>
-          <p className="max-w-3xl text-slate-700">{t('reminderSettingsDescription')}</p>
-        </div>
-        <Button asChild variant="secondary">
-          <Link href="/operations">{t('dashboardTitle')}</Link>
-        </Button>
-      </header>
+      <PageHeader
+        eyebrow={t('title')}
+        title={t('reminderSettings')}
+        description={t('reminderSettingsDescription')}
+        actions={
+          <Button asChild variant="secondary">
+            <Link href="/operations">{t('dashboardTitle')}</Link>
+          </Button>
+        }
+      />
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {translate(errorMessageKey(query.error))}
         </p>
       ) : null}
       {query.updated ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {t('reminderSettingsSaved')}
         </p>
       ) : null}
       {settingsResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t('loadFailed')}
         </p>
       ) : null}
       {scheduler ? (
         <section
           aria-label={t('schedulerStatus')}
-          className="grid gap-1 rounded-lg border bg-white p-4 text-sm"
+          className="grid gap-1 rounded-lg border bg-card p-4 text-sm"
         >
           <strong>
             {t('schedulerStatus')}: {scheduler.status}
@@ -134,7 +139,7 @@ export default async function ReminderSettingsPage({
               {organizations.map((organization) => (
                 <Link
                   key={organization.id}
-                  className={`rounded-md border px-3 py-2 text-sm ${organization.id === selected?.id ? 'bg-blue-50 font-semibold' : 'bg-white'}`}
+                  className={`rounded-md border px-3 py-2 text-sm ${organization.id === selected?.id ? 'bg-accent font-semibold' : 'bg-card'}`}
                   href={`/operations/reminder-settings?organizationId=${organization.id}`}
                 >
                   {organization.name}
@@ -146,7 +151,7 @@ export default async function ReminderSettingsPage({
           )}
           <section className="grid gap-3">
             {selected?.policies.map((policy) => (
-              <article key={policy.category} className="grid gap-3 rounded-lg border bg-white p-4">
+              <article key={policy.category} className="grid gap-3 rounded-lg border bg-card p-4">
                 <h2 className="text-lg font-semibold">
                   {t(`reminderCategories.${policy.category as (typeof categories)[number]}`)}
                 </h2>
@@ -165,7 +170,10 @@ export default async function ReminderSettingsPage({
                       aria-describedby={`offset-help-${policy.category}`}
                       required
                     />
-                    <span id={`offset-help-${policy.category}`} className="text-xs text-slate-600">
+                    <span
+                      id={`offset-help-${policy.category}`}
+                      className="text-xs text-muted-foreground"
+                    >
                       {t('leadTimesHelp')}
                     </span>
                   </label>
@@ -209,7 +217,7 @@ export default async function ReminderSettingsPage({
           </section>
         </>
       ) : (
-        <p className="rounded-lg border bg-white p-5">{t('noReminderOrganizations')}</p>
+        <EmptyState title={t('noReminderOrganizations')} />
       )}
     </div>
   );

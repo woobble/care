@@ -12,7 +12,13 @@ import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { ResourceReference } from '@app/web/components/resource-reference';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+} from '@app/web/lib/api';
 import { statusLabelKey } from '@app/web/i18n/status';
 
 type SearchParams = Promise<{
@@ -76,6 +82,8 @@ export default async function EmployeesPage({
     get('/api/v1/facilities', { params: { header } }),
     get('/api/v1/teams', { params: { header } }),
   ]);
+  const permissions = await getPermissionGrants(api);
+  const tenantId = header['X-Tenant-Id'];
   const employees = employeesResult.data;
   const filters = { q: text, status, organizationId, facilityId, teamId, sortBy, sortOrder };
 
@@ -91,19 +99,25 @@ export default async function EmployeesPage({
         }
       />
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t('Errors.generic')}
         </p>
       ) : null}
       {employeesResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+        >
           {t('Employees.loadFailed')}
         </p>
       ) : null}
 
       <section
         aria-labelledby="employee-filter-title"
-        className="grid gap-3 rounded-lg border bg-white p-5"
+        className="grid gap-3 rounded-lg border bg-card p-5"
       >
         <h2 id="employee-filter-title" className="text-lg font-semibold">
           {t('Employees.searchAndFilter')}
@@ -176,12 +190,12 @@ export default async function EmployeesPage({
           <h2 id="employee-list-title" className="text-lg font-semibold">
             {t('Employees.resultCount', { count: employees.total })}
           </h2>
-          <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
+          <div className="overflow-x-auto rounded-lg border bg-card shadow-sm">
             <ShadcnTable className="w-full border-collapse text-left text-sm">
               <ShadcnTableCaption className="sr-only">
                 {t('Employees.listCaption')}
               </ShadcnTableCaption>
-              <ShadcnTableHeader className="border-b bg-slate-100 text-slate-700">
+              <ShadcnTableHeader className="border-b bg-muted text-muted-foreground">
                 <ShadcnTableRow>
                   <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Common.fields.name')}
@@ -202,14 +216,32 @@ export default async function EmployeesPage({
                   <ShadcnTableRow key={employee.id} className="border-b last:border-0">
                     <ShadcnTableCell className="px-4 py-3">
                       <Link
-                        className="font-medium text-blue-900 underline-offset-4 hover:underline"
+                        className="font-medium text-primary underline-offset-4 hover:underline"
                         href={`/employees/${employee.id}`}
                       >
                         {employee.preferredName || employee.firstName} {employee.lastName}
                       </Link>
                     </ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">
-                      {employee.organizationName ?? '—'}
+                      {employee.organizationName ? (
+                        <ResourceReference
+                          label={employee.organizationName}
+                          href={
+                            employee.organizationId &&
+                            hasClientPermission(
+                              permissions,
+                              'organization.read',
+                              tenantId,
+                              employee.organizationId,
+                              null,
+                            )
+                              ? `/administration/organizations/${employee.organizationId}`
+                              : null
+                          }
+                        />
+                      ) : (
+                        '—'
+                      )}
                     </ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">
                       {employee.personnelNumber ?? '—'}
@@ -226,7 +258,7 @@ export default async function EmployeesPage({
             </ShadcnTable>
           </div>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               {t('Common.pagination', {
                 page: new Intl.NumberFormat(locale).format(employees.page),
                 pages: new Intl.NumberFormat(locale).format(
@@ -253,7 +285,9 @@ export default async function EmployeesPage({
           </div>
         </section>
       ) : !employeesResult.error ? (
-        <p className="rounded-lg border bg-white p-6 text-slate-700">{t('Employees.notFound')}</p>
+        <p className="rounded-lg border bg-card p-6 text-muted-foreground">
+          {t('Employees.notFound')}
+        </p>
       ) : null}
     </div>
   );
@@ -269,7 +303,7 @@ function SelectFilter({
     <label className="grid gap-1 text-sm">
       {label}
       <NativeSelect
-        selectClassName="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-card px-3"
         name={name}
         defaultValue={value}
         className="w-full"

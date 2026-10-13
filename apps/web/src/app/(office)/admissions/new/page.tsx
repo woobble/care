@@ -1,6 +1,7 @@
 import { Textarea } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
@@ -23,7 +24,7 @@ export default async function NewAdmissionPage({
   const permissions = await getPermissionGrants(api);
   if (!hasPermission(permissions, 'onboarding.create')) {
     return (
-      <p role="alert" className="rounded-md border bg-white p-5">
+      <p role="alert" className="rounded-md border bg-card p-5">
         {t('noAccess')}
       </p>
     );
@@ -56,20 +57,18 @@ export default async function NewAdmissionPage({
 
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/admissions">{t('title')}</Link>
-        </p>
-        <h1 className="text-3xl font-semibold">{t('createTitle')}</h1>
-      </header>
+      <PageHeader eyebrow={<Link href="/admissions">{t('title')}</Link>} title={t('createTitle')} />
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {translate(errorMessageKey(query.error))}
         </p>
       ) : null}
       <RHFActionForm
         action={createAdmissionCaseAction}
-        className="grid gap-6 rounded-lg border bg-white p-5"
+        className="grid gap-6 rounded-lg border bg-card p-5"
       >
         <fieldset className="grid gap-4 md:grid-cols-2">
           <legend className="mb-2 text-lg font-semibold">{t('caseDetails')}</legend>
@@ -202,7 +201,7 @@ function SelectField({
     <label className="grid gap-1 text-sm font-medium">
       {label}
       <NativeSelect
-        selectClassName="h-10 rounded-md border bg-white px-3 font-normal"
+        selectClassName="h-10 rounded-md border bg-card px-3 font-normal"
         name={name}
         required={required}
         className="w-full"

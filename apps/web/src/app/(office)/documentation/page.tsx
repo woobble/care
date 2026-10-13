@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { dateRange, shiftDate, todayDateKey } from '@app/web/lib/care-date';
 import { formatDateTime } from '@app/web/i18n/format';
 import { errorMessageKey } from '@app/web/i18n/errors';
@@ -10,6 +11,7 @@ import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
+  hasClientPermission,
   hasPermission,
 } from '@app/web/lib/api';
 
@@ -68,31 +70,33 @@ export default async function DocumentationWorklistPage({
   const items = listResult.data?.items ?? [];
   const facilities = facilitiesResult.data ?? [];
   const employees = employeesResult.data?.items ?? [];
+  const tenantId = header['X-Tenant-Id'];
 
   return (
     <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('CareDocumentation.section')}
-          </p>
-          <h1 className="mt-1 text-3xl font-semibold">{t('CareDocumentation.worklistTitle')}</h1>
-          <p className="mt-2 text-slate-600">{t('CareDocumentation.worklistDescription')}</p>
-        </div>
-        <Button asChild variant="secondary">
-          <Link href="/planning">{t('CareDocumentation.goToPlanning')}</Link>
-        </Button>
-      </header>
+      <PageHeader
+        eyebrow={t('CareDocumentation.section')}
+        title={t('CareDocumentation.worklistTitle')}
+        description={t('CareDocumentation.worklistDescription')}
+        actions={
+          <Button asChild variant="secondary">
+            <Link href="/planning">{t('CareDocumentation.goToPlanning')}</Link>
+          </Button>
+        }
+      />
 
       {query.error || listResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t(errorMessageKey(query.error ?? listResult.error?.code ?? 'UNKNOWN'))}
         </p>
       ) : null}
 
       <form
         method="get"
-        className="grid gap-4 rounded-lg border bg-white p-4 sm:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-4 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-6"
       >
         <label className="grid gap-1 text-sm">
           <span>{t('Common.fields.from')}</span>
@@ -128,7 +132,7 @@ export default async function DocumentationWorklistPage({
           <NativeSelect
             name="facilityId"
             defaultValue={query.facilityId ?? ''}
-            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-card px-3"
             className="w-full"
           >
             <option value="">{t('Common.filters.allFacilities')}</option>
@@ -144,7 +148,7 @@ export default async function DocumentationWorklistPage({
           <NativeSelect
             name="employeeId"
             defaultValue={query.employeeId ?? ''}
-            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-card px-3"
             className="w-full"
           >
             <option value="">{t('CareDocumentation.allEmployees')}</option>
@@ -160,7 +164,7 @@ export default async function DocumentationWorklistPage({
           <NativeSelect
             name="status"
             defaultValue={query.status ?? ''}
-            selectClassName="min-h-11 rounded-md border bg-white px-3"
+            selectClassName="min-h-11 rounded-md border bg-card px-3"
             className="w-full"
           >
             <option value="">{t('CareDocumentation.allStatuses')}</option>
@@ -174,43 +178,80 @@ export default async function DocumentationWorklistPage({
       </form>
 
       <section className="grid gap-3">
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-muted-foreground">
           {t('CareDocumentation.visitCount', { count: listResult.data?.total ?? 0 })}
         </p>
         {items.length ? (
           <ul className="grid gap-3">
-            {items.map((item) => (
-              <li key={item.visitId}>
-                <Link
-                  href={`/visits/${item.visitId}`}
-                  className="grid gap-3 rounded-lg border bg-white p-4 hover:border-blue-400 sm:grid-cols-[1fr_auto] sm:items-start"
-                >
+            {items.map((item) => {
+              const canReadVisit = hasClientPermission(
+                permissions,
+                'schedule.read',
+                tenantId,
+                item.organizationId,
+                item.facilityId,
+              );
+              const canReadClient = hasClientPermission(
+                permissions,
+                'client.read',
+                tenantId,
+                item.organizationId,
+                item.facilityId,
+              );
+              const content = (
+                <>
                   <span className="grid gap-1">
-                    <span className="text-lg font-semibold">{item.clientDisplayName}</span>
-                    <span className="text-sm text-slate-600">
+                    <span className="text-lg font-semibold">
+                      {canReadVisit ? (
+                        item.clientDisplayName
+                      ) : canReadClient ? (
+                        <Link href={`/clients/${item.clientId}`} className="hover:underline">
+                          {item.clientDisplayName}
+                        </Link>
+                      ) : (
+                        item.clientDisplayName
+                      )}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
                       {formatDateTime(item.plannedStart, locale, item.timezone)} ·{' '}
                       {item.employeeName ?? t('CareDocumentation.unassignedEmployee')}
                     </span>
-                    <span className="text-sm text-slate-700">
+                    <span className="text-sm text-muted-foreground">
                       {item.missing
                         .map((missing) => t(missingRequirementKey(missing.code)))
                         .join(' · ')}
                     </span>
                   </span>
-                  <span className="w-fit rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-950">
+                  <span className="w-fit rounded-full bg-warning-muted px-3 py-1 text-sm text-warning-foreground">
                     {item.documentationStatus === 'missing'
                       ? t('CareDocumentation.missingItem')
                       : t('CareDocumentation.draftStatus')}
                   </span>
-                </Link>
-              </li>
-            ))}
+                </>
+              );
+              const cardClassName =
+                'grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-[1fr_auto] sm:items-start';
+              return (
+                <li key={item.visitId}>
+                  {canReadVisit ? (
+                    <Link
+                      href={`/visits/${item.visitId}`}
+                      className={`${cardClassName} hover:border-primary/40`}
+                    >
+                      {content}
+                    </Link>
+                  ) : (
+                    <div className={cardClassName}>{content}</div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         ) : (
-          <div className="rounded-lg border bg-white p-6">
-            <h2 className="font-semibold">{t('CareDocumentation.noOpenItems')}</h2>
-            <p className="mt-1 text-slate-600">{t('CareDocumentation.noOpenItemsForRange')}</p>
-          </div>
+          <EmptyState
+            title={t('CareDocumentation.noOpenItems')}
+            description={t('CareDocumentation.noOpenItemsForRange')}
+          />
         )}
       </section>
     </div>

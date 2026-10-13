@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import type { components } from '@care/api-client';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
+import { PageHeader } from '@app/web/components/page-patterns';
 import {
   acknowledgementCapacityKey,
   acknowledgementMethodKey,
@@ -50,14 +51,22 @@ export default async function ServiceEvidenceDetailPage({
   const packageData = packageResult.data as EvidencePackage | undefined;
   if (!packageData) {
     return (
-      <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+      <p
+        role="alert"
+        className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+      >
         {t(errorMessageKey(packageResult.error?.code ?? ''))}
       </p>
     );
   }
-  const sourceClientResult = await get('/api/v1/clients/{id}', {
-    params: { path: { id: packageData.snapshot.clientId }, header },
-  });
+  const [sourceClientResult, sourceVisitResult] = await Promise.all([
+    get('/api/v1/clients/{id}', {
+      params: { path: { id: packageData.snapshot.clientId }, header },
+    }),
+    get('/api/v1/visits/{id}', {
+      params: { path: { id: packageData.snapshot.visitId }, header },
+    }),
+  ]);
   const canGenerateDocument = sourceClientResult.data
     ? hasClientPermission(
         permissions,
@@ -105,49 +114,50 @@ export default async function ServiceEvidenceDetailPage({
 
   return (
     <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Link className="text-sm font-semibold text-blue-800 underline" href="/service-evidence">
-            {t('ServiceEvidence.office.detail.backToList')}
-          </Link>
-          <p className="mt-4 text-sm font-semibold uppercase tracking-wide text-blue-800">
-            {t('ServiceEvidence.office.detail.title', {
-              version: formatNumber(packageData.version, locale),
-            })}
-          </p>
-          <h1 className="mt-1 text-3xl font-semibold">{packageData.snapshot.clientName}</h1>
-          <p className="mt-2 text-slate-600">
-            {formatVisitDateTime(
-              packageData.snapshot.plannedStart,
-              packageData.snapshot.timezone,
-              locale,
+      <PageHeader
+        eyebrow={t('ServiceEvidence.office.detail.title', {
+          version: formatNumber(packageData.version, locale),
+        })}
+        title={packageData.snapshot.clientName}
+        description={formatVisitDateTime(
+          packageData.snapshot.plannedStart,
+          packageData.snapshot.timezone,
+          locale,
+        )}
+        meta={
+          <span
+            className={
+              packageData.isCurrent
+                ? 'rounded-full bg-success-muted px-3 py-1 text-sm text-success-foreground'
+                : 'rounded-full bg-warning-muted px-3 py-1 text-sm text-warning-foreground'
+            }
+          >
+            {t(
+              packageData.isCurrent
+                ? evidenceStatusKey(packageData.status)
+                : 'ServiceEvidence.office.detail.outdated',
             )}
-          </p>
-        </div>
-        <span
-          className={
-            packageData.isCurrent
-              ? 'rounded-full bg-green-100 px-3 py-1 text-sm text-green-900'
-              : 'rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-950'
-          }
-        >
-          {t(
-            packageData.isCurrent
-              ? evidenceStatusKey(packageData.status)
-              : 'ServiceEvidence.office.detail.outdated',
-          )}
-        </span>
-      </header>
+          </span>
+        }
+        actions={
+          <Button asChild variant="secondary">
+            <Link href="/service-evidence">{t('ServiceEvidence.office.detail.backToList')}</Link>
+          </Button>
+        }
+      />
 
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t(errorMessageKey(query.error))}
         </p>
       ) : null}
       {canGenerateDocument ? (
         <RHFActionForm
           action={generateDocumentAction}
-          className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4"
+          className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4"
         >
           <input type="hidden" name="sourceType" value="evidence_package" />
           <input type="hidden" name="evidencePackageId" value={packageData.id} />
@@ -157,7 +167,7 @@ export default async function ServiceEvidenceDetailPage({
             <NativeSelect
               name="locale"
               defaultValue={locale}
-              selectClassName="h-10 rounded-md border bg-white px-3"
+              selectClassName="h-10 rounded-md border bg-card px-3"
               className="w-full"
             >
               <option value="de">{t('Documents.languageOptions.german')}</option>
@@ -180,7 +190,7 @@ export default async function ServiceEvidenceDetailPage({
       {query.notice ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {query.notice === 'acknowledgement-revoked'
             ? t('ServiceEvidence.office.detail.revokedNotice')
@@ -188,13 +198,13 @@ export default async function ServiceEvidenceDetailPage({
         </p>
       ) : null}
 
-      <section className="grid gap-4 rounded-lg border bg-white p-4 sm:p-5">
+      <section className="grid gap-4 rounded-lg border bg-card p-4 sm:p-5">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold">
               {t('ServiceEvidence.office.detail.servicesTitle')}
             </h2>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-muted-foreground">
               {t('ServiceEvidence.office.detail.actualVisit')}{' '}
               {formatVisitDateTime(
                 packageData.snapshot.actualStart,
@@ -209,7 +219,7 @@ export default async function ServiceEvidenceDetailPage({
               )}
             </p>
           </div>
-          <span className="text-sm text-slate-600">
+          <span className="text-sm text-muted-foreground">
             {t('ServiceEvidence.office.detail.documentationVersion', {
               version: formatNumber(packageData.snapshot.documentationVersion, locale),
             })}{' '}
@@ -228,11 +238,11 @@ export default async function ServiceEvidenceDetailPage({
               >
                 <div>
                   <h3 className="font-semibold">{item.serviceName}</h3>
-                  <p className="text-sm text-slate-600">{item.serviceCode}</p>
+                  <p className="text-sm text-muted-foreground">{item.serviceCode}</p>
                 </div>
                 <div className="text-right text-sm">
                   <p>{t(evidenceOutcomeKey(item.outcome))}</p>
-                  <p className="text-slate-600">
+                  <p className="text-muted-foreground">
                     {t('ServiceEvidence.care.actualQuantity', {
                       quantity:
                         item.actualQuantity == null
@@ -245,17 +255,17 @@ export default async function ServiceEvidenceDetailPage({
             ))}
           </ul>
         ) : (
-          <p className="rounded-md border p-3 text-slate-700">
+          <p className="rounded-md border p-3 text-muted-foreground">
             {t('ServiceEvidence.office.detail.noServices')}
           </p>
         )}
         <dl className="grid gap-2 border-t pt-3 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-slate-600">{t('ServiceEvidence.office.detail.checksum')}</dt>
+            <dt className="text-muted-foreground">{t('ServiceEvidence.office.detail.checksum')}</dt>
             <dd className="break-all font-mono">{packageData.snapshotHash}</dd>
           </div>
           <div>
-            <dt className="text-slate-600">{t('ServiceEvidence.office.detail.created')}</dt>
+            <dt className="text-muted-foreground">{t('ServiceEvidence.office.detail.created')}</dt>
             <dd>
               {formatVisitDateTime(packageData.generatedAt, packageData.snapshot.timezone, locale)}
             </dd>
@@ -263,7 +273,7 @@ export default async function ServiceEvidenceDetailPage({
         </dl>
       </section>
 
-      <section className="grid gap-4 rounded-lg border bg-white p-4 sm:p-5">
+      <section className="grid gap-4 rounded-lg border bg-card p-4 sm:p-5">
         <h2 className="text-xl font-semibold">
           {t('ServiceEvidence.office.detail.acknowledgementsTitle')}
         </h2>
@@ -279,7 +289,7 @@ export default async function ServiceEvidenceDetailPage({
                 <li key={acknowledgement.id} className="grid gap-3 rounded-md border p-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <h3 className="font-semibold">{acknowledgement.signatoryName}</h3>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-sm">
+                    <span className="rounded-full bg-muted px-2 py-1 text-sm">
                       {t(evidenceStatusKey(acknowledgement.status))}
                     </span>
                   </div>
@@ -325,14 +335,14 @@ export default async function ServiceEvidenceDetailPage({
                     ) : null}
                   </dl>
                   {acknowledgement.signatureSha256 ? (
-                    <p className="break-all text-xs text-slate-500">
+                    <p className="break-all text-xs text-muted-foreground">
                       {t('ServiceEvidence.office.detail.signatureChecksum')}{' '}
                       {acknowledgement.signatureSha256}
                     </p>
                   ) : null}
                   {signature ? <SignatureView signature={signature} /> : null}
                   {acknowledgement.signatureAvailable && !signature ? (
-                    <p className="text-sm text-amber-900">
+                    <p className="text-sm text-warning-foreground">
                       {t('ServiceEvidence.office.detail.signatureUnavailable')}
                     </p>
                   ) : null}
@@ -365,9 +375,11 @@ export default async function ServiceEvidenceDetailPage({
             })}
           </ul>
         ) : (
-          <p className="text-slate-700">{t('ServiceEvidence.office.detail.noAcknowledgement')}</p>
+          <p className="text-muted-foreground">
+            {t('ServiceEvidence.office.detail.noAcknowledgement')}
+          </p>
         )}
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           {t('ServiceEvidence.office.detail.statementLabel', {
             version: packageData.statementVersion,
           })}{' '}
@@ -376,7 +388,7 @@ export default async function ServiceEvidenceDetailPage({
       </section>
 
       {packageHistory.length > 1 ? (
-        <section className="grid gap-3 rounded-lg border bg-white p-4 sm:p-5">
+        <section className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
           <h2 className="text-xl font-semibold">
             {t('ServiceEvidence.office.detail.packageVersions')}
           </h2>
@@ -388,14 +400,14 @@ export default async function ServiceEvidenceDetailPage({
               >
                 <Link
                   href={`/service-evidence/${item.evidencePackageId}`}
-                  className="font-medium text-blue-900 underline"
+                  className="font-medium text-primary underline"
                 >
                   {t('ServiceEvidence.office.detail.title', {
                     version: formatNumber(item.packageVersion ?? 0, locale),
                   })}{' '}
                   · {t(evidenceStatusKey(item.status))}
                 </Link>
-                <span className="text-sm text-slate-600">
+                <span className="text-sm text-muted-foreground">
                   {formatVisitDateTime(item.plannedStart, item.timezone, locale)}
                 </span>
               </li>
@@ -404,11 +416,13 @@ export default async function ServiceEvidenceDetailPage({
         </section>
       ) : null}
 
-      <Button asChild variant="secondary" className="w-fit">
-        <Link href={`/visits/${packageData.snapshot.visitId}`}>
-          {t('ServiceEvidence.office.detail.openVisit')}
-        </Link>
-      </Button>
+      {sourceVisitResult.data ? (
+        <Button asChild variant="secondary" className="w-fit">
+          <Link href={`/visits/${packageData.snapshot.visitId}`}>
+            {t('ServiceEvidence.office.detail.openVisit')}
+          </Link>
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -416,7 +430,7 @@ export default async function ServiceEvidenceDetailPage({
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-slate-600">{label}</dt>
+      <dt className="text-muted-foreground">{label}</dt>
       <dd className="font-medium">{value}</dd>
     </div>
   );
@@ -425,7 +439,7 @@ function Detail({ label, value }: { label: string; value: string }) {
 async function SignatureView({ signature }: { signature: Signature }) {
   const t = await getTranslations();
   return (
-    <figure className="grid gap-2 rounded-md bg-slate-50 p-3">
+    <figure className="grid gap-2 rounded-md bg-background p-3">
       <figcaption className="text-sm font-medium">
         {t('ServiceEvidence.office.detail.savedSignature')}
       </figcaption>
@@ -434,7 +448,7 @@ async function SignatureView({ signature }: { signature: Signature }) {
         preserveAspectRatio="none"
         role="img"
         aria-label={t('ServiceEvidence.office.detail.savedSignature')}
-        className="h-32 w-full border bg-white"
+        className="h-32 w-full border bg-card"
       >
         {signature.strokes.map((stroke) => (
           <path
@@ -451,7 +465,7 @@ async function SignatureView({ signature }: { signature: Signature }) {
             strokeLinecap="round"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
-            className="text-slate-900"
+            className="text-foreground"
           />
         ))}
       </svg>

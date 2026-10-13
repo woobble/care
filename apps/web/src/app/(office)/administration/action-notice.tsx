@@ -12,7 +12,7 @@ export async function ActionNotice({
       {error ? (
         <Alert
           variant="destructive"
-          className="rounded-md border-red-300 bg-red-50 p-3 text-red-900"
+          className="rounded-md border-destructive/40 bg-destructive/10 p-3 text-destructive"
         >
           <AlertDescription className="text-inherit">{t(errorMessageKey(error))}</AlertDescription>
         </Alert>
@@ -20,7 +20,7 @@ export async function ActionNotice({
       {updated ? (
         <Alert
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           <AlertDescription className="text-inherit">{t('Errors.saved')}</AlertDescription>
         </Alert>

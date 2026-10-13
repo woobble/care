@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   BadgeEuro,
@@ -23,7 +23,7 @@ import {
   UserRoundPlus,
   Wrench,
   type LucideIcon,
-} from "lucide-react";
+} from 'lucide-react';
 import {
   Button,
   Separator,
@@ -47,12 +47,12 @@ import {
   SidebarSeparator,
   SidebarTrigger,
   cn,
-} from "@care/ui";
-import { AccountMenu } from "@app/web/components/account-menu";
-import type { Locale } from "@app/web/i18n/config";
-import { LanguageSwitcher } from "@app/web/components/language-switcher";
-import { NavigationProgress } from "@app/web/components/navigation-progress";
-import { ThemeSwitcher } from "@app/web/components/theme-switcher";
+} from '@care/ui';
+import { AccountMenu } from '@app/web/components/account-menu';
+import type { Locale } from '@app/web/i18n/config';
+import { LanguageSwitcher } from '@app/web/components/language-switcher';
+import { NavigationProgress } from '@app/web/components/navigation-progress';
+import { ThemeSwitcher } from '@app/web/components/theme-switcher';
 
 export type OfficeNavigationGroup = {
   id: string;
@@ -118,17 +118,17 @@ export function OfficeShell({
       .filter((item) => isNavigationItemActive(item, pathname))
       .sort((left, right) => right.href.length - left.href.length)[0];
   }, [groups, pathname]);
-  const tenantInitial = tenantName.trim().charAt(0).toUpperCase() || "C";
+  const tenantInitial = tenantName.trim().charAt(0).toUpperCase() || 'C';
 
   useEffect(() => {
-    const desktopViewport = window.matchMedia("(min-width: 768px)");
+    const desktopViewport = window.matchMedia('(min-width: 768px)');
     function closeDrawerOnDesktop() {
       if (desktopViewport.matches) setMobileOpen(false);
     }
     closeDrawerOnDesktop();
-    desktopViewport.addEventListener("change", closeDrawerOnDesktop);
+    desktopViewport.addEventListener('change', closeDrawerOnDesktop);
     return () => {
-      desktopViewport.removeEventListener("change", closeDrawerOnDesktop);
+      desktopViewport.removeEventListener('change', closeDrawerOnDesktop);
     };
   }, []);
 
@@ -142,8 +142,8 @@ export function OfficeShell({
         cookieFormat="expanded-collapsed"
         style={
           {
-            "--sidebar-width": "var(--sidebar-width-expanded)",
-            "--sidebar-width-icon": "var(--sidebar-width-collapsed)",
+            '--sidebar-width': 'var(--sidebar-width-expanded)',
+            '--sidebar-width-icon': 'var(--sidebar-width-collapsed)',
           } as React.CSSProperties
         }
       >
@@ -155,15 +155,15 @@ export function OfficeShell({
             data-collapsed={collapsed}
             collapsible="none"
             style={{
-              width: collapsed ? "var(--sidebar-width-collapsed)" : "var(--sidebar-width-expanded)",
+              width: collapsed ? 'var(--sidebar-width-collapsed)' : 'var(--sidebar-width-expanded)',
             }}
             className={cn(
-              "sticky top-0 hidden h-dvh shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none md:flex",
+              'sticky top-0 hidden h-dvh shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none md:flex',
             )}
           >
-            <SidebarHeader className="min-h-[4.75rem] shrink-0 p-0">
+            <SidebarHeader className="min-h-[4.25rem] shrink-0 p-0">
               <SidebarBrand
-                href={groups[0]?.items[0]?.href ?? "/"}
+                href={groups[0]?.items[0]?.href ?? '/'}
                 label={labels.brand}
                 collapsed={collapsed}
                 mobileView={false}
@@ -183,8 +183,8 @@ export function OfficeShell({
               <div className="flex min-w-0 items-center">
                 <span
                   className={cn(
-                    "flex h-[4.75rem] w-[var(--sidebar-width-collapsed)] shrink-0 items-center justify-center text-sidebar-foreground transition-transform duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none",
-                    !collapsed && "translate-x-2.5",
+                    'flex h-[4.25rem] w-[var(--sidebar-width-collapsed)] shrink-0 items-center justify-center text-sidebar-foreground transition-transform duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+                    !collapsed && 'translate-x-2.5',
                   )}
                   title={tenantName}
                 >
@@ -197,10 +197,10 @@ export function OfficeShell({
                 </span>
                 <div
                   className={cn(
-                    "ml-[18px] grid min-w-0 overflow-hidden transition-[max-width,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none",
+                    'ml-[18px] grid min-w-0 overflow-hidden transition-[max-width,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
                     collapsed
-                      ? "max-w-0 -translate-x-1 opacity-0"
-                      : "max-w-44 translate-x-0 opacity-100",
+                      ? 'max-w-0 -translate-x-1 opacity-0'
+                      : 'max-w-44 translate-x-0 opacity-100',
                   )}
                   aria-hidden={collapsed}
                 >
@@ -214,7 +214,7 @@ export function OfficeShell({
           </Sidebar>
 
           <div className="flex min-w-0 flex-1 flex-col">
-            <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur md:h-[4.75rem] sm:px-5 lg:px-7">
+            <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur md:h-[4.25rem] sm:px-5 lg:px-7">
               <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
                 <SheetTrigger asChild>
                   <Button
@@ -233,7 +233,7 @@ export function OfficeShell({
                   closeLabel={labels.closeMenu}
                   aria-describedby={undefined}
                   onCloseAutoFocus={(event) => {
-                    if (window.matchMedia("(min-width: 768px)").matches) {
+                    if (window.matchMedia('(min-width: 768px)').matches) {
                       event.preventDefault();
                       pageContextRef.current?.focus({ preventScroll: true });
                     }
@@ -243,7 +243,7 @@ export function OfficeShell({
                     <SheetTitle className="sr-only">{labels.main}</SheetTitle>
                     <SheetDescription className="sr-only">{tenantName}</SheetDescription>
                     <SidebarBrand
-                      href={groups[0]?.items[0]?.href ?? "/"}
+                      href={groups[0]?.items[0]?.href ?? '/'}
                       label={labels.brand}
                       collapsed={false}
                       mobileView
@@ -291,15 +291,15 @@ export function OfficeShell({
                 </span>
                 <span
                   className={cn(
-                    "hidden shrink-0 text-sm font-semibold sm:inline",
-                    !collapsed && "md:hidden",
+                    'hidden shrink-0 text-sm font-semibold sm:inline',
+                    !collapsed && 'md:hidden',
                   )}
                 >
                   {labels.brand}
                 </span>
                 <Separator
                   orientation="vertical"
-                  className={cn("hidden h-7 sm:block", !collapsed && "md:hidden")}
+                  className={cn('hidden h-7 sm:block', !collapsed && 'md:hidden')}
                 />
                 <span
                   id="office-page-context"
@@ -360,37 +360,37 @@ function SidebarBrand({
     <Link
       href={href}
       className={cn(
-        "relative flex items-center overflow-hidden text-sidebar-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-        mobileView ? "min-h-16" : "min-h-[4.75rem]",
-        mobileView ? "gap-3 px-2" : "px-0",
+        'relative flex items-center overflow-hidden text-sidebar-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+        mobileView ? 'min-h-16' : 'min-h-[4.25rem]',
+        mobileView ? 'gap-3 px-2' : 'px-0',
       )}
       aria-label={label}
       {...(onNavigate ? { onClick: onNavigate } : {})}
     >
       <span
         className={cn(
-          "flex shrink-0 items-center justify-center transition-transform duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none",
-          mobileView ? "size-10" : "h-[4.75rem] w-[var(--sidebar-width-collapsed)]",
-          !mobileView && !collapsed && "translate-x-2.5",
+          'flex shrink-0 items-center justify-center transition-transform duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+          mobileView ? 'size-10' : 'h-[4.25rem] w-[var(--sidebar-width-collapsed)]',
+          !mobileView && !collapsed && 'translate-x-2.5',
         )}
       >
         <span
           className={cn(
-            "flex items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm",
-            mobileView ? "size-9" : "size-11",
+            'flex items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm',
+            mobileView ? 'size-9' : 'size-11',
           )}
         >
-          <HeartHandshake className={cn("size-5", !mobileView && "size-6")} aria-hidden="true" />
+          <HeartHandshake className={cn('size-5', !mobileView && 'size-6')} aria-hidden="true" />
         </span>
       </span>
       <span
         className={cn(
-          "min-w-0 overflow-hidden truncate whitespace-nowrap font-semibold transition-[max-width,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none",
-          mobileView ? "text-sm" : "text-lg",
-          !mobileView && "ml-[18px]",
+          'min-w-0 overflow-hidden truncate whitespace-nowrap font-semibold transition-[max-width,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+          mobileView ? 'text-sm' : 'text-lg',
+          !mobileView && 'ml-[18px]',
           !mobileView && collapsed
-            ? "max-w-0 -translate-x-1 opacity-0"
-            : "max-w-40 translate-x-0 opacity-100",
+            ? 'max-w-0 -translate-x-1 opacity-0'
+            : 'max-w-40 translate-x-0 opacity-100',
         )}
         aria-hidden={!mobileView && collapsed}
       >
@@ -414,17 +414,17 @@ function NavigationGroups({
   closeMobile: () => void;
 }) {
   return (
-    <div className={cn("grid", mobileView || !collapsed ? "gap-7" : "gap-5")}>
+    <div className={cn('grid', mobileView || !collapsed ? 'gap-7' : 'gap-5')}>
       {groups.map((group) => (
         <SidebarGroup key={group.id} className="grid gap-2 p-0">
           <SidebarGroupLabel
             className={cn(
-              "block h-auto w-full overflow-hidden rounded-none p-0 text-sm font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground transition-[max-height,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none",
+              'block h-auto w-full overflow-hidden rounded-none p-0 text-sm font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground transition-[max-height,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
               mobileView || !collapsed
                 ? mobileView
-                  ? "max-h-10 translate-y-0 px-3 pb-1 opacity-100"
-                  : "max-h-10 translate-y-0 pb-1 pl-[calc(var(--sidebar-width-collapsed)+1.125rem)] pr-4 opacity-100"
-                : "max-h-0 translate-y-1 p-0 opacity-0",
+                  ? 'max-h-10 translate-y-0 px-3 pb-1 opacity-100'
+                  : 'max-h-10 translate-y-0 pb-1 pl-[calc(var(--sidebar-width-collapsed)+1.125rem)] pr-4 opacity-100'
+                : 'max-h-0 translate-y-1 p-0 opacity-0',
             )}
             aria-hidden={collapsed && !mobileView}
           >
@@ -432,9 +432,9 @@ function NavigationGroups({
           </SidebarGroupLabel>
           <SidebarMenu
             className={cn(
-              "grid",
-              collapsed && !mobileView ? "gap-1.5" : "gap-2",
-              mobileView && "px-2",
+              'grid',
+              collapsed && !mobileView ? 'gap-1.5' : 'gap-2',
+              mobileView && 'px-2',
             )}
           >
             {group.items.map((item) => {
@@ -448,32 +448,32 @@ function NavigationGroups({
                     size="lg"
                     {...(!mobileView && collapsed ? { tooltip: item.label } : {})}
                     className={cn(
-                      "relative isolate min-w-0 overflow-hidden rounded-2xl p-0 font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-transparent data-[active=true]:text-sidebar-accent-foreground",
+                      'relative isolate min-w-0 overflow-hidden rounded-2xl p-0 font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-transparent data-[active=true]:text-sidebar-accent-foreground',
                       mobileView
-                        ? "min-h-11 gap-3 px-3 text-base hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent"
+                        ? 'min-h-11 gap-3 px-3 text-base hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent'
                         : collapsed
-                          ? "mx-auto h-11 w-11 justify-center text-sm hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent"
-                          : "min-h-14 w-full text-base before:pointer-events-none before:absolute before:inset-y-1 before:left-3 before:right-3 before:z-0 before:rounded-xl before:bg-sidebar-accent before:shadow-sm before:opacity-0 before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100 data-[active=true]:before:opacity-100",
-                      isActive && "text-sidebar-accent-foreground",
+                          ? 'mx-auto h-11 w-11 justify-center text-sm hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent'
+                          : 'min-h-11 w-full text-sm before:pointer-events-none before:absolute before:inset-y-1 before:left-3 before:right-3 before:z-0 before:rounded-xl before:bg-sidebar-accent before:shadow-sm before:opacity-0 before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100 data-[active=true]:before:opacity-100',
+                      isActive && 'text-sidebar-accent-foreground',
                     )}
                   >
                     <Link
                       href={item.href}
-                      aria-current={isActive ? "page" : undefined}
+                      aria-current={isActive ? 'page' : undefined}
                       aria-label={!mobileView && collapsed ? item.label : undefined}
                       onClick={closeMobile}
                     >
                       <span
                         className={cn(
-                          "z-10 flex shrink-0 items-center justify-center",
+                          'z-10 flex shrink-0 items-center justify-center',
                           mobileView
-                            ? "size-10"
+                            ? 'size-10'
                             : collapsed
-                              ? "absolute inset-y-0 left-0 w-full"
-                              : "absolute inset-y-0 left-0 w-[var(--sidebar-width-collapsed)]",
-                          !mobileView && !collapsed && "translate-x-2.5",
+                              ? 'absolute inset-y-0 left-0 w-full'
+                              : 'absolute inset-y-0 left-0 w-[var(--sidebar-width-collapsed)]',
+                          !mobileView && !collapsed && 'translate-x-2.5',
                           !mobileView &&
-                            "transition-transform duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none",
+                            'transition-transform duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
                         )}
                       >
                         <Icon className="size-5" strokeWidth={1.8} aria-hidden="true" />
@@ -485,12 +485,12 @@ function NavigationGroups({
                       ) : (
                         <span
                           className={cn(
-                            "absolute inset-y-0 z-10 flex min-w-0 items-center overflow-hidden truncate whitespace-nowrap transition-[opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none",
-                            isActive && !collapsed ? "right-12" : "right-3",
+                            'absolute inset-y-0 z-10 flex min-w-0 items-center overflow-hidden truncate whitespace-nowrap transition-[opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+                            isActive && !collapsed ? 'right-12' : 'right-3',
                             collapsed
-                              ? "left-[var(--sidebar-width-collapsed)] text-sm"
-                              : "left-[calc(var(--sidebar-width-collapsed)+1.125rem)] text-base",
-                            collapsed ? "translate-x-1 opacity-0" : "translate-x-0 opacity-100",
+                              ? 'left-[var(--sidebar-width-collapsed)] text-sm'
+                              : 'left-[calc(var(--sidebar-width-collapsed)+1.125rem)] text-sm',
+                            collapsed ? 'translate-x-1 opacity-0' : 'translate-x-0 opacity-100',
                           )}
                           aria-hidden={collapsed}
                         >
@@ -500,9 +500,9 @@ function NavigationGroups({
                       {isActive ? (
                         <span
                           className={cn(
-                            "absolute z-10 size-1.5 rounded-full bg-primary",
-                            !mobileView && !collapsed ? "right-5" : "right-3",
-                            collapsed && !mobileView && "hidden",
+                            'absolute z-10 size-1.5 rounded-full bg-primary',
+                            !mobileView && !collapsed ? 'right-5' : 'right-3',
+                            collapsed && !mobileView && 'hidden',
                           )}
                         />
                       ) : null}
@@ -519,7 +519,7 @@ function NavigationGroups({
 }
 
 function isNavigationItemActive(item: { id: string; href: string }, pathname: string) {
-  if (item.id === "overview") return pathname === "/operations";
-  if (item.id === "operations" && pathname.startsWith("/operations/")) return true;
+  if (item.id === 'overview') return pathname === '/operations';
+  if (item.id === 'operations' && pathname.startsWith('/operations/')) return true;
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }

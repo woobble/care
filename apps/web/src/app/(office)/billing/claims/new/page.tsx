@@ -1,5 +1,7 @@
+import { ErrorNotice as Alert } from '@app/web/components/page-patterns';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -66,6 +68,13 @@ export default async function NewClaimPage({
     invoice.organizationId,
     invoice.facilityId,
   );
+  const canReadClient = hasClientPermission(
+    permissions,
+    'client.read',
+    header['X-Tenant-Id'],
+    invoice.organizationId,
+    invoice.facilityId,
+  );
   const [arrangementResult, payerResult] = invoice.organizationId
     ? await Promise.all([
         api.GET('/api/v1/billing/payer-arrangements', {
@@ -114,15 +123,11 @@ export default async function NewClaimPage({
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/billing/claims">{t('claims')}</Link>
-        </p>
-        <h1 className="text-3xl font-semibold">{t('createClaim')}</h1>
-        <p className="text-slate-700">
-          {invoice.invoiceNumber ?? invoice.id.slice(0, 8)} · {invoice.clientName}
-        </p>
-      </header>
+      <PageHeader
+        eyebrow={<Link href="/billing/claims">{t('claims')}</Link>}
+        title={t('createClaim')}
+        description={`${invoice.invoiceNumber ?? t('draftIdentifier')} · ${invoice.clientName}`}
+      />
       <BillingNavigation permissions={permissions} />
       {error ? <Alert>{translate(errorMessageKey(error))}</Alert> : null}
       {!canManage ? <Alert>{t('noClaimsManagePermission')}</Alert> : null}
@@ -130,18 +135,20 @@ export default async function NewClaimPage({
       {invoice.status === 'issued' && !eligibleArrangements.length ? (
         <Alert>
           {t('claimNeedsPayerArrangement')}{' '}
-          <Link
-            className="font-medium underline"
-            href={'/clients/' + invoice.clientId + '/invoices'}
-          >
-            {t('managePayerArrangements')}
-          </Link>
+          {canReadClient ? (
+            <Link
+              className="font-medium underline"
+              href={'/clients/' + invoice.clientId + '/invoices'}
+            >
+              {t('managePayerArrangements')}
+            </Link>
+          ) : null}
         </Alert>
       ) : null}
       {canCreate && eligibleArrangements.length ? (
         <RHFActionForm
           action={createClaimAction}
-          className="grid gap-5 rounded-lg border bg-white p-5"
+          className="grid gap-5 rounded-lg border bg-card p-5"
         >
           <input type="hidden" name="invoiceId" value={invoice.id} />
           <input type="hidden" name="expectedInvoiceVersion" value={invoice.version} />
@@ -190,7 +197,7 @@ export default async function NewClaimPage({
               ))}
             </NativeSelect>
           </label>
-          <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+          <p className="rounded-md border border-warning/40 bg-warning-muted p-3 text-sm text-warning-foreground">
             {t('claimProfileReadinessNote')}
           </p>
           <fieldset className="grid gap-3">
@@ -203,7 +210,7 @@ export default async function NewClaimPage({
                 <input type="hidden" name="invoiceLineId" value={line.id} />
                 <div className="grid gap-1">
                   <p className="font-medium">{line.serviceNameSnapshot}</p>
-                  <p className="text-sm text-slate-700">
+                  <p className="text-sm text-muted-foreground">
                     {line.serviceDate} · {line.fundingLabelSnapshot ?? t('fundingSource')} ·{' '}
                     {formatCents(line.grossCents, locale as Locale)}
                   </p>
@@ -271,12 +278,4 @@ function fundingTypeLabel(
 
 function isString(value: string | null): value is string {
   return typeof value === 'string';
-}
-
-function Alert({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-      {children}
-    </p>
-  );
 }

@@ -1,3 +1,4 @@
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
 import { Checkbox as ShadcnCheckbox } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
@@ -133,9 +134,9 @@ export default async function BillingWorklistPage({
             <h2 id="worklist-title" className="text-xl font-semibold">
               {t('worklistTitle')}
             </h2>
-            <p className="mt-1 text-sm text-slate-700">{t('worklistDescription')}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t('worklistDescription')}</p>
           </div>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             {t('candidateCount', { count: candidates.length })}
           </p>
         </div>
@@ -234,7 +235,7 @@ export default async function BillingWorklistPage({
         </FilterDisclosure>
 
         {canExport ? (
-          <section className="flex flex-wrap items-center gap-2 rounded-lg border bg-white p-4">
+          <section className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-4">
             {organizationId && from && until ? (
               <>
                 <Button asChild variant="secondary">
@@ -281,13 +282,13 @@ export default async function BillingWorklistPage({
                 </Button>
               </>
             ) : (
-              <p className="text-sm text-slate-700">{t('exportNeedsFilters')}</p>
+              <p className="text-sm text-muted-foreground">{t('exportNeedsFilters')}</p>
             )}
           </section>
         ) : null}
 
         {candidates.length === 0 ? (
-          <p className="rounded-lg border bg-white p-5 text-sm text-slate-700">
+          <p className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">
             {t('worklistEmpty')}
           </p>
         ) : (
@@ -295,11 +296,11 @@ export default async function BillingWorklistPage({
             {groups.map((group) => (
               <section
                 key={groupKey(group)}
-                className="grid min-w-0 gap-3 rounded-lg border bg-white p-5"
+                className="grid min-w-0 gap-3 rounded-lg border bg-card p-5"
               >
                 <header className="grid min-w-0 gap-1">
                   <h3 className="break-words text-lg font-semibold">{group.clientName}</h3>
-                  <p className="break-words text-sm text-slate-700">
+                  <p className="break-words text-sm text-muted-foreground">
                     {group.organizationName} · {group.facilityName} ·{' '}
                     {t(group.recipientType === 'payer' ? 'payerInvoice' : 'clientInvoice')}
                     {group.recipientName ? ` · ${group.recipientName}` : ''}
@@ -328,17 +329,17 @@ export default async function BillingWorklistPage({
                             <p className="break-words font-medium">
                               {candidate.serviceName} · {formatDate(candidate.serviceDate, locale)}
                             </p>
-                            <p className="break-words text-sm text-slate-700">
+                            <p className="break-words text-sm text-muted-foreground">
                               {candidate.quantity} {t(`unit.${candidate.unit}`)} ·{' '}
                               {candidate.fundingLabel ?? t('selfPay')} · {candidate.evidenceStatus}
                             </p>
-                            <p className="break-words text-sm text-slate-700">
+                            <p className="break-words text-sm text-muted-foreground">
                               {t('unitPrice')}: {formatCents(candidate.unitPriceCents, locale)} ·{' '}
                               {t('remainingBillable')}:{' '}
                               {formatCents(candidate.remainingBillableAmountCents, locale)}
                             </p>
                             {candidate.blockers.length ? (
-                              <ul className="mt-1 grid min-w-0 gap-1 text-sm text-amber-900">
+                              <ul className="mt-1 grid min-w-0 gap-1 text-sm text-warning-foreground">
                                 {candidate.blockers.map((blocker) => (
                                   <li key={blocker}>{blockerLabel(t, blocker)}</li>
                                 ))}
@@ -393,7 +394,7 @@ export default async function BillingWorklistPage({
                     </Button>
                   </RHFActionForm>
                 ) : (
-                  <p className="text-sm text-slate-700">{t('noManagePermission')}</p>
+                  <p className="text-sm text-muted-foreground">{t('noManagePermission')}</p>
                 )}
               </section>
             ))}
@@ -532,22 +533,6 @@ function billingExportHref(
   return `/exports/${type}?${query.toString()}`;
 }
 
-function Alert({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
-      {children}
-    </p>
-  );
-}
-
-function Status({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <p role="status" className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900">
-      {children}
-    </p>
-  );
-}
-
 function Field({
   id,
   name,
@@ -609,7 +594,7 @@ function SelectField({
         id={id}
         name={name}
         defaultValue={defaultValue}
-        selectClassName="min-h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-3 py-2"
+        selectClassName="min-h-10 w-full min-w-0 max-w-full rounded-md border border-border bg-card px-3 py-2"
         className="w-full"
       >
         {children}

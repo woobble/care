@@ -6,6 +6,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import { FilterDisclosure } from '@app/web/components/filter-disclosure';
 import { formatCurrency, formatLongDate, formatTime } from '@app/web/i18n/format';
 import type { Locale } from '@app/web/i18n/config';
@@ -396,19 +397,25 @@ export default async function PlanningPage({
       />
 
       {error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t(errorMessageKey(error))}
         </p>
       ) : null}
       {admissionHandoffRequested && !admissionContextUsable ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {onboardingT('schedulingContextUnavailable')}
         </p>
       ) : null}
       {query.updated ? (
         <p
           role="status"
-          className="rounded-md border border-green-300 bg-green-50 p-3 text-green-900"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {t(planningUpdateKey(query.updated))}
         </p>
@@ -536,13 +543,15 @@ export default async function PlanningPage({
       {canEstimate ? (
         <section
           aria-labelledby="budget-estimate-title"
-          className="grid gap-3 rounded-lg border bg-white p-5"
+          className="grid gap-3 rounded-lg border bg-card p-5"
         >
           <div className="grid gap-1">
             <h2 id="budget-estimate-title" className="text-xl font-semibold">
               {t('Benefits.planningEstimateTitle')}
             </h2>
-            <p className="text-sm text-slate-700">{t('Benefits.planningEstimateDescription')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('Benefits.planningEstimateDescription')}
+            </p>
           </div>
           <form method="get" className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
             <input type="hidden" name="date" value={selectedDate} />
@@ -594,12 +603,15 @@ export default async function PlanningPage({
             </Button>
           </form>
           {estimateError ? (
-            <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+            <p
+              role="alert"
+              className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+            >
               {t(errorMessageKey(estimateError))}
             </p>
           ) : null}
           {estimate ? (
-            <div className="grid gap-3 rounded-md bg-blue-50 p-4 text-sm text-blue-950">
+            <div className="grid gap-3 rounded-md bg-accent p-4 text-sm text-primary">
               <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <Metric
                   label={t('Benefits.estimatedCost')}
@@ -654,7 +666,7 @@ export default async function PlanningPage({
             </div>
           ) : null}
           {!clients.length || !services.length ? (
-            <p className="text-sm text-slate-600">{t('Benefits.noEstimateOptions')}</p>
+            <p className="text-sm text-muted-foreground">{t('Benefits.noEstimateOptions')}</p>
           ) : null}
         </section>
       ) : null}
@@ -664,13 +676,16 @@ export default async function PlanningPage({
           <h2 id="calendar-title" className="text-xl font-semibold">
             {t(view === 'week' ? 'Planning.weekOverview' : 'Planning.dayOverview')}
           </h2>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             {t('Planning.visitCount', { count: visitResult.data?.total ?? 0 })} ·{' '}
             {t('Planning.openCount', { count: openCount })}
           </p>
         </div>
         {visitResult.error ? (
-          <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+          >
             {t(errorMessageKey(visitResult.error.code))}
           </p>
         ) : (
@@ -680,7 +695,7 @@ export default async function PlanningPage({
               <section
                 key={day}
                 aria-labelledby={`day-${day}`}
-                className="grid gap-2 rounded-lg border bg-white p-4"
+                className="grid gap-2 rounded-lg border bg-card p-4"
               >
                 <h3 id={`day-${day}`} className="font-semibold">
                   {formatDay(day, locale)}
@@ -690,7 +705,7 @@ export default async function PlanningPage({
                     {dayVisits.map((visit) => (
                       <li key={visit.id}>
                         <Link
-                          className="grid gap-1 rounded-md border p-3 hover:border-blue-400 hover:bg-blue-50 sm:grid-cols-[8rem_1fr_auto]"
+                          className="grid gap-1 rounded-md border p-3 hover:border-primary/40 hover:bg-accent sm:grid-cols-[8rem_1fr_auto]"
                           href={`/visits/${visit.id}`}
                         >
                           <span className="font-medium">
@@ -699,12 +714,12 @@ export default async function PlanningPage({
                           </span>
                           <span>
                             <strong>{visit.clientDisplayName}</strong>
-                            <span className="block text-sm text-slate-600">
+                            <span className="block text-sm text-muted-foreground">
                               {visit.services
                                 .map((service) => `${service.serviceCode} ${service.serviceName}`)
                                 .join(' · ')}
                             </span>
-                            <span className="block text-sm text-slate-600">
+                            <span className="block text-sm text-muted-foreground">
                               {visit.assignments.length
                                 ? visit.assignments
                                     .map((item) => item.employeeDisplayName)
@@ -725,8 +740,8 @@ export default async function PlanningPage({
                                     className={
                                       'rounded-full px-2 py-1 text-xs ' +
                                       (conflict.severity === 'blocking'
-                                        ? 'bg-red-100 text-red-900'
-                                        : 'bg-amber-100 text-amber-900')
+                                        ? 'bg-destructive/15 text-destructive'
+                                        : 'bg-warning-muted text-warning-foreground')
                                     }
                                   >
                                     {conflictMessages[conflict.code] ?? conflict.code}
@@ -740,7 +755,7 @@ export default async function PlanningPage({
                     ))}
                   </ol>
                 ) : (
-                  <p className="text-sm text-slate-600">{t('Planning.noVisits')}</p>
+                  <p className="text-sm text-muted-foreground">{t('Planning.noVisits')}</p>
                 )}
               </section>
             );
@@ -770,7 +785,7 @@ export default async function PlanningPage({
             <h2 id="tour-planning-title" className="text-xl font-semibold">
               {t('Planning.tourPlanning')}
             </h2>
-            <p className="text-sm text-slate-600">{t('Planning.tourPlanningDescription')}</p>
+            <p className="text-sm text-muted-foreground">{t('Planning.tourPlanningDescription')}</p>
           </div>
           {employeeVisitGroups.size ? (
             [...employeeVisitGroups].map(([tourEmployeeId, employeeVisits]) => {
@@ -790,14 +805,14 @@ export default async function PlanningPage({
                   )
                 : [];
               return (
-                <section key={tourEmployeeId} className="grid gap-3 rounded-lg border bg-white p-4">
+                <section key={tourEmployeeId} className="grid gap-3 rounded-lg border bg-card p-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <h3 className="text-lg font-semibold">
                       {employeeName ?? t('Planning.employeeTour')}
                     </h3>
                     {listedTour ? (
                       <Link
-                        className="text-sm font-medium text-blue-800 underline"
+                        className="text-sm font-medium text-primary underline"
                         href={viewHref({
                           ...query,
                           date: selectedDate,
@@ -817,7 +832,7 @@ export default async function PlanningPage({
                       {employeeVisits.map((visit) => (
                         <input key={visit.id} type="hidden" name="visitIds" value={visit.id} />
                       ))}
-                      <p className="text-sm text-slate-600">
+                      <p className="text-sm text-muted-foreground">
                         {t('Planning.tourVisitCount', { count: employeeVisits.length })}
                       </p>
                       <Button type="submit" className="w-fit">
@@ -826,7 +841,7 @@ export default async function PlanningPage({
                     </form>
                   ) : tour ? (
                     <div className="grid gap-3">
-                      <p className="text-sm text-slate-600">
+                      <p className="text-sm text-muted-foreground">
                         {tour.status === 'published'
                           ? t('Planning.tourPublished')
                           : t('Planning.tourDraft')}
@@ -845,12 +860,11 @@ export default async function PlanningPage({
                             return (
                               <li key={stop.id} className="rounded-md border p-3">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <Link
-                                    className="font-medium text-blue-900 underline"
-                                    href={`/visits/${stop.visitId}`}
-                                  >
-                                    {visit?.clientDisplayName ?? stop.visitId}
-                                  </Link>
+                                  <ResourceReference
+                                    className="font-medium"
+                                    label={visit?.clientDisplayName ?? t('Resources.unavailableVisit')}
+                                    href={visit ? `/visits/${stop.visitId}` : null}
+                                  />
                                   <span className="text-sm tabular-nums">
                                     {formatTime(stop.plannedStart, locale, stop.timezone)}–
                                     {formatTime(stop.plannedEnd, locale, stop.timezone)}
@@ -864,7 +878,7 @@ export default async function PlanningPage({
                                     })}
                                   </span>
                                 </div>
-                                <p className="mt-1 text-sm text-slate-600">
+                                <p className="mt-1 text-sm text-muted-foreground">
                                   {stop.estimatedTravelMinutes !== null
                                     ? t('Planning.travelEstimate', {
                                         minutes: stop.estimatedTravelMinutes,
@@ -881,7 +895,7 @@ export default async function PlanningPage({
                                     : ''}
                                 </p>
                                 {visit?.services.length ? (
-                                  <p className="mt-1 text-sm text-slate-600">
+                                  <p className="mt-1 text-sm text-muted-foreground">
                                     {visit.services
                                       .map((service) => service.serviceName)
                                       .join(' · ')}
@@ -892,12 +906,12 @@ export default async function PlanningPage({
                           })}
                         </ol>
                       ) : (
-                        <p className="text-sm text-red-800">{t('Planning.emptyTour')}</p>
+                        <p className="text-sm text-destructive">{t('Planning.emptyTour')}</p>
                       )}
                       {suggestedTourId === tour.id && suggestedOrder.length ? (
                         <form
                           action={applySuggestedTourOrderAction}
-                          className="grid gap-2 rounded-md bg-blue-50 p-3"
+                          className="grid gap-2 rounded-md bg-accent p-3"
                         >
                           <input type="hidden" name="tourId" value={tour.id} />
                           <input type="hidden" name="expectedVersion" value={tour.version} />
@@ -929,13 +943,13 @@ export default async function PlanningPage({
                               id={`tour-stop-${stop.id}`}
                               name="visitId"
                               defaultValue={stop.visitId}
-                              selectClassName="h-10 rounded-md border bg-white px-3 text-sm"
+                              selectClassName="h-10 rounded-md border bg-card px-3 text-sm"
                               className="w-full"
                             >
                               {tour.stops.map((candidate) => (
                                 <option key={candidate.visitId} value={candidate.visitId}>
                                   {selectedDayVisits.find((item) => item.id === candidate.visitId)
-                                    ?.clientDisplayName ?? candidate.visitId}
+                                    ?.clientDisplayName ?? t('Resources.unavailableVisit')}
                                 </option>
                               ))}
                             </NativeSelect>
@@ -980,7 +994,7 @@ export default async function PlanningPage({
                       </div>
                     </div>
                   ) : selectedTourResult?.error ? (
-                    <p role="alert" className="text-sm text-red-800">
+                    <p role="alert" className="text-sm text-destructive">
                       {t(errorMessageKey(selectedTourResult.error.code))}
                     </p>
                   ) : null}
@@ -988,7 +1002,7 @@ export default async function PlanningPage({
               );
             })
           ) : (
-            <p className="rounded-lg border bg-white p-4 text-sm text-slate-600">
+            <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
               {t('Planning.noAssignedVisitsForTour')}
             </p>
           )}
@@ -998,14 +1012,14 @@ export default async function PlanningPage({
       {canCreate && (!admissionHandoffRequested || admissionContextUsable) ? (
         <section
           aria-labelledby="create-title"
-          className="grid gap-3 rounded-lg border bg-white p-5"
+          className="grid gap-3 rounded-lg border bg-card p-5"
         >
           <h2 id="create-title" className="text-xl font-semibold">
             {t('Planning.createTitle')}
           </h2>
           {admissionContextUsable && admission ? (
-            <div className="grid gap-2 rounded-md bg-slate-50 p-3 text-sm">
-              <Link className="w-fit text-blue-800 underline" href={`/admissions/${admission.id}`}>
+            <div className="grid gap-2 rounded-md bg-background p-3 text-sm">
+              <Link className="w-fit text-primary underline" href={`/admissions/${admission.id}`}>
                 {onboardingT('backToAdmission')}: {admission.firstName} {admission.lastName}
               </Link>
               {requestedServiceNames.length ? (
@@ -1108,7 +1122,7 @@ export default async function PlanningPage({
               </Button>
             </RHFActionForm>
           ) : (
-            <p className="text-sm text-slate-600">{t('Planning.createRequirements')}</p>
+            <p className="text-sm text-muted-foreground">{t('Planning.createRequirements')}</p>
           )}
         </section>
       ) : null}
@@ -1174,7 +1188,7 @@ function SelectField({
         required={required}
         multiple={multiple}
         size={multiple ? 4 : undefined}
-        selectClassName="min-h-10 w-full min-w-0 rounded-md border bg-white px-3 py-2"
+        selectClassName="min-h-10 w-full min-w-0 rounded-md border bg-card px-3 py-2"
         className="w-full"
       >
         {children}
@@ -1186,7 +1200,7 @@ function SelectField({
 function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div>
-      <dt className="text-blue-800">{label}</dt>
+      <dt className="text-primary">{label}</dt>
       <dd className="font-semibold">{value}</dd>
     </div>
   );

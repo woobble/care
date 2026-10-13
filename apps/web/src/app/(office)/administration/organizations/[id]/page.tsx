@@ -1,10 +1,16 @@
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
 import { statusLabelKey } from '@app/web/i18n/status';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+} from '@app/web/lib/api';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import {
   createFacilityAction,
@@ -26,33 +32,33 @@ export default async function OrganizationDetailPage({
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
-  const [organizationResult, facilitiesResult, teamsResult] = await Promise.all([
+  const [organizationResult, facilitiesResult, teamsResult, permissions] = await Promise.all([
     get('/api/v1/organizations/{id}', { params: { path: { id }, header } }),
     get('/api/v1/facilities', { params: { query: { organizationId: id }, header } }),
     get('/api/v1/teams', { params: { query: { organizationId: id }, header } }),
+    getPermissionGrants(api),
   ]);
   if (!organizationResult.data) notFound();
   const organization = organizationResult.data;
+  const tenantId = header['X-Tenant-Id'];
 
   return (
     <div className="grid gap-8">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">
-          <Link href="/administration/organizations">{t('Organizations.title')}</Link>
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-semibold">{organization.name}</h1>
+      <PageHeader
+        eyebrow={<Link href="/administration/organizations">{t('Organizations.title')}</Link>}
+        title={organization.name}
+        meta={
           <StatusBadge
             status={organization.status}
             label={t(statusLabelKey(organization.status))}
           />
-        </div>
-      </header>
+        }
+      />
       <ActionNotice error={query.error} updated={query.updated} />
 
       <section
         aria-labelledby="organization-edit-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <h2 id="organization-edit-title" className="text-xl font-semibold">
           {t('Organizations.detailsTitle')}
@@ -139,13 +145,15 @@ export default async function OrganizationDetailPage({
 
       <section
         aria-labelledby="facility-create-title"
-        className="grid gap-4 rounded-lg border bg-white p-5"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
         <div>
           <h2 id="facility-create-title" className="text-xl font-semibold">
             {t('Organizations.facilitiesTitle')}
           </h2>
-          <p className="text-sm text-slate-600">{t('Organizations.facilitiesDescription')}</p>
+          <p className="text-sm text-muted-foreground">
+            {t('Organizations.facilitiesDescription')}
+          </p>
         </div>
         <RHFActionForm action={createFacilityAction} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="organizationId" value={organization.id} />
@@ -183,7 +191,7 @@ export default async function OrganizationDetailPage({
             name="timezone"
             maxLength={100}
           />
-          <p className="text-sm text-slate-600 md:col-span-2">
+          <p className="text-sm text-muted-foreground md:col-span-2">
             {t('Organizations.facilityTimezoneHint')}
           </p>
           <div className="md:col-span-2">
@@ -197,18 +205,28 @@ export default async function OrganizationDetailPage({
                 key={facility.id}
                 className="flex flex-wrap justify-between gap-3 rounded-md border p-3"
               >
-                <Link
-                  className="font-medium text-blue-900 underline"
-                  href={`/administration/facilities/${facility.id}`}
-                >
-                  {facility.name}
-                </Link>
+                {hasClientPermission(
+                  permissions,
+                  'facility.read',
+                  tenantId,
+                  organization.id,
+                  facility.id,
+                ) ? (
+                  <Link
+                    className="font-medium text-primary underline"
+                    href={`/administration/facilities/${facility.id}`}
+                  >
+                    {facility.name}
+                  </Link>
+                ) : (
+                  <span className="font-medium">{facility.name}</span>
+                )}
                 <StatusBadge status={facility.status} label={t(statusLabelKey(facility.status))} />
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-600">{t('Organizations.noFacilities')}</p>
+          <p className="text-sm text-muted-foreground">{t('Organizations.noFacilities')}</p>
         )}
       </section>
 
@@ -221,22 +239,32 @@ export default async function OrganizationDetailPage({
             {teamsResult.data.map((team) => (
               <li
                 key={team.id}
-                className="flex flex-wrap justify-between gap-3 rounded-md border bg-white p-3"
+                className="flex flex-wrap justify-between gap-3 rounded-md border bg-card p-3"
               >
-                <Link
-                  className="font-medium text-blue-900 underline"
-                  href={`/administration/teams/${team.id}`}
-                >
-                  {team.name}
-                </Link>
-                <span className="text-sm text-slate-600">
+                {hasClientPermission(
+                  permissions,
+                  'team.read',
+                  tenantId,
+                  organization.id,
+                  team.facilityId,
+                ) ? (
+                  <Link
+                    className="font-medium text-primary underline"
+                    href={`/administration/teams/${team.id}`}
+                  >
+                    {team.name}
+                  </Link>
+                ) : (
+                  <span className="font-medium">{team.name}</span>
+                )}
+                <span className="text-sm text-muted-foreground">
                   {team.facilityName ?? t('Organizations.organizationWide')}
                 </span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="rounded-lg border bg-white p-4 text-slate-700">
+          <p className="rounded-lg border bg-card p-4 text-muted-foreground">
             {t('Organizations.noTeams')}
           </p>
         )}

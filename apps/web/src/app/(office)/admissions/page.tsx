@@ -11,8 +11,9 @@ import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
-import { PageHeader } from '@app/web/components/page-patterns';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { FilterDisclosure } from '@app/web/components/filter-disclosure';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate, formatDateTime } from '@app/web/i18n/format';
@@ -30,11 +31,13 @@ type AdmissionRow = {
   lastName: string;
   stage: string;
   ownerEmployeeId: string | null;
+  ownerEmployeeName?: string | null;
   nextFollowUpAt: string | null;
   lastActivityAt: string;
   createdAt: string;
   preferredStartDate: string | null;
   clientId: string | null;
+  clientName?: string | null;
   readinessSummary?: { canAdmit: boolean; blockerCount: number; warningCount: number };
 };
 const stages = [
@@ -64,7 +67,7 @@ export default async function AdmissionsPage({
   const canManageTemplates = hasPermission(permissions, 'onboarding.templates.manage');
   if (!canRead) {
     return (
-      <p role="alert" className="rounded-md border bg-white p-5">
+      <p role="alert" className="rounded-md border bg-card p-5">
         {t('noAccess')}
       </p>
     );
@@ -165,12 +168,18 @@ export default async function AdmissionsPage({
       />
 
       {query.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {translate(errorMessageKey(query.error))}
         </p>
       ) : null}
       {result.error || organizationResult.error || facilityResult.error || employeeResult.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+        >
           {t('loadFailed')}
         </p>
       ) : null}
@@ -261,7 +270,10 @@ export default async function AdmissionsPage({
                       </Link>
                       {row.clientId ? (
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {t('clientId')}: {row.clientId}
+                          <ResourceReference
+                            label={row.clientName ?? translate('Resources.unavailableClient')}
+                            href={row.clientName ? `/clients/${row.clientId}` : null}
+                          />
                         </p>
                       ) : null}
                     </div>
@@ -305,9 +317,22 @@ export default async function AdmissionsPage({
                     <div className="min-w-0">
                       <dt className="text-xs text-muted-foreground">{t('owner')}</dt>
                       <dd className="mt-0.5 break-words">
-                        {row.ownerEmployeeId
-                          ? (employeeNames.get(row.ownerEmployeeId) ?? row.ownerEmployeeId)
-                          : '—'}
+                        {row.ownerEmployeeId ? (
+                          <ResourceReference
+                            label={
+                              row.ownerEmployeeName ??
+                              employeeNames.get(row.ownerEmployeeId) ??
+                              translate('Resources.unavailableEmployee')
+                            }
+                            href={
+                              row.ownerEmployeeName || employeeNames.has(row.ownerEmployeeId)
+                                ? `/employees/${row.ownerEmployeeId}`
+                                : null
+                            }
+                          />
+                        ) : (
+                          '—'
+                        )}
                       </dd>
                     </div>
                     <div className="min-w-0">
@@ -320,9 +345,9 @@ export default async function AdmissionsPage({
                 </article>
               ))}
             </div>
-            <div className="hidden overflow-x-auto rounded-lg border bg-white lg:block">
+            <div className="hidden overflow-x-auto rounded-lg border bg-card lg:block">
               <ShadcnTable className="w-full min-w-[900px] text-left text-sm">
-                <ShadcnTableHeader className="border-b bg-slate-50 text-slate-700">
+                <ShadcnTableHeader className="border-b bg-background text-muted-foreground">
                   <ShadcnTableRow>
                     <ShadcnTableHead className="p-3">{t('caseDetails')}</ShadcnTableHead>
                     <ShadcnTableHead className="p-3">{t('stage')}</ShadcnTableHead>
@@ -339,14 +364,17 @@ export default async function AdmissionsPage({
                     <ShadcnTableRow key={row.id}>
                       <ShadcnTableCell className="p-3">
                         <Link
-                          className="font-semibold text-blue-800 underline"
+                          className="font-semibold text-primary underline"
                           href={`/admissions/${row.id}`}
                         >
                           {row.firstName} {row.lastName}
                         </Link>
                         {row.clientId ? (
-                          <span className="ml-2 text-xs text-slate-600">
-                            {t('clientId')}: {row.clientId}
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            <ResourceReference
+                              label={row.clientName ?? translate('Resources.unavailableClient')}
+                              href={row.clientName ? `/clients/${row.clientId}` : null}
+                            />
                           </span>
                         ) : null}
                       </ShadcnTableCell>
@@ -377,7 +405,9 @@ export default async function AdmissionsPage({
                       </ShadcnTableCell>
                       <ShadcnTableCell className="p-3">
                         {row.ownerEmployeeId
-                          ? (employeeNames.get(row.ownerEmployeeId) ?? row.ownerEmployeeId)
+                          ? (row.ownerEmployeeName ??
+                            employeeNames.get(row.ownerEmployeeId) ??
+                            translate('Resources.unavailableEmployee'))
                           : '—'}
                       </ShadcnTableCell>
                       <ShadcnTableCell className="p-3">
@@ -390,12 +420,12 @@ export default async function AdmissionsPage({
             </div>
           </>
         ) : (
-          <p className="p-5 text-slate-700">{t('noCases')}</p>
+          <EmptyState title={t('noCases')} />
         )}
       </section>
 
       <nav aria-label={t('worklist')} className="flex items-center justify-between">
-        <span className="text-sm text-slate-600">{total}</span>
+        <span className="text-sm text-muted-foreground">{total}</span>
         <div className="flex gap-2">
           {page > 1 ? (
             <Button asChild variant="secondary">
@@ -453,7 +483,7 @@ function SelectField({
     <label className="grid min-w-0 gap-1 text-sm font-medium">
       {label}
       <NativeSelect
-        selectClassName="h-10 w-full min-w-0 rounded-md border bg-white px-3 font-normal"
+        selectClassName="h-10 w-full min-w-0 rounded-md border bg-card px-3 font-normal"
         name={name}
         defaultValue={value}
         className="w-full"

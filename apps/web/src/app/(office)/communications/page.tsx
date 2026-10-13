@@ -2,6 +2,8 @@ import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import type { components } from '@care/api-client';
 import { formatDateTime } from '@app/web/i18n/format';
 import {
@@ -57,9 +59,10 @@ export default async function CommunicationsPage({
     page?: string;
   }>;
 }>) {
-  const [query, t, locale] = await Promise.all([
+  const [query, t, common, locale] = await Promise.all([
     searchParams,
     getTranslations('Communications'),
+    getTranslations(),
     getLocale(),
   ]);
   const api = await getApiClient();
@@ -71,7 +74,7 @@ export default async function CommunicationsPage({
     !hasPermission(permissionGrants, 'client.read')
   ) {
     return (
-      <p role="alert" className="rounded-md border bg-white p-5">
+      <p role="alert" className="rounded-md border bg-card p-5">
         {t('noAccess')}
       </p>
     );
@@ -166,19 +169,22 @@ export default async function CommunicationsPage({
 
   return (
     <div className="grid gap-6">
-      <header className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">{t('title')}</p>
-        <h1 className="text-3xl font-semibold">{t('globalTitle')}</h1>
-        <p className="max-w-3xl text-slate-700">{t('globalDescription')}</p>
-      </header>
+      <PageHeader
+        eyebrow={t('title')}
+        title={t('globalTitle')}
+        description={t('globalDescription')}
+      />
 
       {result.error ? (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
           {t('loadFailed')}
         </p>
       ) : null}
 
-      <section aria-label={t('globalTitle')} className="grid gap-4 rounded-lg border bg-white p-5">
+      <section aria-label={t('globalTitle')} className="grid gap-4 rounded-lg border bg-card p-5">
         <form method="get" className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
           <TextField
             id="communications-search"
@@ -335,32 +341,33 @@ export default async function CommunicationsPage({
                   <div className="grid gap-1">
                     <h2 className="font-semibold">{interaction.subject}</h2>
                     <p className="text-sm font-medium">
-                      {interaction.clientName ?? t('unknownClient')}
+                      <ResourceReference
+                        label={interaction.clientName ?? common('Resources.unavailableClient')}
+                        href={
+                          interaction.clientName
+                            ? `/clients/${interaction.clientId}/communications`
+                            : null
+                        }
+                      />
                     </p>
-                    <p className="text-sm text-slate-600">
+                    <p className="text-sm text-muted-foreground">
                       {formatDateTime(interaction.occurredAt, locale)} ·{' '}
                       {t(`channels.${interaction.channel}`)} ·{' '}
                       {t(`categories.${interaction.category}`)} ·{' '}
                       {t(`outcomes.${interaction.outcome}`)}
                     </p>
-                    <p className="text-sm text-slate-600">
-                      {interaction.contactLabel ?? t('noContact')} ·{' '}
-                      {interaction.recordedByName ??
-                        t('recordedBy', { userId: interaction.recordedByUserId })}
+                    <p className="text-sm text-muted-foreground">
+                      {interaction.contactLabel ?? t('noContact')} · {t('recordedBy')}:{' '}
+                      {interaction.recordedByName ?? common('Resources.unavailableUser')}
                     </p>
                   </div>
-                  <Button asChild variant="secondary" size="sm">
-                    <Link href={`/clients/${interaction.clientId}/communications`}>
-                      {t('openClient')}
-                    </Link>
-                  </Button>
                 </div>
 
                 {interaction.source ? (
                   <p className="text-sm">
                     {t('source')}:{' '}
                     <Link
-                      className="text-blue-800 underline"
+                      className="text-primary underline"
                       href={sourceHref(interaction.source, interaction.clientId)}
                     >
                       {t(`sourceTypes.${interaction.source.type}`)}
@@ -379,12 +386,12 @@ export default async function CommunicationsPage({
             ))}
           </ul>
         ) : (
-          <p className="rounded-md border border-dashed p-5 text-slate-700">{t('empty')}</p>
+          <EmptyState title={t('empty')} />
         )}
 
         {pages > 1 ? (
           <nav aria-label={t('globalTitle')} className="flex items-center justify-between">
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               {page} / {pages}
             </p>
             <div className="flex gap-2">
@@ -447,7 +454,7 @@ function SelectField({
         id={id}
         name={name}
         defaultValue={defaultValue}
-        selectClassName="h-10 rounded-md border bg-white px-3"
+        selectClassName="h-10 rounded-md border bg-card px-3"
         className="w-full"
       >
         {children}
