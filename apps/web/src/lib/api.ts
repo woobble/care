@@ -8,6 +8,7 @@ import type { PermissionGrantDto } from '@care/api-client';
 import { loadWebConfig } from '@care/config';
 import { auth } from '@app/web/auth';
 import { getPermissionGrantsForTenant } from '@app/web/lib/permission-cache';
+import { resolveCareApiUrl } from './api-url';
 
 const getRequestHeaders = cache(() => headers());
 
@@ -65,7 +66,7 @@ export async function fetchCareApi(path: string, init: RequestInit = {}): Promis
   requestHeaders.set('X-Tenant-Id', options.tenantId!);
   if (options.requestId) requestHeaders.set('X-Request-Id', options.requestId);
   if (options.correlationId) requestHeaders.set('X-Correlation-Id', options.correlationId);
-  return fetch(new URL(path, options.baseUrl), { ...init, headers: requestHeaders });
+  return fetch(resolveCareApiUrl(path, options.baseUrl), { ...init, headers: requestHeaders });
 }
 
 const getTenantHeaderForRequest = cache(async (): Promise<{ 'X-Tenant-Id': string }> => {
