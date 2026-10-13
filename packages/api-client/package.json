@@ -2,7 +2,7 @@
   "name": "@care/api-client",
   "devDependencies": {
     "@hey-api/openapi-ts": "0.99.0",
-    "typescript": "^7.0.2"
+    "typescript": "^6.0.3"
   },
   "exports": {
     ".": "./src/index.ts"

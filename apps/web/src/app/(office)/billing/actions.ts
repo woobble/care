@@ -311,7 +311,7 @@ export async function createPayerDirectoryEntryAction(formData: FormData): Promi
   const validFrom = readDate(formData.get('validFrom'));
   const validUntil = readOptionalDate(formData.get('validUntil'));
   if (!organizationId || !payerType || !name || !validFrom || validUntil === undefined) {
-    redirect(claimSettingsPath('INVALID_REQUEST', undefined, organizationId));
+    redirect(claimSettingsPath('INVALID_REQUEST', undefined, organizationId ?? undefined));
   }
   const api = await getApiClient();
   const { error } = await api.POST('/api/v1/billing/payers', {
@@ -356,7 +356,7 @@ export async function updatePayerDirectoryEntryAction(formData: FormData): Promi
     !validFrom ||
     validUntil === undefined
   ) {
-    redirect(claimSettingsPath('INVALID_REQUEST', undefined, organizationId));
+    redirect(claimSettingsPath('INVALID_REQUEST', undefined, organizationId ?? undefined));
   }
   const api = await getApiClient();
   const { error } = await api.PATCH('/api/v1/billing/payers/{id}', {
@@ -406,7 +406,7 @@ export async function savePayerRequirementsAction(formData: FormData): Promise<v
     !sourceEffectiveDate ||
     (sourceUrl !== null && !/^https:\/\/\S+$/i.test(sourceUrl))
   ) {
-    redirect(claimSettingsPath('INVALID_PAYER_PROFILE', undefined, organizationId));
+    redirect(claimSettingsPath('INVALID_PAYER_PROFILE', undefined, organizationId ?? undefined));
   }
   const api = await getApiClient();
   const headers = await getTenantHeader();
