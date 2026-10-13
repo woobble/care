@@ -3,14 +3,14 @@
 import { Languages } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useTransition } from 'react';
+import { Button } from '@care/ui/components/button';
 import {
-  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from '@care/ui';
+} from '@care/ui/components/dropdown-menu';
 import { setLocaleAction } from '@app/web/app/actions/locale';
 import { isLocale, type Locale } from '@app/web/i18n/config';
 

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { formatDateTime } from '@app/web/i18n/format';
 import {

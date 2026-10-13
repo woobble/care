@@ -6,12 +6,13 @@ import {
   TableRow as ShadcnTableRow,
   TableCell as ShadcnTableCell,
   TableCaption as ShadcnTableCaption,
-} from '@care/ui';
-import { NativeSelect } from '@care/ui';
+} from '@care/ui/components/table';
+import { NativeSelect } from '@care/ui/components/native-select';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button, StatusBadge } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { StatusBadge } from '@care/ui/components/status-badge';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { DataPagination } from '@app/web/components/data-pagination';
 import { redirectToValidPage } from '@app/web/lib/pagination';

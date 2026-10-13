@@ -1,6 +1,7 @@
 import { Global, Inject, Injectable, Module, type OnApplicationShutdown } from '@nestjs/common';
 import { loadApiConfig } from '@care/config';
 import { createDatabase, createUnitOfWork } from '@care/database';
+import { createLogger } from '@care/logging';
 import { databaseSchema } from './schema';
 import { API_CONFIG, DATABASE, UNIT_OF_WORK } from '@app/api/tokens';
 
@@ -22,8 +23,16 @@ class DatabaseLifecycle implements OnApplicationShutdown {
     {
       provide: DATABASE,
       inject: [API_CONFIG],
-      useFactory: (config: ReturnType<typeof loadApiConfig>): AppDatabase =>
-        createDatabase(config.DATABASE_URL, databaseSchema),
+      useFactory: (config: ReturnType<typeof loadApiConfig>): AppDatabase => {
+        if (config.NODE_ENV === 'development') {
+          const logger = createLogger('care-database');
+          return createDatabase(config.DATABASE_URL, databaseSchema, {
+            slowQueryThresholdMs: 250,
+            onSlowQuery: (event) => logger.warn(event, 'slow database query'),
+          });
+        }
+        return createDatabase(config.DATABASE_URL, databaseSchema);
+      },
     },
     {
       provide: UNIT_OF_WORK,

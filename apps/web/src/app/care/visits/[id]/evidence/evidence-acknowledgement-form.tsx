@@ -1,7 +1,7 @@
 'use client';
 
-import { Textarea } from '@care/ui';
-import { NativeSelect } from '@care/ui';
+import { Textarea } from '@care/ui/components/textarea';
+import { NativeSelect } from '@care/ui/components/native-select';
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import type { components } from '@care/api-client';

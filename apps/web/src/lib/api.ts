@@ -1,14 +1,61 @@
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { cache } from 'react';
 import { createCareApi } from '@care/api-client';
 import type { CareApi } from '@care/api-client';
 import type { ApiClientOptions } from '@care/api-client';
 import type { PermissionGrantDto } from '@care/api-client';
 import { loadWebConfig } from '@care/config';
 import { auth } from '@app/web/auth';
+import { getPermissionGrantsForTenant } from '@app/web/lib/permission-cache';
 
-export async function getApiClient(requireTenant = true) {
-  return createCareApi(await apiClientOptions(requireTenant));
+const getRequestHeaders = cache(() => headers());
+
+export const getAuthSession = cache(async () =>
+  auth.api.getSession({ headers: await getRequestHeaders() }),
+);
+
+const requestAuthentication = cache(async () => {
+  const requestHeaders = await getRequestHeaders();
+  if (!(await getAuthSession())) redirect('/');
+
+  const accounts = await auth.api.listUserAccounts({ headers: requestHeaders });
+  const account = accounts.find((item) => item.providerId === 'authentik');
+  if (!account) redirect('/?error=auth');
+
+  const token = await auth.api
+    .getAccessToken({ headers: requestHeaders, body: { accountId: account.id } })
+    .catch(() => redirect('/?error=auth'));
+
+  const config = loadWebConfig();
+  return {
+    baseUrl: config.API_INTERNAL_URL,
+    accessToken: token.accessToken,
+    ...(requestHeaders.get('x-request-id')
+      ? { requestId: requestHeaders.get('x-request-id')! }
+      : {}),
+    ...(requestHeaders.get('x-correlation-id')
+      ? { correlationId: requestHeaders.get('x-correlation-id')! }
+      : {}),
+  };
+});
+
+const apiClientOptions = cache(async (requireTenant: boolean): Promise<ApiClientOptions> => {
+  const authentication = await requestAuthentication();
+  const tenantId = (await cookies()).get('care-tenant')?.value;
+  if (requireTenant && !tenantId) redirect('/');
+  return {
+    ...authentication,
+    ...(requireTenant && tenantId ? { tenantId } : {}),
+  };
+});
+
+const createRequestApiClient = cache(async (requireTenant: boolean) =>
+  createCareApi(await apiClientOptions(requireTenant)),
+);
+
+export function getApiClient(requireTenant = true) {
+  return createRequestApiClient(requireTenant);
 }
 
 export async function fetchCareApi(path: string, init: RequestInit = {}): Promise<Response> {
@@ -21,47 +68,20 @@ export async function fetchCareApi(path: string, init: RequestInit = {}): Promis
   return fetch(new URL(path, options.baseUrl), { ...init, headers: requestHeaders });
 }
 
-async function apiClientOptions(requireTenant: boolean): Promise<ApiClientOptions> {
-  const requestHeaders = await headers();
-  const session = await auth.api.getSession({ headers: requestHeaders });
-  if (!session) redirect('/');
-
-  const accounts = await auth.api.listUserAccounts({ headers: requestHeaders });
-  const account = accounts.find((item) => item.providerId === 'authentik');
-  if (!account) redirect('/?error=auth');
-
-  const token = await auth.api
-    .getAccessToken({ headers: requestHeaders, body: { accountId: account.id } })
-    .catch(() => redirect('/?error=auth'));
-
-  const config = loadWebConfig();
-  const tenantId = (await cookies()).get('care-tenant')?.value;
-  if (requireTenant && !tenantId) redirect('/');
-  return {
-    baseUrl: config.API_INTERNAL_URL,
-    accessToken: token.accessToken,
-    ...(requireTenant && tenantId ? { tenantId } : {}),
-    ...(requestHeaders.get('x-request-id')
-      ? { requestId: requestHeaders.get('x-request-id')! }
-      : {}),
-    ...(requestHeaders.get('x-correlation-id')
-      ? { correlationId: requestHeaders.get('x-correlation-id')! }
-      : {}),
-  };
-}
-
-export async function getTenantHeader(): Promise<{ 'X-Tenant-Id': string }> {
+const getTenantHeaderForRequest = cache(async (): Promise<{ 'X-Tenant-Id': string }> => {
   const tenantId = (await cookies()).get('care-tenant')?.value;
   if (!tenantId) redirect('/');
   return { 'X-Tenant-Id': tenantId };
+});
+
+export function getTenantHeader(): Promise<{ 'X-Tenant-Id': string }> {
+  return getTenantHeaderForRequest();
 }
 
 export async function getPermissionGrants(api?: CareApi) {
   const client = api ?? (await getApiClient());
-  const { data, error } = await client.GET('/api/v1/me/permissions', {
-    params: { header: await getTenantHeader() },
-  });
-  return error ? [] : ((data as unknown as PermissionGrantDto[] | undefined) ?? []);
+  const tenantHeader = await getTenantHeader();
+  return getPermissionGrantsForTenant(client, tenantHeader['X-Tenant-Id']);
 }
 
 export type CurrentPermissionGrant = PermissionGrantDto;

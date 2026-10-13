@@ -4,14 +4,14 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ChevronDown, UserRound } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Button } from '@care/ui/components/button';
 import {
-  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@care/ui';
+} from '@care/ui/components/dropdown-menu';
 import type { Locale } from '@app/web/i18n/config';
 import { LanguageMenu } from '@app/web/components/language-menu';
 

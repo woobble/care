@@ -33,7 +33,6 @@ import { createHash } from 'node:crypto';
 import {
   DocumentAccessDeniedError,
   DocumentArtifactNotFoundError,
-  DocumentDomainError,
   DocumentGenerationFailedError,
   DocumentSourceNotFoundError,
   DocumentSourceNotReadyError,

@@ -4,7 +4,10 @@ import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { Button, Input, Label, StatusBadge } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { StatusBadge } from '@care/ui/components/status-badge';
 import { statusLabelKey } from '@app/web/i18n/status';
 import {
   getApiClient,

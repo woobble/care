@@ -571,7 +571,31 @@ export class ClientResponseDto {
   updatedAt!: string;
 }
 
-export class ClientListItemResponseDto extends ClientResponseDto {
+export class ClientListItemResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ format: 'uuid', nullable: true })
+  organizationId!: string | null;
+
+  @ApiProperty({ format: 'uuid', nullable: true })
+  primaryFacilityId!: string | null;
+
+  @ApiProperty()
+  firstName!: string;
+
+  @ApiProperty()
+  lastName!: string;
+
+  @ApiProperty({ nullable: true })
+  preferredName!: string | null;
+
+  @ApiProperty({ type: String, format: 'date', nullable: true })
+  dateOfBirth!: string | null;
+
+  @ApiProperty({ enum: ['pending', 'active', 'archived'] })
+  status!: 'pending' | 'active' | 'archived';
+
   @ApiProperty({ nullable: true })
   organizationName!: string | null;
 

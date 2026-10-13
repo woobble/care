@@ -1,8 +1,9 @@
-import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { Button, Input } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { errorMessageKey } from '@app/web/i18n/errors';

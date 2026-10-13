@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target bun --packages external",
+    "test": "bun test src",
     "lint": "oxlint src",
     "format": "oxfmt",
     "format:check": "oxfmt --check",

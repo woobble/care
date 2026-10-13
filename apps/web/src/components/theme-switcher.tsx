@@ -4,14 +4,14 @@ import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslations } from 'next-intl';
 import { useSyncExternalStore } from 'react';
+import { Button } from '@care/ui/components/button';
 import {
-  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from '@care/ui';
+} from '@care/ui/components/dropdown-menu';
 
 const options = [
   { value: 'light', icon: Sun },

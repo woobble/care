@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { createAuthClient } from 'better-auth/react';
 import { useTranslations } from 'next-intl';
 import { ArrowRight, CircleAlert, LoaderCircle } from 'lucide-react';
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 
 const authClient = createAuthClient({ basePath: '/api/auth' });
 

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { v7 as uuidv7 } from 'uuid';
 import { getLocale, getTranslations } from 'next-intl/server';
 import type { components } from '@care/api-client';
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 import { formatVisitDateTime } from '@app/web/lib/care-date';
 import { formatNumber } from '@app/web/i18n/format';

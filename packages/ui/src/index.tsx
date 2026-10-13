@@ -1,5 +1,3 @@
-import { Badge } from './components/badge';
-
 export * from './components/accordion';
 export * from './components/alert';
 export * from './components/alert-dialog';
@@ -52,6 +50,7 @@ export * from './components/sheet';
 export * from './components/sidebar';
 export * from './components/skeleton';
 export * from './components/slider';
+export * from './components/status-badge';
 export * from './components/sonner';
 export * from './components/spinner';
 export * from './components/switch';
@@ -62,20 +61,3 @@ export * from './components/toggle';
 export * from './components/toggle-group';
 export * from './components/tooltip';
 export { cn } from './lib/utils';
-
-export function StatusBadge({
-  status,
-  label,
-}: {
-  status: 'pending' | 'active' | 'inactive' | 'revoked' | 'archived';
-  label: string;
-}) {
-  const variants = {
-    pending: 'warning',
-    active: 'success',
-    inactive: 'secondary',
-    revoked: 'destructive',
-    archived: 'secondary',
-  } as const;
-  return <Badge variant={variants[status]}>{label}</Badge>;
-}

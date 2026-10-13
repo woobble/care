@@ -2,7 +2,12 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { Button, Collapsible, CollapsibleContent, CollapsibleTrigger } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@care/ui/components/collapsible';
 
 export function FilterDisclosure({
   title,

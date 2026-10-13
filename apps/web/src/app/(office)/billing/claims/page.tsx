@@ -6,11 +6,11 @@ import {
   TableHead as ShadcnTableHead,
   TableRow as ShadcnTableRow,
   TableCell as ShadcnTableCell,
-} from '@care/ui';
-import { NativeSelect } from '@care/ui';
+} from '@care/ui/components/table';
+import { NativeSelect } from '@care/ui/components/native-select';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDateTime } from '@app/web/i18n/format';

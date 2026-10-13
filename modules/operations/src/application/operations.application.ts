@@ -137,7 +137,7 @@ export interface OperationsSourceServices {
   evidence: Pick<ServiceEvidenceApplicationService, 'worklist' | 'getPackage'>;
   benefits: Pick<BenefitsApplicationService, 'getWorklist' | 'listUnallocatedServices'>;
   billing: Pick<BillingApplicationService, 'listInvoices' | 'receivables'>;
-  claims: Pick<BillingClaimsApplicationService, 'listClaims' | 'readiness'>;
+  claims: Pick<BillingClaimsApplicationService, 'listClaims' | 'readiness' | 'readinessForClaims'>;
   onboarding?: {
     operationsReadinessWorklist(
       principal: AuthorizationPrincipal,
@@ -981,26 +981,9 @@ export class OperationsApplicationService {
       }
     }
     if (evidence) {
-      const acknowledgementRequirements = new Map(
-        await Promise.all(
-          evidence.items
-            .filter((row) => row.status === 'awaiting_acknowledgement' && row.evidencePackageId)
-            .map(
-              async (row) =>
-                [
-                  row.evidencePackageId!,
-                  (await this.sources.evidence.getPackage(principal, row.evidencePackageId!))
-                    .acknowledgementRequired,
-                ] as const,
-            ),
-        ),
-      );
       truncated ||= evidence.total > evidence.items.length;
       for (const row of evidence.items) {
-        const issueCode = evidenceIssueCode(
-          row,
-          acknowledgementRequirements.get(row.evidencePackageId ?? '') ?? false,
-        );
+        const issueCode = evidenceIssueCode(row);
         if (!issueCode) continue;
         const resource = evidenceResources.get(row.clientId);
         items.push(
@@ -1192,16 +1175,26 @@ export class OperationsApplicationService {
     }
     if (claimsPage) {
       truncated ||= claimsPage.hasMore;
-      const readinessResults = await Promise.all(
-        claimsPage.items
-          .filter((claim) => claim.status === 'draft')
-          .map(async (claim) => ({
-            claimId: claim.id,
-            readiness: await isolateOperationsSource('claims', () =>
-              this.sources.claims.readiness(principal, claim.id),
-            ),
-          })),
+      const draftClaims = claimsPage.items.filter((claim) => claim.status === 'draft');
+      const batchedReadiness = await isolateOperationsSource('claims', () =>
+        this.sources.claims.readinessForClaims(
+          principal,
+          draftClaims.map((claim) => claim.id),
+        ),
       );
+      const readinessResults = batchedReadiness
+        ? draftClaims.map((claim) => ({
+            claimId: claim.id,
+            readiness: batchedReadiness.get(claim.id) ?? null,
+          }))
+        : await Promise.all(
+            draftClaims.map(async (claim) => ({
+              claimId: claim.id,
+              readiness: await isolateOperationsSource('claims', () =>
+                this.sources.claims.readiness(principal, claim.id),
+              ),
+            })),
+          );
       claimsReadinessComplete = readinessResults.every((result) => result.readiness !== null);
       if (!claimsReadinessComplete) completeDomains.delete('claims');
       const claimReadiness = new Map(

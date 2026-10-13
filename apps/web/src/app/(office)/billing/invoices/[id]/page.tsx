@@ -1,5 +1,5 @@
 import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
-import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -7,13 +7,15 @@ import {
   TableHead as ShadcnTableHead,
   TableRow as ShadcnTableRow,
   TableCell as ShadcnTableCell,
-} from '@care/ui';
+} from '@care/ui/components/table';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button, Input, Label } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate, formatDateTime } from '@app/web/i18n/format';

@@ -9,7 +9,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from '@care/ui';
+} from '@care/ui/components/dropdown-menu';
 import { setLocaleAction } from '@app/web/app/actions/locale';
 import { isLocale, type Locale } from '@app/web/i18n/config';
 

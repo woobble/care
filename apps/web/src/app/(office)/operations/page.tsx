@@ -1,7 +1,15 @@
 import Link from 'next/link';
 import { CalendarDays, ClipboardCheck, FileCheck2, type LucideIcon } from 'lucide-react';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@care/ui';
+import { Badge } from '@care/ui/components/badge';
+import { Button } from '@care/ui/components/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@care/ui/components/card';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDateTime } from '@app/web/i18n/format';

@@ -11,16 +11,12 @@ export function stableIssueId(
     .digest('hex');
 }
 
-export function evidenceIssueCode(
-  item: {
-    status: string;
-    evidencePackageId: string | null;
-    signatureAvailable: boolean;
-  },
-  acknowledgementRequired: boolean,
-): string | null {
+export function evidenceIssueCode(item: {
+  status: string;
+  evidencePackageId: string | null;
+  signatureAvailable: boolean;
+}): string | null {
   if (!item.evidencePackageId) return null;
-  if (item.status === 'awaiting_acknowledgement' && !acknowledgementRequired) return null;
   switch (item.status) {
     case 'awaiting_acknowledgement':
       return 'acknowledgement_missing';

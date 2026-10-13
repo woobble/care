@@ -5,13 +5,13 @@ import {
   TableHead as ShadcnTableHead,
   TableRow as ShadcnTableRow,
   TableCell as ShadcnTableCell,
-} from '@care/ui';
-import { NativeSelect } from '@care/ui';
+} from '@care/ui/components/table';
+import { NativeSelect } from '@care/ui/components/native-select';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { components } from '@care/api-client';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { acknowledgementCapacityKey, evidenceStatusKey } from '@app/web/i18n/evidence';
 import { errorMessageKey } from '@app/web/i18n/errors';

@@ -572,11 +572,11 @@ async function ensureClients(organizationId: string, facilityId: string) {
       facilityId,
       pageSize: 100,
     });
-    const existing = matches.items
-      .map((item) => item.client)
-      .filter((item) => item.lastName === lastName);
+    const existing = matches.items.filter((item) => item.client.lastName === lastName);
     if (existing.length > 1) throw new Error(`Duplicate synthetic client ${lastName}`);
-    let client = existing[0];
+    let client = existing[0]
+      ? await clientService.get(principal, existing[0].client.id)
+      : undefined;
     if (
       client &&
       (client.firstName !== 'Fiktiv' ||

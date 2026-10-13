@@ -1,8 +1,8 @@
-import { NativeSelect } from '@care/ui';
+import { NativeSelect } from '@care/ui/components/native-select';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { dateRange, shiftDate, todayDateKey } from '@app/web/lib/care-date';
 import { formatDateTime } from '@app/web/i18n/format';

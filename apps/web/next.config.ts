@@ -12,6 +12,7 @@ export default function nextConfig(phase: string): NextConfig {
   return withNextIntl({
     output: 'standalone',
     transpilePackages: ['@care/api-client', '@care/config', '@care/ui', 'pg'],
+    logging: { fetches: { fullUrl: false } },
     async headers() {
       const securityHeaders = [
         { key: 'X-Content-Type-Options', value: 'nosniff' },

@@ -1,4 +1,4 @@
-import { Skeleton } from '@care/ui';
+import { Skeleton } from '@care/ui/components/skeleton';
 import { getTranslations } from 'next-intl/server';
 
 export async function PageLoadingSkeleton() {

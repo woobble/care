@@ -1,10 +1,11 @@
-import { Checkbox as ShadcnCheckbox } from '@care/ui';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { Button, StatusBadge } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { StatusBadge } from '@care/ui/components/status-badge';
 import { permissionLabelKeys, roleLabelKey } from '@app/web/i18n/access';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { statusLabelKey } from '@app/web/i18n/status';

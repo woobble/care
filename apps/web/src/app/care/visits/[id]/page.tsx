@@ -1,10 +1,12 @@
-import { Textarea } from '@care/ui';
-import { NativeSelect } from '@care/ui';
+import { Textarea } from '@care/ui/components/textarea';
+import { NativeSelect } from '@care/ui/components/native-select';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { v7 as uuidv7 } from 'uuid';
 import type { components } from '@care/api-client';
-import { Button, Input, Label } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { errorMessageKey } from '@app/web/i18n/errors';

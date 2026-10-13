@@ -1,28 +1,34 @@
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
+import { Suspense } from 'react';
 import { SignOutMenuItem } from '@app/web/components/sign-out-menu-item';
-import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
+import { getApiClient, getAuthSession, getPermissionGrants, hasPermission } from '@app/web/lib/api';
 import { signOutAction } from '@app/web/app/actions/auth';
 import { OfficeShell, type OfficeNavigationGroup } from '@app/web/components/office-shell';
-import { auth } from '@app/web/auth';
+import { PageLoadingSkeleton } from '@app/web/components/page-loading-skeleton';
 
-export default async function OfficeLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const api = await getApiClient(false);
-  const get = api.GET;
-  const [requestHeaders, cookieStore, t, locale] = await Promise.all([
-    headers(),
+export default function OfficeLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <Suspense fallback={<PageLoadingSkeleton />}>
+      <OfficeWorkspaceLayout>{children}</OfficeWorkspaceLayout>
+    </Suspense>
+  );
+}
+
+async function OfficeWorkspaceLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const [api, cookieStore, t, locale, session] = await Promise.all([
+    getApiClient(false),
     cookies(),
     getTranslations('Navigation'),
     getLocale(),
+    getAuthSession(),
   ]);
-  const [{ data: tenants, error }, session] = await Promise.all([
-    get('/api/v1/me/tenants'),
-    auth.api.getSession({ headers: requestHeaders }),
-  ]);
+  const get = api.GET;
+  const { data: tenants, error } = await get('/api/v1/me/tenants');
   const tenantId = cookieStore.get('care-tenant')?.value;
   if (error || !tenantId || !tenants?.some((tenant) => tenant.id === tenantId)) redirect('/');
-  const permissions = await getPermissionGrants(api);
+  const permissions = await getPermissionGrants(await getApiClient());
   const navigationLabels = {
     workspace: t('workspace'),
     servicesFinance: t('servicesFinance'),

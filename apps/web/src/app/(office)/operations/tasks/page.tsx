@@ -1,10 +1,12 @@
-import { Checkbox as ShadcnCheckbox } from '@care/ui';
-import { Textarea } from '@care/ui';
-import { NativeSelect } from '@care/ui';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { Textarea } from '@care/ui/components/textarea';
+import { NativeSelect } from '@care/ui/components/native-select';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button, Input, Label } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDateTime } from '@app/web/i18n/format';
 import { visitDateTimeInputValue } from '@app/web/lib/care-date';

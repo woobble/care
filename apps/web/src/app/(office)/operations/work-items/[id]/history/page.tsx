@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { formatDateTime } from '@app/web/i18n/format';
 import { DataPagination } from '@app/web/components/data-pagination';

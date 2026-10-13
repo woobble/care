@@ -1,7 +1,9 @@
-import { NativeSelect } from '@care/ui';
+import { NativeSelect } from '@care/ui/components/native-select';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button, Input, Label } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { DataPagination } from '@app/web/components/data-pagination';
 import { redirectToValidPage } from '@app/web/lib/pagination';

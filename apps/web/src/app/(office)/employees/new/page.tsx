@@ -3,7 +3,9 @@ import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { Button, Input, Label } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import { createEmployeeAction } from '@app/web/app/(office)/employees/actions';
 

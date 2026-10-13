@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import { Skeleton } from '@care/ui';
+import { Skeleton } from '@care/ui/components/skeleton';
 
 export default async function CareTodayLoading() {
   const t = await getTranslations('Caregiver');

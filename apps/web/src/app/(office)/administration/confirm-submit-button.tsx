@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 
 export function ConfirmSubmitButton({
   children,

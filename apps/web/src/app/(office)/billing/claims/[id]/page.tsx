@@ -6,14 +6,15 @@ import {
   TableHead as ShadcnTableHead,
   TableRow as ShadcnTableRow,
   TableCell as ShadcnTableCell,
-} from '@care/ui';
-import { NativeSelect } from '@care/ui';
+} from '@care/ui/components/table';
+import { NativeSelect } from '@care/ui/components/native-select';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button, Input } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate, formatDateTime } from '@app/web/i18n/format';

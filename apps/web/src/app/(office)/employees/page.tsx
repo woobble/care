@@ -6,11 +6,12 @@ import {
   TableRow as ShadcnTableRow,
   TableCell as ShadcnTableCell,
   TableCaption as ShadcnTableCaption,
-} from '@care/ui';
-import { NativeSelect } from '@care/ui';
+} from '@care/ui/components/table';
+import { NativeSelect } from '@care/ui/components/native-select';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { Button, StatusBadge } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { StatusBadge } from '@care/ui/components/status-badge';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
 import {
@@ -167,6 +168,7 @@ export default async function EmployeesPage({
             name="organizationId"
             label={t('Common.fields.organization')}
             entity="organizations"
+            className="h-10"
             placeholder={t('Common.filters.allOrganizations')}
             {...(selectedOrganization
               ? {
@@ -182,6 +184,7 @@ export default async function EmployeesPage({
             label={t('Common.fields.facility')}
             entity="facilities"
             {...(organizationId ? { organizationId } : {})}
+            className="h-10"
             placeholder={t('Common.filters.allFacilities')}
             {...(selectedFacility
               ? {
@@ -197,6 +200,7 @@ export default async function EmployeesPage({
             label={t('Common.fields.team')}
             entity="teams"
             {...(organizationId ? { organizationId } : {})}
+            className="h-10"
             placeholder={t('Common.filters.allTeams')}
             {...(selectedTeam
               ? {

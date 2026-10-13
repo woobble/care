@@ -23986,10 +23986,6 @@
             "type": "string",
             "format": "uuid"
           },
-          "tenantId": {
-            "type": "string",
-            "format": "uuid"
-          },
           "organizationId": {
             "type": "string",
             "format": "uuid",
@@ -24015,43 +24011,6 @@
             "format": "date",
             "nullable": true
           },
-          "dateOfDeath": {
-            "type": "string",
-            "format": "date",
-            "nullable": true
-          },
-          "gender": {
-            "type": "string",
-            "enum": [
-              "female",
-              "male",
-              "diverse"
-            ],
-            "nullable": true
-          },
-          "salutation": {
-            "type": "string",
-            "enum": [
-              "mr",
-              "ms",
-              "mx",
-              "other"
-            ],
-            "nullable": true
-          },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "nullable": true
-          },
-          "phone": {
-            "type": "string",
-            "nullable": true
-          },
-          "mobile": {
-            "type": "string",
-            "nullable": true
-          },
           "status": {
             "type": "string",
             "enum": [
@@ -24059,14 +24018,6 @@
               "active",
               "archived"
             ]
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
           },
           "organizationName": {
             "type": "string",
@@ -24085,22 +24036,13 @@
         },
         "required": [
           "id",
-          "tenantId",
           "organizationId",
           "primaryFacilityId",
           "firstName",
           "lastName",
           "preferredName",
           "dateOfBirth",
-          "dateOfDeath",
-          "gender",
-          "salutation",
-          "email",
-          "phone",
-          "mobile",
           "status",
-          "createdAt",
-          "updatedAt",
           "organizationName",
           "facilityName",
           "currentPflegegrad"

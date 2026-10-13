@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   BadgeEuro,
@@ -24,35 +25,18 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
-import {
-  Button,
-  Separator,
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-  TooltipProvider,
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarSeparator,
-  SidebarTrigger,
-  cn,
-} from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Separator } from '@care/ui/components/separator';
+import { cn } from '@care/ui/lib/utils';
 import { AccountMenu } from '@app/web/components/account-menu';
 import type { Locale } from '@app/web/i18n/config';
 import { LanguageSwitcher } from '@app/web/components/language-switcher';
 import { NavigationProgress } from '@app/web/components/navigation-progress';
 import { ThemeSwitcher } from '@app/web/components/theme-switcher';
+
+const OfficeMobileNavigation = dynamic(() => import('./office-mobile-navigation'), {
+  ssr: false,
+});
 
 export type OfficeNavigationGroup = {
   id: string;
@@ -111,6 +95,7 @@ export function OfficeShell({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileNavigationLoaded, setMobileNavigationLoaded] = useState(false);
   const pageContextRef = useRef<HTMLSpanElement>(null);
   const activeItem = useMemo(() => {
     const links = groups.flatMap((group) => group.items);
@@ -119,6 +104,11 @@ export function OfficeShell({
       .sort((left, right) => right.href.length - left.href.length)[0];
   }, [groups, pathname]);
   const tenantInitial = tenantName.trim().charAt(0).toUpperCase() || 'C';
+
+  const updateCollapsed = useCallback((nextCollapsed: boolean) => {
+    setCollapsed(nextCollapsed);
+    document.cookie = `care-office-sidebar=${nextCollapsed ? 'collapsed' : 'expanded'}; Path=/; Max-Age=31536000; SameSite=Lax`;
+  }, []);
 
   useEffect(() => {
     const desktopViewport = window.matchMedia('(min-width: 768px)');
@@ -132,214 +122,211 @@ export function OfficeShell({
     };
   }, []);
 
+  useEffect(() => {
+    function toggleSidebar(event: KeyboardEvent) {
+      if (
+        event.key === 'b' &&
+        (event.metaKey || event.ctrlKey) &&
+        window.matchMedia('(min-width: 768px)').matches
+      ) {
+        event.preventDefault();
+        updateCollapsed(!collapsed);
+      }
+    }
+    window.addEventListener('keydown', toggleSidebar);
+    return () => window.removeEventListener('keydown', toggleSidebar);
+  }, [collapsed, updateCollapsed]);
+
   return (
-    <TooltipProvider delayDuration={250}>
-      <SidebarProvider
-        open={!collapsed}
-        onOpenChange={(open) => setCollapsed(!open)}
-        cookieName="care-office-sidebar"
-        cookieMaxAge={31_536_000}
-        cookieFormat="expanded-collapsed"
-        style={
-          {
-            '--sidebar-width': 'var(--sidebar-width-expanded)',
-            '--sidebar-width-icon': 'var(--sidebar-width-collapsed)',
-          } as React.CSSProperties
-        }
+    <div
+      className="flex min-h-dvh w-full min-w-0 bg-background text-foreground"
+      style={
+        {
+          '--sidebar-width': 'var(--sidebar-width-expanded)',
+          '--sidebar-width-icon': 'var(--sidebar-width-collapsed)',
+        } as React.CSSProperties
+      }
+    >
+      <aside
+        id="office-sidebar"
+        role="complementary"
+        aria-label={labels.main}
+        data-collapsed={collapsed}
+        style={{
+          width: collapsed ? 'var(--sidebar-width-collapsed)' : 'var(--sidebar-width-expanded)',
+        }}
+        className={cn(
+          'sticky top-0 hidden h-dvh shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none md:flex',
+        )}
       >
-        <div className="flex min-h-dvh w-full min-w-0 bg-background text-foreground">
-          <Sidebar
-            id="office-sidebar"
-            role="complementary"
-            aria-label={labels.main}
-            data-collapsed={collapsed}
-            collapsible="none"
-            style={{
-              width: collapsed ? 'var(--sidebar-width-collapsed)' : 'var(--sidebar-width-expanded)',
-            }}
-            className={cn(
-              'sticky top-0 hidden h-dvh shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none md:flex',
-            )}
-          >
-            <SidebarHeader className="min-h-[4.25rem] shrink-0 p-0">
-              <SidebarBrand
-                href={groups[0]?.items[0]?.href ?? '/'}
-                label={labels.brand}
-                collapsed={collapsed}
-                mobileView={false}
-              />
-            </SidebarHeader>
-            <SidebarSeparator className="mx-0 shrink-0" />
-            <SidebarContent className="office-sidebar-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto py-3">
-              <NavigationGroups
-                groups={groups}
-                activeItemId={activeItem?.id}
-                collapsed={collapsed}
-                mobileView={false}
-                closeMobile={() => undefined}
-              />
-            </SidebarContent>
-            <SidebarFooter className="mt-auto border-t border-sidebar-border p-0">
-              <div className="flex min-w-0 items-center">
-                <span
-                  className={cn(
-                    'flex h-[4.25rem] w-[var(--sidebar-width-collapsed)] shrink-0 items-center justify-center text-sidebar-foreground transition-transform duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
-                    !collapsed && 'translate-x-2.5',
-                  )}
-                  title={tenantName}
-                >
-                  <span
-                    className="flex size-11 items-center justify-center rounded-full border border-sidebar-border bg-background text-sm font-semibold text-foreground"
-                    aria-hidden="true"
-                  >
-                    {tenantInitial}
-                  </span>
-                </span>
-                <div
-                  className={cn(
-                    'ml-[18px] grid min-w-0 overflow-hidden transition-[max-width,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
-                    collapsed
-                      ? 'max-w-0 -translate-x-1 opacity-0'
-                      : 'max-w-44 translate-x-0 opacity-100',
-                  )}
-                  aria-hidden={collapsed}
-                >
-                  <p className="truncate text-sm font-medium" title={tenantName}>
-                    {tenantName}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">{labels.brand}</p>
-                </div>
-              </div>
-            </SidebarFooter>
-          </Sidebar>
-
-          <div className="flex min-w-0 flex-1 flex-col">
-            <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur md:h-[4.25rem] sm:px-5 lg:px-7">
-              <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-                <SheetTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 md:hidden"
-                    aria-label={labels.openMenu}
-                    aria-expanded={mobileOpen}
-                    aria-controls="office-mobile-navigation"
-                  >
-                    <Menu className="size-5" aria-hidden="true" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent
-                  className="p-0"
-                  closeLabel={labels.closeMenu}
-                  aria-describedby={undefined}
-                  onCloseAutoFocus={(event) => {
-                    if (window.matchMedia('(min-width: 768px)').matches) {
-                      event.preventDefault();
-                      pageContextRef.current?.focus({ preventScroll: true });
-                    }
-                  }}
-                >
-                  <SheetHeader className="border-b border-sidebar-border px-4 py-4 pr-14">
-                    <SheetTitle className="sr-only">{labels.main}</SheetTitle>
-                    <SheetDescription className="sr-only">{tenantName}</SheetDescription>
-                    <SidebarBrand
-                      href={groups[0]?.items[0]?.href ?? '/'}
-                      label={labels.brand}
-                      collapsed={false}
-                      mobileView
-                      onNavigate={() => setMobileOpen(false)}
-                    />
-                  </SheetHeader>
-                  <nav
-                    id="office-mobile-navigation"
-                    aria-label={labels.main}
-                    className="min-h-0 flex-1 overflow-y-auto px-2 py-3"
-                  >
-                    <NavigationGroups
-                      groups={groups}
-                      activeItemId={activeItem?.id}
-                      collapsed={false}
-                      mobileView
-                      closeMobile={() => setMobileOpen(false)}
-                    />
-                  </nav>
-                  <div className="border-t border-sidebar-border p-4">
-                    <p className="truncate text-sm font-medium">{tenantName}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{labels.brand}</p>
-                  </div>
-                </SheetContent>
-              </Sheet>
-
-              <SidebarTrigger
-                className="hidden shrink-0 rounded-full md:inline-flex"
-                aria-label={collapsed ? labels.expand : labels.collapse}
-                label={collapsed ? labels.expand : labels.collapse}
-                title={collapsed ? labels.expand : labels.collapse}
-                aria-expanded={!collapsed}
-                aria-controls="office-sidebar"
+        <div className="flex min-h-[4.25rem] shrink-0 flex-col p-0">
+          <SidebarBrand
+            href={groups[0]?.items[0]?.href ?? '/'}
+            label={labels.brand}
+            collapsed={collapsed}
+            mobileView={false}
+          />
+        </div>
+        <Separator className="mx-0 shrink-0 bg-sidebar-border" />
+        <div className="office-sidebar-scroll flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto py-3">
+          <NavigationGroups
+            groups={groups}
+            activeItemId={activeItem?.id}
+            collapsed={collapsed}
+            mobileView={false}
+            closeMobile={() => undefined}
+          />
+        </div>
+        <div className="mt-auto flex flex-col border-t border-sidebar-border p-0">
+          <div className="flex min-w-0 items-center">
+            <span
+              className={cn(
+                'flex h-[4.25rem] w-[var(--sidebar-width-collapsed)] shrink-0 items-center justify-center text-sidebar-foreground transition-transform duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+                !collapsed && 'translate-x-2.5',
+              )}
+              title={tenantName}
+            >
+              <span
+                className="flex size-11 items-center justify-center rounded-full border border-sidebar-border bg-background text-sm font-semibold text-foreground"
+                aria-hidden="true"
               >
-                {collapsed ? (
-                  <PanelLeftOpen className="size-4" aria-hidden="true" />
-                ) : (
-                  <PanelLeftClose className="size-4" aria-hidden="true" />
-                )}
-              </SidebarTrigger>
-
-              <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground md:hidden">
-                  <HeartHandshake className="size-4" aria-hidden="true" />
-                </span>
-                <span
-                  className={cn(
-                    'hidden shrink-0 text-sm font-semibold sm:inline',
-                    !collapsed && 'md:hidden',
-                  )}
-                >
-                  {labels.brand}
-                </span>
-                <Separator
-                  orientation="vertical"
-                  className={cn('hidden h-7 sm:block', !collapsed && 'md:hidden')}
-                />
-                <span
-                  id="office-page-context"
-                  ref={pageContextRef}
-                  tabIndex={-1}
-                  className="min-w-0 truncate rounded-sm text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-current="page"
-                >
-                  {activeItem?.label ?? labels.overview}
-                </span>
-                <span className="hidden min-w-0 truncate text-xs text-muted-foreground lg:block">
-                  {tenantName}
-                </span>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-                <ThemeSwitcher />
-                <div className="hidden sm:block">
-                  <LanguageSwitcher locale={locale} />
-                </div>
-                <AccountMenu
-                  profileName={profileName}
-                  email={email}
-                  tenantName={tenantName}
-                  locale={locale}
-                  mobileLanguageOnly
-                  labels={{ account: labels.account, changeTenant: labels.changeTenant }}
-                  signOut={signOut}
-                />
-              </div>
-              <NavigationProgress />
-            </header>
-
-            <main className="mx-auto w-full max-w-[1680px] min-w-0 flex-1 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
-              {children}
-            </main>
+                {tenantInitial}
+              </span>
+            </span>
+            <div
+              className={cn(
+                'ml-[18px] grid min-w-0 overflow-hidden transition-[max-width,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+                collapsed
+                  ? 'max-w-0 -translate-x-1 opacity-0'
+                  : 'max-w-44 translate-x-0 opacity-100',
+              )}
+              aria-hidden={collapsed}
+            >
+              <p className="truncate text-sm font-medium" title={tenantName}>
+                {tenantName}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">{labels.brand}</p>
+            </div>
           </div>
         </div>
-      </SidebarProvider>
-    </TooltipProvider>
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur md:h-[4.25rem] sm:px-5 lg:px-7">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0 md:hidden"
+            aria-label={labels.openMenu}
+            aria-expanded={mobileOpen}
+            aria-controls="office-mobile-navigation"
+            onClick={() => {
+              setMobileNavigationLoaded(true);
+              setMobileOpen(true);
+            }}
+          >
+            <Menu className="size-5" aria-hidden="true" />
+          </Button>
+          {mobileNavigationLoaded ? (
+            <OfficeMobileNavigation
+              open={mobileOpen}
+              onOpenChange={setMobileOpen}
+              mainLabel={labels.main}
+              brandLabel={labels.brand}
+              closeLabel={labels.closeMenu}
+              tenantName={tenantName}
+              pageContextRef={pageContextRef}
+              brand={
+                <SidebarBrand
+                  href={groups[0]?.items[0]?.href ?? '/'}
+                  label={labels.brand}
+                  collapsed={false}
+                  mobileView
+                  onNavigate={() => setMobileOpen(false)}
+                />
+              }
+              navigation={
+                <NavigationGroups
+                  groups={groups}
+                  activeItemId={activeItem?.id}
+                  collapsed={false}
+                  mobileView
+                  closeMobile={() => setMobileOpen(false)}
+                />
+              }
+            />
+          ) : null}
+
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="hidden shrink-0 rounded-full md:inline-flex"
+            aria-label={collapsed ? labels.expand : labels.collapse}
+            title={collapsed ? labels.expand : labels.collapse}
+            aria-expanded={!collapsed}
+            aria-controls="office-sidebar"
+            onClick={() => updateCollapsed(!collapsed)}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="size-4" aria-hidden="true" />
+            ) : (
+              <PanelLeftClose className="size-4" aria-hidden="true" />
+            )}
+          </Button>
+
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground md:hidden">
+              <HeartHandshake className="size-4" aria-hidden="true" />
+            </span>
+            <span
+              className={cn(
+                'hidden shrink-0 text-sm font-semibold sm:inline',
+                !collapsed && 'md:hidden',
+              )}
+            >
+              {labels.brand}
+            </span>
+            <Separator
+              orientation="vertical"
+              className={cn('hidden h-7 sm:block', !collapsed && 'md:hidden')}
+            />
+            <span
+              id="office-page-context"
+              ref={pageContextRef}
+              tabIndex={-1}
+              className="min-w-0 truncate rounded-sm text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-current="page"
+            >
+              {activeItem?.label ?? labels.overview}
+            </span>
+            <span className="hidden min-w-0 truncate text-xs text-muted-foreground lg:block">
+              {tenantName}
+            </span>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            <ThemeSwitcher />
+            <div className="hidden sm:block">
+              <LanguageSwitcher locale={locale} />
+            </div>
+            <AccountMenu
+              profileName={profileName}
+              email={email}
+              tenantName={tenantName}
+              locale={locale}
+              mobileLanguageOnly
+              labels={{ account: labels.account, changeTenant: labels.changeTenant }}
+              signOut={signOut}
+            />
+          </div>
+          <NavigationProgress />
+        </header>
+
+        <main className="mx-auto w-full max-w-[1680px] min-w-0 flex-1 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
+          {children}
+        </main>
+      </div>
+    </div>
   );
 }
 
@@ -416,8 +403,8 @@ function NavigationGroups({
   return (
     <div className={cn('grid', mobileView || !collapsed ? 'gap-7' : 'gap-5')}>
       {groups.map((group) => (
-        <SidebarGroup key={group.id} className="grid gap-2 p-0">
-          <SidebarGroupLabel
+        <div key={group.id} className="relative grid w-full min-w-0 gap-2 p-0">
+          <div
             className={cn(
               'block h-auto w-full overflow-hidden rounded-none p-0 text-sm font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground transition-[max-height,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
               mobileView || !collapsed
@@ -429,10 +416,10 @@ function NavigationGroups({
             aria-hidden={collapsed && !mobileView}
           >
             {group.label}
-          </SidebarGroupLabel>
-          <SidebarMenu
+          </div>
+          <ul
             className={cn(
-              'grid',
+              'grid w-full min-w-0',
               collapsed && !mobileView ? 'gap-1.5' : 'gap-2',
               mobileView && 'px-2',
             )}
@@ -441,13 +428,19 @@ function NavigationGroups({
               const Icon = icons[item.id] ?? Activity;
               const isActive = activeItemId === item.id;
               return (
-                <SidebarMenuItem key={item.id}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive}
-                    size="lg"
-                    {...(!mobileView && collapsed ? { tooltip: item.label } : {})}
+                <li key={item.id} className="group/menu-item relative">
+                  <Link
+                    href={item.href}
+                    data-slot="sidebar-menu-button"
+                    data-sidebar="menu-button"
+                    data-size="lg"
+                    data-active={isActive}
+                    aria-current={isActive ? 'page' : undefined}
+                    aria-label={!mobileView && collapsed ? item.label : undefined}
+                    title={!mobileView && collapsed ? item.label : undefined}
+                    onClick={closeMobile}
                     className={cn(
+                      'peer/menu-button group/menu-button flex h-12 w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding]',
                       'relative isolate min-w-0 overflow-hidden rounded-2xl p-0 font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-transparent data-[active=true]:text-sidebar-accent-foreground',
                       mobileView
                         ? 'min-h-11 gap-3 px-3 text-base hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent'
@@ -457,62 +450,55 @@ function NavigationGroups({
                       isActive && 'text-sidebar-accent-foreground',
                     )}
                   >
-                    <Link
-                      href={item.href}
-                      aria-current={isActive ? 'page' : undefined}
-                      aria-label={!mobileView && collapsed ? item.label : undefined}
-                      onClick={closeMobile}
+                    <span
+                      className={cn(
+                        'z-10 flex shrink-0 items-center justify-center',
+                        mobileView
+                          ? 'size-10'
+                          : collapsed
+                            ? 'absolute inset-y-0 left-0 w-full'
+                            : 'absolute inset-y-0 left-0 w-[var(--sidebar-width-collapsed)]',
+                        !mobileView && !collapsed && 'translate-x-2.5',
+                        !mobileView &&
+                          'transition-transform duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+                      )}
                     >
+                      <Icon className="size-5" strokeWidth={1.8} aria-hidden="true" />
+                    </span>
+                    {mobileView ? (
+                      <span className="min-w-0 flex-1 truncate whitespace-nowrap">
+                        {item.label}
+                      </span>
+                    ) : (
                       <span
                         className={cn(
-                          'z-10 flex shrink-0 items-center justify-center',
-                          mobileView
-                            ? 'size-10'
-                            : collapsed
-                              ? 'absolute inset-y-0 left-0 w-full'
-                              : 'absolute inset-y-0 left-0 w-[var(--sidebar-width-collapsed)]',
-                          !mobileView && !collapsed && 'translate-x-2.5',
-                          !mobileView &&
-                            'transition-transform duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+                          'absolute inset-y-0 z-10 flex min-w-0 items-center overflow-hidden truncate whitespace-nowrap transition-[opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+                          isActive && !collapsed ? 'right-12' : 'right-3',
+                          collapsed
+                            ? 'left-[var(--sidebar-width-collapsed)] text-sm'
+                            : 'left-[calc(var(--sidebar-width-collapsed)+1.125rem)] text-sm',
+                          collapsed ? 'translate-x-1 opacity-0' : 'translate-x-0 opacity-100',
                         )}
+                        aria-hidden={collapsed}
                       >
-                        <Icon className="size-5" strokeWidth={1.8} aria-hidden="true" />
+                        {item.label}
                       </span>
-                      {mobileView ? (
-                        <span className="min-w-0 flex-1 truncate whitespace-nowrap">
-                          {item.label}
-                        </span>
-                      ) : (
-                        <span
-                          className={cn(
-                            'absolute inset-y-0 z-10 flex min-w-0 items-center overflow-hidden truncate whitespace-nowrap transition-[opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
-                            isActive && !collapsed ? 'right-12' : 'right-3',
-                            collapsed
-                              ? 'left-[var(--sidebar-width-collapsed)] text-sm'
-                              : 'left-[calc(var(--sidebar-width-collapsed)+1.125rem)] text-sm',
-                            collapsed ? 'translate-x-1 opacity-0' : 'translate-x-0 opacity-100',
-                          )}
-                          aria-hidden={collapsed}
-                        >
-                          {item.label}
-                        </span>
-                      )}
-                      {isActive ? (
-                        <span
-                          className={cn(
-                            'absolute z-10 size-1.5 rounded-full bg-primary',
-                            !mobileView && !collapsed ? 'right-5' : 'right-3',
-                            collapsed && !mobileView && 'hidden',
-                          )}
-                        />
-                      ) : null}
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                    )}
+                    {isActive ? (
+                      <span
+                        className={cn(
+                          'absolute z-10 size-1.5 rounded-full bg-primary',
+                          !mobileView && !collapsed ? 'right-5' : 'right-3',
+                          collapsed && !mobileView && 'hidden',
+                        )}
+                      />
+                    ) : null}
+                  </Link>
+                </li>
               );
             })}
-          </SidebarMenu>
-        </SidebarGroup>
+          </ul>
+        </div>
       ))}
     </div>
   );

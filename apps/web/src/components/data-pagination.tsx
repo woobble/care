@@ -1,4 +1,5 @@
-import { Button, NativeSelect } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { NativeSelect } from '@care/ui/components/native-select';
 import {
   Pagination,
   PaginationContent,
@@ -7,7 +8,7 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from '@care/ui';
+} from '@care/ui/components/pagination';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { getLocale, getTranslations } from 'next-intl/server';
 

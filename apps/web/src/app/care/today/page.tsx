@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Badge, Button } from '@care/ui';
+import { Badge } from '@care/ui/components/badge';
+import { Button } from '@care/ui/components/button';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { CaregiverRetryButton } from '@app/web/components/caregiver-retry-button';
 import { formatLongDate } from '@app/web/i18n/format';

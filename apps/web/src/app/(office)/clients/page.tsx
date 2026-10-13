@@ -1,11 +1,11 @@
-import { NativeSelect } from '@care/ui';
+import { NativeSelect } from '@care/ui/components/native-select';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
+import { Button } from '@care/ui/components/button';
+import { Card } from '@care/ui/components/card';
+import { Input } from '@care/ui/components/input';
+import { StatusBadge } from '@care/ui/components/status-badge';
 import {
-  Button,
-  Card,
-  Input,
-  StatusBadge,
   Table,
   TableBody,
   TableCaption,
@@ -13,7 +13,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@care/ui';
+} from '@care/ui/components/table';
 import { formatDate } from '@app/web/i18n/format';
 import { statusLabelKey } from '@app/web/i18n/status';
 import { ResourceReference } from '@app/web/components/resource-reference';
@@ -69,13 +69,10 @@ export default async function ClientsPage({
   const pageSize = [10, 20, 50, 100].includes(parsedPageSize) ? parsedPageSize : 20;
   const text = query.q?.trim().slice(0, 120) || undefined;
 
-  const api = await getApiClient();
-  const header = await getTenantHeader();
-  const permissions = await getPermissionGrants(api);
+  const [api, header] = await Promise.all([getApiClient(), getTenantHeader()]);
   const tenantId = header['X-Tenant-Id'];
-  const canCreateClient = hasPermission(permissions, 'client.create');
   const get = api.GET;
-  const [clientsResult, organizationResult, facilityResult] = await Promise.all([
+  const [clientsResult, organizationResult, facilityResult, permissions] = await Promise.all([
     get('/api/v1/clients', {
       params: {
         query: {
@@ -98,7 +95,9 @@ export default async function ClientsPage({
     facilityId
       ? get('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
       : Promise.resolve(null),
+    getPermissionGrants(api),
   ]);
+  const canCreateClient = hasPermission(permissions, 'client.create');
   const clients = clientsResult.data as unknown as
     | components['schemas']['ClientListResponseDto']
     | undefined;
@@ -148,7 +147,7 @@ export default async function ClientsPage({
             <input type="hidden" name="pageSize" value={pageSize} />
             <label className="grid min-w-0 gap-1 text-sm font-medium md:col-span-2">
               {t('Clients.searchName')}
-              <Input type="search" name="q" maxLength={120} defaultValue={text} />
+              <Input type="search" name="q" maxLength={120} defaultValue={text} className="h-10" />
             </label>
             <SelectFilter label={t('Common.fields.status')} name="status" value={status ?? ''}>
               <option value="">{t('Common.filters.allStatuses')}</option>
@@ -160,6 +159,8 @@ export default async function ClientsPage({
               name="organizationId"
               label={t('Common.fields.organization')}
               entity="organizations"
+              browseOnEmpty
+              className="h-10"
               placeholder={t('Common.filters.allOrganizations')}
               {...(selectedOrganization
                 ? {
@@ -175,6 +176,8 @@ export default async function ClientsPage({
               label={t('Common.fields.facility')}
               entity="facilities"
               {...(organizationId ? { organizationId } : {})}
+              browseOnEmpty
+              className="h-10"
               placeholder={t('Common.filters.allFacilities')}
               {...(selectedFacility
                 ? {
@@ -419,7 +422,7 @@ function SelectFilter({
     <label className="grid min-w-0 gap-1 text-sm font-medium">
       {label}
       <NativeSelect
-        selectClassName="h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 font-normal text-foreground"
+        selectClassName="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 font-normal text-foreground"
         name={name}
         defaultValue={value}
         className="w-full"

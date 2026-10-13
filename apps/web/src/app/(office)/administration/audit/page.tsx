@@ -6,7 +6,7 @@ import {
   TableRow as ShadcnTableRow,
   TableCell as ShadcnTableCell,
   TableCaption as ShadcnTableCaption,
-} from '@care/ui';
+} from '@care/ui/components/table';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';

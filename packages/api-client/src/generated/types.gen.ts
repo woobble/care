@@ -561,22 +561,13 @@ export type AuditListDto = {
 
 export type ClientListItemResponseDto = {
     id: string;
-    tenantId: string;
     organizationId: string | null;
     primaryFacilityId: string | null;
     firstName: string;
     lastName: string;
     preferredName: string | null;
     dateOfBirth: string | null;
-    dateOfDeath: string | null;
-    gender: 'female' | 'male' | 'diverse';
-    salutation: 'mr' | 'ms' | 'mx' | 'other';
-    email: string | null;
-    phone: string | null;
-    mobile: string | null;
     status: 'pending' | 'active' | 'archived';
-    createdAt: string;
-    updatedAt: string;
     organizationName: string | null;
     facilityName: string | null;
     currentPflegegrad: number | null;

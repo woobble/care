@@ -1,10 +1,10 @@
-import { NativeSelect } from '@care/ui';
+import { NativeSelect } from '@care/ui/components/native-select';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { components } from '@care/api-client';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 import { PageHeader } from '@app/web/components/page-patterns';
 import {
   acknowledgementCapacityKey,

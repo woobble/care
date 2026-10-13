@@ -1,19 +1,11 @@
-import { NativeSelect } from '@care/ui';
+import { NativeSelect } from '@care/ui/components/native-select';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { headers } from 'next/headers';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { auth } from '@app/web/auth';
-import { getApiClient } from '@app/web/lib/api';
-import {
-  Alert,
-  AlertDescription,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  Label,
-} from '@care/ui';
+import { getApiClient, getAuthSession } from '@app/web/lib/api';
+import { Alert, AlertDescription } from '@care/ui/components/alert';
+import { Button } from '@care/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader } from '@care/ui/components/card';
+import { Label } from '@care/ui/components/label';
 import { HeartHandshake, ShieldCheck } from 'lucide-react';
 import { LanguageSwitcher } from '@app/web/components/language-switcher';
 import { SignOutForm } from '@app/web/components/sign-out-form';
@@ -26,10 +18,12 @@ export default async function TenantSelectionPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  const params = await searchParams;
-  const locale = await getLocale();
-  const [authT, tenantT] = await Promise.all([getTranslations('Auth'), getTranslations('Tenant')]);
-  const session = await auth.api.getSession({ headers: await headers() });
+  const [params, locale, [authT, tenantT], session] = await Promise.all([
+    searchParams,
+    getLocale(),
+    Promise.all([getTranslations('Auth'), getTranslations('Tenant')]),
+    getAuthSession(),
+  ]);
   if (!session) {
     return (
       <main className="relative grid min-h-dvh place-items-center overflow-hidden bg-background px-4 py-16">

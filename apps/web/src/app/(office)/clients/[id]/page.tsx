@@ -1,11 +1,14 @@
 import { Suspense } from 'react';
-import { Checkbox as ShadcnCheckbox } from '@care/ui';
-import { NativeSelect } from '@care/ui';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { NativeSelect } from '@care/ui/components/native-select';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button, Input, Label, StatusBadge } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { StatusBadge } from '@care/ui/components/status-badge';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { DataPagination } from '@app/web/components/data-pagination';
 import { ResourceCardLink, ResourceReference } from '@app/web/components/resource-reference';

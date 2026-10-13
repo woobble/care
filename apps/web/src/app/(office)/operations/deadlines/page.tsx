@@ -1,7 +1,7 @@
-import { NativeSelect } from '@care/ui';
+import { NativeSelect } from '@care/ui/components/native-select';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { DataPagination } from '@app/web/components/data-pagination';

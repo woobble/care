@@ -41,7 +41,7 @@ export function clientResponse(client: ClientSnapshot): ClientResponseDto {
 
 export function clientListItemResponse(item: ClientSearchItem): ClientListItemResponseDto {
   return {
-    ...clientResponse(item.client),
+    ...item.client,
     organizationName: item.organizationName,
     facilityName: item.facilityName,
     currentPflegegrad: item.currentPflegegrad,

@@ -6,10 +6,10 @@ import {
   TableHead as ShadcnTableHead,
   TableRow as ShadcnTableRow,
   TableCell as ShadcnTableCell,
-} from '@care/ui';
+} from '@care/ui/components/table';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate } from '@app/web/i18n/format';

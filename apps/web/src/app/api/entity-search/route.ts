@@ -24,11 +24,19 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const entity = url.searchParams.get('entity');
   const query = url.searchParams.get('q')?.trim().slice(0, 120) ?? '';
-  if (!isSearchableEntity(entity) || query.length < 2) {
+  const canBrowseWithoutQuery = entity === 'organizations' || entity === 'facilities';
+  if (
+    !isSearchableEntity(entity) ||
+    (query.length < 2 && !(query.length === 0 && canBrowseWithoutQuery))
+  ) {
     return NextResponse.json({ items: [] satisfies EntityOption[] });
   }
 
-  const search = new URLSearchParams({ q: query, page: '1', pageSize: '20' });
+  const requestedPage = Number(url.searchParams.get('page') ?? '1');
+  const page =
+    Number.isInteger(requestedPage) && requestedPage > 0 ? Math.min(requestedPage, 100_000) : 1;
+  const search = new URLSearchParams({ page: String(page), pageSize: '20' });
+  if (query) search.set('q', query);
   if (entity === 'clients' || entity === 'employees' || entity === 'employee-users') {
     search.set('status', 'active');
     search.set('sortBy', 'lastName');
@@ -79,7 +87,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Entity search failed' }, { status: response.status });
   }
 
-  const payload = (await response.json()) as { items?: EntityRecord[] };
+  const payload = (await response.json()) as {
+    items?: EntityRecord[];
+    page?: number;
+    totalPages?: number;
+  };
   const items = (payload.items ?? []).flatMap((record) => {
     const id = entity === 'employee-users' ? record.userId : record.id;
     if (!id) return [];
@@ -94,7 +106,15 @@ export async function GET(request: Request) {
         ]
       : [];
   });
-  return NextResponse.json({ items });
+  return NextResponse.json({
+    items,
+    ...(canBrowseWithoutQuery
+      ? {
+          page: payload.page ?? page,
+          hasMore: (payload.page ?? page) < (payload.totalPages ?? 0),
+        }
+      : {}),
+  });
 }
 
 function isSearchableEntity(value: string | null): value is SearchableEntity {

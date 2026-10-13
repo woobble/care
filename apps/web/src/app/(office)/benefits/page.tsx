@@ -1,4 +1,4 @@
-import { NativeSelect } from '@care/ui';
+import { NativeSelect } from '@care/ui/components/native-select';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
@@ -8,7 +8,9 @@ import { redirectToValidPage } from '@app/web/lib/pagination';
 import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button, Input, Label } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
 import type { Locale } from '@app/web/i18n/config';
 import type { components } from '@care/api-client';
 import { errorMessageKey } from '@app/web/i18n/errors';

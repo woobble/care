@@ -1,10 +1,10 @@
-import { Textarea } from '@care/ui';
-import { NativeSelect } from '@care/ui';
+import { Textarea } from '@care/ui/components/textarea';
+import { NativeSelect } from '@care/ui/components/native-select';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
 import { createAdmissionCaseAction } from '@app/web/app/(office)/admissions/actions';

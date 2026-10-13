@@ -41,7 +41,16 @@ export interface ClientSearchFilter {
 }
 
 export interface ClientSearchItem {
-  client: ClientSnapshot;
+  client: {
+    id: string;
+    organizationId: string | null;
+    primaryFacilityId: string | null;
+    firstName: string;
+    lastName: string;
+    preferredName: string | null;
+    dateOfBirth: string | null;
+    status: ClientStatus;
+  };
   organizationName: string | null;
   facilityName: string | null;
   currentPflegegrad: number | null;
@@ -97,8 +106,10 @@ export class ClientRepository {
       const pattern = `%${term}%`;
       filters.push(
         or(
-          ilike(clientRecords.firstName, pattern),
-          ilike(clientRecords.lastName, pattern),
+          ilike(
+            sql<string>`${clientRecords.firstName} || ' ' || ${clientRecords.lastName}`,
+            pattern,
+          ),
           ilike(clientRecords.preferredName, pattern),
         )!,
       );
@@ -143,7 +154,16 @@ export class ClientRepository {
         : [asc(clientRecords.lastName), asc(clientRecords.firstName), asc(clientRecords.id)];
     const rows = await transaction
       .select({
-        client: clientRecords,
+        client: {
+          id: clientRecords.id,
+          organizationId: clientRecords.organizationId,
+          primaryFacilityId: clientRecords.primaryFacilityId,
+          firstName: clientRecords.firstName,
+          lastName: clientRecords.lastName,
+          preferredName: clientRecords.preferredName,
+          dateOfBirth: clientRecords.dateOfBirth,
+          status: clientRecords.status,
+        },
         organizationName: organizationsTable.name,
         facilityName: facilities.name,
         currentPflegegrad: pflegegradRecords.grade,
@@ -181,7 +201,11 @@ export class ClientRepository {
     const totals = await transaction.select({ total: count() }).from(clientRecords).where(where);
     return {
       items: rows.map((row) => ({
-        client: toSnapshot(row.client),
+        client: {
+          ...row.client,
+          preferredName: row.client.preferredName ?? null,
+          dateOfBirth: row.client.dateOfBirth ?? null,
+        },
         organizationName: row.organizationName,
         facilityName: row.facilityName,
         currentPflegegrad: row.currentPflegegrad === null ? null : Number(row.currentPflegegrad),

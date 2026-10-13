@@ -9,6 +9,7 @@ import { apiMetrics } from '@app/api/operational-metrics';
 import type { ApiRequest } from './request';
 
 const VALID_REQUEST_ID = /^[\w.-]{1,128}$/;
+const slowRequestThresholdMs = process.env.NODE_ENV === 'production' ? 1_000 : 500;
 
 class ApiFastifyAdapter extends FastifyAdapter {
   override registerParserMiddleware(prefix?: string, rawBody?: boolean): void {
@@ -95,6 +96,21 @@ export async function configureApiHttp(
         },
         'request completed',
       );
+      if (durationMs >= slowRequestThresholdMs) {
+        logger.warn(
+          {
+            req: {
+              id: request.id,
+              method: request.method,
+              route: request.routeOptions.url ?? 'unmatched',
+            },
+            res: { statusCode: reply.statusCode },
+            responseTime: durationMs,
+            correlationId: request.headers['x-care-correlation-id'],
+          },
+          'slow API request',
+        );
+      }
     }
   });
 

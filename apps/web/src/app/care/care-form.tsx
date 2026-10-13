@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import {
   careDraftPrefix,

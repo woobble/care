@@ -13,39 +13,28 @@ describe('operations issue projections', () => {
 
   test('does not project acknowledgement issues without an evidence package', () => {
     expect(
-      evidenceIssueCode(
-        { status: 'awaiting_acknowledgement', evidencePackageId: null, signatureAvailable: false },
-        true,
-      ),
+      evidenceIssueCode({
+        status: 'awaiting_acknowledgement',
+        evidencePackageId: null,
+        signatureAvailable: false,
+      }),
     ).toBeNull();
   });
 
   test('projects only required pending acknowledgements and accepts acknowledged evidence without a signature', () => {
     expect(
-      evidenceIssueCode(
-        {
-          status: 'awaiting_acknowledgement',
-          evidencePackageId: 'package-1',
-          signatureAvailable: false,
-        },
-        true,
-      ),
+      evidenceIssueCode({
+        status: 'awaiting_acknowledgement',
+        evidencePackageId: 'package-1',
+        signatureAvailable: false,
+      }),
     ).toBe('acknowledgement_missing');
     expect(
-      evidenceIssueCode(
-        {
-          status: 'awaiting_acknowledgement',
-          evidencePackageId: 'package-1',
-          signatureAvailable: false,
-        },
-        false,
-      ),
-    ).toBeNull();
-    expect(
-      evidenceIssueCode(
-        { status: 'acknowledged', evidencePackageId: 'package-1', signatureAvailable: false },
-        false,
-      ),
+      evidenceIssueCode({
+        status: 'acknowledged',
+        evidencePackageId: 'package-1',
+        signatureAvailable: false,
+      }),
     ).toBeNull();
   });
 

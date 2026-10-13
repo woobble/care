@@ -1,11 +1,13 @@
-import { Textarea } from '@care/ui';
-import { NativeSelect } from '@care/ui';
+import { Textarea } from '@care/ui/components/textarea';
+import { NativeSelect } from '@care/ui/components/native-select';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button, Input, Label } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
 import type { components } from '@care/api-client';
 import { formatDateTime } from '@app/web/i18n/format';
 import {

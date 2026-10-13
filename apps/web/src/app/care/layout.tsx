@@ -1,30 +1,42 @@
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
+import { Suspense } from 'react';
 import { AccountMenu } from '@app/web/components/account-menu';
 import { SignOutMenuItem } from '@app/web/components/sign-out-menu-item';
 import { ThemeSwitcher } from '@app/web/components/theme-switcher';
-import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
+import { getApiClient, getAuthSession, getPermissionGrants, hasPermission } from '@app/web/lib/api';
 import { signOutAction } from '@app/web/app/actions/auth';
 import { CareDraftScope } from './draft-scope';
 import { HeartHandshake } from 'lucide-react';
-import { auth } from '@app/web/auth';
+import { PageLoadingSkeleton } from '@app/web/components/page-loading-skeleton';
 
-export default async function CareLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const api = await getApiClient(false);
+export default function CareLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <Suspense fallback={<PageLoadingSkeleton />}>
+      <CareWorkspaceLayout>{children}</CareWorkspaceLayout>
+    </Suspense>
+  );
+}
+
+async function CareWorkspaceLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const [api, cookieStore, session, t, locale] = await Promise.all([
+    getApiClient(false),
+    cookies(),
+    getAuthSession(),
+    getTranslations('Navigation'),
+    getLocale(),
+  ]);
   const get = api.GET;
-  const [requestHeaders, cookieStore] = await Promise.all([headers(), cookies()]);
-  const [{ data: tenants, error }, { data: user }, session] = await Promise.all([
+  const [{ data: tenants, error }, { data: user }] = await Promise.all([
     get('/api/v1/me/tenants'),
     get('/api/v1/me'),
-    auth.api.getSession({ headers: requestHeaders }),
   ]);
   const tenantId = cookieStore.get('care-tenant')?.value;
   if (error || !user || !tenantId || !tenants?.some((tenant) => tenant.id === tenantId))
     redirect('/');
-  const permissions = await getPermissionGrants(api);
-  const [t, locale] = await Promise.all([getTranslations('Navigation'), getLocale()]);
+  const permissions = await getPermissionGrants(await getApiClient());
   const tenantName = tenants.find((tenant) => tenant.id === tenantId)?.name ?? '';
   if (!hasPermission(permissions, 'visit_execution.read')) redirect('/');
 

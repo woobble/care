@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 import type { AuditWriter } from '@care/audit';
@@ -675,6 +675,27 @@ export class BillingClaimsApplicationService {
       async (transaction) => this.claimReadinessFacts(transaction, principal, claimId),
     );
     return this.evaluateReadiness(principal, data);
+  }
+
+  async readinessForClaims(
+    principal: AuthorizationPrincipal,
+    claimIds: readonly string[],
+  ): Promise<Map<string, ClaimReadiness>> {
+    const ids = [...new Set(claimIds)];
+    if (ids.length > 100)
+      throw new RangeError('Claim readiness batches are limited to 100 claims.');
+    if (ids.length === 0) return new Map();
+    const facts = await this.unitOfWork.transaction(
+      { tenantId: principal.tenantId },
+      (transaction) => this.claimReadinessFactsForClaims(transaction, principal, ids),
+    );
+    const results = await Promise.all(
+      [...facts].map(
+        async ([claimId, claimFacts]) =>
+          [claimId, await this.evaluateReadiness(principal, claimFacts)] as const,
+      ),
+    );
+    return new Map(results);
   }
 
   async prepare(
@@ -1859,89 +1880,150 @@ export class BillingClaimsApplicationService {
     claimId: string,
     permission: Permission = 'claims.read',
   ): Promise<ClaimReadinessFacts> {
-    const claim = await this.getClaimRow(transaction, principal, claimId, permission);
-    const [invoice] = await transaction
+    const facts = await this.claimReadinessFactsForClaims(
+      transaction,
+      principal,
+      [claimId],
+      permission,
+    );
+    const claimFacts = facts.get(claimId);
+    if (!claimFacts) throw new ClaimNotFoundError();
+    return claimFacts;
+  }
+
+  private async claimReadinessFactsForClaims(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    claimIds: readonly string[],
+    permission: Permission = 'claims.read',
+  ): Promise<Map<string, ClaimReadinessFacts>> {
+    if (claimIds.length === 0) return new Map();
+    const claimRows = await transaction
       .select()
-      .from(invoices)
-      .where(and(eq(invoices.tenantId, principal.tenantId), eq(invoices.id, claim.invoiceId)))
-      .limit(1);
-    const [arrangement] = await transaction
-      .select()
-      .from(payerArrangements)
-      .where(
-        and(
-          eq(payerArrangements.tenantId, principal.tenantId),
-          eq(payerArrangements.organizationId, claim.organizationId),
-          eq(payerArrangements.clientId, claim.clientId),
-          eq(payerArrangements.id, claim.payerArrangementId),
-        ),
-      )
-      .limit(1);
-    const [payer] = await transaction
-      .select()
-      .from(payers)
-      .where(
-        and(
-          eq(payers.tenantId, principal.tenantId),
-          eq(payers.organizationId, claim.organizationId),
-          eq(payers.id, claim.payerId),
-        ),
-      )
-      .limit(1);
-    const [profile] = claim.payerBillingProfileId
+      .from(claims)
+      .where(and(eq(claims.tenantId, principal.tenantId), inArray(claims.id, [...claimIds])));
+    const claimById = new Map(claimRows.map((claim) => [claim.id, claim]));
+    for (const claimId of claimIds) {
+      const claim = claimById.get(claimId);
+      if (!claim) throw new ClaimNotFoundError();
+      this.requireScoped(principal, permission, this.resourceForClaim(claim));
+    }
+
+    const unique = <T extends string>(values: readonly (T | null | undefined)[]) => [
+      ...new Set(values.filter((value): value is T => value !== null && value !== undefined)),
+    ];
+    const invoiceIds = unique(claimRows.map((claim) => claim.invoiceId));
+    const arrangementIds = unique(claimRows.map((claim) => claim.payerArrangementId));
+    const payerIds = unique(claimRows.map((claim) => claim.payerId));
+    const profileIds = unique(claimRows.map((claim) => claim.payerBillingProfileId));
+    const invoicesRows = invoiceIds.length
+      ? await transaction
+          .select()
+          .from(invoices)
+          .where(and(eq(invoices.tenantId, principal.tenantId), inArray(invoices.id, invoiceIds)))
+      : [];
+    const arrangementRows = arrangementIds.length
+      ? await transaction
+          .select()
+          .from(payerArrangements)
+          .where(
+            and(
+              eq(payerArrangements.tenantId, principal.tenantId),
+              inArray(payerArrangements.id, arrangementIds),
+            ),
+          )
+      : [];
+    const payerRows = payerIds.length
+      ? await transaction
+          .select()
+          .from(payers)
+          .where(and(eq(payers.tenantId, principal.tenantId), inArray(payers.id, payerIds)))
+      : [];
+    const profileRows = profileIds.length
       ? await transaction
           .select()
           .from(payerBillingProfiles)
           .where(
             and(
               eq(payerBillingProfiles.tenantId, principal.tenantId),
-              eq(payerBillingProfiles.organizationId, claim.organizationId),
-              eq(payerBillingProfiles.payerId, claim.payerId),
-              eq(payerBillingProfiles.id, claim.payerBillingProfileId),
+              inArray(payerBillingProfiles.id, profileIds),
             ),
           )
-          .limit(1)
       : [];
-    const [insurance] = arrangement?.clientInsuranceId
+    const invoiceById = new Map(invoicesRows.map((invoice) => [invoice.id, invoice]));
+    const arrangementById = new Map(arrangementRows.map((row) => [row.id, row]));
+    const payerById = new Map(payerRows.map((row) => [row.id, row]));
+    const profileById = new Map(profileRows.map((row) => [row.id, row]));
+
+    const insuranceIds = unique(arrangementRows.map((row) => row.clientInsuranceId));
+    const insuranceRows = insuranceIds.length
       ? await transaction
           .select()
           .from(clientInsurances)
           .where(
             and(
               eq(clientInsurances.tenantId, principal.tenantId),
-              eq(clientInsurances.clientId, claim.clientId),
-              eq(clientInsurances.id, arrangement.clientInsuranceId),
+              inArray(clientInsurances.id, insuranceIds),
             ),
           )
-          .limit(1)
       : [];
-    const [invoiceDocument] = await transaction
-      .select()
-      .from(invoiceDocuments)
-      .where(
-        and(
-          eq(invoiceDocuments.tenantId, principal.tenantId),
-          eq(invoiceDocuments.invoiceId, claim.invoiceId),
-          eq(invoiceDocuments.status, 'ready'),
-        ),
-      )
-      .orderBy(desc(invoiceDocuments.documentVersion), desc(invoiceDocuments.createdAt))
-      .limit(1);
-    const [correctionCount] = await transaction
-      .select({ value: sql<number>`count(*)::int` })
-      .from(invoiceCorrections)
-      .where(
-        and(
-          eq(invoiceCorrections.tenantId, principal.tenantId),
-          eq(invoiceCorrections.invoiceId, claim.invoiceId),
-        ),
-      );
+    const insuranceById = new Map(insuranceRows.map((row) => [row.id, row]));
+
+    const invoiceDocumentRows = invoiceIds.length
+      ? await transaction
+          .select()
+          .from(invoiceDocuments)
+          .where(
+            and(
+              eq(invoiceDocuments.tenantId, principal.tenantId),
+              inArray(invoiceDocuments.invoiceId, invoiceIds),
+              eq(invoiceDocuments.status, 'ready'),
+            ),
+          )
+          .orderBy(desc(invoiceDocuments.documentVersion), desc(invoiceDocuments.createdAt))
+      : [];
+    const invoiceDocumentByInvoiceId = new Map<string, (typeof invoiceDocumentRows)[number]>();
+    for (const document of invoiceDocumentRows) {
+      if (!invoiceDocumentByInvoiceId.has(document.invoiceId)) {
+        invoiceDocumentByInvoiceId.set(document.invoiceId, document);
+      }
+    }
+    const correctionRows = invoiceIds.length
+      ? await transaction
+          .select({
+            invoiceId: invoiceCorrections.invoiceId,
+            value: sql<number>`count(*)::int`,
+          })
+          .from(invoiceCorrections)
+          .where(
+            and(
+              eq(invoiceCorrections.tenantId, principal.tenantId),
+              inArray(invoiceCorrections.invoiceId, invoiceIds),
+            ),
+          )
+          .groupBy(invoiceCorrections.invoiceId)
+      : [];
+    const correctionCountByInvoiceId = new Map(
+      correctionRows.map((row) => [row.invoiceId, row.value]),
+    );
+
     const claimLineRows = await transaction
       .select()
       .from(claimLines)
-      .where(and(eq(claimLines.tenantId, principal.tenantId), eq(claimLines.claimId, claimId)))
+      .where(
+        and(
+          eq(claimLines.tenantId, principal.tenantId),
+          inArray(claimLines.claimId, [...claimIds]),
+        ),
+      )
       .orderBy(asc(claimLines.createdAt), asc(claimLines.id));
-    const invoiceLineIds = claimLineRows.map((line) => line.invoiceLineId);
+    const claimLinesByClaimId = new Map<string, (typeof claimLineRows)[number][]>();
+    for (const line of claimLineRows) {
+      const rows = claimLinesByClaimId.get(line.claimId) ?? [];
+      rows.push(line);
+      claimLinesByClaimId.set(line.claimId, rows);
+    }
+    const invoiceLineIds = unique(claimLineRows.map((line) => line.invoiceLineId));
     const invoiceLineRows = invoiceLineIds.length
       ? await transaction
           .select()
@@ -1949,15 +2031,12 @@ export class BillingClaimsApplicationService {
           .where(
             and(
               eq(invoiceLines.tenantId, principal.tenantId),
-              eq(invoiceLines.invoiceId, claim.invoiceId),
               inArray(invoiceLines.id, invoiceLineIds),
             ),
           )
       : [];
     const invoiceLineById = new Map(invoiceLineRows.map((line) => [line.id, line]));
-    const allocationIds = claimLineRows.flatMap((line) =>
-      line.fundingAllocationId ? [line.fundingAllocationId] : [],
-    );
+    const allocationIds = unique(claimLineRows.map((line) => line.fundingAllocationId));
     const allocationRows = allocationIds.length
       ? await transaction
           .select()
@@ -1969,10 +2048,8 @@ export class BillingClaimsApplicationService {
             ),
           )
       : [];
-    const allocationById = new Map(allocationRows.map((allocation) => [allocation.id, allocation]));
-    const fundingSourceIds = [
-      ...new Set(allocationRows.map((allocation) => allocation.fundingSourceId)),
-    ];
+    const allocationById = new Map(allocationRows.map((row) => [row.id, row]));
+    const fundingSourceIds = unique(allocationRows.map((row) => row.fundingSourceId));
     const fundingRows = fundingSourceIds.length
       ? await transaction
           .select()
@@ -1980,13 +2057,12 @@ export class BillingClaimsApplicationService {
           .where(
             and(
               eq(benefitFundingSources.tenantId, principal.tenantId),
-              eq(benefitFundingSources.clientId, claim.clientId),
               inArray(benefitFundingSources.id, fundingSourceIds),
             ),
           )
       : [];
-    const fundingById = new Map(fundingRows.map((source) => [source.id, source]));
-    const evidenceIds = [...new Set(claimLineRows.map((line) => line.evidencePackageId))];
+    const fundingById = new Map(fundingRows.map((row) => [row.id, row]));
+    const evidenceIds = unique(claimLineRows.map((line) => line.evidencePackageId));
     const evidenceRows = evidenceIds.length
       ? await transaction
           .select()
@@ -1998,100 +2074,226 @@ export class BillingClaimsApplicationService {
             ),
           )
       : [];
-    const evidenceById = new Map(evidenceRows.map((evidence) => [evidence.id, evidence]));
-    const reservedByLine = await this.reservedInvoiceLineAmounts(
-      transaction,
-      principal.tenantId,
-      claim.invoiceId,
-      claimId,
-    );
-    const lines: ClaimReadinessLineFact[] = [];
-    for (const claimLine of claimLineRows) {
-      const invoiceLine = invoiceLineById.get(claimLine.invoiceLineId) ?? null;
-      const allocation = claimLine.fundingAllocationId
-        ? (allocationById.get(claimLine.fundingAllocationId) ?? null)
-        : null;
-      const fundingSource = allocation
-        ? (fundingById.get(allocation.fundingSourceId) ?? null)
-        : null;
-      const evidencePackage = evidenceById.get(claimLine.evidencePackageId) ?? null;
-      const [acknowledgement] = evidencePackage
-        ? await transaction
-            .select()
-            .from(acknowledgements)
-            .where(
-              and(
-                eq(acknowledgements.tenantId, principal.tenantId),
-                eq(acknowledgements.evidencePackageId, evidencePackage.id),
-                eq(acknowledgements.evidencePackageHash, evidencePackage.snapshotHash),
-                eq(acknowledgements.status, 'acknowledged'),
-                isNull(acknowledgements.revokedAt),
-              ),
-            )
-            .limit(1)
-        : [];
-      const [reversal] = allocation
-        ? await transaction
-            .select({ id: serviceAllocationReversals.id })
-            .from(serviceAllocationReversals)
-            .where(
-              and(
-                eq(serviceAllocationReversals.tenantId, principal.tenantId),
-                eq(serviceAllocationReversals.allocationId, allocation.id),
-              ),
-            )
-            .limit(1)
-        : [];
-      lines.push({
-        claimLine,
-        invoiceLine,
-        allocation,
-        fundingSource,
-        evidencePackage,
-        acknowledgement: acknowledgement ?? null,
-        acknowledged: Boolean(acknowledgement),
-        allocationReversed: Boolean(reversal),
-        reservedCents: reservedByLine.get(claimLine.invoiceLineId) ?? 0,
+    const evidenceById = new Map(evidenceRows.map((row) => [row.id, row]));
+    const acknowledgementRows = evidenceIds.length
+      ? await transaction
+          .select()
+          .from(acknowledgements)
+          .where(
+            and(
+              eq(acknowledgements.tenantId, principal.tenantId),
+              inArray(acknowledgements.evidencePackageId, evidenceIds),
+              eq(acknowledgements.status, 'acknowledged'),
+              isNull(acknowledgements.revokedAt),
+            ),
+          )
+      : [];
+    const acknowledgementsByPackageId = new Map<string, (typeof acknowledgementRows)[number][]>();
+    for (const acknowledgement of acknowledgementRows) {
+      const rows = acknowledgementsByPackageId.get(acknowledgement.evidencePackageId) ?? [];
+      rows.push(acknowledgement);
+      acknowledgementsByPackageId.set(acknowledgement.evidencePackageId, rows);
+    }
+    const reversalRows = allocationIds.length
+      ? await transaction
+          .select({ allocationId: serviceAllocationReversals.allocationId })
+          .from(serviceAllocationReversals)
+          .where(
+            and(
+              eq(serviceAllocationReversals.tenantId, principal.tenantId),
+              inArray(serviceAllocationReversals.allocationId, allocationIds),
+            ),
+          )
+      : [];
+    const reversedAllocationIds = new Set(reversalRows.map((row) => row.allocationId));
+
+    const activeStatuses = new Set([
+      'draft',
+      'ready',
+      'submitted',
+      'accepted',
+      'partially_accepted',
+      'clarification_required',
+    ]);
+    const reservedClaimRows = invoiceIds.length
+      ? await transaction
+          .select({ line: claimLines, claim: claims })
+          .from(claimLines)
+          .innerJoin(
+            claims,
+            and(eq(claims.tenantId, claimLines.tenantId), eq(claims.id, claimLines.claimId)),
+          )
+          .where(
+            and(
+              eq(claimLines.tenantId, principal.tenantId),
+              inArray(claimLines.invoiceId, invoiceIds),
+            ),
+          )
+      : [];
+    const activeReservedByLine = new Map<string, number>();
+    const resubmittedClaimIds: string[] = [];
+    for (const { line, claim } of reservedClaimRows) {
+      if (activeStatuses.has(claim.status)) {
+        activeReservedByLine.set(
+          line.invoiceLineId,
+          (activeReservedByLine.get(line.invoiceLineId) ?? 0) + line.amountCents,
+        );
+      } else if (claim.status === 'resubmitted') {
+        resubmittedClaimIds.push(claim.id);
+      }
+    }
+    const historicalAcceptedRows = resubmittedClaimIds.length
+      ? await transaction
+          .select({
+            claimId: claimLines.claimId,
+            invoiceLineId: claimLines.invoiceLineId,
+            acceptedCents: claimDecisionLines.acceptedCents,
+          })
+          .from(claimDecisionLines)
+          .innerJoin(
+            claimLines,
+            and(
+              eq(claimLines.tenantId, claimDecisionLines.tenantId),
+              eq(claimLines.id, claimDecisionLines.claimLineId),
+            ),
+          )
+          .where(
+            and(
+              eq(claimLines.tenantId, principal.tenantId),
+              inArray(claimLines.claimId, unique(resubmittedClaimIds)),
+            ),
+          )
+      : [];
+    const historicalAcceptedByLine = new Map<string, number>();
+    const historicalAcceptedByClaimAndLine = new Map<string, number>();
+    for (const row of historicalAcceptedRows) {
+      historicalAcceptedByLine.set(
+        row.invoiceLineId,
+        (historicalAcceptedByLine.get(row.invoiceLineId) ?? 0) + row.acceptedCents,
+      );
+      const key = `${row.claimId}:${row.invoiceLineId}`;
+      historicalAcceptedByClaimAndLine.set(
+        key,
+        (historicalAcceptedByClaimAndLine.get(key) ?? 0) + row.acceptedCents,
+      );
+    }
+
+    const organizationIds = unique(claimRows.map((claim) => claim.organizationId));
+    const recognitionRows = organizationIds.length
+      ? await transaction
+          .select({
+            organizationId: providerRecognitions.organizationId,
+            validFrom: providerRecognitions.validFrom,
+            validUntil: providerRecognitions.validUntil,
+          })
+          .from(providerRecognitions)
+          .where(
+            and(
+              eq(providerRecognitions.tenantId, principal.tenantId),
+              inArray(providerRecognitions.organizationId, organizationIds),
+              eq(providerRecognitions.jurisdiction, 'DE-NW'),
+              eq(providerRecognitions.status, 'active'),
+            ),
+          )
+      : [];
+
+    const result = new Map<string, ClaimReadinessFacts>();
+    for (const claim of claimRows) {
+      const arrangementCandidate = arrangementById.get(claim.payerArrangementId);
+      const arrangement =
+        arrangementCandidate?.organizationId === claim.organizationId &&
+        arrangementCandidate.clientId === claim.clientId
+          ? arrangementCandidate
+          : undefined;
+      const payerCandidate = payerById.get(claim.payerId);
+      const payer =
+        payerCandidate?.organizationId === claim.organizationId ? payerCandidate : undefined;
+      const profileCandidate = claim.payerBillingProfileId
+        ? profileById.get(claim.payerBillingProfileId)
+        : undefined;
+      const profile =
+        profileCandidate?.organizationId === claim.organizationId &&
+        profileCandidate.payerId === claim.payerId
+          ? profileCandidate
+          : undefined;
+      const insuranceCandidate = arrangement?.clientInsuranceId
+        ? insuranceById.get(arrangement.clientInsuranceId)
+        : undefined;
+      const insurance =
+        insuranceCandidate?.clientId === claim.clientId ? insuranceCandidate : undefined;
+      const currentClaimLines = claimLinesByClaimId.get(claim.id) ?? [];
+      const ownActiveReserved = new Map<string, number>();
+      if (activeStatuses.has(claim.status)) {
+        for (const line of currentClaimLines) {
+          ownActiveReserved.set(
+            line.invoiceLineId,
+            (ownActiveReserved.get(line.invoiceLineId) ?? 0) + line.amountCents,
+          );
+        }
+      }
+      const lines: ClaimReadinessLineFact[] = currentClaimLines.map((claimLine) => {
+        const invoiceLineCandidate = invoiceLineById.get(claimLine.invoiceLineId);
+        const invoiceLine =
+          invoiceLineCandidate?.invoiceId === claim.invoiceId ? invoiceLineCandidate : null;
+        const allocation = claimLine.fundingAllocationId
+          ? (allocationById.get(claimLine.fundingAllocationId) ?? null)
+          : null;
+        const fundingCandidate = allocation ? fundingById.get(allocation.fundingSourceId) : null;
+        const fundingSource =
+          fundingCandidate?.clientId === claim.clientId ? fundingCandidate : null;
+        const evidencePackage = evidenceById.get(claimLine.evidencePackageId) ?? null;
+        const acknowledgement = evidencePackage
+          ? (acknowledgementsByPackageId
+              .get(evidencePackage.id)
+              ?.find((row) => row.evidencePackageHash === evidencePackage.snapshotHash) ?? null)
+          : null;
+        const ownHistoricalAccepted =
+          historicalAcceptedByClaimAndLine.get(`${claim.id}:${claimLine.invoiceLineId}`) ?? 0;
+        return {
+          claimLine,
+          invoiceLine,
+          allocation,
+          fundingSource,
+          evidencePackage,
+          acknowledgement,
+          acknowledged: Boolean(acknowledgement),
+          allocationReversed: allocation ? reversedAllocationIds.has(allocation.id) : false,
+          reservedCents:
+            (activeReservedByLine.get(claimLine.invoiceLineId) ?? 0) -
+            (ownActiveReserved.get(claimLine.invoiceLineId) ?? 0) +
+            (historicalAcceptedByLine.get(claimLine.invoiceLineId) ?? 0) -
+            ownHistoricalAccepted,
+        };
+      });
+      const serviceDates = lines.flatMap((line) =>
+        line.invoiceLine ? [line.invoiceLine.serviceDate] : [],
+      );
+      const minDate = serviceDates.length ? [...serviceDates].sort()[0]! : null;
+      const maxDate = serviceDates.length ? [...serviceDates].sort().at(-1)! : null;
+      const providerRecognitionValid =
+        !profile?.requiresProviderRecognition ||
+        minDate === null ||
+        maxDate === null ||
+        recognitionRows.some(
+          (row) =>
+            row.organizationId === claim.organizationId &&
+            row.validFrom <= minDate &&
+            (row.validUntil === null || row.validUntil >= maxDate),
+        );
+      result.set(claim.id, {
+        claim,
+        invoice: invoiceById.get(claim.invoiceId) ?? null,
+        arrangement: arrangement ?? null,
+        payer: payer ?? null,
+        profile: profile ?? null,
+        insurance: insurance ?? null,
+        invoiceDocument: invoiceDocumentByInvoiceId.get(claim.invoiceId) ?? null,
+        correctionCount: correctionCountByInvoiceId.get(claim.invoiceId) ?? 0,
+        lines,
+        providerRecognitionValid,
       });
     }
-    const serviceDates = lines.flatMap((line) =>
-      line.invoiceLine ? [line.invoiceLine.serviceDate] : [],
-    );
-    const minDate = serviceDates.length ? [...serviceDates].sort()[0]! : null;
-    const maxDate = serviceDates.length ? [...serviceDates].sort().at(-1)! : null;
-    const providerRecognition =
-      profile?.requiresProviderRecognition && minDate && maxDate
-        ? await transaction
-            .select({ id: providerRecognitions.id })
-            .from(providerRecognitions)
-            .where(
-              and(
-                eq(providerRecognitions.tenantId, principal.tenantId),
-                eq(providerRecognitions.organizationId, claim.organizationId),
-                eq(providerRecognitions.jurisdiction, 'DE-NW'),
-                eq(providerRecognitions.status, 'active'),
-                lte(providerRecognitions.validFrom, minDate),
-                or(
-                  isNull(providerRecognitions.validUntil),
-                  gte(providerRecognitions.validUntil, maxDate),
-                ),
-              ),
-            )
-            .limit(1)
-        : [{ id: 'not-required' }];
-    const facts: ClaimReadinessFacts = {
-      claim,
-      invoice: invoice ?? null,
-      arrangement: arrangement ?? null,
-      payer: payer ?? null,
-      profile: profile ?? null,
-      insurance: insurance ?? null,
-      invoiceDocument: invoiceDocument ?? null,
-      correctionCount: correctionCount?.value ?? 0,
-      lines,
-      providerRecognitionValid: providerRecognition.length > 0,
-    } as ClaimReadinessFacts;
-    return facts;
+    return result;
   }
 
   private async evaluateReadiness(

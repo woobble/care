@@ -1,8 +1,8 @@
-import { Checkbox as ShadcnCheckbox } from '@care/ui';
-import { NativeSelect } from '@care/ui';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { NativeSelect } from '@care/ui/components/native-select';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui';
+import { Button } from '@care/ui/components/button';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDateTime } from '@app/web/i18n/format';
 import {

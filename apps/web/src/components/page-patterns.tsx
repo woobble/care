@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ArrowUpRight, Inbox } from 'lucide-react';
-import { Card } from '@care/ui';
+import { Card } from '@care/ui/components/card';
 
 export function PageHeader({
   eyebrow,

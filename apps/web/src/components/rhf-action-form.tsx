@@ -21,15 +21,10 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
 import { z } from 'zod';
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-  Input,
-  NativeSelect,
-  Textarea,
-} from '@care/ui';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@care/ui/components/field';
+import { Input } from '@care/ui/components/input';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { Textarea } from '@care/ui/components/textarea';
 
 type ServerAction = (formData: FormData) => void | Promise<void>;
 type FormValues = FieldValues;

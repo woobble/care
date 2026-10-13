@@ -6,13 +6,15 @@ import {
   TableRow as ShadcnTableRow,
   TableCell as ShadcnTableCell,
   TableCaption as ShadcnTableCaption,
-} from '@care/ui';
-import { NativeSelect } from '@care/ui';
+} from '@care/ui/components/table';
+import { NativeSelect } from '@care/ui/components/native-select';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button, Label, StatusBadge } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Label } from '@care/ui/components/label';
+import { StatusBadge } from '@care/ui/components/status-badge';
 import { roleLabelKey, scopeTypeLabelKey } from '@app/web/i18n/access';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate } from '@app/web/i18n/format';

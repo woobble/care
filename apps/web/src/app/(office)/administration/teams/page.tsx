@@ -6,7 +6,7 @@ import {
   TableRow as ShadcnTableRow,
   TableCell as ShadcnTableCell,
   TableCaption as ShadcnTableCaption,
-} from '@care/ui';
+} from '@care/ui/components/table';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { DataPagination } from '@app/web/components/data-pagination';
@@ -17,7 +17,10 @@ import type { components } from '@care/api-client';
 import { ResourceReference } from '@app/web/components/resource-reference';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { Button, Input, Label, StatusBadge } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { StatusBadge } from '@care/ui/components/status-badge';
 import { statusLabelKey } from '@app/web/i18n/status';
 import {
   getApiClient,

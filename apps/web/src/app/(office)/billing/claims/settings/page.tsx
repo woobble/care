@@ -1,11 +1,12 @@
 import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
-import { Checkbox as ShadcnCheckbox } from '@care/ui';
-import { NativeSelect } from '@care/ui';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { NativeSelect } from '@care/ui/components/native-select';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { Button, Input } from '@care/ui';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
