@@ -99,19 +99,30 @@ export default async function AdmissionTemplatesPage({
               <p className="text-sm text-muted-foreground">
                 {t('templateScope')}:{' '}
                 <ResourceReference
-                  label={template.organizationName ?? translate('Resources.unavailableOrganization')}
-                  href={template.organizationName ? `/administration/organizations/${template.organizationId}` : null}
+                  label={
+                    template.organizationName ?? translate('Resources.unavailableOrganization')
+                  }
+                  href={
+                    template.organizationName
+                      ? `/administration/organizations/${template.organizationId}`
+                      : null
+                  }
                 />
                 {template.facilityId ? (
                   <>
                     {' · '}
                     <ResourceReference
                       label={template.facilityName ?? translate('Resources.unavailableFacility')}
-                      href={template.facilityName ? `/administration/facilities/${template.facilityId}` : null}
+                      href={
+                        template.facilityName
+                          ? `/administration/facilities/${template.facilityId}`
+                          : null
+                      }
                     />
                   </>
-                ) : null}{' · '}{t('templateVersion')}{' '}
-                {template.currentVersion}
+                ) : null}
+                {' · '}
+                {t('templateVersion')} {template.currentVersion}
               </p>
             </header>
             <div className="grid gap-3">

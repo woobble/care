@@ -425,16 +425,10 @@ export class OnboardingApplicationService {
     const organizationNames = new Map(organizationRows.map((row) => [row.id, row.name]));
     const facilityNames = new Map(facilityRows.map((row) => [row.id, row.name]));
     const employeeNames = new Map(
-      employeeRows.map((row) => [
-        row.id,
-        `${row.preferredName || row.firstName} ${row.lastName}`,
-      ]),
+      employeeRows.map((row) => [row.id, `${row.preferredName || row.firstName} ${row.lastName}`]),
     );
     const clientNames = new Map(
-      clientRows.map((row) => [
-        row.id,
-        `${row.preferredName || row.firstName} ${row.lastName}`,
-      ]),
+      clientRows.map((row) => [row.id, `${row.preferredName || row.firstName} ${row.lastName}`]),
     );
     return rows.map((row) => ({
       ...row,
@@ -622,7 +616,7 @@ export class OnboardingApplicationService {
           : [];
         const actorNames = new Map(
           actorRows.flatMap((actor) =>
-            actor.displayName ? ([[actor.id, actor.displayName] as const]) : [],
+            actor.displayName ? [[actor.id, actor.displayName] as const] : [],
           ),
         );
         const clientReadable = Boolean(
@@ -735,7 +729,11 @@ export class OnboardingApplicationService {
           can(principal, { action: 'schedule.read', resource: clientResource(admission) });
         const firstVisitRows = canReadFirstVisit
           ? await transaction
-              .select({ id: visits.id, clientId: visits.clientId, plannedStart: visits.plannedStart })
+              .select({
+                id: visits.id,
+                clientId: visits.clientId,
+                plannedStart: visits.plannedStart,
+              })
               .from(visits)
               .where(
                 and(
@@ -2001,9 +1999,7 @@ export class OnboardingApplicationService {
       return templates.map((template) => ({
         ...template,
         organizationName: organizationNames.get(template.organizationId) ?? null,
-        facilityName: template.facilityId
-          ? (facilityNames.get(template.facilityId) ?? null)
-          : null,
+        facilityName: template.facilityId ? (facilityNames.get(template.facilityId) ?? null) : null,
         items: items.filter((item) => item.templateId === template.id),
       }));
     });
@@ -2217,15 +2213,12 @@ export class OnboardingApplicationService {
             .from(tenantMemberships)
             .innerJoin(users, eq(users.id, tenantMemberships.userId))
             .where(
-              and(
-                eq(tenantMemberships.tenantId, principal.tenantId),
-                inArray(users.id, actorIds),
-              ),
+              and(eq(tenantMemberships.tenantId, principal.tenantId), inArray(users.id, actorIds)),
             )
         : [];
       const actorNames = new Map(
         actorRows.flatMap((actor) =>
-          actor.displayName ? ([[actor.id, actor.displayName] as const]) : [],
+          actor.displayName ? [[actor.id, actor.displayName] as const] : [],
         ),
       );
       const documentsByCase = groupBy(documents, (row) => row.caseId);

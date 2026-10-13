@@ -1,11 +1,11 @@
-import { readdir, rm } from "node:fs/promises";
-import { join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readdir, rm } from 'node:fs/promises';
+import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const projectRoot = fileURLToPath(new URL("..", import.meta.url));
-const outputNames = ["dist", ".next", "coverage", "test-results", "playwright-report"];
-const workspaceGroups = ["apps", "modules", "packages"];
-const targets = [".turbo", "dist", "coverage"].map((name) => join(projectRoot, name));
+const projectRoot = fileURLToPath(new URL('..', import.meta.url));
+const outputNames = ['dist', '.next', 'coverage', 'test-results', 'playwright-report'];
+const workspaceGroups = ['apps', 'modules', 'packages'];
+const targets = ['.turbo', 'dist', 'coverage'].map((name) => join(projectRoot, name));
 
 for (const group of workspaceGroups) {
   const groupPath = join(projectRoot, group);
@@ -14,7 +14,7 @@ for (const group of workspaceGroups) {
   try {
     entries = await readdir(groupPath, { withFileTypes: true });
   } catch (error) {
-    if (error.code === "ENOENT") continue;
+    if (error.code === 'ENOENT') continue;
     throw error;
   }
 
@@ -33,14 +33,16 @@ for (const target of targets) {
   try {
     await rm(target, { recursive: true, force: true });
   } catch (error) {
-    if (error.code !== "EACCES" && error.code !== "EPERM") throw error;
+    if (error.code !== 'EACCES' && error.code !== 'EPERM') throw error;
     failures.push({ target, path: error.path });
   }
 }
 
 if (failures.length > 0) {
   const quoteForShell = (value) => `'${value.replaceAll("'", "'\\''")}'`;
-  console.error("Some generated artifacts could not be removed because they are not writable by this user:");
+  console.error(
+    'Some generated artifacts could not be removed because they are not writable by this user:',
+  );
 
   for (const failure of failures) {
     const blockedPath = relative(projectRoot, failure.path ?? failure.target);
@@ -53,5 +55,5 @@ if (failures.length > 0) {
 
   process.exitCode = 1;
 } else {
-  console.log("Removed workspace build outputs, caches, coverage, and Playwright reports.");
+  console.log('Removed workspace build outputs, caches, coverage, and Playwright reports.');
 }
