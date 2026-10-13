@@ -289,7 +289,10 @@ export function AsyncEntityCombobox({
 
   return (
     <div className="grid min-w-0 gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id}>
+        {label}
+        {required ? <span aria-hidden="true"> *</span> : null}
+      </Label>
       {multiple ? (
         selectedOptions.map((option) => (
           <input

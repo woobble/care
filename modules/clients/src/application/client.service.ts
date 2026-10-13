@@ -113,11 +113,20 @@ export class ClientApplicationService {
       throw new InvalidPaginationError();
     }
     const access = clientScopeFilter(principal, 'client.read');
+    const identifierGrants = principal.grants.filter(
+      (grant) =>
+        grant.permission === 'client.update' &&
+        ['tenant', 'organization', 'facility'].includes(grant.scopeType),
+    );
+    const identifierAccess = identifierGrants.length
+      ? clientScopeFilter({ ...principal, grants: identifierGrants }, 'client.update')
+      : { tenantWide: false, organizationIds: [], facilityIds: [] };
     const validAt = new Date().toISOString().slice(0, 10);
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
       this.clients.search(transaction, {
         tenantId: principal.tenantId,
         access,
+        identifierAccess,
         ...(query.text === undefined ? {} : { text: query.text }),
         ...(query.status === undefined ? {} : { status: query.status }),
         ...(query.organizationId === undefined ? {} : { organizationId: query.organizationId }),

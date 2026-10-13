@@ -95,15 +95,16 @@ export class ClientsController {
     const parsed = searchSchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException();
     const { q, ...filters } = parsed.data;
+    const principal = this.principal(request);
     const result = await this.clients.search(
-      this.principal(request),
+      principal,
       withoutUndefined({
         ...(q === undefined ? {} : { text: q }),
         ...filters,
       }) satisfies ClientSearchQuery,
     );
     return {
-      items: result.items.map(clientListItemResponse),
+      items: result.items.map((item) => clientListItemResponse(item, principal)),
       page: parsed.data.page,
       pageSize: parsed.data.pageSize,
       total: result.total,

@@ -214,6 +214,7 @@ export function CareForm({
 
   return (
     <RHFActionForm
+      key={draft?.revision}
       action={action}
       className={className}
       onInput={(event) => persist(event.currentTarget)}

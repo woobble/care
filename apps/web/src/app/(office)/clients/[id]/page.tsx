@@ -48,6 +48,9 @@ import { getFacilitiesByIds } from '@app/web/lib/facility-lookup';
 import { getEmployeesByIds } from '@app/web/lib/employee-lookup';
 import { PageLoadingSkeleton } from '@app/web/components/page-loading-skeleton';
 import { redirectToValidPage } from '@app/web/lib/pagination';
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { ClientProfileOverview } from '@app/web/components/client-profile-overview';
+import { Skeleton } from '@care/ui/components/skeleton';
 import type { components } from '@care/api-client';
 
 const contactRoleKeys = {
@@ -94,11 +97,11 @@ export default async function ClientDetailPage({
   searchParams: Promise<ClientDetailQuery>;
 }>) {
   const [{ id }, query, t] = await Promise.all([params, searchParams, getTranslations()]);
-  const api = await getApiClient();
-  const header = await getTenantHeader();
-  const clientResult = await api.GET('/api/v1/clients/{id}', {
-    params: { path: { id }, header },
-  });
+  const [api, header] = await Promise.all([getApiClient(), getTenantHeader()]);
+  const [clientResult, permissions] = await Promise.all([
+    api.GET('/api/v1/clients/{id}', { params: { path: { id }, header } }),
+    getPermissionGrants(api),
+  ]);
   if ((clientResult.error as { code?: string } | undefined)?.code === 'CLIENT_NOT_FOUND')
     notFound();
   const client = clientResult.data as ClientDetailClient | undefined;
@@ -110,11 +113,85 @@ export default async function ClientDetailPage({
           title={t('Clients.detail.detailTitle')}
         />
         <p role="alert" className="rounded-md border bg-card p-5">
-          {t('Clients.detail.loadFailed')}
+          {(clientResult.error as { code?: string } | undefined)?.code === 'INSUFFICIENT_PERMISSION'
+            ? t('Errors.insufficientPermission')
+            : t('Clients.detail.loadFailed')}
         </p>
       </div>
     );
   }
+  const tenantId = header['X-Tenant-Id'];
+  const canUpdateClient = hasClientPermission(
+    permissions,
+    'client.update',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canCreateVisit = hasClientPermission(
+    permissions,
+    'schedule.update',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canReadSchedule = hasClientPermission(
+    permissions,
+    'schedule.read',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canReadServiceAgreements = hasClientPermission(
+    permissions,
+    'service_agreement.read',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canReadBenefits = hasClientPermission(
+    permissions,
+    'benefits.read',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canReadBilling = hasClientPermission(
+    permissions,
+    'billing.read',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canReadDocuments = hasClientPermission(
+    permissions,
+    'documents.read',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canReadCommunications =
+    hasClientPermission(
+      permissions,
+      'communications.read',
+      tenantId,
+      client.organizationId,
+      client.primaryFacilityId,
+    ) &&
+    hasClientPermission(
+      permissions,
+      'client.read',
+      tenantId,
+      client.organizationId,
+      client.primaryFacilityId,
+    );
+  const canReadAdmissions = hasClientPermission(
+    permissions,
+    'onboarding.read',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
   return (
     <div className="mx-auto grid max-w-6xl gap-5">
       <PageHeader
@@ -122,13 +199,103 @@ export default async function ClientDetailPage({
         title={`${client.preferredName || client.firstName} ${client.lastName}`}
         meta={<StatusBadge status={client.status} label={t(statusLabelKey(client.status))} />}
         actions={
-          <Button asChild variant="outline" className="min-h-11">
-            <Link href="/clients">{t('Clients.detail.backToList')}</Link>
-          </Button>
+          <>
+            {canUpdateClient ? (
+              <Button asChild variant="outline" className="min-h-11">
+                <Link href="#personal-information">{t('Clients.detail.editPersonalData')}</Link>
+              </Button>
+            ) : null}
+            {canCreateVisit ? (
+              <Button asChild className="min-h-11">
+                <Link href={`/planning?clientId=${encodeURIComponent(client.id)}`}>
+                  {t('Planning.createVisit')}
+                </Link>
+              </Button>
+            ) : null}
+            <Button asChild variant="outline" className="min-h-11">
+              <Link href="/clients">{t('Clients.detail.backToList')}</Link>
+            </Button>
+          </>
         }
       />
+      <nav
+        aria-label={t('Clients.detail.navigationLabel')}
+        className="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-border py-1 text-sm [scrollbar-width:thin]"
+      >
+        <SectionLink href="#overview">{t('Clients.detail.overviewTab')}</SectionLink>
+        <SectionLink href="#personal-information">{t('Clients.form.personalData')}</SectionLink>
+        <SectionLink href="#contacts">{t('Clients.detail.contactsTab')}</SectionLink>
+        <SectionLink href="#insurance">{t('Clients.detail.insuranceTab')}</SectionLink>
+        {canReadDocuments ? (
+          <SectionLink href="#documents">{t('Documents.title')}</SectionLink>
+        ) : null}
+        {canReadServiceAgreements ? (
+          <Link
+            className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            href={`/clients/${client.id}/service-agreements`}
+          >
+            {t('Clients.detail.servicePlanningTab')}
+          </Link>
+        ) : null}
+        {hasClientPermission(
+          permissions,
+          'operations.read',
+          tenantId,
+          client.organizationId,
+          client.primaryFacilityId,
+        ) ? (
+          <Link
+            className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            href={`/operations/deadlines?clientId=${encodeURIComponent(client.id)}`}
+          >
+            {t('Operations.clientDeadlines')}
+          </Link>
+        ) : null}
+        {canReadBenefits ? (
+          <Link
+            className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            href={`/clients/${client.id}/benefits`}
+          >
+            {t('Clients.detail.benefitsTab')}
+          </Link>
+        ) : null}
+        {canReadBilling ? (
+          <Link
+            className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            href={`/clients/${client.id}/invoices`}
+          >
+            {t('Clients.detail.invoicesTab')}
+          </Link>
+        ) : null}
+        {canReadSchedule ? (
+          <SectionLink href="#visits">{t('Clients.detail.visitsTab')}</SectionLink>
+        ) : null}
+        {canReadCommunications ? (
+          <Link
+            className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            href={`/clients/${client.id}/communications`}
+          >
+            {t('Clients.detail.communicationsTab')}
+          </Link>
+        ) : null}
+        {canReadAdmissions ? (
+          <SectionLink href="#admissions">{t('Onboarding.title')}</SectionLink>
+        ) : null}
+        <SectionLink href="#timeline">{t('Clients.detail.timelineTab')}</SectionLink>
+      </nav>
+      <ClientProfileOverview
+        client={client}
+        permissions={permissions}
+        title={t('Clients.detail.overview')}
+        loadingLabel={t('Common.loadingPage')}
+      />
       <Suspense fallback={<PageLoadingSkeleton />}>
-        <ClientDetailContent id={id} query={query} initialClient={client} />
+        <ClientDetailContent
+          id={id}
+          query={query}
+          initialClient={client}
+          permissions={permissions}
+        />
       </Suspense>
     </div>
   );
@@ -138,245 +305,79 @@ async function ClientDetailContent({
   id,
   query,
   initialClient,
+  permissions,
 }: Readonly<{
   id: string;
   query: ClientDetailQuery;
   initialClient: ClientDetailClient;
+  permissions: Awaited<ReturnType<typeof getPermissionGrants>>;
 }>) {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
-  const api = await getApiClient();
+  const [api, header] = await Promise.all([getApiClient(), getTenantHeader()]);
   const get = api.GET;
-  const header = await getTenantHeader();
-  const permissionsPromise = getPermissionGrants(api);
-  const { visitNow, visitFuture, visitRecent } = clientVisitRange();
-  const [
-    addressesResult,
-    contactsResult,
-    insurancesResult,
-    gradesResult,
-    timelineResult,
-    upcomingVisitsResult,
-    recentVisitsResult,
-    recentCancelledVisitsResult,
-  ] = await Promise.all([
+  const client = initialClient;
+  const tenantId = header['X-Tenant-Id'];
+  const canReadSchedule = hasClientPermission(
+    permissions,
+    'schedule.read',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canManageSchedule = hasClientPermission(
+    permissions,
+    'schedule.update',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const [addressesResult, contactsResult, insurancesResult, gradesResult] = await Promise.all([
     get('/api/v1/clients/{clientId}/addresses', { params: { path: { clientId: id }, header } }),
     get('/api/v1/clients/{clientId}/contacts', { params: { path: { clientId: id }, header } }),
     get('/api/v1/clients/{clientId}/insurances', { params: { path: { clientId: id }, header } }),
     get('/api/v1/clients/{clientId}/pflegegrade', { params: { path: { clientId: id }, header } }),
-    get('/api/v1/clients/{clientId}/timeline', { params: { path: { clientId: id }, header } }),
-    get('/api/v1/visits', {
-      params: {
-        query: {
-          from: visitNow.toISOString(),
-          until: visitFuture.toISOString(),
-          clientId: id,
-          page: 1,
-          pageSize: 100,
-        },
-        header,
-      },
-    }),
-    get('/api/v1/visits', {
-      params: {
-        query: {
-          from: visitRecent.toISOString(),
-          until: visitNow.toISOString(),
-          clientId: id,
-          page: 1,
-          pageSize: 100,
-        },
-        header,
-      },
-    }),
-    get('/api/v1/visits', {
-      params: {
-        query: {
-          from: visitRecent.toISOString(),
-          until: visitNow.toISOString(),
-          clientId: id,
-          status: 'cancelled',
-          page: 1,
-          pageSize: 100,
-        },
-        header,
-      },
-    }),
   ]);
-  const visitItems = upcomingVisitsResult.data?.items ?? [];
-  const recentVisitItems = recentVisitsResult.data?.items ?? [];
-  const fetchExecutionSummaries = (items: typeof visitItems) =>
-    items.length
-      ? get('/api/v1/visit-executions/summaries', {
-          params: {
-            query: { visitIds: items.map((visit) => visit.id).join(',') },
-            header,
-          },
-        })
-      : Promise.resolve({ data: [], error: undefined });
-  const [executionSummariesResult, recentExecutionSummariesResult] = await Promise.all([
-    fetchExecutionSummaries(visitItems),
-    fetchExecutionSummaries(recentVisitItems),
-  ]);
-  const executionByVisitId = new Map(
-    (executionSummariesResult.data ?? []).map((summary) => [summary.visitId, summary]),
-  );
-  const recentExecutionByVisitId = new Map(
-    (recentExecutionSummariesResult.data ?? []).map((summary) => [summary.visitId, summary]),
-  );
-  const recentExecutionItems = recentVisitItems.filter(
-    (visit) =>
-      recentExecutionByVisitId.get(visit.id)?.executionStatus !== undefined &&
-      recentExecutionByVisitId.get(visit.id)?.executionStatus !== 'not_started',
-  );
-  const client = initialClient;
   const addresses = addressesResult.data ?? [];
   const contacts = contactsResult.data ?? [];
   const insurances = insurancesResult.data ?? [];
   const grades = gradesResult.data ?? [];
-  const timeline = timelineResult.data ?? [];
-  const [permissions, organizationLookup, facilityLookup] = await Promise.all([
-    permissionsPromise,
-    getOrganizationsByIds(client.organizationId ? [client.organizationId] : []),
-    getFacilitiesByIds(client.primaryFacilityId ? [client.primaryFacilityId] : []),
+  const [organizationLookup, facilityLookup] = await Promise.all([
+    getOrganizationsByIds(
+      client.organizationId &&
+        hasClientPermission(permissions, 'organization.read', tenantId, client.organizationId, null)
+        ? [client.organizationId]
+        : [],
+    ),
+    getFacilitiesByIds(
+      client.organizationId &&
+        client.primaryFacilityId &&
+        hasClientPermission(
+          permissions,
+          'facility.read',
+          tenantId,
+          client.organizationId,
+          client.primaryFacilityId,
+        )
+        ? [client.primaryFacilityId]
+        : [],
+    ),
   ]);
   const organizations = organizationLookup.items;
   const facilities = facilityLookup.items;
-  const tenantId = header['X-Tenant-Id'];
-  const canReadBenefits = client
-    ? hasClientPermission(
-        permissions,
-        'benefits.read',
-        tenantId,
-        client.organizationId,
-        client.primaryFacilityId,
-      )
-    : false;
-  const canReadBilling = client
-    ? hasClientPermission(
-        permissions,
-        'billing.read',
-        tenantId,
-        client.organizationId,
-        client.primaryFacilityId,
-      )
-    : false;
-  const canReadDocuments = client
-    ? hasClientPermission(
-        permissions,
-        'documents.read',
-        tenantId,
-        client.organizationId,
-        client.primaryFacilityId,
-      )
-    : false;
-  const canReadCommunications = client
-    ? hasClientPermission(
-        permissions,
-        'communications.read',
-        tenantId,
-        client.organizationId,
-        client.primaryFacilityId,
-      ) &&
-      hasClientPermission(
-        permissions,
-        'client.read',
-        tenantId,
-        client.organizationId,
-        client.primaryFacilityId,
-      )
-    : false;
-  const canReadAdmissions = client
-    ? hasClientPermission(
-        permissions,
-        'onboarding.read',
-        tenantId,
-        client.organizationId,
-        client.primaryFacilityId,
-      )
-    : false;
-  const admissionHistoryResult = canReadAdmissions
-    ? await api.GET('/api/v1/onboarding/clients/{clientId}/history', {
-        params: { path: { clientId: id }, header },
-      })
-    : undefined;
-  const admissionHistory = (admissionHistoryResult?.data ?? []) as unknown as Array<{
-    id: string;
-    stage: string;
-    admittedAt: string | null;
-    ownerEmployeeId: string | null;
-    ownerEmployeeName?: string | null;
-    createdAt: string;
-    firstVisitId: string | null;
-    firstVisitStartsAt?: string | null;
-    history: Array<{
-      version: number;
-      toStage: string;
-      occurredAt: string;
-      actorName?: string | null;
-    }>;
-    documents: Array<{ id: string; requirementCode: string; status: string }>;
-    tasks: Array<{ id: string; title: string; status: string; dueAt: string | null }>;
-    communications: Array<{
-      id: string;
-      subject: string;
-      summary: string | null;
-      occurredAt: string;
-    }>;
-  }>;
-  const canReadSchedule = client
-    ? hasClientPermission(
-        permissions,
-        'schedule.read',
-        tenantId,
-        client.organizationId,
-        client.primaryFacilityId,
-      )
-    : false;
-  const canManageSchedule = client
-    ? hasClientPermission(
-        permissions,
-        'schedule.update',
-        tenantId,
-        client.organizationId,
-        client.primaryFacilityId,
-      )
-    : false;
-  const communicationsSummaryResult =
-    client && canReadCommunications
-      ? await get('/api/v1/communications/clients/{clientId}/summary', {
-          params: { path: { clientId: client.id }, header },
-        })
-      : null;
-  const communicationsSummary = communicationsSummaryResult?.data;
-  const canReadCommunicationTasks = client
-    ? hasClientPermission(
-        permissions,
-        'operations.read',
-        tenantId,
-        client.organizationId,
-        client.primaryFacilityId,
-      )
-    : false;
-  const operationTaskStatusLabels: Record<string, string> = {
-    open: t('Operations.taskOpen'),
-    in_progress: t('Operations.taskInProgress'),
-    completed: t('Operations.taskCompleted'),
-    cancelled: t('Operations.taskCancelled'),
-  };
-  const communicationChannelLabels: Record<string, string> = {
-    phone: t('Communications.channels.phone'),
-    in_person: t('Communications.channels.in_person'),
-    email: t('Communications.channels.email'),
-    letter: t('Communications.channels.letter'),
-    portal: t('Communications.channels.portal'),
-    other: t('Communications.channels.other'),
-  };
-  const contactAuthorizationLabels: Record<string, string> = {
-    legal_representative: t('Communications.authorizationStatus.legal_representative'),
-    authorized_contact: t('Communications.authorizationStatus.authorized_contact'),
-    not_confirmed: t('Communications.authorizationStatus.not_confirmed'),
-    not_applicable: t('Communications.authorizationStatus.not_applicable'),
-  };
+  const canReadDocuments = hasClientPermission(
+    permissions,
+    'documents.read',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canReadAdmissions = hasClientPermission(
+    permissions,
+    'onboarding.read',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
   const [schedulingPreferencesResult, routingLocationResult] =
     client && canReadSchedule
       ? await Promise.all([
@@ -392,50 +393,6 @@ async function ClientDetailContent({
             : Promise.resolve({ data: undefined, error: undefined }),
         ])
       : [null, null];
-  const selectedDocumentType = clientDocumentTypes.includes(
-    query.documentType as ClientDocumentType,
-  )
-    ? (query.documentType as ClientDocumentType)
-    : null;
-  const documentPage = positivePage(query.documentPage);
-  const documentPageSize = positivePageSize(query.documentPageSize);
-  const documentsResult =
-    client && canReadDocuments
-      ? await get('/api/v1/documents', {
-          params: {
-            query: {
-              clientId: client.id,
-              page: documentPage,
-              pageSize: documentPageSize,
-              ...(selectedDocumentType ? { documentType: selectedDocumentType } : {}),
-            },
-            header,
-          },
-        })
-      : null;
-  const documentList = documentsResult?.data as
-    | {
-        items?: ClientDocument[];
-        hasMore?: boolean;
-        page: number;
-        pageSize: number;
-        totalItems: number;
-        totalPages: number;
-      }
-    | undefined;
-  const documentErrorCode = (documentsResult?.error as { code?: string } | undefined)?.code;
-  if (documentList) {
-    redirectToValidPage(
-      `/clients/${client.id}`,
-      query,
-      documentPage,
-      documentList.pageSize,
-      documentList.totalItems,
-      'documentPage',
-      'documentPageSize',
-    );
-  }
-  const documents = documentList?.items ?? [];
   const canUpdateClient = client
     ? hasClientPermission(
         permissions,
@@ -533,77 +490,13 @@ async function ClientDetailContent({
         </p>
       ) : (
         <>
-          {canManageSchedule ? (
-            <div className="flex justify-end">
-              <Button asChild className="min-h-11">
-                <Link href={`/planning?clientId=${encodeURIComponent(client.id)}`}>
-                  {t('Planning.createVisit')}
-                </Link>
-              </Button>
-            </div>
-          ) : null}
-          <nav
-            aria-label={t('Clients.detail.navigationLabel')}
-            className="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-border py-1 text-sm [scrollbar-width:thin]"
-          >
-            <SectionLink href="#overview">{t('Clients.detail.overviewTab')}</SectionLink>
-            <SectionLink href="#contacts">{t('Clients.detail.contactsTab')}</SectionLink>
-            <SectionLink href="#insurance">{t('Clients.detail.insuranceTab')}</SectionLink>
-            {canReadDocuments ? (
-              <SectionLink href="#documents">{t('Documents.title')}</SectionLink>
-            ) : null}
-            <Link
-              className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              href={`/clients/${client.id}/service-agreements`}
-            >
-              {t('Clients.detail.servicePlanningTab')}
-            </Link>
-            {hasPermission(permissions, 'operations.read') ? (
-              <Link
-                className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                href={`/operations/deadlines?clientId=${client.id}`}
-              >
-                {t('Operations.clientDeadlines')}
-              </Link>
-            ) : null}
-            {canReadBenefits ? (
-              <Link
-                className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                href={`/clients/${client.id}/benefits`}
-              >
-                {t('Clients.detail.benefitsTab')}
-              </Link>
-            ) : null}
-            {canReadBilling ? (
-              <Link
-                className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                href={`/clients/${client.id}/invoices`}
-              >
-                {t('Clients.detail.invoicesTab')}
-              </Link>
-            ) : null}
-            <SectionLink href="#visits">{t('Clients.detail.visitsTab')}</SectionLink>
-            {canReadCommunications ? (
-              <Link
-                className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                href={`/clients/${client.id}/communications`}
-              >
-                {t('Clients.detail.communicationsTab')}
-              </Link>
-            ) : null}
-            {canReadAdmissions ? (
-              <SectionLink href="#admissions">{t('Onboarding.title')}</SectionLink>
-            ) : null}
-            <SectionLink href="#timeline">{t('Clients.detail.timelineTab')}</SectionLink>
-          </nav>
-
           <section
-            id="overview"
-            aria-labelledby="overview-title"
+            id="personal-information"
+            aria-labelledby="personal-information-title"
             className="grid gap-4 scroll-mt-6"
           >
-            <h2 id="overview-title" className="text-xl font-semibold">
-              {t('Clients.detail.overview')}
+            <h2 id="personal-information-title" className="text-xl font-semibold">
+              {t('Clients.form.personalData')}
             </h2>
             <dl className="grid gap-4 rounded-lg border bg-card p-5 sm:grid-cols-2 lg:grid-cols-3">
               <div className="grid gap-1">
@@ -681,9 +574,42 @@ async function ClientDetailContent({
                 label={t('Clients.form.salutation')}
                 value={client.salutation ? t(salutationKey(client.salutation)) : null}
               />
-              <Field label={t('Clients.form.email')} value={client.email} />
-              <Field label={t('Clients.form.phone')} value={client.phone} />
-              <Field label={t('Clients.form.mobilePhone')} value={client.mobile} />
+              <Field
+                label={t('Clients.form.email')}
+                value={
+                  client.email ? (
+                    <a className="text-primary underline" href={`mailto:${client.email}`}>
+                      {client.email}
+                    </a>
+                  ) : null
+                }
+              />
+              <Field
+                label={t('Clients.form.phone')}
+                value={
+                  client.phone ? (
+                    <a
+                      className="text-primary underline"
+                      href={`tel:${encodeURIComponent(client.phone)}`}
+                    >
+                      {client.phone}
+                    </a>
+                  ) : null
+                }
+              />
+              <Field
+                label={t('Clients.form.mobilePhone')}
+                value={
+                  client.mobile ? (
+                    <a
+                      className="text-primary underline"
+                      href={`tel:${encodeURIComponent(client.mobile)}`}
+                    >
+                      {client.mobile}
+                    </a>
+                  ) : null
+                }
+              />
               <Field
                 label={t('Clients.detail.primaryAddress')}
                 value={primaryAddress ? formatAddress(primaryAddress) : null}
@@ -717,7 +643,12 @@ async function ClientDetailContent({
                 <summary className="cursor-pointer font-semibold">
                   {t('Clients.detail.editPersonalData')}
                 </summary>
-                <RHFActionForm action={updateClientAction} className="mt-4 grid gap-4">
+                <RHFActionForm
+                  action={updateClientAction}
+                  errorMessage={t('Clients.detail.saveFailed')}
+                  warnOnUnsavedChanges
+                  className="mt-4 grid gap-4"
+                >
                   <input type="hidden" name="id" value={client.id} />
                   <div className="grid gap-4 md:grid-cols-2">
                     <TextField
@@ -820,6 +751,7 @@ async function ClientDetailContent({
               </p>
               {canUpdateClient ? (
                 <RHFActionForm
+                  warnOnUnsavedChanges
                   action={changeClientProviderContextAction}
                   className="mt-4 grid gap-4 md:grid-cols-2"
                 >
@@ -895,103 +827,134 @@ async function ClientDetailContent({
             <h2 id="contacts-title" className="text-xl font-semibold">
               {t('Clients.detail.addressesAndContacts')}
             </h2>
-            <div className="grid gap-4">
-              {addresses.map((address) => (
-                <article key={address.id} className="grid gap-3 rounded-lg border bg-card p-5">
-                  <h3 className="font-semibold">
-                    {t(addressTypeKey(address.addressType))}
-                    {address.isPrimary ? ` · ${t('Clients.detail.primary')}` : ''}
-                  </h3>
-                  {canUpdateClient ? (
-                    <RHFActionForm action={updateClientAddressAction} className="grid gap-4">
-                      <input type="hidden" name="id" value={client.id} />
-                      <input type="hidden" name="addressId" value={address.id} />
-                      <div className="grid gap-4 md:grid-cols-3">
-                        <SelectField
-                          id={`address-type-${address.id}`}
-                          name="addressType"
-                          label={t('Clients.detail.addressType')}
-                          value={address.addressType}
-                        >
-                          <option value="home">{t('Clients.detail.addressTypes.home')}</option>
-                          <option value="billing">
-                            {t('Clients.detail.addressTypes.billing')}
-                          </option>
-                          <option value="other">{t('Clients.detail.addressTypes.other')}</option>
-                        </SelectField>
-                        <TextField
-                          id={`address-street-${address.id}`}
-                          name="street"
-                          label={t('Clients.form.street')}
-                          defaultValue={address.street}
-                          required
-                        />
-                        <TextField
-                          id={`address-house-${address.id}`}
-                          name="houseNumber"
-                          label={t('Clients.form.houseNumber')}
-                          defaultValue={address.houseNumber ?? ''}
-                        />
-                        <TextField
-                          id={`address-addition-${address.id}`}
-                          name="addressAddition"
-                          label={t('Clients.form.addressAddition')}
-                          defaultValue={address.addressAddition ?? ''}
-                        />
-                        <TextField
-                          id={`address-postal-${address.id}`}
-                          name="postalCode"
-                          label={t('Clients.form.postalCode')}
-                          defaultValue={address.postalCode ?? ''}
-                        />
-                        <TextField
-                          id={`address-city-${address.id}`}
-                          name="city"
-                          label={t('Clients.form.city')}
-                          defaultValue={address.city}
-                          required
-                        />
-                        <TextField
-                          id={`address-country-${address.id}`}
-                          name="countryCode"
-                          label={t('Clients.form.countryCode')}
-                          defaultValue={address.countryCode}
-                          maxLength={2}
-                        />
-                        <TextField
-                          id={`address-from-${address.id}`}
-                          name="validFrom"
-                          label={t('Clients.detail.validFrom')}
-                          type="date"
-                          defaultValue={address.validFrom ?? ''}
-                        />
-                        <TextField
-                          id={`address-until-${address.id}`}
-                          name="validUntil"
-                          label={t('Clients.detail.validUntil')}
-                          type="date"
-                          defaultValue={address.validUntil ?? ''}
-                        />
+            {addresses.length ? (
+              <div className="grid gap-3">
+                {addresses.map((address) => (
+                  <article key={address.id} className="grid gap-3 rounded-lg border bg-card p-4">
+                    <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                      <div className="grid min-w-0 gap-1">
+                        <h3 className="font-semibold">
+                          {t(addressTypeKey(address.addressType))}
+                          {address.isPrimary ? ` · ${t('Clients.detail.primary')}` : ''}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">{formatAddress(address)}</p>
                       </div>
-                      <label className="flex items-center gap-2 text-sm">
-                        <ShadcnCheckbox name="isPrimary" defaultChecked={address.isPrimary} />{' '}
-                        {t('Clients.detail.primaryAddressCheckbox')}
-                      </label>
-                      <div className="flex gap-2">
-                        <Button type="submit" variant="secondary">
-                          {t('Clients.detail.saveAddress')}
-                        </Button>
-                        <Button formAction={removeClientAddressAction} variant="destructive">
-                          {t('Clients.detail.removeAddress')}
-                        </Button>
-                      </div>
-                    </RHFActionForm>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">{formatAddress(address)}</p>
-                  )}
-                </article>
-              ))}
-            </div>
+                      {canUpdateClient ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <form action={removeClientAddressAction}>
+                            <input type="hidden" name="id" value={client.id} />
+                            <input type="hidden" name="addressId" value={address.id} />
+                            <ConfirmSubmitButton
+                              confirmation={t('Clients.detail.confirmRemoveAddress')}
+                            >
+                              {t('Clients.detail.removeAddress')}
+                            </ConfirmSubmitButton>
+                          </form>
+                          <details>
+                            <summary className="flex min-h-10 cursor-pointer list-none items-center rounded-md border px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                              {t('Common.actions.edit')}
+                            </summary>
+                            <RHFActionForm
+                              warnOnUnsavedChanges
+                              action={updateClientAddressAction}
+                              className="mt-4 grid gap-4 rounded-lg border p-4"
+                            >
+                              <input type="hidden" name="id" value={client.id} />
+                              <input type="hidden" name="addressId" value={address.id} />
+                              <div className="grid gap-4 md:grid-cols-3">
+                                <SelectField
+                                  id={`address-type-${address.id}`}
+                                  name="addressType"
+                                  label={t('Clients.detail.addressType')}
+                                  value={address.addressType}
+                                >
+                                  <option value="home">
+                                    {t('Clients.detail.addressTypes.home')}
+                                  </option>
+                                  <option value="billing">
+                                    {t('Clients.detail.addressTypes.billing')}
+                                  </option>
+                                  <option value="other">
+                                    {t('Clients.detail.addressTypes.other')}
+                                  </option>
+                                </SelectField>
+                                <TextField
+                                  id={`address-street-${address.id}`}
+                                  name="street"
+                                  label={t('Clients.form.street')}
+                                  defaultValue={address.street}
+                                  required
+                                />
+                                <TextField
+                                  id={`address-house-${address.id}`}
+                                  name="houseNumber"
+                                  label={t('Clients.form.houseNumber')}
+                                  defaultValue={address.houseNumber ?? ''}
+                                />
+                                <TextField
+                                  id={`address-addition-${address.id}`}
+                                  name="addressAddition"
+                                  label={t('Clients.form.addressAddition')}
+                                  defaultValue={address.addressAddition ?? ''}
+                                />
+                                <TextField
+                                  id={`address-postal-${address.id}`}
+                                  name="postalCode"
+                                  label={t('Clients.form.postalCode')}
+                                  defaultValue={address.postalCode ?? ''}
+                                />
+                                <TextField
+                                  id={`address-city-${address.id}`}
+                                  name="city"
+                                  label={t('Clients.form.city')}
+                                  defaultValue={address.city}
+                                  required
+                                />
+                                <TextField
+                                  id={`address-country-${address.id}`}
+                                  name="countryCode"
+                                  label={t('Clients.form.countryCode')}
+                                  defaultValue={address.countryCode}
+                                  maxLength={2}
+                                />
+                                <TextField
+                                  id={`address-from-${address.id}`}
+                                  name="validFrom"
+                                  label={t('Clients.detail.validFrom')}
+                                  type="date"
+                                  defaultValue={address.validFrom ?? ''}
+                                />
+                                <TextField
+                                  id={`address-until-${address.id}`}
+                                  name="validUntil"
+                                  label={t('Clients.detail.validUntil')}
+                                  type="date"
+                                  defaultValue={address.validUntil ?? ''}
+                                />
+                              </div>
+                              <label className="flex items-center gap-2 text-sm">
+                                <ShadcnCheckbox
+                                  name="isPrimary"
+                                  defaultChecked={address.isPrimary}
+                                />{' '}
+                                {t('Clients.detail.primaryAddressCheckbox')}
+                              </label>
+                              <Button type="submit" variant="secondary" className="w-fit">
+                                {t('Clients.detail.saveAddress')}
+                              </Button>
+                            </RHFActionForm>
+                          </details>
+                        </div>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-lg border border-dashed bg-card p-5 text-sm text-muted-foreground">
+                {t('Clients.detail.noAddresses')}
+              </p>
+            )}
             {canUpdateClient ? (
               <details className="rounded-lg border bg-card p-5">
                 <summary className="cursor-pointer font-semibold">
@@ -1005,101 +968,213 @@ async function ClientDetailContent({
               </details>
             ) : null}
 
-            <div className="grid gap-4">
-              {contacts.map((contact) => (
-                <article key={contact.id} className="rounded-lg border bg-card p-5">
-                  <h3 className="font-semibold">
-                    {contact.firstName} {contact.lastName}
-                  </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {t(relationshipKey(contact.relationshipType))} ·{' '}
-                    {contact.roles.map((role) => t(contactRoleKeys[role])).join(', ') ||
-                      t('Clients.detail.noContactRole')}
-                  </p>
-                  {!canUpdateClient ? (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {[contact.phone, contact.mobile, contact.email].filter(Boolean).join(' · ') ||
-                        t('Clients.detail.noContactDetails')}
-                    </p>
-                  ) : null}
-                  {canUpdateClient ? (
-                    <RHFActionForm action={updateClientContactAction} className="mt-4 grid gap-4">
-                      <input type="hidden" name="id" value={client.id} />
-                      <input type="hidden" name="contactId" value={contact.id} />
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <TextField
-                          id={`contact-first-${contact.id}`}
-                          name="firstName"
-                          label={t('Clients.form.firstName')}
-                          defaultValue={contact.firstName}
-                          required
-                        />
-                        <TextField
-                          id={`contact-last-${contact.id}`}
-                          name="lastName"
-                          label={t('Clients.form.lastName')}
-                          defaultValue={contact.lastName}
-                          required
-                        />
-                        <SelectField
-                          id={`contact-relation-${contact.id}`}
-                          name="relationshipType"
-                          label={t('Clients.detail.relationship')}
-                          value={contact.relationshipType}
-                        >
-                          <RelationshipOptions />
-                        </SelectField>
-                        <TextField
-                          id={`contact-phone-${contact.id}`}
-                          name="phone"
-                          label={t('Clients.form.phone')}
-                          type="tel"
-                          defaultValue={contact.phone ?? ''}
-                        />
-                        <TextField
-                          id={`contact-mobile-${contact.id}`}
-                          name="mobile"
-                          label={t('Clients.form.mobilePhone')}
-                          type="tel"
-                          defaultValue={contact.mobile ?? ''}
-                        />
-                        <TextField
-                          id={`contact-email-${contact.id}`}
-                          name="email"
-                          label={t('Clients.form.email')}
-                          type="email"
-                          defaultValue={contact.email ?? ''}
-                        />
-                        <TextField
-                          id={`contact-notes-${contact.id}`}
-                          name="notes"
-                          label={t('Clients.detail.contactNotes')}
-                          defaultValue={contact.notes ?? ''}
-                          maxLength={500}
+            {contacts.length ? (
+              <div className="grid gap-3">
+                {contacts.map((contact) => (
+                  <article key={contact.id} className="grid gap-3 rounded-lg border bg-card p-4">
+                    <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                      <div className="grid min-w-0 gap-1">
+                        <h3 className="font-semibold">
+                          {contact.firstName} {contact.lastName}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {t(relationshipKey(contact.relationshipType))} ·{' '}
+                          {contact.roles.map((role) => t(contactRoleKeys[role])).join(', ') ||
+                            t('Clients.detail.noContactRole')}
+                        </p>
+                        <ContactMethods
+                          phone={contact.phone}
+                          mobile={contact.mobile}
+                          email={contact.email}
+                          phoneLabel={t('Clients.form.phone')}
+                          mobileLabel={t('Clients.form.mobilePhone')}
+                          emailLabel={t('Clients.form.email')}
+                          emptyLabel={t('Clients.detail.noContactDetails')}
                         />
                       </div>
-                      <RoleChecks selected={contact.roles} />
-                      <Button type="submit" variant="secondary" className="w-fit">
-                        {t('Clients.detail.saveContact')}
-                      </Button>
-                      <Button
-                        formAction={removeClientContactAction}
-                        variant="destructive"
-                        className="w-fit"
-                      >
-                        {t('Clients.detail.removeContact')}
-                      </Button>
-                    </RHFActionForm>
-                  ) : null}
-                </article>
-              ))}
-            </div>
+                      {canUpdateClient ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <form action={removeClientContactAction}>
+                            <input type="hidden" name="id" value={client.id} />
+                            <input type="hidden" name="contactId" value={contact.id} />
+                            <ConfirmSubmitButton
+                              confirmation={t('Clients.detail.confirmRemoveContact')}
+                            >
+                              {t('Clients.detail.removeContact')}
+                            </ConfirmSubmitButton>
+                          </form>
+                          <details className="min-w-0">
+                            <summary className="flex min-h-10 cursor-pointer list-none items-center rounded-md border px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                              {t('Common.actions.edit')}
+                            </summary>
+                            <RHFActionForm
+                              warnOnUnsavedChanges
+                              action={updateClientContactAction}
+                              className="mt-4 grid gap-4 rounded-lg border p-4"
+                            >
+                              <input type="hidden" name="id" value={client.id} />
+                              <input type="hidden" name="contactId" value={contact.id} />
+                              <div className="grid gap-4 md:grid-cols-2">
+                                <TextField
+                                  id={`contact-first-${contact.id}`}
+                                  name="firstName"
+                                  label={t('Clients.form.firstName')}
+                                  defaultValue={contact.firstName}
+                                  required
+                                />
+                                <TextField
+                                  id={`contact-last-${contact.id}`}
+                                  name="lastName"
+                                  label={t('Clients.form.lastName')}
+                                  defaultValue={contact.lastName}
+                                  required
+                                />
+                                <SelectField
+                                  id={`contact-relation-${contact.id}`}
+                                  name="relationshipType"
+                                  label={t('Clients.detail.relationship')}
+                                  value={contact.relationshipType}
+                                >
+                                  <RelationshipOptions />
+                                </SelectField>
+                                <TextField
+                                  id={`contact-phone-${contact.id}`}
+                                  name="phone"
+                                  label={t('Clients.form.phone')}
+                                  type="tel"
+                                  defaultValue={contact.phone ?? ''}
+                                />
+                                <TextField
+                                  id={`contact-mobile-${contact.id}`}
+                                  name="mobile"
+                                  label={t('Clients.form.mobilePhone')}
+                                  type="tel"
+                                  defaultValue={contact.mobile ?? ''}
+                                />
+                                <TextField
+                                  id={`contact-email-${contact.id}`}
+                                  name="email"
+                                  label={t('Clients.form.email')}
+                                  type="email"
+                                  defaultValue={contact.email ?? ''}
+                                />
+                                <TextField
+                                  id={`contact-notes-${contact.id}`}
+                                  name="notes"
+                                  label={t('Clients.detail.contactNotes')}
+                                  defaultValue={contact.notes ?? ''}
+                                  maxLength={500}
+                                />
+                              </div>
+                              <RoleChecks selected={contact.roles} />
+                              <details className="grid gap-3 rounded-md border p-3">
+                                <summary className="cursor-pointer font-medium">
+                                  {t('Clients.detail.contactAddressAndRepresentation')}
+                                </summary>
+                                <div className="grid gap-4 pt-2 md:grid-cols-2">
+                                  <TextField
+                                    id={`contact-address-street-${contact.id}`}
+                                    name="addressStreet"
+                                    label={t('Clients.form.street')}
+                                    defaultValue={contact.addressStreet ?? ''}
+                                  />
+                                  <TextField
+                                    id={`contact-address-house-${contact.id}`}
+                                    name="addressHouseNumber"
+                                    label={t('Clients.form.houseNumber')}
+                                    defaultValue={contact.addressHouseNumber ?? ''}
+                                  />
+                                  <TextField
+                                    id={`contact-address-addition-${contact.id}`}
+                                    name="addressAddition"
+                                    label={t('Clients.form.addressAddition')}
+                                    defaultValue={contact.addressAddition ?? ''}
+                                  />
+                                  <TextField
+                                    id={`contact-address-postal-${contact.id}`}
+                                    name="addressPostalCode"
+                                    label={t('Clients.form.postalCode')}
+                                    defaultValue={contact.addressPostalCode ?? ''}
+                                  />
+                                  <TextField
+                                    id={`contact-address-city-${contact.id}`}
+                                    name="addressCity"
+                                    label={t('Clients.form.city')}
+                                    defaultValue={contact.addressCity ?? ''}
+                                  />
+                                  <TextField
+                                    id={`contact-address-country-${contact.id}`}
+                                    name="addressCountryCode"
+                                    label={t('Clients.form.countryCode')}
+                                    defaultValue={contact.addressCountryCode ?? ''}
+                                    maxLength={2}
+                                  />
+                                  <SelectField
+                                    id={`contact-representation-type-${contact.id}`}
+                                    name="representationType"
+                                    label={t('Clients.detail.representationType')}
+                                    value={contact.representationType ?? ''}
+                                  >
+                                    <option value="">{t('Clients.detail.noRepresentation')}</option>
+                                    <option value="power_of_attorney">
+                                      {t('Clients.detail.powerOfAttorney')}
+                                    </option>
+                                    <option value="legal_guardianship">
+                                      {t('Clients.detail.legalGuardianship')}
+                                    </option>
+                                    <option value="authorized_representative">
+                                      {t('Clients.detail.authorizedRepresentative')}
+                                    </option>
+                                  </SelectField>
+                                  <TextField
+                                    id={`contact-representation-from-${contact.id}`}
+                                    name="representationValidFrom"
+                                    label={t('Clients.detail.representationValidFrom')}
+                                    type="date"
+                                    defaultValue={contact.representationValidFrom ?? ''}
+                                  />
+                                  <TextField
+                                    id={`contact-representation-until-${contact.id}`}
+                                    name="representationValidUntil"
+                                    label={t('Clients.detail.representationValidUntil')}
+                                    type="date"
+                                    defaultValue={contact.representationValidUntil ?? ''}
+                                  />
+                                  <TextField
+                                    id={`contact-representation-reference-${contact.id}`}
+                                    name="representationReference"
+                                    label={t('Clients.detail.representationReference')}
+                                    defaultValue={contact.representationReference ?? ''}
+                                    maxLength={120}
+                                  />
+                                </div>
+                              </details>
+                              <Button type="submit" variant="secondary" className="w-fit">
+                                {t('Clients.detail.saveContact')}
+                              </Button>
+                            </RHFActionForm>
+                          </details>
+                        </div>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-lg border border-dashed bg-card p-5 text-sm text-muted-foreground">
+                {t('Clients.detail.noContacts')}
+              </p>
+            )}
             {canUpdateClient ? (
               <details className="rounded-lg border bg-card p-5">
                 <summary className="cursor-pointer font-semibold">
                   {t('Clients.detail.addContact')}
                 </summary>
-                <RHFActionForm action={addClientContactAction} className="mt-4 grid gap-4">
+                <RHFActionForm
+                  warnOnUnsavedChanges
+                  action={addClientContactAction}
+                  className="mt-4 grid gap-4"
+                >
                   <input type="hidden" name="id" value={client.id} />
                   <div className="grid gap-4 md:grid-cols-2">
                     <TextField
@@ -1203,81 +1278,108 @@ async function ClientDetailContent({
             <h2 id="insurance-title" className="text-xl font-semibold">
               {t('Clients.detail.insuranceAndCareLevel')}
             </h2>
-            <div className="grid gap-4">
-              {insurances.map((insurance) => (
-                <article key={insurance.id} className="rounded-lg border bg-card p-5">
-                  <h3 className="font-semibold">
-                    {insurance.insurerName}
-                    {insurance.isPrimary ? ` · ${t('Clients.detail.primary')}` : ''}
-                  </h3>
-                  {canUpdateClient ? (
-                    <RHFActionForm action={updateClientInsuranceAction} className="mt-4 grid gap-4">
-                      <input type="hidden" name="id" value={client.id} />
-                      <input type="hidden" name="insuranceId" value={insurance.id} />
-                      <div className="grid gap-4 md:grid-cols-3">
-                        <SelectField
-                          id={`insurance-type-${insurance.id}`}
-                          name="insuranceType"
-                          label={t('Clients.detail.insuranceType')}
-                          value={insurance.insuranceType}
+            <div className="grid gap-3">
+              {insurances.length ? (
+                insurances.map((insurance) => (
+                  <article key={insurance.id} className="rounded-lg border bg-card p-5">
+                    <h3 className="font-semibold">
+                      {insurance.insurerName}
+                      {insurance.isPrimary ? ` · ${t('Clients.detail.primary')}` : ''}
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {t(insuranceTypeKey(insurance.insuranceType))} ·{' '}
+                      {t('Clients.detail.validFrom')}{' '}
+                      {formatDate(insurance.validFrom, locale) ?? '—'}
+                      {' · '}
+                      {t('Clients.detail.validUntil')}{' '}
+                      {formatDate(insurance.validUntil, locale) ?? '—'}
+                    </p>
+                    {canUpdateClient ? (
+                      <details className="mt-3">
+                        <summary className="flex min-h-10 w-fit cursor-pointer list-none items-center rounded-md border px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                          {t('Common.actions.edit')}
+                        </summary>
+                        <RHFActionForm
+                          warnOnUnsavedChanges
+                          action={updateClientInsuranceAction}
+                          className="mt-4 grid gap-4 rounded-lg border p-4"
                         >
-                          <InsuranceOptions />
-                        </SelectField>
-                        <TextField
-                          id={`insurer-name-${insurance.id}`}
-                          name="insurerName"
-                          label={t('Clients.detail.insurer')}
-                          defaultValue={insurance.insurerName}
-                          required
-                        />
-                        <TextField
-                          id={`insurance-number-${insurance.id}`}
-                          name="insuranceNumber"
-                          label={t('Clients.detail.insuranceNumber')}
-                          defaultValue={insurance.insuranceNumber ?? ''}
-                        />
-                        <TextField
-                          id={`member-number-${insurance.id}`}
-                          name="memberNumber"
-                          label={t('Clients.detail.memberNumber')}
-                          defaultValue={insurance.memberNumber ?? ''}
-                        />
-                        <TextField
-                          id={`insurance-from-${insurance.id}`}
-                          name="validFrom"
-                          label={t('Clients.detail.validFrom')}
-                          type="date"
-                          defaultValue={insurance.validFrom ?? ''}
-                        />
-                        <TextField
-                          id={`insurance-until-${insurance.id}`}
-                          name="validUntil"
-                          label={t('Clients.detail.validUntil')}
-                          type="date"
-                          defaultValue={insurance.validUntil ?? ''}
-                        />
-                      </div>
-                      <label className="flex items-center gap-2 text-sm">
-                        <ShadcnCheckbox name="isPrimary" defaultChecked={insurance.isPrimary} />{' '}
-                        {t('Clients.detail.primaryInsurance')}
-                      </label>
-                      <p className="text-sm text-muted-foreground">
-                        {t('Clients.detail.protectedInsuranceNumber')}
-                      </p>
-                      <Button type="submit" variant="secondary" className="w-fit">
-                        {t('Clients.detail.saveInsurance')}
-                      </Button>
-                    </RHFActionForm>
-                  ) : null}
-                </article>
-              ))}
+                          <input type="hidden" name="id" value={client.id} />
+                          <input type="hidden" name="insuranceId" value={insurance.id} />
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <SelectField
+                              id={`insurance-type-${insurance.id}`}
+                              name="insuranceType"
+                              label={t('Clients.detail.insuranceType')}
+                              value={insurance.insuranceType}
+                            >
+                              <InsuranceOptions />
+                            </SelectField>
+                            <TextField
+                              id={`insurer-name-${insurance.id}`}
+                              name="insurerName"
+                              label={t('Clients.detail.insurer')}
+                              defaultValue={insurance.insurerName}
+                              required
+                            />
+                            <TextField
+                              id={`insurance-number-${insurance.id}`}
+                              name="insuranceNumber"
+                              label={t('Clients.detail.insuranceNumber')}
+                              defaultValue={insurance.insuranceNumber ?? ''}
+                            />
+                            <TextField
+                              id={`member-number-${insurance.id}`}
+                              name="memberNumber"
+                              label={t('Clients.detail.memberNumber')}
+                              defaultValue={insurance.memberNumber ?? ''}
+                            />
+                            <TextField
+                              id={`insurance-from-${insurance.id}`}
+                              name="validFrom"
+                              label={t('Clients.detail.validFrom')}
+                              type="date"
+                              defaultValue={insurance.validFrom ?? ''}
+                            />
+                            <TextField
+                              id={`insurance-until-${insurance.id}`}
+                              name="validUntil"
+                              label={t('Clients.detail.validUntil')}
+                              type="date"
+                              defaultValue={insurance.validUntil ?? ''}
+                            />
+                          </div>
+                          <label className="flex items-center gap-2 text-sm">
+                            <ShadcnCheckbox name="isPrimary" defaultChecked={insurance.isPrimary} />{' '}
+                            {t('Clients.detail.primaryInsurance')}
+                          </label>
+                          <p className="text-sm text-muted-foreground">
+                            {t('Clients.detail.protectedInsuranceNumber')}
+                          </p>
+                          <Button type="submit" variant="secondary" className="w-fit">
+                            {t('Clients.detail.saveInsurance')}
+                          </Button>
+                        </RHFActionForm>
+                      </details>
+                    ) : null}
+                  </article>
+                ))
+              ) : (
+                <p className="rounded-lg border border-dashed bg-card p-5 text-sm text-muted-foreground">
+                  {t('Clients.detail.noInsurance')}
+                </p>
+              )}
             </div>
             {canUpdateClient ? (
               <details className="rounded-lg border bg-card p-5">
                 <summary className="cursor-pointer font-semibold">
                   {t('Clients.detail.addInsurance')}
                 </summary>
-                <RHFActionForm action={addClientInsuranceAction} className="mt-4 grid gap-4">
+                <RHFActionForm
+                  warnOnUnsavedChanges
+                  action={addClientInsuranceAction}
+                  className="mt-4 grid gap-4"
+                >
                   <input type="hidden" name="id" value={client.id} />
                   <div className="grid gap-4 md:grid-cols-3">
                     <SelectField
@@ -1332,12 +1434,25 @@ async function ClientDetailContent({
               <h3 className="text-lg font-semibold">{t('Clients.detail.careLevelHistory')}</h3>
               {grades.length ? (
                 grades.map((grade) => {
+                  const isCurrent =
+                    grade.status === 'confirmed' &&
+                    grade.validFrom <= today &&
+                    (!grade.validUntil || grade.validUntil > today);
                   const editableFuture = grade.status === 'pending' && grade.validFrom > today;
                   return (
                     <article key={grade.id} className="grid gap-3 rounded-lg border bg-card p-5">
                       <h4 className="font-semibold">
                         {t('Clients.careLevelNumber', { grade: grade.grade })} ·{' '}
-                        {t(statusLabelKey(grade.status))}
+                        {t(statusLabelKey(grade.status))}{' '}
+                        {grade.status === 'confirmed' ? (
+                          <span className="text-sm font-normal text-muted-foreground">
+                            (
+                            {isCurrent
+                              ? t('Clients.detail.currentCareLevel')
+                              : t('Clients.detail.historicalCareLevel')}
+                            )
+                          </span>
+                        ) : null}
                       </h4>
                       <p className="text-sm text-muted-foreground">
                         {t('Clients.detail.validFrom')} {formatDate(grade.validFrom, locale)}{' '}
@@ -1349,6 +1464,7 @@ async function ClientDetailContent({
                       </p>
                       {editableFuture && canUpdateClient ? (
                         <RHFActionForm
+                          warnOnUnsavedChanges
                           action={updateFuturePflegegradAction}
                           className="grid gap-4 md:grid-cols-4"
                         >
@@ -1407,6 +1523,7 @@ async function ClientDetailContent({
                     {t('Clients.detail.addCareLevel')}
                   </summary>
                   <RHFActionForm
+                    warnOnUnsavedChanges
                     action={addClientPflegegradAction}
                     className="mt-4 grid gap-4 md:grid-cols-3"
                   >
@@ -1491,6 +1608,7 @@ async function ClientDetailContent({
               ) : null}
               {canManageSchedule ? (
                 <RHFActionForm
+                  warnOnUnsavedChanges
                   action={saveClientSchedulingPreferencesAction}
                   className="grid gap-4"
                 >
@@ -1596,8 +1714,9 @@ async function ClientDetailContent({
                     </p>
                   </div>
                   {canManageSchedule ? (
-                    <form
+                    <RHFActionForm
                       action={saveClientRoutingLocationAction}
+                      warnOnUnsavedChanges
                       className="grid gap-3 md:grid-cols-2"
                     >
                       <input type="hidden" name="id" value={client.id} />
@@ -1626,7 +1745,7 @@ async function ClientDetailContent({
                       <Button type="submit" className="w-fit md:col-span-2">
                         {t('Clients.detail.saveRoutingLocation')}
                       </Button>
-                    </form>
+                    </RHFActionForm>
                   ) : routingLocation ? (
                     <p className="text-sm text-muted-foreground">
                       {routingLocation.latitude}, {routingLocation.longitude}
@@ -1641,248 +1760,576 @@ async function ClientDetailContent({
             </section>
           ) : null}
 
-          <section id="visits" aria-labelledby="visits-title" className="grid gap-4 scroll-mt-6">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 id="visits-title" className="text-xl font-semibold">
-                {t('Clients.detail.upcomingVisits')}
-              </h2>
-              <Button asChild variant="secondary" size="sm">
-                <Link href={`/planning?clientId=${client.id}`}>
-                  {t('Clients.detail.openCalendar')}
-                </Link>
-              </Button>
-            </div>
-            {upcomingVisitsResult.error ? (
-              <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
-                {t('Clients.detail.visitsUnavailable')}
-              </p>
-            ) : visitItems.length ? (
-              <ol className="grid gap-2">
-                {visitItems.map((visit) => {
-                  const execution = executionByVisitId.get(visit.id);
-                  const visitHref = hasClientPermission(
-                    permissions,
-                    'schedule.read',
-                    tenantId,
-                    visit.organizationId,
-                    visit.facilityId,
-                  )
-                    ? `/visits/${visit.id}`
-                    : null;
-                  return (
-                    <li key={visit.id}>
-                      <ResourceCardLink
-                        className="grid gap-1 rounded-lg border bg-card p-4 hover:border-primary/40 sm:grid-cols-[12rem_1fr_auto]"
-                        href={visitHref}
-                      >
-                        <time dateTime={visit.plannedStart}>
-                          {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
-                        </time>
-                        <span>
-                          <strong>
-                            {visit.services.map((service) => service.serviceName).join(' · ')}
-                          </strong>
-                          <span className="block text-sm text-muted-foreground">
-                            {visit.assignments.length
-                              ? visit.assignments
-                                  .map((assignment) => assignment.employeeDisplayName)
-                                  .join(', ')
-                              : t('Clients.detail.unassigned')}
-                          </span>
-                          {execution ? (
-                            <span className="block text-sm text-muted-foreground">
-                              {t('Clients.detail.execution')}{' '}
-                              {execution.executionStatus === 'completed'
-                                ? t('Common.status.completed')
-                                : execution.executionStatus === 'in_progress'
-                                  ? t('Common.status.inProgress')
-                                  : t('VisitExecution.executionStatus.notStarted')}
-                              {execution.actualStart ? (
-                                <>
-                                  {` · ${t('Clients.detail.actual')} `}
-                                  {formatVisitDateTime(
-                                    execution.actualStart,
-                                    visit.timezone,
-                                    locale,
-                                  )}
-                                  {execution.actualEnd
-                                    ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone, locale)}`
-                                    : ''}
-                                </>
-                              ) : null}
-                            </span>
-                          ) : executionSummariesResult.error ? (
-                            <span className="block text-sm text-muted-foreground">
-                              {t('Clients.detail.executionStatusUnavailable')}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="text-sm">
-                          {visit.status === 'cancelled'
-                            ? t('Common.status.cancelled')
-                            : visit.status === 'confirmed'
-                              ? t('Common.status.confirmed')
-                              : t('Common.status.planned')}
-                        </span>
-                      </ResourceCardLink>
-                    </li>
-                  );
-                })}
-              </ol>
-            ) : (
-              <p className="rounded-lg border bg-card p-4 text-muted-foreground">
-                {t('Clients.detail.noUpcomingVisits')}
-              </p>
-            )}
-            {recentVisitsResult.error ? (
-              <p className="text-sm text-muted-foreground">
-                {t('Clients.detail.pastExecutionsUnavailable')}
-              </p>
-            ) : recentExecutionSummariesResult.error ? (
-              <p className="text-sm text-muted-foreground">
-                {t('Clients.detail.pastExecutionStatusUnavailable')}
-              </p>
-            ) : recentExecutionItems.length ? (
-              <div className="grid gap-3">
-                <h3 className="font-semibold">{t('Clients.detail.recentVisits')}</h3>
-                <ol className="grid gap-2">
-                  {recentExecutionItems.map((visit) => {
-                    const execution = recentExecutionByVisitId.get(visit.id);
-                    if (!execution) return null;
-                    const visitHref = hasClientPermission(
-                      permissions,
-                      'schedule.read',
-                      tenantId,
-                      visit.organizationId,
-                      visit.facilityId,
-                    )
-                      ? `/visits/${visit.id}`
-                      : null;
-                    return (
-                      <li key={visit.id}>
-                        <ResourceCardLink
-                          className="grid gap-1 rounded-lg border bg-card p-4 hover:border-primary/40"
-                          href={visitHref}
-                        >
-                          <time dateTime={visit.plannedStart}>
-                            {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
-                          </time>
-                          <strong>
-                            {visit.services.map((service) => service.serviceName).join(' · ')}
-                          </strong>
-                          <span className="text-sm text-muted-foreground">
-                            {t('Clients.detail.execution')}{' '}
-                            {execution.executionStatus === 'completed'
-                              ? t('Common.status.completed')
-                              : t('Common.status.inProgress')}
-                            {execution.actualStart
-                              ? ` · ${t('Clients.detail.actual')} ${formatVisitDateTime(execution.actualStart, visit.timezone, locale)}`
-                              : ''}
+          {canReadSchedule ? (
+            <Suspense
+              fallback={<ClientSectionLoading label={t('Clients.detail.upcomingVisits')} />}
+            >
+              <ClientVisitsSection client={client} permissions={permissions} />
+            </Suspense>
+          ) : null}
+
+          {canReadDocuments ? (
+            <Suspense fallback={<ClientSectionLoading label={t('Documents.title')} />}>
+              <ClientDocumentsSection clientId={client.id} query={query} />
+            </Suspense>
+          ) : null}
+
+          {canReadAdmissions ? (
+            <Suspense fallback={<ClientSectionLoading label={t('Onboarding.title')} />}>
+              <ClientAdmissionHistorySection
+                clientId={client.id}
+                client={client}
+                permissions={permissions}
+                canReadSchedule={canReadSchedule}
+              />
+            </Suspense>
+          ) : null}
+          <Suspense fallback={<ClientSectionLoading label={t('Clients.detail.timeline')} />}>
+            <ClientTimelineSection clientId={client.id} />
+          </Suspense>
+        </>
+      )}
+    </div>
+  );
+}
+
+async function ClientDocumentsSection({
+  clientId,
+  query,
+}: Readonly<{ clientId: string; query: ClientDetailQuery }>) {
+  const [t, locale, api, header] = await Promise.all([
+    getTranslations(),
+    getLocale(),
+    getApiClient(),
+    getTenantHeader(),
+  ]);
+  const selectedDocumentType = clientDocumentTypes.includes(
+    query.documentType as ClientDocumentType,
+  )
+    ? (query.documentType as ClientDocumentType)
+    : null;
+  const page = positivePage(query.documentPage);
+  const pageSize = positivePageSize(query.documentPageSize);
+  const documentsResult = await api.GET('/api/v1/documents', {
+    params: {
+      query: {
+        clientId,
+        page,
+        pageSize,
+        ...(selectedDocumentType ? { documentType: selectedDocumentType } : {}),
+      },
+      header,
+    },
+  });
+  const documentList = documentsResult.data as
+    | {
+        items?: ClientDocument[];
+        page: number;
+        pageSize: number;
+        totalItems: number;
+      }
+    | undefined;
+  if (documentList) {
+    redirectToValidPage(
+      `/clients/${clientId}`,
+      query,
+      page,
+      documentList.pageSize,
+      documentList.totalItems,
+      'documentPage',
+      'documentPageSize',
+    );
+  }
+  const documents = documentList?.items ?? [];
+  const errorCode = (documentsResult.error as { code?: string } | undefined)?.code;
+
+  return (
+    <section
+      id="documents"
+      aria-labelledby="documents-title"
+      className="grid gap-3 rounded-lg border bg-card p-5 scroll-mt-6"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="documents-title" className="text-xl font-semibold">
+          {t('Documents.title')}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {t('Documents.historyCount', { count: documents.length })}
+        </p>
+      </div>
+      <form method="get" action={`/clients/${clientId}`} className="flex flex-wrap items-end gap-2">
+        <div className="grid gap-1">
+          <Label htmlFor="document-type-filter">{t('Documents.filterType')}</Label>
+          <NativeSelect
+            id="document-type-filter"
+            name="documentType"
+            defaultValue={selectedDocumentType ?? ''}
+            selectClassName="h-10 rounded-md border bg-card px-3"
+            className="w-full"
+          >
+            <option value="">{t('Documents.allDocumentTypes')}</option>
+            {clientDocumentTypes.map((type) => (
+              <option key={type} value={type}>
+                {t(`Documents.documentTypes.${type}`)}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+        <input type="hidden" name="documentPage" value="1" />
+        <input type="hidden" name="documentPageSize" value={pageSize} />
+        <Button type="submit" variant="secondary">
+          {t('Documents.applyFilter')}
+        </Button>
+      </form>
+      {documents.length ? (
+        <ul className="grid gap-2">
+          {documents.map((document) => (
+            <li
+              key={document.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+            >
+              <div>
+                <h3 className="font-medium">
+                  {t(`Documents.documentTypes.${document.documentType}`)}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {formatDateTime(document.generatedAt ?? document.createdAt, locale)} ·{' '}
+                  {t(`Documents.status.${document.status}`)} · {document.locale.toUpperCase()}
+                </p>
+              </div>
+              {document.status === 'ready' ? (
+                <Button asChild variant="secondary">
+                  <Link href={`/documents/${document.id}/pdf`}>{t('Documents.download')}</Link>
+                </Button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : errorCode ? (
+        <p role="alert" className="rounded-md border bg-card p-4 text-destructive">
+          {t(errorMessageKey(errorCode))}
+        </p>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          {selectedDocumentType ? t('Documents.historyFilterEmpty') : t('Documents.historyEmpty')}
+        </p>
+      )}
+      {documentList ? (
+        <DataPagination
+          pathname={`/clients/${clientId}`}
+          page={documentList.page}
+          pageSize={documentList.pageSize}
+          totalItems={documentList.totalItems}
+          pageParam="documentPage"
+          pageSizeParam="documentPageSize"
+          controlId="client-document-page-size"
+          filters={{
+            documentType: selectedDocumentType ?? undefined,
+            error: query.error,
+            updated: query.updated,
+          }}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+async function ClientVisitsSection({
+  client,
+  permissions,
+}: Readonly<{
+  client: ClientDetailClient;
+  permissions: Awaited<ReturnType<typeof getPermissionGrants>>;
+}>) {
+  const [t, locale, api, header] = await Promise.all([
+    getTranslations(),
+    getLocale(),
+    getApiClient(),
+    getTenantHeader(),
+  ]);
+  const get = api.GET;
+  const { visitNow, visitFuture, visitRecent } = clientVisitRange();
+  const [upcomingVisitsResult, recentVisitsResult, recentCancelledVisitsResult] = await Promise.all(
+    [
+      get('/api/v1/visits', {
+        params: {
+          query: {
+            from: visitNow.toISOString(),
+            until: visitFuture.toISOString(),
+            clientId: client.id,
+            page: 1,
+            pageSize: 10,
+          },
+          header,
+        },
+      }),
+      get('/api/v1/visits', {
+        params: {
+          query: {
+            from: visitRecent.toISOString(),
+            until: visitNow.toISOString(),
+            clientId: client.id,
+            page: 1,
+            pageSize: 10,
+          },
+          header,
+        },
+      }),
+      get('/api/v1/visits', {
+        params: {
+          query: {
+            from: visitRecent.toISOString(),
+            until: visitNow.toISOString(),
+            clientId: client.id,
+            status: 'cancelled',
+            page: 1,
+            pageSize: 10,
+          },
+          header,
+        },
+      }),
+    ],
+  );
+  const visitItems = upcomingVisitsResult.data?.items ?? [];
+  const recentVisitItems = recentVisitsResult.data?.items ?? [];
+  const fetchExecutionSummaries = (items: typeof visitItems) =>
+    items.length
+      ? get('/api/v1/visit-executions/summaries', {
+          params: {
+            query: { visitIds: items.map((visit) => visit.id).join(',') },
+            header,
+          },
+        })
+      : Promise.resolve({ data: [], error: undefined });
+  const [executionSummariesResult, recentExecutionSummariesResult] = await Promise.all([
+    fetchExecutionSummaries(visitItems),
+    fetchExecutionSummaries(recentVisitItems),
+  ]);
+  const executionByVisitId = new Map(
+    (executionSummariesResult.data ?? []).map((summary) => [summary.visitId, summary]),
+  );
+  const recentExecutionByVisitId = new Map(
+    (recentExecutionSummariesResult.data ?? []).map((summary) => [summary.visitId, summary]),
+  );
+  const recentExecutionItems = recentVisitItems.filter(
+    (visit) =>
+      recentExecutionByVisitId.get(visit.id)?.executionStatus !== undefined &&
+      recentExecutionByVisitId.get(visit.id)?.executionStatus !== 'not_started',
+  );
+  const tenantId = header['X-Tenant-Id'];
+  const visitHref = (visit: (typeof visitItems)[number]) =>
+    hasClientPermission(
+      permissions,
+      'schedule.read',
+      tenantId,
+      visit.organizationId,
+      visit.facilityId,
+    )
+      ? `/visits/${visit.id}`
+      : null;
+
+  return (
+    <section id="visits" aria-labelledby="visits-title" className="grid gap-4 scroll-mt-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="visits-title" className="text-xl font-semibold">
+          {t('Clients.detail.upcomingVisits')}
+        </h2>
+        <Button asChild variant="secondary" size="sm">
+          <Link href={`/planning?clientId=${encodeURIComponent(client.id)}`}>
+            {t('Clients.detail.openCalendar')}
+          </Link>
+        </Button>
+      </div>
+      {upcomingVisitsResult.error ? (
+        <p role="alert" className="rounded-lg border bg-card p-4 text-sm text-destructive">
+          {t('Clients.detail.visitsUnavailable')}
+        </p>
+      ) : visitItems.length ? (
+        <ol className="grid gap-2">
+          {visitItems.map((visit) => {
+            const execution = executionByVisitId.get(visit.id);
+            return (
+              <li key={visit.id}>
+                <ResourceCardLink
+                  className="grid gap-1 rounded-lg border bg-card p-4 hover:border-primary/40 sm:grid-cols-[12rem_1fr_auto]"
+                  href={visitHref(visit)}
+                >
+                  <time dateTime={visit.plannedStart}>
+                    {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
+                  </time>
+                  <span>
+                    <strong>
+                      {visit.services.map((service) => service.serviceName).join(' · ')}
+                    </strong>
+                    <span className="block text-sm text-muted-foreground">
+                      {visit.assignments.length
+                        ? visit.assignments
+                            .map((assignment) => assignment.employeeDisplayName)
+                            .join(', ')
+                        : t('Clients.detail.unassigned')}
+                    </span>
+                    {execution ? (
+                      <span className="block text-sm text-muted-foreground">
+                        {t('Clients.detail.execution')}{' '}
+                        {execution.executionStatus === 'completed'
+                          ? t('Common.status.completed')
+                          : execution.executionStatus === 'in_progress'
+                            ? t('Common.status.inProgress')
+                            : t('VisitExecution.executionStatus.notStarted')}
+                        {execution.actualStart ? (
+                          <>
+                            {` · ${t('Clients.detail.actual')} `}
+                            {formatVisitDateTime(execution.actualStart, visit.timezone, locale)}
                             {execution.actualEnd
                               ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone, locale)}`
                               : ''}
-                          </span>
-                        </ResourceCardLink>
-                      </li>
-                    );
-                  })}
-                </ol>
-              </div>
-            ) : null}
-            {recentCancelledVisitsResult.data?.items.length ? (
-              <details className="rounded-lg border bg-card p-4">
-                <summary className="cursor-pointer font-semibold">
-                  {t('Clients.detail.recentlyCancelledVisits', {
-                    count: recentCancelledVisitsResult.data.items.length,
-                  })}
-                </summary>
-                <ul className="mt-3 grid gap-2">
-                  {recentCancelledVisitsResult.data.items.map((visit) => {
-                    const visitHref = hasClientPermission(
-                      permissions,
-                      'schedule.read',
-                      tenantId,
-                      visit.organizationId,
-                      visit.facilityId,
-                    )
-                      ? `/visits/${visit.id}`
-                      : null;
-                    return (
-                      <li key={visit.id}>
-                        <ResourceCardLink href={visitHref} className="text-primary underline">
-                          {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)} ·{' '}
-                          {visit.services.map((service) => service.serviceName).join(', ')}
-                        </ResourceCardLink>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </details>
-            ) : null}
-          </section>
+                          </>
+                        ) : null}
+                      </span>
+                    ) : executionSummariesResult.error ? (
+                      <span className="block text-sm text-muted-foreground">
+                        {t('Clients.detail.executionStatusUnavailable')}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="text-sm">
+                    {visit.status === 'cancelled'
+                      ? t('Common.status.cancelled')
+                      : visit.status === 'confirmed'
+                        ? t('Common.status.confirmed')
+                        : t('Common.status.planned')}
+                  </span>
+                </ResourceCardLink>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className="rounded-lg border bg-card p-4 text-muted-foreground">
+          {t('Clients.detail.noUpcomingVisits')}
+        </p>
+      )}
+      {recentVisitsResult.error ? (
+        <p role="alert" className="text-sm text-muted-foreground">
+          {t('Clients.detail.pastExecutionsUnavailable')}
+        </p>
+      ) : recentExecutionSummariesResult.error ? (
+        <p role="alert" className="text-sm text-muted-foreground">
+          {t('Clients.detail.pastExecutionStatusUnavailable')}
+        </p>
+      ) : recentExecutionItems.length ? (
+        <div className="grid gap-3">
+          <h3 className="font-semibold">{t('Clients.detail.recentVisits')}</h3>
+          <ol className="grid gap-2">
+            {recentExecutionItems.map((visit) => {
+              const execution = recentExecutionByVisitId.get(visit.id);
+              if (!execution) return null;
+              return (
+                <li key={visit.id}>
+                  <ResourceCardLink
+                    className="grid gap-1 rounded-lg border bg-card p-4 hover:border-primary/40"
+                    href={visitHref(visit)}
+                  >
+                    <time dateTime={visit.plannedStart}>
+                      {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
+                    </time>
+                    <strong>
+                      {visit.services.map((service) => service.serviceName).join(' · ')}
+                    </strong>
+                    <span className="text-sm text-muted-foreground">
+                      {t('Clients.detail.execution')}{' '}
+                      {execution.executionStatus === 'completed'
+                        ? t('Common.status.completed')
+                        : t('Common.status.inProgress')}
+                      {execution.actualStart
+                        ? ` · ${t('Clients.detail.actual')} ${formatVisitDateTime(execution.actualStart, visit.timezone, locale)}`
+                        : ''}
+                      {execution.actualEnd
+                        ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone, locale)}`
+                        : ''}
+                    </span>
+                  </ResourceCardLink>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      ) : null}
+      {recentCancelledVisitsResult.data?.items.length ? (
+        <details className="rounded-lg border bg-card p-4">
+          <summary className="cursor-pointer font-semibold">
+            {t('Clients.detail.recentlyCancelledVisits', {
+              count: recentCancelledVisitsResult.data.items.length,
+            })}
+          </summary>
+          <ul className="mt-3 grid gap-2">
+            {recentCancelledVisitsResult.data.items.map((visit) => (
+              <li key={visit.id}>
+                <ResourceCardLink href={visitHref(visit)} className="text-primary underline">
+                  {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)} ·{' '}
+                  {visit.services.map((service) => service.serviceName).join(', ')}
+                </ResourceCardLink>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </section>
+  );
+}
 
-          {canReadCommunications ? (
-            <section className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-[1fr_auto]">
-              <div className="grid gap-2">
-                <div>
-                  <h2 className="font-semibold">{t('Clients.detail.communicationsSummary')}</h2>
-                  <p className="text-sm text-muted-foreground">
-                    {t('Clients.detail.communicationsSummaryDescription')}
-                  </p>
+async function ClientAdmissionHistorySection({
+  clientId,
+  client,
+  permissions,
+  canReadSchedule,
+}: Readonly<{
+  clientId: string;
+  client: ClientDetailClient;
+  permissions: Awaited<ReturnType<typeof getPermissionGrants>>;
+  canReadSchedule: boolean;
+}>) {
+  const [t, locale, api, header] = await Promise.all([
+    getTranslations(),
+    getLocale(),
+    getApiClient(),
+    getTenantHeader(),
+  ]);
+  const result = await api.GET('/api/v1/onboarding/clients/{clientId}/history', {
+    params: { path: { clientId }, header },
+  });
+  const history = (result.data ?? []) as unknown as Array<{
+    id: string;
+    stage: string;
+    admittedAt: string | null;
+    ownerEmployeeId: string | null;
+    ownerEmployeeName?: string | null;
+    createdAt: string;
+    firstVisitId: string | null;
+    firstVisitStartsAt?: string | null;
+    history: Array<{
+      version: number;
+      toStage: string;
+      occurredAt: string;
+      actorName?: string | null;
+    }>;
+    documents: Array<{ id: string; requirementCode: string; status: string }>;
+    tasks: Array<{ id: string; title: string; status: string; dueAt: string | null }>;
+    communications: Array<{
+      id: string;
+      subject: string;
+      summary: string | null;
+      occurredAt: string;
+    }>;
+  }>;
+  const tenantId = header['X-Tenant-Id'];
+  const canReadEmployee = hasClientPermission(
+    permissions,
+    'employee.read',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+  const canReadOperations = hasClientPermission(
+    permissions,
+    'operations.read',
+    tenantId,
+    client.organizationId,
+    client.primaryFacilityId,
+  );
+
+  return (
+    <section id="admissions" aria-labelledby="admissions-title" className="grid gap-3 scroll-mt-6">
+      <h2 id="admissions-title" className="text-xl font-semibold">
+        {t('Onboarding.title')}
+      </h2>
+      {result.error ? (
+        <p role="alert" className="rounded-lg border bg-card p-5">
+          {t('Onboarding.loadFailed')}
+        </p>
+      ) : history.length ? (
+        <ul className="grid gap-3">
+          {history.map((entry) => (
+            <li key={entry.id} className="rounded-lg border bg-card p-4">
+              <Link
+                className="font-semibold text-primary underline"
+                href={`/admissions/${entry.id}`}
+              >
+                {t('Onboarding.stage')}:{' '}
+                {t(
+                  `Onboarding.${entry.stage === 'assessment' ? 'assessmentStage' : entry.stage}` as 'Onboarding.inquiry',
+                )}
+              </Link>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {entry.admittedAt
+                  ? `${t('Onboarding.admitted')} · ${formatDateTime(entry.admittedAt, locale)}`
+                  : formatDate(entry.createdAt, locale)}
+              </p>
+              {entry.ownerEmployeeId ? (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t('Onboarding.ownerEmployee')}:{' '}
+                  <ResourceReference
+                    label={
+                      canReadEmployee && entry.ownerEmployeeName
+                        ? entry.ownerEmployeeName
+                        : t('Resources.unavailableEmployee')
+                    }
+                    href={
+                      canReadEmployee && entry.ownerEmployeeName
+                        ? `/employees/${entry.ownerEmployeeId}`
+                        : null
+                    }
+                  />
+                </p>
+              ) : null}
+              {entry.firstVisitId && entry.firstVisitStartsAt ? (
+                <p className="mt-1 text-sm">
+                  {t('Onboarding.firstScheduledVisit')}:{' '}
+                  <ResourceReference
+                    label={
+                      formatDateTime(entry.firstVisitStartsAt, locale) ??
+                      t('Resources.unavailableVisit')
+                    }
+                    href={canReadSchedule ? `/visits/${entry.firstVisitId}` : null}
+                  />
+                </p>
+              ) : null}
+              {entry.history.length ? (
+                <div className="mt-3 border-t pt-3">
+                  <h3 className="font-medium">{t('Onboarding.admissionHistory')}</h3>
+                  <ol className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                    {entry.history.map((transition) => (
+                      <li key={`${entry.id}-${transition.version}`}>
+                        {t(
+                          `Onboarding.${transition.toStage === 'assessment' ? 'assessmentStage' : transition.toStage}` as 'Onboarding.inquiry',
+                        )}{' '}
+                        · {formatDateTime(transition.occurredAt, locale)} ·{' '}
+                        {transition.actorName ?? t('Resources.unavailableUser')}
+                      </li>
+                    ))}
+                  </ol>
                 </div>
-                <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
-                  {communicationsSummary?.preferredChannel ? (
-                    <div>
-                      <dt className="inline font-medium">
-                        {t('Communications.preferredChannel')}:{' '}
-                      </dt>
-                      <dd className="inline">
-                        {communicationChannelLabels[communicationsSummary.preferredChannel] ??
-                          communicationsSummary.preferredChannel}
-                      </dd>
-                    </div>
-                  ) : null}
-                  {communicationsSummary?.preferredContactName ? (
-                    <div>
-                      <dt className="inline font-medium">
-                        {t('Communications.preferredContact')}:{' '}
-                      </dt>
-                      <dd className="inline">{communicationsSummary.preferredContactName}</dd>
-                    </div>
-                  ) : null}
-                  {communicationsSummary?.primaryAuthorizedContact ? (
-                    <div>
-                      <dt className="inline font-medium">
-                        {t('Communications.primaryAuthorizedContact')}:{' '}
-                      </dt>
-                      <dd className="inline">
-                        {communicationsSummary.primaryAuthorizedContact.name} ·{' '}
-                        {contactAuthorizationLabels[
-                          communicationsSummary.primaryAuthorizedContact.authorization
-                        ] ?? communicationsSummary.primaryAuthorizedContact.authorization}
-                      </dd>
-                    </div>
-                  ) : null}
-                  {communicationsSummary?.mostRecentInteraction ? (
-                    <div>
-                      <dt className="inline font-medium">
-                        {t('Communications.mostRecentInteraction')}:{' '}
-                      </dt>
-                      <dd className="inline">
-                        {communicationsSummary.mostRecentInteraction.subject} ·{' '}
-                        {formatDateTime(
-                          communicationsSummary.mostRecentInteraction.occurredAt,
-                          locale,
-                        )}
-                      </dd>
-                    </div>
-                  ) : null}
-                </dl>
-                {canReadCommunicationTasks && communicationsSummary?.openFollowUps.length ? (
-                  <div className="grid gap-1">
-                    <p className="text-sm font-medium">{t('Communications.openFollowUps')}</p>
-                    <ul className="grid gap-1 text-sm">
-                      {communicationsSummary.openFollowUps.map((task) => (
+              ) : null}
+              {entry.documents.length ? (
+                <div className="mt-3 border-t pt-3">
+                  <h3 className="font-medium">{t('Onboarding.admissionDocuments')}</h3>
+                  <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                    {entry.documents.map((document) => (
+                      <li key={document.id}>
+                        {document.requirementCode} · {document.status}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {canReadOperations &&
+              entry.tasks.some((task) => !['completed', 'cancelled'].includes(task.status)) ? (
+                <div className="mt-3 border-t pt-3">
+                  <h3 className="font-medium">{t('Onboarding.admissionTasks')}</h3>
+                  <ul className="mt-2 grid gap-1 text-sm">
+                    {entry.tasks
+                      .filter((task) => !['completed', 'cancelled'].includes(task.status))
+                      .map((task) => (
                         <li key={task.id}>
                           <Link
                             className="text-primary underline"
@@ -1891,286 +2338,93 @@ async function ClientDetailContent({
                             {task.title}
                           </Link>
                           {' · '}
-                          {operationTaskStatusLabels[task.status] ?? task.status}
+                          {task.status}
                           {task.dueAt ? ` · ${formatDateTime(task.dueAt, locale)}` : ''}
                         </li>
                       ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-              <Button asChild variant="secondary">
-                <Link href={`/clients/${client.id}/communications`}>
-                  {t('Clients.detail.openCommunications')}
-                </Link>
-              </Button>
-            </section>
-          ) : null}
-
-          {canReadDocuments ? (
-            <section
-              id="documents"
-              aria-labelledby="documents-title"
-              className="grid gap-3 rounded-lg border bg-card p-5 scroll-mt-6"
-            >
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 id="documents-title" className="text-xl font-semibold">
-                  {t('Documents.title')}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {t('Documents.historyCount', { count: documents.length })}
-                </p>
-              </div>
-              <form
-                method="get"
-                action={`/clients/${client.id}`}
-                className="flex flex-wrap items-end gap-2"
-              >
-                <div className="grid gap-1">
-                  <Label htmlFor="document-type-filter">{t('Documents.filterType')}</Label>
-                  <NativeSelect
-                    id="document-type-filter"
-                    name="documentType"
-                    defaultValue={selectedDocumentType ?? ''}
-                    selectClassName="h-10 rounded-md border bg-card px-3"
-                    className="w-full"
-                  >
-                    <option value="">{t('Documents.allDocumentTypes')}</option>
-                    {clientDocumentTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {t(`Documents.documentTypes.${type}`)}
-                      </option>
-                    ))}
-                  </NativeSelect>
+                  </ul>
                 </div>
-                <input type="hidden" name="documentPage" value="1" />
-                <input type="hidden" name="documentPageSize" value={documentPageSize} />
-                <Button type="submit" variant="secondary">
-                  {t('Documents.applyFilter')}
-                </Button>
-              </form>
-              {documents.length ? (
-                <ul className="grid gap-2">
-                  {documents.map((document) => (
-                    <li
-                      key={document.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
-                    >
-                      <div>
-                        <h3 className="font-medium">
-                          {t(`Documents.documentTypes.${document.documentType}`)}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          {formatDateTime(document.generatedAt ?? document.createdAt, locale)} ·{' '}
-                          {t(`Documents.status.${document.status}`)} ·{' '}
-                          {document.locale.toUpperCase()}
-                        </p>
-                      </div>
-                      {document.status === 'ready' ? (
-                        <Button asChild variant="secondary">
-                          <Link href={`/documents/${document.id}/pdf`}>
-                            {t('Documents.download')}
-                          </Link>
-                        </Button>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : documentErrorCode ? (
-                <p role="alert" className="rounded-md border bg-card p-4 text-destructive">
-                  {t(errorMessageKey(documentErrorCode))}
-                </p>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {selectedDocumentType
-                    ? t('Documents.historyFilterEmpty')
-                    : t('Documents.historyEmpty')}
-                </p>
-              )}
-              {documentList ? (
-                <DataPagination
-                  pathname={`/clients/${client.id}`}
-                  page={documentList.page}
-                  pageSize={documentList.pageSize}
-                  totalItems={documentList.totalItems}
-                  pageParam="documentPage"
-                  pageSizeParam="documentPageSize"
-                  controlId="client-document-page-size"
-                  filters={{
-                    documentType: selectedDocumentType ?? undefined,
-                    error: query.error,
-                    updated: query.updated,
-                  }}
-                />
               ) : null}
-            </section>
-          ) : null}
-
-          {canReadAdmissions ? (
-            <section
-              id="admissions"
-              aria-labelledby="admissions-title"
-              className="grid gap-3 scroll-mt-6"
-            >
-              <h2 id="admissions-title" className="text-xl font-semibold">
-                {t('Onboarding.title')}
-              </h2>
-              {admissionHistoryResult?.error ? (
-                <p role="alert" className="rounded-lg border bg-card p-5">
-                  {t('Onboarding.loadFailed')}
-                </p>
-              ) : admissionHistory.length ? (
-                <ul className="grid gap-3">
-                  {admissionHistory.map((entry) => (
-                    <li key={entry.id} className="rounded-lg border bg-card p-4">
-                      <Link
-                        className="font-semibold text-primary underline"
-                        href={`/admissions/${entry.id}`}
-                      >
-                        {t('Onboarding.stage')}:{' '}
-                        {t(
-                          `Onboarding.${entry.stage === 'assessment' ? 'assessmentStage' : entry.stage}` as 'Onboarding.inquiry',
-                        )}
-                      </Link>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {entry.admittedAt
-                          ? t('Onboarding.admitted') +
-                            ' · ' +
-                            formatDateTime(entry.admittedAt, locale)
-                          : formatDate(entry.createdAt, locale)}
+              {entry.communications.length ? (
+                <ul className="mt-3 grid gap-2 border-t pt-3 text-sm">
+                  {entry.communications.map((interaction) => (
+                    <li key={interaction.id}>
+                      <p className="font-medium">
+                        {interaction.subject} · {formatDateTime(interaction.occurredAt, locale)}
                       </p>
-                      {entry.ownerEmployeeId ? (
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {t('Onboarding.ownerEmployee')}:{' '}
-                          <ResourceReference
-                            label={entry.ownerEmployeeName ?? t('Resources.unavailableEmployee')}
-                            href={
-                              entry.ownerEmployeeName ? `/employees/${entry.ownerEmployeeId}` : null
-                            }
-                          />
+                      {interaction.summary ? (
+                        <p className="whitespace-pre-wrap text-muted-foreground">
+                          {interaction.summary}
                         </p>
-                      ) : null}
-                      {entry.firstVisitId && entry.firstVisitStartsAt ? (
-                        <p className="mt-1 text-sm">
-                          {t('Onboarding.firstScheduledVisit')}:{' '}
-                          <ResourceReference
-                            label={
-                              formatDateTime(entry.firstVisitStartsAt, locale) ??
-                              t('Resources.unavailableVisit')
-                            }
-                            href={canReadSchedule ? `/visits/${entry.firstVisitId}` : null}
-                          />
-                        </p>
-                      ) : null}
-                      {entry.history.length ? (
-                        <div className="mt-3 border-t pt-3">
-                          <h3 className="font-medium">{t('Onboarding.admissionHistory')}</h3>
-                          <ol className="mt-2 grid gap-1 text-sm text-muted-foreground">
-                            {entry.history.map((transition) => (
-                              <li key={`${entry.id}-${transition.version}`}>
-                                {t(
-                                  `Onboarding.${transition.toStage === 'assessment' ? 'assessmentStage' : transition.toStage}` as 'Onboarding.inquiry',
-                                )}{' '}
-                                · {formatDateTime(transition.occurredAt, locale)} ·{' '}
-                                {transition.actorName ?? t('Resources.unavailableUser')}
-                              </li>
-                            ))}
-                          </ol>
-                        </div>
-                      ) : null}
-                      {entry.documents.length ? (
-                        <div className="mt-3 border-t pt-3">
-                          <h3 className="font-medium">{t('Onboarding.admissionDocuments')}</h3>
-                          <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
-                            {entry.documents.map((document) => (
-                              <li key={document.id}>
-                                {document.requirementCode} · {document.status}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                      {entry.tasks.some(
-                        (task) => !['completed', 'cancelled'].includes(task.status),
-                      ) ? (
-                        <div className="mt-3 border-t pt-3">
-                          <h3 className="font-medium">{t('Onboarding.admissionTasks')}</h3>
-                          <ul className="mt-2 grid gap-1 text-sm">
-                            {entry.tasks
-                              .filter((task) => !['completed', 'cancelled'].includes(task.status))
-                              .map((task) => (
-                                <li key={task.id}>
-                                  <Link
-                                    className="text-primary underline"
-                                    href={`/operations/tasks/${task.id}`}
-                                  >
-                                    {task.title}
-                                  </Link>{' '}
-                                  · {task.status}
-                                  {task.dueAt ? ` · ${formatDateTime(task.dueAt, locale)}` : ''}
-                                </li>
-                              ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                      {entry.communications.length ? (
-                        <ul className="mt-3 grid gap-2 border-t pt-3 text-sm">
-                          {entry.communications.map((interaction) => (
-                            <li key={interaction.id}>
-                              <p className="font-medium">
-                                {interaction.subject} ·{' '}
-                                {formatDateTime(interaction.occurredAt, locale)}
-                              </p>
-                              {interaction.summary ? (
-                                <p className="whitespace-pre-wrap text-muted-foreground">
-                                  {interaction.summary}
-                                </p>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
                       ) : null}
                     </li>
                   ))}
                 </ul>
-              ) : (
-                <p className="rounded-lg border bg-card p-5 text-muted-foreground">
-                  {t('Onboarding.noHistory')}
-                </p>
-              )}
-            </section>
-          ) : null}
-          <section
-            id="timeline"
-            aria-labelledby="timeline-title"
-            className="grid gap-4 scroll-mt-6"
-          >
-            <h2 id="timeline-title" className="text-xl font-semibold">
-              {t('Clients.detail.timeline')}
-            </h2>
-            {timeline.length ? (
-              <ol className="grid gap-3 border-l-2 border-primary/30 pl-5">
-                {timeline.map((entry) => (
-                  <li key={entry.id} className="rounded-lg border bg-card p-4">
-                    <p className="font-medium">{t(auditActionKey(entry.action))}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {formatDateTime(entry.occurredAt, locale)} ·{' '}
-                      {t('Clients.detail.editedBy', {
-                        actor: t('Resources.unavailableUser'),
-                      })}
-                    </p>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="rounded-lg border bg-card p-5 text-muted-foreground">
-                {t('Clients.detail.noTimeline')}
-              </p>
-            )}
-          </section>
-        </>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="rounded-lg border bg-card p-5 text-muted-foreground">
+          {t('Onboarding.noHistory')}
+        </p>
       )}
-    </div>
+    </section>
+  );
+}
+
+async function ClientTimelineSection({ clientId }: Readonly<{ clientId: string }>) {
+  const [t, locale, api, header] = await Promise.all([
+    getTranslations(),
+    getLocale(),
+    getApiClient(),
+    getTenantHeader(),
+  ]);
+  const result = await api.GET('/api/v1/clients/{clientId}/timeline', {
+    params: { path: { clientId }, header },
+  });
+  const timeline = result.data ?? [];
+  return (
+    <section id="timeline" aria-labelledby="timeline-title" className="grid gap-4 scroll-mt-6">
+      <h2 id="timeline-title" className="text-xl font-semibold">
+        {t('Clients.detail.timeline')}
+      </h2>
+      {result.error ? (
+        <p role="alert" className="rounded-lg border bg-card p-5 text-destructive">
+          {t('Clients.detail.loadFailed')}
+        </p>
+      ) : timeline.length ? (
+        <ol className="grid gap-3 border-l-2 border-primary/30 pl-5">
+          {timeline.map((entry) => (
+            <li key={entry.id} className="rounded-lg border bg-card p-4">
+              <p className="font-medium">{t(auditActionKey(entry.action))}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {formatDateTime(entry.occurredAt, locale)} ·{' '}
+                {t('Clients.detail.editedBy', { actor: t('Resources.unavailableUser') })}
+              </p>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="rounded-lg border bg-card p-5 text-muted-foreground">
+          {t('Clients.detail.noTimeline')}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ClientSectionLoading({ label }: Readonly<{ label: string }>) {
+  return (
+    <section
+      aria-label={label}
+      aria-busy="true"
+      className="grid gap-3 rounded-lg border bg-card p-5"
+    >
+      <span className="sr-only">{label}</span>
+      <Skeleton className="h-5 w-40" />
+      <Skeleton className="h-12" />
+    </section>
   );
 }
 
@@ -2179,13 +2433,13 @@ async function AddressForm({
   clientId,
   idPrefix,
 }: {
-  action: (formData: FormData) => Promise<void>;
+  action: (formData: FormData) => Promise<boolean | void>;
   clientId: string;
   idPrefix: string;
 }) {
   const t = await getTranslations();
   return (
-    <RHFActionForm action={action} className="mt-4 grid gap-4">
+    <RHFActionForm warnOnUnsavedChanges action={action} className="mt-4 grid gap-4">
       <input type="hidden" name="id" value={clientId} />
       <div className="grid gap-4 md:grid-cols-3">
         <SelectField
@@ -2326,7 +2580,10 @@ function TextField({
 }>) {
   return (
     <div className="grid gap-2">
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id}>
+        {label}
+        {required ? <span aria-hidden="true"> *</span> : null}
+      </Label>
       <Input
         id={id}
         name={name}
@@ -2359,7 +2616,10 @@ function SelectField({
 }>) {
   return (
     <div className="grid gap-2">
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id}>
+        {label}
+        {required ? <span aria-hidden="true"> *</span> : null}
+      </Label>
       <NativeSelect
         id={id}
         name={name}
@@ -2374,12 +2634,62 @@ function SelectField({
   );
 }
 
-function Field({ label, value }: { label: string; value: string | null }) {
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="grid gap-1">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="break-words font-medium">{value || '—'}</dd>
+      <dd className="break-words font-medium">{value ?? '—'}</dd>
     </div>
+  );
+}
+
+function ContactMethods({
+  phone,
+  mobile,
+  email,
+  phoneLabel,
+  mobileLabel,
+  emailLabel,
+  emptyLabel,
+}: Readonly<{
+  phone: string | null;
+  mobile: string | null;
+  email: string | null;
+  phoneLabel: string;
+  mobileLabel: string;
+  emailLabel: string;
+  emptyLabel: string;
+}>) {
+  const methods = [
+    phone
+      ? {
+          href: `tel:${encodeURIComponent(phone)}`,
+          label: phoneLabel,
+          value: phone,
+        }
+      : null,
+    mobile
+      ? {
+          href: `tel:${encodeURIComponent(mobile)}`,
+          label: mobileLabel,
+          value: mobile,
+        }
+      : null,
+    email ? { href: `mailto:${email}`, label: emailLabel, value: email } : null,
+  ].filter((method) => method !== null);
+
+  return methods.length ? (
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+      {methods.map((method) => (
+        <li key={`${method.label}-${method.value}`}>
+          <a className="text-primary underline underline-offset-2" href={method.href}>
+            {method.label}: {method.value}
+          </a>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <p className="text-sm text-muted-foreground">{emptyLabel}</p>
   );
 }
 
@@ -2479,6 +2789,22 @@ function addressTypeKey(
     : value === 'billing'
       ? 'Clients.detail.addressTypes.billing'
       : 'Clients.detail.addressTypes.other';
+}
+
+function insuranceTypeKey(
+  value: string,
+):
+  | 'Clients.detail.insuranceTypes.care'
+  | 'Clients.detail.insuranceTypes.health'
+  | 'Clients.detail.insuranceTypes.private'
+  | 'Clients.detail.insuranceTypes.other' {
+  return value === 'pflegeversicherung'
+    ? 'Clients.detail.insuranceTypes.care'
+    : value === 'krankenversicherung'
+      ? 'Clients.detail.insuranceTypes.health'
+      : value === 'private'
+        ? 'Clients.detail.insuranceTypes.private'
+        : 'Clients.detail.insuranceTypes.other';
 }
 
 function relationshipKey(

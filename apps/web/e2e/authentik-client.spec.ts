@@ -10,10 +10,9 @@ import { createS3ObjectStorage } from '@care/storage';
 
 const retiredModuleNavigationName =
   /^(?:Medications?|Clinical Documentation|Care Planning|Competency Policies|Workforce Compliance|Medikamente?|Klinische Dokumentation|Pflegeplanung|Kompetenzrichtlinien|Personal Compliance)$/i;
-const reviewDirectory = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../../artifacts/ui-foundation-review',
-);
+const reviewDirectory = process.env.CARE_UI_REVIEW_DIR
+  ? resolve(process.env.CARE_UI_REVIEW_DIR)
+  : resolve(dirname(fileURLToPath(import.meta.url)), '../../../artifacts/ui-foundation-review');
 
 test('Authentik users can be invited and administered from the office UI', async ({
   page,
@@ -34,7 +33,6 @@ test('Authentik users can be invited and administered from the office UI', async
       hideNextDevToolbar();
     }
   });
-
   const issuer = required('OIDC_ISSUER');
   const authentikOrigin = new URL(issuer).origin;
   const apiToken = required('AUTHENTIK_E2E_API_TOKEN');
@@ -584,7 +582,7 @@ test('Authentik users can be invited and administered from the office UI', async
     const savedContact = page
       .locator('article')
       .filter({ has: page.getByRole('heading', { name: 'E2E Kontakt' }) });
-    await expect(savedContact.getByRole('checkbox', { name: 'Emergency contact' })).toBeChecked();
+    await expect(savedContact).toContainText('Emergency contact');
 
     await page.locator('summary').filter({ hasText: 'Add insurance relationship' }).click();
     const insuranceForm = page
@@ -628,6 +626,9 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.setViewportSize({ width: 390, height: 844 });
     await expectMobileLayoutToFit(page);
     await captureReviewScreenshot(page, 'client-detail-mobile-390.png', true);
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'client-detail-tablet-768.png', true);
     await page.setViewportSize({ width: 1440, height: 900 });
     const clientArchivePath = new URL(page.url()).pathname;
     const clientArchiveResponse = page.waitForResponse(
@@ -1151,7 +1152,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page.getByText('Eligible for this service date')).toBeVisible();
 
     await page.goto(`/clients/${agreementClientId}`);
-    await page.getByRole('link', { name: 'Service planning' }).click();
+    await page.getByRole('link', { name: 'Service planning', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Service planning' })).toBeVisible();
 
     await page.locator('summary').filter({ hasText: 'Create service planning' }).click();
@@ -1574,6 +1575,9 @@ test('Authentik users can be invited and administered from the office UI', async
     const plannedServiceForm = caregiverPage.locator('form').filter({
       has: caregiverPage.getByRole('button', { name: 'Save outcome' }),
     });
+    const plannedExecutionVersion = await plannedServiceForm
+      .locator('input[name="expectedVersion"]')
+      .inputValue();
     await plannedServiceForm.locator('select[name="status"]').selectOption('performed');
     await plannedServiceForm.locator('input[name="actualQuantity"]').fill('1');
     await plannedServiceForm.getByRole('button', { name: 'Save outcome' }).tap();
@@ -1584,6 +1588,9 @@ test('Authentik users can be invited and administered from the office UI', async
     const unplannedForm = caregiverPage.locator('form').filter({
       has: caregiverPage.getByRole('button', { name: 'Record service' }),
     });
+    await expect(unplannedForm.locator('input[name="expectedVersion"]')).not.toHaveValue(
+      plannedExecutionVersion,
+    );
     await unplannedForm.locator('select[name="serviceDefinitionId"]').selectOption(serviceId);
     await unplannedForm.locator('select[name="status"]').selectOption('performed');
     await unplannedForm.locator('input[name="actualQuantity"]').fill('1');
@@ -2048,11 +2055,13 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page.getByText('Documentation finalized', { exact: true })).toBeVisible();
     await expect(page.getByText('Incident documented', { exact: true })).toBeVisible();
     await expect(page.getByText('Documentation amended', { exact: true }).first()).toBeVisible();
-    const clientExecutionRow = page.locator(`a[href="/visits/${executionVisitId}"]`);
+    const clientExecutionRow = page.locator(`#visits a[href="/visits/${executionVisitId}"]`);
     await expect(clientExecutionRow).toContainText('Execution: Completed');
     await expect(clientExecutionRow).toContainText('Actual');
     await page.goto(`/employees/${caregiverEmployeeId}`);
-    const employeeExecutionRow = page.locator(`a[href="/visits/${executionVisitId}"]`);
+    const employeeExecutionRow = page.locator(
+      `section[aria-labelledby="schedule-title"] > ol a[href="/visits/${executionVisitId}"]`,
+    );
     await expect(employeeExecutionRow).toContainText('Execution: Completed');
     await expect(employeeExecutionRow).toContainText('Actual');
 

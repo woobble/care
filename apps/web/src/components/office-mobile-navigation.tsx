@@ -17,6 +17,7 @@ export default function OfficeMobileNavigation({
   closeLabel,
   tenantName,
   pageContextRef,
+  triggerRef,
   brand,
   navigation,
 }: Readonly<{
@@ -27,6 +28,7 @@ export default function OfficeMobileNavigation({
   closeLabel: string;
   tenantName: string;
   pageContextRef: RefObject<HTMLSpanElement | null>;
+  triggerRef: RefObject<HTMLButtonElement | null>;
   brand: ReactNode;
   navigation: ReactNode;
 }>) {
@@ -37,9 +39,11 @@ export default function OfficeMobileNavigation({
         closeLabel={closeLabel}
         aria-describedby={undefined}
         onCloseAutoFocus={(event) => {
+          event.preventDefault();
           if (window.matchMedia('(min-width: 768px)').matches) {
-            event.preventDefault();
             pageContextRef.current?.focus({ preventScroll: true });
+          } else {
+            triggerRef.current?.focus({ preventScroll: true });
           }
         }}
       >

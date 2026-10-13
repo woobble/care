@@ -16,6 +16,7 @@ import type {
   ClientTimelineEntryDto,
   PflegegradResponseDto,
 } from './clients.dto';
+import { can, type AuthorizationPrincipal } from '@care/permissions';
 
 export function clientResponse(client: ClientSnapshot): ClientResponseDto {
   return {
@@ -39,11 +40,35 @@ export function clientResponse(client: ClientSnapshot): ClientResponseDto {
   };
 }
 
-export function clientListItemResponse(item: ClientSearchItem): ClientListItemResponseDto {
+export function clientListItemResponse(
+  item: ClientSearchItem,
+  principal: AuthorizationPrincipal,
+): ClientListItemResponseDto {
+  const canReadOrganization = Boolean(
+    item.client.organizationId &&
+    can(principal, {
+      action: 'organization.read',
+      resource: {
+        tenantId: principal.tenantId,
+        organizationId: item.client.organizationId,
+      },
+    }),
+  );
+  const canReadFacility = Boolean(
+    item.client.primaryFacilityId &&
+    can(principal, {
+      action: 'facility.read',
+      resource: {
+        tenantId: principal.tenantId,
+        ...(item.client.organizationId ? { organizationId: item.client.organizationId } : {}),
+        facilityId: item.client.primaryFacilityId,
+      },
+    }),
+  );
   return {
     ...item.client,
-    organizationName: item.organizationName,
-    facilityName: item.facilityName,
+    organizationName: canReadOrganization ? item.organizationName : null,
+    facilityName: canReadFacility ? item.facilityName : null,
     currentPflegegrad: item.currentPflegegrad,
   };
 }

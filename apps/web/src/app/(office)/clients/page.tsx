@@ -22,7 +22,6 @@ import {
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
-  hasClientPermission,
 } from '@app/web/lib/api';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { FilterDisclosure } from '@app/web/components/filter-disclosure';
@@ -43,6 +42,7 @@ type SearchParams = Promise<{
   sortOrder?: string;
   error?: string;
 }>;
+type ClientListItem = components['schemas']['ClientListItemResponseDto'];
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -70,7 +70,6 @@ export default async function ClientsPage({
   const text = query.q?.trim().slice(0, 120) || undefined;
 
   const [api, header] = await Promise.all([getApiClient(), getTenantHeader()]);
-  const tenantId = header['X-Tenant-Id'];
   const get = api.GET;
   const [clientsResult, organizationResult, facilityResult, permissions] = await Promise.all([
     get('/api/v1/clients', {
@@ -98,6 +97,7 @@ export default async function ClientsPage({
     getPermissionGrants(api),
   ]);
   const canCreateClient = hasPermission(permissions, 'client.create');
+  const clientsErrorCode = (clientsResult.error as { code?: string } | undefined)?.code;
   const clients = clientsResult.data as unknown as
     | components['schemas']['ClientListResponseDto']
     | undefined;
@@ -129,7 +129,9 @@ export default async function ClientsPage({
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
         >
-          {t('Clients.actionFailed')}
+          {query.error === 'INSUFFICIENT_PERMISSION'
+            ? t('Clients.noAccess')
+            : t('Clients.actionFailed')}
         </p>
       ) : null}
       {clientsResult.error ? (
@@ -137,7 +139,9 @@ export default async function ClientsPage({
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
         >
-          {t('Clients.loadFailed')}
+          {clientsErrorCode === 'INSUFFICIENT_PERMISSION'
+            ? t('Clients.noAccess')
+            : t('Clients.loadFailed')}
         </p>
       ) : null}
 
@@ -148,6 +152,9 @@ export default async function ClientsPage({
             <label className="grid min-w-0 gap-1 text-sm font-medium md:col-span-2">
               {t('Clients.searchName')}
               <Input type="search" name="q" maxLength={120} defaultValue={text} className="h-10" />
+              <span className="text-xs font-normal text-muted-foreground">
+                {t('Clients.searchFields')}
+              </span>
             </label>
             <SelectFilter label={t('Common.fields.status')} name="status" value={status ?? ''}>
               <option value="">{t('Common.filters.allStatuses')}</option>
@@ -262,46 +269,12 @@ export default async function ClientsPage({
                       {t('Clients.organizationFacility')}
                     </dt>
                     <dd className="mt-0.5 break-words">
-                      {client.organizationName && client.facilityName ? (
-                        <>
-                          <ResourceReference
-                            label={client.organizationName}
-                            href={
-                              client.organizationId &&
-                              hasClientPermission(
-                                permissions,
-                                'organization.read',
-                                tenantId,
-                                client.organizationId,
-                                null,
-                              )
-                                ? `/administration/organizations/${client.organizationId}`
-                                : null
-                            }
-                          />{' '}
-                          /{' '}
-                          <ResourceReference
-                            label={client.facilityName}
-                            href={
-                              client.primaryFacilityId &&
-                              client.organizationId &&
-                              hasClientPermission(
-                                permissions,
-                                'facility.read',
-                                tenantId,
-                                client.organizationId,
-                                client.primaryFacilityId,
-                              )
-                                ? `/administration/facilities/${client.primaryFacilityId}`
-                                : null
-                            }
-                          />
-                        </>
-                      ) : (
-                        <span className="font-medium text-warning-foreground">
-                          {t('Common.empty.unassigned')}
-                        </span>
-                      )}
+                      <ClientProviderReferences
+                        client={client}
+                        unassigned={t('Common.empty.unassigned')}
+                        organizationUnavailable={t('Resources.unavailableOrganization')}
+                        facilityUnavailable={t('Resources.unavailableFacility')}
+                      />
                     </dd>
                   </div>
                 </dl>
@@ -339,46 +312,12 @@ export default async function ClientsPage({
                           : '—'}
                       </TableCell>
                       <TableCell>
-                        {client.organizationName && client.facilityName ? (
-                          <>
-                            <ResourceReference
-                              label={client.organizationName}
-                              href={
-                                client.organizationId &&
-                                hasClientPermission(
-                                  permissions,
-                                  'organization.read',
-                                  tenantId,
-                                  client.organizationId,
-                                  null,
-                                )
-                                  ? `/administration/organizations/${client.organizationId}`
-                                  : null
-                              }
-                            />{' '}
-                            /{' '}
-                            <ResourceReference
-                              label={client.facilityName}
-                              href={
-                                client.primaryFacilityId &&
-                                client.organizationId &&
-                                hasClientPermission(
-                                  permissions,
-                                  'facility.read',
-                                  tenantId,
-                                  client.organizationId,
-                                  client.primaryFacilityId,
-                                )
-                                  ? `/administration/facilities/${client.primaryFacilityId}`
-                                  : null
-                              }
-                            />
-                          </>
-                        ) : (
-                          <span className="font-medium text-warning-foreground">
-                            {t('Common.empty.unassigned')}
-                          </span>
-                        )}
+                        <ClientProviderReferences
+                          client={client}
+                          unassigned={t('Common.empty.unassigned')}
+                          organizationUnavailable={t('Resources.unavailableOrganization')}
+                          facilityUnavailable={t('Resources.unavailableFacility')}
+                        />
                       </TableCell>
                       <TableCell>
                         <StatusBadge
@@ -401,7 +340,12 @@ export default async function ClientsPage({
           />
         </section>
       ) : !clientsResult.error ? (
-        <EmptyState title={t('Clients.notFound')} />
+        <div className="grid gap-3 justify-items-center">
+          <EmptyState title={t('Clients.notFound')} />
+          <Button asChild variant="secondary">
+            <Link href="/clients">{t('Common.actions.reset')}</Link>
+          </Button>
+        </div>
       ) : null}
     </div>
   );
@@ -430,6 +374,42 @@ function SelectFilter({
         {children}
       </NativeSelect>
     </label>
+  );
+}
+
+function ClientProviderReferences({
+  client,
+  unassigned,
+  organizationUnavailable,
+  facilityUnavailable,
+}: Readonly<{
+  client: ClientListItem;
+  unassigned: string;
+  organizationUnavailable: string;
+  facilityUnavailable: string;
+}>) {
+  return (
+    <>
+      <ResourceReference
+        label={
+          client.organizationId ? (client.organizationName ?? organizationUnavailable) : unassigned
+        }
+        href={
+          client.organizationId && client.organizationName
+            ? `/administration/organizations/${client.organizationId}`
+            : null
+        }
+      />{' '}
+      /{' '}
+      <ResourceReference
+        label={client.primaryFacilityId ? (client.facilityName ?? facilityUnavailable) : unassigned}
+        href={
+          client.primaryFacilityId && client.facilityName
+            ? `/administration/facilities/${client.primaryFacilityId}`
+            : null
+        }
+      />
+    </>
   );
 }
 

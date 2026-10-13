@@ -97,6 +97,7 @@ export function OfficeShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileNavigationLoaded, setMobileNavigationLoaded] = useState(false);
   const pageContextRef = useRef<HTMLSpanElement>(null);
+  const mobileNavigationTriggerRef = useRef<HTMLButtonElement>(null);
   const activeItem = useMemo(() => {
     const links = groups.flatMap((group) => group.items);
     return links
@@ -214,6 +215,7 @@ export function OfficeShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur md:h-[4.25rem] sm:px-5 lg:px-7">
           <Button
+            ref={mobileNavigationTriggerRef}
             variant="ghost"
             size="icon"
             className="shrink-0 md:hidden"
@@ -236,6 +238,7 @@ export function OfficeShell({
               closeLabel={labels.closeMenu}
               tenantName={tenantName}
               pageContextRef={pageContextRef}
+              triggerRef={mobileNavigationTriggerRef}
               brand={
                 <SidebarBrand
                   href={groups[0]?.items[0]?.href ?? '/'}

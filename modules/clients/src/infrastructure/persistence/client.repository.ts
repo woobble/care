@@ -16,7 +16,7 @@ import {
 import type { SQL } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
 import { facilities, organizationsTable } from '@care/organizations';
-import { clientRecords, pflegegradRecords } from '@module/clients/schema';
+import { clientInsurances, clientRecords, pflegegradRecords } from '@module/clients/schema';
 import type { ClientSnapshot, ClientStatus } from '@module/clients/domain/client';
 
 export interface ClientScopeFilter {
@@ -28,6 +28,7 @@ export interface ClientScopeFilter {
 export interface ClientSearchFilter {
   tenantId: string;
   access: ClientScopeFilter;
+  identifierAccess: ClientScopeFilter;
   text?: string;
   status?: ClientStatus;
   organizationId?: string;
@@ -88,15 +89,7 @@ export class ClientRepository {
     input: ClientSearchFilter,
   ): Promise<{ items: ClientSearchItem[]; total: number }> {
     const filters: SQL[] = [eq(clientRecords.tenantId, input.tenantId)];
-    const accessible: SQL[] = [];
-    if (input.access.tenantWide) accessible.push(eq(clientRecords.tenantId, input.tenantId));
-    if (input.access.organizationIds.length > 0) {
-      accessible.push(inArray(clientRecords.organizationId, [...input.access.organizationIds]));
-    }
-    if (input.access.facilityIds.length > 0) {
-      accessible.push(inArray(clientRecords.primaryFacilityId, [...input.access.facilityIds]));
-    }
-    filters.push(or(...accessible) ?? sql`false`);
+    filters.push(clientScopePredicate(input.access, input.tenantId));
     if (input.text?.trim()) {
       const term = input.text
         .trim()
@@ -104,15 +97,40 @@ export class ClientRepository {
         .replaceAll('%', '\\%')
         .replaceAll('_', '\\_');
       const pattern = `%${term}%`;
-      filters.push(
-        or(
-          ilike(
-            sql<string>`${clientRecords.firstName} || ' ' || ${clientRecords.lastName}`,
-            pattern,
-          ),
-          ilike(clientRecords.preferredName, pattern),
-        )!,
-      );
+      const matches: SQL[] = [
+        ilike(sql<string>`${clientRecords.firstName} || ' ' || ${clientRecords.lastName}`, pattern),
+        ilike(clientRecords.preferredName, pattern),
+        ilike(clientRecords.email, pattern),
+        ilike(clientRecords.phone, pattern),
+        ilike(clientRecords.mobile, pattern),
+      ];
+      if (
+        input.identifierAccess.tenantWide ||
+        input.identifierAccess.organizationIds.length > 0 ||
+        input.identifierAccess.facilityIds.length > 0
+      ) {
+        matches.push(
+          and(
+            clientScopePredicate(input.identifierAccess, input.tenantId),
+            exists(
+              transaction
+                .select({ id: clientInsurances.id })
+                .from(clientInsurances)
+                .where(
+                  and(
+                    eq(clientInsurances.tenantId, input.tenantId),
+                    eq(clientInsurances.clientId, clientRecords.id),
+                    or(
+                      ilike(clientInsurances.insuranceNumber, pattern),
+                      ilike(clientInsurances.memberNumber, pattern),
+                    ),
+                  ),
+                ),
+            ),
+          )!,
+        );
+      }
+      filters.push(or(...matches)!);
     }
     if (input.status) filters.push(eq(clientRecords.status, input.status));
     if (input.organizationId) filters.push(eq(clientRecords.organizationId, input.organizationId));
@@ -213,6 +231,18 @@ export class ClientRepository {
       total: Number(totals[0]?.total ?? 0),
     };
   }
+}
+
+function clientScopePredicate(scope: ClientScopeFilter, tenantId: string): SQL {
+  const accessible: SQL[] = [];
+  if (scope.tenantWide) accessible.push(eq(clientRecords.tenantId, tenantId));
+  if (scope.organizationIds.length > 0) {
+    accessible.push(inArray(clientRecords.organizationId, [...scope.organizationIds]));
+  }
+  if (scope.facilityIds.length > 0) {
+    accessible.push(inArray(clientRecords.primaryFacilityId, [...scope.facilityIds]));
+  }
+  return or(...accessible) ?? sql`false`;
 }
 
 function toRow(client: ClientSnapshot) {

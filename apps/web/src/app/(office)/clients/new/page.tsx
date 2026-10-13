@@ -37,8 +37,11 @@ export default async function NewClientPage({
       ) : null}
       <RHFActionForm
         action={createClientAction}
+        errorMessage={t('Clients.saveFailed')}
+        warnOnUnsavedChanges
         className="grid gap-6 rounded-lg border bg-card p-5 shadow-sm"
       >
+        <p className="text-sm text-muted-foreground">{t('Clients.form.requiredFieldsNote')}</p>
         <fieldset className="grid gap-4">
           <legend className="mb-2 text-lg font-semibold">{t('Clients.form.personalData')}</legend>
           <div className="grid gap-4 md:grid-cols-2">
@@ -217,7 +220,10 @@ function Field({
 }>) {
   return (
     <div className="grid gap-2">
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id}>
+        {label}
+        {required ? <span aria-hidden="true"> *</span> : null}
+      </Label>
       <Input
         id={id}
         name={name}
@@ -246,7 +252,10 @@ function SelectField({
 }>) {
   return (
     <div className="grid gap-2">
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id}>
+        {label}
+        {required ? <span aria-hidden="true"> *</span> : null}
+      </Label>
       <NativeSelect
         id={id}
         name={name}

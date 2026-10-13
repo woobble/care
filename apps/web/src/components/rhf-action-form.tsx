@@ -26,10 +26,11 @@ import { Input } from '@care/ui/components/input';
 import { NativeSelect } from '@care/ui/components/native-select';
 import { Textarea } from '@care/ui/components/textarea';
 
-type ServerAction = (formData: FormData) => void | Promise<void>;
+type ServerAction = (formData: FormData) => void | boolean | Promise<void | boolean>;
 type FormValues = FieldValues;
 
 const permissiveFormSchema = z.record(z.string(), z.unknown());
+const confirmedNavigationEvents = new WeakSet<Event>();
 
 type NativeControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
@@ -65,6 +66,7 @@ function buildNativeSchema(
   for (const [name, group] of byName) {
     const first = group[0];
     if (!first) continue;
+    const required = group.some((control) => control.required);
     const inputs = group.filter(
       (control): control is HTMLInputElement => control instanceof HTMLInputElement,
     );
@@ -79,12 +81,14 @@ function buildNativeSchema(
       let validator: z.ZodType = checkboxGroup
         ? z.array(z.string())
         : z.union([z.boolean(), z.string()]);
-      if (group.some((control) => control.required)) {
+      if (required) {
         validator = checkboxGroup
           ? z.array(z.string()).min(1, { message: messages.checked })
           : validator.refine((value) => value === true || value === 'true' || value === 'on', {
               message: messages.checked,
             });
+      } else {
+        validator = validator.optional();
       }
       validators.set(name, validator);
       continue;
@@ -96,15 +100,17 @@ function buildNativeSchema(
     }
     if (first instanceof HTMLSelectElement && first.multiple) {
       let validator: z.ZodType = z.array(z.string());
-      if (group.some((control) => control.required)) {
+      if (required) {
         validator = z.array(z.string()).min(1, { message: messages.selectAtLeastOne });
+      } else {
+        validator = validator.optional();
       }
       validators.set(name, validator);
       continue;
     }
 
     let validator = z.string();
-    if (group.some((control) => control.required)) {
+    if (required) {
       validator = z.string().refine((value) => value.trim().length > 0, {
         message: messages.required,
       });
@@ -147,10 +153,10 @@ function buildNativeSchema(
         message: messages.maxLength(maxLength),
       });
     }
-    if (radioGroup && group.some((control) => control.required)) {
+    if (radioGroup && required) {
       validator = z.string().min(1, { message: messages.selectOne });
     }
-    validators.set(name, validator);
+    validators.set(name, required ? validator : validator.optional());
   }
 
   return permissiveFormSchema.superRefine((values, context) => {
@@ -188,23 +194,85 @@ export function RHFActionForm({
   action,
   beforeAction,
   onChange,
+  errorMessage,
+  warnOnUnsavedChanges = false,
   children,
   ...props
 }: Omit<FormHTMLAttributes<HTMLFormElement>, 'action' | 'onSubmit' | 'onChange'> & {
   action: ServerAction;
   beforeAction?: (form: HTMLFormElement, data: FormData) => boolean | Promise<boolean>;
   onChange?: FormHTMLAttributes<HTMLFormElement>['onChange'];
+  errorMessage?: ReactNode;
+  warnOnUnsavedChanges?: boolean;
   children: ReactNode;
 }) {
   const t = useTranslations('Common.formValidation');
   const formRef = useRef<HTMLFormElement>(null);
   const [nativeSchema, setNativeSchema] = useState<z.ZodType>(permissiveFormSchema);
+  const [actionFailed, setActionFailed] = useState(false);
   const methods = useForm<FormValues>({
     mode: 'onSubmit',
     reValidateMode: 'onChange',
     resolver: zodResolver(nativeSchema as never) as Resolver<FormValues>,
   });
-  const { register, setValue } = methods;
+  const { getValues, register, reset, setValue } = methods;
+  const nativeAction = action as (formData: FormData) => void | Promise<void>;
+
+  useEffect(() => {
+    if (!warnOnUnsavedChanges || !methods.formState.isDirty || methods.formState.isSubmitting)
+      return;
+
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    const confirmNavigation = (event: MouseEvent) => {
+      if (confirmedNavigationEvents.has(event)) return;
+      confirmedNavigationEvents.add(event);
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const link = target.closest('a[href]');
+      if (
+        !(link instanceof HTMLAnchorElement) ||
+        link.target === '_blank' ||
+        link.hasAttribute('download')
+      )
+        return;
+      const destination = new URL(link.href, window.location.href);
+      if (
+        destination.origin !== window.location.origin ||
+        (destination.pathname === window.location.pathname &&
+          destination.search === window.location.search)
+      )
+        return;
+      if (!window.confirm(t('unsavedChanges'))) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
+    const confirmOtherFormSubmit = (event: SubmitEvent) => {
+      if (
+        confirmedNavigationEvents.has(event) ||
+        !(event.target instanceof HTMLFormElement) ||
+        event.target === formRef.current
+      )
+        return;
+      confirmedNavigationEvents.add(event);
+      if (!window.confirm(t('unsavedChangesOtherAction'))) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
+
+    window.addEventListener('beforeunload', beforeUnload);
+    document.addEventListener('click', confirmNavigation, true);
+    document.addEventListener('submit', confirmOtherFormSubmit, true);
+    return () => {
+      window.removeEventListener('beforeunload', beforeUnload);
+      document.removeEventListener('click', confirmNavigation, true);
+      document.removeEventListener('submit', confirmOtherFormSubmit, true);
+    };
+  }, [methods.formState.isDirty, methods.formState.isSubmitting, t, warnOnUnsavedChanges]);
 
   useEffect(() => {
     const form = formRef.current;
@@ -224,6 +292,7 @@ export function RHFActionForm({
       registration.ref(control);
       registeredRefs.push(registration.ref);
     }
+    reset(getValues());
     setNativeSchema(
       buildNativeSchema(controls, {
         required: t('required'),
@@ -241,24 +310,18 @@ export function RHFActionForm({
     return () => {
       for (const ref of registeredRefs) ref(null);
     };
-  }, [register, t]);
+  }, [getValues, register, reset, t]);
 
-  async function submit(_values: FormValues, event?: { nativeEvent?: unknown }) {
+  async function submit(data: FormData) {
     const form = formRef.current;
     if (!form) return;
-
-    const nativeEvent = event?.nativeEvent as SubmitEvent | undefined;
-    const submitter = nativeEvent?.submitter ?? null;
-    const data =
-      submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement
-        ? new FormData(form, submitter)
-        : new FormData(form);
-
     if (beforeAction && !(await beforeAction(form, data))) return;
-    await action(data);
+    const result = await action(data);
+    setActionFailed(result === false);
   }
 
   function handleChange(event: React.ChangeEvent<HTMLFormElement>) {
+    setActionFailed(false);
     const control = event.target;
     if (
       !(
@@ -304,7 +367,12 @@ export function RHFActionForm({
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    return methods.handleSubmit(submit)(event);
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    const data =
+      submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement
+        ? new FormData(event.currentTarget, submitter)
+        : new FormData(event.currentTarget);
+    return methods.handleSubmit(() => submit(data))(event);
   }
 
   return (
@@ -312,16 +380,26 @@ export function RHFActionForm({
       <form
         {...props}
         ref={formRef}
-        action={action}
+        action={nativeAction}
         aria-busy={methods.formState.isSubmitting}
         onChange={handleChange}
         onSubmit={handleSubmit}
       >
-        {children}
+        <fieldset disabled={methods.formState.isSubmitting} className="contents">
+          {children}
+        </fieldset>
         {methods.formState.isSubmitting ? (
           <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
             {t('saving')}
           </p>
+        ) : null}
+        {actionFailed ? (
+          <div
+            role="alert"
+            className="rounded-md border border-destructive/30 bg-destructive/10 p-3"
+          >
+            {errorMessage ?? t('actionFailed')}
+          </div>
         ) : null}
         {collectErrorMessages(methods.formState.errors).length ? (
           <div

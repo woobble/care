@@ -39,6 +39,7 @@ const migrations = {
     '0002_master_data.sql',
     '0003_scheduling_provider_reference.sql',
     '0004_worker_deadline_read.sql',
+    '0005_client_search_indexes.sql',
   ],
   services: ['0001_catalog.sql', '0002_benefit_classification_and_prices.sql'],
   'service-agreements': [
