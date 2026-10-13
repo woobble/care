@@ -26,11 +26,16 @@ import {
   suggestTourOrderAction,
   updateTourStopsAction,
 } from './actions';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
 
 type SearchParams = Promise<{
   date?: string;
   view?: string;
   page?: string;
+  pageSize?: string;
   clientId?: string;
   admissionCaseId?: string;
   employeeId?: string;
@@ -85,6 +90,8 @@ export default async function PlanningPage({
   const view = query.view === 'day' ? 'day' : 'week';
   const selectedDate = validDate(query.date) ?? todayInBerlin();
   const page = positivePage(query.page);
+  const requestedPageSize = Number(query.pageSize ?? '20');
+  const pageSize = [10, 20, 50, 100].includes(requestedPageSize) ? requestedPageSize : 20;
   const requestedClientId = validUuid(query.clientId);
   const employeeId = validUuid(query.employeeId);
   const requestedOrganizationId = validUuid(query.organizationId);
@@ -130,9 +137,10 @@ export default async function PlanningPage({
           params: { path: { id: admission!.clientId! }, header },
         })
       : null;
-  const admissionContextUsable = Boolean(
-    admissionCaseVisible && linkedClientResult?.data?.status === 'active',
-  );
+  const linkedClient = linkedClientResult?.data as
+    | components['schemas']['ClientResponseDto']
+    | undefined;
+  const admissionContextUsable = Boolean(admissionCaseVisible && linkedClient?.status === 'active');
   const clientId = admissionContextUsable ? admission!.clientId! : requestedClientId;
   const organizationId = admissionContextUsable
     ? admission!.organizationId
@@ -155,7 +163,7 @@ export default async function PlanningPage({
           from: requestRange.from,
           until: requestRange.until,
           page,
-          pageSize: 100,
+          pageSize,
           sortBy: 'plannedStart',
           sortOrder: 'asc',
           ...(clientId ? { clientId } : {}),
@@ -172,15 +180,21 @@ export default async function PlanningPage({
         header,
       },
     }),
-    get('/api/v1/clients', {
-      params: { query: { status: 'active', page: 1, pageSize: 100 }, header },
-    }),
-    get('/api/v1/employees', {
-      params: { query: { status: 'active', page: 1, pageSize: 100 }, header },
-    }),
-    get('/api/v1/organizations', { params: { header } }),
-    get('/api/v1/facilities', { params: { header } }),
-    get('/api/v1/teams', { params: { header } }),
+    clientId && hasPermission(permissions, 'client.read')
+      ? get('/api/v1/clients/{id}', { params: { path: { id: clientId }, header } })
+      : Promise.resolve(null),
+    employeeId && hasPermission(permissions, 'employee.read')
+      ? get('/api/v1/employees/{id}', { params: { path: { id: employeeId }, header } })
+      : Promise.resolve(null),
+    organizationId
+      ? get('/api/v1/organizations/{id}', { params: { path: { id: organizationId }, header } })
+      : Promise.resolve(null),
+    facilityId
+      ? get('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
+      : Promise.resolve(null),
+    teamId
+      ? get('/api/v1/teams/{id}', { params: { path: { id: teamId }, header } })
+      : Promise.resolve(null),
     get('/api/v1/services', {
       params: {
         query: {
@@ -199,6 +213,55 @@ export default async function PlanningPage({
   const canCreate = hasPermission(permissions, 'schedule.create');
   const canAssign = hasPermission(permissions, 'schedule.assign');
   const canEstimate = hasPermission(permissions, 'benefits.read');
+  const canReadClient = hasPermission(permissions, 'client.read');
+  const visitData = visitResult.data as unknown as
+    | components['schemas']['VisitListResponseDto']
+    | undefined;
+  const visitError = visitResult.error as { code?: string } | undefined;
+  if (visitData) {
+    redirectToValidPage('/planning', query, page, pageSize, visitData.total);
+  }
+  const [selectedServiceResult, estimateClientResult, estimateServiceResult] = await Promise.all([
+    serviceDefinitionId
+      ? get('/api/v1/services/{id}', {
+          params: { path: { id: serviceDefinitionId }, header },
+        })
+      : Promise.resolve(null),
+    estimateClientId && canReadClient
+      ? get('/api/v1/clients/{id}', { params: { path: { id: estimateClientId }, header } })
+      : Promise.resolve(null),
+    estimateServiceId
+      ? get('/api/v1/services/{id}', {
+          params: { path: { id: estimateServiceId }, header },
+        })
+      : Promise.resolve(null),
+  ]);
+  const selectedClient = clientResult?.data as
+    | components['schemas']['ClientResponseDto']
+    | undefined;
+  const selectedEmployee = employeeResult?.data as
+    | components['schemas']['EmployeeResponseDto']
+    | undefined;
+  const selectedOrganization = organizationResult?.data as
+    | components['schemas']['OrganizationResponseDto']
+    | undefined;
+  const selectedFacility = facilityResult?.data as
+    | components['schemas']['FacilityResponseDto']
+    | undefined;
+  const selectedTeam = teamResult?.data as components['schemas']['TeamResponseDto'] | undefined;
+  const selectedService = selectedServiceResult?.data as
+    | components['schemas']['ServiceResponseDto']
+    | undefined;
+  const estimateClient = estimateClientResult?.data as
+    | components['schemas']['ClientResponseDto']
+    | undefined;
+  const estimateService = estimateServiceResult?.data as
+    | components['schemas']['ServiceResponseDto']
+    | undefined;
+  const serviceData = serviceResult.data as unknown as
+    | components['schemas']['ServiceListResponseDto']
+    | undefined;
+  const services = serviceData?.items ?? [];
   const estimateResult =
     canEstimate && estimateClientId && estimateServiceId && validQuantity(query.estimateQuantity)
       ? await get('/api/v1/clients/{clientId}/budgets/estimate', {
@@ -213,10 +276,7 @@ export default async function PlanningPage({
           },
         })
       : null;
-  const visits = (visitResult.data?.items ?? []).filter((visit) => {
-    const localDate = dateAtZone(visit.plannedStart, visit.timezone);
-    return localDate >= period.start && localDate < period.endExclusive;
-  });
+  const visits = visitData?.items ?? [];
   const worklistResult = hasPermission(permissions, 'schedule.read')
     ? await get('/api/v1/scheduling/worklist', {
         params: {
@@ -240,8 +300,11 @@ export default async function PlanningPage({
         },
       })
     : null;
+  const worklistData = worklistResult?.data as unknown as
+    | components['schemas']['SchedulingWorklistResponseDto']
+    | undefined;
   const conflictsByVisit = new Map(
-    (worklistResult?.data?.items ?? []).map((item) => [item.visit.id, item.conflicts]),
+    (worklistData?.items ?? []).map((item) => [item.visit.id, item.conflicts]),
   );
   const visitsByDate = new Map<string, typeof visits>();
   for (const visit of visits) {
@@ -249,23 +312,6 @@ export default async function PlanningPage({
     visitsByDate.set(localDate, [...(visitsByDate.get(localDate) ?? []), visit]);
   }
   const days = datesBetween(period.start, period.endExclusive);
-  const clients = [...(clientResult.data?.items ?? [])];
-  if (
-    linkedClientResult?.data &&
-    !clients.some((client) => client.id === linkedClientResult.data!.id)
-  ) {
-    clients.push({
-      ...linkedClientResult.data,
-      organizationName: null,
-      facilityName: null,
-      currentPflegegrad: null,
-    });
-  }
-  const employees = employeeResult.data?.items ?? [];
-  const organizations = organizationResult.data ?? [];
-  const facilities = facilityResult.data ?? [];
-  const teams = teamResult.data ?? [];
-  const services = serviceResult.data?.items ?? [];
   const requestedServiceNames = admission
     ? admission.assessment?.requestedServices.length
       ? admission.assessment.requestedServices
@@ -338,7 +384,14 @@ export default async function PlanningPage({
                 header,
               },
             });
-            return { employeeId: tourEmployeeId, tours: result.data ?? [], error: result.error };
+            return {
+              employeeId: tourEmployeeId,
+              tours:
+                (result.data as unknown as
+                  | components['schemas']['TourListItemResponseDto'][]
+                  | undefined) ?? [],
+              error: result.error as { code?: string } | undefined,
+            };
           }),
         )
       : [];
@@ -350,6 +403,10 @@ export default async function PlanningPage({
           params: { path: { id: selectedTourId }, header },
         })
       : null;
+  const selectedTour = selectedTourResult?.data as
+    | components['schemas']['TourResponseDto']
+    | undefined;
+  const selectedTourError = selectedTourResult?.error as { code?: string } | undefined;
   const suggestedTourId = validUuid(query.suggestedTourId);
   const suggestedOrder = (query.suggestedOrder ?? '')
     .split(',')
@@ -370,12 +427,14 @@ export default async function PlanningPage({
     unpublished_schedule_changes: t('Planning.conflicts.unpublished_schedule_changes'),
   };
   const openCount = visits.filter((visit) => visit.assignments.length === 0).length;
-  const error = query.error ?? visitResult.error?.code;
-  const estimateError = estimateResult?.error?.code;
-  const estimate = estimateResult?.data;
+  const error = query.error ?? visitError?.code;
+  const estimateError = (estimateResult?.error as { code?: string } | undefined)?.code;
+  const estimate = estimateResult?.data as
+    | components['schemas']['BenefitEstimateResponseDto']
+    | undefined;
 
   return (
-    <div className="grid min-w-0 gap-6">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
       <PageHeader
         eyebrow={t('Navigation.office')}
         title={t('Planning.title')}
@@ -457,54 +516,70 @@ export default async function PlanningPage({
       <FilterDisclosure title={t('Planning.filters')}>
         <form
           method="get"
-          className="grid min-w-0 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
         >
           <input type="hidden" name="view" value={view} />
+          <input type="hidden" name="page" value="1" />
+          <input type="hidden" name="pageSize" value={pageSize} />
           <Field label={t('Planning.date')} name="date" type="date" defaultValue={selectedDate} />
-          <SelectField
+          <AsyncEntityCombobox
             label={t('Planning.organization')}
             name="organizationId"
-            defaultValue={organizationId ?? ''}
-          >
-            <option value="">{t('Planning.allOrganizations')}</option>
-            {organizations.map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organization.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField
+            entity="organizations"
+            placeholder={t('Planning.allOrganizations')}
+            {...(selectedOrganization
+              ? {
+                  initialOption: {
+                    id: selectedOrganization.id,
+                    label: selectedOrganization.name,
+                  },
+                }
+              : {})}
+          />
+          <AsyncEntityCombobox
             label={t('Planning.facility')}
             name="facilityId"
-            defaultValue={facilityId ?? ''}
-          >
-            <option value="">{t('Planning.allFacilities')}</option>
-            {facilities.map((facility) => (
-              <option key={facility.id} value={facility.id}>
-                {facility.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField label={t('Common.fields.team')} name="teamId" defaultValue={teamId ?? ''}>
-            <option value="">{t('Planning.allTeams')}</option>
-            {teams.map((team) => (
-              <option key={team.id} value={team.id}>
-                {team.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField
+            entity="facilities"
+            {...(organizationId ? { organizationId } : {})}
+            placeholder={t('Planning.allFacilities')}
+            {...(selectedFacility
+              ? {
+                  initialOption: {
+                    id: selectedFacility.id,
+                    label: `${selectedFacility.organizationName} · ${selectedFacility.name}`,
+                  },
+                }
+              : {})}
+          />
+          <AsyncEntityCombobox
+            label={t('Common.fields.team')}
+            name="teamId"
+            entity="teams"
+            {...(organizationId ? { organizationId } : {})}
+            placeholder={t('Planning.allTeams')}
+            {...(selectedTeam
+              ? {
+                  initialOption: {
+                    id: selectedTeam.id,
+                    label: `${selectedTeam.organizationName} · ${selectedTeam.name}`,
+                  },
+                }
+              : {})}
+          />
+          <AsyncEntityCombobox
             label={t('Planning.employees')}
             name="employeeId"
-            defaultValue={employeeId ?? ''}
-          >
-            <option value="">{t('Planning.allEmployees')}</option>
-            {employees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.preferredName || employee.firstName} {employee.lastName}
-              </option>
-            ))}
-          </SelectField>
+            entity="employees"
+            placeholder={t('Planning.allEmployees')}
+            {...(selectedEmployee
+              ? {
+                  initialOption: {
+                    id: selectedEmployee.id,
+                    label: `${selectedEmployee.preferredName || selectedEmployee.firstName} ${selectedEmployee.lastName}`,
+                  },
+                }
+              : {})}
+          />
           <SelectField label={t('Planning.status')} name="status" defaultValue={status ?? ''}>
             <option value="">{t('Planning.allStatuses')}</option>
             <option value="planned">{t('Common.status.planned')}</option>
@@ -516,18 +591,21 @@ export default async function PlanningPage({
             <option value="unassigned">{t('Planning.openVisits')}</option>
             <option value="assigned">{t('Planning.assigned')}</option>
           </SelectField>
-          <SelectField
+          <AsyncEntityCombobox
             label={t('Planning.service')}
             name="serviceDefinitionId"
-            defaultValue={serviceDefinitionId ?? ''}
-          >
-            <option value="">{t('Planning.allServices')}</option>
-            {services.map((service) => (
-              <option key={service.id} value={service.id}>
-                {service.code} · {service.name}
-              </option>
-            ))}
-          </SelectField>
+            entity="services"
+            validAt={selectedDate}
+            placeholder={t('Planning.allServices')}
+            {...(selectedService
+              ? {
+                  initialOption: {
+                    id: selectedService.id,
+                    label: `${selectedService.code} · ${selectedService.name}`,
+                  },
+                }
+              : {})}
+          />
           {clientId ? <input type="hidden" name="clientId" value={clientId} /> : null}
           <div className="flex items-end gap-2">
             <Button type="submit" variant="secondary">
@@ -556,32 +634,39 @@ export default async function PlanningPage({
           <form method="get" className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
             <input type="hidden" name="date" value={selectedDate} />
             <input type="hidden" name="view" value={view} />
-            <SelectField
-              label={t('Benefits.planningEstimateClient')}
-              name="estimateClientId"
-              defaultValue={estimateClientId ?? ''}
-              required
-            >
-              <option value="">{t('Planning.selectClient')}</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.preferredName || client.firstName} {client.lastName}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField
+            {canReadClient ? (
+              <AsyncEntityCombobox
+                label={t('Benefits.planningEstimateClient')}
+                name="estimateClientId"
+                entity="clients"
+                required
+                placeholder={t('Planning.selectClient')}
+                {...(estimateClient
+                  ? {
+                      initialOption: {
+                        id: estimateClient.id,
+                        label: `${estimateClient.preferredName || estimateClient.firstName} ${estimateClient.lastName}`,
+                      },
+                    }
+                  : {})}
+              />
+            ) : null}
+            <AsyncEntityCombobox
               label={t('Benefits.planningEstimateService')}
               name="estimateServiceId"
-              defaultValue={estimateServiceId ?? ''}
+              entity="services"
+              validAt={estimateDate}
               required
-            >
-              <option value="">{t('Planning.allServices')}</option>
-              {services.map((service) => (
-                <option key={service.id} value={service.id}>
-                  {service.code} · {service.name} ({service.unit})
-                </option>
-              ))}
-            </SelectField>
+              placeholder={t('Planning.allServices')}
+              {...(estimateService
+                ? {
+                    initialOption: {
+                      id: estimateService.id,
+                      label: `${estimateService.code} · ${estimateService.name}`,
+                    },
+                  }
+                : {})}
+            />
             <Field
               label={t('Benefits.planningEstimateDate')}
               name="estimateDate"
@@ -665,19 +750,22 @@ export default async function PlanningPage({
               )}
             </div>
           ) : null}
-          {!clients.length || !services.length ? (
+          {!canReadClient || !services.length ? (
             <p className="text-sm text-muted-foreground">{t('Benefits.noEstimateOptions')}</p>
           ) : null}
         </section>
       ) : null}
 
-      <section aria-labelledby="calendar-title" className="grid gap-3">
+      <section
+        aria-labelledby="calendar-title"
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3"
+      >
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="calendar-title" className="text-xl font-semibold">
             {t(view === 'week' ? 'Planning.weekOverview' : 'Planning.dayOverview')}
           </h2>
           <p className="text-sm text-muted-foreground">
-            {t('Planning.visitCount', { count: visitResult.data?.total ?? 0 })} ·{' '}
+            {t('Planning.visitCount', { count: visitData?.total ?? 0 })} ·{' '}
             {t('Planning.openCount', { count: openCount })}
           </p>
         </div>
@@ -686,7 +774,7 @@ export default async function PlanningPage({
             role="alert"
             className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
           >
-            {t(errorMessageKey(visitResult.error.code))}
+            {t(errorMessageKey(visitError?.code ?? 'UNKNOWN'))}
           </p>
         ) : (
           days.map((day) => {
@@ -695,17 +783,17 @@ export default async function PlanningPage({
               <section
                 key={day}
                 aria-labelledby={`day-${day}`}
-                className="grid gap-2 rounded-lg border bg-card p-4"
+                className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border bg-card p-4"
               >
                 <h3 id={`day-${day}`} className="font-semibold">
                   {formatDay(day, locale)}
                 </h3>
                 {dayVisits.length ? (
-                  <ol className="grid gap-2">
+                  <ol className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
                     {dayVisits.map((visit) => (
                       <li key={visit.id}>
                         <Link
-                          className="grid gap-1 rounded-md border p-3 hover:border-primary/40 hover:bg-accent sm:grid-cols-[8rem_1fr_auto]"
+                          className="grid min-w-0 gap-1 rounded-md border p-3 hover:border-primary/40 hover:bg-accent sm:grid-cols-[8rem_minmax(0,1fr)_auto]"
                           href={`/visits/${visit.id}`}
                         >
                           <span className="font-medium">
@@ -761,21 +849,26 @@ export default async function PlanningPage({
             );
           })
         )}
-        {(visitResult.data?.total ?? 0) > 100 ? (
-          <div className="flex justify-end gap-2">
-            {page > 1 ? (
-              <Button asChild variant="secondary">
-                <Link href={viewHref({ ...query, date: selectedDate, page: String(page - 1) })}>
-                  {t('Planning.previousPage')}
-                </Link>
-              </Button>
-            ) : null}
-            <Button asChild variant="secondary">
-              <Link href={viewHref({ ...query, date: selectedDate, page: String(page + 1) })}>
-                {t('Planning.moreVisits')}
-              </Link>
-            </Button>
-          </div>
+        {visitData ? (
+          <DataPagination
+            pathname="/planning"
+            page={visitData.page}
+            pageSize={visitData.pageSize}
+            totalItems={visitData.total}
+            filters={{
+              date: selectedDate,
+              view,
+              clientId,
+              admissionCaseId,
+              employeeId,
+              organizationId,
+              facilityId,
+              teamId,
+              status,
+              assigned,
+              serviceDefinitionId,
+            }}
+          />
         ) : null}
       </section>
 
@@ -790,10 +883,7 @@ export default async function PlanningPage({
           {employeeVisitGroups.size ? (
             [...employeeVisitGroups].map(([tourEmployeeId, employeeVisits]) => {
               const listedTour = toursByEmployee.get(tourEmployeeId)?.[0];
-              const tour =
-                selectedTourId === listedTour?.id && selectedTourResult?.data
-                  ? selectedTourResult.data
-                  : null;
+              const tour = selectedTourId === listedTour?.id ? selectedTour : null;
               const employeeName = employeeVisits[0]?.assignments.find(
                 (assignment) => assignment.employeeId === tourEmployeeId,
               )?.employeeDisplayName;
@@ -862,7 +952,9 @@ export default async function PlanningPage({
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <ResourceReference
                                     className="font-medium"
-                                    label={visit?.clientDisplayName ?? t('Resources.unavailableVisit')}
+                                    label={
+                                      visit?.clientDisplayName ?? t('Resources.unavailableVisit')
+                                    }
                                     href={visit ? `/visits/${stop.visitId}` : null}
                                   />
                                   <span className="text-sm tabular-nums">
@@ -993,9 +1085,9 @@ export default async function PlanningPage({
                         </form>
                       </div>
                     </div>
-                  ) : selectedTourResult?.error ? (
+                  ) : selectedTourError ? (
                     <p role="alert" className="text-sm text-destructive">
-                      {t(errorMessageKey(selectedTourResult.error.code))}
+                      {t(errorMessageKey(selectedTourError.code ?? 'UNKNOWN'))}
                     </p>
                   ) : null}
                 </section>
@@ -1032,7 +1124,7 @@ export default async function PlanningPage({
               ) : null}
             </div>
           ) : null}
-          {clients.length && services.length ? (
+          {canReadClient && services.length ? (
             <RHFActionForm action={createVisitAction} className="grid gap-4 md:grid-cols-2">
               {admissionContextUsable && admission ? (
                 <>
@@ -1040,21 +1132,21 @@ export default async function PlanningPage({
                   <input type="hidden" name="expectedAdmissionVersion" value={admission.version} />
                 </>
               ) : null}
-              <SelectField
+              <AsyncEntityCombobox
                 label={t('Planning.client')}
                 name="clientId"
+                entity="clients"
                 required
-                defaultValue={
-                  admissionContextUsable ? (admission?.clientId ?? '') : (clientId ?? '')
-                }
-              >
-                <option value="">{t('Planning.selectClient')}</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.preferredName || client.firstName} {client.lastName}
-                  </option>
-                ))}
-              </SelectField>
+                placeholder={t('Planning.selectClient')}
+                {...((admissionContextUsable ? linkedClient : selectedClient)
+                  ? {
+                      initialOption: {
+                        id: (admissionContextUsable ? linkedClient : selectedClient)!.id,
+                        label: `${(admissionContextUsable ? linkedClient : selectedClient)!.preferredName || (admissionContextUsable ? linkedClient : selectedClient)!.firstName} ${(admissionContextUsable ? linkedClient : selectedClient)!.lastName}`,
+                      },
+                    }
+                  : {})}
+              />
               <Field
                 label={t('Planning.date')}
                 name="localDate"
@@ -1084,28 +1176,40 @@ export default async function PlanningPage({
                 }
                 required
               />
-              <SelectField
+              <AsyncEntityCombobox
                 label={t('Planning.services')}
                 name="serviceDefinitionIds"
+                entity="services"
+                validAt={selectedDate}
                 multiple
                 required
-                defaultValue={admissionContextUsable ? preselectedServiceIds : []}
-              >
-                {services.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    {service.code} · {service.name}
-                  </option>
-                ))}
-              </SelectField>
+                placeholder={t('Planning.allServices')}
+                initialOptions={
+                  admissionContextUsable
+                    ? services
+                        .filter((service) => preselectedServiceIds.includes(service.id))
+                        .map((service) => ({
+                          id: service.id,
+                          label: `${service.code} · ${service.name}`,
+                        }))
+                    : []
+                }
+              />
               {canAssign ? (
-                <SelectField label={t('Planning.employeesOptional')} name="employeeId">
-                  <option value="">{t('Planning.doNotAssign')}</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.preferredName || employee.firstName} {employee.lastName}
-                    </option>
-                  ))}
-                </SelectField>
+                <AsyncEntityCombobox
+                  label={t('Planning.employeesOptional')}
+                  name="employeeId"
+                  entity="employees"
+                  placeholder={t('Planning.doNotAssign')}
+                  {...(selectedEmployee
+                    ? {
+                        initialOption: {
+                          id: selectedEmployee.id,
+                          label: `${selectedEmployee.preferredName || selectedEmployee.firstName} ${selectedEmployee.lastName}`,
+                        },
+                      }
+                    : {})}
+                />
               ) : null}
               <div className="grid gap-2 md:col-span-2">
                 <Label htmlFor="visit-note">{t('Planning.planningNote')}</Label>

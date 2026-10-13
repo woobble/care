@@ -21,14 +21,18 @@ import {
 } from '@app/web/lib/api';
 import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
 import { formatCents } from '@app/web/app/(office)/billing/format';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
 
-type SearchParams = Promise<{ page?: string; error?: string }>;
+type SearchParams = Promise<{ page?: string; pageSize?: string; error?: string }>;
 
 export default async function BillingReceivablesPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
   const page = positivePage(query.page);
+  const pageSize = positivePageSize(query.pageSize);
   const [t, translate, locale] = await Promise.all([
     getTranslations('Billing'),
     getTranslations(),
@@ -36,12 +40,19 @@ export default async function BillingReceivablesPage({
   ]);
   const api = await getApiClient();
   const header = await getTenantHeader();
-  const [{ data, error }, permissions] = await Promise.all([
+  const [result, permissions] = await Promise.all([
     api.GET('/api/v1/billing/receivables', {
-      params: { query: { page, pageSize: 50 }, header },
+      params: { query: { page, pageSize }, header },
     }),
     getPermissionGrants(api),
   ]);
+  const data = result.data as unknown as
+    | (components['schemas']['BillingInvoiceListResponseDto'] & { totalPages: number })
+    | undefined;
+  const error = result.error as { code?: string } | undefined;
+  if (data) {
+    redirectToValidPage('/billing/receivables', {}, page, pageSize, data.total);
+  }
   const items = data?.items ?? [];
   const tenantId = header['X-Tenant-Id'];
 
@@ -140,18 +151,15 @@ export default async function BillingReceivablesPage({
         ) : (
           <p className="text-sm text-muted-foreground">{t('receivablesEmpty')}</p>
         )}
-        <div className="flex justify-end gap-2">
-          {page > 1 ? (
-            <Button asChild variant="secondary">
-              <Link href={`/billing/receivables?page=${page - 1}`}>{t('previous')}</Link>
-            </Button>
-          ) : null}
-          {items.length === 50 ? (
-            <Button asChild variant="secondary">
-              <Link href={`/billing/receivables?page=${page + 1}`}>{t('next')}</Link>
-            </Button>
-          ) : null}
-        </div>
+        {data ? (
+          <DataPagination
+            pathname="/billing/receivables"
+            page={data.page}
+            pageSize={data.pageSize}
+            totalItems={data.total}
+            filters={{}}
+          />
+        ) : null}
       </section>
     </div>
   );
@@ -161,4 +169,9 @@ function positivePage(value: string | undefined): number {
   if (!value || !/^\d+$/.test(value)) return 1;
   const page = Number(value);
   return Number.isSafeInteger(page) && page > 0 && page <= 100_000 ? page : 1;
+}
+
+function positivePageSize(value: string | undefined): number {
+  const pageSize = Number(value);
+  return [10, 20, 50, 100].includes(pageSize) ? pageSize : 20;
 }

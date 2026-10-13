@@ -1,7 +1,6 @@
 'use client';
 
 import { Languages } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useTransition } from 'react';
 import {
@@ -16,7 +15,6 @@ import { isLocale, type Locale } from '@app/web/i18n/config';
 
 export function LanguageMenu({ locale }: Readonly<{ locale: Locale }>) {
   const t = useTranslations('Common');
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   return (
@@ -33,7 +31,7 @@ export function LanguageMenu({ locale }: Readonly<{ locale: Locale }>) {
             if (!isLocale(value)) return;
             startTransition(async () => {
               await setLocaleAction(value);
-              router.refresh();
+              window.location.reload();
             });
           }}
         >

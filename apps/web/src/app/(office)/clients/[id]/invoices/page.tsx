@@ -25,14 +25,31 @@ import {
   hasClientPermission,
 } from '@app/web/lib/api';
 import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import { formatCents } from '@app/web/app/(office)/billing/format';
 import {
   createPayerArrangementAction,
   updatePayerArrangementAction,
 } from '@app/web/app/(office)/billing/actions';
 
-type SearchParams = Promise<{ error?: string; updated?: string }>;
+type SearchParams = Promise<{
+  error?: string;
+  updated?: string;
+  invoicePage?: string;
+  invoicePageSize?: string;
+  claimPage?: string;
+  claimPageSize?: string;
+}>;
 type Invoice = components['schemas']['BillingInvoiceResponseDto'];
+type PayerArrangement = components['schemas']['PayerArrangementResponseDto'];
+type PayerDirectoryEntry = {
+  id: string;
+  name: string;
+  payerIdentifier: string | null;
+  status: 'active' | 'inactive';
+};
 type ClientClaim = {
   id: string;
   invoiceId: string;
@@ -52,6 +69,10 @@ export default async function ClientInvoicesPage({
 }: Readonly<{ params: Promise<{ id: string }>; searchParams: SearchParams }>) {
   const { id } = await params;
   const query = await searchParams;
+  const invoicePage = positivePage(query.invoicePage);
+  const invoicePageSize = positivePageSize(query.invoicePageSize);
+  const claimPage = positivePage(query.claimPage);
+  const claimPageSize = positivePageSize(query.claimPageSize);
   const [t, translate, locale] = await Promise.all([
     getTranslations('Billing'),
     getTranslations(),
@@ -63,8 +84,9 @@ export default async function ClientInvoicesPage({
     api.GET('/api/v1/clients/{id}', { params: { path: { id }, header } }),
     getPermissionGrants(api),
   ]);
-  if (clientResult.error?.code === 'CLIENT_NOT_FOUND') notFound();
-  const client = clientResult.data;
+  if ((clientResult.error as { code?: string } | undefined)?.code === 'CLIENT_NOT_FOUND')
+    notFound();
+  const client = clientResult.data as components['schemas']['ClientResponseDto'];
   if (!client) notFound();
 
   const tenantId = header['X-Tenant-Id'];
@@ -109,53 +131,104 @@ export default async function ClientInvoicesPage({
     );
   }
 
-  const [invoiceResult, insuranceResult, payerResult] = await Promise.all([
+  const [invoiceResult, insuranceResult] = await Promise.all([
     api.GET('/api/v1/billing/invoices', {
-      params: { query: { clientId: id, page: 1, pageSize: 100 }, header },
+      params: { query: { clientId: id, page: invoicePage, pageSize: invoicePageSize }, header },
     }),
     api.GET('/api/v1/clients/{clientId}/insurances', {
       params: { path: { clientId: id }, header },
     }),
-    client.organizationId
-      ? api.GET('/api/v1/billing/payers', {
-          params: { query: { organizationId: client.organizationId }, header },
-        })
-      : Promise.resolve({ data: [], error: undefined }),
   ]);
-  const arrangementResult = client.organizationId
-    ? await api.GET('/api/v1/billing/payer-arrangements', {
-        params: { query: { clientId: id, organizationId: client.organizationId }, header },
-      })
-    : undefined;
-  const budgetResult = canReadBenefits
-    ? await api.GET('/api/v1/clients/{clientId}/budgets', {
-        params: { path: { clientId: id }, header },
-      })
-    : undefined;
-  const claimsResult = canReadClaims
-    ? await api.GET('/api/v1/billing/claims', {
-        params: { query: { clientId: id, page: 1, pageSize: 100 }, header },
-      })
-    : undefined;
+  const [arrangementResult, budgetResult, claimsResult] = await Promise.all([
+    client.organizationId
+      ? api.GET('/api/v1/billing/payer-arrangements', {
+          params: { query: { clientId: id, organizationId: client.organizationId }, header },
+        })
+      : Promise.resolve(undefined),
+    canReadBenefits
+      ? api.GET('/api/v1/clients/{clientId}/budgets', {
+          params: { path: { clientId: id }, header },
+        })
+      : Promise.resolve(undefined),
+    canReadClaims
+      ? api.GET('/api/v1/billing/claims', {
+          params: { query: { clientId: id, page: claimPage, pageSize: claimPageSize }, header },
+        })
+      : Promise.resolve(undefined),
+  ]);
 
-  const invoices = invoiceResult.data?.items ?? [];
-  const claims = (claimsResult?.data as { items?: ClientClaim[] } | undefined)?.items ?? [];
-  const arrangements = arrangementResult?.data?.items ?? [];
-  const insurances = insuranceResult.data ?? [];
-  const payers = (payerResult.data ?? []) as Array<{
-    id: string;
-    name: string;
-    payerIdentifier: string | null;
-    status: 'active' | 'inactive';
-  }>;
+  const invoiceData = invoiceResult.data as
+    | {
+        items: Invoice[];
+        page: number;
+        pageSize: number;
+        total: number;
+      }
+    | undefined;
+  const claimData = claimsResult?.data as
+    | { items: ClientClaim[]; page: number; pageSize: number; total: number }
+    | undefined;
+  if (invoiceData) {
+    redirectToValidPage(
+      `/clients/${id}/invoices`,
+      {
+        claimPage: query.claimPage,
+        claimPageSize: query.claimPageSize,
+        error: query.error,
+        updated: query.updated,
+      },
+      invoicePage,
+      invoicePageSize,
+      invoiceData.total,
+      'invoicePage',
+      'invoicePageSize',
+    );
+  }
+  if (claimData) {
+    redirectToValidPage(
+      `/clients/${id}/invoices`,
+      {
+        invoicePage: query.invoicePage,
+        invoicePageSize: query.invoicePageSize,
+        error: query.error,
+        updated: query.updated,
+      },
+      claimPage,
+      claimPageSize,
+      claimData.total,
+      'claimPage',
+      'claimPageSize',
+    );
+  }
+  const invoices = invoiceData?.items ?? [];
+  const claims = claimData?.items ?? [];
+  const arrangements = ((
+    arrangementResult?.data as components['schemas']['PayerArrangementListResponseDto'] | undefined
+  )?.items ?? []) as PayerArrangement[];
+  const insurances =
+    (insuranceResult.data as components['schemas']['ClientInsuranceResponseDto'][] | undefined) ??
+    [];
+  const payerIds = [
+    ...new Set(arrangements.map((arrangement) => arrangement.payerId).filter(isString)),
+  ];
+  const payerResult =
+    client.organizationId && payerIds.length
+      ? await api.GET('/api/v1/billing/payer-directory/lookup', {
+          params: {
+            query: { organizationId: client.organizationId, payerIds: payerIds.join(',') },
+            header,
+          },
+        })
+      : null;
+  const payers = (payerResult?.data ?? []) as PayerDirectoryEntry[];
   const payerNames = new Map(payers.map((payer) => [payer.id, payer.name]));
-  const fundingSources = budgetResult?.data?.fundingSources ?? [];
+  const fundingSources =
+    (budgetResult?.data as components['schemas']['BenefitBudgetResponseDto'] | undefined)
+      ?.fundingSources ?? [];
   const error =
     query.error ??
-    invoiceResult.error?.code ??
-    arrangementResult?.error?.code ??
-    payerResult.error?.code ??
-    claimsResult?.error?.code;
+    (arrangementResult?.error as { code?: string } | undefined)?.code ??
+    (payerResult?.error as { code?: string } | undefined)?.code;
   const updated = query.updated === 'PAYER_ARRANGEMENT_SAVED';
 
   return (
@@ -184,7 +257,15 @@ export default async function ClientInvoicesPage({
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{t('clientInvoicesDescription')}</p>
         </div>
-        {invoices.length ? (
+        {invoiceResult.error ? (
+          <Alert>
+            {translate(
+              errorMessageKey(
+                (invoiceResult.error as { code?: string } | undefined)?.code ?? 'INVALID_REQUEST',
+              ),
+            )}
+          </Alert>
+        ) : invoices.length ? (
           <div className="overflow-x-auto">
             <ShadcnTable className="w-full min-w-[58rem] text-left text-sm">
               <ShadcnTableHeader>
@@ -210,6 +291,23 @@ export default async function ClientInvoicesPage({
         ) : (
           <p className="text-sm text-muted-foreground">{t('invoiceHistoryEmpty')}</p>
         )}
+        {invoiceData ? (
+          <DataPagination
+            pathname={`/clients/${id}/invoices`}
+            page={invoiceData.page}
+            pageSize={invoiceData.pageSize}
+            totalItems={invoiceData.total}
+            pageParam="invoicePage"
+            pageSizeParam="invoicePageSize"
+            controlId="client-invoice-page-size"
+            filters={{
+              claimPage: query.claimPage,
+              claimPageSize: query.claimPageSize,
+              error: query.error,
+              updated: query.updated,
+            }}
+          />
+        ) : null}
       </section>
 
       {canReadClaims ? (
@@ -226,7 +324,13 @@ export default async function ClientInvoicesPage({
             </p>
           </div>
           {claimsResult?.error ? (
-            <Alert>{translate(errorMessageKey(claimsResult.error.code))}</Alert>
+            <Alert>
+              {translate(
+                errorMessageKey(
+                  (claimsResult.error as { code?: string } | undefined)?.code ?? 'INVALID_REQUEST',
+                ),
+              )}
+            </Alert>
           ) : claims.length ? (
             <div className="overflow-x-auto">
               <ShadcnTable className="w-full min-w-[50rem] text-left text-sm">
@@ -283,6 +387,23 @@ export default async function ClientInvoicesPage({
           ) : (
             <p className="text-sm text-muted-foreground">{t('clientClaimHistoryEmpty')}</p>
           )}
+          {claimData ? (
+            <DataPagination
+              pathname={`/clients/${id}/invoices`}
+              page={claimData.page}
+              pageSize={claimData.pageSize}
+              totalItems={claimData.total}
+              pageParam="claimPage"
+              pageSizeParam="claimPageSize"
+              controlId="client-claim-page-size"
+              filters={{
+                invoicePage: query.invoicePage,
+                invoicePageSize: query.invoicePageSize,
+                error: query.error,
+                updated: query.updated,
+              }}
+            />
+          ) : null}
         </section>
       ) : null}
       <section
@@ -333,23 +454,15 @@ export default async function ClientInvoicesPage({
                     <input type="hidden" name="clientId" value={client.id} />
                     <input type="hidden" name="arrangementId" value={arrangement.id} />
                     <input type="hidden" name="expectedVersion" value={arrangement.version} />
-                    <SelectField
-                      id={'directory-payer-' + arrangement.id}
+                    <AsyncEntityCombobox
                       name="payerId"
+                      entity="payers"
                       label={t('payerDirectoryEntry')}
-                      defaultValue={arrangement.payerId ?? ''}
+                      organizationId={client.organizationId ?? undefined}
+                      initialOption={payerOption(payers, arrangement.payerId, t('payerNotLinked'))}
+                      placeholder={t('selectPayerDirectoryEntry')}
                       required
-                    >
-                      <option value="">{t('selectPayerDirectoryEntry')}</option>
-                      {payers
-                        .filter((payer) => payer.status === 'active')
-                        .map((payer) => (
-                          <option key={payer.id} value={payer.id}>
-                            {payer.name}
-                            {payer.payerIdentifier ? ' · ' + payer.payerIdentifier : ''}
-                          </option>
-                        ))}
-                    </SelectField>
+                    />
                     <SelectField
                       id={`mandate-${arrangement.id}`}
                       name="mandateStatus"
@@ -403,23 +516,14 @@ export default async function ClientInvoicesPage({
             <input type="hidden" name="clientId" value={client.id} />
             <input type="hidden" name="organizationId" value={client.organizationId} />
             <h3 className="text-lg font-semibold md:col-span-2">{t('payerArrangementForm')}</h3>
-            <SelectField
-              id="directory-payer"
+            <AsyncEntityCombobox
               name="payerId"
+              entity="payers"
               label={t('payerDirectoryEntry')}
-              defaultValue=""
+              organizationId={client.organizationId ?? undefined}
+              placeholder={t('selectPayerDirectoryEntry')}
               required
-            >
-              <option value="">{t('selectPayerDirectoryEntry')}</option>
-              {payers
-                .filter((payer) => payer.status === 'active')
-                .map((payer) => (
-                  <option key={payer.id} value={payer.id}>
-                    {payer.name}
-                    {payer.payerIdentifier ? ' · ' + payer.payerIdentifier : ''}
-                  </option>
-                ))}
-            </SelectField>
+            />
             <SelectField
               id="payer-association"
               name="payerAssociation"
@@ -717,4 +821,32 @@ function SelectField({
       </NativeSelect>
     </label>
   );
+}
+
+function positivePage(value: string | undefined): number {
+  if (!value || !/^\d+$/.test(value)) return 1;
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page > 0 && page <= 100_000 ? page : 1;
+}
+
+function positivePageSize(value: string | undefined): number {
+  const pageSize = Number(value);
+  return [10, 20, 50, 100].includes(pageSize) ? pageSize : 20;
+}
+
+function payerOption(
+  payers: PayerDirectoryEntry[],
+  payerId: string | null,
+  fallbackLabel: string,
+): { id: string; label: string } | undefined {
+  if (!payerId) return undefined;
+  const payer = payers.find((candidate) => candidate.id === payerId);
+  return {
+    id: payerId,
+    label: payer ? [payer.name, payer.payerIdentifier].filter(Boolean).join(' · ') : fallbackLabel,
+  };
+}
+
+function isString(value: string | null): value is string {
+  return typeof value === 'string';
 }

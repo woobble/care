@@ -1,4 +1,3 @@
-import { Checkbox as ShadcnCheckbox } from '@care/ui';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -17,6 +16,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { formatCurrency, formatDate } from '@app/web/i18n/format';
 import { statusLabelKey, unitLabelKey } from '@app/web/i18n/status';
 import { todayDateKey } from '@app/web/lib/care-date';
@@ -35,6 +35,9 @@ import {
   hasClientPermission,
   hasTenantPermission,
 } from '@app/web/lib/api';
+import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
+import { getFacilitiesByIds } from '@app/web/lib/facility-lookup';
+import type { components } from '@care/api-client';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export default async function ServiceDetailPage({
@@ -67,29 +70,21 @@ export default async function ServiceDetailPage({
   );
   const canManagePricing = hasPermission(permissions, 'service.manage_pricing');
   const get = api.GET;
-  const [
-    serviceResult,
-    categoriesResult,
-    availabilityResult,
-    organizationsResult,
-    facilitiesResult,
-  ] = await Promise.all([
+  const [serviceResult, categoriesResult, availabilityResult] = await Promise.all([
     get('/api/v1/services/{id}', { params: { path: { id }, header } }),
     get('/api/v1/service-categories', { params: { query: { includeArchived: true }, header } }),
     get('/api/v1/services/{id}/availability', { params: { path: { id }, header } }),
-    get('/api/v1/organizations', { params: { header } }),
-    get('/api/v1/facilities', { params: { header } }),
   ]);
-  if (serviceResult.error || !serviceResult.data) notFound();
-  const service = serviceResult.data;
-  const categories = categoriesResult.data ?? [];
-  const availability = availabilityResult.data ?? [];
-  const organizations = organizationsResult.data ?? [];
-  const facilities = facilitiesResult.data ?? [];
+  const service = serviceResult.data as components['schemas']['ServiceResponseDto'] | undefined;
+  if (serviceResult.error || !service) notFound();
+  const categories = (categoriesResult.data ??
+    []) as components['schemas']['ServiceCategoryResponseDto'][];
+  const availability = (availabilityResult.data ??
+    []) as components['schemas']['ServiceAvailabilityResponseDto'][];
   const priceOrganizationId =
     query.priceOrganizationId && uuidPattern.test(query.priceOrganizationId)
       ? query.priceOrganizationId
-      : organizations[0]?.id;
+      : undefined;
   const priceFacilityId =
     query.priceFacilityId && uuidPattern.test(query.priceFacilityId)
       ? query.priceFacilityId
@@ -98,20 +93,6 @@ export default async function ServiceDetailPage({
     query.priceDate && /^\d{4}-\d{2}-\d{2}$/.test(query.priceDate)
       ? query.priceDate
       : todayDateKey();
-  const pricesResult = priceOrganizationId
-    ? await get('/api/v1/services/{serviceId}/prices', {
-        params: {
-          path: { serviceId: id },
-          query: {
-            organizationId: priceOrganizationId,
-            validAt: priceDate,
-            ...(priceFacilityId ? { facilityId: priceFacilityId } : {}),
-          },
-          header,
-        },
-      })
-    : null;
-  const prices = pricesResult?.data?.items ?? [];
   const activeAvailability = availability.filter((item) => item.active);
   const selectedOrganizations = new Set(
     activeAvailability
@@ -121,6 +102,51 @@ export default async function ServiceDetailPage({
   const selectedFacilities = new Set(
     activeAvailability.flatMap((item) => (item.facilityId ? [item.facilityId] : [])),
   );
+  const organizationIds = [
+    ...new Set([
+      ...activeAvailability.map((item) => item.organizationId),
+      ...(priceOrganizationId ? [priceOrganizationId] : []),
+    ]),
+  ];
+  const [organizationLookup, pricesResult] = await Promise.all([
+    getOrganizationsByIds(organizationIds),
+    priceOrganizationId
+      ? get('/api/v1/services/{serviceId}/prices', {
+          params: {
+            path: { serviceId: id },
+            query: {
+              organizationId: priceOrganizationId,
+              validAt: priceDate,
+              ...(priceFacilityId ? { facilityId: priceFacilityId } : {}),
+            },
+            header,
+          },
+        })
+      : Promise.resolve(null),
+  ]);
+  const prices =
+    (pricesResult?.data as components['schemas']['ServicePriceListResponseDto'] | undefined)
+      ?.items ?? [];
+  const facilityIds = [
+    ...new Set([
+      ...activeAvailability.flatMap((item) => (item.facilityId ? [item.facilityId] : [])),
+      ...(priceFacilityId ? [priceFacilityId] : []),
+      ...prices.flatMap((price) => (price.facilityId ? [price.facilityId] : [])),
+    ]),
+  ];
+  const facilityLookup = await getFacilitiesByIds(facilityIds);
+  const organizationsById = new Map(organizationLookup.items.map((item) => [item.id, item]));
+  const facilitiesById = new Map(facilityLookup.items.map((item) => [item.id, item]));
+  const selectedOrganizationOptions = [...selectedOrganizations].flatMap((selectedId) => {
+    const selected = organizationsById.get(selectedId);
+    return selected ? [{ id: selectedId, label: selected.name }] : [];
+  });
+  const selectedFacilityOptions = [...selectedFacilities].flatMap((selectedId) => {
+    const selected = facilitiesById.get(selectedId);
+    return selected
+      ? [{ id: selectedId, label: `${selected.organizationName} · ${selected.name}` }]
+      : [];
+  });
 
   return (
     <div className="grid gap-6">
@@ -132,7 +158,10 @@ export default async function ServiceDetailPage({
       />
 
       <ActionNotice error={query.error} updated={query.updated} />
-      {categoriesResult.error || organizationsResult.error || facilitiesResult.error ? (
+      {categoriesResult.error ||
+      availabilityResult.error ||
+      organizationLookup.failed ||
+      facilityLookup.failed ? (
         <p
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
@@ -327,40 +356,34 @@ export default async function ServiceDetailPage({
           </p>
         ) : null}
         <form method="get" className="grid gap-3 rounded-md border p-4 md:grid-cols-4">
-          <label className="grid gap-2">
-            <Label htmlFor="priceOrganizationId">{t('Common.fields.organization')}</Label>
-            <NativeSelect
-              id="priceOrganizationId"
-              name="priceOrganizationId"
-              selectClassName="h-10 rounded-md border bg-card px-3"
-              defaultValue={priceOrganizationId ?? ''}
-              required
-              className="w-full"
-            >
-              {organizations.map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-            </NativeSelect>
-          </label>
-          <label className="grid gap-2">
-            <Label htmlFor="priceFacilityId">{t('Common.fields.facility')}</Label>
-            <NativeSelect
-              id="priceFacilityId"
-              name="priceFacilityId"
-              selectClassName="h-10 rounded-md border bg-card px-3"
-              defaultValue={priceFacilityId ?? ''}
-              className="w-full"
-            >
-              <option value="">{t('Services.pricing.organizationDefault')}</option>
-              {facilities.map((facility) => (
-                <option key={facility.id} value={facility.id}>
-                  {facility.organizationName} — {facility.name}
-                </option>
-              ))}
-            </NativeSelect>
-          </label>
+          <AsyncEntityCombobox
+            name="priceOrganizationId"
+            entity="organizations"
+            label={t('Common.fields.organization')}
+            initialOption={
+              priceOrganizationId && organizationsById.has(priceOrganizationId)
+                ? {
+                    id: priceOrganizationId,
+                    label: organizationsById.get(priceOrganizationId)!.name,
+                  }
+                : undefined
+            }
+          />
+          <AsyncEntityCombobox
+            name="priceFacilityId"
+            entity="facilities"
+            label={t('Common.fields.facility')}
+            organizationId={priceOrganizationId}
+            placeholder={t('Services.pricing.organizationDefault')}
+            initialOption={
+              priceFacilityId && facilitiesById.has(priceFacilityId)
+                ? {
+                    id: priceFacilityId,
+                    label: `${facilitiesById.get(priceFacilityId)!.organizationName} · ${facilitiesById.get(priceFacilityId)!.name}`,
+                  }
+                : undefined
+            }
+          />
           <Field
             id="priceDate"
             name="priceDate"
@@ -393,7 +416,7 @@ export default async function ServiceDetailPage({
                 <span className="block text-muted-foreground">
                   {price.facilityId
                     ? (() => {
-                        const facility = facilities.find((item) => item.id === price.facilityId);
+                        const facility = facilitiesById.get(price.facilityId);
                         return facility ? (
                           <ResourceReference
                             label={facility.name}
@@ -429,40 +452,27 @@ export default async function ServiceDetailPage({
             <input type="hidden" name="serviceId" value={service.id} />
             <h3 className="font-semibold">{t('Services.pricing.addTitle')}</h3>
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2">
-                <Label htmlFor="newPriceOrganizationId">{t('Common.fields.organization')}</Label>
-                <NativeSelect
-                  id="newPriceOrganizationId"
-                  name="organizationId"
-                  selectClassName="h-10 rounded-md border bg-card px-3"
-                  defaultValue={priceOrganizationId ?? ''}
-                  required
-                  className="w-full"
-                >
-                  {organizations.map((organization) => (
-                    <option key={organization.id} value={organization.id}>
-                      {organization.name}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </label>
-              <label className="grid gap-2">
-                <Label htmlFor="newPriceFacilityId">{t('Common.fields.facility')}</Label>
-                <NativeSelect
-                  id="newPriceFacilityId"
-                  name="facilityId"
-                  selectClassName="h-10 rounded-md border bg-card px-3"
-                  defaultValue=""
-                  className="w-full"
-                >
-                  <option value="">{t('Services.pricing.organizationDefault')}</option>
-                  {facilities.map((facility) => (
-                    <option key={facility.id} value={facility.id}>
-                      {facility.organizationName} — {facility.name}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </label>
+              <AsyncEntityCombobox
+                name="organizationId"
+                entity="organizations"
+                label={t('Common.fields.organization')}
+                required
+                initialOption={
+                  priceOrganizationId && organizationsById.has(priceOrganizationId)
+                    ? {
+                        id: priceOrganizationId,
+                        label: organizationsById.get(priceOrganizationId)!.name,
+                      }
+                    : undefined
+                }
+              />
+              <AsyncEntityCombobox
+                name="facilityId"
+                entity="facilities"
+                label={t('Common.fields.facility')}
+                organizationId={priceOrganizationId}
+                placeholder={t('Services.pricing.organizationDefault')}
+              />
               <Field
                 id="price"
                 name="price"
@@ -504,11 +514,7 @@ export default async function ServiceDetailPage({
             <p className="text-sm text-muted-foreground">
               {t('Services.pricing.priceHistoryNote')}
             </p>
-            <Button
-              type="submit"
-              className="w-fit"
-              disabled={!organizations.length || service.status === 'archived'}
-            >
+            <Button type="submit" className="w-fit" disabled={service.status === 'archived'}>
               {t('Services.pricing.record')}
             </Button>
           </RHFActionForm>
@@ -554,39 +560,23 @@ export default async function ServiceDetailPage({
             </div>
             <fieldset className="grid gap-3">
               <legend className="font-medium">{t('Services.detail.organizations')}</legend>
-              {organizations.length ? (
-                organizations.map((organization) => (
-                  <label key={organization.id} className="flex items-center gap-2 text-sm">
-                    <ShadcnCheckbox
-                      name="organizationIds"
-                      value={organization.id}
-                      defaultChecked={selectedOrganizations.has(organization.id)}
-                    />
-                    {organization.name}
-                  </label>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {t('Services.detail.noOrganizations')}
-                </p>
-              )}
+              <AsyncEntityCombobox
+                name="organizationIds"
+                entity="organizations"
+                label={t('Services.detail.organizations')}
+                multiple
+                initialOptions={selectedOrganizationOptions}
+              />
             </fieldset>
             <fieldset className="grid gap-3">
               <legend className="font-medium">{t('Services.detail.facilities')}</legend>
-              {facilities.length ? (
-                facilities.map((facility) => (
-                  <label key={facility.id} className="flex items-center gap-2 text-sm">
-                    <ShadcnCheckbox
-                      name="facilityIds"
-                      value={facility.id}
-                      defaultChecked={selectedFacilities.has(facility.id)}
-                    />
-                    {facility.organizationName} — {facility.name}
-                  </label>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">{t('Services.detail.noFacilities')}</p>
-              )}
+              <AsyncEntityCombobox
+                name="facilityIds"
+                entity="facilities"
+                label={t('Services.detail.facilities')}
+                multiple
+                initialOptions={selectedFacilityOptions}
+              />
             </fieldset>
             <div>
               <Button type="submit" disabled={service.status === 'archived'}>
@@ -618,10 +608,10 @@ export default async function ServiceDetailPage({
               </ShadcnTableHeader>
               <ShadcnTableBody>
                 {activeAvailability.map((item) => {
-                  const facility = facilities.find((candidate) => candidate.id === item.facilityId);
-                  const organization = organizations.find(
-                    (candidate) => candidate.id === item.organizationId,
-                  );
+                  const facility = item.facilityId
+                    ? facilitiesById.get(item.facilityId)
+                    : undefined;
+                  const organization = organizationsById.get(item.organizationId);
                   return (
                     <ShadcnTableRow key={item.id} className="border-b last:border-0">
                       <ShadcnTableCell className="px-3 py-2">

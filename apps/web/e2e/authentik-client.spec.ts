@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
 import { devices, expect, test } from '@playwright/test';
-import type { BrowserContext, Page } from '@playwright/test';
+import type { BrowserContext, Locator, Page } from '@playwright/test';
 import { loadStorageConfig } from '@care/config';
 import { createS3ObjectStorage } from '@care/storage';
 
@@ -544,18 +544,17 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.goto('/clients?localeCheck=1');
 
     await page.getByRole('link', { name: 'Create client' }).click();
-    await expect(page).toHaveURL(/\/clients\/new$/);
+    await expect(page).toHaveURL(/\/clients\/new$/, { timeout: 30_000 });
     await page.locator('#firstName').fill('E2E');
     await page.locator('#lastName').fill(runId);
-    await page.getByLabel('Organization').selectOption({ label: 'Demo Pflegedienst' });
-    await page.getByLabel('Primary facility').selectOption({ label: 'Facility West' });
+    await selectEntity(page, 'Organization', 'Demo Pflegedienst', 'Demo Pflegedienst');
+    await selectEntity(page, 'Primary facility', 'Facility West', /Facility West/);
     await page.getByRole('button', { name: 'Create client' }).click();
     await expect(page).toHaveURL(/\/clients\/[0-9a-f-]{36}$/i);
     clientId = new URL(page.url()).pathname.split('/').at(-1);
     if (!clientId) throw new Error('The office UI did not redirect to the created client');
     await expect(page.getByRole('heading', { name: `E2E ${runId}` })).toBeVisible();
     await expect(page.locator('span').filter({ hasText: /^Pending$/ })).toBeVisible();
-
     await page.locator('summary').filter({ hasText: 'Add address' }).click();
     await page.locator('#new-address-street').fill(`E2E Street ${runId}`);
     await page.locator('#new-address-house').fill('12');
@@ -690,7 +689,14 @@ test('Authentik users can be invited and administered from the office UI', async
     if (!e2eFacilityId) throw new Error('The office UI did not create the facility');
 
     await page.locator('#team-name').fill(e2eTeamName);
-    await page.getByRole('button', { name: 'Create team' }).click();
+    const teamCreateNavigation = page.waitForURL(
+      (url) => url.pathname.startsWith('/administration/teams/'),
+      { timeout: 30_000 },
+    );
+    await Promise.all([
+      page.getByRole('button', { name: 'Create team' }).click(),
+      teamCreateNavigation,
+    ]);
     await expect(page.getByRole('heading', { name: e2eTeamName })).toBeVisible();
     const e2eTeamRow = await database.query<{ id: string }>(
       'SELECT id FROM organizations.teams WHERE tenant_id = $1 AND organization_id = $2 AND name = $3',
@@ -700,12 +706,15 @@ test('Authentik users can be invited and administered from the office UI', async
     if (!e2eTeamId) throw new Error('The office UI did not create the team');
 
     await page.goto('/employees/new');
-    await page.getByLabel('Organization').selectOption(e2eOrganizationId);
+    await selectEntity(page, 'Organization', e2eOrganizationName, e2eOrganizationName);
     await page.getByLabel('First name').fill('E2E');
     await page.getByLabel('Last name').fill(runId);
     await page.getByLabel('Personnel number').fill(caregiverPersonnelNumber);
     await page.getByRole('button', { name: 'Create employee' }).click();
-    await expect(page.getByRole('heading', { name: `E2E ${runId}` })).toBeVisible();
+    await page.waitForURL(/\/employees\/[0-9a-f-]{36}$/i, { timeout: 30_000 });
+    await expect(page.getByRole('heading', { name: `E2E ${runId}` })).toBeVisible({
+      timeout: 30_000,
+    });
     const caregiverEmployeeRow = await database.query<{ id: string }>(
       'SELECT id FROM employees.employees WHERE tenant_id = $1 AND personnel_number = $2',
       [tenantId, caregiverPersonnelNumber],
@@ -713,12 +722,12 @@ test('Authentik users can be invited and administered from the office UI', async
     const caregiverEmployeeId = caregiverEmployeeRow.rows[0]?.id;
     if (!caregiverEmployeeId) throw new Error('The office UI did not create the employee');
 
-    await page.getByLabel('Assign facility').selectOption(e2eFacilityId);
+    await selectEntity(page, 'Assign facility', e2eFacilityName, /E2E Facility/);
     await page.getByRole('button', { name: 'Assign facility' }).click();
     await expect(
       page.getByText(`${e2eFacilityName} · Primary facility`, { exact: true }),
     ).toBeVisible();
-    await page.getByLabel('Assign to team').selectOption(e2eTeamId);
+    await selectEntity(page, 'Assign to team', e2eTeamName, /E2E Team/);
     const teamAssignmentPath = new URL(page.url()).pathname;
     const teamAssignmentResponse = page.waitForResponse(
       (response) =>
@@ -741,19 +750,21 @@ test('Authentik users can be invited and administered from the office UI', async
     expect(caregiverEmployeeId).toMatch(/^[0-9a-f-]+$/i);
 
     await page.goto('/employees/new');
-    await page.getByLabel('Organization').selectOption(e2eOrganizationId);
+    await selectEntity(page, 'Organization', e2eOrganizationName, e2eOrganizationName);
     await page.getByLabel('First name').fill('Cover E2E');
     await page.getByLabel('Last name').fill(runId);
     await page.getByLabel('Personnel number').fill(replacementEmployeePersonnelNumber);
     await page.getByRole('button', { name: 'Create employee' }).click();
-    await expect(page.getByRole('heading', { name: `Cover E2E ${runId}` })).toBeVisible();
+    await expect(page.getByRole('heading', { name: `Cover E2E ${runId}` })).toBeVisible({
+      timeout: 30_000,
+    });
     const replacementEmployeeRow = await database.query<{ id: string }>(
       'SELECT id FROM employees.employees WHERE tenant_id = $1 AND personnel_number = $2',
       [tenantId, replacementEmployeePersonnelNumber],
     );
     replacementEmployeeId = replacementEmployeeRow.rows[0]?.id;
     if (!replacementEmployeeId) throw new Error('The office UI did not create the cover employee');
-    await page.getByLabel('Assign facility').selectOption(e2eFacilityId);
+    await selectEntity(page, 'Assign facility', e2eFacilityName, /E2E Facility/);
     await page.getByRole('button', { name: 'Assign facility' }).click();
     await expect(
       page.getByText(`${e2eFacilityName} · Primary facility`, { exact: true }),
@@ -778,13 +789,15 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.getByRole('button', { name: 'Create service' }).click();
     await expect(page.getByRole('heading', { name: `E2E Service ${runId}` })).toBeVisible();
     serviceId = new URL(page.url()).pathname.split('/').at(-1);
-    await page.locator(`button[role="checkbox"][value="${e2eOrganizationId}"]`).click();
-    await page.locator(`button[role="checkbox"][value="${e2eFacilityId}"]`).click();
+    await selectEntity(page, 'Organizations', e2eOrganizationName, e2eOrganizationName);
+    await selectEntity(page, 'Facilities', e2eFacilityName, /E2E Facility/);
     await page.getByRole('button', { name: 'Save availability' }).click();
     await expect(page.getByRole('table').getByText(e2eFacilityName)).toBeVisible();
-    const priceForm = page.locator('form').filter({ has: page.locator('#newPriceOrganizationId') });
-    await priceForm.locator('select[name="organizationId"]').selectOption(e2eOrganizationId);
-    await priceForm.locator('select[name="facilityId"]').selectOption(e2eFacilityId);
+    const priceForm = page
+      .locator('form')
+      .filter({ has: page.getByRole('button', { name: 'Record price' }) });
+    await selectEntity(page, 'Organization', e2eOrganizationName, e2eOrganizationName, priceForm);
+    await selectEntity(page, 'Facility', e2eFacilityName, /E2E Facility/, priceForm);
     await priceForm.locator('input[name="price"]').fill('45.00');
     await priceForm.locator('select[name="pricingUnit"]').selectOption('visit');
     await priceForm.locator('input[name="validFrom"]').fill(serviceValidFrom);
@@ -794,8 +807,8 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.goto('/admissions/new');
     await page.getByLabel('Prospect first name').fill('Admission E2E');
     await page.getByLabel('Prospect last name').fill(runId);
-    await page.getByLabel('Organization').selectOption(e2eOrganizationId);
-    await page.getByLabel('Facility').selectOption(e2eFacilityId);
+    await selectEntity(page, 'Organization', e2eOrganizationName, e2eOrganizationName);
+    await selectEntity(page, 'Facility', e2eFacilityName, /E2E Facility/);
     await page.getByLabel('Inquiry source').fill('E2E browser journey');
     await page.getByLabel('Funding plan').selectOption('private_pay');
     await page.getByLabel('Preferred start date').fill(serviceValidFrom);
@@ -810,6 +823,7 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     expect(createdAdmission.rows[0]?.id).toBe(admissionCaseId);
     await page.goto('/admissions');
+    await expect(page.getByRole('link', { name: `Admission E2E ${runId}` })).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
     await expectMobileLayoutToFit(page);
     await page.screenshot({
@@ -861,13 +875,28 @@ test('Authentik users can be invited and administered from the office UI', async
     await admissionVisitForm.locator('input[name="localDate"]').fill(serviceValidFrom);
     await admissionVisitForm.locator('input[name="localStartTime"]').fill('09:15');
     await admissionVisitForm.locator('input[name="localEndTime"]').fill('09:45');
-    await admissionVisitForm
-      .locator('select[name="serviceDefinitionIds"]')
-      .selectOption(serviceId!);
     await admissionVisitForm.locator('textarea[name="note"]').fill(admissionVisitMarker);
+    await expect(admissionVisitForm.locator('input[name="clientId"]')).toHaveValue(
+      admissionClientId!,
+    );
+    await expect(admissionVisitForm.locator('input[name="admissionCaseId"]')).toHaveValue(
+      admissionCaseId!,
+    );
+    await expect(admissionVisitForm.locator('input[name="expectedAdmissionVersion"]')).toHaveValue(
+      /^[1-9]\d*$/,
+    );
+    await expect(admissionVisitForm.locator('input[name="localDate"]')).toHaveValue(
+      serviceValidFrom,
+    );
+    await expect(admissionVisitForm.locator('input[name="localStartTime"]')).toHaveValue('09:15');
+    await expect(admissionVisitForm.locator('input[name="localEndTime"]')).toHaveValue('09:45');
+    await expect(admissionVisitForm.locator('input[name="serviceDefinitionIds"]')).toHaveValue(
+      serviceId!,
+    );
     await admissionVisitForm.getByRole('button', { name: 'Create visit' }).click();
     await expect(page).toHaveURL(
       new RegExp(`/admissions/${admissionCaseId}\\?updated=first_visit$`),
+      { timeout: 30_000 },
     );
     await expect(page.getByRole('status').filter({ hasText: 'First visit planned' })).toBeVisible();
     const firstVisitLink = await database.query<{ first_visit_id: string | null }>(
@@ -893,8 +922,8 @@ test('Authentik users can be invited and administered from the office UI', async
     ]);
 
     await page.goto('/clients/new');
-    await page.getByLabel('Organization').selectOption(e2eOrganizationId);
-    await page.getByLabel('Primary facility').selectOption(e2eFacilityId);
+    await selectEntity(page, 'Organization', e2eOrganizationName, e2eOrganizationName);
+    await selectEntity(page, 'Primary facility', e2eFacilityName, /E2E Facility/);
     await page.getByLabel('First name').fill('Agreement E2E');
     await page.getByLabel('Last name').fill(runId);
     await page.getByRole('button', { name: 'Create client' }).click();
@@ -979,6 +1008,17 @@ test('Authentik users can be invited and administered from the office UI', async
     await expectMobileLayoutToFit(page);
     await captureReviewScreenshot(page, 'billing-claims-settings-tablet-768.png', true);
     await page.setViewportSize({ width: 1440, height: 900 });
+    const payerSettingsForm = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Open payer settings' }),
+    });
+    await selectEntity(
+      page,
+      'Organization',
+      e2eOrganizationName,
+      e2eOrganizationName,
+      payerSettingsForm,
+    );
+    await payerSettingsForm.getByRole('button', { name: 'Open payer settings' }).click();
     const payerOrganizationSection = page.getByRole('region', { name: e2eOrganizationName });
     const payerCreationForm = payerOrganizationSection.locator('form').filter({
       has: page.getByRole('button', { name: 'Create payer' }),
@@ -1025,7 +1065,13 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     const payerId = payerRows.rows[0]?.id;
     if (!payerId) throw new Error('The payer directory entry was not persisted');
-    await payerArrangementForm.locator('select[name="payerId"]').selectOption(payerId);
+    await selectEntity(
+      page,
+      'Payer directory entry',
+      e2ePayerName,
+      e2ePayerName,
+      payerArrangementForm,
+    );
     const payerAssociation = payerArrangementForm.locator('select[name="payerAssociation"]');
     await payerAssociation.selectOption({ label: 'E2E Pflegekasse' });
     await expect(payerAssociation).toHaveValue(/^funding:/);
@@ -1074,11 +1120,17 @@ test('Authentik users can be invited and administered from the office UI', async
       page.getByRole('status').filter({ hasText: 'Billing profile saved.' }),
     ).toBeVisible();
 
-    await page.goto('/benefits');
-    const recognitionForm = page
-      .locator('form')
-      .filter({ has: page.locator('#recognition-organization') });
-    await recognitionForm.locator('#recognition-organization').selectOption(e2eOrganizationId);
+    await page.goto('/benefits', { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    const recognitionForm = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Record recognition' }),
+    });
+    await selectEntity(
+      page,
+      'Organization',
+      e2eOrganizationName,
+      e2eOrganizationName,
+      recognitionForm,
+    );
     await recognitionForm
       .locator('#recognized-offering')
       .fill('Angebote zur Unterstützung im Alltag');
@@ -1110,15 +1162,10 @@ test('Authentik users can be invited and administered from the office UI', async
     const agreementCard = page.locator('article[id^="agreement-"]');
 
     await page.getByRole('button', { name: 'Search available services' }).click();
-    const servicePicker = page.locator('select[name="serviceDefinitionId"]');
-    const serviceOption = servicePicker.locator('option').filter({
-      hasText: `E2E Service ${runId}`,
+    const agreementServiceForm = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Add service' }),
     });
-    const serviceOptionValue = await serviceOption.getAttribute('value');
-    if (!serviceOptionValue)
-      throw new Error('The agreement service picker did not include the service');
-    await servicePicker.selectOption(serviceOptionValue);
-    const agreementServiceForm = page.locator('form').filter({ has: servicePicker });
+    await selectEntity(page, 'Service', serviceCode, new RegExp(serviceCode), agreementServiceForm);
     await agreementServiceForm.locator('input[name="quantity"]').fill('1');
     await agreementServiceForm.locator('select[name="cadence"]').selectOption('weekly');
     await agreementServiceForm.getByRole('checkbox', { name: 'Monday' }).click();
@@ -1162,7 +1209,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(generatedVisitLink).toContainText(`Agreement E2E ${runId}`);
     await generatedVisitLink.click();
     await expect(page.getByRole('heading', { name: `Agreement E2E ${runId}` })).toBeVisible();
-    await page.getByLabel('Assign employee').selectOption(caregiverEmployeeId);
+    await selectEntity(page, 'Assign employee', runId, new RegExp(`^E2E ${runId}$`));
     await page.getByRole('button', { name: 'Assign', exact: true }).click();
     await expect(
       page
@@ -1359,12 +1406,30 @@ test('Authentik users can be invited and administered from the office UI', async
     const manualVisitForm = page.locator('form').filter({
       has: page.getByRole('button', { name: 'Create visit' }),
     });
-    await manualVisitForm.getByLabel('Client').selectOption(agreementClientId);
+    await selectEntity(
+      page,
+      'Client',
+      runId,
+      new RegExp(`^Agreement E2E ${runId}$`),
+      manualVisitForm,
+    );
     await manualVisitForm.locator('input[name="localDate"]').fill(executionDate);
     await manualVisitForm.locator('input[name="localStartTime"]').fill(executionSchedule.start);
     await manualVisitForm.locator('input[name="localEndTime"]').fill(executionSchedule.end);
-    await manualVisitForm.locator('select[name="serviceDefinitionIds"]').selectOption(serviceId);
-    await manualVisitForm.locator('select[name="employeeId"]').selectOption(caregiverEmployeeId);
+    await selectEntity(
+      page,
+      'Services (select multiple)',
+      serviceCode,
+      new RegExp(`^${serviceCode} · E2E Service ${runId}$`),
+      manualVisitForm,
+    );
+    await selectEntity(
+      page,
+      'Employees (optional)',
+      runId,
+      new RegExp(`^E2E ${runId}$`),
+      manualVisitForm,
+    );
     await manualVisitForm.locator('textarea[name="note"]').fill(executionMarker);
     await manualVisitForm.getByRole('button', { name: 'Create visit' }).click();
     await expect(page).toHaveURL(/(?:\?|&)updated=visit(?:&|$)/);
@@ -1460,11 +1525,11 @@ test('Authentik users can be invited and administered from the office UI', async
     await mobileVisitLink.click();
     await expect(
       caregiverPage.getByRole('heading', { name: `Agreement E2E ${runId}` }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
     await expectMobileLayoutToFit(caregiverPage);
     if (!replacementEmployeeId) throw new Error('The cover employee is missing for reassignment');
     await page.goto(`/visits/${executionVisitId}`);
-    await page.getByLabel('Assign employee').selectOption(replacementEmployeeId);
+    await selectEntity(page, 'Assign employee', runId, new RegExp(`^Cover E2E ${runId}$`));
     await page.getByRole('button', { name: 'Assign', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/visits/${executionVisitId}\\?updated=assigned$`));
     await expect(
@@ -1491,7 +1556,7 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     expect(deniedExecution.rows).toHaveLength(0);
 
-    await page.getByLabel('Assign employee').selectOption(caregiverEmployeeId);
+    await selectEntity(page, 'Assign employee', runId, new RegExp(`^E2E ${runId}$`));
     await page.getByRole('button', { name: 'Assign', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/visits/${executionVisitId}\\?updated=assigned$`));
     await expect(
@@ -2173,7 +2238,13 @@ test('Authentik users can be invited and administered from the office UI', async
     const paymentEntryForm = page.locator('form').filter({
       has: page.getByRole('button', { name: 'Record payment' }),
     });
-    await paymentEntryForm.locator('select[name="organizationId"]').selectOption(e2eOrganizationId);
+    await selectEntity(
+      page,
+      'Organization',
+      e2eOrganizationName,
+      e2eOrganizationName,
+      paymentEntryForm,
+    );
     await paymentEntryForm.locator('input[name="payerName"]').fill(e2ePayerName);
     await paymentEntryForm.locator('input[name="payerReference"]').fill(`E2E-PAYER-${runId}`);
     await paymentEntryForm.locator('input[name="amount"]').fill(invoiceAmount);
@@ -2276,7 +2347,13 @@ test('Authentik users can be invited and administered from the office UI', async
 
     await page.goto('/administration/users');
     await page.getByRole('link', { name: invitedName }).click();
-    await expect(page.getByRole('heading', { name: invitedName })).toBeVisible();
+    await expect(page).toHaveURL(
+      new RegExp(`/administration/users/${invitedMembershipId}(?:\\?.*)?$`),
+      {
+        timeout: 30_000,
+      },
+    );
+    await expect(page.getByRole('heading', { name: invitedName })).toBeVisible({ timeout: 30_000 });
     const officeRole = page.locator(`button[role="checkbox"][value="${officeRoleId}"]`);
     await officeRole.click();
     await page.getByRole('button', { name: 'Save roles' }).click();
@@ -2296,21 +2373,20 @@ test('Authentik users can be invited and administered from the office UI', async
     ).toBeVisible();
 
     await page.locator('input[name="scopeMode"][value="scoped"]').check();
-    const facilityScope = page.locator(
-      `button[role="checkbox"][value="facility:${facilityWestId}"]`,
-    );
-    await facilityScope.click();
+    const facilityScope = page.locator(`input[name="scope"][value="facility:${facilityWestId}"]`);
+    await selectEntity(page, 'Facilities', 'Facility West', /Facility West/);
     await page.getByRole('button', { name: 'Save scopes' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
-    await facilityScope.click();
+    await expect(facilityScope).toHaveCount(1);
+    await selectEntity(page, 'Facilities', 'Facility West', /Facility West/);
     await page.getByRole('button', { name: 'Save scopes' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
-    await expect(facilityScope).not.toBeChecked();
-    await facilityScope.click();
+    await expect(facilityScope).toHaveCount(0);
+    await selectEntity(page, 'Facilities', 'Facility West', /Facility West/);
     await page.getByRole('button', { name: 'Save scopes' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
@@ -2318,9 +2394,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.getByRole('button', { name: 'Activate membership' }).click();
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
     await expect(page.getByText('Office', { exact: true })).toBeVisible();
-    await expect(
-      page.locator(`input[name="scope"][value="facility:${facilityWestId}"]`),
-    ).toBeChecked();
+    await expect(facilityScope).toHaveCount(1);
 
     await page.goto('/administration/audit');
     await expect(page.getByText('Membership activated', { exact: true })).toBeVisible();
@@ -3051,6 +3125,22 @@ async function cleanupOrganizationRecords(
       "DELETE FROM platform.outbox_messages WHERE tenant_id = $1 AND event ->> 'aggregateId' = ANY($2::text[])",
       [tenantId, resourceIds],
     );
+    await database.query(
+      `DELETE FROM operations.exception_interactions
+       WHERE tenant_id = $1
+         AND occurrence_id IN (
+           SELECT id FROM operations.exception_occurrences
+           WHERE tenant_id = $1
+             AND (organization_id = ANY($2::uuid[]) OR facility_id = ANY($3::uuid[]))
+         )`,
+      [tenantId, organizations.rows.map((row) => row.id), facilities.rows.map((row) => row.id)],
+    );
+    await database.query(
+      `DELETE FROM operations.exception_occurrences
+       WHERE tenant_id = $1
+         AND (organization_id = ANY($2::uuid[]) OR facility_id = ANY($3::uuid[]))`,
+      [tenantId, organizations.rows.map((row) => row.id), facilities.rows.map((row) => row.id)],
+    );
     if (employees.rows.length) {
       const employeeIds = employees.rows.map((row) => row.id);
       await database.query(
@@ -3285,6 +3375,19 @@ async function cleanup(
     );
     if (clientIds.length && input.tenantId) {
       await database.query(
+        `DELETE FROM operations.exception_interactions
+         WHERE tenant_id = $1
+           AND occurrence_id IN (
+             SELECT id FROM operations.exception_occurrences
+             WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])
+           )`,
+        [input.tenantId, clientIds],
+      );
+      await database.query(
+        'DELETE FROM operations.exception_occurrences WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
+        [input.tenantId, clientIds],
+      );
+      await database.query(
         'DELETE FROM clients.client_contact_roles WHERE tenant_id = $1 AND client_id = ANY($2::uuid[])',
         [input.tenantId, clientIds],
       );
@@ -3491,32 +3594,54 @@ async function cleanupOnboardingTemplates(
 }
 
 async function expectMobileLayoutToFit(page: Page): Promise<void> {
-  const { documentWidth, visualWidth, overflowCandidates } = await page.evaluate(() => {
-    const width = window.visualViewport?.width ?? window.innerWidth;
-    return {
-      documentWidth: document.documentElement.scrollWidth,
-      visualWidth: width,
-      overflowCandidates: Array.from(document.body.querySelectorAll('*'))
-        .map((element) => {
-          const rect = element.getBoundingClientRect();
-          return {
-            tag: element.tagName,
-            id: element.id,
-            className: typeof element.className === 'string' ? element.className : '',
-            text: element.textContent?.trim().slice(0, 100) ?? '',
-            left: Math.round(rect.left),
-            right: Math.round(rect.right),
-            width: Math.round(rect.width),
-            scrollWidth: element.scrollWidth,
-            clientWidth: element.clientWidth,
-          };
-        })
-        .filter((element) => element.right > width + 1 || element.left < -1)
-        .sort((left, right) => right.right - left.right)
-        .slice(0, 8),
-    };
-  });
-  expect(documentWidth, JSON.stringify(overflowCandidates)).toBeLessThanOrEqual(visualWidth);
+  const { documentWidth, visualWidth, overflowCandidates, shellAncestors } = await page.evaluate(
+    () => {
+      const width = window.visualViewport?.width ?? window.innerWidth;
+      const shell = document.querySelector('main');
+      const shellAncestors = [];
+      let current = shell;
+      while (current && shellAncestors.length < 6) {
+        const rect = current.getBoundingClientRect();
+        const style = getComputedStyle(current);
+        shellAncestors.push({
+          tag: current.tagName,
+          className: typeof current.className === 'string' ? current.className : '',
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+          minWidth: style.minWidth,
+          flex: style.flex,
+        });
+        current = current.parentElement;
+      }
+      return {
+        documentWidth: document.documentElement.scrollWidth,
+        visualWidth: width,
+        shellAncestors,
+        overflowCandidates: Array.from(document.body.querySelectorAll('*'))
+          .map((element) => {
+            const rect = element.getBoundingClientRect();
+            return {
+              tag: element.tagName,
+              id: element.id,
+              className: typeof element.className === 'string' ? element.className : '',
+              text: element.textContent?.trim().slice(0, 100) ?? '',
+              left: Math.round(rect.left),
+              right: Math.round(rect.right),
+              width: Math.round(rect.width),
+              scrollWidth: element.scrollWidth,
+              clientWidth: element.clientWidth,
+            };
+          })
+          .filter((element) => element.right > width + 1 || element.left < -1)
+          .sort((left, right) => right.right - left.right)
+          .slice(0, 8),
+      };
+    },
+  );
+  expect(documentWidth, JSON.stringify({ overflowCandidates, shellAncestors })).toBeLessThanOrEqual(
+    visualWidth,
+  );
 }
 
 async function expectVisibleTextToOmitIds(
@@ -3527,6 +3652,36 @@ async function expectVisibleTextToOmitIds(
   for (const id of ids) {
     if (id) expect(visibleText).not.toContain(id);
   }
+}
+
+async function selectEntity(
+  page: Page,
+  controlLabel: string,
+  searchText: string,
+  optionName: string | RegExp,
+  root: Page | Locator = page,
+): Promise<void> {
+  const trigger = root.getByRole('combobox', { name: controlLabel });
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
+  const search = page.getByRole('combobox', { name: 'Search by name' });
+  await search.fill(searchText);
+  const dialog = page.getByRole('dialog');
+  const targetOption = dialog.getByRole('option', { name: optionName });
+  await expect(targetOption).toBeVisible();
+  const optionCount = await dialog.getByRole('option').count();
+  const matchesOption = (text: string) =>
+    typeof optionName === 'string' ? text.includes(optionName) : optionName.test(text);
+
+  for (let index = 0; index < optionCount; index += 1) {
+    const activeOption = dialog.locator('[role="option"][aria-selected="true"]').first();
+    const activeText = (await activeOption.textContent()) ?? '';
+    if (matchesOption(activeText)) {
+      await search.press('Enter');
+      return;
+    }
+    await search.press('ArrowDown');
+  }
+  throw new Error(`Could not navigate to the ${String(optionName)} option`);
 }
 
 async function captureReviewScreenshot(

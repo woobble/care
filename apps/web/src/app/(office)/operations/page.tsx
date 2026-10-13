@@ -15,6 +15,8 @@ import {
 } from '@app/web/lib/api';
 import { EmptyState, PageHeader, SectionHeader } from '@app/web/components/page-patterns';
 import { ResourceCardLink } from '@app/web/components/resource-reference';
+import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
+import type { components } from '@care/api-client';
 import { categoryTranslationKey, issueTitleKey, workItemSourceHref } from './ui';
 
 type SearchParams = Promise<{ organizationId?: string; facilityId?: string }>;
@@ -57,28 +59,24 @@ export default async function OperationsDashboardPage({
       </p>
     );
   }
-  const [dashboardResult, organizationsResult] = await Promise.all([
-    api.GET('/api/v1/operations/dashboard', {
-      params: {
-        query: {
-          ...(organizationId ? { organizationId } : {}),
-          ...(facilityId ? { facilityId } : {}),
-        },
-        header,
+  const dashboardResult = await api.GET('/api/v1/operations/dashboard', {
+    params: {
+      query: {
+        ...(organizationId ? { organizationId } : {}),
+        ...(facilityId ? { facilityId } : {}),
       },
-    }),
-    api.GET('/api/v1/organizations', { params: { header } }),
-  ]);
-  const dashboard = dashboardResult.data;
-  const timezoneByOrganization = new Map(
-    (organizationsResult.data ?? []).map((organization) => [
-      organization.id,
-      organization.timezone,
-    ]),
-  );
+      header,
+    },
+  });
+  const dashboard = dashboardResult.data as
+    | components['schemas']['OperationsDashboardResponseDto']
+    | undefined;
   const canReadSchedule = hasPermission(permissions, 'schedule.read');
+  const selectedOrganization = organizationId
+    ? await getOrganizationsByIds([organizationId])
+    : { items: [], failed: false };
   const workday = todayRange(
-    (organizationId && timezoneByOrganization.get(organizationId)) || 'Europe/Berlin',
+    (organizationId && selectedOrganization.items[0]?.timezone) || 'Europe/Berlin',
   );
   const scheduledVisitsResults = canReadSchedule
     ? await Promise.all(
@@ -102,14 +100,35 @@ export default async function OperationsDashboardPage({
         ),
       )
     : null;
+  const scheduledVisitPages = (scheduledVisitsResults ?? []).map(
+    (result) => result.data as components['schemas']['VisitListResponseDto'] | undefined,
+  );
   const scheduledVisitCount = scheduledVisitsResults?.every(
-    (result) => !result.error && result.data,
+    (result, index) => !result.error && scheduledVisitPages[index],
   )
-    ? scheduledVisitsResults.reduce((total, result) => total + (result.data?.total ?? 0), 0)
+    ? scheduledVisitPages.reduce((total, result) => total + (result?.total ?? 0), 0)
     : null;
-  const todayVisits = (scheduledVisitsResults ?? [])
-    .flatMap((result) => result.data?.items ?? [])
+  const todayVisits = scheduledVisitPages
+    .flatMap((result) => result?.items ?? [])
     .sort((left, right) => left.plannedStart.localeCompare(right.plannedStart));
+  const organizationIds = [
+    ...new Set([
+      ...(organizationId ? [organizationId] : []),
+      ...(dashboard?.highPriorityExceptions.flatMap((item) =>
+        item.organizationId ? [item.organizationId] : [],
+      ) ?? []),
+      ...todayVisits.map((visit) => visit.organizationId),
+    ]),
+  ];
+  const organizationsResult = await getOrganizationsByIds(
+    organizationIds.filter((id) => id !== organizationId),
+  );
+  const timezoneByOrganization = new Map(
+    [...selectedOrganization.items, ...organizationsResult.items].map((organization) => [
+      organization.id,
+      organization.timezone,
+    ]),
+  );
   const scheduleUnavailable = Boolean(
     canReadSchedule && scheduledVisitsResults?.some((result) => result.error || !result.data),
   );
@@ -134,7 +153,11 @@ export default async function OperationsDashboardPage({
           role="alert"
           className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-destructive"
         >
-          {translate(errorMessageKey(dashboardResult.error.code))}
+          {translate(
+            errorMessageKey(
+              (dashboardResult.error as { code?: string } | undefined)?.code ?? 'UNKNOWN_ERROR',
+            ),
+          )}
         </p>
       ) : null}
       {dashboard ? (

@@ -172,6 +172,57 @@ export class TeamResponseDto {
   updatedAt!: string;
 }
 
+export class PaginatedOrganizationsResponseDto {
+  @ApiProperty({ type: [OrganizationResponseDto] })
+  items!: OrganizationResponseDto[];
+
+  @ApiProperty({ minimum: 1 })
+  page!: number;
+
+  @ApiProperty({ minimum: 1, maximum: 100 })
+  pageSize!: number;
+
+  @ApiProperty({ minimum: 0 })
+  total!: number;
+
+  @ApiProperty({ minimum: 0 })
+  totalPages!: number;
+}
+
+export class PaginatedFacilitiesResponseDto {
+  @ApiProperty({ type: [FacilityResponseDto] })
+  items!: FacilityResponseDto[];
+
+  @ApiProperty({ minimum: 1 })
+  page!: number;
+
+  @ApiProperty({ minimum: 1, maximum: 100 })
+  pageSize!: number;
+
+  @ApiProperty({ minimum: 0 })
+  total!: number;
+
+  @ApiProperty({ minimum: 0 })
+  totalPages!: number;
+}
+
+export class PaginatedTeamsResponseDto {
+  @ApiProperty({ type: [TeamResponseDto] })
+  items!: TeamResponseDto[];
+
+  @ApiProperty({ minimum: 1 })
+  page!: number;
+
+  @ApiProperty({ minimum: 1, maximum: 100 })
+  pageSize!: number;
+
+  @ApiProperty({ minimum: 0 })
+  total!: number;
+
+  @ApiProperty({ minimum: 0 })
+  totalPages!: number;
+}
+
 export class CreateOrganizationDto {
   @ApiProperty({ minLength: 1, maxLength: 160 })
   name!: string;

@@ -17,6 +17,7 @@ const migrations = {
     '0004_scheduling_timezone.sql',
     '0005_worker_tenant_scan.sql',
     '0006_worker_deadline_read.sql',
+    '0007_structure_search_indexes.sql',
   ],
   identity: [
     '0001_initial.sql',
@@ -72,6 +73,7 @@ const migrations = {
     '0002_invoice_document_rendering.sql',
     '0003_claims.sql',
     '0004_worker_deadline_read.sql',
+    '0005_payer_search_indexes.sql',
   ],
   operations: [
     '0001_operations.sql',

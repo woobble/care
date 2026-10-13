@@ -124,10 +124,24 @@ export const invoiceListQuerySchema = z
   .strict();
 
 export const receivablesQuerySchema = z
-  .object({ organizationId: uuid.optional(), clientId: uuid.optional(), page, pageSize })
+  .object({
+    organizationId: uuid.optional(),
+    clientId: uuid.optional(),
+    q: z.string().trim().min(2).max(120).optional(),
+    page,
+    pageSize,
+  })
   .strict();
 export const paymentsQuerySchema = z
-  .object({ organizationId: uuid.optional(), page, pageSize })
+  .object({
+    organizationId: uuid.optional(),
+    remainingOnly: z
+      .enum(['true', 'false'])
+      .optional()
+      .transform((value) => value === 'true'),
+    page,
+    pageSize,
+  })
   .strict();
 
 export const paymentSchema = z
@@ -442,6 +456,8 @@ export class BillingInvoiceListResponseDto {
   @ApiProperty({ type: [BillingInvoiceResponseDto] }) items!: BillingInvoiceResponseDto[];
   @ApiProperty() page!: number;
   @ApiProperty() pageSize!: number;
+  @ApiProperty() total!: number;
+  @ApiProperty() totalPages!: number;
 }
 
 export class InvoiceCorrectionResponseDto {
@@ -479,4 +495,6 @@ export class BillingPaymentListResponseDto {
   @ApiProperty({ type: [BillingPaymentResponseDto] }) items!: BillingPaymentResponseDto[];
   @ApiProperty() page!: number;
   @ApiProperty() pageSize!: number;
+  @ApiProperty() total!: number;
+  @ApiProperty() totalPages!: number;
 }

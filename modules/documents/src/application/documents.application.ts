@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
@@ -490,6 +491,27 @@ export class DocumentsApplicationService {
       if (filters.facilityId) conditions.push(eq(documentArtifacts.facilityId, filters.facilityId));
       if (filters.documentType)
         conditions.push(eq(documentArtifacts.documentType, filters.documentType));
+      const listableTypes: DocumentType[] = principal.roles?.includes('Caregiver')
+        ? []
+        : ['service_evidence', 'service_agreement', 'benefit_overview'];
+      const permittedTypes = listableTypes.filter(
+        (type) => !filters.documentType || type === filters.documentType,
+      );
+      conditions.push(
+        permittedTypes.length
+          ? or(
+              ...permittedTypes.map((type) =>
+                and(
+                  eq(documentArtifacts.documentType, type),
+                  documentArtifactPermissionScope(principal, sourceReadPermission(type)),
+                  ...(type === 'service_agreement'
+                    ? [documentArtifactPermissionScope(principal, 'client.read')]
+                    : []),
+                ),
+              ),
+            )!
+          : sql`false`,
+      );
       const rows = await transaction
         .select()
         .from(documentArtifacts)
@@ -1062,6 +1084,30 @@ function sourceReadPermission(type: DocumentType): Permission {
     case 'claim_summary':
       return 'claims.read';
   }
+}
+
+function documentArtifactPermissionScope(
+  principal: AuthorizationPrincipal,
+  permission: Permission,
+): SQL {
+  const grants = principal.grants.filter((grant) => grant.permission === permission);
+  if (
+    grants.some((grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId)
+  ) {
+    return sql`true`;
+  }
+
+  const scopes: SQL[] = [];
+  const organizationIds = grants
+    .filter((grant) => grant.scopeType === 'organization')
+    .map((grant) => grant.scopeId);
+  const facilityIds = grants
+    .filter((grant) => grant.scopeType === 'facility')
+    .map((grant) => grant.scopeId);
+  if (organizationIds.length)
+    scopes.push(inArray(documentArtifacts.organizationId, organizationIds));
+  if (facilityIds.length) scopes.push(inArray(documentArtifacts.facilityId, facilityIds));
+  return scopes.length ? or(...scopes)! : sql`false`;
 }
 
 function inspectLogo(bytes: Uint8Array): {

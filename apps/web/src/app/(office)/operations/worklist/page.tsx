@@ -23,6 +23,11 @@ import {
   workItemSourceHref,
 } from '@app/web/app/(office)/operations/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
+import type { components } from '@care/api-client';
 
 type SearchParams = Promise<
   Record<string, string | undefined> & { error?: string; updated?: string }
@@ -61,6 +66,9 @@ export default async function OperationsWorklistPage({
   }
   const canAssign = hasPermission(permissions, 'operations.tasks.assign');
   const canManageExceptions = hasPermission(permissions, 'operations.exceptions.manage');
+  const canReadOrganizations = hasPermission(permissions, 'organization.read');
+  const canReadFacilities = hasPermission(permissions, 'facility.read');
+  const canReadEmployees = hasPermission(permissions, 'employee.read');
   const organizationId = validUuid(query.organizationId);
   const facilityId = validUuid(query.facilityId);
   const clientId = validUuid(query.clientId);
@@ -84,110 +92,125 @@ export default async function OperationsWorklistPage({
   const assignedEmployeeId = canAssign ? validUuid(query.assignedEmployeeId) : undefined;
   const assignedToMe = query.assignedToMe === 'true' ? 'true' : undefined;
   const search = query.search?.trim().slice(0, 120) || undefined;
-  const page = validPage(query.page);
+  const workItemsPage = validPage(query.workItemsPage ?? query.page);
+  const tasksPage = validPage(query.tasksPage ?? query.page);
+  const workItemsPageSize = pageSizeValue(query.workItemsPageSize);
+  const tasksPageSize = pageSizeValue(query.tasksPageSize);
 
-  const [
-    workItemsResult,
-    tasksResult,
-    organizationsResult,
-    facilitiesResult,
-    employeesResult,
-    clientsResult,
-  ] = await Promise.all([
-    api.GET('/api/v1/operations/work-items', {
-      params: {
-        query: {
-          page,
-          pageSize: 25,
-          ...(organizationId ? { organizationId } : {}),
-          ...(facilityId ? { facilityId } : {}),
-          ...(clientId ? { clientId } : {}),
-          ...(category ? { category } : {}),
-          ...(severity ? { severity } : {}),
-          ...(issueStatus ? { status: issueStatus } : {}),
-          ...(due ? { due } : {}),
-          ...(issueSort ? { sort: issueSort } : {}),
-          ...(search ? { search } : {}),
-        },
-        header,
-      },
-    }),
-    api.GET('/api/v1/operations/tasks', {
-      params: {
-        query: {
-          page,
-          pageSize: 25,
-          order: taskOrder ?? 'due',
-          ...(organizationId ? { organizationId } : {}),
-          ...(facilityId ? { facilityId } : {}),
-          ...(clientId ? { clientId } : {}),
-          ...(taskStatus ? { status: taskStatus } : {}),
-          ...(priority ? { priority } : {}),
-          ...(assignedEmployeeId ? { assignedEmployeeId } : {}),
-          ...(assignedToMe ? { assignedToMe } : {}),
-          ...(due ? { due } : {}),
-          ...(search ? { search } : {}),
-        },
-        header,
-      },
-    }),
-    api.GET('/api/v1/organizations', { params: { header } }),
-    api.GET('/api/v1/facilities', {
-      params: { query: organizationId ? { organizationId } : {}, header },
-    }),
-    canAssign && hasPermission(permissions, 'employee.read')
-      ? api.GET('/api/v1/employees', {
-          params: {
-            query: {
-              status: 'active',
-              page: 1,
-              pageSize: 100,
-              sortBy: 'lastName',
-              sortOrder: 'asc',
-            },
-            header,
+  const [workItemsResult, tasksResult, facilitiesResult, employeesResult, clientsResult] =
+    await Promise.all([
+      api.GET('/api/v1/operations/work-items', {
+        params: {
+          query: {
+            page: workItemsPage,
+            pageSize: workItemsPageSize,
+            ...(organizationId ? { organizationId } : {}),
+            ...(facilityId ? { facilityId } : {}),
+            ...(clientId ? { clientId } : {}),
+            ...(category ? { category } : {}),
+            ...(severity ? { severity } : {}),
+            ...(issueStatus ? { status: issueStatus } : {}),
+            ...(due ? { due } : {}),
+            ...(issueSort ? { sort: issueSort } : {}),
+            ...(search ? { search } : {}),
           },
-        })
-      : Promise.resolve({ data: undefined, error: undefined }),
-    hasPermission(permissions, 'client.read')
-      ? api.GET('/api/v1/clients', {
-          params: {
-            query: {
-              page: 1,
-              pageSize: 100,
-              status: 'active',
-              sortBy: 'lastName',
-              sortOrder: 'asc',
-            },
-            header,
+          header,
+        },
+      }),
+      api.GET('/api/v1/operations/tasks', {
+        params: {
+          query: {
+            page: tasksPage,
+            pageSize: tasksPageSize,
+            order: taskOrder ?? 'due',
+            ...(organizationId ? { organizationId } : {}),
+            ...(facilityId ? { facilityId } : {}),
+            ...(clientId ? { clientId } : {}),
+            ...(taskStatus ? { status: taskStatus } : {}),
+            ...(priority ? { priority } : {}),
+            ...(assignedEmployeeId ? { assignedEmployeeId } : {}),
+            ...(assignedToMe ? { assignedToMe } : {}),
+            ...(due ? { due } : {}),
+            ...(search ? { search } : {}),
           },
-        })
-      : Promise.resolve({ data: undefined, error: undefined }),
-  ]);
-  const workItems = workItemsResult.data?.items ?? [];
-  const tasks = tasksResult.data?.items ?? [];
-  const organizations = organizationsResult.data ?? [];
-  const facilities = facilitiesResult.data ?? [];
-  const employees = employeesResult.data?.items ?? [];
-  const clients = clientsResult.data?.items ?? [];
+          header,
+        },
+      }),
+      facilityId && canReadFacilities
+        ? api.GET('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
+        : Promise.resolve({ data: undefined, error: undefined }),
+      assignedEmployeeId && canAssign && canReadEmployees
+        ? api.GET('/api/v1/employees/{id}', {
+            params: { path: { id: assignedEmployeeId }, header },
+          })
+        : Promise.resolve({ data: undefined, error: undefined }),
+      clientId && hasPermission(permissions, 'client.read')
+        ? api.GET('/api/v1/clients/{id}', { params: { path: { id: clientId }, header } })
+        : Promise.resolve({ data: undefined, error: undefined }),
+    ]);
+  const workItemsData = workItemsResult.data as unknown as
+    | components['schemas']['OperationsWorklistResponseDto']
+    | undefined;
+  const tasksData = tasksResult.data as unknown as
+    | components['schemas']['OperationsTaskListResponseDto']
+    | undefined;
+  if (workItemsData)
+    redirectToValidPage(
+      '/operations/worklist',
+      query,
+      workItemsData.page,
+      workItemsData.pageSize,
+      workItemsData.total,
+      'workItemsPage',
+      'workItemsPageSize',
+    );
+  if (tasksData)
+    redirectToValidPage(
+      '/operations/worklist',
+      query,
+      tasksData.page,
+      tasksData.pageSize,
+      tasksData.total,
+      'tasksPage',
+      'tasksPageSize',
+    );
+  const workItems = workItemsData?.items ?? [];
+  const tasks = tasksData?.items ?? [];
+  const organizationLookup = canReadOrganizations
+    ? await getOrganizationsByIds([
+        ...(organizationId ? [organizationId] : []),
+        ...workItems.flatMap((item) => (item.organizationId ? [item.organizationId] : [])),
+        ...tasks.map((task) => task.organizationId),
+      ])
+    : { items: [], failed: false };
+  const organizations = organizationLookup.items;
+  const selectedFacility = facilitiesResult.data as
+    | components['schemas']['FacilityResponseDto']
+    | undefined;
+  const selectedEmployee = employeesResult.data as
+    | components['schemas']['EmployeeResponseDto']
+    | undefined;
+  const selectedClient = clientsResult.data as
+    | components['schemas']['ClientResponseDto']
+    | undefined;
   const timezoneByOrganization = new Map(
     organizations.map((organization) => [organization.id, organization.timezone]),
   );
-  const currentQuery = {
-    ...query,
-    ...(organizationId ? { organizationId } : {}),
-    ...(facilityId ? { facilityId } : {}),
-    ...(clientId ? { clientId } : {}),
-    ...(category ? { category } : {}),
-    ...(severity ? { severity } : {}),
-    ...(issueStatus ? { issueStatus } : {}),
-    ...(taskStatus ? { taskStatus } : {}),
-    ...(priority ? { priority } : {}),
-    ...(due ? { due } : {}),
-    ...(issueSort ? { sort: issueSort } : {}),
-    ...(taskOrder ? { order: taskOrder } : {}),
-    ...(assignedEmployeeId ? { assignedEmployeeId } : {}),
-    ...(search ? { search } : {}),
+  const listFilters = {
+    organizationId,
+    facilityId,
+    clientId,
+    category,
+    severity,
+    issueStatus,
+    taskStatus,
+    priority,
+    due,
+    sort: issueSort,
+    order: taskOrder,
+    assignedEmployeeId,
+    assignedToMe,
+    search,
   };
 
   return (
@@ -211,7 +234,7 @@ export default async function OperationsWorklistPage({
           {translate(errorMessageKey(query.error))}
         </p>
       ) : null}
-      {workItemsResult.error || tasksResult.error ? (
+      {workItemsResult.error || tasksResult.error || organizationLookup.failed ? (
         <p
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
@@ -219,7 +242,7 @@ export default async function OperationsWorklistPage({
           {t('loadFailed')}
         </p>
       ) : null}
-      {workItemsResult.data?.truncated ? (
+      {workItemsData?.truncated ? (
         <p
           role="status"
           className="rounded-md border border-warning/40 bg-warning-muted p-3 text-warning-foreground"
@@ -232,6 +255,10 @@ export default async function OperationsWorklistPage({
         method="get"
         className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4"
       >
+        <input type="hidden" name="workItemsPage" value="1" />
+        <input type="hidden" name="tasksPage" value="1" />
+        <input type="hidden" name="workItemsPageSize" value={workItemsPageSize} />
+        <input type="hidden" name="tasksPageSize" value={tasksPageSize} />
         <label className="grid gap-1 text-sm">
           <span>{t('search')}</span>
           <input
@@ -242,45 +269,56 @@ export default async function OperationsWorklistPage({
             defaultValue={search}
           />
         </label>
-        <SelectField
-          id="organizationId"
-          name="organizationId"
-          label={t('organization')}
-          defaultValue={organizationId ?? ''}
-        >
-          <option value="">{t('all')}</option>
-          {organizations.map((org) => (
-            <option key={org.id} value={org.id}>
-              {org.name}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField
-          id="facilityId"
-          name="facilityId"
-          label={t('facility')}
-          defaultValue={facilityId ?? ''}
-        >
-          <option value="">{t('all')}</option>
-          {facilities.map((facility) => (
-            <option key={facility.id} value={facility.id}>
-              {facility.name}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField
-          id="clientId"
-          name="clientId"
-          label={t('client')}
-          defaultValue={clientId ?? ''}
-        >
-          <option value="">{t('all')}</option>
-          {clients.map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.preferredName || client.firstName} {client.lastName}
-            </option>
-          ))}
-        </SelectField>
+        {canReadOrganizations ? (
+          <AsyncEntityCombobox
+            name="organizationId"
+            label={t('organization')}
+            entity="organizations"
+            placeholder={t('all')}
+            {...(organizationId
+              ? {
+                  initialOption: {
+                    id: organizationId,
+                    label:
+                      organizations.find((item) => item.id === organizationId)?.name ?? t('all'),
+                  },
+                }
+              : {})}
+          />
+        ) : null}
+        {canReadFacilities ? (
+          <AsyncEntityCombobox
+            name="facilityId"
+            label={t('facility')}
+            entity="facilities"
+            {...(organizationId ? { organizationId } : {})}
+            placeholder={t('all')}
+            {...(selectedFacility
+              ? {
+                  initialOption: {
+                    id: selectedFacility.id,
+                    label: `${selectedFacility.organizationName} · ${selectedFacility.name}`,
+                  },
+                }
+              : {})}
+          />
+        ) : null}
+        {hasPermission(permissions, 'client.read') ? (
+          <AsyncEntityCombobox
+            name="clientId"
+            label={t('client')}
+            entity="clients"
+            placeholder={t('all')}
+            {...(selectedClient
+              ? {
+                  initialOption: {
+                    id: selectedClient.id,
+                    label: `${selectedClient.preferredName || selectedClient.firstName} ${selectedClient.lastName}`,
+                  },
+                }
+              : {})}
+          />
+        ) : null}
         <SelectField
           id="category"
           name="category"
@@ -364,20 +402,21 @@ export default async function OperationsWorklistPage({
           <option value="due">{t('sortDue')}</option>
           <option value="created">{t('sortCreated')}</option>
         </SelectField>
-        {canAssign ? (
-          <SelectField
-            id="assignedEmployeeId"
+        {canAssign && canReadEmployees ? (
+          <AsyncEntityCombobox
             name="assignedEmployeeId"
             label={t('assignee')}
-            defaultValue={assignedEmployeeId ?? ''}
-          >
-            <option value="">{t('allEmployees')}</option>
-            {employees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.preferredName || employee.firstName} {employee.lastName}
-              </option>
-            ))}
-          </SelectField>
+            entity="employees"
+            placeholder={t('allEmployees')}
+            {...(selectedEmployee
+              ? {
+                  initialOption: {
+                    id: selectedEmployee.id,
+                    label: `${selectedEmployee.preferredName || selectedEmployee.firstName} ${selectedEmployee.lastName}`,
+                  },
+                }
+              : {})}
+          />
         ) : null}
         <label className="flex min-h-10 items-center gap-2 text-sm">
           <ShadcnCheckbox
@@ -476,15 +515,16 @@ export default async function OperationsWorklistPage({
             <p>{t('worklistEmpty')}</p>
           </div>
         )}
-        {workItemsResult.data ? (
-          <Pagination
-            page={page}
-            pageSize={25}
-            total={workItemsResult.data.total}
-            query={currentQuery}
-            label={t('issuePages')}
-            previousLabel={t('previousPage')}
-            nextLabel={t('nextPage')}
+        {workItemsData ? (
+          <DataPagination
+            pathname="/operations/worklist"
+            page={workItemsData.page}
+            pageSize={workItemsData.pageSize}
+            totalItems={workItemsData.total}
+            filters={{ ...listFilters, tasksPage, tasksPageSize }}
+            pageParam="workItemsPage"
+            pageSizeParam="workItemsPageSize"
+            controlId="work-items-page-size"
           />
         ) : null}
       </section>
@@ -549,15 +589,16 @@ export default async function OperationsWorklistPage({
             <p>{t('tasksEmpty')}</p>
           </div>
         )}
-        {tasksResult.data ? (
-          <Pagination
-            page={page}
-            pageSize={25}
-            total={tasksResult.data.total}
-            query={currentQuery}
-            label={t('taskPages')}
-            previousLabel={t('previousPage')}
-            nextLabel={t('nextPage')}
+        {tasksData ? (
+          <DataPagination
+            pathname="/operations/worklist"
+            page={tasksData.page}
+            pageSize={tasksData.pageSize}
+            totalItems={tasksData.total}
+            filters={{ ...listFilters, workItemsPage, workItemsPageSize }}
+            pageParam="tasksPage"
+            pageSizeParam="tasksPageSize"
+            controlId="tasks-page-size"
           />
         ) : null}
       </section>
@@ -605,56 +646,6 @@ function exceptionStatusLabel(
       : t('snoozed');
 }
 
-function Pagination({
-  page,
-  pageSize,
-  total,
-  query,
-  label,
-  previousLabel,
-  nextLabel,
-}: {
-  page: number;
-  pageSize: number;
-  total: number;
-  query: Record<string, string | undefined>;
-  label: string;
-  previousLabel: string;
-  nextLabel: string;
-}) {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query))
-    if (value && key !== 'page' && key !== 'error' && key !== 'updated') params.set(key, value);
-  return (
-    <nav aria-label={label} className="flex justify-between">
-      {page > 1 ? (
-        <Link
-          className="rounded-md border bg-card px-3 py-2"
-          href={`/operations/worklist?${withPage(params, page - 1)}`}
-        >
-          {previousLabel}
-        </Link>
-      ) : (
-        <span />
-      )}
-      {page * pageSize < total ? (
-        <Link
-          className="rounded-md border bg-card px-3 py-2"
-          href={`/operations/worklist?${withPage(params, page + 1)}`}
-        >
-          {nextLabel}
-        </Link>
-      ) : null}
-    </nav>
-  );
-}
-
-function withPage(params: URLSearchParams, page: number): string {
-  const next = new URLSearchParams(params);
-  next.set('page', String(page));
-  return next.toString();
-}
-
 function validUuid(value: string | undefined): string | undefined {
   return value && uuidPattern.test(value) ? value : undefined;
 }
@@ -662,6 +653,11 @@ function validUuid(value: string | undefined): string | undefined {
 function validPage(value: string | undefined): number {
   const parsed = Number(value ?? '1');
   return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 100_000 ? parsed : 1;
+}
+
+function pageSizeValue(value: string | undefined): number {
+  const parsed = Number(value ?? '20');
+  return [10, 20, 50, 100].includes(parsed) ? parsed : 20;
 }
 
 function enumValue<const T extends readonly string[]>(

@@ -84,6 +84,13 @@ export class EmployeesController {
   @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'teamId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'userId', required: false, format: 'uuid' })
+  @ApiQuery({
+    name: 'ids',
+    required: false,
+    type: String,
+    description: 'Comma-separated employee IDs (up to 100)',
+  })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiQuery({ name: 'sortBy', required: false, enum: ['lastName', 'firstName', 'createdAt'] })
@@ -96,6 +103,8 @@ export class EmployeesController {
     @Query('organizationId') organizationId?: string,
     @Query('facilityId') facilityId?: string,
     @Query('teamId') teamId?: string,
+    @Query('userId') userId?: string,
+    @Query('ids') ids?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('sortBy') sortBy?: string,
@@ -107,6 +116,8 @@ export class EmployeesController {
       organizationId,
       facilityId,
       teamId,
+      userId,
+      ids,
       page,
       pageSize,
       sortBy,
@@ -121,6 +132,8 @@ export class EmployeesController {
         : { organizationId: parsed.data.organizationId }),
       ...(parsed.data.facilityId === undefined ? {} : { facilityId: parsed.data.facilityId }),
       ...(parsed.data.teamId === undefined ? {} : { teamId: parsed.data.teamId }),
+      ...(parsed.data.userId === undefined ? {} : { userId: parsed.data.userId }),
+      ...(parsed.data.ids === undefined ? {} : { ids: parsed.data.ids }),
       page: parsed.data.page,
       pageSize: parsed.data.pageSize,
       sortBy: parsed.data.sortBy,

@@ -13,6 +13,7 @@ import {
   hasClientPermission,
 } from '@app/web/lib/api';
 import { saveDocumentTemplateAction, uploadDocumentLogoAction } from './actions';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 
 const documentTypes = [
   'service_evidence',
@@ -23,6 +24,7 @@ const documentTypes = [
   'claim_summary',
 ] as const;
 type DocumentType = (typeof documentTypes)[number];
+type Organization = { id: string; name: string };
 type Template = {
   id: string | null;
   organizationId: string;
@@ -53,18 +55,70 @@ export default async function DocumentTemplatesPage({
   const t = await getTranslations();
   const api = await getApiClient();
   const header = await getTenantHeader();
-  const [organizationsResult, permissions] = await Promise.all([
-    api.GET('/api/v1/organizations', { params: { header } }),
-    getPermissionGrants(api),
-  ]);
+  const permissions = await getPermissionGrants(api);
   const tenantId = header['X-Tenant-Id'];
-  const organizations = (organizationsResult.data ?? []).filter((organization) =>
-    hasClientPermission(permissions, 'documents.templates.manage', tenantId, organization.id, null),
-  );
-  if (organizations.length === 0) notFound();
-  const selectedOrganization =
-    organizations.find((organization) => organization.id === query.organizationId) ??
-    organizations[0]!;
+  const organizationId = validUuid(query.organizationId);
+  const organizationResult = organizationId
+    ? await api.GET('/api/v1/organizations/{id}', {
+        params: { path: { id: organizationId }, header },
+      })
+    : null;
+  const selectedOrganization = organizationResult?.data as Organization | undefined;
+  const organizationError = organizationResult?.error as { code?: string } | undefined;
+  if (
+    selectedOrganization &&
+    !hasClientPermission(
+      permissions,
+      'documents.templates.manage',
+      tenantId,
+      selectedOrganization.id,
+      null,
+    )
+  ) {
+    notFound();
+  }
+  if (!selectedOrganization) {
+    return (
+      <div className="mx-auto grid max-w-5xl gap-6">
+        <PageHeader
+          eyebrow={t('Navigation.administration')}
+          title={t('Documents.templates.title')}
+          description={t('Documents.templates.description')}
+        />
+        <form method="get" className="grid gap-4 rounded-lg border bg-card p-5 sm:grid-cols-2">
+          <AsyncEntityCombobox
+            name="organizationId"
+            entity="organizations"
+            label={t('Documents.templates.organization')}
+          />
+          <div className="grid gap-2">
+            <Label htmlFor="template-type">{t('Documents.templates.documentType')}</Label>
+            <NativeSelect
+              id="template-type"
+              name="type"
+              defaultValue={
+                documentTypes.includes(query.type as DocumentType) ? query.type : 'service_evidence'
+              }
+              selectClassName="h-10 rounded-md border bg-card px-3"
+              className="w-full"
+            >
+              {documentTypes.map((type) => (
+                <option key={type} value={type}>
+                  {t(`Documents.documentTypes.${type}`)}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+          <Button type="submit" variant="secondary" className="w-fit sm:col-span-2">
+            {t('Documents.templates.choose')}
+          </Button>
+        </form>
+        <p className="text-sm text-muted-foreground">
+          {t('Documents.templates.chooseOrganization')}
+        </p>
+      </div>
+    );
+  }
   const selectedType = documentTypes.includes(query.type as DocumentType)
     ? (query.type as DocumentType)
     : 'service_evidence';
@@ -92,6 +146,14 @@ export default async function DocumentTemplatesPage({
           {t(errorMessageKey(query.error))}
         </p>
       ) : null}
+      {organizationResult?.error ? (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+        >
+          {t(errorMessageKey(organizationError?.code ?? 'UNKNOWN_ERROR'))}
+        </p>
+      ) : null}
       {query.notice ? (
         <p
           role="status"
@@ -102,22 +164,12 @@ export default async function DocumentTemplatesPage({
       ) : null}
 
       <form method="get" className="grid gap-4 rounded-lg border bg-card p-5 sm:grid-cols-2">
-        <div className="grid gap-2">
-          <Label htmlFor="template-organization">{t('Documents.templates.organization')}</Label>
-          <NativeSelect
-            id="template-organization"
-            name="organizationId"
-            defaultValue={selectedOrganization.id}
-            selectClassName="h-10 rounded-md border bg-card px-3"
-            className="w-full"
-          >
-            {organizations.map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organization.name}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
+        <AsyncEntityCombobox
+          name="organizationId"
+          entity="organizations"
+          label={t('Documents.templates.organization')}
+          initialOption={{ id: selectedOrganization.id, label: selectedOrganization.name }}
+        />
         <div className="grid gap-2">
           <Label htmlFor="template-type">{t('Documents.templates.documentType')}</Label>
           <NativeSelect

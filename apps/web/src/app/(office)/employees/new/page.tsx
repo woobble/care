@@ -1,10 +1,9 @@
-import { NativeSelect } from '@care/ui';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import { createEmployeeAction } from '@app/web/app/(office)/employees/actions';
 
@@ -15,11 +14,6 @@ export default async function NewEmployeePage({
 }: Readonly<{ searchParams: SearchParams }>) {
   const t = await getTranslations();
   const query = await searchParams;
-  const api = await getApiClient();
-  const get = api.GET;
-  const { data: organizations, error } = await get('/api/v1/organizations', {
-    params: { query: { status: 'active' }, header: await getTenantHeader() },
-  });
   return (
     <div className="grid max-w-3xl gap-6">
       <PageHeader
@@ -28,39 +22,18 @@ export default async function NewEmployeePage({
         description={t('Employees.createDescription')}
       />
       <ActionNotice error={query.error} />
-      {error ? (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
-        >
-          {t('Errors.generic')}
-        </p>
-      ) : null}
       <RHFActionForm
         action={createEmployeeAction}
         className="grid gap-5 rounded-lg border bg-card p-5"
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="grid gap-2">
-            <Label htmlFor="organizationId">{t('Employees.form.organization')}</Label>
-            <NativeSelect
-              id="organizationId"
-              name="organizationId"
-              selectClassName="h-10 rounded-md border bg-card px-3"
-              required
-              defaultValue=""
-              className="w-full"
-            >
-              <option value="" disabled>
-                {t('Employees.form.selectOrganization')}
-              </option>
-              {(organizations ?? []).map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-            </NativeSelect>
-          </div>
+          <AsyncEntityCombobox
+            name="organizationId"
+            entity="organizations"
+            label={t('Employees.form.organization')}
+            placeholder={t('Employees.form.selectOrganization')}
+            required
+          />
           <Field
             id="firstName"
             name="firstName"
@@ -125,9 +98,7 @@ export default async function NewEmployeePage({
           />
         </div>
         <div className="flex gap-3">
-          <Button type="submit" disabled={!organizations?.length}>
-            {t('Employees.create')}
-          </Button>
+          <Button type="submit">{t('Employees.create')}</Button>
           <Button asChild variant="secondary">
             <Link href="/employees">{t('Common.actions.cancel')}</Link>
           </Button>

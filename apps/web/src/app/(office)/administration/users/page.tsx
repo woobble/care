@@ -23,9 +23,16 @@ import {
   revokeInvitationAction,
 } from '@app/web/app/(office)/administration/actions';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import type { components } from '@care/api-client';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 
 type SearchParams = Promise<{
   status?: string;
+  page?: string;
+  pageSize?: string;
+  invitationPage?: string;
+  invitationPageSize?: string;
   error?: string;
   invited?: string;
   updated?: string;
@@ -39,17 +46,60 @@ export default async function UsersAccessPage({
   const status = ['pending', 'active', 'inactive', 'revoked'].includes(params.status ?? '')
     ? (params.status as 'pending' | 'active' | 'inactive' | 'revoked')
     : undefined;
+  const page = parsePage(params.page);
+  const pageSize = parsePageSize(params.pageSize);
+  const invitationPage = parsePage(params.invitationPage);
+  const invitationPageSize = parsePageSize(params.invitationPageSize);
   const api = await getApiClient();
   const get = api.GET;
+  const header = await getTenantHeader();
   const [membersResult, invitationsResult] = await Promise.all([
     get('/api/v1/admin/members', {
       params: {
-        query: { page: 1, pageSize: 100, ...(status ? { status } : {}) },
-        header: await getTenantHeader(),
+        query: { page, pageSize, ...(status ? { status } : {}) },
+        header,
       },
     }),
-    get('/api/v1/admin/invitations', { params: { header: await getTenantHeader() } }),
+    get('/api/v1/admin/invitations', {
+      params: { query: { page: invitationPage, pageSize: invitationPageSize }, header },
+    }),
   ]);
+  const members = membersResult.data as unknown as
+    | components['schemas']['TenantMemberListDto']
+    | undefined;
+  const memberError = membersResult.error as { code?: string } | undefined;
+  const invitations = invitationsResult.data as unknown as
+    | components['schemas']['TenantInvitationListDto']
+    | undefined;
+  const invitationError = invitationsResult.error as { code?: string } | undefined;
+  if (members) {
+    redirectToValidPage(
+      '/administration/users',
+      {
+        ...(status ? { status } : {}),
+        invitationPage: String(invitationPage),
+        invitationPageSize: String(invitationPageSize),
+      },
+      page,
+      pageSize,
+      members.total,
+    );
+  }
+  if (invitations) {
+    redirectToValidPage(
+      '/administration/users',
+      {
+        ...(status ? { status } : {}),
+        page: String(page),
+        pageSize: String(pageSize),
+      },
+      invitationPage,
+      invitationPageSize,
+      invitations.total,
+      'invitationPage',
+      'invitationPageSize',
+    );
+  }
 
   return (
     <div className="grid gap-8">
@@ -107,6 +157,9 @@ export default async function UsersAccessPage({
             {t('Users.membersTitle')}
           </h2>
           <form method="get" className="flex items-end gap-2">
+            <input type="hidden" name="pageSize" value={pageSize} />
+            <input type="hidden" name="invitationPage" value={invitationPage} />
+            <input type="hidden" name="invitationPageSize" value={invitationPageSize} />
             <label className="grid gap-1 text-sm" htmlFor="member-status">
               {t('Users.status')}
               <NativeSelect
@@ -128,9 +181,9 @@ export default async function UsersAccessPage({
             </Button>
           </form>
         </div>
-        {membersResult.error ? (
-          <ErrorNotice code={membersResult.error.code} />
-        ) : membersResult.data?.items.length ? (
+        {memberError ? (
+          <ErrorNotice code={memberError.code ?? ''} />
+        ) : members?.items.length ? (
           <div className="overflow-x-auto rounded-lg border bg-card">
             <ShadcnTable className="w-full border-collapse text-left text-sm">
               <ShadcnTableCaption className="sr-only">
@@ -156,7 +209,7 @@ export default async function UsersAccessPage({
                 </ShadcnTableRow>
               </ShadcnTableHeader>
               <ShadcnTableBody>
-                {membersResult.data.items.map((member) => (
+                {members.items.map((member) => (
                   <ShadcnTableRow key={member.id} className="border-b last:border-0">
                     <ShadcnTableCell className="px-4 py-3">
                       <Link
@@ -198,15 +251,28 @@ export default async function UsersAccessPage({
             {t('Users.noMembers')}
           </p>
         )}
+        {members ? (
+          <DataPagination
+            pathname="/administration/users"
+            page={members.page}
+            pageSize={members.pageSize}
+            totalItems={members.total}
+            filters={{
+              ...(status ? { status } : {}),
+              invitationPage,
+              invitationPageSize,
+            }}
+          />
+        ) : null}
       </section>
 
       <section aria-labelledby="invitations-title" className="grid gap-4">
         <h2 id="invitations-title" className="text-xl font-semibold">
           {t('Users.invitationsTitle')}
         </h2>
-        {invitationsResult.error ? (
-          <ErrorNotice code={invitationsResult.error.code} />
-        ) : invitationsResult.data?.length ? (
+        {invitationError ? (
+          <ErrorNotice code={invitationError.code ?? ''} />
+        ) : invitations?.items.length ? (
           <div className="overflow-x-auto rounded-lg border bg-card">
             <ShadcnTable className="w-full border-collapse text-left text-sm">
               <ShadcnTableCaption className="sr-only">
@@ -229,7 +295,7 @@ export default async function UsersAccessPage({
                 </ShadcnTableRow>
               </ShadcnTableHeader>
               <ShadcnTableBody>
-                {invitationsResult.data.map((invitation) => (
+                {invitations.items.map((invitation) => (
                   <ShadcnTableRow key={invitation.id} className="border-b last:border-0">
                     <ShadcnTableCell className="px-4 py-3">{invitation.email}</ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">
@@ -260,9 +326,36 @@ export default async function UsersAccessPage({
             {t('Users.noInvitations')}
           </p>
         )}
+        {invitations ? (
+          <DataPagination
+            pathname="/administration/users"
+            page={invitations.page}
+            pageSize={invitations.pageSize}
+            totalItems={invitations.total}
+            pageParam="invitationPage"
+            pageSizeParam="invitationPageSize"
+            controlId="invitation-page-size"
+            filters={{
+              ...(status ? { status } : {}),
+              page,
+              pageSize,
+            }}
+          />
+        ) : null}
       </section>
     </div>
   );
+}
+
+function parsePage(value: string | undefined): number {
+  if (!value || !/^\d+$/.test(value)) return 1;
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page > 0 && page <= 100_000 ? page : 1;
+}
+
+function parsePageSize(value: string | undefined): number {
+  const pageSize = Number(value);
+  return [10, 20, 50, 100].includes(pageSize) ? pageSize : 20;
 }
 
 async function ErrorNotice({ code }: Readonly<{ code: string }>) {

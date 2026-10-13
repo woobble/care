@@ -50,15 +50,8 @@ import {
   ClientMasterDataApplicationService,
 } from '@care/clients';
 import { AuthorizationDeniedError, type AuthorizationPrincipal } from '@care/permissions';
-import {
-  ServiceAgreementApplicationService,
-  ServiceAgreementError,
-} from '@care/service-agreements';
-import {
-  ServiceEvidenceApplicationService,
-  ServiceEvidenceVisitRelationshipRequiredError,
-  ServiceEvidenceEmployeeLinkRequiredError,
-} from '@care/service-evidence';
+import { ServiceAgreementApplicationService } from '@care/service-agreements';
+import { ServiceEvidenceApplicationService } from '@care/service-evidence';
 import { BenefitsApplicationService } from '@care/benefits';
 import { BillingApplicationService } from '@care/billing';
 import { OrganizationApplicationService } from '@care/organizations';
@@ -142,15 +135,12 @@ export class DocumentsController {
       this.principal(request),
       withoutUndefined(parsed.data),
     );
-    const readable = await Promise.all(
-      listed.items.map(async (artifact) =>
-        (await this.canReadSource(this.principal(request), artifact)) ? artifact : null,
-      ),
-    );
     return {
-      items: readable.filter((item): item is DocumentArtifactView => item !== null),
+      items: listed.items,
       page: listed.page,
       pageSize: listed.pageSize,
+      totalItems: listed.total,
+      totalPages: Math.ceil(listed.total / listed.pageSize),
       hasMore: listed.total > listed.page * listed.pageSize,
     };
   }
@@ -1068,19 +1058,6 @@ export class DocumentsController {
     };
   }
 
-  private async canReadSource(
-    principal: AuthorizationPrincipal,
-    artifact: DocumentArtifactView,
-  ): Promise<boolean> {
-    try {
-      await this.requireSourceAccess(principal, artifact);
-      return true;
-    } catch (error) {
-      if (isExpectedSourceAccessFailure(error)) return false;
-      throw error;
-    }
-  }
-
   private async requireSourceAccess(
     principal: AuthorizationPrincipal,
     artifact: DocumentArtifactView,
@@ -1141,18 +1118,6 @@ export class DocumentsController {
     if (!request.principal) throw new BadRequestException();
     return request.principal;
   }
-}
-
-function isExpectedSourceAccessFailure(error: unknown): boolean {
-  return (
-    error instanceof AuthorizationDeniedError ||
-    error instanceof DocumentAccessDeniedError ||
-    (error instanceof ServiceAgreementError && (error.status === 403 || error.status === 404)) ||
-    error instanceof ServiceEvidenceVisitRelationshipRequiredError ||
-    error instanceof ServiceEvidenceEmployeeLinkRequiredError ||
-    error instanceof DocumentArtifactNotFoundError ||
-    (error instanceof DocumentDomainError && error.code.endsWith('_NOT_FOUND'))
-  );
 }
 
 function clientRecipient(

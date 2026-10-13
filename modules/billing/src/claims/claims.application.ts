@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, asc, desc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 import type { AuditWriter } from '@care/audit';
@@ -76,6 +76,14 @@ type ClaimScope = {
   pageSize?: number;
 };
 
+type PayerScope = {
+  organizationId: string;
+  q?: string | undefined;
+  status?: 'active' | 'inactive' | undefined;
+  page?: number;
+  pageSize?: number;
+};
+
 const MAX_CLAIM_LINES = 100;
 
 type ClaimEventName = Extract<EventName, `claim.${string}`>;
@@ -117,18 +125,98 @@ export class BillingClaimsApplicationService {
     private readonly storage: ObjectStorage,
   ) {}
 
-  async listPayers(principal: AuthorizationPrincipal, organizationId: string) {
-    this.requireScoped(principal, 'claims.read', { tenantId: principal.tenantId, organizationId });
+  async listPayers(principal: AuthorizationPrincipal, filters: PayerScope) {
+    const page = boundedInteger(filters.page, 1, 1, 100_000);
+    const pageSize = boundedInteger(filters.pageSize, 20, 1, 100);
+    this.requireScoped(principal, 'claims.read', {
+      tenantId: principal.tenantId,
+      organizationId: filters.organizationId,
+    });
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const rows = await transaction
+      const conditions = [
+        eq(payers.tenantId, principal.tenantId),
+        eq(payers.organizationId, filters.organizationId),
+      ];
+      if (filters.status) conditions.push(eq(payers.status, filters.status));
+      const search = filters.q?.trim();
+      if (search) {
+        const pattern = `%${escapeLike(search)}%`;
+        conditions.push(or(ilike(payers.name, pattern), ilike(payers.payerIdentifier, pattern))!);
+      }
+      const where = and(...conditions);
+      const [countRows, items] = await Promise.all([
+        transaction.select({ total: count() }).from(payers).where(where),
+        transaction
+          .select()
+          .from(payers)
+          .where(where)
+          .orderBy(asc(payers.name), asc(payers.id))
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
+      ]);
+      const totalItems = Number(countRows[0]?.total ?? 0);
+      const totalPages = Math.ceil(totalItems / pageSize);
+      return { items, page, pageSize, totalItems, totalPages, hasMore: page < totalPages };
+    });
+  }
+
+  async lookupPayers(
+    principal: AuthorizationPrincipal,
+    organizationId: string,
+    payerIds: string[],
+  ) {
+    this.requireScoped(principal, 'claims.read', { tenantId: principal.tenantId, organizationId });
+    if (payerIds.length === 0) return [];
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+      transaction
         .select()
         .from(payers)
         .where(
-          and(eq(payers.tenantId, principal.tenantId), eq(payers.organizationId, organizationId)),
+          and(
+            eq(payers.tenantId, principal.tenantId),
+            eq(payers.organizationId, organizationId),
+            inArray(payers.id, [...new Set(payerIds)]),
+          ),
         )
-        .orderBy(asc(payers.name), asc(payers.id));
-      return rows;
-    });
+        .orderBy(asc(payers.name), asc(payers.id)),
+    );
+  }
+
+  async payerProfilesForOrganization(
+    principal: AuthorizationPrincipal,
+    organizationId: string,
+    payerIds: string[],
+  ) {
+    this.requireScoped(principal, 'claims.read', { tenantId: principal.tenantId, organizationId });
+    if (payerIds.length === 0) return [];
+    return this.unitOfWork
+      .transaction({ tenantId: principal.tenantId }, (transaction) =>
+        transaction
+          .select({ profile: payerBillingProfiles, payerId: payers.id })
+          .from(payerBillingProfiles)
+          .innerJoin(
+            payers,
+            and(
+              eq(payers.tenantId, payerBillingProfiles.tenantId),
+              eq(payers.organizationId, payerBillingProfiles.organizationId),
+              eq(payers.id, payerBillingProfiles.payerId),
+            ),
+          )
+          .where(
+            and(
+              eq(payers.tenantId, principal.tenantId),
+              eq(payers.organizationId, organizationId),
+              inArray(payers.id, [...new Set(payerIds)]),
+            ),
+          )
+          .orderBy(
+            asc(payerBillingProfiles.payerId),
+            asc(payerBillingProfiles.channel),
+            asc(payerBillingProfiles.fundingSourceType),
+            desc(payerBillingProfiles.version),
+          ),
+      )
+      .then((rows) => rows.map(({ profile, payerId }) => ({ ...profile, payerId })));
   }
 
   async getPayer(principal: AuthorizationPrincipal, payerId: string) {
@@ -389,7 +477,7 @@ export class BillingClaimsApplicationService {
     const page = boundedInteger(filters.page, 1, 1, 100_000);
     const pageSize = boundedInteger(filters.pageSize, 25, 1, 100);
     const scope = this.listScope(principal, 'claims.read');
-    const rows = await this.unitOfWork.transaction(
+    const { countRows, rows } = await this.unitOfWork.transaction(
       { tenantId: principal.tenantId },
       async (transaction) => {
         const conditions = [eq(claims.tenantId, principal.tenantId), scope];
@@ -400,16 +488,22 @@ export class BillingClaimsApplicationService {
           conditions.push(
             eq(claims.status, filters.status as (typeof claims.$inferSelect)['status']),
           );
-        return transaction
-          .select()
-          .from(claims)
-          .where(and(...conditions))
-          .orderBy(desc(claims.createdAt), desc(claims.id))
-          .limit(pageSize + 1)
-          .offset((page - 1) * pageSize);
+        const where = and(...conditions);
+        const [countRows, rows] = await Promise.all([
+          transaction.select({ total: count() }).from(claims).where(where),
+          transaction
+            .select()
+            .from(claims)
+            .where(where)
+            .orderBy(desc(claims.createdAt), desc(claims.id))
+            .limit(pageSize)
+            .offset((page - 1) * pageSize),
+        ]);
+        return { countRows, rows };
       },
     );
-    const pageRows = rows.slice(0, pageSize);
+    const pageRows = rows;
+    const total = Number(countRows[0]?.total ?? 0);
     const claimIds = pageRows.map((claim) => claim.id);
     const summaries = claimIds.length
       ? await this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
@@ -531,7 +625,9 @@ export class BillingClaimsApplicationService {
       })),
       page,
       pageSize,
-      hasMore: rows.length > pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+      hasMore: page < Math.ceil(total / pageSize),
     };
   }
 
@@ -2790,6 +2886,10 @@ function snapshotText(value: unknown, key: string): string {
 
 function optionalText(value: string | null | undefined): string | null {
   return value?.trim() || null;
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
 }
 
 function boundedInteger(

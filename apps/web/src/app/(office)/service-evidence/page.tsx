@@ -15,7 +15,6 @@ import { Button } from '@care/ui';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { acknowledgementCapacityKey, evidenceStatusKey } from '@app/web/i18n/evidence';
 import { errorMessageKey } from '@app/web/i18n/errors';
-import { formatNumber } from '@app/web/i18n/format';
 import { dateRange, shiftDate, todayDateKey, formatVisitDateTime } from '@app/web/lib/care-date';
 import {
   getApiClient,
@@ -23,6 +22,9 @@ import {
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 
 type Status = components['schemas']['ServiceEvidenceWorklistItemDto']['status'];
 type SignatoryType = 'client' | 'representative' | 'other_authorized_person';
@@ -36,6 +38,7 @@ type SearchParams = Promise<{
   status?: Status;
   signatoryType?: SignatoryType;
   page?: string;
+  pageSize?: string;
   error?: string;
 }>;
 
@@ -54,50 +57,85 @@ export default async function ServiceEvidenceWorklistPage({
     redirect('/service-evidence?error=SERVICE_EVIDENCE_INVALID_QUERY');
   }
   const page = parsePage(query.page);
+  const pageSize = parsePageSize(query.pageSize);
   const status = validStatus(query.status) ? query.status : undefined;
   const signatoryType = validSignatoryType(query.signatoryType) ? query.signatoryType : undefined;
+  const organizationId = validUuid(query.organizationId) ? query.organizationId : undefined;
+  const facilityId = validUuid(query.facilityId) ? query.facilityId : undefined;
+  const employeeId = validUuid(query.employeeId) ? query.employeeId : undefined;
 
   const api = await getApiClient();
   const get = api.GET;
   const permissions = await getPermissionGrants(api);
   if (!hasPermission(permissions, 'service_evidence.read')) redirect('/');
   const header = await getTenantHeader();
-  const [listResult, facilitiesResult, organizationsResult, employeesResult] = await Promise.all([
+  const [listResult, organizationResult, facilityResult, employeeResult] = await Promise.all([
     get('/api/v1/service-evidence', {
       params: {
         query: {
           from: range.from,
           until: range.until,
           page,
-          pageSize: 50,
+          pageSize,
           ...(query.clientQuery?.trim() ? { clientQuery: query.clientQuery.trim() } : {}),
-          ...(validUuid(query.facilityId) ? { facilityId: query.facilityId } : {}),
-          ...(validUuid(query.organizationId) ? { organizationId: query.organizationId } : {}),
-          ...(validUuid(query.employeeId) ? { employeeId: query.employeeId } : {}),
+          ...(facilityId ? { facilityId } : {}),
+          ...(organizationId ? { organizationId } : {}),
+          ...(employeeId ? { employeeId } : {}),
           ...(status ? { status } : {}),
           ...(signatoryType ? { signatoryType } : {}),
         },
         header,
       },
     }),
-    get('/api/v1/facilities', { params: { header } }),
-    get('/api/v1/organizations', { params: { header } }),
-    get('/api/v1/employees', {
-      params: { query: { status: 'active', page: 1, pageSize: 100 }, header },
-    }),
+    organizationId
+      ? get('/api/v1/organizations/{id}', { params: { path: { id: organizationId }, header } })
+      : Promise.resolve(null),
+    facilityId
+      ? get('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
+      : Promise.resolve(null),
+    employeeId
+      ? get('/api/v1/employees/{id}', { params: { path: { id: employeeId }, header } })
+      : Promise.resolve(null),
   ]);
-  const result = listResult.data;
+  const result = listResult.data as unknown as
+    | components['schemas']['ServiceEvidenceWorklistDto']
+    | undefined;
+  const listError = listResult.error as { code?: string } | undefined;
   const items = result?.items ?? [];
-  const facilities = facilitiesResult.data ?? [];
-  const organizations = organizationsResult.data ?? [];
-  const employees = employeesResult.data?.items ?? [];
+  const selectedOrganization = organizationResult?.data as
+    | components['schemas']['OrganizationResponseDto']
+    | undefined;
+  const selectedFacility = facilityResult?.data as
+    | components['schemas']['FacilityResponseDto']
+    | undefined;
+  const selectedEmployee = employeeResult?.data as
+    | components['schemas']['EmployeeResponseDto']
+    | undefined;
+  if (result) {
+    redirectToValidPage(
+      '/service-evidence',
+      {
+        from: range.from,
+        until: range.until,
+        clientQuery: query.clientQuery?.trim(),
+        organizationId,
+        facilityId,
+        employeeId,
+        status,
+        signatoryType,
+      },
+      page,
+      pageSize,
+      result.total,
+    );
+  }
   const filterValues = {
     from: fromDate,
     until: untilDate,
     clientQuery: query.clientQuery?.trim() ?? '',
-    facilityId: validUuid(query.facilityId) ? query.facilityId : '',
-    organizationId: validUuid(query.organizationId) ? query.organizationId : '',
-    employeeId: validUuid(query.employeeId) ? query.employeeId : '',
+    facilityId: facilityId ?? '',
+    organizationId: organizationId ?? '',
+    employeeId: employeeId ?? '',
     status: status ?? '',
     signatoryType: signatoryType ?? '',
   };
@@ -115,12 +153,12 @@ export default async function ServiceEvidenceWorklistPage({
         }
       />
 
-      {query.error || listResult.error ? (
+      {query.error || listError ? (
         <p
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
         >
-          {t(errorMessageKey(query.error ?? listResult.error?.code ?? ''))}
+          {t(errorMessageKey(query.error ?? listError?.code ?? ''))}
         </p>
       ) : null}
 
@@ -128,6 +166,7 @@ export default async function ServiceEvidenceWorklistPage({
         method="get"
         className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4"
       >
+        <input type="hidden" name="pageSize" value={pageSize} />
         <label className="grid gap-1 text-sm">
           <span>{t('ServiceEvidence.office.from')}</span>
           <input
@@ -174,54 +213,51 @@ export default async function ServiceEvidenceWorklistPage({
             <option value="superseded">{t(evidenceStatusKey('superseded'))}</option>
           </NativeSelect>
         </label>
-        <label className="grid gap-1 text-sm">
-          <span>{t('ServiceEvidence.office.organization')}</span>
-          <NativeSelect
-            name="organizationId"
-            defaultValue={filterValues.organizationId}
-            selectClassName="min-h-11 rounded-md border bg-card px-3"
-            className="w-full"
-          >
-            <option value="">{t('ServiceEvidence.office.allOrganizations')}</option>
-            {organizations.map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organization.name}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span>{t('ServiceEvidence.office.facility')}</span>
-          <NativeSelect
-            name="facilityId"
-            defaultValue={filterValues.facilityId}
-            selectClassName="min-h-11 rounded-md border bg-card px-3"
-            className="w-full"
-          >
-            <option value="">{t('ServiceEvidence.office.allFacilities')}</option>
-            {facilities.map((facility) => (
-              <option key={facility.id} value={facility.id}>
-                {facility.name}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span>{t('ServiceEvidence.office.employees')}</span>
-          <NativeSelect
-            name="employeeId"
-            defaultValue={filterValues.employeeId}
-            selectClassName="min-h-11 rounded-md border bg-card px-3"
-            className="w-full"
-          >
-            <option value="">{t('ServiceEvidence.office.allEmployees')}</option>
-            {employees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.preferredName ?? `${employee.firstName} ${employee.lastName}`}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
+        <AsyncEntityCombobox
+          name="organizationId"
+          label={t('ServiceEvidence.office.organization')}
+          entity="organizations"
+          placeholder={t('ServiceEvidence.office.allOrganizations')}
+          {...(selectedOrganization
+            ? {
+                initialOption: {
+                  id: selectedOrganization.id,
+                  label: selectedOrganization.name,
+                },
+              }
+            : {})}
+        />
+        <AsyncEntityCombobox
+          name="facilityId"
+          label={t('ServiceEvidence.office.facility')}
+          entity="facilities"
+          {...(organizationId ? { organizationId } : {})}
+          placeholder={t('ServiceEvidence.office.allFacilities')}
+          {...(selectedFacility
+            ? {
+                initialOption: {
+                  id: selectedFacility.id,
+                  label: [selectedFacility.name, selectedFacility.organizationName]
+                    .filter(Boolean)
+                    .join(' · '),
+                },
+              }
+            : {})}
+        />
+        <AsyncEntityCombobox
+          name="employeeId"
+          label={t('ServiceEvidence.office.employees')}
+          entity="employees"
+          placeholder={t('ServiceEvidence.office.allEmployees')}
+          {...(selectedEmployee
+            ? {
+                initialOption: {
+                  id: selectedEmployee.id,
+                  label: `${selectedEmployee.preferredName || selectedEmployee.firstName} ${selectedEmployee.lastName}`,
+                },
+              }
+            : {})}
+        />
         <label className="grid gap-1 text-sm">
           <span>{t('ServiceEvidence.office.signatory')}</span>
           <NativeSelect
@@ -252,10 +288,7 @@ export default async function ServiceEvidenceWorklistPage({
 
       <section className="grid gap-3">
         <p className="text-sm text-muted-foreground">
-          {result
-            ? t('ServiceEvidence.office.resultCount', { count: result.total })
-            : t('ServiceEvidence.office.noRecords')}{' '}
-          · {t('ServiceEvidence.office.page', { page: formatNumber(result?.page ?? page, locale) })}
+          {t('ServiceEvidence.office.resultCount', { count: result?.total ?? 0 })}
         </p>
         {items.length ? (
           <div className="overflow-x-auto rounded-lg border bg-card">
@@ -319,22 +352,15 @@ export default async function ServiceEvidenceWorklistPage({
         ) : (
           <EmptyState title={t('ServiceEvidence.office.noResults')} />
         )}
-        <div className="flex justify-between">
-          {page > 1 ? (
-            <Button asChild variant="secondary">
-              <Link href={pageUrl(filterValues, page - 1)}>
-                {t('ServiceEvidence.office.previous')}
-              </Link>
-            </Button>
-          ) : (
-            <span />
-          )}
-          {result && page * result.pageSize < result.total ? (
-            <Button asChild variant="secondary">
-              <Link href={pageUrl(filterValues, page + 1)}>{t('ServiceEvidence.office.next')}</Link>
-            </Button>
-          ) : null}
-        </div>
+        {result ? (
+          <DataPagination
+            pathname="/service-evidence"
+            page={result.page}
+            pageSize={result.pageSize}
+            totalItems={result.total}
+            filters={filterValues}
+          />
+        ) : null}
       </section>
     </div>
   );
@@ -354,7 +380,12 @@ function validUuid(value: string | undefined): value is string {
 
 function parsePage(value: string | undefined): number {
   const parsed = Number(value ?? 1);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= 100_000 ? parsed : 1;
+}
+
+function parsePageSize(value: string | undefined): number {
+  const parsed = Number(value);
+  return [10, 20, 50, 100].includes(parsed) ? parsed : 20;
 }
 
 function validStatus(value: string | undefined): value is Status {
@@ -370,24 +401,4 @@ function validStatus(value: string | undefined): value is Status {
 
 function validSignatoryType(value: string | undefined): value is SignatoryType {
   return ['client', 'representative', 'other_authorized_person'].includes(value ?? '');
-}
-
-function pageUrl(
-  filters: {
-    from: string;
-    until: string;
-    clientQuery: string;
-    facilityId: string;
-    organizationId: string;
-    employeeId: string;
-    status: string;
-    signatoryType: string;
-  },
-  page: number,
-): string {
-  const params = new URLSearchParams({ page: String(page) });
-  for (const [key, value] of Object.entries(filters)) {
-    if (value) params.set(key, value);
-  }
-  return `/service-evidence?${params.toString()}`;
 }

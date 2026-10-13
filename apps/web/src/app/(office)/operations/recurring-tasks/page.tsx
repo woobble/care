@@ -6,6 +6,9 @@ import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDateTime } from '@app/web/i18n/format';
 import { todayDateKey } from '@app/web/lib/care-date';
@@ -15,6 +18,7 @@ import {
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
+import type { components } from '@care/api-client';
 import {
   createRecurringTaskAction,
   transitionRecurringTaskAction,
@@ -47,48 +51,28 @@ export default async function RecurringTasksPage({
   const canAssign =
     hasPermission(permissions, 'operations.tasks.assign') &&
     hasPermission(permissions, 'employee.read');
-  const [taskResult, organizationResult, facilityResult, employeeResult, clientResult] =
-    await Promise.all([
-      api.GET('/api/v1/operations/recurring-tasks', {
-        params: { query: { page: 1, pageSize: 100 }, header },
-      }),
-      api.GET('/api/v1/organizations', { params: { header } }),
-      api.GET('/api/v1/facilities', { params: { header } }),
-      canAssign
-        ? api.GET('/api/v1/employees', {
-            params: {
-              query: {
-                status: 'active',
-                page: 1,
-                pageSize: 100,
-                sortBy: 'lastName',
-                sortOrder: 'asc',
-              },
-              header,
-            },
-          })
-        : Promise.resolve({ data: undefined, error: undefined }),
-      hasPermission(permissions, 'client.read')
-        ? api.GET('/api/v1/clients', {
-            params: {
-              query: {
-                status: 'active',
-                page: 1,
-                pageSize: 100,
-                sortBy: 'lastName',
-                sortOrder: 'asc',
-              },
-              header,
-            },
-          })
-        : Promise.resolve({ data: undefined, error: undefined }),
-    ]);
-  const recurrences = taskResult.data?.items ?? [];
-  const organizations = organizationResult.data ?? [];
-  const facilities = facilityResult.data ?? [];
-  const employees = employeeResult.data?.items ?? [];
-  const clients = clientResult.data?.items ?? [];
-  const timezoneByOrganization = new Map(organizations.map((org) => [org.id, org.timezone]));
+  const canReadOrganizations = hasPermission(permissions, 'organization.read');
+  const canReadFacilities = hasPermission(permissions, 'facility.read');
+  const canReadClients = hasPermission(permissions, 'client.read');
+  const pageValue = Number(query.page);
+  const page = Number.isSafeInteger(pageValue) && pageValue > 0 ? Math.min(pageValue, 100_000) : 1;
+  const requestedPageSize = Number(query.pageSize ?? '20');
+  const pageSize = [10, 20, 50, 100].includes(requestedPageSize) ? requestedPageSize : 20;
+  const taskResult = await api.GET('/api/v1/operations/recurring-tasks', {
+    params: { query: { page, pageSize }, header },
+  });
+  const taskData = taskResult.data as unknown as
+    | components['schemas']['RecurringTaskListResponseDto']
+    | undefined;
+  const recurrences = taskData?.items ?? [];
+  if (taskData)
+    redirectToValidPage(
+      '/operations/recurring-tasks',
+      query,
+      taskData.page,
+      taskData.pageSize,
+      taskData.total,
+    );
   const today = todayDateKey();
 
   return (
@@ -119,7 +103,7 @@ export default async function RecurringTasksPage({
           {query.updated === 'created' ? t('recurrenceCreated') : t('recurrenceUpdated')}
         </p>
       ) : null}
-      {taskResult.error || organizationResult.error ? (
+      {taskResult.error ? (
         <p
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
@@ -128,7 +112,7 @@ export default async function RecurringTasksPage({
         </p>
       ) : null}
 
-      {canCreate ? (
+      {canCreate && canReadOrganizations ? (
         <section
           className="grid gap-4 rounded-lg border bg-card p-5"
           aria-labelledby="recurring-create-title"
@@ -141,61 +125,29 @@ export default async function RecurringTasksPage({
               <Label htmlFor="recurring-title">{t('taskTitle')}</Label>
               <Input id="recurring-title" name="title" required maxLength={200} />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="recurring-organization">{t('organization')}</Label>
-              <NativeSelect
-                id="recurring-organization"
-                name="organizationId"
-                selectClassName="h-10 rounded-md border px-3"
-                required
-                defaultValue=""
-                className="w-full"
-              >
-                <option value="" disabled>
-                  {t('selectOrganization')}
-                </option>
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name}
-                  </option>
-                ))}
-              </NativeSelect>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="recurring-facility">{t('facility')}</Label>
-              <NativeSelect
-                id="recurring-facility"
+            <AsyncEntityCombobox
+              name="organizationId"
+              label={t('organization')}
+              entity="organizations"
+              required
+              placeholder={t('selectOrganization')}
+              timezoneFieldName="timezone"
+            />
+            {canReadFacilities ? (
+              <AsyncEntityCombobox
                 name="facilityId"
-                selectClassName="h-10 rounded-md border px-3"
-                defaultValue=""
-                className="w-full"
-              >
-                <option value="">{t('all')}</option>
-                {facilities.map((facility) => (
-                  <option key={facility.id} value={facility.id}>
-                    {facility.name}
-                  </option>
-                ))}
-              </NativeSelect>
-            </div>
-            {hasPermission(permissions, 'client.read') ? (
-              <div className="grid gap-2">
-                <Label htmlFor="recurring-client">{t('client')}</Label>
-                <NativeSelect
-                  id="recurring-client"
-                  name="clientId"
-                  selectClassName="h-10 rounded-md border px-3"
-                  defaultValue=""
-                  className="w-full"
-                >
-                  <option value="">{t('all')}</option>
-                  {clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.preferredName ?? client.firstName} {client.lastName}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
+                label={t('facility')}
+                entity="facilities"
+                placeholder={t('all')}
+              />
+            ) : null}
+            {canReadClients ? (
+              <AsyncEntityCombobox
+                name="clientId"
+                label={t('client')}
+                entity="clients"
+                placeholder={t('all')}
+              />
             ) : null}
             <div className="grid gap-2">
               <Label htmlFor="recurring-priority">{t('priority')}</Label>
@@ -214,23 +166,12 @@ export default async function RecurringTasksPage({
               </NativeSelect>
             </div>
             {canAssign ? (
-              <div className="grid gap-2">
-                <Label htmlFor="recurring-assignee">{t('assignee')}</Label>
-                <NativeSelect
-                  id="recurring-assignee"
-                  name="assignedEmployeeId"
-                  selectClassName="h-10 rounded-md border px-3"
-                  defaultValue=""
-                  className="w-full"
-                >
-                  <option value="">{t('unassigned')}</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.preferredName ?? employee.firstName} {employee.lastName}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
+              <AsyncEntityCombobox
+                name="assignedEmployeeId"
+                label={t('assignee')}
+                entity="employees"
+                placeholder={t('unassigned')}
+              />
             ) : null}
             <div className="grid gap-2 md:col-span-2">
               <Label htmlFor="recurring-description">{t('taskDescription')}</Label>
@@ -347,7 +288,7 @@ export default async function RecurringTasksPage({
         <h2 id="recurring-list-title" className="text-xl font-semibold">
           {t('recurrenceDefinitions')}
         </h2>
-        {recurrences.length ? (
+        {!taskResult.error && recurrences.length ? (
           <ul className="grid gap-3">
             {recurrences.map((item) => (
               <li key={item.id} className="grid gap-3 rounded-lg border bg-card p-4">
@@ -373,7 +314,7 @@ export default async function RecurringTasksPage({
                         ? formatDateTime(
                             item.nextOccurrenceAt,
                             locale as 'en' | 'de',
-                            timezoneByOrganization.get(item.organizationId) ?? item.timezone,
+                            item.timezone,
                           )
                         : t('noDueDate')}
                     </span>
@@ -431,9 +372,18 @@ export default async function RecurringTasksPage({
               </li>
             ))}
           </ul>
-        ) : (
+        ) : taskResult.error ? null : (
           <p className="rounded-lg border bg-card p-5">{t('recurrencesEmpty')}</p>
         )}
+        {taskData && !taskResult.error ? (
+          <DataPagination
+            pathname="/operations/recurring-tasks"
+            page={taskData.page}
+            pageSize={taskData.pageSize}
+            totalItems={taskData.total}
+            filters={{}}
+          />
+        ) : null}
       </section>
     </div>
   );

@@ -3,6 +3,7 @@ import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -22,6 +23,7 @@ import {
   updateTaskAction,
 } from '@app/web/app/(office)/operations/actions';
 import { taskSourceHref, taskStatusTranslation } from '@app/web/app/(office)/operations/ui';
+import type { components } from '@care/api-client';
 
 type Params = Promise<{ id: string }>;
 type SearchParams = Promise<{ error?: string; updated?: string }>;
@@ -60,50 +62,56 @@ export default async function OperationsTaskDetailPage({
           {t('tasksTitle')}
         </Link>
         <p role="alert" className="rounded-md border bg-card p-5">
-          {translate(errorMessageKey(taskResult.error?.code ?? 'OPERATIONS_TASK_NOT_FOUND'))}
+          {translate(
+            errorMessageKey(
+              (taskResult.error as { code?: string } | undefined)?.code ??
+                'OPERATIONS_TASK_NOT_FOUND',
+            ),
+          )}
         </p>
       </div>
     );
   }
-  const task = taskResult.data;
-  const [activityResult, organizationResult, facilityResult, employeeResult, clientResult] = await Promise.all([
-    api.GET('/api/v1/operations/tasks/{id}/activity', { params: { path: { id }, header } }),
-    api.GET('/api/v1/organizations/{id}', {
-      params: { path: { id: task.organizationId }, header },
-    }),
-    task.facilityId && hasPermission(permissions, 'facility.read')
-      ? api.GET('/api/v1/facilities/{id}', {
-          params: { path: { id: task.facilityId }, header },
-        })
-      : Promise.resolve({ data: undefined, error: undefined }),
-    canAssign
-      ? api.GET('/api/v1/employees', {
-          params: {
-            query: {
-              status: 'active',
-              organizationId: task.organizationId,
-              ...(task.facilityId ? { facilityId: task.facilityId } : {}),
-              page: 1,
-              pageSize: 100,
-              sortBy: 'lastName',
-              sortOrder: 'asc',
-            },
-            header,
-          },
-        })
-      : Promise.resolve({ data: undefined, error: undefined }),
-    task.clientId && hasPermission(permissions, 'client.read')
-      ? api.GET('/api/v1/clients/{id}', { params: { path: { id: task.clientId }, header } })
-      : Promise.resolve({ data: undefined, error: undefined }),
-  ]);
-  const timezone = organizationResult.data?.timezone ?? 'Europe/Berlin';
-  const employees = employeeResult.data?.items ?? [];
-  const employeeName = new Map(
-    employees.map((employee) => [
-      employee.id,
-      `${employee.preferredName || employee.firstName} ${employee.lastName}`,
-    ]),
-  );
+  const task = taskResult.data as components['schemas']['OperationsTaskResponseDto'];
+  const [activityResult, organizationResult, facilityResult, employeeResult, clientResult] =
+    await Promise.all([
+      api.GET('/api/v1/operations/tasks/{id}/activity', { params: { path: { id }, header } }),
+      api.GET('/api/v1/organizations/{id}', {
+        params: { path: { id: task.organizationId }, header },
+      }),
+      task.facilityId && hasPermission(permissions, 'facility.read')
+        ? api.GET('/api/v1/facilities/{id}', {
+            params: { path: { id: task.facilityId }, header },
+          })
+        : Promise.resolve({ data: undefined, error: undefined }),
+      task.assignedEmployeeId && hasPermission(permissions, 'employee.read')
+        ? api.GET('/api/v1/employees/{id}', {
+            params: { path: { id: task.assignedEmployeeId }, header },
+          })
+        : Promise.resolve({ data: undefined, error: undefined }),
+      task.clientId && hasPermission(permissions, 'client.read')
+        ? api.GET('/api/v1/clients/{id}', { params: { path: { id: task.clientId }, header } })
+        : Promise.resolve({ data: undefined, error: undefined }),
+    ]);
+  const organization = organizationResult.data as
+    | components['schemas']['OrganizationResponseDto']
+    | undefined;
+  const facility = facilityResult.data as components['schemas']['FacilityResponseDto'] | undefined;
+  const client = clientResult.data as components['schemas']['ClientResponseDto'] | undefined;
+  const activity = activityResult.data as
+    | components['schemas']['OperationsTaskActivityResponseDto'][]
+    | undefined;
+  const timezone = organization?.timezone ?? 'Europe/Berlin';
+  const assignedEmployee = employeeResult.data as
+    | components['schemas']['EmployeeDetailResponseDto']
+    | undefined;
+  const assignedEmployeeOption =
+    task.assignedEmployeeId && assignedEmployee
+      ? {
+          id: task.assignedEmployeeId,
+          label: `${assignedEmployee.preferredName || assignedEmployee.firstName} ${assignedEmployee.lastName}`,
+        }
+      : undefined;
   const sourceHref = taskSourceHref(task);
   const terminal = task.status === 'completed' || task.status === 'cancelled';
 
@@ -176,8 +184,10 @@ export default async function OperationsTaskDetailPage({
               <dt className="text-muted-foreground">{t('organization')}</dt>
               <dd>
                 <ResourceReference
-                  label={organizationResult.data?.name ?? translate('Resources.unavailableOrganization')}
-                  href={organizationResult.data ? `/administration/organizations/${task.organizationId}` : null}
+                  label={organization?.name ?? translate('Resources.unavailableOrganization')}
+                  href={
+                    organization ? `/administration/organizations/${task.organizationId}` : null
+                  }
                 />
               </dd>
             </div>
@@ -186,8 +196,8 @@ export default async function OperationsTaskDetailPage({
               <dd>
                 {task.facilityId ? (
                   <ResourceReference
-                    label={facilityResult.data?.name ?? translate('Resources.unavailableFacility')}
-                    href={facilityResult.data ? `/administration/facilities/${task.facilityId}` : null}
+                    label={facility?.name ?? translate('Resources.unavailableFacility')}
+                    href={facility ? `/administration/facilities/${task.facilityId}` : null}
                   />
                 ) : (
                   t('all')
@@ -197,13 +207,9 @@ export default async function OperationsTaskDetailPage({
             <div>
               <dt className="text-muted-foreground">{t('client')}</dt>
               <dd>
-                {clientResult.data ? (
-                  <Link
-                    className="text-primary underline"
-                    href={`/clients/${clientResult.data.id}`}
-                  >
-                    {clientResult.data.preferredName || clientResult.data.firstName}{' '}
-                    {clientResult.data.lastName}
+                {client ? (
+                  <Link className="text-primary underline" href={`/clients/${client.id}`}>
+                    {client.preferredName || client.firstName} {client.lastName}
                   </Link>
                 ) : task.clientId ? (
                   t('restrictedClient')
@@ -216,7 +222,7 @@ export default async function OperationsTaskDetailPage({
               <dt className="text-muted-foreground">{t('assignee')}</dt>
               <dd>
                 {task.assignedEmployeeId
-                  ? (employeeName.get(task.assignedEmployeeId) ?? t('assigned'))
+                  ? (assignedEmployeeOption?.label ?? t('assigned'))
                   : t('unassigned')}
               </dd>
             </div>
@@ -262,19 +268,15 @@ export default async function OperationsTaskDetailPage({
                 <option value="urgent">{t('urgent')}</option>
               </SelectField>
               {canAssign ? (
-                <SelectField
-                  id="assignedEmployeeId"
+                <AsyncEntityCombobox
                   name="assignedEmployeeId"
+                  entity="employees"
                   label={t('assignee')}
-                  defaultValue={task.assignedEmployeeId ?? ''}
-                >
-                  <option value="">{t('unassigned')}</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.preferredName || employee.firstName} {employee.lastName}
-                    </option>
-                  ))}
-                </SelectField>
+                  placeholder={t('unassigned')}
+                  organizationId={task.organizationId}
+                  facilityId={task.facilityId ?? undefined}
+                  initialOption={assignedEmployeeOption}
+                />
               ) : null}
               <div className="grid gap-2">
                 <Label htmlFor="dueAt">{t('dueDate')}</Label>
@@ -342,9 +344,9 @@ export default async function OperationsTaskDetailPage({
               {t('loadFailed')}
             </p>
           ) : null}
-          {activityResult.data?.length ? (
+          {activity?.length ? (
             <ol className="grid gap-3">
-              {activityResult.data.map((entry) => (
+              {activity.map((entry) => (
                 <li key={entry.id} className="border-l-2 border-border pl-3">
                   <p className="font-medium">{entry.comment ?? activityLabel(t, entry.kind)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">

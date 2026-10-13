@@ -42,6 +42,9 @@ import {
   CreateOrganizationDto,
   CreateTeamDto,
   FacilityResponseDto,
+  PaginatedFacilitiesResponseDto,
+  PaginatedOrganizationsResponseDto,
+  PaginatedTeamsResponseDto,
   OrganizationResponseDto,
   TeamResponseDto,
   UpdateFacilityDto,
@@ -55,6 +58,32 @@ import {
   updateOrganizationSchema,
   updateTeamSchema,
 } from './organizations.dto';
+
+const pageFilterSchema = z.object({
+  q: z.string().trim().max(120).optional(),
+  status: z.enum(['active', 'archived']).optional(),
+  page: z.coerce.number().int().min(1).max(100_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+const organizationIdsQuerySchema = z
+  .preprocess(
+    (value) => (typeof value === 'string' ? value.split(',').map((id) => id.trim()) : value),
+    z.array(z.string().uuid()).min(1).max(100),
+  )
+  .optional();
+const organizationSearchSchema = pageFilterSchema
+  .extend({ ids: organizationIdsQuerySchema })
+  .strict();
+const facilitySearchSchema = pageFilterSchema
+  .extend({ organizationId: z.string().uuid().optional(), ids: organizationIdsQuerySchema })
+  .strict();
+const teamSearchSchema = pageFilterSchema
+  .extend({
+    organizationId: z.string().uuid().optional(),
+    facilityId: z.string().uuid().optional(),
+    ids: organizationIdsQuerySchema,
+  })
+  .strict();
 
 @ApiTags('organization structure')
 @ApiBearerAuth()
@@ -80,6 +109,35 @@ export class OrganizationsController {
     return (await this.organizations.listOrganizations(this.principal(request), parsed)).map(
       organizationResponse,
     );
+  }
+
+  @Get('organizations/search')
+  @ApiOperation({ summary: 'Search authorized organizations with database pagination' })
+  @ApiQuery({ name: 'q', required: false, type: String, maxLength: 120 })
+  @ApiQuery({ name: 'status', required: false, enum: ['active', 'archived'] })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, maximum: 100 })
+  @ApiQuery({
+    name: 'ids',
+    required: false,
+    type: String,
+    description: 'Comma-separated UUIDs; maximum 100',
+  })
+  @ApiOkResponse({ type: PaginatedOrganizationsResponseDto })
+  async searchOrganizations(
+    @Req() request: ApiRequest,
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<PaginatedOrganizationsResponseDto> {
+    const parsed = organizationSearchSchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    const result = await this.organizations.searchOrganizations(this.principal(request), {
+      page: parsed.data.page,
+      pageSize: parsed.data.pageSize,
+      ...(parsed.data.ids ? { ids: parsed.data.ids } : {}),
+      ...(parsed.data.q ? { text: parsed.data.q } : {}),
+      ...(parsed.data.status ? { status: parsed.data.status } : {}),
+    });
+    return { ...result, items: result.items.map(organizationResponse) };
   }
 
   @Post('organizations')
@@ -187,6 +245,12 @@ export class OrganizationsController {
   @Get('facilities')
   @ApiOperation({ summary: 'List visible facilities' })
   @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({
+    name: 'ids',
+    required: false,
+    type: String,
+    description: 'Comma-separated facility IDs (up to 100)',
+  })
   @ApiQuery({ name: 'status', required: false, enum: ['active', 'archived'] })
   @ApiOkResponse({ type: [FacilityResponseDto] })
   async listFacilities(
@@ -200,6 +264,37 @@ export class OrganizationsController {
         ...(status === undefined ? {} : { status: parseStatus(status)! }),
       })
     ).map(facilityResponse);
+  }
+
+  @Get('facilities/search')
+  @ApiOperation({ summary: 'Search authorized facilities with database pagination' })
+  @ApiQuery({ name: 'q', required: false, type: String, maxLength: 120 })
+  @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({
+    name: 'ids',
+    required: false,
+    type: String,
+    description: 'Comma-separated facility IDs (up to 100)',
+  })
+  @ApiQuery({ name: 'status', required: false, enum: ['active', 'archived'] })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, maximum: 100 })
+  @ApiOkResponse({ type: PaginatedFacilitiesResponseDto })
+  async searchFacilities(
+    @Req() request: ApiRequest,
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<PaginatedFacilitiesResponseDto> {
+    const parsed = facilitySearchSchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    const result = await this.organizations.searchFacilities(this.principal(request), {
+      page: parsed.data.page,
+      pageSize: parsed.data.pageSize,
+      ...(parsed.data.q ? { text: parsed.data.q } : {}),
+      ...(parsed.data.organizationId ? { organizationId: parsed.data.organizationId } : {}),
+      ...(parsed.data.ids ? { ids: parsed.data.ids } : {}),
+      ...(parsed.data.status ? { status: parsed.data.status } : {}),
+    });
+    return { ...result, items: result.items.map(facilityResponse) };
   }
 
   @Post('facilities')
@@ -323,6 +418,39 @@ export class OrganizationsController {
         ...(status === undefined ? {} : { status: parseStatus(status)! }),
       })
     ).map(teamResponse);
+  }
+
+  @Get('teams/search')
+  @ApiOperation({ summary: 'Search authorized teams with database pagination' })
+  @ApiQuery({ name: 'q', required: false, type: String, maxLength: 120 })
+  @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'status', required: false, enum: ['active', 'archived'] })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, maximum: 100 })
+  @ApiQuery({
+    name: 'ids',
+    required: false,
+    type: String,
+    description: 'Comma-separated UUIDs; maximum 100',
+  })
+  @ApiOkResponse({ type: PaginatedTeamsResponseDto })
+  async searchTeams(
+    @Req() request: ApiRequest,
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<PaginatedTeamsResponseDto> {
+    const parsed = teamSearchSchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    const result = await this.organizations.searchTeams(this.principal(request), {
+      page: parsed.data.page,
+      pageSize: parsed.data.pageSize,
+      ...(parsed.data.ids ? { ids: parsed.data.ids } : {}),
+      ...(parsed.data.q ? { text: parsed.data.q } : {}),
+      ...(parsed.data.organizationId ? { organizationId: parsed.data.organizationId } : {}),
+      ...(parsed.data.facilityId ? { facilityId: parsed.data.facilityId } : {}),
+      ...(parsed.data.status ? { status: parsed.data.status } : {}),
+    });
+    return { ...result, items: result.items.map(teamResponse) };
   }
 
   @Post('teams')

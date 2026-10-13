@@ -21,12 +21,14 @@ import {
   createCommunicationFollowUpAction,
   saveCommunicationPreferencesAction,
 } from './actions';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 
 type Interaction = components['schemas']['CommunicationInteractionResponseDto'];
 type Preferences = components['schemas']['CommunicationPreferencesResponseDto'];
 type Visit = components['schemas']['VisitListResponseDto']['items'][number];
 type Task = components['schemas']['OperationsTaskListResponseDto']['items'][number];
-type Employee = components['schemas']['EmployeeResponseDto'];
 type SourceType =
   | 'visit'
   | 'service_agreement'
@@ -75,6 +77,7 @@ export default async function ClientCommunicationsPage({
     from?: string;
     until?: string;
     page?: string;
+    pageSize?: string;
   }>;
 }>) {
   const [{ id: clientId }, query] = await Promise.all([params, searchParams]);
@@ -205,6 +208,7 @@ export default async function ClientCommunicationsPage({
 
   const visitWindow = clientVisitWindow();
   const historyPage = positivePage(query.page);
+  const historyPageSize = positivePageSize(query.pageSize);
   const historyChannel = channels.find((value) => value === query.channel);
   const historyCategory = categories.find((value) => value === query.category);
   const historyFrom = dateBoundary(query.from, false);
@@ -216,7 +220,6 @@ export default async function ClientCommunicationsPage({
     preferencesResult,
     visitsResult,
     tasksResult,
-    employeesResult,
     agreementsResult,
     invoicesResult,
     claimsResult,
@@ -230,7 +233,7 @@ export default async function ClientCommunicationsPage({
             path: { clientId },
             query: {
               page: historyPage,
-              pageSize: 25,
+              pageSize: historyPageSize,
               ...(historyChannel ? { channel: historyChannel } : {}),
               ...(historyCategory ? { category: historyCategory } : {}),
               ...(historyFrom ? { from: historyFrom } : {}),
@@ -266,20 +269,6 @@ export default async function ClientCommunicationsPage({
           params: { query: { clientId, page: 1, pageSize: 100 }, header },
         })
       : Promise.resolve({ data: undefined, error: undefined }),
-    canReadEmployees && client.organizationId
-      ? get('/api/v1/employees', {
-          params: {
-            query: {
-              status: 'active',
-              organizationId: client.organizationId,
-              ...(client.primaryFacilityId ? { facilityId: client.primaryFacilityId } : {}),
-              page: 1,
-              pageSize: 100,
-            },
-            header,
-          },
-        })
-      : Promise.resolve({ data: undefined, error: undefined }),
     canReadAgreements
       ? get('/api/v1/clients/{clientId}/service-agreements', {
           params: { path: { clientId }, query: { page: 1, pageSize: 25 }, header },
@@ -311,12 +300,30 @@ export default async function ClientCommunicationsPage({
         })
       : Promise.resolve({ data: undefined, error: undefined }),
   ]);
-  const interactions = interactionResult.data?.items ?? [];
+  const interactionData = interactionResult.data as
+    | { items: Interaction[]; page: number; pageSize: number; total: number }
+    | undefined;
+  if (interactionData) {
+    redirectToValidPage(
+      `/clients/${clientId}/communications`,
+      {
+        q: query.q,
+        channel: query.channel,
+        category: query.category,
+        from: validDateInput(query.from) || undefined,
+        until: validDateInput(query.until) || undefined,
+        interactionId: query.interactionId,
+      },
+      historyPage,
+      historyPageSize,
+      interactionData.total,
+    );
+  }
+  const interactions = interactionData?.items ?? [];
   const contacts = contactsResult.data ?? [];
   const preferences = preferencesResult.data as Preferences | undefined;
   const visits = visitsResult.data?.items ?? [];
   const tasks = tasksResult.data?.items ?? [];
-  const employees = employeesResult.data?.items ?? [];
   const agreements = agreementsResult.data?.items ?? [];
   const invoices = invoicesResult.data?.items ?? [];
   const claims =
@@ -712,7 +719,7 @@ export default async function ClientCommunicationsPage({
                 {common('Clients.detail.communicationsSummary')}
               </h2>
               <p className="text-sm text-muted-foreground">
-                {interactionResult.data?.total ?? interactions.length}
+                {interactionData?.total ?? interactions.length}
               </p>
             </div>
             <form
@@ -720,6 +727,7 @@ export default async function ClientCommunicationsPage({
               className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5"
             >
               <input type="hidden" name="page" value="1" />
+              <input type="hidden" name="pageSize" value={historyPageSize} />
               <div className="grid gap-2">
                 <Label htmlFor="history-search">{t('searchInteractions')}</Label>
                 <Input
@@ -784,7 +792,7 @@ export default async function ClientCommunicationsPage({
                 {t('loadFailed')}
               </p>
             ) : null}
-            {interactions.length ? (
+            {interactionResult.error ? null : interactions.length ? (
               <ul className="grid gap-3">
                 {interactions.map((interaction) => (
                   <li key={interaction.id} className="grid gap-4 rounded-lg border bg-card p-4">
@@ -953,7 +961,16 @@ export default async function ClientCommunicationsPage({
                             </option>
                           ))}
                         </SelectField>
-                        {canAssignTask ? (
+                        {canAssignTask && canReadEmployees ? (
+                          <AsyncEntityCombobox
+                            name="assignedEmployeeId"
+                            entity="employees"
+                            label={t('followUpAssignee')}
+                            organizationId={client.organizationId ?? undefined}
+                            facilityId={client.primaryFacilityId ?? undefined}
+                            placeholder={common('Operations.unassigned')}
+                          />
+                        ) : canAssignTask ? (
                           <SelectField
                             id={`followup-assignee-${interaction.id}`}
                             name="assignedEmployeeId"
@@ -961,11 +978,6 @@ export default async function ClientCommunicationsPage({
                             defaultValue=""
                           >
                             <option value="">{common('Operations.unassigned')}</option>
-                            {employees.map((employee: Employee) => (
-                              <option key={employee.id} value={employee.id}>
-                                {employee.preferredName || employee.firstName} {employee.lastName}
-                              </option>
-                            ))}
                           </SelectField>
                         ) : null}
                         <div className="grid gap-2">
@@ -991,26 +1003,22 @@ export default async function ClientCommunicationsPage({
             ) : (
               <EmptyState title={t('empty')} />
             )}
-            {interactionResult.data && interactionResult.data.total > 25 ? (
-              <nav aria-label={t('historyPages')} className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  {historyPage} / {Math.ceil(interactionResult.data.total / 25)}
-                </p>
-                <div className="flex gap-2">
-                  {historyPage > 1 ? (
-                    <Button asChild variant="secondary" size="sm">
-                      <Link href={historyPageHref(query, historyPage - 1)}>
-                        {t('previousPage')}
-                      </Link>
-                    </Button>
-                  ) : null}
-                  {historyPage * 25 < interactionResult.data.total ? (
-                    <Button asChild variant="secondary" size="sm">
-                      <Link href={historyPageHref(query, historyPage + 1)}>{t('nextPage')}</Link>
-                    </Button>
-                  ) : null}
-                </div>
-              </nav>
+            {interactionData ? (
+              <DataPagination
+                pathname={`/clients/${clientId}/communications`}
+                page={interactionData.page}
+                pageSize={interactionData.pageSize}
+                totalItems={interactionData.total}
+                filters={{
+                  q: historySearch,
+                  channel: historyChannel,
+                  category: historyCategory,
+                  from: validDateInput(query.from) || undefined,
+                  until: validDateInput(query.until) || undefined,
+                  interactionId: query.interactionId,
+                }}
+                controlId="communication-history-page-size"
+              />
             ) : null}
           </section>
         </>
@@ -1032,6 +1040,11 @@ function positivePage(value: string | undefined): number {
   return Number.isSafeInteger(page) && page > 0 ? Math.min(page, 100_000) : 1;
 }
 
+function positivePageSize(value: string | undefined): number {
+  const pageSize = Number(value);
+  return [10, 20, 25, 50, 100].includes(pageSize) ? pageSize : 25;
+}
+
 function dateBoundary(value: string | undefined, endOfDay: boolean): string | undefined {
   const date = validDateInput(value);
   if (!date) return undefined;
@@ -1042,30 +1055,6 @@ function validDateInput(value: string | undefined): string {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? '' : value;
-}
-
-function historyPageHref(
-  query: {
-    q?: string;
-    channel?: string;
-    category?: string;
-    from?: string;
-    until?: string;
-    interactionId?: string;
-  },
-  page: number,
-) {
-  const params = new URLSearchParams();
-  if (query.q) params.set('q', query.q);
-  if (query.channel) params.set('channel', query.channel);
-  if (query.category) params.set('category', query.category);
-  const from = validDateInput(query.from);
-  const until = validDateInput(query.until);
-  if (from) params.set('from', from);
-  if (until) params.set('until', until);
-  if (query.interactionId) params.set('interactionId', query.interactionId);
-  params.set('page', String(page));
-  return `?${params.toString()}`;
 }
 
 function sourceHref(source: { [key: string]: unknown } | null, clientId: string): string | null {

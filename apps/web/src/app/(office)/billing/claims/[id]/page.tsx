@@ -24,6 +24,8 @@ import {
   hasClientPermission,
 } from '@app/web/lib/api';
 import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import { formatCents } from '@app/web/app/(office)/billing/format';
 import {
   allocatePaymentAction,
@@ -126,7 +128,12 @@ type Payment = {
   remainingCents: number;
   method: string;
 };
-type SearchParams = Promise<{ error?: string; updated?: string }>;
+type SearchParams = Promise<{
+  error?: string;
+  updated?: string;
+  paymentPage?: string;
+  paymentPageSize?: string;
+}>;
 
 export default async function ClaimDetailPage({
   params,
@@ -135,6 +142,8 @@ export default async function ClaimDetailPage({
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const query = await searchParams;
+  const paymentPage = positiveInteger(query.paymentPage, 1, 100_000, 1);
+  const paymentPageSize = positiveInteger(query.paymentPageSize, 10, 100, 20);
   const [t, translate, locale] = await Promise.all([
     getTranslations('Billing'),
     getTranslations(),
@@ -206,14 +215,31 @@ export default async function ClaimDetailPage({
     canReconcile && payment && payment.unpaidCents > 0 && claim.status !== 'submitted'
       ? await api.GET('/api/v1/billing/payments', {
           params: {
-            query: { organizationId: claim.organizationId, page: 1, pageSize: 100 },
+            query: {
+              organizationId: claim.organizationId,
+              remainingOnly: 'true',
+              page: paymentPage,
+              pageSize: paymentPageSize,
+            },
             header,
           },
         })
       : null;
-  const payments = (
-    (paymentsResult?.data as { items?: Payment[] } | undefined)?.items ?? []
-  ).filter((item) => item.remainingCents > 0);
+  const paymentData = paymentsResult?.data as
+    | { items: Payment[]; page: number; pageSize: number; total: number }
+    | undefined;
+  const payments = paymentData?.items ?? [];
+  if (paymentData) {
+    redirectToValidPage(
+      `/billing/claims/${claim.id}`,
+      query,
+      paymentPage,
+      paymentData.pageSize,
+      paymentData.total,
+      'paymentPage',
+      'paymentPageSize',
+    );
+  }
   const error =
     query.error ??
     detailResult.error?.code ??
@@ -247,9 +273,9 @@ export default async function ClaimDetailPage({
         description={`${clientName} · ${payerName} · ${claimStatus(t, claim.status)}`}
         actions={
           canReadInvoice ? (
-          <Button asChild variant="secondary">
-            <Link href={'/billing/invoices/' + claim.invoiceId}>{t('openInvoice')}</Link>
-          </Button>
+            <Button asChild variant="secondary">
+              <Link href={'/billing/invoices/' + claim.invoiceId}>{t('openInvoice')}</Link>
+            </Button>
           ) : undefined
         }
       />
@@ -605,6 +631,18 @@ export default async function ClaimDetailPage({
                     </Button>
                   </RHFActionForm>
                 ))}
+                {paymentData ? (
+                  <DataPagination
+                    pathname={`/billing/claims/${claim.id}`}
+                    page={paymentData.page}
+                    pageSize={paymentData.pageSize}
+                    totalItems={paymentData.total}
+                    pageParam="paymentPage"
+                    pageSizeParam="paymentPageSize"
+                    controlId="claim-payment-page-size"
+                    filters={{ error: query.error, updated: query.updated }}
+                  />
+                ) : null}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">{t('noUnallocatedPayments')}</p>
@@ -650,6 +688,17 @@ function isUuid(value: string): boolean {
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function positiveInteger(
+  value: string | undefined,
+  minimum: number,
+  maximum: number,
+  fallback: number,
+): number {
+  if (!value || !/^\d+$/.test(value)) return fallback;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
 }
 
 function claimStatus(

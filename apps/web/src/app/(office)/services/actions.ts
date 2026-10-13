@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
+import { getFacilitiesByIds } from '@app/web/lib/facility-lookup';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -24,7 +26,8 @@ export async function createServiceCategoryAction(formData: FormData): Promise<v
       sortOrder,
     },
   });
-  if (error) redirect(`/services?error=${encodeURIComponent(error.code)}`);
+  if (error)
+    redirect(`/services?error=${encodeURIComponent(apiErrorCode(error) ?? 'UNKNOWN_ERROR')}`);
   revalidatePath('/services');
   redirect('/services?updated=category');
 }
@@ -44,7 +47,8 @@ export async function updateServiceCategoryAction(formData: FormData): Promise<v
       sortOrder,
     },
   });
-  if (error) redirect(`/services?error=${encodeURIComponent(error.code)}`);
+  if (error)
+    redirect(`/services?error=${encodeURIComponent(apiErrorCode(error) ?? 'UNKNOWN_ERROR')}`);
   revalidatePath('/services');
   redirect('/services?updated=category');
 }
@@ -56,7 +60,8 @@ export async function archiveServiceCategoryAction(formData: FormData): Promise<
   const { error } = await api.POST('/api/v1/service-categories/{id}/archive', {
     params: { path: { id }, header: await getTenantHeader() },
   });
-  if (error) redirect(`/services?error=${encodeURIComponent(error.code)}`);
+  if (error)
+    redirect(`/services?error=${encodeURIComponent(apiErrorCode(error) ?? 'UNKNOWN_ERROR')}`);
   revalidatePath('/services');
   redirect('/services?updated=category');
 }
@@ -98,9 +103,9 @@ export async function createServiceAction(formData: FormData): Promise<void> {
     },
   });
   if (error || !data)
-    redirect(`/services/new?error=${encodeURIComponent(error?.code ?? 'CREATE_FAILED')}`);
+    redirect(`/services/new?error=${encodeURIComponent(apiErrorCode(error) ?? 'CREATE_FAILED')}`);
   revalidatePath('/services');
-  redirect(`/services/${data.id}`);
+  redirect(`/services/${(data as { id: string }).id}`);
 }
 
 export async function updateServiceAction(formData: FormData): Promise<void> {
@@ -141,7 +146,7 @@ export async function updateServiceAction(formData: FormData): Promise<void> {
       description: readNullableText(formData, 'description'),
     },
   });
-  if (error) redirect(servicePath(id, error.code));
+  if (error) redirect(servicePath(id, apiErrorCode(error) ?? 'UNKNOWN_ERROR'));
   refreshService(id);
   redirect(servicePath(id, ''));
 }
@@ -177,7 +182,15 @@ export async function recordServicePriceAction(formData: FormData): Promise<void
       validUntil,
     },
   });
-  if (error) redirect(servicePricePath(serviceId, organizationId, validFrom, error.code));
+  if (error)
+    redirect(
+      servicePricePath(
+        serviceId,
+        organizationId,
+        validFrom,
+        apiErrorCode(error) ?? 'UNKNOWN_ERROR',
+      ),
+    );
   revalidatePath(`/services/${serviceId}`);
   revalidatePath('/planning');
   revalidatePath('/benefits');
@@ -191,7 +204,7 @@ export async function archiveServiceAction(formData: FormData): Promise<void> {
   const { error } = await api.POST('/api/v1/services/{id}/archive', {
     params: { path: { id }, header: await getTenantHeader() },
   });
-  if (error) redirect(servicePath(id, error.code));
+  if (error) redirect(servicePath(id, apiErrorCode(error) ?? 'UNKNOWN_ERROR'));
   refreshService(id);
   redirect(servicePath(id, ''));
 }
@@ -205,51 +218,42 @@ export async function setServiceAvailabilityAction(formData: FormData): Promise<
 
   const api = await getApiClient();
   const header = await getTenantHeader();
+  const selectedOrganizationIds = readUuids(formData, 'organizationIds');
+  const selectedFacilityIds = readUuids(formData, 'facilityIds');
+  if (selectedOrganizationIds.length + selectedFacilityIds.length > 200)
+    redirect(servicePath(id, 'INVALID_REQUEST'));
   const [organizationsResult, facilitiesResult] = await Promise.all([
-    api.GET('/api/v1/organizations', { params: { header } }),
-    api.GET('/api/v1/facilities', { params: { header } }),
+    getOrganizationsByIds(selectedOrganizationIds),
+    getFacilitiesByIds(selectedFacilityIds),
   ]);
-  if (organizationsResult.error || facilitiesResult.error)
+  if (
+    organizationsResult.failed ||
+    facilitiesResult.failed ||
+    organizationsResult.items.length !== selectedOrganizationIds.length ||
+    facilitiesResult.items.length !== selectedFacilityIds.length
+  ) {
     redirect(servicePath(id, 'PROVIDER_LIST_FAILED'));
-  const organizations = organizationsResult.data ?? [];
-  const facilities = facilitiesResult.data ?? [];
-  const selectedOrganizationIds = new Set(
-    readUuids(formData, 'organizationIds').filter((organizationId) =>
-      organizations.some((organization) => organization.id === organizationId),
-    ),
-  );
-  const selectedFacilityIds = new Set(
-    readUuids(formData, 'facilityIds').filter((facilityId) =>
-      facilities.some((facility) => facility.id === facilityId),
-    ),
-  );
+  }
   const items = [
-    ...[...selectedOrganizationIds].map((organizationId) => ({
+    ...selectedOrganizationIds.map((organizationId) => ({
       organizationId,
       active: true,
       validFrom,
       validUntil,
     })),
-    ...[...selectedFacilityIds].flatMap((facilityId) => {
-      const facility = facilities.find((item) => item.id === facilityId);
-      return facility
-        ? [
-            {
-              organizationId: facility.organizationId,
-              facilityId,
-              active: true,
-              validFrom,
-              validUntil,
-            },
-          ]
-        : [];
-    }),
+    ...facilitiesResult.items.map((facility) => ({
+      organizationId: facility.organizationId,
+      facilityId: facility.id,
+      active: true,
+      validFrom,
+      validUntil,
+    })),
   ];
   const { error } = await api.PUT('/api/v1/services/{id}/availability', {
     params: { path: { id }, header },
     body: { items },
   });
-  if (error) redirect(servicePath(id, error.code));
+  if (error) redirect(servicePath(id, apiErrorCode(error) ?? 'UNKNOWN_ERROR'));
   refreshService(id);
   redirect(servicePath(id, ''));
 }
@@ -257,6 +261,12 @@ export async function setServiceAvailabilityAction(formData: FormData): Promise<
 function readString(formData: FormData, name: string): string {
   const value = formData.get(name);
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function apiErrorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
 }
 
 function readNullableText(formData: FormData, name: string): string | null {

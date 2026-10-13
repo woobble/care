@@ -1,4 +1,19 @@
-import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+} from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { v7 as uuidv7 } from 'uuid';
@@ -1149,6 +1164,22 @@ export class BillingApplicationService {
       pageSize?: number;
     } = {},
   ): Promise<BillingInvoiceView[]> {
+    return (await this.listInvoicesPage(principal, query)).items;
+  }
+
+  async listInvoicesPage(
+    principal: AuthorizationPrincipal,
+    query: {
+      organizationId?: string;
+      clientId?: string;
+      status?: 'draft' | 'issued' | 'cancelled';
+      from?: string;
+      until?: string;
+      facilityId?: string;
+      page?: number;
+      pageSize?: number;
+    } = {},
+  ) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 25;
     if (
@@ -1167,36 +1198,31 @@ export class BillingApplicationService {
     }
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const where = [eq(invoices.tenantId, principal.tenantId)];
+      const scope = billingScopeConditions(principal, 'billing.read');
+      where.push(scope ?? sql`false`);
       if (query.organizationId) where.push(eq(invoices.organizationId, query.organizationId));
       if (query.facilityId) where.push(eq(invoices.facilityId, query.facilityId));
       if (query.clientId) where.push(eq(invoices.clientId, query.clientId));
       if (query.status) where.push(eq(invoices.status, query.status));
       if (query.from) where.push(gte(invoices.issueDate, query.from));
       if (query.until) where.push(lte(invoices.issueDate, query.until));
-      const rows = await transaction
-        .select()
-        .from(invoices)
-        .where(and(...where))
-        .orderBy(desc(invoices.createdAt), desc(invoices.id))
-        .limit(pageSize)
-        .offset((page - 1) * pageSize);
+      const whereClause = and(...where);
+      const [countRows, rows] = await Promise.all([
+        transaction.select({ total: count() }).from(invoices).where(whereClause),
+        transaction
+          .select()
+          .from(invoices)
+          .where(whereClause)
+          .orderBy(desc(invoices.createdAt), desc(invoices.id))
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
+      ]);
       const result: BillingInvoiceView[] = [];
       for (const invoice of rows) {
-        if (
-          !can(principal, {
-            action: 'billing.read',
-            resource: {
-              tenantId: principal.tenantId,
-              clientId: invoice.clientId,
-              organizationId: invoice.organizationId,
-              facilityId: invoice.facilityId,
-            },
-          })
-        )
-          continue;
         result.push(await this.invoiceView(transaction, principal, invoice));
       }
-      return result;
+      const total = Number(countRows[0]?.total ?? 0);
+      return { items: result, page, pageSize, total, totalPages: Math.ceil(total / pageSize) };
     });
   }
 
@@ -1372,8 +1398,27 @@ export class BillingApplicationService {
 
   async receivables(
     principal: AuthorizationPrincipal,
-    query: { organizationId?: string; clientId?: string; page?: number; pageSize?: number } = {},
+    query: {
+      organizationId?: string;
+      clientId?: string;
+      q?: string;
+      page?: number;
+      pageSize?: number;
+    } = {},
   ): Promise<BillingInvoiceView[]> {
+    return (await this.receivablesPage(principal, query)).items;
+  }
+
+  async receivablesPage(
+    principal: AuthorizationPrincipal,
+    query: {
+      organizationId?: string;
+      clientId?: string;
+      q?: string;
+      page?: number;
+      pageSize?: number;
+    } = {},
+  ) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 25;
     if (
@@ -1388,40 +1433,96 @@ export class BillingApplicationService {
     if (query.organizationId)
       this.requireOrganization(principal, 'billing.payments.read', query.organizationId);
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const where = [eq(invoices.tenantId, principal.tenantId), eq(invoices.status, 'issued')];
+      const outstandingCents = sql<number>`
+        ${invoices.grandTotalCents}
+        - coalesce((
+          select sum(${invoiceCorrections.amountCents})
+          from ${invoiceCorrections}
+          where ${invoiceCorrections.tenantId} = ${invoices.tenantId}
+            and ${invoiceCorrections.invoiceId} = ${invoices.id}
+        ), 0)
+        - coalesce((
+          select sum(${paymentAllocations.amountCents})
+          from ${paymentAllocations}
+          where ${paymentAllocations.tenantId} = ${invoices.tenantId}
+            and ${paymentAllocations.invoiceId} = ${invoices.id}
+            and not exists (
+              select 1
+              from ${paymentReversals}
+              where ${paymentReversals.tenantId} = ${paymentAllocations.tenantId}
+                and ${paymentReversals.allocationId} = ${paymentAllocations.id}
+            )
+        ), 0)
+      `;
+      const where = [
+        eq(invoices.tenantId, principal.tenantId),
+        eq(invoices.status, 'issued'),
+        gt(outstandingCents, 0),
+        billingScopeConditions(principal, 'billing.payments.read') ?? sql`false`,
+      ];
       if (query.organizationId) where.push(eq(invoices.organizationId, query.organizationId));
       if (query.clientId) where.push(eq(invoices.clientId, query.clientId));
-      const rows = await transaction
-        .select()
-        .from(invoices)
-        .where(and(...where))
-        .orderBy(asc(invoices.dueDate), desc(invoices.issueDate))
-        .limit(Math.min(page * pageSize + 100, 500));
-      const result: BillingInvoiceView[] = [];
-      for (const invoice of rows) {
-        if (
-          !can(principal, {
-            action: 'billing.payments.read',
-            resource: {
-              tenantId: principal.tenantId,
-              clientId: invoice.clientId,
-              organizationId: invoice.organizationId,
-              facilityId: invoice.facilityId,
-            },
-          })
-        )
-          continue;
-        const view = await this.invoiceView(transaction, principal, invoice);
-        if (view.outstandingCents && view.outstandingCents > 0) result.push(view);
+      const search = query.q?.trim();
+      if (search) {
+        const pattern = `%${search}%`;
+        const matchingClients = transaction
+          .select({ id: clientRecords.id })
+          .from(clientRecords)
+          .where(
+            and(
+              eq(clientRecords.tenantId, principal.tenantId),
+              or(
+                ilike(clientRecords.firstName, pattern),
+                ilike(clientRecords.preferredName, pattern),
+                ilike(clientRecords.lastName, pattern),
+                sql`concat(coalesce(${clientRecords.preferredName}, ${clientRecords.firstName}), ' ', ${clientRecords.lastName}) ilike ${pattern}`,
+              ),
+            ),
+          );
+        where.push(
+          or(ilike(invoices.invoiceNumber, pattern), inArray(invoices.clientId, matchingClients))!,
+        );
       }
-      return result.slice((page - 1) * pageSize, page * pageSize);
+      const whereClause = and(...where);
+      const [countRows, rows] = await Promise.all([
+        transaction.select({ total: count() }).from(invoices).where(whereClause),
+        transaction
+          .select()
+          .from(invoices)
+          .where(whereClause)
+          .orderBy(asc(invoices.dueDate), desc(invoices.issueDate), asc(invoices.id))
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
+      ]);
+      const items = await Promise.all(
+        rows.map((invoice) => this.invoiceView(transaction, principal, invoice)),
+      );
+      const total = Number(countRows[0]?.total ?? 0);
+      return { items, page, pageSize, total, totalPages: Math.ceil(total / pageSize) };
     });
   }
 
   async listPayments(
     principal: AuthorizationPrincipal,
-    query: { organizationId?: string; page?: number; pageSize?: number } = {},
+    query: {
+      organizationId?: string;
+      remainingOnly?: boolean;
+      page?: number;
+      pageSize?: number;
+    } = {},
   ): Promise<BillingPaymentView[]> {
+    return (await this.listPaymentsPage(principal, query)).items;
+  }
+
+  async listPaymentsPage(
+    principal: AuthorizationPrincipal,
+    query: {
+      organizationId?: string;
+      remainingOnly?: boolean;
+      page?: number;
+      pageSize?: number;
+    } = {},
+  ) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 25;
     if (
@@ -1437,26 +1538,38 @@ export class BillingApplicationService {
       this.requireOrganization(principal, 'billing.payments.read', query.organizationId);
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const where = [eq(payments.tenantId, principal.tenantId)];
+      where.push(billingPaymentScopeConditions(principal) ?? sql`false`);
       if (query.organizationId) where.push(eq(payments.organizationId, query.organizationId));
-      const rows = await transaction
-        .select()
-        .from(payments)
-        .where(and(...where))
-        .orderBy(desc(payments.receivedAt), desc(payments.id))
-        .limit(pageSize)
-        .offset((page - 1) * pageSize);
-      const output: BillingPaymentView[] = [];
-      for (const payment of rows) {
-        if (
-          !can(principal, {
-            action: 'billing.payments.read',
-            resource: { tenantId: principal.tenantId, organizationId: payment.organizationId },
-          })
-        )
-          continue;
-        output.push(await this.paymentView(transaction, principal.tenantId, payment));
+      if (query.remainingOnly) {
+        where.push(sql`${payments.amountCents} > coalesce((
+          select sum(${paymentAllocations.amountCents})
+          from ${paymentAllocations}
+          where ${paymentAllocations.tenantId} = ${payments.tenantId}
+            and ${paymentAllocations.paymentId} = ${payments.id}
+            and not exists (
+              select 1
+              from ${paymentReversals}
+              where ${paymentReversals.tenantId} = ${paymentAllocations.tenantId}
+                and ${paymentReversals.allocationId} = ${paymentAllocations.id}
+            )
+        ), 0)`);
       }
-      return output;
+      const whereClause = and(...where);
+      const [countRows, rows] = await Promise.all([
+        transaction.select({ total: count() }).from(payments).where(whereClause),
+        transaction
+          .select()
+          .from(payments)
+          .where(whereClause)
+          .orderBy(desc(payments.receivedAt), desc(payments.id))
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
+      ]);
+      const items = await Promise.all(
+        rows.map((payment) => this.paymentView(transaction, principal.tenantId, payment)),
+      );
+      const total = Number(countRows[0]?.total ?? 0);
+      return { items, page, pageSize, total, totalPages: Math.ceil(total / pageSize) };
     });
   }
 
@@ -3919,6 +4032,19 @@ function billingScopeConditions(
   if (organizations.length) clauses.push(inArray(invoices.organizationId, organizations));
   if (facilities.length) clauses.push(inArray(invoices.facilityId, facilities));
   return or(...clauses) ?? null;
+}
+
+function billingPaymentScopeConditions(principal: AuthorizationPrincipal): SQL | null {
+  const grants = principal.grants.filter((grant) => grant.permission === 'billing.payments.read');
+  if (
+    grants.some((grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId)
+  ) {
+    return sql`true`;
+  }
+  const organizations = grants
+    .filter((grant) => grant.scopeType === 'organization')
+    .map((grant) => grant.scopeId);
+  return organizations.length ? inArray(payments.organizationId, organizations) : null;
 }
 
 function currentDate(): string {

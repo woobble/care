@@ -18,9 +18,20 @@ import {
   updateOrganizationAction,
 } from '@app/web/app/(office)/administration/actions';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import type { components } from '@care/api-client';
 
 type Params = Promise<{ id: string }>;
-type SearchParams = Promise<{ error?: string; updated?: string }>;
+type SearchParams = Promise<{
+  error?: string;
+  updated?: string;
+  facilityPage?: string;
+  facilityPageSize?: string;
+  teamPage?: string;
+  teamPageSize?: string;
+}>;
 
 export default async function OrganizationDetailPage({
   params,
@@ -32,15 +43,64 @@ export default async function OrganizationDetailPage({
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
+  const facilityPage = positivePage(query.facilityPage);
+  const facilityPageSize = positivePageSize(query.facilityPageSize);
+  const teamPage = positivePage(query.teamPage);
+  const teamPageSize = positivePageSize(query.teamPageSize);
   const [organizationResult, facilitiesResult, teamsResult, permissions] = await Promise.all([
     get('/api/v1/organizations/{id}', { params: { path: { id }, header } }),
-    get('/api/v1/facilities', { params: { query: { organizationId: id }, header } }),
-    get('/api/v1/teams', { params: { query: { organizationId: id }, header } }),
+    get('/api/v1/facilities/search', {
+      params: {
+        query: { organizationId: id, page: facilityPage, pageSize: facilityPageSize },
+        header,
+      },
+    }),
+    get('/api/v1/teams/search', {
+      params: { query: { organizationId: id, page: teamPage, pageSize: teamPageSize }, header },
+    }),
     getPermissionGrants(api),
   ]);
   if (!organizationResult.data) notFound();
-  const organization = organizationResult.data;
+  const organization = organizationResult.data as components['schemas']['OrganizationResponseDto'];
   const tenantId = header['X-Tenant-Id'];
+  const facilities = facilitiesResult.data as unknown as
+    | {
+        items: components['schemas']['FacilityResponseDto'][];
+        page: number;
+        pageSize: number;
+        total: number;
+      }
+    | undefined;
+  const teams = teamsResult.data as unknown as
+    | {
+        items: components['schemas']['TeamResponseDto'][];
+        page: number;
+        pageSize: number;
+        total: number;
+      }
+    | undefined;
+  if (facilities) {
+    redirectToValidPage(
+      `/administration/organizations/${id}`,
+      { teamPage: String(teamPage), teamPageSize: String(teamPageSize) },
+      facilityPage,
+      facilityPageSize,
+      facilities.total,
+      'facilityPage',
+      'facilityPageSize',
+    );
+  }
+  if (teams) {
+    redirectToValidPage(
+      `/administration/organizations/${id}`,
+      { facilityPage: String(facilityPage), facilityPageSize: String(facilityPageSize) },
+      teamPage,
+      teamPageSize,
+      teams.total,
+      'teamPage',
+      'teamPageSize',
+    );
+  }
 
   return (
     <div className="grid gap-8">
@@ -198,9 +258,9 @@ export default async function OrganizationDetailPage({
             <Button type="submit">{t('Organizations.createFacility')}</Button>
           </div>
         </RHFActionForm>
-        {facilitiesResult.data?.length ? (
+        {facilities?.items.length ? (
           <ul className="grid gap-2">
-            {facilitiesResult.data.map((facility) => (
+            {facilities.items.map((facility) => (
               <li
                 key={facility.id}
                 className="flex flex-wrap justify-between gap-3 rounded-md border p-3"
@@ -225,18 +285,38 @@ export default async function OrganizationDetailPage({
               </li>
             ))}
           </ul>
+        ) : facilitiesResult.error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {t(
+              errorMessageKey(
+                (facilitiesResult.error as { code?: string }).code ?? 'INVALID_REQUEST',
+              ),
+            )}
+          </p>
         ) : (
           <p className="text-sm text-muted-foreground">{t('Organizations.noFacilities')}</p>
         )}
+        {facilities ? (
+          <DataPagination
+            pathname={`/administration/organizations/${id}`}
+            page={facilities.page}
+            pageSize={facilities.pageSize}
+            totalItems={facilities.total}
+            pageParam="facilityPage"
+            pageSizeParam="facilityPageSize"
+            controlId="facility-page-size"
+            filters={{ teamPage, teamPageSize }}
+          />
+        ) : null}
       </section>
 
       <section aria-labelledby="teams-title" className="grid gap-3">
         <h2 id="teams-title" className="text-xl font-semibold">
           {t('Organizations.teamsTitle')}
         </h2>
-        {teamsResult.data?.length ? (
+        {teams?.items.length ? (
           <ul className="grid gap-2">
-            {teamsResult.data.map((team) => (
+            {teams.items.map((team) => (
               <li
                 key={team.id}
                 className="flex flex-wrap justify-between gap-3 rounded-md border bg-card p-3"
@@ -263,11 +343,27 @@ export default async function OrganizationDetailPage({
               </li>
             ))}
           </ul>
+        ) : teamsResult.error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {t(errorMessageKey((teamsResult.error as { code?: string }).code ?? 'INVALID_REQUEST'))}
+          </p>
         ) : (
           <p className="rounded-lg border bg-card p-4 text-muted-foreground">
             {t('Organizations.noTeams')}
           </p>
         )}
+        {teams ? (
+          <DataPagination
+            pathname={`/administration/organizations/${id}`}
+            page={teams.page}
+            pageSize={teams.pageSize}
+            totalItems={teams.total}
+            pageParam="teamPage"
+            pageSizeParam="teamPageSize"
+            controlId="team-page-size"
+            filters={{ facilityPage, facilityPageSize }}
+          />
+        ) : null}
       </section>
     </div>
   );
@@ -303,4 +399,14 @@ function Field({
       />
     </div>
   );
+}
+
+function positivePage(value: string | undefined): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, 100_000) : 1;
+}
+
+function positivePageSize(value: string | undefined): number {
+  const parsed = Number(value);
+  return [10, 20, 50, 100].includes(parsed) ? parsed : 20;
 }

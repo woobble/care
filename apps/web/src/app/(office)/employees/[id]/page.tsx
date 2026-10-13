@@ -8,6 +8,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { ResourceCardLink, ResourceReference } from '@app/web/components/resource-reference';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { statusLabelKey } from '@app/web/i18n/status';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate } from '@app/web/i18n/format';
@@ -64,26 +65,13 @@ export default async function EmployeeDetailPage({
   if (!employeeResult.data) notFound();
   const employee = employeeResult.data;
   const { scheduleNow, scheduleFrom, scheduleUntil } = employeeVisitRange();
-  const [facilitiesResult, teamsResult, qualificationsResult, skillsResult, linkableUsersResult] =
-    await Promise.all([
-      get('/api/v1/facilities', {
-        params: {
-          query: employee.organizationId ? { organizationId: employee.organizationId } : {},
-          header,
-        },
-      }),
-      get('/api/v1/teams', {
-        params: {
-          query: employee.organizationId ? { organizationId: employee.organizationId } : {},
-          header,
-        },
-      }),
-      get('/api/v1/qualifications', { params: { query: { status: 'active' }, header } }),
-      get('/api/v1/skills', { params: { query: { status: 'active' }, header } }),
-      employee.linkedUser
-        ? Promise.resolve({ data: undefined, error: undefined })
-        : get('/api/v1/employees/{id}/linkable-users', { params: { path: { id }, header } }),
-    ]);
+  const [qualificationsResult, skillsResult, linkableUsersResult] = await Promise.all([
+    get('/api/v1/qualifications', { params: { query: { status: 'active' }, header } }),
+    get('/api/v1/skills', { params: { query: { status: 'active' }, header } }),
+    employee.linkedUser
+      ? Promise.resolve({ data: undefined, error: undefined })
+      : get('/api/v1/employees/{id}/linkable-users', { params: { path: { id }, header } }),
+  ]);
   const visitsResult = await get('/api/v1/visits', {
     params: {
       query: {
@@ -154,10 +142,6 @@ export default async function EmployeeDetailPage({
       recentExecutionByVisitId.get(visit.id)?.executionStatus !== undefined &&
       recentExecutionByVisitId.get(visit.id)?.executionStatus !== 'not_started',
   );
-  const facilities = (facilitiesResult.data ?? []).filter(
-    (facility) => facility.status === 'active',
-  );
-  const teams = (teamsResult.data ?? []).filter((team) => team.status === 'active');
   const qualifications = qualificationsResult.data ?? [];
   const skills = skillsResult.data ?? [];
   const assignments = employee.facilityAssignments.filter(
@@ -946,54 +930,40 @@ export default async function EmployeeDetailPage({
               ) : (
                 <p className="text-sm text-muted-foreground">{t('Employees.detail.noFacility')}</p>
               )}
-              {facilities.length ? (
-                <RHFActionForm
-                  action={assignFacilityAction}
-                  className="grid gap-3 rounded-md border p-3"
-                >
-                  <input type="hidden" name="employeeId" value={id} />
-                  <div className="grid gap-2">
-                    <Label htmlFor="facilityId">{t('Employees.detail.assignFacility')}</Label>
-                    <NativeSelect
-                      id="facilityId"
-                      name="facilityId"
-                      selectClassName="h-10 rounded-md border bg-card px-3"
-                      required
-                      defaultValue=""
-                      className="w-full"
-                    >
-                      <option value="" disabled>
-                        {t('Employees.detail.selectFacility')}
-                      </option>
-                      {facilities.map((facility) => (
-                        <option key={facility.id} value={facility.id}>
-                          {facility.name}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </div>
-                  <label className="flex items-center gap-2 text-sm">
-                    <ShadcnCheckbox name="isPrimary" /> {t('Employees.detail.setPrimaryFacility')}
-                  </label>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field
-                      id="facility-valid-from"
-                      name="validFrom"
-                      label={t('Employees.detail.validFrom')}
-                      type="date"
-                    />
-                    <Field
-                      id="facility-valid-until"
-                      name="validUntil"
-                      label={t('Employees.detail.validUntil')}
-                      type="date"
-                    />
-                  </div>
-                  <Button type="submit" disabled={!writable || employee.status !== 'active'}>
-                    {t('Employees.detail.assignFacilityAction')}
-                  </Button>
-                </RHFActionForm>
-              ) : null}
+              <RHFActionForm
+                action={assignFacilityAction}
+                className="grid gap-3 rounded-md border p-3"
+              >
+                <input type="hidden" name="employeeId" value={id} />
+                <AsyncEntityCombobox
+                  name="facilityId"
+                  entity="facilities"
+                  label={t('Employees.detail.assignFacility')}
+                  placeholder={t('Employees.detail.selectFacility')}
+                  organizationId={employee.organizationId ?? undefined}
+                  required
+                />
+                <label className="flex items-center gap-2 text-sm">
+                  <ShadcnCheckbox name="isPrimary" /> {t('Employees.detail.setPrimaryFacility')}
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field
+                    id="facility-valid-from"
+                    name="validFrom"
+                    label={t('Employees.detail.validFrom')}
+                    type="date"
+                  />
+                  <Field
+                    id="facility-valid-until"
+                    name="validUntil"
+                    label={t('Employees.detail.validUntil')}
+                    type="date"
+                  />
+                </div>
+                <Button type="submit" disabled={!writable || employee.status !== 'active'}>
+                  {t('Employees.detail.assignFacilityAction')}
+                </Button>
+              </RHFActionForm>
             </div>
             <div className="grid content-start gap-3">
               <h3 className="font-semibold">{t('Employees.detail.teams')}</h3>
@@ -1045,57 +1015,40 @@ export default async function EmployeeDetailPage({
               ) : (
                 <p className="text-sm text-muted-foreground">{t('Employees.detail.noTeam')}</p>
               )}
-              {teams.length ? (
-                <RHFActionForm
-                  action={assignTeamAction}
-                  className="grid gap-3 rounded-md border p-3"
-                >
-                  <input type="hidden" name="employeeId" value={id} />
-                  <div className="grid gap-2">
-                    <Label htmlFor="teamId">{t('Employees.detail.assignTeam')}</Label>
-                    <NativeSelect
-                      id="teamId"
-                      name="teamId"
-                      selectClassName="h-10 rounded-md border bg-card px-3"
-                      required
-                      defaultValue=""
-                      className="w-full"
-                    >
-                      <option value="" disabled>
-                        {t('Employees.detail.selectTeam')}
-                      </option>
-                      {teams.map((team) => (
-                        <option key={team.id} value={team.id}>
-                          {team.name}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </div>
+              <RHFActionForm action={assignTeamAction} className="grid gap-3 rounded-md border p-3">
+                <input type="hidden" name="employeeId" value={id} />
+                <AsyncEntityCombobox
+                  name="teamId"
+                  entity="teams"
+                  label={t('Employees.detail.assignTeam')}
+                  placeholder={t('Employees.detail.selectTeam')}
+                  organizationId={employee.organizationId ?? undefined}
+                  required
+                />
+                <Field
+                  id="team-role"
+                  name="role"
+                  label={t('Employees.detail.teamRoleOptional')}
+                  maxLength={80}
+                />
+                <div className="grid gap-3 sm:grid-cols-2">
                   <Field
-                    id="team-role"
-                    name="role"
-                    label={t('Employees.detail.teamRoleOptional')}
-                    maxLength={80}
+                    id="team-valid-from"
+                    name="validFrom"
+                    label={t('Employees.detail.validFrom')}
+                    type="date"
                   />
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field
-                      id="team-valid-from"
-                      name="validFrom"
-                      label={t('Employees.detail.validFrom')}
-                      type="date"
-                    />
-                    <Field
-                      id="team-valid-until"
-                      name="validUntil"
-                      label={t('Employees.detail.validUntil')}
-                      type="date"
-                    />
-                  </div>
-                  <Button type="submit" disabled={!writable || employee.status !== 'active'}>
-                    {t('Employees.detail.assignTeamAction')}
-                  </Button>
-                </RHFActionForm>
-              ) : null}
+                  <Field
+                    id="team-valid-until"
+                    name="validUntil"
+                    label={t('Employees.detail.validUntil')}
+                    type="date"
+                  />
+                </div>
+                <Button type="submit" disabled={!writable || employee.status !== 'active'}>
+                  {t('Employees.detail.assignTeamAction')}
+                </Button>
+              </RHFActionForm>
             </div>
           </div>
         ) : (

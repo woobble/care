@@ -9,6 +9,7 @@ import { permissionLabelKeys, roleLabelKey } from '@app/web/i18n/access';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { statusLabelKey } from '@app/web/i18n/status';
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import type { components } from '@care/api-client';
 import {
   activateMemberAction,
   deactivateMemberAction,
@@ -17,6 +18,7 @@ import {
   revokeMemberAction,
 } from '@app/web/app/(office)/administration/actions';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 
 type Params = Promise<{ id: string }>;
 type SearchParams = Promise<{ error?: string; updated?: string }>;
@@ -29,18 +31,12 @@ export default async function MemberDetailPage({
   const query = await searchParams;
   const t = await getTranslations();
   const api = await getApiClient();
-  const get = api.GET;
-  const [memberResult, rolesResult, organizationsResult, facilitiesResult, teamsResult] =
-    await Promise.all([
-      get('/api/v1/admin/members/{id}', {
-        params: { path: { id }, header: await getTenantHeader() },
-      }),
-      get('/api/v1/admin/roles', { params: { header: await getTenantHeader() } }),
-      get('/api/v1/organizations', { params: { header: await getTenantHeader() } }),
-      get('/api/v1/facilities', { params: { header: await getTenantHeader() } }),
-      get('/api/v1/teams', { params: { header: await getTenantHeader() } }),
-    ]);
-  if (memberResult.response.status === 404) notFound();
+  const header = await getTenantHeader();
+  const [memberResult, rolesResult] = await Promise.all([
+    api.GET('/api/v1/admin/members/{id}', { params: { path: { id }, header } }),
+    api.GET('/api/v1/admin/roles', { params: { header } }),
+  ]);
+  if (memberResult.response?.status === 404) notFound();
   if (!memberResult.data) {
     return (
       <p
@@ -51,15 +47,16 @@ export default async function MemberDetailPage({
       </p>
     );
   }
-  const member = memberResult.data;
-  const roles = rolesResult.data ?? [];
-  const organizations = organizationsResult.data ?? [];
-  const facilities = facilitiesResult.data ?? [];
-  const teams = teamsResult.data ?? [];
+  const member = memberResult.data as components['schemas']['TenantMemberDto'];
+  const roles = (rolesResult.data ?? []) as components['schemas']['TenantRoleDto'][];
+  const scopesOfType = (scopeType: 'organization' | 'facility' | 'team') =>
+    member.scopes
+      .filter((scope) => scope.scopeType === scopeType)
+      .map((scope) => ({
+        id: scope.scopeId,
+        label: scope.name ?? t('Resources.unavailableScope'),
+      }));
   const assignedRoleIds = new Set(member.roles.map((role) => role.id));
-  const assignedScopes = new Set(
-    member.scopes.map((scope) => `${scope.scopeType}:${scope.scopeId}`),
-  );
   const tenantScope = member.scopes.some((scope) => scope.scopeType === 'tenant');
 
   return (
@@ -87,10 +84,7 @@ export default async function MemberDetailPage({
           {t('Users.accessUpdated')}
         </p>
       ) : null}
-      {rolesResult.error ||
-      organizationsResult.error ||
-      facilitiesResult.error ||
-      teamsResult.error ? (
+      {rolesResult.error ? (
         <p
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
@@ -197,52 +191,40 @@ export default async function MemberDetailPage({
             </label>
           </fieldset>
           <fieldset className="grid gap-3">
-            <legend className="font-medium">{t('Teams.title')}</legend>
-            {teams.map((team) => (
-              <label key={team.id} className="flex items-center gap-2">
-                <ShadcnCheckbox
-                  name="scope"
-                  value={`team:${team.id}`}
-                  defaultChecked={assignedScopes.has(`team:${team.id}`)}
-                />
-                {team.name} — {team.organizationName}
-              </label>
-            ))}
-            {teams.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('Users.noVisibleTeams')}</p>
-            ) : null}
+            <legend className="sr-only">{t('Teams.title')}</legend>
+            <AsyncEntityCombobox
+              name="scope"
+              entity="teams"
+              label={t('Teams.title')}
+              multiple
+              valuePrefix="team:"
+              initialOptions={scopesOfType('team')}
+              placeholder={t('Users.noVisibleTeams')}
+            />
           </fieldset>
           <fieldset className="grid gap-3">
-            <legend className="font-medium">{t('Organizations.title')}</legend>
-            {organizations.map((organization) => (
-              <label key={organization.id} className="flex items-center gap-2">
-                <ShadcnCheckbox
-                  name="scope"
-                  value={`organization:${organization.id}`}
-                  defaultChecked={assignedScopes.has(`organization:${organization.id}`)}
-                />
-                {organization.name}
-              </label>
-            ))}
-            {organizations.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('Users.noVisibleOrganizations')}</p>
-            ) : null}
+            <legend className="sr-only">{t('Organizations.title')}</legend>
+            <AsyncEntityCombobox
+              name="scope"
+              entity="organizations"
+              label={t('Organizations.title')}
+              multiple
+              valuePrefix="organization:"
+              initialOptions={scopesOfType('organization')}
+              placeholder={t('Users.noVisibleOrganizations')}
+            />
           </fieldset>
           <fieldset className="grid gap-3">
-            <legend className="font-medium">{t('Facilities.title')}</legend>
-            {facilities.map((facility) => (
-              <label key={facility.id} className="flex items-center gap-2">
-                <ShadcnCheckbox
-                  name="scope"
-                  value={`facility:${facility.id}`}
-                  defaultChecked={assignedScopes.has(`facility:${facility.id}`)}
-                />
-                {facility.name} — {facility.organizationName}
-              </label>
-            ))}
-            {facilities.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('Users.noVisibleFacilities')}</p>
-            ) : null}
+            <legend className="sr-only">{t('Facilities.title')}</legend>
+            <AsyncEntityCombobox
+              name="scope"
+              entity="facilities"
+              label={t('Facilities.title')}
+              multiple
+              valuePrefix="facility:"
+              initialOptions={scopesOfType('facility')}
+              placeholder={t('Users.noVisibleFacilities')}
+            />
           </fieldset>
           <Button type="submit" disabled={member.status === 'revoked'}>
             {t('Users.saveScopes')}

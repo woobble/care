@@ -4468,6 +4468,17 @@ describe('clients API', () => {
         status: string;
       };
       expect(workforceOrganization.status).toBe('active');
+      const organizationIdLookup = await fetch(
+        `${baseUrl}/api/v1/organizations/search?ids=${workforceOrganization.id},${otherOrganizationId}&page=1&pageSize=1`,
+        { headers },
+      );
+      expect(organizationIdLookup.status).toBe(200);
+      expect(await organizationIdLookup.json()).toMatchObject({
+        page: 1,
+        pageSize: 1,
+        total: 1,
+        items: [expect.objectContaining({ id: workforceOrganization.id })],
+      });
       const updateWorkforceOrganization = await fetch(
         `${baseUrl}/api/v1/organizations/${workforceOrganization.id}`,
         {
@@ -4517,6 +4528,17 @@ describe('clients API', () => {
       expect(workforceTeamResponse.status).toBe(201);
       const workforceTeam = (await workforceTeamResponse.json()) as { id: string; status: string };
       expect(workforceTeam.status).toBe('active');
+      const teamIdLookup = await fetch(
+        `${baseUrl}/api/v1/teams/search?ids=${workforceTeam.id}&page=1&pageSize=1`,
+        { headers },
+      );
+      expect(teamIdLookup.status).toBe(200);
+      expect(await teamIdLookup.json()).toMatchObject({
+        page: 1,
+        pageSize: 1,
+        total: 1,
+        items: [expect.objectContaining({ id: workforceTeam.id })],
+      });
       const updateWorkforceTeam = await fetch(`${baseUrl}/api/v1/teams/${workforceTeam.id}`, {
         method: 'PATCH',
         headers,
@@ -4982,6 +5004,10 @@ describe('clients API', () => {
         headers: caregiverAdminHeaders,
       });
       expect(caregiverCannotListMembers.status).toBe(403);
+      const caregiverCannotListInvitations = await fetch(`${baseUrl}/api/v1/admin/invitations`, {
+        headers: caregiverAdminHeaders,
+      });
+      expect(caregiverCannotListInvitations.status).toBe(403);
       const caregiverCannotReadAudit = await fetch(`${baseUrl}/api/v1/audit`, {
         headers: caregiverAdminHeaders,
       });
@@ -5027,6 +5053,22 @@ describe('clients API', () => {
       expect(invitation).toMatchObject({
         invitation: { email: newUserEmail, status: 'pending' },
       });
+      const invitationPageResponse = await fetch(
+        `${baseUrl}/api/v1/admin/invitations?page=1&pageSize=1`,
+        { headers },
+      );
+      expect(invitationPageResponse.status).toBe(200);
+      const invitationPage = (await invitationPageResponse.json()) as {
+        items: Array<{ id: string }>;
+        page: number;
+        pageSize: number;
+        total: number;
+      };
+      expect(invitationPage).toMatchObject({ page: 1, pageSize: 1 });
+      expect(invitationPage.total).toBeGreaterThanOrEqual(1);
+      expect(invitationPage.items).toContainEqual(
+        expect.objectContaining({ id: invitation.invitation.id }),
+      );
       const duplicateInvitation = await fetch(`${baseUrl}/api/v1/admin/invitations`, {
         method: 'POST',
         headers,

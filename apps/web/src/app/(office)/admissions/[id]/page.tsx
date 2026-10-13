@@ -3,6 +3,8 @@ import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import type { components } from '@care/api-client';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -169,7 +171,8 @@ export default async function AdmissionCasePage({
   const result = await api.GET('/api/v1/onboarding/cases/{id}', {
     params: { path: { id }, header },
   });
-  if (result.error?.code === 'ONBOARDING_CASE_NOT_FOUND') notFound();
+  if ((result.error as { code?: string } | undefined)?.code === 'ONBOARDING_CASE_NOT_FOUND')
+    notFound();
   const admission = result.data as unknown as AdmissionCaseDetail | undefined;
   if (!admission)
     return (
@@ -226,26 +229,17 @@ export default async function AdmissionCasePage({
           params: { path: { id: admission.clientId }, header },
         })
       : null;
-  const linkableClientsResult =
-    canManage && canReadClient && !admission.clientId
-      ? await api.GET('/api/v1/clients', {
-          params: {
-            query: {
-              status: 'active',
-              organizationId: admission.organizationId,
-              ...(admission.facilityId ? { facilityId: admission.facilityId } : {}),
-              page: 1,
-              pageSize: 100,
-              sortBy: 'lastName',
-              sortOrder: 'asc',
-            },
-            header,
-          },
-        })
-      : null;
-  const linkableClients = linkableClientsResult?.data?.items ?? [];
+  const linkedClient = linkedClientResult?.data as
+    | components['schemas']['ClientResponseDto']
+    | undefined;
+  const createdVisit = createdVisitResult.data as
+    | components['schemas']['VisitResponseDto']
+    | undefined;
+  const createdTask = createdTaskResult.data as
+    | components['schemas']['OperationsTaskResponseDto']
+    | undefined;
   const canPlanFirstVisit =
-    Boolean(linkedClientResult?.data && linkedClientResult.data.status === 'active') &&
+    Boolean(linkedClient && linkedClient.status === 'active') &&
     canScheduleCreate &&
     canScheduleRead &&
     canManage &&
@@ -311,15 +305,12 @@ export default async function AdmissionCasePage({
           {t('visitCreatedButUnlinked')} {t('createdVisit')}:{' '}
           <ResourceReference
             label={
-              createdVisitResult.data
-                ? (formatDateTime(
-                    createdVisitResult.data.plannedStart,
-                    locale as Locale,
-                    timezone,
-                  ) ?? t('createdVisit'))
+              createdVisit
+                ? (formatDateTime(createdVisit.plannedStart, locale as Locale, timezone) ??
+                  t('createdVisit'))
                 : translate('Resources.unavailableVisit')
             }
-            href={createdVisitResult.data ? `/visits/${query.createdVisitId}` : null}
+            href={createdVisit ? `/visits/${query.createdVisitId}` : null}
           />
         </p>
       ) : null}
@@ -330,8 +321,8 @@ export default async function AdmissionCasePage({
         >
           {t('taskCreatedButUnlinked')}{' '}
           <ResourceReference
-            label={createdTaskResult.data?.title ?? translate('Resources.unavailableTask')}
-            href={createdTaskResult.data ? `/operations/tasks/${query.createdTaskId}` : null}
+            label={createdTask?.title ?? translate('Resources.unavailableTask')}
+            href={createdTask ? `/operations/tasks/${query.createdTaskId}` : null}
           />
         </p>
       ) : null}
@@ -613,32 +604,24 @@ export default async function AdmissionCasePage({
           </details>
         ) : null}
         {canManage && canReadClient && !admission.clientId ? (
-          linkableClients.length ? (
-            <RHFActionForm
-              action={linkAdmissionClientAction}
-              className="grid gap-3 rounded-md border p-4 sm:grid-cols-[1fr_1fr_auto]"
-            >
-              <HiddenCase admission={admission} />
-              <SelectField name="clientId" label={t('clientId')} value="">
-                <option value="" disabled>
-                  {t('selectExistingClient')}
-                </option>
-                {linkableClients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.preferredName || client.firstName} {client.lastName}
-                  </option>
-                ))}
-              </SelectField>
-              <Field name="reason" label={t('linkReason')} />
-              <Button type="submit" className="self-end">
-                {t('linkClient')}
-              </Button>
-            </RHFActionForm>
-          ) : (
-            <p className="rounded-md border p-4 text-sm text-muted-foreground">
-              {t('noLinkableClients')}
-            </p>
-          )
+          <RHFActionForm
+            action={linkAdmissionClientAction}
+            className="grid gap-3 rounded-md border p-4 sm:grid-cols-[1fr_1fr_auto]"
+          >
+            <HiddenCase admission={admission} />
+            <AsyncEntityCombobox
+              name="clientId"
+              entity="clients"
+              label={t('clientId')}
+              placeholder={t('selectExistingClient')}
+              organizationId={admission.organizationId}
+              facilityId={admission.facilityId ?? undefined}
+            />
+            <Field name="reason" label={t('linkReason')} />
+            <Button type="submit" className="self-end">
+              {t('linkClient')}
+            </Button>
+          </RHFActionForm>
         ) : null}
         {canManage && canCreateClient && !admission.clientId && admission.stage !== 'admitted' ? (
           admission.facilityId ? (

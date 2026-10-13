@@ -20,14 +20,26 @@ import {
   recordPaymentAction,
   reversePaymentAllocationAction,
 } from '@app/web/app/(office)/billing/actions';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
 
-type SearchParams = Promise<{ invoiceId?: string; error?: string; updated?: string }>;
+type SearchParams = Promise<{
+  invoiceId?: string;
+  page?: string;
+  pageSize?: string;
+  error?: string;
+  updated?: string;
+}>;
 
 export default async function BillingPaymentsPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
   const invoiceId = validUuid(query.invoiceId);
+  const page = positivePage(query.page);
+  const pageSize = positivePageSize(query.pageSize);
   const [t, translate, locale] = await Promise.all([
     getTranslations('Billing'),
     getTranslations(),
@@ -35,23 +47,51 @@ export default async function BillingPaymentsPage({
   ]);
   const api = await getApiClient();
   const header = await getTenantHeader();
-  const [paymentResult, receivableResult, organizationResult, permissions] = await Promise.all([
-    api.GET('/api/v1/billing/payments', { params: { query: { page: 1, pageSize: 50 }, header } }),
-    api.GET('/api/v1/billing/receivables', {
-      params: { query: { page: 1, pageSize: 100 }, header },
-    }),
-    api.GET('/api/v1/organizations', { params: { header } }),
+  const [paymentResult, selectedInvoiceResult, permissions] = await Promise.all([
+    api.GET('/api/v1/billing/payments', { params: { query: { page, pageSize }, header } }),
+    invoiceId
+      ? api.GET('/api/v1/billing/invoices/{id}', { params: { path: { id: invoiceId }, header } })
+      : Promise.resolve(null),
     getPermissionGrants(api),
   ]);
-  const payments = paymentResult.data?.items ?? [];
-  const invoices = receivableResult.data?.items ?? [];
-  const organizations = organizationResult.data ?? [];
+  const paymentData = paymentResult.data as unknown as
+    | (components['schemas']['BillingPaymentListResponseDto'] & { totalPages: number })
+    | undefined;
+  const selectedInvoice = selectedInvoiceResult?.data as
+    | components['schemas']['BillingInvoiceResponseDto']
+    | undefined;
+  const payments = paymentData?.items ?? [];
   const canManage = hasPermission(permissions, 'billing.payments.manage');
   const updated =
     query.updated === 'payment' || query.updated === 'allocation' || query.updated === 'reversal'
       ? query.updated
       : null;
-  const error = query.error ?? paymentResult.error?.code ?? receivableResult.error?.code;
+  const paymentError = paymentResult.error as { code?: string } | undefined;
+  const error = query.error ?? paymentError?.code;
+  if (paymentData) {
+    redirectToValidPage(
+      '/billing/payments',
+      invoiceId ? { invoiceId } : {},
+      page,
+      pageSize,
+      paymentData.total,
+    );
+  }
+  const selectedInvoiceOption =
+    selectedInvoice?.invoiceNumber || selectedInvoice?.clientName
+      ? {
+          id: selectedInvoice.id,
+          label: [
+            selectedInvoice.invoiceNumber ?? t('draftIdentifier'),
+            selectedInvoice.clientName,
+            typeof selectedInvoice.outstandingCents === 'number'
+              ? euroInput(selectedInvoice.outstandingCents)
+              : undefined,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        }
+      : undefined;
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
@@ -76,19 +116,13 @@ export default async function BillingPaymentsPage({
             action={recordPaymentAction}
             className="grid gap-3 md:grid-cols-2 lg:grid-cols-3"
           >
-            <SelectField
-              id="payment-organization"
+            <AsyncEntityCombobox
               name="organizationId"
               label={t('organization')}
+              entity="organizations"
+              placeholder={t('selectOrganization')}
               required
-            >
-              <option value="">{t('selectOrganization')}</option>
-              {organizations.map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-            </SelectField>
+            />
             <Field id="payment-payer" name="payerName" label={t('payerName')} />
             <Field id="payment-payer-reference" name="payerReference" label={t('payerReference')} />
             <Field
@@ -132,13 +166,6 @@ export default async function BillingPaymentsPage({
         {payments.length ? (
           <ul className="grid gap-4">
             {payments.map((payment) => {
-              const eligibleInvoices = invoices.filter(
-                (invoice) =>
-                  invoice.organizationId === payment.organizationId &&
-                  invoice.outstandingCents &&
-                  invoice.outstandingCents > 0,
-              );
-              const selectedInvoice = eligibleInvoices.find((invoice) => invoice.id === invoiceId);
               return (
                 <li key={payment.id} className="grid gap-3 rounded-md border p-4">
                   <div className="flex flex-wrap justify-between gap-3">
@@ -172,8 +199,7 @@ export default async function BillingPaymentsPage({
                               className="text-primary underline"
                               href={`/billing/invoices/${allocation.invoiceId}`}
                             >
-                              {allocation.invoiceNumber ??
-                                t('draftIdentifier')}
+                              {allocation.invoiceNumber ?? t('draftIdentifier')}
                             </Link>
                             {' · '}
                             {formatCents(allocation.amountCents, locale)}
@@ -208,28 +234,24 @@ export default async function BillingPaymentsPage({
                   ) : (
                     <p className="text-sm text-muted-foreground">{t('noPaymentAllocations')}</p>
                   )}
-                  {payment.remainingCents > 0 && eligibleInvoices.length && canManage ? (
+                  {payment.remainingCents > 0 && canManage ? (
                     <RHFActionForm
                       action={allocatePaymentAction}
                       className="grid gap-3 rounded-md bg-background p-4 md:grid-cols-[1fr_12rem_auto]"
                     >
                       <input type="hidden" name="paymentId" value={payment.id} />
-                      <SelectField
-                        id={`invoice-${payment.id}`}
+                      <AsyncEntityCombobox
                         name="invoiceId"
                         label={t('allocateToInvoice')}
+                        entity="receivables"
+                        organizationId={payment.organizationId}
+                        placeholder={t('selectInvoice')}
+                        {...(selectedInvoice?.organizationId === payment.organizationId &&
+                        selectedInvoiceOption
+                          ? { initialOption: selectedInvoiceOption }
+                          : {})}
                         required
-                        defaultValue={selectedInvoice?.id ?? ''}
-                      >
-                        <option value="">{t('selectInvoice')}</option>
-                        {eligibleInvoices.map((invoice) => (
-                          <option key={invoice.id} value={invoice.id}>
-                            {invoice.invoiceNumber ??
-                              t('draftIdentifier')}{' '}
-                            · {invoice.clientName} · {formatCents(invoice.outstandingCents, locale)}
-                          </option>
-                        ))}
-                      </SelectField>
+                      />
                       <Field
                         id={`allocation-amount-${payment.id}`}
                         name="amount"
@@ -254,6 +276,15 @@ export default async function BillingPaymentsPage({
         ) : (
           <p className="text-sm text-muted-foreground">{t('paymentsEmpty')}</p>
         )}
+        {paymentData ? (
+          <DataPagination
+            pathname="/billing/payments"
+            page={paymentData.page}
+            pageSize={paymentData.pageSize}
+            totalItems={paymentData.total}
+            filters={invoiceId ? { invoiceId } : {}}
+          />
+        ) : null}
       </section>
     </div>
   );
@@ -278,6 +309,17 @@ function validUuid(value: string | undefined): string | undefined {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
     ? value
     : undefined;
+}
+
+function positivePage(value: string | undefined): number {
+  if (!value || !/^\d+$/.test(value)) return 1;
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page > 0 && page <= 100_000 ? page : 1;
+}
+
+function positivePageSize(value: string | undefined): number {
+  const pageSize = Number(value);
+  return [10, 20, 50, 100].includes(pageSize) ? pageSize : 20;
 }
 
 function Field({

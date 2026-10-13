@@ -43,6 +43,9 @@ import { withoutUndefined } from './validation';
 import {
   ClaimCreateDto,
   PayerInputDto,
+  PayerBillingProfileResponseDto,
+  PayerDirectoryEntryDto,
+  PayerListResponseDto,
   PayerProfileInputDto,
   PayerUpdateDto,
   claimDecisionSchema,
@@ -51,9 +54,16 @@ import {
   createClaimSchema,
   expectedVersionSchema,
   payerCreateSchema,
+  payerLookupQuerySchema,
   payerProfileSchema,
+  payersListQuerySchema,
   payerUpdateSchema,
 } from './claims.dto';
+
+type PayerDirectoryRecord = Awaited<ReturnType<BillingClaimsApplicationService['getPayer']>>;
+type PayerProfileRecord = Awaited<
+  ReturnType<BillingClaimsApplicationService['payerProfiles']>
+>[number];
 
 @ApiTags('billing claims')
 @ApiBearerAuth()
@@ -68,11 +78,71 @@ export class ClaimsController {
   ) {}
 
   @Get('payers')
-  @ApiOperation({ summary: 'List payer records in the authorized provider scope' })
+  @ApiOperation({
+    summary: 'List payer records with database pagination in the authorized provider scope',
+  })
   @ApiQuery({ name: 'organizationId', required: true, format: 'uuid' })
-  @ApiOkResponse({ schema: { type: 'array', items: { type: 'object' } } })
-  async listPayers(@Req() request: ApiRequest, @Query('organizationId') organizationId: string) {
-    return this.claims.listPayers(principal(request), parseId(organizationId));
+  @ApiQuery({ name: 'q', required: false, type: String, maxLength: 120 })
+  @ApiQuery({ name: 'status', required: false, enum: ['active', 'inactive'] })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, maximum: 100 })
+  @ApiOkResponse({ type: PayerListResponseDto })
+  async listPayers(
+    @Req() request: ApiRequest,
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<PayerListResponseDto> {
+    const parsed = payersListQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    const result = await this.claims.listPayers(principal(request), parsed.data);
+    return { ...result, items: result.items.map(payerResponse) };
+  }
+
+  @Get('payer-directory/lookup')
+  @ApiOperation({ summary: 'Resolve up to 100 payer records within an authorized organization' })
+  @ApiQuery({ name: 'organizationId', required: true, format: 'uuid' })
+  @ApiQuery({
+    name: 'payerIds',
+    required: true,
+    type: String,
+    description: 'Comma-separated payer UUIDs; maximum 100',
+  })
+  @ApiOkResponse({ type: [PayerDirectoryEntryDto] })
+  async lookupPayers(
+    @Req() request: ApiRequest,
+    @Query() query: Record<string, string | undefined>,
+  ) {
+    const parsed = payerLookupQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    const payers = await this.claims.lookupPayers(
+      principal(request),
+      parsed.data.organizationId,
+      parsed.data.payerIds,
+    );
+    return payers.map(payerResponse);
+  }
+
+  @Get('payer-directory/profiles')
+  @ApiOperation({ summary: 'Load payer profiles for a bounded set of authorized payer records' })
+  @ApiQuery({ name: 'organizationId', required: true, format: 'uuid' })
+  @ApiQuery({
+    name: 'payerIds',
+    required: true,
+    type: String,
+    description: 'Comma-separated payer UUIDs; maximum 100',
+  })
+  @ApiOkResponse({ type: [PayerBillingProfileResponseDto] })
+  async payerProfilesForOrganization(
+    @Req() request: ApiRequest,
+    @Query() query: Record<string, string | undefined>,
+  ) {
+    const parsed = payerLookupQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    const profiles = await this.claims.payerProfilesForOrganization(
+      principal(request),
+      parsed.data.organizationId,
+      parsed.data.payerIds,
+    );
+    return profiles.map(payerProfileResponse);
   }
 
   @Post('payers')
@@ -119,9 +189,10 @@ export class ClaimsController {
   @Get('payers/:id/profiles')
   @ApiOperation({ summary: 'List immutable, versioned payer requirements profiles' })
   @ApiParam({ name: 'id', format: 'uuid' })
-  @ApiOkResponse({ schema: { type: 'array', items: { type: 'object' } } })
+  @ApiOkResponse({ type: [PayerBillingProfileResponseDto] })
   async payerProfiles(@Req() request: ApiRequest, @Param('id') id: string) {
-    return this.claims.payerProfiles(principal(request), parseId(id));
+    const profiles = await this.claims.payerProfiles(principal(request), parseId(id));
+    return profiles.map(payerProfileResponse);
   }
 
   @Post('payers/:id/profiles')
@@ -345,6 +416,18 @@ export class ClaimsController {
   async paymentSummary(@Req() request: ApiRequest, @Param('id') id: string) {
     return this.claims.paymentSummary(principal(request), parseId(id));
   }
+}
+
+function payerResponse(payer: PayerDirectoryRecord): PayerDirectoryEntryDto {
+  return {
+    ...payer,
+    createdAt: payer.createdAt.toISOString(),
+    updatedAt: payer.updatedAt.toISOString(),
+  };
+}
+
+function payerProfileResponse(profile: PayerProfileRecord): PayerBillingProfileResponseDto {
+  return { ...profile, createdAt: profile.createdAt.toISOString() };
 }
 
 function principal(request: ApiRequest) {

@@ -1,4 +1,3 @@
-import { NativeSelect } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
@@ -19,9 +18,18 @@ import {
   updateTeamAction,
 } from '@app/web/app/(office)/administration/actions';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
 
 type Params = Promise<{ id: string }>;
-type SearchParams = Promise<{ error?: string; updated?: string }>;
+type SearchParams = Promise<{
+  error?: string;
+  updated?: string;
+  employeePage?: string;
+  employeePageSize?: string;
+}>;
 
 export default async function TeamDetailPage({
   params,
@@ -33,14 +41,17 @@ export default async function TeamDetailPage({
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
-  const [teamResult, facilitiesResult, employeesResult, permissions] = await Promise.all([
+  const employeePage = positivePage(query.employeePage);
+  const employeePageSize = positivePageSize(query.employeePageSize);
+  const [teamResult, employeesResult, permissions] = await Promise.all([
     get('/api/v1/teams/{id}', { params: { path: { id }, header } }),
-    get('/api/v1/facilities', { params: { header } }),
-    get('/api/v1/employees', { params: { query: { teamId: id, page: 1, pageSize: 50 }, header } }),
+    get('/api/v1/employees', {
+      params: { query: { teamId: id, page: employeePage, pageSize: employeePageSize }, header },
+    }),
     getPermissionGrants(api),
   ]);
   if (!teamResult.data) notFound();
-  const team = teamResult.data;
+  const team = teamResult.data as components['schemas']['TeamResponseDto'];
   const tenantId = header['X-Tenant-Id'];
   const canReadEmployees = hasClientPermission(
     permissions,
@@ -49,9 +60,25 @@ export default async function TeamDetailPage({
     team.organizationId,
     team.facilityId,
   );
-  const facilities = (facilitiesResult.data ?? []).filter(
-    (facility) => facility.organizationId === team.organizationId && facility.status === 'active',
-  );
+  const employees = employeesResult.data as unknown as
+    | {
+        items: components['schemas']['EmployeeListResponseDto']['items'];
+        page: number;
+        pageSize: number;
+        total: number;
+      }
+    | undefined;
+  if (employees) {
+    redirectToValidPage(
+      `/administration/teams/${id}`,
+      {},
+      employeePage,
+      employeePageSize,
+      employees.total,
+      'employeePage',
+      'employeePageSize',
+    );
+  }
 
   return (
     <div className="grid gap-8">
@@ -92,23 +119,18 @@ export default async function TeamDetailPage({
             <Label htmlFor="name">{t('Common.fields.name')}</Label>
             <Input id="name" name="name" defaultValue={team.name} required maxLength={160} />
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="facilityId">{t('Teams.facility')}</Label>
-            <NativeSelect
-              id="facilityId"
-              name="facilityId"
-              selectClassName="h-10 rounded-md border bg-card px-3"
-              defaultValue={team.facilityId ?? ''}
-              className="w-full"
-            >
-              <option value="">{t('Teams.organizationWide')}</option>
-              {facilities.map((facility) => (
-                <option key={facility.id} value={facility.id}>
-                  {facility.name}
-                </option>
-              ))}
-            </NativeSelect>
-          </div>
+          <AsyncEntityCombobox
+            name="facilityId"
+            entity="facilities"
+            label={t('Teams.facility')}
+            organizationId={team.organizationId}
+            placeholder={t('Teams.organizationWide')}
+            {...(team.facilityId && team.facilityName
+              ? {
+                  initialOption: { id: team.facilityId, label: team.facilityName },
+                }
+              : {})}
+          />
           <div className="md:col-span-2">
             <Button type="submit">{t('Common.actions.save')}</Button>
           </div>
@@ -142,9 +164,9 @@ export default async function TeamDetailPage({
           >
             {t('Teams.employeeLoadFailed')}
           </p>
-        ) : employeesResult.data?.items.length ? (
+        ) : employees?.items.length ? (
           <ul className="grid gap-2">
-            {employeesResult.data.items.map((employee) => (
+            {employees.items.map((employee) => (
               <li
                 key={employee.id}
                 className="flex justify-between gap-3 rounded-md border bg-card p-3"
@@ -165,12 +187,34 @@ export default async function TeamDetailPage({
               </li>
             ))}
           </ul>
-        ) : (
+        ) : employees ? (
           <p className="rounded-lg border bg-card p-4 text-muted-foreground">
             {t('Teams.noEmployees')}
           </p>
-        )}
+        ) : null}
+        {employees ? (
+          <DataPagination
+            pathname={`/administration/teams/${id}`}
+            page={employees.page}
+            pageSize={employees.pageSize}
+            totalItems={employees.total}
+            pageParam="employeePage"
+            pageSizeParam="employeePageSize"
+            controlId="employee-page-size"
+            filters={{}}
+          />
+        ) : null}
       </section>
     </div>
   );
+}
+
+function positivePage(value: string | undefined): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, 100_000) : 1;
+}
+
+function positivePageSize(value: string | undefined): number {
+  const parsed = Number(value);
+  return [10, 20, 50, 100].includes(parsed) ? parsed : 20;
 }

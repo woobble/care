@@ -2,10 +2,13 @@ import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
-import { ResourceReference } from '@app/web/components/resource-reference';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDateTime } from '@app/web/i18n/format';
+import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
 import {
   getApiClient,
   getPermissionGrants,
@@ -22,6 +25,7 @@ import {
   issueTitleKey,
   workItemSourceHref,
 } from '@app/web/app/(office)/operations/ui';
+import type { components } from '@care/api-client';
 
 type SearchParams = Promise<Record<string, string | undefined>>;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -70,19 +74,20 @@ export default async function OperationsDeadlinesPage({
   const fromDate = validDate(query.fromDate);
   const untilDate = validDate(query.untilDate);
   const page = Math.max(1, Math.min(100_000, Number.parseInt(query.page ?? '1', 10) || 1));
+  const requestedPageSize = Number(query.pageSize ?? '20');
+  const pageSize = [10, 20, 50, 100].includes(requestedPageSize) ? requestedPageSize : 20;
   const [
     deadlineResult,
-    organizationResult,
     facilityResult,
-    employeeResult,
     selectedClientResult,
     selectedEmployeeResult,
+    selectedAssignedEmployeeResult,
   ] = await Promise.all([
     api.GET('/api/v1/operations/deadlines', {
       params: {
         query: {
           page,
-          pageSize: 25,
+          pageSize,
           sort: 'due',
           ...(organizationId ? { organizationId } : {}),
           ...(facilityId ? { facilityId } : {}),
@@ -99,25 +104,8 @@ export default async function OperationsDeadlinesPage({
         header,
       },
     }),
-    api.GET('/api/v1/organizations', { params: { header } }),
-    api.GET('/api/v1/facilities', {
-      params: { query: organizationId ? { organizationId } : {}, header },
-    }),
-    canFilterByAssignee
-      ? api.GET('/api/v1/employees', {
-          params: {
-            query: {
-              status: 'active',
-              page: 1,
-              pageSize: 100,
-              sortBy: 'lastName',
-              sortOrder: 'asc',
-              ...(organizationId ? { organizationId } : {}),
-              ...(facilityId ? { facilityId } : {}),
-            },
-            header,
-          },
-        })
+    facilityId && hasPermission(permissions, 'facility.read')
+      ? api.GET('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
       : Promise.resolve({ data: undefined, error: undefined }),
     clientId && hasPermission(permissions, 'client.read')
       ? api.GET('/api/v1/clients/{id}', { params: { path: { id: clientId }, header } })
@@ -125,15 +113,43 @@ export default async function OperationsDeadlinesPage({
     employeeId && hasPermission(permissions, 'employee.read')
       ? api.GET('/api/v1/employees/{id}', { params: { path: { id: employeeId }, header } })
       : Promise.resolve({ data: undefined, error: undefined }),
+    assignedEmployeeId && canFilterByAssignee
+      ? api.GET('/api/v1/employees/{id}', {
+          params: { path: { id: assignedEmployeeId }, header },
+        })
+      : Promise.resolve({ data: undefined, error: undefined }),
   ]);
-  const items = deadlineResult.data?.items ?? [];
-  const organizations = organizationResult.data ?? [];
-  const facilities = facilityResult.data ?? [];
-  const employees = employeeResult.data?.items ?? [];
-  const timezoneByOrganization = new Map(organizations.map((org) => [org.id, org.timezone]));
+  const result = deadlineResult.data as unknown as
+    | components['schemas']['OperationsWorklistResponseDto']
+    | undefined;
+  const items = result?.items ?? [];
+  if (result)
+    redirectToValidPage('/operations/deadlines', query, result.page, result.pageSize, result.total);
+  const selectedFacility = facilityResult.data as
+    | components['schemas']['FacilityResponseDto']
+    | undefined;
+  const selectedClient = selectedClientResult.data as
+    | components['schemas']['ClientResponseDto']
+    | undefined;
+  const selectedEmployee = selectedEmployeeResult.data as
+    | components['schemas']['EmployeeResponseDto']
+    | undefined;
+  const selectedAssignedEmployee = selectedAssignedEmployeeResult.data as
+    | components['schemas']['EmployeeResponseDto']
+    | undefined;
+  const organizationLookup = hasPermission(permissions, 'organization.read')
+    ? await getOrganizationsByIds([
+        ...(organizationId ? [organizationId] : []),
+        ...items.flatMap((item) => (item.organizationId ? [item.organizationId] : [])),
+      ])
+    : { items: [], failed: false };
+  const timezoneOrganizations = organizationLookup.items;
+  const selectedOrganization = timezoneOrganizations.find((item) => item.id === organizationId);
+  const timezoneByOrganization = new Map(
+    timezoneOrganizations.map((organization) => [organization.id, organization.timezone]),
+  );
   const canManage = hasPermission(permissions, 'operations.exceptions.manage');
   const canCreateTask = hasPermission(permissions, 'operations.tasks.create');
-  const result = deadlineResult.data;
 
   return (
     <div className="grid gap-6">
@@ -169,7 +185,7 @@ export default async function OperationsDeadlinesPage({
           {query.updated === 'acknowledged' ? t('acknowledged') : t('snoozed')}
         </p>
       ) : null}
-      {deadlineResult.error || organizationResult.error || facilityResult.error ? (
+      {deadlineResult.error || organizationLookup.failed || facilityResult.error ? (
         <p
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
@@ -190,38 +206,35 @@ export default async function OperationsDeadlinesPage({
         method="get"
         className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4"
       >
-        <label className="grid gap-1 text-sm">
-          <span>{t('organization')}</span>
-          <NativeSelect
-            selectClassName="h-10 rounded-md border px-3"
+        <input type="hidden" name="pageSize" value={pageSize} />
+        {hasPermission(permissions, 'organization.read') ? (
+          <AsyncEntityCombobox
             name="organizationId"
-            defaultValue={organizationId ?? ''}
-            className="w-full"
-          >
-            <option value="">{t('all')}</option>
-            {organizations.map((org) => (
-              <option key={org.id} value={org.id}>
-                {org.name}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span>{t('facility')}</span>
-          <NativeSelect
-            selectClassName="h-10 rounded-md border px-3"
+            label={t('organization')}
+            entity="organizations"
+            placeholder={t('all')}
+            {...(selectedOrganization
+              ? { initialOption: { id: selectedOrganization.id, label: selectedOrganization.name } }
+              : {})}
+          />
+        ) : null}
+        {hasPermission(permissions, 'facility.read') ? (
+          <AsyncEntityCombobox
             name="facilityId"
-            defaultValue={facilityId ?? ''}
-            className="w-full"
-          >
-            <option value="">{t('all')}</option>
-            {facilities.map((facility) => (
-              <option key={facility.id} value={facility.id}>
-                {facility.name}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
+            label={t('facility')}
+            entity="facilities"
+            {...(organizationId ? { organizationId } : {})}
+            placeholder={t('all')}
+            {...(selectedFacility
+              ? {
+                  initialOption: {
+                    id: selectedFacility.id,
+                    label: `${selectedFacility.organizationName} · ${selectedFacility.name}`,
+                  },
+                }
+              : {})}
+          />
+        ) : null}
         <label className="grid gap-1 text-sm">
           <span>{t('category')}</span>
           <NativeSelect
@@ -287,66 +300,53 @@ export default async function OperationsDeadlinesPage({
           </NativeSelect>
         </label>
         {hasPermission(permissions, 'client.read') ? (
-          <label className="grid gap-1 text-sm">
-            <span>{t('client')}</span>
-            {clientId ? (
-              <>
-                <input type="hidden" name="clientId" value={clientId} />
-                <ResourceReference
-                  label={
-                    selectedClientResult.data
-                      ? `${selectedClientResult.data.preferredName || selectedClientResult.data.firstName} ${selectedClientResult.data.lastName}`
-                      : translate('Resources.unavailableClient')
-                  }
-                  href={selectedClientResult.data ? `/clients/${clientId}` : null}
-                />
-              </>
-            ) : (
-              <span className="h-10 rounded-md border px-3 py-2 text-muted-foreground">
-                {t('all')}
-              </span>
-            )}
-          </label>
+          <AsyncEntityCombobox
+            name="clientId"
+            label={t('client')}
+            entity="clients"
+            placeholder={t('all')}
+            {...(selectedClient
+              ? {
+                  initialOption: {
+                    id: selectedClient.id,
+                    label: `${selectedClient.preferredName || selectedClient.firstName} ${selectedClient.lastName}`,
+                  },
+                }
+              : {})}
+          />
         ) : null}
         {hasPermission(permissions, 'employee.read') ? (
-          <label className="grid gap-1 text-sm">
-            <span>{t('employee')}</span>
-            {employeeId ? (
-              <>
-                <input type="hidden" name="employeeId" value={employeeId} />
-                <ResourceReference
-                  label={
-                    selectedEmployeeResult.data
-                      ? `${selectedEmployeeResult.data.preferredName || selectedEmployeeResult.data.firstName} ${selectedEmployeeResult.data.lastName}`
-                      : translate('Resources.unavailableEmployee')
-                  }
-                  href={selectedEmployeeResult.data ? `/employees/${employeeId}` : null}
-                />
-              </>
-            ) : (
-              <span className="h-10 rounded-md border px-3 py-2 text-muted-foreground">
-                {t('all')}
-              </span>
-            )}
-          </label>
+          <AsyncEntityCombobox
+            name="employeeId"
+            label={t('employee')}
+            entity="employees"
+            placeholder={t('all')}
+            {...(selectedEmployee
+              ? {
+                  initialOption: {
+                    id: selectedEmployee.id,
+                    label: `${selectedEmployee.preferredName || selectedEmployee.firstName} ${selectedEmployee.lastName}`,
+                  },
+                }
+              : {})}
+          />
         ) : null}
         {canFilterByAssignee ? (
-          <label className="grid gap-1 text-sm">
-            <span>{t('assignedEmployeeFilter')}</span>
-            <NativeSelect
-              selectClassName="h-10 rounded-md border px-3"
-              name="assignedEmployeeId"
-              defaultValue={assignedEmployeeId ?? ''}
-              className="w-full"
-            >
-              <option value="">{t('all')}</option>
-              {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.firstName} {employee.lastName}
-                </option>
-              ))}
-            </NativeSelect>
-          </label>
+          <AsyncEntityCombobox
+            name="assignedEmployeeId"
+            label={t('assignedEmployeeFilter')}
+            entity="employees"
+            placeholder={t('all')}
+            {...(organizationId ? { organizationId } : {})}
+            {...(selectedAssignedEmployee
+              ? {
+                  initialOption: {
+                    id: selectedAssignedEmployee.id,
+                    label: `${selectedAssignedEmployee.preferredName || selectedAssignedEmployee.firstName} ${selectedAssignedEmployee.lastName}`,
+                  },
+                }
+              : {})}
+          />
         ) : null}
         <label className="grid gap-1 text-sm">
           <span>{t('fromDate')}</span>
@@ -449,45 +449,16 @@ export default async function OperationsDeadlinesPage({
         <EmptyState title={t('deadlinesEmpty')} />
       )}
 
-      {result && result.total > result.pageSize ? (
-        <nav aria-label={t('issuePages')} className="flex justify-between">
-          <PageLink page={page - 1} disabled={page <= 1} query={query} label={t('previousPage')} />
-          <span>
-            {t('pageOf', { page: result.page, pages: Math.ceil(result.total / result.pageSize) })}
-          </span>
-          <PageLink
-            page={page + 1}
-            disabled={page * result.pageSize >= result.total}
-            query={query}
-            label={t('nextPage')}
-          />
-        </nav>
+      {result ? (
+        <DataPagination
+          pathname="/operations/deadlines"
+          page={result.page}
+          pageSize={result.pageSize}
+          totalItems={result.total}
+          filters={query}
+        />
       ) : null}
     </div>
-  );
-}
-
-function PageLink({
-  page,
-  disabled,
-  query,
-  label,
-}: {
-  page: number;
-  disabled: boolean;
-  query: Record<string, string | undefined>;
-  label: string;
-}) {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query))
-    if (value && key !== 'page') params.set(key, value);
-  params.set('page', String(page));
-  return disabled ? (
-    <span className="text-muted-foreground">{label}</span>
-  ) : (
-    <Link className="text-primary underline" href={`/operations/deadlines?${params}`}>
-      {label}
-    </Link>
   );
 }
 

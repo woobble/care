@@ -311,7 +311,7 @@ export async function createPayerDirectoryEntryAction(formData: FormData): Promi
   const validFrom = readDate(formData.get('validFrom'));
   const validUntil = readOptionalDate(formData.get('validUntil'));
   if (!organizationId || !payerType || !name || !validFrom || validUntil === undefined) {
-    redirect(claimSettingsPath('INVALID_REQUEST'));
+    redirect(claimSettingsPath('INVALID_REQUEST', undefined, organizationId));
   }
   const api = await getApiClient();
   const { error } = await api.POST('/api/v1/billing/payers', {
@@ -331,10 +331,10 @@ export async function createPayerDirectoryEntryAction(formData: FormData): Promi
       validUntil,
     },
   });
-  if (error) redirect(claimSettingsPath(error.code));
+  if (error) redirect(claimSettingsPath(error.code, undefined, organizationId));
   revalidatePath('/billing/claims');
   revalidatePath('/billing/claims/settings');
-  redirect(claimSettingsPath(undefined, 'payer-saved'));
+  redirect(claimSettingsPath(undefined, 'payer-saved', organizationId));
 }
 
 export async function updatePayerDirectoryEntryAction(formData: FormData): Promise<void> {
@@ -356,7 +356,7 @@ export async function updatePayerDirectoryEntryAction(formData: FormData): Promi
     !validFrom ||
     validUntil === undefined
   ) {
-    redirect(claimSettingsPath('INVALID_REQUEST'));
+    redirect(claimSettingsPath('INVALID_REQUEST', undefined, organizationId));
   }
   const api = await getApiClient();
   const { error } = await api.PATCH('/api/v1/billing/payers/{id}', {
@@ -377,10 +377,10 @@ export async function updatePayerDirectoryEntryAction(formData: FormData): Promi
       ...(validUntil !== undefined ? { validUntil } : {}),
     },
   });
-  if (error) redirect(claimSettingsPath(error.code));
+  if (error) redirect(claimSettingsPath(error.code, undefined, organizationId));
   revalidatePath('/billing/claims');
   revalidatePath('/billing/claims/settings');
-  redirect(claimSettingsPath(undefined, 'payer-saved'));
+  redirect(claimSettingsPath(undefined, 'payer-saved', organizationId));
 }
 
 export async function savePayerRequirementsAction(formData: FormData): Promise<void> {
@@ -406,14 +406,15 @@ export async function savePayerRequirementsAction(formData: FormData): Promise<v
     !sourceEffectiveDate ||
     (sourceUrl !== null && !/^https:\/\/\S+$/i.test(sourceUrl))
   ) {
-    redirect(claimSettingsPath('INVALID_PAYER_PROFILE'));
+    redirect(claimSettingsPath('INVALID_PAYER_PROFILE', undefined, organizationId));
   }
   const api = await getApiClient();
   const headers = await getTenantHeader();
   const profileResult = await api.GET('/api/v1/billing/payers/{id}/profiles', {
     params: { path: { id: payerId }, header: headers },
   });
-  if (profileResult.error) redirect(claimSettingsPath(profileResult.error.code));
+  if (profileResult.error)
+    redirect(claimSettingsPath(profileResult.error.code, undefined, organizationId));
   const profiles = (profileResult.data ?? []) as Array<{
     channel: string;
     fundingSourceType: string;
@@ -448,10 +449,10 @@ export async function savePayerRequirementsAction(formData: FormData): Promise<v
       expectedVersion,
     },
   });
-  if (error) redirect(claimSettingsPath(error.code));
+  if (error) redirect(claimSettingsPath(error.code, undefined, organizationId));
   revalidatePath('/billing/claims');
   revalidatePath('/billing/claims/settings');
-  redirect(claimSettingsPath(undefined, 'profile-saved'));
+  redirect(claimSettingsPath(undefined, 'profile-saved', organizationId));
 }
 
 export async function createClaimAction(formData: FormData): Promise<void> {
@@ -904,8 +905,12 @@ function claimsInvoicePath(invoiceId: string, error?: string): string {
   return queryPath('/billing/claims/new?invoiceId=' + encodeURIComponent(invoiceId), error);
 }
 
-function claimSettingsPath(error?: string, updated?: string): string {
-  return queryPath('/billing/claims/settings', error, updated);
+function claimSettingsPath(error?: string, updated?: string, organizationId?: string): string {
+  const query = new URLSearchParams();
+  if (error) query.set('error', error);
+  if (updated) query.set('updated', updated);
+  if (organizationId) query.set('organizationId', organizationId);
+  return query.size ? `/billing/claims/settings?${query.toString()}` : '/billing/claims/settings';
 }
 
 function queryPath(path: string, error?: string, updated?: string): string {

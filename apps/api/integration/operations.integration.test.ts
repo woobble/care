@@ -621,15 +621,41 @@ describe('operations PostgreSQL/API integration', () => {
       expect(updatedAgreementDeadline?.id).toBe(agreementDeadline!.id);
       expect(updatedAgreementDeadline?.dueAt).not.toBe(agreementDeadline!.dueAt);
       const changedAgreementHistoryResponse = await fetch(
-        `${baseUrl}/api/v1/operations/work-items/${agreementDeadline!.id}/history`,
+        `${baseUrl}/api/v1/operations/work-items/${agreementDeadline!.id}/history?page=1&pageSize=1`,
         { headers },
       );
       const changedAgreementHistory = (await changedAgreementHistoryResponse.json()) as {
+        page: number;
+        pageSize: number;
+        totalOccurrences: number;
         occurrences: Array<{ sourceAt: string | null; resolvedAt: string | null }>;
       };
-      expect(changedAgreementHistory.occurrences).toHaveLength(2);
+      expect(changedAgreementHistory).toMatchObject({
+        page: 1,
+        pageSize: 1,
+        totalOccurrences: 2,
+      });
+      expect(changedAgreementHistory.occurrences).toHaveLength(1);
+      const secondAgreementHistoryResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items/${agreementDeadline!.id}/history?page=2&pageSize=1`,
+        { headers },
+      );
+      const secondAgreementHistory = (await secondAgreementHistoryResponse.json()) as {
+        page: number;
+        pageSize: number;
+        totalOccurrences: number;
+        occurrences: Array<{ sourceAt: string | null; resolvedAt: string | null }>;
+      };
+      expect(secondAgreementHistory).toMatchObject({
+        page: 2,
+        pageSize: 1,
+        totalOccurrences: 2,
+      });
+      expect(secondAgreementHistory.occurrences).toHaveLength(1);
       expect(
-        changedAgreementHistory.occurrences.filter((item) => item.resolvedAt === null),
+        [changedAgreementHistory, secondAgreementHistory].flatMap((history) =>
+          history.occurrences.filter((item) => item.resolvedAt === null),
+        ),
       ).toHaveLength(1);
 
       const recurrenceStartDate = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
@@ -1142,6 +1168,17 @@ describe('operations PostgreSQL/API integration', () => {
         "DELETE FROM identity.role_permissions WHERE role_id = $1 AND permission = 'client.read'",
         [roleId],
       );
+      const scopedRecurrencesResponse = await fetch(
+        `${baseUrl}/api/v1/operations/recurring-tasks?page=1&pageSize=1`,
+        { headers },
+      );
+      expect(scopedRecurrencesResponse.status).toBe(200);
+      expect(await scopedRecurrencesResponse.json()).toMatchObject({
+        page: 1,
+        pageSize: 1,
+        total: 1,
+        items: [expect.objectContaining({ id: skipMissedRecurrence.id })],
+      });
       const unauthorizedSource = await fetch(`${baseUrl}/api/v1/operations/tasks`, {
         method: 'POST',
         headers,

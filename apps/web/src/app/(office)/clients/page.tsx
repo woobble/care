@@ -26,6 +26,10 @@ import {
 } from '@app/web/lib/api';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { FilterDisclosure } from '@app/web/components/filter-disclosure';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import type { components } from '@care/api-client';
 
 type SearchParams = Promise<{
   q?: string;
@@ -34,6 +38,7 @@ type SearchParams = Promise<{
   facilityId?: string;
   pflegegrad?: string;
   page?: string;
+  pageSize?: string;
   sortBy?: string;
   sortOrder?: string;
   error?: string;
@@ -59,7 +64,9 @@ export default async function ClientsPage({
     : 'lastName';
   const sortOrder = query.sortOrder === 'desc' ? 'desc' : 'asc';
   const parsedPage = Number(query.page ?? '1');
-  const page = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const page = Number.isInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
+  const parsedPageSize = Number(query.pageSize ?? '20');
+  const pageSize = [10, 20, 50, 100].includes(parsedPageSize) ? parsedPageSize : 20;
   const text = query.q?.trim().slice(0, 120) || undefined;
 
   const api = await getApiClient();
@@ -68,12 +75,12 @@ export default async function ClientsPage({
   const tenantId = header['X-Tenant-Id'];
   const canCreateClient = hasPermission(permissions, 'client.create');
   const get = api.GET;
-  const [clientsResult, organizationsResult, facilitiesResult] = await Promise.all([
+  const [clientsResult, organizationResult, facilityResult] = await Promise.all([
     get('/api/v1/clients', {
       params: {
         query: {
           page,
-          pageSize: 25,
+          pageSize,
           sortBy,
           sortOrder,
           ...(text ? { q: text } : {}),
@@ -85,14 +92,28 @@ export default async function ClientsPage({
         header,
       },
     }),
-    get('/api/v1/organizations', { params: { header } }),
-    get('/api/v1/facilities', { params: { header } }),
+    organizationId
+      ? get('/api/v1/organizations/{id}', { params: { path: { id: organizationId }, header } })
+      : Promise.resolve(null),
+    facilityId
+      ? get('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
+      : Promise.resolve(null),
   ]);
-  const clients = clientsResult.data;
+  const clients = clientsResult.data as unknown as
+    | components['schemas']['ClientListResponseDto']
+    | undefined;
+  const selectedOrganization = organizationResult?.data as
+    | components['schemas']['OrganizationResponseDto']
+    | undefined;
+  const selectedFacility = facilityResult?.data as
+    | components['schemas']['FacilityResponseDto']
+    | undefined;
+  if (clients)
+    redirectToValidPage('/clients', query, clients.page, clients.pageSize, clients.total);
   const filters = { q: text, status, organizationId, facilityId, pflegegrad, sortBy, sortOrder };
 
   return (
-    <div className="grid gap-6">
+    <div className="grid min-w-0 grid-cols-1 gap-6">
       <PageHeader
         eyebrow={t('Clients.section')}
         title={t('Clients.title')}
@@ -121,9 +142,10 @@ export default async function ClientsPage({
         </p>
       ) : null}
 
-      <section aria-label={t('Clients.searchAndFilter')} className="grid gap-3">
+      <section aria-label={t('Clients.searchAndFilter')} className="grid min-w-0 grid-cols-1 gap-3">
         <FilterDisclosure title={t('Clients.searchAndFilter')}>
           <form method="get" className="grid min-w-0 gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
+            <input type="hidden" name="pageSize" value={pageSize} />
             <label className="grid min-w-0 gap-1 text-sm font-medium md:col-span-2">
               {t('Clients.searchName')}
               <Input type="search" name="q" maxLength={120} defaultValue={text} />
@@ -134,30 +156,35 @@ export default async function ClientsPage({
               <option value="active">{t('Common.status.active')}</option>
               <option value="archived">{t('Common.status.archived')}</option>
             </SelectFilter>
-            <SelectFilter
-              label={t('Common.fields.organization')}
+            <AsyncEntityCombobox
               name="organizationId"
-              value={organizationId ?? ''}
-            >
-              <option value="">{t('Common.filters.allOrganizations')}</option>
-              {(organizationsResult.data ?? []).map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-            </SelectFilter>
-            <SelectFilter
-              label={t('Common.fields.facility')}
+              label={t('Common.fields.organization')}
+              entity="organizations"
+              placeholder={t('Common.filters.allOrganizations')}
+              {...(selectedOrganization
+                ? {
+                    initialOption: {
+                      id: selectedOrganization.id,
+                      label: selectedOrganization.name,
+                    },
+                  }
+                : {})}
+            />
+            <AsyncEntityCombobox
               name="facilityId"
-              value={facilityId ?? ''}
-            >
-              <option value="">{t('Common.filters.allFacilities')}</option>
-              {(facilitiesResult.data ?? []).map((facility) => (
-                <option key={facility.id} value={facility.id}>
-                  {facility.name}
-                </option>
-              ))}
-            </SelectFilter>
+              label={t('Common.fields.facility')}
+              entity="facilities"
+              {...(organizationId ? { organizationId } : {})}
+              placeholder={t('Common.filters.allFacilities')}
+              {...(selectedFacility
+                ? {
+                    initialOption: {
+                      id: selectedFacility.id,
+                      label: `${selectedFacility.organizationName} · ${selectedFacility.name}`,
+                    },
+                  }
+                : {})}
+            />
             <SelectFilter
               label={t('Clients.careLevel')}
               name="pflegegrad"
@@ -191,13 +218,16 @@ export default async function ClientsPage({
       </section>
 
       {clients?.items.length ? (
-        <section aria-labelledby="client-list-title" className="grid gap-3">
+        <section aria-labelledby="client-list-title" className="grid min-w-0 grid-cols-1 gap-3">
           <h2 id="client-list-title" className="text-lg font-semibold">
             {t('Clients.resultCount', { count: clients.total })}
           </h2>
-          <ul className="grid gap-2 lg:hidden">
+          <ul className="grid min-w-0 grid-cols-1 gap-2 lg:hidden">
             {clients.items.map((client) => (
-              <li key={client.id} className="grid min-w-0 gap-3 rounded-xl border bg-card p-4">
+              <li
+                key={client.id}
+                className="grid min-w-0 grid-cols-1 gap-3 rounded-xl border bg-card p-4"
+              >
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <Link
                     className="inline-flex min-h-11 min-w-0 items-center break-words font-semibold text-primary underline-offset-4 hover:underline"
@@ -359,30 +389,13 @@ export default async function ClientsPage({
               </Table>
             </div>
           </Card>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              {t('Common.pagination', {
-                page: new Intl.NumberFormat(locale).format(clients.page),
-                pages: new Intl.NumberFormat(locale).format(
-                  Math.max(1, Math.ceil(clients.total / clients.pageSize)),
-                ),
-              })}
-            </p>
-            <div className="flex gap-2">
-              {clients.page > 1 ? (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(filters, clients.page - 1)}>
-                    {t('Common.actions.previous')}
-                  </Link>
-                </Button>
-              ) : null}
-              {clients.page * clients.pageSize < clients.total ? (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(filters, clients.page + 1)}>{t('Common.actions.next')}</Link>
-                </Button>
-              ) : null}
-            </div>
-          </div>
+          <DataPagination
+            pathname="/clients"
+            page={clients.page}
+            pageSize={clients.pageSize}
+            totalItems={clients.total}
+            filters={filters}
+          />
         </section>
       ) : !clientsResult.error ? (
         <EmptyState title={t('Clients.notFound')} />
@@ -419,12 +432,4 @@ function SelectFilter({
 
 function validUuid(value: string | undefined): string | undefined {
   return value && uuidPattern.test(value) ? value : undefined;
-}
-
-function pageHref(filters: Record<string, string | number | undefined>, page: number): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries({ ...filters, page })) {
-    if (value !== undefined) params.set(key, String(value));
-  }
-  return `/clients?${params.toString()}`;
 }

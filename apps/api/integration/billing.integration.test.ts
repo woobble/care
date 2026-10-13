@@ -234,6 +234,21 @@ describe('billing PostgreSQL integration', () => {
       if (!mainInvoiceNumber) throw new Error('Issued invoice number is missing');
       expect(mainInvoiceNumber).toMatch(/^CARE\d{4}-\d{6}$/);
 
+      const invoicePage = await billing.listInvoicesPage(principal, {
+        status: 'issued',
+        page: 1,
+        pageSize: 1,
+      });
+      expect(invoicePage).toMatchObject({ page: 1, pageSize: 1, total: 1, totalPages: 1 });
+      expect(invoicePage.items.map((invoice) => invoice.id)).toEqual([mainInvoice.id]);
+      const receivablesSearch = await billing.receivablesPage(principal, {
+        q: mainInvoiceNumber,
+        page: 1,
+        pageSize: 1,
+      });
+      expect(receivablesSearch).toMatchObject({ page: 1, pageSize: 1, total: 1, totalPages: 1 });
+      expect(receivablesSearch.items.map((invoice) => invoice.id)).toEqual([mainInvoice.id]);
+
       const pdf = await billing.getInvoicePdf(principal, mainInvoice.id);
       const storedDocument = await owner.query<{ sha256: string }>(
         `SELECT sha256 FROM billing.invoice_documents
@@ -248,6 +263,16 @@ describe('billing PostgreSQL integration', () => {
         tenantId,
         grants: [],
       };
+      const deniedInvoicePage = await billing.listInvoicesPage(deniedPrincipal, {
+        page: 1,
+        pageSize: 1,
+      });
+      expect(deniedInvoicePage).toMatchObject({ items: [], total: 0, totalPages: 0 });
+      const deniedReceivablesPage = await billing.receivablesPage(deniedPrincipal, {
+        page: 1,
+        pageSize: 1,
+      });
+      expect(deniedReceivablesPage).toMatchObject({ items: [], total: 0, totalPages: 0 });
       await expect(billing.getInvoicePdf(deniedPrincipal, mainInvoice.id)).rejects.toBeInstanceOf(
         AuthorizationDeniedError,
       );
@@ -341,6 +366,53 @@ describe('billing PostgreSQL integration', () => {
         request,
         {},
       );
+      const payerPage = await claims.listPayers(principal, {
+        organizationId,
+        page: 1,
+        pageSize: 1,
+        q: 'Integration payer',
+      });
+      expect(payerPage).toMatchObject({
+        page: 1,
+        pageSize: 1,
+        totalItems: 1,
+        items: [expect.objectContaining({ id: payer.id })],
+      });
+      expect(await claims.lookupPayers(principal, organizationId, [payer.id, uuidv7()])).toEqual([
+        expect.objectContaining({ id: payer.id }),
+      ]);
+      expect(
+        await claims.payerProfilesForOrganization(principal, organizationId, [payer.id]),
+      ).toEqual([expect.objectContaining({ id: payerProfile.id, payerId: payer.id })]);
+      const inactivePayer = await claims.createPayer(
+        principal,
+        {
+          organizationId,
+          payerType: 'other',
+          name: 'Inactive integration payer',
+          status: 'inactive',
+          validFrom: serviceDate,
+        },
+        request,
+        {},
+      );
+      expect(
+        await claims.listPayers(principal, {
+          organizationId,
+          q: 'Inactive integration payer',
+          status: 'inactive',
+        }),
+      ).toMatchObject({
+        totalItems: 1,
+        items: [expect.objectContaining({ id: inactivePayer.id })],
+      });
+      expect(
+        await claims.listPayers(principal, {
+          organizationId,
+          q: 'Inactive integration payer',
+          status: 'active',
+        }),
+      ).toMatchObject({ totalItems: 0, items: [] });
 
       const arrangement = await billing.createPayerArrangement(
         principal,
@@ -392,11 +464,19 @@ describe('billing PostgreSQL integration', () => {
       };
       const claim = await claims.createClaim(principal, claimInput, request, {});
       expect(claim.claim).toMatchObject({ status: 'draft', amountCents: 3_000 });
+      const claimPage = await claims.listClaims(principal, { page: 1, pageSize: 1 });
+      expect(claimPage).toMatchObject({ page: 1, pageSize: 1, total: 1, totalPages: 1 });
+      expect(claimPage.items.map((item) => item.id)).toEqual([claim.claim.id]);
       const deniedClaimPrincipal: AuthorizationPrincipal = {
         userId: uuidv7(),
         tenantId,
         grants: [],
       };
+      const deniedClaimPage = await claims.listClaims(deniedClaimPrincipal, {
+        page: 1,
+        pageSize: 1,
+      });
+      expect(deniedClaimPage).toMatchObject({ items: [], total: 0, totalPages: 0 });
       await expect(claims.getClaim(deniedClaimPrincipal, claim.claim.id)).rejects.toBeInstanceOf(
         AuthorizationDeniedError,
       );
@@ -636,6 +716,18 @@ describe('billing PostgreSQL integration', () => {
         request,
         {},
       );
+      const paymentPage = await billing.listPaymentsPage(principal, { page: 1, pageSize: 1 });
+      expect(paymentPage.page).toBe(1);
+      expect(paymentPage.pageSize).toBe(1);
+      expect(paymentPage.items).toHaveLength(1);
+      expect(paymentPage.total).toBeGreaterThanOrEqual(2);
+      const unallocatedPayments = await billing.listPaymentsPage(principal, {
+        organizationId,
+        remainingOnly: true,
+        page: 1,
+        pageSize: 100,
+      });
+      expect(unallocatedPayments.items.some((item) => item.id === payment.id)).toBe(true);
       const allocation = await billing.allocatePayment(
         principal,
         { paymentId: payment.id, invoiceId: mainInvoice.id, amountCents: 3_000 },
@@ -645,6 +737,13 @@ describe('billing PostgreSQL integration', () => {
       expect((await billing.getInvoice(principal, mainInvoice.id)).receivableStatus).toBe(
         'partially_paid',
       );
+      const paymentsAfterAllocation = await billing.listPaymentsPage(principal, {
+        organizationId,
+        remainingOnly: true,
+        page: 1,
+        pageSize: 100,
+      });
+      expect(paymentsAfterAllocation.items.some((item) => item.id === payment.id)).toBe(false);
       await billing.reversePaymentAllocation(
         principal,
         allocation.id,

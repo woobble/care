@@ -7,6 +7,7 @@ import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input } from '@care/ui';
 import type { Locale } from '@app/web/i18n/config';
+import type { components } from '@care/api-client';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
@@ -26,9 +27,10 @@ type Arrangement = {
   validUntil: string | null;
   mandateStatus: string;
 };
-type Payer = { id: string; name: string; payerType: string; status: 'active' | 'inactive' };
+type Payer = { id: string; name: string };
 type PayerProfile = {
   id: string;
+  payerId: string;
   channel: string;
   fundingSourceType: string;
   version: number;
@@ -58,8 +60,9 @@ export default async function NewClaimPage({
     }),
     getPermissionGrants(api),
   ]);
-  if (invoiceResult.error?.code === 'INVOICE_NOT_FOUND') notFound();
-  const invoice = invoiceResult.data;
+  if ((invoiceResult.error as { code?: string } | undefined)?.code === 'INVOICE_NOT_FOUND')
+    notFound();
+  const invoice = invoiceResult.data as components['schemas']['BillingInvoiceResponseDto'];
   if (!invoice) notFound();
   const canManage = hasClientPermission(
     permissions,
@@ -75,20 +78,32 @@ export default async function NewClaimPage({
     invoice.organizationId,
     invoice.facilityId,
   );
-  const [arrangementResult, payerResult] = invoice.organizationId
-    ? await Promise.all([
-        api.GET('/api/v1/billing/payer-arrangements', {
+  const arrangementResult = invoice.organizationId
+    ? await api.GET('/api/v1/billing/payer-arrangements', {
+        params: {
+          query: { clientId: invoice.clientId, organizationId: invoice.organizationId },
+          header,
+        },
+      })
+    : null;
+  const arrangements = ((
+    arrangementResult?.data as components['schemas']['PayerArrangementListResponseDto'] | undefined
+  )?.items ?? []) as Arrangement[];
+  const arrangementPayerIds = [
+    ...new Set(arrangements.map((arrangement) => arrangement.payerId).filter(isString)),
+  ];
+  const payerResult =
+    invoice.organizationId && arrangementPayerIds.length
+      ? await api.GET('/api/v1/billing/payer-directory/lookup', {
           params: {
-            query: { clientId: invoice.clientId, organizationId: invoice.organizationId },
+            query: {
+              organizationId: invoice.organizationId,
+              payerIds: arrangementPayerIds.join(','),
+            },
             header,
           },
-        }),
-        api.GET('/api/v1/billing/payers', {
-          params: { query: { organizationId: invoice.organizationId }, header },
-        }),
-      ])
-    : [null, null];
-  const arrangements = (arrangementResult?.data?.items ?? []) as Arrangement[];
+        })
+      : null;
   const payers = (payerResult?.data ?? []) as Payer[];
   const payerNames = new Map(payers.map((payer) => [payer.id, payer.name]));
   const eligibleArrangements = arrangements.filter((arrangement) => {
@@ -101,24 +116,24 @@ export default async function NewClaimPage({
     }
     return arrangement.arrangementType === 'reimbursement_to_client';
   });
-  const profileResults = await Promise.all(
-    [
-      ...new Set(eligibleArrangements.map((arrangement) => arrangement.payerId).filter(isString)),
-    ].map(async (payerId) => {
-      const result = await api.GET('/api/v1/billing/payers/{id}/profiles', {
-        params: { path: { id: payerId }, header },
-      });
-      return [payerId, (result.data ?? []) as PayerProfile[], result.error?.code] as const;
-    }),
-  );
-  const profiles = profileResults.flatMap(([payerId, payerProfiles]) =>
-    payerProfiles.map((profile) => ({ ...profile, payerId })),
-  );
+  const eligiblePayerIds = [
+    ...new Set(eligibleArrangements.map((arrangement) => arrangement.payerId).filter(isString)),
+  ];
+  const profileResult =
+    invoice.organizationId && eligiblePayerIds.length
+      ? await api.GET('/api/v1/billing/payer-directory/profiles', {
+          params: {
+            query: { organizationId: invoice.organizationId, payerIds: eligiblePayerIds.join(',') },
+            header,
+          },
+        })
+      : null;
+  const profiles = (profileResult?.data ?? []) as PayerProfile[];
   const error =
     query.error ??
-    arrangementResult?.error?.code ??
-    payerResult?.error?.code ??
-    profileResults.find(([, , code]) => code)?.[2];
+    (arrangementResult?.error as { code?: string } | undefined)?.code ??
+    (payerResult?.error as { code?: string } | undefined)?.code ??
+    (profileResult?.error as { code?: string } | undefined)?.code;
   const canCreate = canManage && invoice.status === 'issued' && invoice.lines.length > 0;
 
   return (

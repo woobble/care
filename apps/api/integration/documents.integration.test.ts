@@ -257,6 +257,15 @@ describe('documents PostgreSQL integration', () => {
         (await documents.listArtifacts(principal, { clientId, documentType: 'service_evidence' }))
           .items,
       ).toHaveLength(1);
+      const documentsOnlyPrincipal: AuthorizationPrincipal = {
+        userId: uuidv7(),
+        tenantId,
+        grants: [{ permission: 'documents.read', scopeType: 'tenant', scopeId: tenantId }],
+      };
+      expect(await documents.listArtifacts(documentsOnlyPrincipal, { clientId })).toMatchObject({
+        items: [],
+        total: 0,
+      });
 
       const downloadable = await documents.download(principal, firstArtifact.id, request, {});
       expect(new TextDecoder().decode(downloadable.bytes.slice(0, 4))).toBe('%PDF');

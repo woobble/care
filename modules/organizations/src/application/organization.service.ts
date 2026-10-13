@@ -100,6 +100,27 @@ export class OrganizationApplicationService {
     );
   }
 
+  async searchOrganizations(
+    principal: AuthorizationPrincipal,
+    filter: {
+      page: number;
+      pageSize: number;
+      ids?: string[];
+      text?: string;
+      status?: StructureStatus;
+    },
+  ) {
+    this.requireAnyGrant(principal, 'organization.read');
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+      this.organizations.searchOrganizations(
+        transaction,
+        principal.tenantId,
+        principal.grants,
+        filter,
+      ),
+    );
+  }
+
   async getOrganization(
     principal: AuthorizationPrincipal,
     id: string,
@@ -246,6 +267,28 @@ export class OrganizationApplicationService {
           facilityId: facility.id,
         },
       }),
+    );
+  }
+
+  async searchFacilities(
+    principal: AuthorizationPrincipal,
+    filter: {
+      page: number;
+      pageSize: number;
+      ids?: string[];
+      text?: string;
+      organizationId?: string;
+      status?: StructureStatus;
+    },
+  ) {
+    this.requireAnyGrant(principal, 'facility.read');
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+      this.organizations.searchFacilities(
+        transaction,
+        principal.tenantId,
+        principal.grants,
+        filter,
+      ),
     );
   }
 
@@ -442,6 +485,24 @@ export class OrganizationApplicationService {
           teamId: team.id,
         },
       }),
+    );
+  }
+
+  async searchTeams(
+    principal: AuthorizationPrincipal,
+    filter: {
+      page: number;
+      pageSize: number;
+      ids?: string[];
+      text?: string;
+      organizationId?: string;
+      facilityId?: string;
+      status?: StructureStatus;
+    },
+  ) {
+    this.requireAnyGrant(principal, 'team.read');
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+      this.organizations.searchTeams(transaction, principal.tenantId, principal.grants, filter),
     );
   }
 

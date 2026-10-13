@@ -147,7 +147,7 @@ export function OfficeShell({
           } as React.CSSProperties
         }
       >
-        <div className="flex min-h-dvh w-full bg-background text-foreground">
+        <div className="flex min-h-dvh w-full min-w-0 bg-background text-foreground">
           <Sidebar
             id="office-sidebar"
             role="complementary"

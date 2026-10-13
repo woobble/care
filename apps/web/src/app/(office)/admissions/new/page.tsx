@@ -6,13 +6,9 @@ import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
 import { errorMessageKey } from '@app/web/i18n/errors';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasPermission,
-} from '@app/web/lib/api';
+import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
 import { createAdmissionCaseAction } from '@app/web/app/(office)/admissions/actions';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 
 export default async function NewAdmissionPage({
   searchParams,
@@ -20,41 +16,17 @@ export default async function NewAdmissionPage({
   const [t, translate] = await Promise.all([getTranslations('Onboarding'), getTranslations()]);
   const query = await searchParams;
   const api = await getApiClient();
-  const header = await getTenantHeader();
   const permissions = await getPermissionGrants(api);
-  if (!hasPermission(permissions, 'onboarding.create')) {
+  if (
+    !hasPermission(permissions, 'onboarding.create') ||
+    !hasPermission(permissions, 'organization.read')
+  ) {
     return (
       <p role="alert" className="rounded-md border bg-card p-5">
         {t('noAccess')}
       </p>
     );
   }
-  const [organizationsResult, facilitiesResult, employeesResult] = await Promise.all([
-    hasPermission(permissions, 'organization.read')
-      ? api.GET('/api/v1/organizations', { params: { query: { status: 'active' }, header } })
-      : Promise.resolve({ data: undefined }),
-    hasPermission(permissions, 'facility.read')
-      ? api.GET('/api/v1/facilities', { params: { query: { status: 'active' }, header } })
-      : Promise.resolve({ data: undefined }),
-    hasPermission(permissions, 'employee.read')
-      ? api.GET('/api/v1/employees', {
-          params: {
-            query: {
-              status: 'active',
-              page: 1,
-              pageSize: 100,
-              sortBy: 'lastName',
-              sortOrder: 'asc',
-            },
-            header,
-          },
-        })
-      : Promise.resolve({ data: undefined }),
-  ]);
-  const organizations = organizationsResult.data ?? [];
-  const facilities = facilitiesResult.data ?? [];
-  const employees = employeesResult.data?.items ?? [];
-
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
       <PageHeader eyebrow={<Link href="/admissions">{t('title')}</Link>} title={t('createTitle')} />
@@ -74,30 +46,29 @@ export default async function NewAdmissionPage({
           <legend className="mb-2 text-lg font-semibold">{t('caseDetails')}</legend>
           <Field name="firstName" label={t('firstName')} required />
           <Field name="lastName" label={t('lastName')} required />
-          <SelectField name="organizationId" label={t('organization')} required>
-            <option value="">{t('organization')}</option>
-            {organizations.map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organization.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField name="facilityId" label={t('facility')}>
-            <option value="">—</option>
-            {facilities.map((facility) => (
-              <option key={facility.id} value={facility.id}>
-                {facility.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField name="ownerEmployeeId" label={t('owner')}>
-            <option value="">—</option>
-            {employees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.firstName} {employee.lastName}
-              </option>
-            ))}
-          </SelectField>
+          <AsyncEntityCombobox
+            name="organizationId"
+            label={t('organization')}
+            entity="organizations"
+            required
+            placeholder={t('organization')}
+          />
+          {hasPermission(permissions, 'facility.read') ? (
+            <AsyncEntityCombobox
+              name="facilityId"
+              label={t('facility')}
+              entity="facilities"
+              placeholder="—"
+            />
+          ) : null}
+          {hasPermission(permissions, 'employee.read') ? (
+            <AsyncEntityCombobox
+              name="ownerEmployeeId"
+              label={t('owner')}
+              entity="employees"
+              placeholder="—"
+            />
+          ) : null}
           <SelectField name="contactMethod" label={t('contactMethod')} required>
             {(['phone', 'email', 'in_person', 'letter', 'other'] as const).map((value) => (
               <option key={value} value={value}>
@@ -136,11 +107,7 @@ export default async function NewAdmissionPage({
             />
           </label>
           <Field name="serviceLocation" label={t('serviceLocation')} />
-          <input
-            type="hidden"
-            name="timezone"
-            value={organizations[0]?.timezone ?? 'Europe/Berlin'}
-          />
+          <input type="hidden" name="timezone" value="Europe/Berlin" />
           <label className="grid gap-1 text-sm font-medium md:col-span-2">
             {t('initialNotes')}
             <Textarea

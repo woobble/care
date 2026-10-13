@@ -13,6 +13,8 @@ import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import { formatDate, formatNumber } from '@app/web/i18n/format';
 import { statusLabelKey, unitLabelKey } from '@app/web/i18n/status';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
@@ -27,6 +29,8 @@ import {
   getTenantHeader,
   hasTenantPermission,
 } from '@app/web/lib/api';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import type { components } from '@care/api-client';
 
 type SearchParams = Promise<{
   q?: string;
@@ -36,6 +40,7 @@ type SearchParams = Promise<{
   facilityId?: string;
   validAt?: string;
   page?: string;
+  pageSize?: string;
   error?: string;
   updated?: string;
 }>;
@@ -54,7 +59,9 @@ export default async function ServicesPage({
   const facilityId = validUuid(query.facilityId);
   const validAt = query.validAt && datePattern.test(query.validAt) ? query.validAt : today();
   const pageNumber = Number(query.page);
-  const page = Number.isInteger(pageNumber) && pageNumber > 0 ? pageNumber : 1;
+  const page = Number.isInteger(pageNumber) && pageNumber > 0 ? Math.min(pageNumber, 100_000) : 1;
+  const pageSizeNumber = Number(query.pageSize ?? '20');
+  const pageSize = [10, 20, 50, 100].includes(pageSizeNumber) ? pageSizeNumber : 20;
 
   const api = await getApiClient();
   const header = await getTenantHeader();
@@ -67,31 +74,45 @@ export default async function ServicesPage({
     tenantId,
   );
   const get = api.GET;
-  const [servicesResult, categoriesResult, organizationsResult, facilitiesResult] =
-    await Promise.all([
-      get('/api/v1/services', {
-        params: {
-          query: {
-            page,
-            pageSize: 25,
-            status,
-            validAt,
-            ...(q ? { q } : {}),
-            ...(categoryId ? { categoryId } : {}),
-            ...(organizationId ? { organizationId } : {}),
-            ...(facilityId ? { facilityId } : {}),
-          },
-          header,
+  const [servicesResult, categoriesResult, organizationResult, facilityResult] = await Promise.all([
+    get('/api/v1/services', {
+      params: {
+        query: {
+          page,
+          pageSize,
+          status,
+          validAt,
+          ...(q ? { q } : {}),
+          ...(categoryId ? { categoryId } : {}),
+          ...(organizationId ? { organizationId } : {}),
+          ...(facilityId ? { facilityId } : {}),
         },
-      }),
-      get('/api/v1/service-categories', { params: { query: { includeArchived: true }, header } }),
-      get('/api/v1/organizations', { params: { header } }),
-      get('/api/v1/facilities', { params: { header } }),
-    ]);
-  const services = servicesResult.data;
-  const categories = categoriesResult.data ?? [];
-  const organizations = organizationsResult.data ?? [];
-  const facilities = facilitiesResult.data ?? [];
+        header,
+      },
+    }),
+    get('/api/v1/service-categories', { params: { query: { includeArchived: true }, header } }),
+    organizationId
+      ? get('/api/v1/organizations/{id}', { params: { path: { id: organizationId }, header } })
+      : Promise.resolve(null),
+    facilityId
+      ? get('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
+      : Promise.resolve(null),
+  ]);
+  const services = servicesResult.data as unknown as
+    | components['schemas']['ServiceListResponseDto']
+    | undefined;
+  if (services)
+    redirectToValidPage('/services', query, services.page, services.pageSize, services.total);
+  const categories =
+    (categoriesResult.data as unknown as
+      | components['schemas']['ServiceCategoryResponseDto'][]
+      | undefined) ?? [];
+  const selectedOrganization = organizationResult?.data as
+    | components['schemas']['OrganizationResponseDto']
+    | undefined;
+  const selectedFacility = facilityResult?.data as
+    | components['schemas']['FacilityResponseDto']
+    | undefined;
   const filters = { q, status, categoryId, organizationId, facilityId, validAt };
 
   return (
@@ -127,6 +148,7 @@ export default async function ServicesPage({
           method="get"
           className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-3 lg:grid-cols-4"
         >
+          <input type="hidden" name="pageSize" value={pageSize} />
           <Field label={t('Services.nameOrCode')} name="q" defaultValue={q ?? ''} maxLength={120} />
           <SelectField label={t('Common.fields.status')} name="status" defaultValue={status}>
             <option value="active">{t('Common.status.active')}</option>
@@ -144,30 +166,35 @@ export default async function ServicesPage({
               </option>
             ))}
           </SelectField>
-          <SelectField
-            label={t('Common.fields.organization')}
+          <AsyncEntityCombobox
             name="organizationId"
-            defaultValue={organizationId ?? ''}
-          >
-            <option value="">{t('Common.filters.allOrganizations')}</option>
-            {organizations.map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organization.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField
-            label={t('Common.fields.facility')}
+            label={t('Common.fields.organization')}
+            entity="organizations"
+            placeholder={t('Common.filters.allOrganizations')}
+            {...(selectedOrganization
+              ? {
+                  initialOption: {
+                    id: selectedOrganization.id,
+                    label: selectedOrganization.name,
+                  },
+                }
+              : {})}
+          />
+          <AsyncEntityCombobox
             name="facilityId"
-            defaultValue={facilityId ?? ''}
-          >
-            <option value="">{t('Common.filters.allFacilities')}</option>
-            {facilities.map((facility) => (
-              <option key={facility.id} value={facility.id}>
-                {facility.organizationName} — {facility.name}
-              </option>
-            ))}
-          </SelectField>
+            label={t('Common.fields.facility')}
+            entity="facilities"
+            {...(organizationId ? { organizationId } : {})}
+            placeholder={t('Common.filters.allFacilities')}
+            {...(selectedFacility
+              ? {
+                  initialOption: {
+                    id: selectedFacility.id,
+                    label: `${selectedFacility.organizationName} · ${selectedFacility.name}`,
+                  },
+                }
+              : {})}
+          />
           <Field label={t('Services.validOn')} name="validAt" type="date" defaultValue={validAt} />
           <div className="flex items-end gap-2">
             <Button type="submit">{t('Common.actions.apply')}</Button>
@@ -257,33 +284,13 @@ export default async function ServicesPage({
               </ShadcnTableBody>
             </ShadcnTable>
           </div>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {t('Common.pagination', {
-                page: formatNumber(services.page, locale),
-                pages: formatNumber(
-                  Math.max(1, Math.ceil(services.total / services.pageSize)),
-                  locale,
-                ),
-              })}
-            </p>
-            <div className="flex gap-2">
-              {services.page > 1 ? (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(filters, services.page - 1)}>
-                    {t('Common.actions.previous')}
-                  </Link>
-                </Button>
-              ) : null}
-              {services.page * services.pageSize < services.total ? (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(filters, services.page + 1)}>
-                    {t('Common.actions.next')}
-                  </Link>
-                </Button>
-              ) : null}
-            </div>
-          </div>
+          <DataPagination
+            pathname="/services"
+            page={services.page}
+            pageSize={services.pageSize}
+            totalItems={services.total}
+            filters={filters}
+          />
         </section>
       ) : !servicesResult.error ? (
         <p className="rounded-lg border bg-card p-6 text-muted-foreground">
@@ -470,12 +477,4 @@ function validUuid(value: string | undefined): string | undefined {
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function pageHref(filters: Record<string, string | undefined>, page: number): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries({ ...filters, page: String(page) })) {
-    if (value) params.set(key, value);
-  }
-  return `/services?${params.toString()}`;
 }

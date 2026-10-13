@@ -23,6 +23,8 @@
       "reset": "Zurücksetzen",
       "previous": "Zurück",
       "next": "Weiter",
+      "firstPage": "Erste Seite",
+      "lastPage": "Letzte Seite",
       "save": "Änderungen speichern",
       "cancel": "Abbrechen",
       "create": "Erstellen",
@@ -55,7 +57,19 @@
       "code": "Code",
       "legalName": "Rechtlicher Name",
       "address": "Adresse",
-      "timezone": "Zeitzone"
+      "timezone": "Zeitzone",
+      "pageSize": "Zeilen pro Seite",
+      "pagination": "Seitennavigation"
+    },
+    "entitySelector": {
+      "choose": "{entity} auswählen",
+      "searchPlaceholder": "Nach Namen suchen",
+      "minimumCharacters": "Mindestens {count} Zeichen eingeben",
+      "loading": "Ergebnisse werden geladen …",
+      "empty": "Keine Treffer gefunden",
+      "failed": "Ergebnisse konnten nicht geladen werden",
+      "retry": "Erneut versuchen",
+      "clear": "Auswahl löschen"
     },
     "filters": {
       "allStatuses": "Alle Status",
@@ -86,6 +100,7 @@
       "notSpecified": "Nicht angegeben"
     },
     "pagination": "Seite {page} von {pages}",
+    "resultsRange": "Zeige {start}–{end} von {total}",
     "units": {
       "occurrence": "Einsatz",
       "minute": "Minute",
@@ -1817,6 +1832,8 @@
     "reminderSettingsSaved": "Die Einstellungen für Wiedervorlagen wurden gespeichert.",
     "leadTimesHelp": "Kommagetrennte Anzahl Tage vor der Fälligkeit, zum Beispiel 30, 7, 0. Überfällige Fristen bleiben sichtbar.",
     "noReminderOrganizations": "Für diese Einstellungen ist keine Organisation verfügbar.",
+    "chooseReminderOrganization": "Wählen Sie eine Organisation aus, um ihre Einstellungen für Wiedervorlagen anzuzeigen.",
+    "openReminderSettings": "Einstellungen öffnen",
     "schedulerStatus": "Fristenprüfung",
     "lastSuccessfulEvaluation": "Letzte erfolgreiche Prüfung",
     "lastFailure": "Letzter Fehler",
@@ -2717,6 +2734,7 @@
       "organization": "Organisation",
       "documentType": "Dokumenttyp",
       "choose": "Vorlage auswählen",
+      "chooseOrganization": "Wählen Sie eine Organisation aus, um ihre Dokumentvorlagen zu öffnen.",
       "configuration": "Vorlageneinstellungen",
       "version": "Version {version}",
       "logo": "Trägerlogo (PNG oder JPEG, bis 512 KB)",
@@ -3188,6 +3206,8 @@
     "directPayerBilling": "Direktabrechnung mit Kostenträger",
     "customerReimbursement": "Kostenerstattung an Klient/in",
     "claimsSettingsDescription": "Erfassen Sie Kostenträger und versionierte Anforderungen anhand dokumentierter Quellen. Kennungen und Einreichungsregeln werden nicht abgeleitet.",
+    "chooseClaimsSettingsOrganization": "Wählen Sie eine Organisation aus, um ihr Kostenträgerverzeichnis anzuzeigen.",
+    "openClaimsSettings": "Kostenträgereinstellungen öffnen",
     "noClaimsSettingsPermission": "Sie dürfen Kostenträgereinstellungen in diesem Geltungsbereich nicht verwalten.",
     "payersEmpty": "Für diese Organisation sind keine Kostenträger hinterlegt.",
     "submissionInstructions": "Hinweise zur Einreichung",

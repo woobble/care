@@ -159,11 +159,17 @@ import type {
   OperationsWorkItemResponseDto,
   OperationsWorklistResponseDto,
   OrganizationResponseDto,
+  PaginatedFacilitiesResponseDto,
+  PaginatedOrganizationsResponseDto,
+  PaginatedTeamsResponseDto,
   PayerArrangementInputDto,
   PayerArrangementListResponseDto,
   PayerArrangementResponseDto,
   PayerArrangementUpdateDto,
+  PayerBillingProfileResponseDto,
+  PayerDirectoryEntryDto,
   PayerInputDto,
+  PayerListResponseDto,
   PayerProfileInputDto,
   PayerUpdateDto,
   PaymentAllocationHistoryResponseDto,
@@ -229,6 +235,7 @@ import type {
   TeamMembershipResponseDto,
   TeamResponseDto,
   TenantInvitationDto,
+  TenantInvitationListDto,
   TenantMemberDto,
   TenantMemberListDto,
   TenantRoleDto,
@@ -426,11 +433,17 @@ export type components = {
     OperationsWorkItemResponseDto: OperationsWorkItemResponseDto;
     OperationsWorklistResponseDto: OperationsWorklistResponseDto;
     OrganizationResponseDto: OrganizationResponseDto;
+    PaginatedFacilitiesResponseDto: PaginatedFacilitiesResponseDto;
+    PaginatedOrganizationsResponseDto: PaginatedOrganizationsResponseDto;
+    PaginatedTeamsResponseDto: PaginatedTeamsResponseDto;
     PayerArrangementInputDto: PayerArrangementInputDto;
     PayerArrangementListResponseDto: PayerArrangementListResponseDto;
     PayerArrangementResponseDto: PayerArrangementResponseDto;
     PayerArrangementUpdateDto: PayerArrangementUpdateDto;
+    PayerBillingProfileResponseDto: PayerBillingProfileResponseDto;
+    PayerDirectoryEntryDto: PayerDirectoryEntryDto;
     PayerInputDto: PayerInputDto;
+    PayerListResponseDto: PayerListResponseDto;
     PayerProfileInputDto: PayerProfileInputDto;
     PayerUpdateDto: PayerUpdateDto;
     PaymentAllocationHistoryResponseDto: PaymentAllocationHistoryResponseDto;
@@ -496,6 +509,7 @@ export type components = {
     TeamMembershipResponseDto: TeamMembershipResponseDto;
     TeamResponseDto: TeamResponseDto;
     TenantInvitationDto: TenantInvitationDto;
+    TenantInvitationListDto: TenantInvitationListDto;
     TenantMemberDto: TenantMemberDto;
     TenantMemberListDto: TenantMemberListDto;
     TenantRoleDto: TenantRoleDto;

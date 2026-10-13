@@ -294,6 +294,27 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -302,10 +323,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TenantInvitationDto"
-                  }
+                  "$ref": "#/components/schemas/TenantInvitationListDto"
                 }
               }
             }
@@ -856,6 +874,100 @@
         ]
       }
     },
+    "/api/v1/organizations/search": {
+      "get": {
+        "operationId": "OrganizationsController_searchOrganizations",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "ids",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated UUIDs; maximum 100",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 100,
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "archived"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 120,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedOrganizationsResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Search authorized organizations with database pagination",
+        "tags": [
+          "organization structure"
+        ]
+      }
+    },
     "/api/v1/organizations/{id}": {
       "get": {
         "operationId": "OrganizationsController_getOrganization",
@@ -1121,6 +1233,15 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "name": "ids",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated facility IDs (up to 100)",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1209,6 +1330,108 @@
           }
         ],
         "summary": "Create a facility inside an organization",
+        "tags": [
+          "organization structure"
+        ]
+      }
+    },
+    "/api/v1/facilities/search": {
+      "get": {
+        "operationId": "OrganizationsController_searchFacilities",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 100,
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "archived"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "ids",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated facility IDs (up to 100)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 120,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedFacilitiesResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Search authorized facilities with database pagination",
         "tags": [
           "organization structure"
         ]
@@ -1576,6 +1799,116 @@
           }
         ],
         "summary": "Create a team",
+        "tags": [
+          "organization structure"
+        ]
+      }
+    },
+    "/api/v1/teams/search": {
+      "get": {
+        "operationId": "OrganizationsController_searchTeams",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "ids",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated UUIDs; maximum 100",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 100,
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "archived"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 120,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedTeamsResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Search authorized teams with database pagination",
         "tags": [
           "organization structure"
         ]
@@ -2374,6 +2707,24 @@
             "in": "query",
             "schema": {
               "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "ids",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated employee IDs (up to 100)",
+            "schema": {
               "type": "string"
             }
           },
@@ -14481,6 +14832,15 @@
             }
           },
           {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 2,
+              "maxLength": 120
+            }
+          },
+          {
             "name": "clientId",
             "required": false,
             "in": "query",
@@ -14557,6 +14917,18 @@
             "in": "query",
             "schema": {
               "type": "number"
+            }
+          },
+          {
+            "name": "remainingOnly",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
             }
           },
           {
@@ -14807,12 +15179,49 @@
             }
           },
           {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 100,
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "inactive"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
             "name": "organizationId",
             "required": true,
             "in": "query",
             "schema": {
-              "format": "uuid",
-              "type": "string"
+              "format": "uuid"
             }
           }
         ],
@@ -14822,10 +15231,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object"
-                  }
+                  "$ref": "#/components/schemas/PayerListResponseDto"
                 }
               }
             }
@@ -14846,7 +15252,7 @@
             "bearer": []
           }
         ],
-        "summary": "List payer records in the authorized provider scope",
+        "summary": "List payer records with database pagination in the authorized provider scope",
         "tags": [
           "billing claims"
         ]
@@ -14903,6 +15309,140 @@
           }
         ],
         "summary": "Create a payer directory entry",
+        "tags": [
+          "billing claims"
+        ]
+      }
+    },
+    "/api/v1/billing/payer-directory/lookup": {
+      "get": {
+        "operationId": "ClaimsController_lookupPayers",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "payerIds",
+            "required": true,
+            "in": "query",
+            "description": "Comma-separated payer UUIDs; maximum 100",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PayerDirectoryEntryDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Resolve up to 100 payer records within an authorized organization",
+        "tags": [
+          "billing claims"
+        ]
+      }
+    },
+    "/api/v1/billing/payer-directory/profiles": {
+      "get": {
+        "operationId": "ClaimsController_payerProfilesForOrganization",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "payerIds",
+            "required": true,
+            "in": "query",
+            "description": "Comma-separated payer UUIDs; maximum 100",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PayerBillingProfileResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Load payer profiles for a bounded set of authorized payer records",
         "tags": [
           "billing claims"
         ]
@@ -15061,7 +15601,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "type": "object"
+                    "$ref": "#/components/schemas/PayerBillingProfileResponseDto"
                   }
                 }
               }
@@ -21359,6 +21899,32 @@
           "invitation"
         ]
       },
+      "TenantInvitationListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TenantInvitationDto"
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
       "ReplaceMembershipRolesDto": {
         "type": "object",
         "properties": {
@@ -21482,6 +22048,41 @@
           "timezone",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "PaginatedOrganizationsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrganizationResponseDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages"
         ]
       },
       "CreateOrganizationDto": {
@@ -21647,6 +22248,41 @@
           "updatedAt"
         ]
       },
+      "PaginatedFacilitiesResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FacilityResponseDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages"
+        ]
+      },
       "CreateFacilityDto": {
         "type": "object",
         "properties": {
@@ -21781,6 +22417,41 @@
           "status",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "PaginatedTeamsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamResponseDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages"
         ]
       },
       "CreateTeamDto": {
@@ -32114,12 +32785,20 @@
           },
           "pageSize": {
             "type": "number"
+          },
+          "total": {
+            "type": "number"
+          },
+          "totalPages": {
+            "type": "number"
           }
         },
         "required": [
           "items",
           "page",
-          "pageSize"
+          "pageSize",
+          "total",
+          "totalPages"
         ]
       },
       "BillingInvoiceLineSelectionDto": {
@@ -32376,12 +33055,287 @@
           },
           "pageSize": {
             "type": "number"
+          },
+          "total": {
+            "type": "number"
+          },
+          "totalPages": {
+            "type": "number"
           }
         },
         "required": [
           "items",
           "page",
-          "pageSize"
+          "pageSize",
+          "total",
+          "totalPages"
+        ]
+      },
+      "PayerDirectoryEntryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "payerType": {
+            "type": "string",
+            "enum": [
+              "statutory_pflegekasse",
+              "private_pflegeversicherung",
+              "self_pay",
+              "other"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "payerIdentifier": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressText": {
+            "type": "string",
+            "nullable": true
+          },
+          "billingContactName": {
+            "type": "string",
+            "nullable": true
+          },
+          "billingContactEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "billingContactPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "submissionInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive"
+            ]
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "updatedBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "organizationId",
+          "payerType",
+          "name",
+          "status",
+          "validFrom",
+          "version",
+          "createdBy",
+          "updatedBy",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PayerListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayerDirectoryEntryDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalItems": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "number",
+            "minimum": 0
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "totalItems",
+          "totalPages",
+          "hasMore"
+        ]
+      },
+      "PayerBillingProfileResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "payerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "manual_portal",
+              "manual_email",
+              "postal",
+              "customer_reimbursement"
+            ]
+          },
+          "fundingSourceType": {
+            "type": "string",
+            "enum": [
+              "statutory_long_term_care_insurance",
+              "private_long_term_care_insurance",
+              "self_pay",
+              "other"
+            ]
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "sourceName": {
+            "type": "string"
+          },
+          "sourceVersion": {
+            "type": "string"
+          },
+          "sourceEffectiveDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "sourceUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "requiresClientInsuranceNumber": {
+            "type": "boolean"
+          },
+          "requiresPayerIdentifier": {
+            "type": "boolean"
+          },
+          "requiresAcknowledgement": {
+            "type": "boolean"
+          },
+          "requiresMandate": {
+            "type": "boolean"
+          },
+          "requiresInvoicePdf": {
+            "type": "boolean"
+          },
+          "requiresEvidencePdf": {
+            "type": "boolean"
+          },
+          "requiresMandateDocument": {
+            "type": "boolean"
+          },
+          "requiresExternalReference": {
+            "type": "boolean"
+          },
+          "requiresProviderRecognition": {
+            "type": "boolean"
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "organizationId",
+          "payerId",
+          "version",
+          "channel",
+          "fundingSourceType",
+          "validFrom",
+          "sourceName",
+          "sourceVersion",
+          "sourceEffectiveDate",
+          "requiresClientInsuranceNumber",
+          "requiresPayerIdentifier",
+          "requiresAcknowledgement",
+          "requiresMandate",
+          "requiresInvoicePdf",
+          "requiresEvidencePdf",
+          "requiresMandateDocument",
+          "requiresExternalReference",
+          "requiresProviderRecognition",
+          "createdBy",
+          "createdAt"
         ]
       },
       "PayerInputDto": {

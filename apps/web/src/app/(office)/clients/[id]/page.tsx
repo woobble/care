@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { Checkbox as ShadcnCheckbox } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
@@ -6,7 +7,9 @@ import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { DataPagination } from '@app/web/components/data-pagination';
 import { ResourceCardLink, ResourceReference } from '@app/web/components/resource-reference';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { auditActionKey } from '@app/web/i18n/audit';
 import { statusLabelKey } from '@app/web/i18n/status';
 import { errorMessageKey } from '@app/web/i18n/errors';
@@ -37,6 +40,12 @@ import {
   updateClientInsuranceAction,
   updateFuturePflegegradAction,
 } from '@app/web/app/(office)/clients/actions';
+import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
+import { getFacilitiesByIds } from '@app/web/lib/facility-lookup';
+import { getEmployeesByIds } from '@app/web/lib/employee-lookup';
+import { PageLoadingSkeleton } from '@app/web/components/page-loading-skeleton';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
 
 const contactRoleKeys = {
   primary_contact: 'Clients.detail.contactRoles.primaryContact',
@@ -64,46 +73,94 @@ type ClientDocument = {
   createdAt: string;
 };
 
+type ClientDetailQuery = {
+  error?: string;
+  updated?: string;
+  documentType?: string;
+  documentPage?: string;
+  documentPageSize?: string;
+};
+
+type ClientDetailClient = components['schemas']['ClientResponseDto'];
+
 export default async function ClientDetailPage({
   params,
   searchParams,
 }: Readonly<{
   params: Promise<{ id: string }>;
-  searchParams: Promise<{
-    error?: string;
-    updated?: string;
-    documentType?: string;
-    documentPage?: string;
-  }>;
+  searchParams: Promise<ClientDetailQuery>;
 }>) {
-  const { id } = await params;
-  const query = await searchParams;
+  const [{ id }, query, t] = await Promise.all([params, searchParams, getTranslations()]);
+  const api = await getApiClient();
+  const header = await getTenantHeader();
+  const clientResult = await api.GET('/api/v1/clients/{id}', {
+    params: { path: { id }, header },
+  });
+  if ((clientResult.error as { code?: string } | undefined)?.code === 'CLIENT_NOT_FOUND')
+    notFound();
+  const client = clientResult.data as ClientDetailClient | undefined;
+  if (!client) {
+    return (
+      <div className="mx-auto grid max-w-6xl gap-5">
+        <PageHeader
+          eyebrow={<Link href="/clients">{t('Clients.title')}</Link>}
+          title={t('Clients.detail.detailTitle')}
+        />
+        <p role="alert" className="rounded-md border bg-card p-5">
+          {t('Clients.detail.loadFailed')}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="mx-auto grid max-w-6xl gap-5">
+      <PageHeader
+        eyebrow={<Link href="/clients">{t('Clients.title')}</Link>}
+        title={`${client.preferredName || client.firstName} ${client.lastName}`}
+        meta={<StatusBadge status={client.status} label={t(statusLabelKey(client.status))} />}
+        actions={
+          <Button asChild variant="outline" className="min-h-11">
+            <Link href="/clients">{t('Clients.detail.backToList')}</Link>
+          </Button>
+        }
+      />
+      <Suspense fallback={<PageLoadingSkeleton />}>
+        <ClientDetailContent id={id} query={query} initialClient={client} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function ClientDetailContent({
+  id,
+  query,
+  initialClient,
+}: Readonly<{
+  id: string;
+  query: ClientDetailQuery;
+  initialClient: ClientDetailClient;
+}>) {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const api = await getApiClient();
   const get = api.GET;
   const header = await getTenantHeader();
+  const permissionsPromise = getPermissionGrants(api);
   const { visitNow, visitFuture, visitRecent } = clientVisitRange();
   const [
-    clientResult,
     addressesResult,
     contactsResult,
     insurancesResult,
     gradesResult,
     timelineResult,
-    organizationsResult,
-    facilitiesResult,
     upcomingVisitsResult,
     recentVisitsResult,
     recentCancelledVisitsResult,
   ] = await Promise.all([
-    get('/api/v1/clients/{id}', { params: { path: { id }, header } }),
     get('/api/v1/clients/{clientId}/addresses', { params: { path: { clientId: id }, header } }),
     get('/api/v1/clients/{clientId}/contacts', { params: { path: { clientId: id }, header } }),
     get('/api/v1/clients/{clientId}/insurances', { params: { path: { clientId: id }, header } }),
     get('/api/v1/clients/{clientId}/pflegegrade', { params: { path: { clientId: id }, header } }),
     get('/api/v1/clients/{clientId}/timeline', { params: { path: { clientId: id }, header } }),
-    get('/api/v1/organizations', { params: { header } }),
-    get('/api/v1/facilities', { params: { header } }),
     get('/api/v1/visits', {
       params: {
         query: {
@@ -168,17 +225,19 @@ export default async function ClientDetailPage({
       recentExecutionByVisitId.get(visit.id)?.executionStatus !== undefined &&
       recentExecutionByVisitId.get(visit.id)?.executionStatus !== 'not_started',
   );
-  if (clientResult.error?.code === 'CLIENT_NOT_FOUND') notFound();
-
-  const client = clientResult.data;
+  const client = initialClient;
   const addresses = addressesResult.data ?? [];
   const contacts = contactsResult.data ?? [];
   const insurances = insurancesResult.data ?? [];
   const grades = gradesResult.data ?? [];
   const timeline = timelineResult.data ?? [];
-  const organizations = organizationsResult.data ?? [];
-  const facilities = facilitiesResult.data ?? [];
-  const permissions = await getPermissionGrants(api);
+  const [permissions, organizationLookup, facilityLookup] = await Promise.all([
+    permissionsPromise,
+    getOrganizationsByIds(client.organizationId ? [client.organizationId] : []),
+    getFacilitiesByIds(client.primaryFacilityId ? [client.primaryFacilityId] : []),
+  ]);
+  const organizations = organizationLookup.items;
+  const facilities = facilityLookup.items;
   const tenantId = header['X-Tenant-Id'];
   const canReadBenefits = client
     ? hasClientPermission(
@@ -315,7 +374,7 @@ export default async function ClientDetailPage({
     not_confirmed: t('Communications.authorizationStatus.not_confirmed'),
     not_applicable: t('Communications.authorizationStatus.not_applicable'),
   };
-  const [schedulingPreferencesResult, routingLocationResult, schedulingEmployeesResult] =
+  const [schedulingPreferencesResult, routingLocationResult] =
     client && canReadSchedule
       ? await Promise.all([
           canManageSchedule
@@ -328,28 +387,15 @@ export default async function ClientDetailPage({
                 params: { path: { clientId: client.id }, header },
               })
             : Promise.resolve({ data: undefined, error: undefined }),
-          hasPermission(permissions, 'employee.read')
-            ? get('/api/v1/employees', {
-                params: {
-                  query: {
-                    status: 'active',
-                    ...(client.organizationId ? { organizationId: client.organizationId } : {}),
-                    ...(client.primaryFacilityId ? { facilityId: client.primaryFacilityId } : {}),
-                    page: 1,
-                    pageSize: 100,
-                  },
-                  header,
-                },
-              })
-            : Promise.resolve({ data: undefined, error: undefined }),
         ])
-      : [null, null, null];
+      : [null, null];
   const selectedDocumentType = clientDocumentTypes.includes(
     query.documentType as ClientDocumentType,
   )
     ? (query.documentType as ClientDocumentType)
     : null;
   const documentPage = positivePage(query.documentPage);
+  const documentPageSize = positivePageSize(query.documentPageSize);
   const documentsResult =
     client && canReadDocuments
       ? await get('/api/v1/documents', {
@@ -357,7 +403,7 @@ export default async function ClientDetailPage({
             query: {
               clientId: client.id,
               page: documentPage,
-              pageSize: 25,
+              pageSize: documentPageSize,
               ...(selectedDocumentType ? { documentType: selectedDocumentType } : {}),
             },
             header,
@@ -365,8 +411,27 @@ export default async function ClientDetailPage({
         })
       : null;
   const documentList = documentsResult?.data as
-    | { items?: ClientDocument[]; hasMore?: boolean; total?: number }
+    | {
+        items?: ClientDocument[];
+        hasMore?: boolean;
+        page: number;
+        pageSize: number;
+        totalItems: number;
+        totalPages: number;
+      }
     | undefined;
+  const documentErrorCode = (documentsResult?.error as { code?: string } | undefined)?.code;
+  if (documentList) {
+    redirectToValidPage(
+      `/clients/${client.id}`,
+      query,
+      documentPage,
+      documentList.pageSize,
+      documentList.totalItems,
+      'documentPage',
+      'documentPageSize',
+    );
+  }
   const documents = documentList?.items ?? [];
   const canUpdateClient = client
     ? hasClientPermission(
@@ -396,10 +461,36 @@ export default async function ClientDetailPage({
       grade.validFrom <= today &&
       (!grade.validUntil || grade.validUntil > today),
   );
-  const actionError = query.error || clientResult.error?.code;
-  const schedulingPreferences = schedulingPreferencesResult?.data ?? null;
+  const actionError = query.error;
+  const schedulingPreferences = schedulingPreferencesResult?.data as
+    | components['schemas']['ClientSchedulingPreferencesDto']
+    | null
+    | undefined;
   const routingLocation = routingLocationResult?.data ?? null;
-  const schedulingEmployees = schedulingEmployeesResult?.data?.items ?? [];
+  const schedulingEmployeeIds = [
+    ...new Set([
+      ...(schedulingPreferences?.preferredEmployeeId
+        ? [schedulingPreferences.preferredEmployeeId]
+        : []),
+      ...(schedulingPreferences?.avoidedEmployeeIds ?? []),
+    ]),
+  ];
+  const schedulingEmployeeLookup =
+    canManageSchedule && hasPermission(permissions, 'employee.read')
+      ? await getEmployeesByIds(schedulingEmployeeIds)
+      : { items: [], failed: false };
+  const schedulingEmployeeOptions = schedulingEmployeeIds.map((employeeId) => {
+    const employee = schedulingEmployeeLookup.items.find((item) => item.id === employeeId);
+    return {
+      id: employeeId,
+      label: employee
+        ? `${employee.preferredName || employee.firstName} ${employee.lastName}`
+        : t('Resources.unavailableEmployee'),
+    };
+  });
+  const schedulingEmployeeOptionById = new Map(
+    schedulingEmployeeOptions.map((option) => [option.id, option]),
+  );
   const planningWeekdays = [
     { weekday: 1, label: t('Employees.detail.weekdays.monday') },
     { weekday: 2, label: t('Employees.detail.weekdays.tuesday') },
@@ -411,95 +502,7 @@ export default async function ClientDetailPage({
   ];
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-5">
-      <PageHeader
-        eyebrow={<Link href="/clients">{t('Clients.title')}</Link>}
-        title={
-          client
-            ? `${client.preferredName || client.firstName} ${client.lastName}`
-            : t('Clients.detail.detailTitle')
-        }
-        meta={
-          client ? (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-              <StatusBadge status={client.status} label={t(statusLabelKey(client.status))} />
-              <span>
-                {client.organizationId
-                  ? (() => {
-                      const name = organizationName(
-                        organizations,
-                        client.organizationId,
-                        t('Clients.detail.unknownOrganization'),
-                      );
-                      return (
-                        <ResourceReference
-                          label={name}
-                          href={
-                            organizations.some((item) => item.id === client.organizationId) &&
-                            hasClientPermission(
-                              permissions,
-                              'organization.read',
-                              tenantId,
-                              client.organizationId,
-                              null,
-                            )
-                              ? `/administration/organizations/${client.organizationId}`
-                              : null
-                          }
-                        />
-                      );
-                    })()
-                  : t('Clients.detail.legacyUnassigned')}
-              </span>
-              {client.primaryFacilityId ? (
-                <span>
-                  ·{' '}
-                  {(() => {
-                    const name = facilityName(
-                      facilities,
-                      client.primaryFacilityId,
-                      t('Clients.detail.unknownFacility'),
-                    );
-                    return (
-                      <ResourceReference
-                        label={name}
-                        href={
-                          facilities.some((item) => item.id === client.primaryFacilityId) &&
-                          client.organizationId &&
-                          hasClientPermission(
-                            permissions,
-                            'facility.read',
-                            tenantId,
-                            client.organizationId,
-                            client.primaryFacilityId,
-                          )
-                            ? `/administration/facilities/${client.primaryFacilityId}`
-                            : null
-                        }
-                      />
-                    );
-                  })()}
-                </span>
-              ) : null}
-            </div>
-          ) : null
-        }
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {client && canManageSchedule ? (
-              <Button asChild className="min-h-11">
-                <Link href={`/planning?clientId=${encodeURIComponent(client.id)}`}>
-                  {t('Planning.createVisit')}
-                </Link>
-              </Button>
-            ) : null}
-            <Button asChild variant="outline" className="min-h-11">
-              <Link href="/clients">{t('Clients.detail.backToList')}</Link>
-            </Button>
-          </div>
-        }
-      />
-
+    <div className="grid gap-5">
       {actionError ? (
         <p
           role="alert"
@@ -527,6 +530,15 @@ export default async function ClientDetailPage({
         </p>
       ) : (
         <>
+          {canManageSchedule ? (
+            <div className="flex justify-end">
+              <Button asChild className="min-h-11">
+                <Link href={`/planning?clientId=${encodeURIComponent(client.id)}`}>
+                  {t('Planning.createVisit')}
+                </Link>
+              </Button>
+            </div>
+          ) : null}
           <nav
             aria-label={t('Clients.detail.navigationLabel')}
             className="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-border py-1 text-sm [scrollbar-width:thin]"
@@ -591,6 +603,62 @@ export default async function ClientDetailPage({
               {t('Clients.detail.overview')}
             </h2>
             <dl className="grid gap-4 rounded-lg border bg-card p-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-1">
+                <dt className="text-sm text-muted-foreground">{t('Common.fields.organization')}</dt>
+                <dd className="break-words font-medium">
+                  <ResourceReference
+                    label={
+                      client.organizationId
+                        ? organizationName(
+                            organizations,
+                            client.organizationId,
+                            t('Clients.detail.unknownOrganization'),
+                          )
+                        : t('Clients.detail.legacyUnassigned')
+                    }
+                    href={
+                      client.organizationId &&
+                      organizations.some((item) => item.id === client.organizationId) &&
+                      hasClientPermission(
+                        permissions,
+                        'organization.read',
+                        tenantId,
+                        client.organizationId,
+                        null,
+                      )
+                        ? `/administration/organizations/${client.organizationId}`
+                        : null
+                    }
+                  />
+                </dd>
+              </div>
+              {client.primaryFacilityId ? (
+                <div className="grid gap-1">
+                  <dt className="text-sm text-muted-foreground">{t('Common.fields.facility')}</dt>
+                  <dd className="break-words font-medium">
+                    <ResourceReference
+                      label={facilityName(
+                        facilities,
+                        client.primaryFacilityId,
+                        t('Clients.detail.unknownFacility'),
+                      )}
+                      href={
+                        client.organizationId &&
+                        facilities.some((item) => item.id === client.primaryFacilityId) &&
+                        hasClientPermission(
+                          permissions,
+                          'facility.read',
+                          tenantId,
+                          client.organizationId,
+                          client.primaryFacilityId,
+                        )
+                          ? `/administration/facilities/${client.primaryFacilityId}`
+                          : null
+                      }
+                    />
+                  </dd>
+                </div>
+              ) : null}
               <Field label={t('Clients.form.firstName')} value={client.firstName} />
               <Field label={t('Clients.form.lastName')} value={client.lastName} />
               <Field label={t('Clients.form.preferredName')} value={client.preferredName} />
@@ -753,38 +821,44 @@ export default async function ClientDetailPage({
                   className="mt-4 grid gap-4 md:grid-cols-2"
                 >
                   <input type="hidden" name="id" value={client.id} />
-                  <SelectField
-                    id="organizationId"
+                  <AsyncEntityCombobox
                     name="organizationId"
+                    entity="organizations"
                     label={t('Clients.form.organization')}
-                    value={client.organizationId ?? ''}
+                    placeholder={t('Clients.form.selectOrganization')}
                     required
-                  >
-                    <option value="">{t('Clients.form.selectOrganization')}</option>
-                    {organizations
-                      .filter((organization) => organization.status === 'active')
-                      .map((organization) => (
-                        <option key={organization.id} value={organization.id}>
-                          {organization.name}
-                        </option>
-                      ))}
-                  </SelectField>
-                  <SelectField
-                    id="primaryFacilityId"
+                    {...(client.organizationId
+                      ? {
+                          initialOption: {
+                            id: client.organizationId,
+                            label: organizationName(
+                              organizations,
+                              client.organizationId,
+                              t('Clients.detail.unknownOrganization'),
+                            ),
+                          },
+                        }
+                      : {})}
+                  />
+                  <AsyncEntityCombobox
                     name="primaryFacilityId"
+                    entity="facilities"
                     label={t('Clients.form.primaryFacility')}
-                    value={client.primaryFacilityId ?? ''}
+                    placeholder={t('Clients.form.selectFacility')}
                     required
-                  >
-                    <option value="">{t('Clients.form.selectFacility')}</option>
-                    {facilities
-                      .filter((facility) => facility.status === 'active')
-                      .map((facility) => (
-                        <option key={facility.id} value={facility.id}>
-                          {facility.name}
-                        </option>
-                      ))}
-                  </SelectField>
+                    {...(client.primaryFacilityId
+                      ? {
+                          initialOption: {
+                            id: client.primaryFacilityId,
+                            label: facilityName(
+                              facilities,
+                              client.primaryFacilityId,
+                              t('Clients.detail.unknownFacility'),
+                            ),
+                          },
+                        }
+                      : {})}
+                  />
                   <Button type="submit" className="w-fit md:col-span-2">
                     {t('Clients.detail.saveAssignment')}
                   </Button>
@@ -1460,46 +1534,43 @@ export default async function ClientDetailPage({
                     })}
                   </div>
                   <div className="grid gap-3 md:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="client-preferred-employee">
-                        {t('Clients.detail.preferredEmployee')}
-                      </Label>
-                      <NativeSelect
-                        id="client-preferred-employee"
-                        name="preferredEmployeeId"
-                        defaultValue={schedulingPreferences?.preferredEmployeeId ?? ''}
-                        selectClassName="h-10 rounded-md border bg-card px-3"
-                        className="w-full"
-                      >
-                        <option value="">{t('Clients.detail.noPreferredEmployee')}</option>
-                        {schedulingEmployees.map((employee) => (
-                          <option key={employee.id} value={employee.id}>
-                            {employee.preferredName || employee.firstName} {employee.lastName}
-                          </option>
-                        ))}
-                      </NativeSelect>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="client-avoided-employees">
-                        {t('Clients.detail.avoidedEmployees')}
-                      </Label>
-                      <NativeSelect
-                        id="client-avoided-employees"
-                        name="avoidedEmployeeIds"
-                        multiple
-                        defaultValue={schedulingPreferences?.avoidedEmployeeIds ?? []}
-                        selectClassName="min-h-24 rounded-md border bg-card px-3 py-2"
-                        className="w-full"
-                      >
-                        {schedulingEmployees.map((employee) => (
-                          <option key={employee.id} value={employee.id}>
-                            {employee.preferredName || employee.firstName} {employee.lastName}
-                          </option>
-                        ))}
-                      </NativeSelect>
-                    </div>
+                    <AsyncEntityCombobox
+                      name="preferredEmployeeId"
+                      entity="employees"
+                      label={t('Clients.detail.preferredEmployee')}
+                      placeholder={t('Clients.detail.noPreferredEmployee')}
+                      organizationId={client.organizationId ?? undefined}
+                      facilityId={client.primaryFacilityId ?? undefined}
+                      {...(schedulingPreferences?.preferredEmployeeId
+                        ? {
+                            initialOption: schedulingEmployeeOptionById.get(
+                              schedulingPreferences.preferredEmployeeId,
+                            ) ?? {
+                              id: schedulingPreferences.preferredEmployeeId,
+                              label: t('Resources.unavailableEmployee'),
+                            },
+                          }
+                        : {})}
+                    />
+                    <AsyncEntityCombobox
+                      name="avoidedEmployeeIds"
+                      entity="employees"
+                      label={t('Clients.detail.avoidedEmployees')}
+                      organizationId={client.organizationId ?? undefined}
+                      facilityId={client.primaryFacilityId ?? undefined}
+                      multiple
+                      initialOptions={
+                        schedulingPreferences?.avoidedEmployeeIds.map(
+                          (employeeId) =>
+                            schedulingEmployeeOptionById.get(employeeId) ?? {
+                              id: employeeId,
+                              label: t('Resources.unavailableEmployee'),
+                            },
+                        ) ?? []
+                      }
+                    />
                   </div>
-                  {!schedulingEmployees.length ? (
+                  {schedulingEmployeeLookup.failed ? (
                     <p className="text-sm text-muted-foreground">
                       {t('Clients.detail.employeeChoicesUnavailable')}
                     </p>
@@ -1869,6 +1940,8 @@ export default async function ClientDetailPage({
                     ))}
                   </NativeSelect>
                 </div>
+                <input type="hidden" name="documentPage" value="1" />
+                <input type="hidden" name="documentPageSize" value={documentPageSize} />
                 <Button type="submit" variant="secondary">
                   {t('Documents.applyFilter')}
                 </Button>
@@ -1900,6 +1973,10 @@ export default async function ClientDetailPage({
                     </li>
                   ))}
                 </ul>
+              ) : documentErrorCode ? (
+                <p role="alert" className="rounded-md border bg-card p-4 text-destructive">
+                  {t(errorMessageKey(documentErrorCode))}
+                </p>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   {selectedDocumentType
@@ -1907,35 +1984,21 @@ export default async function ClientDetailPage({
                     : t('Documents.historyEmpty')}
                 </p>
               )}
-              {documentPage > 1 || documentList?.hasMore ? (
-                <nav aria-label={t('Documents.historyPagination')} className="flex gap-2">
-                  {documentPage > 1 ? (
-                    <Button asChild variant="secondary">
-                      <Link
-                        href={clientDocumentsHref(
-                          client.id,
-                          documentPage - 1,
-                          selectedDocumentType,
-                        )}
-                      >
-                        {t('Documents.previousPage')}
-                      </Link>
-                    </Button>
-                  ) : null}
-                  {documentList?.hasMore ? (
-                    <Button asChild variant="secondary">
-                      <Link
-                        href={clientDocumentsHref(
-                          client.id,
-                          documentPage + 1,
-                          selectedDocumentType,
-                        )}
-                      >
-                        {t('Documents.nextPage')}
-                      </Link>
-                    </Button>
-                  ) : null}
-                </nav>
+              {documentList ? (
+                <DataPagination
+                  pathname={`/clients/${client.id}`}
+                  page={documentList.page}
+                  pageSize={documentList.pageSize}
+                  totalItems={documentList.totalItems}
+                  pageParam="documentPage"
+                  pageSizeParam="documentPageSize"
+                  controlId="client-document-page-size"
+                  filters={{
+                    documentType: selectedDocumentType ?? undefined,
+                    error: query.error,
+                    updated: query.updated,
+                  }}
+                />
               ) : null}
             </section>
           ) : null}
@@ -2353,14 +2416,9 @@ function positivePage(value: string | undefined): number {
   return Number.isSafeInteger(page) && page > 0 ? page : 1;
 }
 
-function clientDocumentsHref(
-  clientId: string,
-  page: number,
-  documentType: ClientDocumentType | null,
-): string {
-  const query = new URLSearchParams({ documentPage: String(page) });
-  if (documentType) query.set('documentType', documentType);
-  return `/clients/${clientId}?${query.toString()}#documents`;
+function positivePageSize(value: string | undefined): number {
+  const pageSize = Number(value);
+  return [10, 20, 50, 100].includes(pageSize) ? pageSize : 20;
 }
 
 function clientVisitRange(): { visitNow: Date; visitFuture: Date; visitRecent: Date } {

@@ -37,6 +37,25 @@ export const payerUpdateSchema = payerCreateSchema
   .extend({ expectedVersion: z.number().int().min(1) })
   .strict();
 
+export const payersListQuerySchema = z
+  .object({
+    organizationId: z.uuid(),
+    q: z.string().trim().max(120).optional(),
+    status: z.enum(['active', 'inactive']).optional(),
+    page: z.coerce.number().int().min(1).max(100_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  })
+  .strict();
+
+const payerIdsQuerySchema = z.preprocess(
+  (value) => (typeof value === 'string' ? value.split(',').map((id) => id.trim()) : value),
+  z.array(z.uuid()).min(1).max(100),
+);
+
+export const payerLookupQuerySchema = z
+  .object({ organizationId: z.uuid(), payerIds: payerIdsQuerySchema })
+  .strict();
+
 export const payerProfileSchema = z
   .object({
     organizationId: z.uuid(),
@@ -152,6 +171,76 @@ export class PayerInputDto {
 
 export class PayerUpdateDto extends PayerInputDto {
   @ApiProperty({ minimum: 1 }) expectedVersion!: number;
+}
+
+export class PayerDirectoryEntryDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) tenantId!: string;
+  @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiProperty({
+    enum: ['statutory_pflegekasse', 'private_pflegeversicherung', 'self_pay', 'other'],
+  })
+  payerType!: string;
+  @ApiProperty() name!: string;
+  @ApiPropertyOptional({ nullable: true }) payerIdentifier!: string | null;
+  @ApiPropertyOptional({ nullable: true }) addressText!: string | null;
+  @ApiPropertyOptional({ nullable: true }) billingContactName!: string | null;
+  @ApiPropertyOptional({ nullable: true }) billingContactEmail!: string | null;
+  @ApiPropertyOptional({ nullable: true }) billingContactPhone!: string | null;
+  @ApiPropertyOptional({ nullable: true }) submissionInstructions!: string | null;
+  @ApiProperty({ enum: ['active', 'inactive'] }) status!: string;
+  @ApiProperty({ type: String, format: 'date' }) validFrom!: string;
+  @ApiPropertyOptional({ type: String, format: 'date', nullable: true }) validUntil!: string | null;
+  @ApiProperty({ minimum: 1 }) version!: number;
+  @ApiProperty({ format: 'uuid' }) createdBy!: string;
+  @ApiProperty({ format: 'uuid' }) updatedBy!: string;
+  @ApiProperty({ format: 'date-time' }) createdAt!: string;
+  @ApiProperty({ format: 'date-time' }) updatedAt!: string;
+}
+
+export class PayerBillingProfileResponseDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) tenantId!: string;
+  @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiProperty({ format: 'uuid' }) payerId!: string;
+  @ApiProperty({ minimum: 1 }) version!: number;
+  @ApiProperty({ enum: ['manual_portal', 'manual_email', 'postal', 'customer_reimbursement'] })
+  channel!: string;
+  @ApiProperty({
+    enum: [
+      'statutory_long_term_care_insurance',
+      'private_long_term_care_insurance',
+      'self_pay',
+      'other',
+    ],
+  })
+  fundingSourceType!: string;
+  @ApiProperty({ type: String, format: 'date' }) validFrom!: string;
+  @ApiPropertyOptional({ type: String, format: 'date', nullable: true }) validUntil!: string | null;
+  @ApiProperty() sourceName!: string;
+  @ApiProperty() sourceVersion!: string;
+  @ApiProperty({ type: String, format: 'date' }) sourceEffectiveDate!: string;
+  @ApiPropertyOptional({ nullable: true }) sourceUrl!: string | null;
+  @ApiProperty() requiresClientInsuranceNumber!: boolean;
+  @ApiProperty() requiresPayerIdentifier!: boolean;
+  @ApiProperty() requiresAcknowledgement!: boolean;
+  @ApiProperty() requiresMandate!: boolean;
+  @ApiProperty() requiresInvoicePdf!: boolean;
+  @ApiProperty() requiresEvidencePdf!: boolean;
+  @ApiProperty() requiresMandateDocument!: boolean;
+  @ApiProperty() requiresExternalReference!: boolean;
+  @ApiProperty() requiresProviderRecognition!: boolean;
+  @ApiProperty({ format: 'uuid' }) createdBy!: string;
+  @ApiProperty({ format: 'date-time' }) createdAt!: string;
+}
+
+export class PayerListResponseDto {
+  @ApiProperty({ type: [PayerDirectoryEntryDto] }) items!: PayerDirectoryEntryDto[];
+  @ApiProperty({ minimum: 1 }) page!: number;
+  @ApiProperty({ minimum: 1, maximum: 100 }) pageSize!: number;
+  @ApiProperty({ minimum: 0 }) totalItems!: number;
+  @ApiProperty({ minimum: 0 }) totalPages!: number;
+  @ApiProperty() hasMore!: boolean;
 }
 
 export class PayerProfileInputDto {

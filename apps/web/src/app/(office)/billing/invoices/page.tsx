@@ -24,17 +24,27 @@ import {
   getTenantHeader,
   hasClientPermission,
 } from '@app/web/lib/api';
+import type { components } from '@care/api-client';
 import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
 import { formatCents } from '@app/web/app/(office)/billing/format';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 
-type SearchParams = Promise<{ page?: string; status?: string; error?: string; updated?: string }>;
+type SearchParams = Promise<{
+  page?: string;
+  pageSize?: string;
+  status?: string;
+  error?: string;
+  updated?: string;
+}>;
 
 export default async function BillingInvoicesPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
   const page = positivePage(query.page);
+  const pageSize = positivePageSize(query.pageSize);
   const status =
     query.status === 'draft' || query.status === 'issued' || query.status === 'cancelled'
       ? query.status
@@ -46,9 +56,16 @@ export default async function BillingInvoicesPage({
   ]);
   const api = await getApiClient();
   const header = await getTenantHeader();
-  const { data, error } = await api.GET('/api/v1/billing/invoices', {
-    params: { query: { page, pageSize: 50, ...(status ? { status } : {}) }, header },
+  const result = await api.GET('/api/v1/billing/invoices', {
+    params: { query: { page, pageSize, ...(status ? { status } : {}) }, header },
   });
+  const data = result.data as unknown as
+    | (components['schemas']['BillingInvoiceListResponseDto'] & { totalPages: number })
+    | undefined;
+  const error = result.error as { code?: string } | undefined;
+  if (data) {
+    redirectToValidPage('/billing/invoices', status ? { status } : {}, page, pageSize, data.total);
+  }
   const invoices = data?.items ?? [];
   const permissions = await getPermissionGrants(api);
   const tenantId = header['X-Tenant-Id'];
@@ -66,6 +83,7 @@ export default async function BillingInvoicesPage({
       ) : null}
       {query.updated === 'invoice' ? <Status>{t('invoiceListUpdated')}</Status> : null}
       <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
+        <input type="hidden" name="pageSize" value={pageSize} />
         <label className="grid gap-2 text-sm">
           <span>{t('invoiceStatus')}</span>
           <NativeSelect
@@ -161,18 +179,15 @@ export default async function BillingInvoicesPage({
         ) : (
           <EmptyState title={t('invoiceListEmpty')} />
         )}
-        <div className="flex justify-end gap-2">
-          {page > 1 ? (
-            <Button asChild variant="secondary">
-              <Link href={invoiceListHref(page - 1, status)}>{t('previous')}</Link>
-            </Button>
-          ) : null}
-          {invoices.length === 50 ? (
-            <Button asChild variant="secondary">
-              <Link href={invoiceListHref(page + 1, status)}>{t('next')}</Link>
-            </Button>
-          ) : null}
-        </div>
+        {data ? (
+          <DataPagination
+            pathname="/billing/invoices"
+            page={data.page}
+            pageSize={data.pageSize}
+            totalItems={data.total}
+            filters={status ? { status } : {}}
+          />
+        ) : null}
       </section>
     </div>
   );
@@ -184,14 +199,13 @@ function period(from: string | null, until: string | null, locale: Locale): stri
   return start && end && start !== end ? `${start} – ${end}` : (start ?? end ?? '—');
 }
 
-function invoiceListHref(page: number, status?: string): string {
-  const query = new URLSearchParams({ page: String(page) });
-  if (status) query.set('status', status);
-  return `/billing/invoices?${query}`;
-}
-
 function positivePage(value: string | undefined): number {
   if (!value || !/^\d+$/.test(value)) return 1;
   const page = Number(value);
   return Number.isSafeInteger(page) && page > 0 && page <= 100_000 ? page : 1;
+}
+
+function positivePageSize(value: string | undefined): number {
+  const pageSize = Number(value);
+  return [10, 20, 50, 100].includes(pageSize) ? pageSize : 20;
 }

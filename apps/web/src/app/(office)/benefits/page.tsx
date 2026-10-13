@@ -2,11 +2,15 @@ import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
 import type { Locale } from '@app/web/i18n/config';
+import type { components } from '@care/api-client';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatCurrency, formatDate } from '@app/web/i18n/format';
 import {
@@ -18,13 +22,20 @@ import {
 } from '@app/web/lib/api';
 import { createProviderRecognitionAction, allocatePerformedServiceAction } from './actions';
 
-type SearchParams = Promise<{ page?: string; error?: string; updated?: string }>;
+type SearchParams = Promise<{
+  page?: string;
+  pageSize?: string;
+  error?: string;
+  updated?: string;
+}>;
 
 export default async function BenefitsWorklistPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
   const page = positivePage(query.page);
+  const requestedPageSize = Number(query.pageSize ?? '20');
+  const pageSize = [10, 20, 50, 100].includes(requestedPageSize) ? requestedPageSize : 20;
   const [t, benefitT, locale] = await Promise.all([
     getTranslations(),
     getTranslations('Benefits'),
@@ -35,13 +46,17 @@ export default async function BenefitsWorklistPage({
   const header = await getTenantHeader();
   const permissions = await getPermissionGrants(api);
   const tenantId = header['X-Tenant-Id'];
-  const { data: worklist, error: worklistError } = await get('/api/v1/benefits/worklist', {
-    params: { query: { page, pageSize: 25 }, header },
+  const worklistResult = await get('/api/v1/benefits/worklist', {
+    params: { query: { page, pageSize }, header },
   });
-  const organizationResult = hasPermission(permissions, 'benefits.manage')
-    ? await get('/api/v1/organizations', { params: { header } })
-    : null;
-  const organizations = organizationResult?.data ?? [];
+  const worklist = worklistResult.data as unknown as
+    | components['schemas']['BenefitWorklistResponseDto']
+    | undefined;
+  const worklistError = worklistResult.error as { code?: string } | undefined;
+  if (worklist && !worklistError) {
+    const total = Math.max(worklist.clients.total, worklist.unallocatedServices.total);
+    redirectToValidPage('/benefits', query, page, pageSize, total);
+  }
   const serviceItems = worklist?.unallocatedServices.items ?? [];
   const allocationOptionsByService = new Map(
     (worklist?.allocationOptions ?? []).map(({ performedServiceId, items }) => [
@@ -176,19 +191,15 @@ export default async function BenefitsWorklistPage({
         ) : (
           <EmptyState title={t('Benefits.worklistEmpty')} />
         )}
-        {worklist?.clients && worklist.clients.total > worklist.clients.pageSize ? (
-          <div className="flex justify-end gap-2">
-            {page > 1 ? (
-              <Button asChild variant="secondary">
-                <Link href={worklistHref(page - 1)}>{t('Common.actions.previous')}</Link>
-              </Button>
-            ) : null}
-            {page * worklist.clients.pageSize < worklist.clients.total ? (
-              <Button asChild variant="secondary">
-                <Link href={worklistHref(page + 1)}>{t('Common.actions.next')}</Link>
-              </Button>
-            ) : null}
-          </div>
+        {worklist?.clients && !worklistError ? (
+          <DataPagination
+            pathname="/benefits"
+            page={worklist.clients.page}
+            pageSize={worklist.clients.pageSize}
+            totalItems={worklist.clients.total}
+            filters={{}}
+            controlId="benefit-clients-page-size"
+          />
         ) : null}
       </section>
 
@@ -350,20 +361,15 @@ export default async function BenefitsWorklistPage({
         ) : (
           <EmptyState title={t('Benefits.servicesEmpty')} />
         )}
-        {worklist?.unallocatedServices &&
-        worklist.unallocatedServices.total > worklist.unallocatedServices.pageSize ? (
-          <div className="flex justify-end gap-2">
-            {page > 1 ? (
-              <Button asChild variant="secondary">
-                <Link href={worklistHref(page - 1)}>{t('Common.actions.previous')}</Link>
-              </Button>
-            ) : null}
-            {page * worklist.unallocatedServices.pageSize < worklist.unallocatedServices.total ? (
-              <Button asChild variant="secondary">
-                <Link href={worklistHref(page + 1)}>{t('Common.actions.next')}</Link>
-              </Button>
-            ) : null}
-          </div>
+        {worklist?.unallocatedServices && !worklistError ? (
+          <DataPagination
+            pathname="/benefits"
+            page={worklist.unallocatedServices.page}
+            pageSize={worklist.unallocatedServices.pageSize}
+            totalItems={worklist.unallocatedServices.total}
+            filters={{}}
+            controlId="benefit-services-page-size"
+          />
         ) : null}
       </section>
 
@@ -376,29 +382,18 @@ export default async function BenefitsWorklistPage({
             {t('Benefits.recognitionTitle')}
           </h2>
           <p className="text-sm text-muted-foreground">{t('Benefits.recognitionDescription')}</p>
-          {organizationResult?.error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {t(errorMessageKey(organizationResult.error.code))}
-            </p>
-          ) : null}
-          {organizations.length ? (
+          {hasPermission(permissions, 'organization.read') ? (
             <RHFActionForm
               action={createProviderRecognitionAction}
               className="grid gap-3 md:grid-cols-2"
             >
-              <SelectField
-                id="recognition-organization"
+              <AsyncEntityCombobox
                 name="organizationId"
                 label={t('Benefits.recognitionOrganization')}
+                entity="organizations"
+                placeholder={t('Benefits.selectOrganization')}
                 required
-              >
-                <option value="">{t('Benefits.selectOrganization')}</option>
-                {organizations.map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name}
-                  </option>
-                ))}
-              </SelectField>
+              />
               <Field
                 id="recognized-offering"
                 name="recognizedOffering"
@@ -551,8 +546,4 @@ function positivePage(value: string | undefined): number {
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function worklistHref(page: number): string {
-  return `/benefits?page=${page}`;
 }

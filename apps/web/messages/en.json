@@ -23,6 +23,8 @@
       "reset": "Reset",
       "previous": "Previous",
       "next": "Next",
+      "firstPage": "First page",
+      "lastPage": "Last page",
       "save": "Save changes",
       "cancel": "Cancel",
       "create": "Create",
@@ -55,7 +57,19 @@
       "code": "Code",
       "legalName": "Legal name",
       "address": "Address",
-      "timezone": "Time zone"
+      "timezone": "Time zone",
+      "pageSize": "Rows per page",
+      "pagination": "Pagination"
+    },
+    "entitySelector": {
+      "choose": "Choose {entity}",
+      "searchPlaceholder": "Search by name",
+      "minimumCharacters": "Type at least {count} characters",
+      "loading": "Loading results…",
+      "empty": "No matches found",
+      "failed": "Could not load results",
+      "retry": "Try again",
+      "clear": "Clear selection"
     },
     "filters": {
       "allStatuses": "All statuses",
@@ -86,6 +100,7 @@
       "notSpecified": "Not specified"
     },
     "pagination": "Page {page} of {pages}",
+    "resultsRange": "Showing {start}–{end} of {total}",
     "units": {
       "occurrence": "Visit",
       "minute": "Minute",
@@ -1817,6 +1832,8 @@
     "reminderSettingsSaved": "Reminder settings saved.",
     "leadTimesHelp": "Comma-separated days before the due date, such as 30, 7, 0. Overdue items stay visible.",
     "noReminderOrganizations": "No organization is available for reminder settings.",
+    "chooseReminderOrganization": "Choose an organization to view its reminder settings.",
+    "openReminderSettings": "Open settings",
     "schedulerStatus": "Deadline evaluation",
     "lastSuccessfulEvaluation": "Last successful evaluation",
     "lastFailure": "Last failure",
@@ -2717,6 +2734,7 @@
       "organization": "Organization",
       "documentType": "Document type",
       "choose": "Choose template",
+      "chooseOrganization": "Choose an organization to open its document templates.",
       "configuration": "Template configuration",
       "version": "Version {version}",
       "logo": "Provider logo (PNG or JPEG, up to 512 KB)",
@@ -3188,6 +3206,8 @@
     "directPayerBilling": "Direct payer billing",
     "customerReimbursement": "Customer reimbursement",
     "claimsSettingsDescription": "Configure payer records and versioned requirements from documented sources. No identifiers or submission rules are inferred.",
+    "chooseClaimsSettingsOrganization": "Choose an organization to view its payer directory.",
+    "openClaimsSettings": "Open payer settings",
     "noClaimsSettingsPermission": "You do not have permission to manage payer settings in this scope.",
     "payersEmpty": "No payer directory entries are configured for this organization.",
     "submissionInstructions": "Submission instructions",

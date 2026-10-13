@@ -13,6 +13,7 @@ import {
   lte,
   lt,
   max,
+  ne,
   or,
   type SQL,
   sql,
@@ -1495,36 +1496,37 @@ export class OperationsApplicationService {
     const pageSize = bounded(query.pageSize, 50, 1, 100);
 
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const allOccurrences = await transaction
-        .select()
-        .from(exceptionOccurrences)
-        .where(
-          and(
-            eq(exceptionOccurrences.tenantId, principal.tenantId),
-            eq(exceptionOccurrences.issueKey, issueId),
-          ),
-        )
-        .orderBy(desc(exceptionOccurrences.firstDetectedAt), desc(exceptionOccurrences.id));
-      const allowedOccurrences = allOccurrences.filter((occurrence) => {
-        const permission = exceptionReadPermission(occurrence.sourceDomain, occurrence.issueCode);
-        if (!permission) return false;
-        const resource: ResourceContext = {
-          tenantId: occurrence.tenantId,
-          ...(occurrence.organizationId ? { organizationId: occurrence.organizationId } : {}),
-          ...(occurrence.facilityId ? { facilityId: occurrence.facilityId } : {}),
-          ...(occurrence.clientId ? { clientId: occurrence.clientId } : {}),
-        };
-        return (
-          can(principal, { action: 'operations.read', resource }) &&
-          can(principal, { action: permission, resource }) &&
-          (!occurrence.clientId || can(principal, { action: 'client.read', resource }))
-        );
-      });
-      if (!allowedOccurrences.length) throw new OperationsWorkItemNotFoundError();
+      const issueScope = and(
+        eq(exceptionOccurrences.tenantId, principal.tenantId),
+        eq(exceptionOccurrences.issueKey, issueId),
+      );
+      const visibleScope = and(
+        issueScope,
+        exceptionPermissionScope(principal, 'operations.read'),
+        exceptionClientReadScope(principal),
+        exceptionSourceReadScope(principal),
+      );
+      const [rawCountRows, visibleCountRows, occurrences] = await Promise.all([
+        transaction.select({ value: count() }).from(exceptionOccurrences).where(issueScope),
+        transaction.select({ value: count() }).from(exceptionOccurrences).where(visibleScope),
+        transaction
+          .select()
+          .from(exceptionOccurrences)
+          .where(visibleScope)
+          .orderBy(desc(exceptionOccurrences.firstDetectedAt), desc(exceptionOccurrences.id))
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
+      ]);
+      const rawCount = Number(rawCountRows[0]?.value ?? 0);
+      const totalOccurrences = Number(visibleCountRows[0]?.value ?? 0);
+      if (totalOccurrences === 0) throw new OperationsWorkItemNotFoundError();
 
-      const occurrenceIds = allowedOccurrences.map((occurrence) => occurrence.id);
-      const interactionLinks = [inArray(exceptionInteractions.occurrenceId, occurrenceIds)];
-      if (allowedOccurrences.length === allOccurrences.length) {
+      const occurrenceQuery = transaction
+        .select({ id: exceptionOccurrences.id })
+        .from(exceptionOccurrences)
+        .where(visibleScope);
+      const interactionLinks = [inArray(exceptionInteractions.occurrenceId, occurrenceQuery)];
+      if (totalOccurrences === rawCount) {
         interactionLinks.push(isNull(exceptionInteractions.occurrenceId));
       }
       const interactionScope = and(
@@ -1557,25 +1559,23 @@ export class OperationsApplicationService {
         issueId,
         page,
         pageSize,
-        totalOccurrences: allowedOccurrences.length,
-        totalInteractions: interactionCount?.value ?? 0,
-        occurrences: allowedOccurrences
-          .slice((page - 1) * pageSize, page * pageSize)
-          .map((row) => ({
-            id: row.id,
-            sourceDomain: row.sourceDomain,
-            sourceEntityType: row.sourceEntityType,
-            sourceEntityId: row.sourceEntityId,
-            issueCode: row.issueCode,
-            category: row.category,
-            severity: row.severity,
-            organizationId: row.organizationId,
-            facilityId: row.facilityId,
-            clientId: row.clientId,
-            firstDetectedAt: row.firstDetectedAt.toISOString(),
-            lastObservedAt: row.lastObservedAt.toISOString(),
-            resolvedAt: row.resolvedAt?.toISOString() ?? null,
-          })),
+        totalOccurrences,
+        totalInteractions: Number(interactionCount?.value ?? 0),
+        occurrences: occurrences.map((row) => ({
+          id: row.id,
+          sourceDomain: row.sourceDomain,
+          sourceEntityType: row.sourceEntityType,
+          sourceEntityId: row.sourceEntityId,
+          issueCode: row.issueCode,
+          category: row.category,
+          severity: row.severity,
+          organizationId: row.organizationId,
+          facilityId: row.facilityId,
+          clientId: row.clientId,
+          firstDetectedAt: row.firstDetectedAt.toISOString(),
+          lastObservedAt: row.lastObservedAt.toISOString(),
+          resolvedAt: row.resolvedAt?.toISOString() ?? null,
+        })),
         interactions: interactions.map((row) => ({
           ...row,
           occurredAt: row.occurredAt.toISOString(),
@@ -1852,15 +1852,12 @@ export class OperationsApplicationService {
             .from(tenantMemberships)
             .innerJoin(users, eq(users.id, tenantMemberships.userId))
             .where(
-              and(
-                eq(tenantMemberships.tenantId, principal.tenantId),
-                inArray(users.id, actorIds),
-              ),
+              and(eq(tenantMemberships.tenantId, principal.tenantId), inArray(users.id, actorIds)),
             )
         : [];
       const actorNames = new Map(
         actorRows.flatMap((actor) =>
-          actor.displayName ? ([[actor.id, actor.displayName] as const]) : [],
+          actor.displayName ? [[actor.id, actor.displayName] as const] : [],
         ),
       );
       return rows.map((row) => ({ ...row, actorName: actorNames.get(row.actorUserId) ?? null }));
@@ -3661,6 +3658,71 @@ function exceptionReadPermission(sourceDomain: string, issueCode: string): Permi
     default:
       return null;
   }
+}
+
+function exceptionPermissionScope(principal: AuthorizationPrincipal, permission: Permission): SQL {
+  const grants = principal.grants.filter(
+    (grant) =>
+      grant.permission === permission ||
+      (permission === 'employee.read' && grant.permission === 'employee.manage'),
+  );
+  if (
+    grants.some((grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId)
+  ) {
+    return sql`true`;
+  }
+
+  const scopes: SQL[] = [];
+  const organizationIds = grants
+    .filter((grant) => grant.scopeType === 'organization')
+    .map((grant) => grant.scopeId);
+  const facilityIds = grants
+    .filter((grant) => grant.scopeType === 'facility')
+    .map((grant) => grant.scopeId);
+  if (organizationIds.length)
+    scopes.push(inArray(exceptionOccurrences.organizationId, organizationIds));
+  if (facilityIds.length) scopes.push(inArray(exceptionOccurrences.facilityId, facilityIds));
+  return scopes.length ? or(...scopes)! : sql`false`;
+}
+
+function exceptionClientReadScope(principal: AuthorizationPrincipal): SQL {
+  return or(
+    isNull(exceptionOccurrences.clientId),
+    exceptionPermissionScope(principal, 'client.read'),
+  )!;
+}
+
+function exceptionSourceReadScope(principal: AuthorizationPrincipal): SQL {
+  const domainPermissions = [
+    ['service_agreements', 'service_agreement.read'],
+    ['employee_qualifications', 'employee.read'],
+    ['scheduling', 'schedule.read'],
+    ['visit_execution', 'visit_execution.read'],
+    ['care_documentation', 'care_documentation.review'],
+    ['service_evidence', 'service_evidence.read'],
+    ['benefits', 'benefits.review'],
+    ['claims', 'claims.read'],
+    ['onboarding', 'onboarding.read'],
+  ] as const satisfies readonly (readonly [string, Permission])[];
+  const conditions = domainPermissions.map(([sourceDomain, permission]) =>
+    and(
+      eq(exceptionOccurrences.sourceDomain, sourceDomain),
+      exceptionPermissionScope(principal, permission),
+    ),
+  );
+  conditions.push(
+    and(
+      eq(exceptionOccurrences.sourceDomain, 'billing'),
+      eq(exceptionOccurrences.issueCode, 'receivable_due'),
+      exceptionPermissionScope(principal, 'billing.payments.read'),
+    ),
+    and(
+      eq(exceptionOccurrences.sourceDomain, 'billing'),
+      ne(exceptionOccurrences.issueCode, 'receivable_due'),
+      exceptionPermissionScope(principal, 'billing.read'),
+    ),
+  );
+  return or(...conditions)!;
 }
 
 function severityWeight(severity: OperationsWorkItem['severity']): number {

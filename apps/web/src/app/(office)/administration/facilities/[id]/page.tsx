@@ -19,9 +19,20 @@ import {
   updateFacilityAction,
 } from '@app/web/app/(office)/administration/actions';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import type { components } from '@care/api-client';
 
 type Params = Promise<{ id: string }>;
-type SearchParams = Promise<{ error?: string; updated?: string }>;
+type SearchParams = Promise<{
+  error?: string;
+  updated?: string;
+  teamPage?: string;
+  teamPageSize?: string;
+  employeePage?: string;
+  employeePageSize?: string;
+}>;
 
 export default async function FacilityDetailPage({
   params,
@@ -33,16 +44,22 @@ export default async function FacilityDetailPage({
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
+  const teamPage = positivePage(query.teamPage);
+  const teamPageSize = positivePageSize(query.teamPageSize);
+  const employeePage = positivePage(query.employeePage);
+  const employeePageSize = positivePageSize(query.employeePageSize);
   const [facilityResult, teamsResult, employeesResult, permissions] = await Promise.all([
     get('/api/v1/facilities/{id}', { params: { path: { id }, header } }),
-    get('/api/v1/teams', { params: { query: { facilityId: id }, header } }),
+    get('/api/v1/teams/search', {
+      params: { query: { facilityId: id, page: teamPage, pageSize: teamPageSize }, header },
+    }),
     get('/api/v1/employees', {
-      params: { query: { facilityId: id, page: 1, pageSize: 50 }, header },
+      params: { query: { facilityId: id, page: employeePage, pageSize: employeePageSize }, header },
     }),
     getPermissionGrants(api),
   ]);
   if (!facilityResult.data) notFound();
-  const facility = facilityResult.data;
+  const facility = facilityResult.data as components['schemas']['FacilityResponseDto'];
   const tenantId = header['X-Tenant-Id'];
   const canReadTeams = hasClientPermission(
     permissions,
@@ -58,6 +75,44 @@ export default async function FacilityDetailPage({
     facility.organizationId,
     facility.id,
   );
+  const teams = teamsResult.data as unknown as
+    | {
+        items: components['schemas']['TeamResponseDto'][];
+        page: number;
+        pageSize: number;
+        total: number;
+      }
+    | undefined;
+  const employees = employeesResult.data as unknown as
+    | {
+        items: components['schemas']['EmployeeListResponseDto']['items'];
+        page: number;
+        pageSize: number;
+        total: number;
+      }
+    | undefined;
+  if (teams) {
+    redirectToValidPage(
+      `/administration/facilities/${id}`,
+      { employeePage: String(employeePage), employeePageSize: String(employeePageSize) },
+      teamPage,
+      teamPageSize,
+      teams.total,
+      'teamPage',
+      'teamPageSize',
+    );
+  }
+  if (employees) {
+    redirectToValidPage(
+      `/administration/facilities/${id}`,
+      { teamPage: String(teamPage), teamPageSize: String(teamPageSize) },
+      employeePage,
+      employeePageSize,
+      employees.total,
+      'employeePage',
+      'employeePageSize',
+    );
+  }
 
   return (
     <div className="grid gap-8">
@@ -169,7 +224,7 @@ export default async function FacilityDetailPage({
           </h2>
           <p className="text-sm text-muted-foreground">{t('Facilities.teamsDescription')}</p>
         </div>
-        <RHFActionForm action={createTeamAction} className="flex flex-wrap items-end gap-3">
+        <form action={createTeamAction} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="organizationId" value={facility.organizationId} />
           <input type="hidden" name="facilityId" value={facility.id} />
           <div className="grid gap-2">
@@ -177,10 +232,10 @@ export default async function FacilityDetailPage({
             <Input id="team-name" name="name" required maxLength={160} />
           </div>
           <Button type="submit">{t('Facilities.createTeam')}</Button>
-        </RHFActionForm>
-        {teamsResult.data?.length ? (
+        </form>
+        {teams?.items.length ? (
           <ul className="grid gap-2">
-            {teamsResult.data.map((team) => (
+            {teams.items.map((team) => (
               <li key={team.id} className="flex justify-between gap-3 rounded-md border p-3">
                 {canReadTeams ? (
                   <Link
@@ -196,9 +251,25 @@ export default async function FacilityDetailPage({
               </li>
             ))}
           </ul>
+        ) : teamsResult.error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {t(errorMessageKey((teamsResult.error as { code?: string }).code ?? 'INVALID_REQUEST'))}
+          </p>
         ) : (
           <p className="text-sm text-muted-foreground">{t('Facilities.noTeams')}</p>
         )}
+        {teams ? (
+          <DataPagination
+            pathname={`/administration/facilities/${id}`}
+            page={teams.page}
+            pageSize={teams.pageSize}
+            totalItems={teams.total}
+            pageParam="teamPage"
+            pageSizeParam="teamPageSize"
+            controlId="team-page-size"
+            filters={{ employeePage, employeePageSize }}
+          />
+        ) : null}
       </section>
 
       <section aria-labelledby="facility-employees-title" className="grid gap-3">
@@ -212,9 +283,9 @@ export default async function FacilityDetailPage({
           >
             {t('Facilities.employeeLoadFailed')}
           </p>
-        ) : employeesResult.data?.items.length ? (
+        ) : employees?.items.length ? (
           <ul className="grid gap-2">
-            {employeesResult.data.items.map((employee) => (
+            {employees.items.map((employee) => (
               <li
                 key={employee.id}
                 className="flex justify-between gap-3 rounded-md border bg-card p-3"
@@ -235,11 +306,23 @@ export default async function FacilityDetailPage({
               </li>
             ))}
           </ul>
-        ) : (
+        ) : employees ? (
           <p className="rounded-lg border bg-card p-4 text-muted-foreground">
             {t('Facilities.noEmployees')}
           </p>
-        )}
+        ) : null}
+        {employees ? (
+          <DataPagination
+            pathname={`/administration/facilities/${id}`}
+            page={employees.page}
+            pageSize={employees.pageSize}
+            totalItems={employees.total}
+            pageParam="employeePage"
+            pageSizeParam="employeePageSize"
+            controlId="employee-page-size"
+            filters={{ teamPage, teamPageSize }}
+          />
+        ) : null}
       </section>
     </div>
   );
@@ -275,6 +358,16 @@ function Field({
       />
     </div>
   );
+}
+
+function positivePage(value: string | undefined): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, 100_000) : 1;
+}
+
+function positivePageSize(value: string | undefined): number {
+  const parsed = Number(value);
+  return [10, 20, 50, 100].includes(parsed) ? parsed : 20;
 }
 
 async function StatusForm({ id, operation }: Readonly<{ id: string; operation: 'activate' }>) {

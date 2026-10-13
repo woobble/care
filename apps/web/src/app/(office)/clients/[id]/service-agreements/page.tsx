@@ -8,11 +8,16 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { Badge, Button, Input, Label } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { DataPagination } from '@app/web/components/data-pagination';
 import { ResourceReference } from '@app/web/components/resource-reference';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { auditActionKey } from '@app/web/i18n/audit';
 import { formatDate, formatDateTime, formatNumber } from '@app/web/i18n/format';
 import type { Locale } from '@app/web/i18n/config';
+import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
+import { getFacilitiesByIds } from '@app/web/lib/facility-lookup';
+import type { components } from '@care/api-client';
 import { quantityUnitKey, serviceAgreementStatusKey, unitLabelKey } from '@app/web/i18n/status';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 import {
@@ -31,6 +36,7 @@ import {
 } from './actions';
 import { generateAgreementVisitsAction } from '@app/web/app/(office)/planning/actions';
 import { generateDocumentAction } from '@app/web/app/(office)/documents/actions';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 
 type SearchParams = Promise<{
   error?: string;
@@ -40,14 +46,9 @@ type SearchParams = Promise<{
   generated?: string;
   existing?: string;
   placement?: string;
+  agreementPage?: string;
+  agreementPageSize?: string;
 }>;
-
-const unitKeys = {
-  occurrence: 'Common.units.occurrence',
-  minute: 'Common.units.minute',
-  hour: 'Common.units.hour',
-  day: 'Common.units.day',
-} as const;
 
 const weekdayKeys = {
   monday: 'ServiceAgreements.weekdays.monday',
@@ -59,7 +60,6 @@ const weekdayKeys = {
   sunday: 'ServiceAgreements.weekdays.sunday',
 } as const;
 
-type ServiceUnit = keyof typeof unitKeys;
 type Weekday = keyof typeof weekdayKeys;
 type ScheduleRule =
   | { type: 'daily' }
@@ -74,22 +74,26 @@ export default async function ClientServiceAgreementsPage({
 }: Readonly<{ params: Promise<{ id: string }>; searchParams: SearchParams }>) {
   const { id: clientId } = await params;
   const query = await searchParams;
+  const agreementPage = positivePage(query.agreementPage);
+  const agreementPageSize = positivePageSize(query.agreementPageSize);
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const api = await getApiClient();
   const get = api.GET;
   const header = await getTenantHeader();
-  const [clientResult, agreementsResult, organizationsResult, facilitiesResult, timelineResult] =
-    await Promise.all([
-      get('/api/v1/clients/{id}', { params: { path: { id: clientId }, header } }),
-      get('/api/v1/clients/{clientId}/service-agreements', {
-        params: { path: { clientId }, query: { page: 1, pageSize: 50 }, header },
-      }),
-      get('/api/v1/organizations', { params: { header } }),
-      get('/api/v1/facilities', { params: { header } }),
-      get('/api/v1/clients/{clientId}/timeline', { params: { path: { clientId }, header } }),
-    ]);
-  if (clientResult.error?.code === 'CLIENT_NOT_FOUND') notFound();
-  const client = clientResult.data;
+  const [clientResult, agreementsResult, timelineResult] = await Promise.all([
+    get('/api/v1/clients/{id}', { params: { path: { id: clientId }, header } }),
+    get('/api/v1/clients/{clientId}/service-agreements', {
+      params: {
+        path: { clientId },
+        query: { page: agreementPage, pageSize: agreementPageSize },
+        header,
+      },
+    }),
+    get('/api/v1/clients/{clientId}/timeline', { params: { path: { clientId }, header } }),
+  ]);
+  if ((clientResult.error as { code?: string } | undefined)?.code === 'CLIENT_NOT_FOUND')
+    notFound();
+  const client = clientResult.data as components['schemas']['ClientResponseDto'] | undefined;
   if (!client) {
     return (
       <p
@@ -101,9 +105,33 @@ export default async function ClientServiceAgreementsPage({
     );
   }
 
-  const agreements = agreementsResult.data?.items ?? [];
-  const organizations = organizationsResult.data ?? [];
-  const facilities = facilitiesResult.data ?? [];
+  const agreementData = agreementsResult.data as
+    | components['schemas']['ServiceAgreementListResponseDto']
+    | undefined;
+  const agreements = agreementData?.items ?? [];
+  if (agreementData) {
+    redirectToValidPage(
+      `/clients/${clientId}/service-agreements`,
+      query,
+      agreementPage,
+      agreementData.pageSize,
+      agreementData.total,
+      'agreementPage',
+      'agreementPageSize',
+    );
+  }
+  const [organizationLookup, facilityLookup] = await Promise.all([
+    getOrganizationsByIds([
+      ...(client.organizationId ? [client.organizationId] : []),
+      ...agreements.map((agreement) => agreement.organizationId),
+    ]),
+    getFacilitiesByIds([
+      ...(client.primaryFacilityId ? [client.primaryFacilityId] : []),
+      ...agreements.map((agreement) => agreement.facilityId),
+    ]),
+  ]);
+  const organizations = organizationLookup.items;
+  const facilities = facilityLookup.items;
   const timeline = (timelineResult.data ?? []).filter((entry) =>
     entry.action.startsWith('service_agreement.'),
   );
@@ -154,24 +182,6 @@ export default async function ClientServiceAgreementsPage({
     (selectedAgreement.validUntil == null ||
       (selectedServiceUntil !== null && selectedServiceUntil <= selectedAgreement.validUntil)) &&
     (selectedServiceUntil === null || selectedServiceUntil >= selectedServiceFrom);
-  const serviceOptionsResult =
-    selectedAgreement && selectedProviderCanManage && servicePeriodValid
-      ? await get('/api/v1/services', {
-          params: {
-            query: {
-              status: 'active',
-              organizationId: selectedAgreement.organizationId,
-              facilityId: selectedAgreement.facilityId,
-              validFrom: selectedServiceFrom,
-              ...(selectedServiceUntil === null ? {} : { validUntil: selectedServiceUntil }),
-              page: 1,
-              pageSize: 100,
-            },
-            header,
-          },
-        })
-      : undefined;
-  const serviceOptions = serviceOptionsResult?.data?.items ?? [];
   const error = query.error ?? agreementsResult.error?.code;
   const generationSummary =
     query.generated !== undefined
@@ -259,7 +269,9 @@ export default async function ClientServiceAgreementsPage({
             value={
               <ResourceReference
                 label={organizationName ?? t('Resources.unavailableOrganization')}
-                href={organizationName ? `/administration/organizations/${client.organizationId}` : null}
+                href={
+                  organizationName ? `/administration/organizations/${client.organizationId}` : null
+                }
               />
             }
           />
@@ -269,7 +281,9 @@ export default async function ClientServiceAgreementsPage({
               client.primaryFacilityId ? (
                 <ResourceReference
                   label={facilityName ?? t('Resources.unavailableFacility')}
-                  href={facilityName ? `/administration/facilities/${client.primaryFacilityId}` : null}
+                  href={
+                    facilityName ? `/administration/facilities/${client.primaryFacilityId}` : null
+                  }
                 />
               ) : null
             }
@@ -328,7 +342,7 @@ export default async function ClientServiceAgreementsPage({
             {t('ServiceAgreements.agreementsTab')}
           </h2>
           <p className="text-sm text-muted-foreground">
-            {t('ServiceAgreements.agreementCount', { count: agreementsResult.data?.total ?? 0 })}
+            {t('ServiceAgreements.agreementCount', { count: agreementData?.total ?? 0 })}
           </p>
         </div>
         {agreementsResult.error ? (
@@ -340,7 +354,7 @@ export default async function ClientServiceAgreementsPage({
           </p>
         ) : agreements.length ? (
           <div className="grid gap-4">
-        {await Promise.all(
+            {await Promise.all(
               agreements.map(async (agreement) => {
                 const serviceResult = await get('/api/v1/service-agreements/{id}/services', {
                   params: { path: { id: agreement.id }, header },
@@ -440,13 +454,23 @@ export default async function ClientServiceAgreementsPage({
                         </p>
                         <p className="text-sm text-muted-foreground">
                           <ResourceReference
-                            label={providerOrganizationName ?? t('Resources.unavailableOrganization')}
-                            href={providerOrganizationName ? `/administration/organizations/${agreement.organizationId}` : null}
+                            label={
+                              providerOrganizationName ?? t('Resources.unavailableOrganization')
+                            }
+                            href={
+                              providerOrganizationName
+                                ? `/administration/organizations/${agreement.organizationId}`
+                                : null
+                            }
                           />
                           {' · '}
                           <ResourceReference
                             label={providerFacilityName ?? t('Resources.unavailableFacility')}
-                            href={providerFacilityName ? `/administration/facilities/${agreement.facilityId}` : null}
+                            href={
+                              providerFacilityName
+                                ? `/administration/facilities/${agreement.facilityId}`
+                                : null
+                            }
                           />
                         </p>
                       </div>
@@ -751,26 +775,20 @@ export default async function ClientServiceAgreementsPage({
                             </div>
                           </form>
                           {canSearchServices ? (
-                            serviceOptionsResult?.error ? (
-                              <p role="alert" className="text-sm text-destructive">
-                                {t(errorMessageKey(serviceOptionsResult.error.code))}
-                              </p>
-                            ) : serviceOptions.length ? (
-                              <ServiceFields
-                                action={addAgreementServiceAction}
-                                clientId={client.id}
-                                agreementId={agreement.id}
-                                serviceOptions={serviceOptions}
-                                validFrom={selectedServiceFrom}
-                                validUntil={selectedServiceUntil ?? ''}
-                                idPrefix={`add-${agreement.id}`}
-                                submitLabel={t('ServiceAgreements.addService')}
-                              />
-                            ) : (
-                              <p className="text-sm text-muted-foreground">
-                                {t('ServiceAgreements.noMatchingServices')}
-                              </p>
-                            )
+                            <ServiceFields
+                              action={addAgreementServiceAction}
+                              clientId={client.id}
+                              agreementId={agreement.id}
+                              selectService={{
+                                organizationId: agreement.organizationId,
+                                facilityId: agreement.facilityId,
+                                validAt: selectedServiceFrom!,
+                              }}
+                              validFrom={selectedServiceFrom}
+                              validUntil={selectedServiceUntil ?? ''}
+                              idPrefix={`add-${agreement.id}`}
+                              submitLabel={t('ServiceAgreements.addService')}
+                            />
                           ) : selectedAgreement?.id === agreement.id && !servicePeriodValid ? (
                             <p role="alert" className="text-sm text-destructive">
                               {t('ServiceAgreements.servicePeriodInvalid')}
@@ -797,6 +815,26 @@ export default async function ClientServiceAgreementsPage({
             {t('ServiceAgreements.noAgreements')}
           </p>
         )}
+        {agreementData ? (
+          <DataPagination
+            pathname={`/clients/${clientId}/service-agreements`}
+            page={agreementData.page}
+            pageSize={agreementData.pageSize}
+            totalItems={agreementData.total}
+            pageParam="agreementPage"
+            pageSizeParam="agreementPageSize"
+            controlId="client-agreement-page-size"
+            filters={{
+              error: query.error,
+              findServicesFor: query.findServicesFor,
+              serviceValidFrom: query.serviceValidFrom,
+              serviceValidUntil: query.serviceValidUntil,
+              generated: query.generated,
+              existing: query.existing,
+              placement: query.placement,
+            }}
+          />
+        ) : null}
       </section>
 
       <section id="history" aria-labelledby="history-title" className="grid gap-3 scroll-mt-6">
@@ -837,7 +875,7 @@ async function ServiceFields({
   clientId,
   agreementId,
   serviceId,
-  serviceOptions,
+  selectService,
   validFrom,
   validUntil,
   quantity,
@@ -852,14 +890,7 @@ async function ServiceFields({
   clientId: string;
   agreementId: string;
   serviceId?: string;
-  serviceOptions?: Array<{
-    id: string;
-    code: string;
-    name: string;
-    categoryName: string;
-    unit: ServiceUnit;
-    defaultDurationMinutes: number | null;
-  }>;
+  selectService?: { organizationId: string; facilityId: string; validAt: string };
   validFrom: string | null | undefined;
   validUntil: string;
   quantity?: string;
@@ -870,29 +901,23 @@ async function ServiceFields({
   idPrefix: string;
   submitLabel: string;
 }) {
-  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
+  const t = await getTranslations();
   return (
     <RHFActionForm action={action} className="grid gap-4">
       <input type="hidden" name="clientId" value={clientId} />
       <input type="hidden" name="agreementId" value={agreementId} />
       {serviceId ? <input type="hidden" name="serviceId" value={serviceId} /> : null}
-      {serviceOptions ? (
-        <SelectField
-          id={`${idPrefix}-service`}
+      {selectService ? (
+        <AsyncEntityCombobox
           name="serviceDefinitionId"
+          entity="services"
           label={t('ServiceAgreements.service')}
           required
-        >
-          <option value="">{t('ServiceAgreements.selectService')}</option>
-          {serviceOptions.map((service) => (
-            <option key={service.id} value={service.id}>
-              {service.name} · {service.categoryName} · {t(unitLabelKey(service.unit))}
-              {service.defaultDurationMinutes != null
-                ? ` · ${t('ServiceAgreements.duration', { count: formatNumber(service.defaultDurationMinutes, locale) })}`
-                : ''}
-            </option>
-          ))}
-        </SelectField>
+          placeholder={t('ServiceAgreements.selectService')}
+          organizationId={selectService.organizationId}
+          facilityId={selectService.facilityId}
+          validAt={selectService.validAt}
+        />
       ) : null}
       <div className="grid gap-4 md:grid-cols-2">
         <DateField
@@ -1202,6 +1227,16 @@ function today(): string {
   }).formatToParts(new Date());
   const part = (type: string) => parts.find((item) => item.type === type)?.value ?? '';
   return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function positivePage(value: string | undefined): number {
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page > 0 ? Math.min(page, 100_000) : 1;
+}
+
+function positivePageSize(value: string | undefined): number {
+  const pageSize = Number(value);
+  return [10, 20, 50, 100].includes(pageSize) ? pageSize : 20;
 }
 
 function addDays(value: string, count: number): string {

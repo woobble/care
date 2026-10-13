@@ -16,9 +16,15 @@ import {
 } from '@app/web/lib/api';
 import { createTaskAction } from '@app/web/app/(office)/operations/actions';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
+import type { components } from '@care/api-client';
 
 type SearchParams = Promise<{
   page?: string;
+  pageSize?: string;
   status?: string;
   priority?: string;
   due?: string;
@@ -70,6 +76,10 @@ export default async function OperationsTasksPage({
 
   const canCreate = hasPermission(permissions, 'operations.tasks.create');
   const canAssign = hasPermission(permissions, 'operations.tasks.assign');
+  const canReadClients = hasPermission(permissions, 'client.read');
+  const canReadEmployees = hasPermission(permissions, 'employee.read');
+  const canReadOrganizations = hasPermission(permissions, 'organization.read');
+  const canReadFacilities = hasPermission(permissions, 'facility.read');
   const requestedAdmissionCaseId = query.admissionCaseId?.trim();
   const admissionCaseId = validUuid(requestedAdmissionCaseId);
   const organizationId = validUuid(query.organizationId);
@@ -82,60 +92,51 @@ export default async function OperationsTasksPage({
   const order = query.order === 'created' ? 'created' : 'due';
   const search = query.q?.trim().slice(0, 120) || undefined;
   const page = validPage(query.page);
-  const [taskResult, organizationResult, facilityResult, employeeResult, clientResult] =
-    await Promise.all([
-      api.GET('/api/v1/operations/tasks', {
-        params: {
-          query: {
-            page,
-            pageSize: 25,
-            order,
-            ...(organizationId ? { organizationId } : {}),
-            ...(facilityId ? { facilityId } : {}),
-            ...(clientId ? { clientId } : {}),
-            ...(status ? { status } : {}),
-            ...(priority ? { priority } : {}),
-            ...(assignedEmployeeId ? { assignedEmployeeId } : {}),
-            ...(query.assignedToMe === 'true' ? { assignedToMe: 'true' } : {}),
-            ...(due ? { due } : {}),
-            ...(search ? { search } : {}),
-          },
-          header,
+  const requestedPageSize = Number(query.pageSize ?? '20');
+  const pageSize = [10, 20, 50, 100].includes(requestedPageSize) ? requestedPageSize : 20;
+  const [taskResult, facilityResult, filterClientResult, filterEmployeeResult] = await Promise.all([
+    api.GET('/api/v1/operations/tasks', {
+      params: {
+        query: {
+          page,
+          pageSize,
+          order,
+          ...(organizationId ? { organizationId } : {}),
+          ...(facilityId ? { facilityId } : {}),
+          ...(clientId ? { clientId } : {}),
+          ...(status ? { status } : {}),
+          ...(priority ? { priority } : {}),
+          ...(assignedEmployeeId ? { assignedEmployeeId } : {}),
+          ...(query.assignedToMe === 'true' ? { assignedToMe: 'true' } : {}),
+          ...(due ? { due } : {}),
+          ...(search ? { search } : {}),
         },
-      }),
-      api.GET('/api/v1/organizations', { params: { query: { status: 'active' }, header } }),
-      api.GET('/api/v1/facilities', {
-        params: { query: organizationId ? { organizationId } : {}, header },
-      }),
-      canAssign
-        ? api.GET('/api/v1/employees', {
-            params: {
-              query: {
-                status: 'active',
-                page: 1,
-                pageSize: 100,
-                sortBy: 'lastName',
-                sortOrder: 'asc',
-              },
-              header,
-            },
-          })
-        : Promise.resolve({ data: undefined, error: undefined }),
-      canCreate
-        ? api.GET('/api/v1/clients', {
-            params: {
-              query: {
-                status: 'active',
-                page: 1,
-                pageSize: 100,
-                sortBy: 'lastName',
-                sortOrder: 'asc',
-              },
-              header,
-            },
-          })
-        : Promise.resolve({ data: undefined, error: undefined }),
-    ]);
+        header,
+      },
+    }),
+    facilityId && canReadFacilities
+      ? api.GET('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
+      : Promise.resolve({ data: undefined, error: undefined }),
+    clientId && canReadClients
+      ? api.GET('/api/v1/clients/{id}', { params: { path: { id: clientId }, header } })
+      : Promise.resolve({ data: undefined, error: undefined }),
+    assignedEmployeeId && canReadEmployees
+      ? api.GET('/api/v1/employees/{id}', {
+          params: { path: { id: assignedEmployeeId }, header },
+        })
+      : Promise.resolve({ data: undefined, error: undefined }),
+  ]);
+  const taskData = taskResult.data as unknown as
+    | components['schemas']['OperationsTaskListResponseDto']
+    | undefined;
+  if (taskData)
+    redirectToValidPage(
+      '/operations/tasks',
+      query,
+      taskData.page,
+      taskData.pageSize,
+      taskData.total,
+    );
   const canReadAdmission = hasPermission(permissions, 'onboarding.read');
   const canManageAdmission = hasPermission(permissions, 'onboarding.manage');
   const admissionResult =
@@ -155,32 +156,47 @@ export default async function OperationsTasksPage({
     !['declined', 'withdrawn'].includes(admission.stage),
   );
   const admissionClientResult =
-    admissionHandoffReady && admission?.clientId && hasPermission(permissions, 'client.read')
+    admissionHandoffReady && admission?.clientId && canReadClients
       ? await api.GET('/api/v1/clients/{id}', {
           params: { path: { id: admission.clientId }, header },
         })
       : null;
-  const organizations = organizationResult.data ?? [];
-  const facilities = facilityResult.data ?? [];
-  const employees = employeeResult.data?.items ?? [];
-  const clients = (clientResult.data?.items ?? []).map((client) => ({
-    id: client.id,
-    firstName: client.firstName,
-    lastName: client.lastName,
-    preferredName: client.preferredName,
-  }));
-  if (
-    admissionClientResult?.data &&
-    !clients.some((client) => client.id === admissionClientResult.data!.id)
-  ) {
-    clients.push({
-      id: admissionClientResult.data.id,
-      firstName: admissionClientResult.data.firstName,
-      lastName: admissionClientResult.data.lastName,
-      preferredName: admissionClientResult.data.preferredName,
-    });
-  }
-  const tasks = taskResult.data?.items ?? [];
+  const tasks = taskData?.items ?? [];
+  const organizationLookup = canReadOrganizations
+    ? await getOrganizationsByIds([
+        ...(organizationId ? [organizationId] : []),
+        ...(admission?.organizationId ? [admission.organizationId] : []),
+        ...tasks.map((task) => task.organizationId),
+      ])
+    : { items: [], failed: false };
+  const organizations = organizationLookup.items;
+  const facilityIds = [
+    ...new Set([facilityId, admission?.facilityId ?? undefined].filter((id): id is string => !!id)),
+  ];
+  const facilityLookups = canReadFacilities
+    ? await Promise.all(
+        facilityIds
+          .filter((id) => id !== facilityId || !facilityResult.data)
+          .map((id) => api.GET('/api/v1/facilities/{id}', { params: { path: { id }, header } })),
+      )
+    : [];
+  const facilities = [
+    ...(facilityResult.data
+      ? [facilityResult.data as unknown as components['schemas']['FacilityResponseDto']]
+      : []),
+    ...facilityLookups.flatMap((result) =>
+      result.data ? [result.data as unknown as components['schemas']['FacilityResponseDto']] : [],
+    ),
+  ];
+  const admissionClient = admissionClientResult?.data as
+    | components['schemas']['ClientResponseDto']
+    | undefined;
+  const filterClient = filterClientResult.data as
+    | components['schemas']['ClientResponseDto']
+    | undefined;
+  const filterEmployee = filterEmployeeResult.data as
+    | components['schemas']['EmployeeResponseDto']
+    | undefined;
   const timezoneByOrganization = new Map(
     organizations.map((organization) => [organization.id, organization.timezone]),
   );
@@ -214,7 +230,10 @@ export default async function OperationsTasksPage({
           {t('taskCreated')}
         </p>
       ) : null}
-      {taskResult.error || organizationResult.error || facilityResult.error ? (
+      {taskResult.error ||
+      facilityResult.error ||
+      facilityLookups.some((result) => result.error) ||
+      organizationLookup.failed ? (
         <p
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
@@ -232,7 +251,9 @@ export default async function OperationsTasksPage({
         </p>
       ) : null}
 
-      {canCreate && (!admissionHandoffRequested || admissionHandoffReady) ? (
+      {canCreate &&
+      canReadOrganizations &&
+      (!admissionHandoffRequested || admissionHandoffReady) ? (
         <section
           aria-labelledby="create-task-title"
           className="grid gap-4 rounded-lg border bg-card p-5"
@@ -273,57 +294,65 @@ export default async function OperationsTasksPage({
                 className="rounded-md border bg-card px-3 py-2"
               />
             </div>
-            <SelectField
-              id="organizationId"
+            <AsyncEntityCombobox
               name="organizationId"
               label={t('organization')}
+              entity="organizations"
               required
-              defaultValue={admission?.organizationId ?? ''}
-            >
-              <option value="" disabled>
-                {t('selectOrganization')}
-              </option>
-              {organizations.map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField
-              id="facilityId"
+              placeholder={t('selectOrganization')}
+              timezoneFieldName="timezone"
+              {...(admission && organizations.find((item) => item.id === admission.organizationId)
+                ? {
+                    initialOption: {
+                      id: admission.organizationId,
+                      label: organizations.find((item) => item.id === admission.organizationId)!
+                        .name,
+                      timezone: organizations.find((item) => item.id === admission.organizationId)!
+                        .timezone,
+                    },
+                  }
+                : {})}
+            />
+            <AsyncEntityCombobox
               name="facilityId"
               label={t('facility')}
-              defaultValue={admission?.facilityId ?? ''}
-            >
-              <option value="">{t('all')}</option>
-              {facilities.map((facility) => (
-                <option key={facility.id} value={facility.id}>
-                  {facility.name}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField
-              id="clientId"
-              name="clientId"
-              label={t('client')}
-              defaultValue={admission?.clientId ?? ''}
-            >
-              <option value="">{t('unassigned')}</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.preferredName || client.firstName} {client.lastName}
-                </option>
-              ))}
-            </SelectField>
-            {canAssign ? (
-              <SelectField id="assignedEmployeeId" name="assignedEmployeeId" label={t('assignee')}>
-                <option value="">{t('unassigned')}</option>
-                {employees.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.preferredName || employee.firstName} {employee.lastName}
-                  </option>
-                ))}
-              </SelectField>
+              entity="facilities"
+              {...(admission?.organizationId ? { organizationId: admission.organizationId } : {})}
+              placeholder={t('all')}
+              {...(admission?.facilityId
+                ? {
+                    initialOption: {
+                      id: admission.facilityId,
+                      label:
+                        facilities.find((item) => item.id === admission.facilityId)?.name ??
+                        t('all'),
+                    },
+                  }
+                : {})}
+            />
+            {canReadClients ? (
+              <AsyncEntityCombobox
+                name="clientId"
+                label={t('client')}
+                entity="clients"
+                {...(admissionClient
+                  ? {
+                      initialOption: {
+                        id: admissionClient.id,
+                        label: `${admissionClient.preferredName || admissionClient.firstName} ${admissionClient.lastName}`,
+                      },
+                    }
+                  : {})}
+                placeholder={t('unassigned')}
+              />
+            ) : null}
+            {canAssign && canReadEmployees ? (
+              <AsyncEntityCombobox
+                name="assignedEmployeeId"
+                label={t('assignee')}
+                entity="employees"
+                placeholder={t('unassigned')}
+              />
             ) : null}
             <SelectField
               id="priority"
@@ -352,25 +381,6 @@ export default async function OperationsTasksPage({
                     : ''
                 }
               />
-              <NativeSelect
-                name="timezone"
-                aria-label={t('timezone')}
-                selectClassName="h-10 rounded-md border bg-card px-3 text-sm"
-                defaultValue={
-                  admission
-                    ? (timezoneByOrganization.get(admission.organizationId) ?? '')
-                    : (organizations[0]?.timezone ?? '')
-                }
-                className="w-full"
-              >
-                {[...new Set(organizations.map((organization) => organization.timezone))].map(
-                  (timezone) => (
-                    <option key={timezone} value={timezone}>
-                      {timezone}
-                    </option>
-                  ),
-                )}
-              </NativeSelect>
             </div>
             <div className="flex items-end">
               <Button type="submit" className="min-h-11">
@@ -386,49 +396,61 @@ export default async function OperationsTasksPage({
           {t('tasksTitle')}
         </h2>
         <form method="get" className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-4">
+          <input type="hidden" name="pageSize" value={pageSize} />
           <label className="grid gap-1 text-sm">
             <span>{t('searchTasks')}</span>
             <Input type="search" name="q" maxLength={120} defaultValue={search} />
           </label>
-          <SelectField
-            id="filter-organizationId"
-            name="organizationId"
-            label={t('organization')}
-            defaultValue={organizationId ?? ''}
-          >
-            <option value="">{t('all')}</option>
-            {organizations.map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organization.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField
-            id="filter-facilityId"
-            name="facilityId"
-            label={t('facility')}
-            defaultValue={facilityId ?? ''}
-          >
-            <option value="">{t('all')}</option>
-            {facilities.map((facility) => (
-              <option key={facility.id} value={facility.id}>
-                {facility.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField
-            id="filter-clientId"
-            name="clientId"
-            label={t('client')}
-            defaultValue={clientId ?? ''}
-          >
-            <option value="">{t('all')}</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.preferredName || client.firstName} {client.lastName}
-              </option>
-            ))}
-          </SelectField>
+          {canReadOrganizations ? (
+            <AsyncEntityCombobox
+              name="organizationId"
+              label={t('organization')}
+              entity="organizations"
+              placeholder={t('all')}
+              {...(organizationId
+                ? {
+                    initialOption: {
+                      id: organizationId,
+                      label:
+                        organizations.find((item) => item.id === organizationId)?.name ?? t('all'),
+                    },
+                  }
+                : {})}
+            />
+          ) : null}
+          {canReadFacilities ? (
+            <AsyncEntityCombobox
+              name="facilityId"
+              label={t('facility')}
+              entity="facilities"
+              {...(organizationId ? { organizationId } : {})}
+              placeholder={t('all')}
+              {...(facilityId
+                ? {
+                    initialOption: {
+                      id: facilityId,
+                      label: facilities.find((item) => item.id === facilityId)?.name ?? t('all'),
+                    },
+                  }
+                : {})}
+            />
+          ) : null}
+          {canReadClients ? (
+            <AsyncEntityCombobox
+              name="clientId"
+              label={t('client')}
+              entity="clients"
+              {...(filterClient
+                ? {
+                    initialOption: {
+                      id: filterClient.id,
+                      label: `${filterClient.preferredName || filterClient.firstName} ${filterClient.lastName}`,
+                    },
+                  }
+                : {})}
+              placeholder={t('all')}
+            />
+          ) : null}
           <SelectField
             id="filter-status"
             name="status"
@@ -463,20 +485,21 @@ export default async function OperationsTasksPage({
             <option value="due">{t('sortDue')}</option>
             <option value="created">{t('sortCreated')}</option>
           </SelectField>
-          {canAssign ? (
-            <SelectField
-              id="filter-assignee"
+          {canAssign && canReadEmployees ? (
+            <AsyncEntityCombobox
               name="assignedEmployeeId"
               label={t('assignee')}
-              defaultValue={assignedEmployeeId ?? ''}
-            >
-              <option value="">{t('allEmployees')}</option>
-              {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.preferredName || employee.firstName} {employee.lastName}
-                </option>
-              ))}
-            </SelectField>
+              entity="employees"
+              {...(filterEmployee
+                ? {
+                    initialOption: {
+                      id: filterEmployee.id,
+                      label: `${filterEmployee.preferredName || filterEmployee.firstName} ${filterEmployee.lastName}`,
+                    },
+                  }
+                : {})}
+              placeholder={t('allEmployees')}
+            />
           ) : null}
           <label className="flex min-h-10 items-center gap-2 text-sm">
             <ShadcnCheckbox
@@ -533,15 +556,25 @@ export default async function OperationsTasksPage({
           </div>
         )}
 
-        {taskResult.data ? (
-          <Pagination
-            page={page}
-            pageSize={25}
-            total={taskResult.data.total}
-            query={query}
-            label={t('taskPages')}
-            previousLabel={t('previousPage')}
-            nextLabel={t('nextPage')}
+        {taskData ? (
+          <DataPagination
+            pathname="/operations/tasks"
+            page={taskData.page}
+            pageSize={taskData.pageSize}
+            totalItems={taskData.total}
+            filters={{
+              q: search,
+              status,
+              priority,
+              due,
+              assignedEmployeeId,
+              assignedToMe: query.assignedToMe === 'true' ? 'true' : undefined,
+              order,
+              organizationId,
+              facilityId,
+              clientId,
+              admissionCaseId,
+            }}
           />
         ) : null}
       </section>
@@ -624,54 +657,4 @@ function validUuid(value: string | undefined): string | undefined {
 function validPage(value: string | undefined): number {
   const parsed = Number(value ?? '1');
   return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 100_000 ? parsed : 1;
-}
-
-function Pagination({
-  page,
-  pageSize,
-  total,
-  query,
-  label,
-  previousLabel,
-  nextLabel,
-}: {
-  page: number;
-  pageSize: number;
-  total: number;
-  query: Record<string, string | undefined>;
-  label: string;
-  previousLabel: string;
-  nextLabel: string;
-}) {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query))
-    if (value && key !== 'page' && key !== 'error' && key !== 'updated') params.set(key, value);
-  return (
-    <nav aria-label={label} className="flex justify-between">
-      {page > 1 ? (
-        <Link
-          className="rounded-md border bg-card px-3 py-2"
-          href={`/operations/tasks?${withPage(params, page - 1)}`}
-        >
-          {previousLabel}
-        </Link>
-      ) : (
-        <span />
-      )}
-      {page * pageSize < total ? (
-        <Link
-          className="rounded-md border bg-card px-3 py-2"
-          href={`/operations/tasks?${withPage(params, page + 1)}`}
-        >
-          {nextLabel}
-        </Link>
-      ) : null}
-    </nav>
-  );
-}
-
-function withPage(params: URLSearchParams, page: number): string {
-  const next = new URLSearchParams(params);
-  next.set('page', String(page));
-  return next.toString();
 }

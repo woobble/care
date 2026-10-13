@@ -7,9 +7,13 @@ import {
   TableCell as ShadcnTableCell,
   TableCaption as ShadcnTableCaption,
 } from '@care/ui';
-import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import { searchStructurePage } from '@app/web/lib/structure-search';
+import type { components } from '@care/api-client';
 import { ResourceReference } from '@app/web/components/resource-reference';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
@@ -20,11 +24,19 @@ import {
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
+  hasPermission,
 } from '@app/web/lib/api';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import { createFacilityAction } from '@app/web/app/(office)/administration/actions';
 
-type SearchParams = Promise<{ error?: string; updated?: string }>;
+type SearchParams = Promise<{
+  error?: string;
+  updated?: string;
+  organizationId?: string;
+  q?: string;
+  page?: string;
+  pageSize?: string;
+}>;
 
 export default async function FacilitiesPage({
   searchParams,
@@ -34,12 +46,46 @@ export default async function FacilitiesPage({
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
-  const [organizationsResult, facilitiesResult, permissions] = await Promise.all([
-    get('/api/v1/organizations', { params: { header } }),
-    get('/api/v1/facilities', { params: { header } }),
-    getPermissionGrants(api),
+  const permissions = await getPermissionGrants(api);
+  const organizationId =
+    query.organizationId && /^[0-9a-f-]{36}$/i.test(query.organizationId)
+      ? query.organizationId
+      : undefined;
+  const search = query.q?.trim().slice(0, 120) ?? '';
+  const parsedPage = Number(query.page);
+  const page =
+    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
+  const parsedPageSize = Number(query.pageSize ?? '20');
+  const pageSize = [10, 20, 50, 100].includes(parsedPageSize) ? parsedPageSize : 20;
+  const [organizationResult, facilitiesResult] = await Promise.all([
+    organizationId &&
+    hasClientPermission(
+      permissions,
+      'organization.read',
+      header['X-Tenant-Id'],
+      organizationId,
+      null,
+    )
+      ? get('/api/v1/organizations/{id}', { params: { path: { id: organizationId }, header } })
+      : Promise.resolve({ data: undefined, error: undefined }),
+    searchStructurePage<components['schemas']['FacilityResponseDto']>('facilities', {
+      page,
+      pageSize,
+      ...(search ? { q: search } : {}),
+      ...(organizationId ? { organizationId } : {}),
+    }),
   ]);
-  const organizations = organizationsResult.data ?? [];
+  if (!facilitiesResult.failed)
+    redirectToValidPage(
+      '/administration/facilities',
+      query,
+      page,
+      pageSize,
+      facilitiesResult.total,
+    );
+  const selectedOrganization = organizationResult.data as
+    | components['schemas']['OrganizationResponseDto']
+    | undefined;
   const tenantId = header['X-Tenant-Id'];
 
   return (
@@ -49,7 +95,7 @@ export default async function FacilitiesPage({
         title={t('Facilities.title')}
       />
       <ActionNotice error={query.error} updated={query.updated} />
-      {organizationsResult.error || facilitiesResult.error ? (
+      {organizationResult.error || facilitiesResult.failed ? (
         <p
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
@@ -65,28 +111,13 @@ export default async function FacilitiesPage({
           {t('Facilities.createTitle')}
         </h2>
         <RHFActionForm action={createFacilityAction} className="grid gap-4 md:grid-cols-2">
-          <div className="grid gap-2">
-            <Label htmlFor="organizationId">{t('Facilities.organization')}</Label>
-            <NativeSelect
-              id="organizationId"
-              name="organizationId"
-              selectClassName="h-10 rounded-md border bg-card px-3"
-              required
-              defaultValue=""
-              className="w-full"
-            >
-              <option value="" disabled>
-                {t('Facilities.selectOrganization')}
-              </option>
-              {organizations
-                .filter((organization) => organization.status === 'active')
-                .map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name}
-                  </option>
-                ))}
-            </NativeSelect>
-          </div>
+          <AsyncEntityCombobox
+            name="organizationId"
+            label={t('Facilities.organization')}
+            entity="organizations"
+            required
+            placeholder={t('Facilities.selectOrganization')}
+          />
           <Field id="name" name="name" label={t('Common.fields.name')} required maxLength={160} />
           <Field id="code" name="code" label={t('Common.fields.code')} maxLength={40} />
           <Field
@@ -122,7 +153,36 @@ export default async function FacilitiesPage({
         <h2 id="facility-list-title" className="text-xl font-semibold">
           {t('Facilities.listTitle')}
         </h2>
-        {facilitiesResult.data?.length ? (
+        <form method="get" className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-3">
+          <input type="hidden" name="page" value="1" />
+          <input type="hidden" name="pageSize" value={pageSize} />
+          <label className="grid gap-1 text-sm">
+            <span>{t('Facilities.listTitle')}</span>
+            <Input type="search" name="q" maxLength={120} defaultValue={search} />
+          </label>
+          {hasPermission(permissions, 'organization.read') ? (
+            <AsyncEntityCombobox
+              name="organizationId"
+              label={t('Facilities.organization')}
+              entity="organizations"
+              placeholder={t('Common.actions.apply')}
+              {...(selectedOrganization
+                ? {
+                    initialOption: {
+                      id: selectedOrganization.id,
+                      label: selectedOrganization.name,
+                    },
+                  }
+                : {})}
+            />
+          ) : null}
+          <div className="flex items-end">
+            <Button type="submit" variant="secondary">
+              {t('Common.actions.apply')}
+            </Button>
+          </div>
+        </form>
+        {!facilitiesResult.failed && facilitiesResult.items.length ? (
           <div className="overflow-x-auto rounded-lg border bg-card">
             <ShadcnTable className="w-full border-collapse text-left text-sm">
               <ShadcnTableCaption className="sr-only">
@@ -142,7 +202,7 @@ export default async function FacilitiesPage({
                 </ShadcnTableRow>
               </ShadcnTableHeader>
               <ShadcnTableBody>
-                {facilitiesResult.data.map((facility) => (
+                {facilitiesResult.items.map((facility) => (
                   <ShadcnTableRow key={facility.id} className="border-b last:border-0">
                     <ShadcnTableCell className="px-4 py-3">
                       <Link
@@ -179,9 +239,18 @@ export default async function FacilitiesPage({
               </ShadcnTableBody>
             </ShadcnTable>
           </div>
-        ) : (
+        ) : facilitiesResult.failed ? null : (
           <EmptyState title={t('Facilities.empty')} />
         )}
+        {!facilitiesResult.failed ? (
+          <DataPagination
+            pathname="/administration/facilities"
+            page={facilitiesResult.page}
+            pageSize={facilitiesResult.pageSize}
+            totalItems={facilitiesResult.total}
+            filters={{ q: search, organizationId }}
+          />
+        ) : null}
       </section>
     </div>
   );

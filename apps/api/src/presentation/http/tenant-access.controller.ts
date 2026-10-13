@@ -38,6 +38,7 @@ import {
   ReplaceMembershipRolesDto,
   ReplaceMembershipScopesDto,
   TenantInvitationDto,
+  TenantInvitationListDto,
   TenantMemberDto,
   TenantMemberListDto,
   TenantRoleDto,
@@ -74,6 +75,10 @@ const membershipQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
   status: z.enum(['pending', 'active', 'inactive', 'revoked']).optional(),
+});
+const invitationListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 @ApiTags('tenant administration')
@@ -146,9 +151,28 @@ export class TenantAccessController {
 
   @Get('invitations')
   @ApiOperation({ summary: 'List tenant invitations' })
-  @ApiOkResponse({ type: [TenantInvitationDto] })
-  async listInvitations(@Req() request: ApiRequest): Promise<TenantInvitationDto[]> {
-    return (await this.tenantAccess.listInvitations(this.principal(request))).map(toInvitationDto);
+  @ApiQuery({ name: 'page', required: false, type: 'integer', minimum: 1, default: 1 })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    type: 'integer',
+    minimum: 1,
+    maximum: 100,
+    default: 20,
+  })
+  @ApiOkResponse({ type: TenantInvitationListDto })
+  async listInvitations(
+    @Req() request: ApiRequest,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ): Promise<TenantInvitationListDto> {
+    const parsed = invitationListQuerySchema.safeParse({ page, pageSize });
+    if (!parsed.success) throw invalidRequest();
+    const result = await this.tenantAccess.listInvitationsPage(
+      this.principal(request),
+      parsed.data,
+    );
+    return { ...result, items: result.items.map(toInvitationDto) };
   }
 
   @Post('invitations/:id/revoke')

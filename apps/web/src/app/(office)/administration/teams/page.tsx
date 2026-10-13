@@ -7,9 +7,13 @@ import {
   TableCell as ShadcnTableCell,
   TableCaption as ShadcnTableCaption,
 } from '@care/ui';
-import { NativeSelect } from '@care/ui';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import { searchStructurePage } from '@app/web/lib/structure-search';
+import type { components } from '@care/api-client';
 import { ResourceReference } from '@app/web/components/resource-reference';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
@@ -20,6 +24,7 @@ import {
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
+  hasPermission,
 } from '@app/web/lib/api';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import { createTeamAction } from '@app/web/app/(office)/administration/actions';
@@ -29,6 +34,9 @@ type SearchParams = Promise<{
   updated?: string;
   organizationId?: string;
   facilityId?: string;
+  q?: string;
+  page?: string;
+  pageSize?: string;
 }>;
 
 export default async function TeamsPage({
@@ -39,15 +47,41 @@ export default async function TeamsPage({
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
-  const [organizationsResult, facilitiesResult, teamsResult, permissions] = await Promise.all([
-    get('/api/v1/organizations', { params: { header } }),
-    get('/api/v1/facilities', { params: { header } }),
-    get('/api/v1/teams', { params: { header } }),
-    getPermissionGrants(api),
-  ]);
-  const organizations = organizationsResult.data ?? [];
-  const facilities = facilitiesResult.data ?? [];
+  const permissions = await getPermissionGrants(api);
   const tenantId = header['X-Tenant-Id'];
+  const organizationId = validUuid(query.organizationId);
+  const facilityId = validUuid(query.facilityId);
+  const search = query.q?.trim().slice(0, 120) ?? '';
+  const parsedPage = Number(query.page);
+  const page =
+    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
+  const parsedPageSize = Number(query.pageSize ?? '20');
+  const pageSize = [10, 20, 50, 100].includes(parsedPageSize) ? parsedPageSize : 20;
+  const [organizationResult, facilityResult, teamsResult] = await Promise.all([
+    organizationId &&
+    hasClientPermission(permissions, 'organization.read', tenantId, organizationId, null)
+      ? get('/api/v1/organizations/{id}', { params: { path: { id: organizationId }, header } })
+      : Promise.resolve({ data: undefined, error: undefined }),
+    facilityId &&
+    hasClientPermission(permissions, 'facility.read', tenantId, organizationId ?? null, facilityId)
+      ? get('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
+      : Promise.resolve({ data: undefined, error: undefined }),
+    searchStructurePage<components['schemas']['TeamResponseDto']>('teams', {
+      page,
+      pageSize,
+      ...(search ? { q: search } : {}),
+      ...(organizationId ? { organizationId } : {}),
+      ...(facilityId ? { facilityId } : {}),
+    }),
+  ]);
+  if (!teamsResult.failed)
+    redirectToValidPage('/administration/teams', query, page, pageSize, teamsResult.total);
+  const selectedOrganization = organizationResult.data as
+    | components['schemas']['OrganizationResponseDto']
+    | undefined;
+  const selectedFacility = facilityResult.data as
+    | components['schemas']['FacilityResponseDto']
+    | undefined;
 
   return (
     <div className="grid gap-8">
@@ -56,7 +90,7 @@ export default async function TeamsPage({
         title={t('Teams.title')}
       />
       <ActionNotice error={query.error} updated={query.updated} />
-      {organizationsResult.error || facilitiesResult.error || teamsResult.error ? (
+      {organizationResult.error || facilityResult.error || teamsResult.failed ? (
         <p
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
@@ -72,47 +106,31 @@ export default async function TeamsPage({
           {t('Teams.createTitle')}
         </h2>
         <RHFActionForm action={createTeamAction} className="grid gap-4 md:grid-cols-3">
-          <div className="grid gap-2">
-            <Label htmlFor="organizationId">{t('Teams.organization')}</Label>
-            <NativeSelect
-              id="organizationId"
-              name="organizationId"
-              selectClassName="h-10 rounded-md border bg-card px-3"
-              required
-              defaultValue={query.organizationId ?? ''}
-              className="w-full"
-            >
-              <option value="" disabled>
-                {t('Teams.selectOrganization')}
-              </option>
-              {organizations
-                .filter((organization) => organization.status === 'active')
-                .map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name}
-                  </option>
-                ))}
-            </NativeSelect>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="facilityId">{t('Teams.facilityOptional')}</Label>
-            <NativeSelect
-              id="facilityId"
-              name="facilityId"
-              selectClassName="h-10 rounded-md border bg-card px-3"
-              defaultValue={query.facilityId ?? ''}
-              className="w-full"
-            >
-              <option value="">{t('Teams.organizationWide')}</option>
-              {facilities
-                .filter((facility) => facility.status === 'active')
-                .map((facility) => (
-                  <option key={facility.id} value={facility.id}>
-                    {facility.organizationName} — {facility.name}
-                  </option>
-                ))}
-            </NativeSelect>
-          </div>
+          <AsyncEntityCombobox
+            name="organizationId"
+            label={t('Teams.organization')}
+            entity="organizations"
+            required
+            placeholder={t('Teams.selectOrganization')}
+            {...(selectedOrganization
+              ? { initialOption: { id: selectedOrganization.id, label: selectedOrganization.name } }
+              : {})}
+          />
+          <AsyncEntityCombobox
+            name="facilityId"
+            label={t('Teams.facilityOptional')}
+            entity="facilities"
+            {...(organizationId ? { organizationId } : {})}
+            placeholder={t('Teams.organizationWide')}
+            {...(selectedFacility
+              ? {
+                  initialOption: {
+                    id: selectedFacility.id,
+                    label: `${selectedFacility.organizationName} · ${selectedFacility.name}`,
+                  },
+                }
+              : {})}
+          />
           <div className="grid gap-2">
             <Label htmlFor="name">{t('Teams.name')}</Label>
             <Input id="name" name="name" required maxLength={160} />
@@ -126,7 +144,53 @@ export default async function TeamsPage({
         <h2 id="team-list-title" className="text-xl font-semibold">
           {t('Teams.listTitle')}
         </h2>
-        {teamsResult.data?.length ? (
+        <form method="get" className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-3">
+          <input type="hidden" name="page" value="1" />
+          <input type="hidden" name="pageSize" value={pageSize} />
+          <label className="grid gap-1 text-sm">
+            <span>{t('Teams.listTitle')}</span>
+            <Input type="search" name="q" maxLength={120} defaultValue={search} />
+          </label>
+          {hasPermission(permissions, 'organization.read') ? (
+            <AsyncEntityCombobox
+              name="organizationId"
+              label={t('Teams.organization')}
+              entity="organizations"
+              placeholder={t('Common.actions.apply')}
+              {...(selectedOrganization
+                ? {
+                    initialOption: {
+                      id: selectedOrganization.id,
+                      label: selectedOrganization.name,
+                    },
+                  }
+                : {})}
+            />
+          ) : null}
+          {hasPermission(permissions, 'facility.read') ? (
+            <AsyncEntityCombobox
+              name="facilityId"
+              label={t('Teams.facilityOptional')}
+              entity="facilities"
+              {...(organizationId ? { organizationId } : {})}
+              placeholder={t('Teams.organizationWide')}
+              {...(selectedFacility
+                ? {
+                    initialOption: {
+                      id: selectedFacility.id,
+                      label: `${selectedFacility.organizationName} · ${selectedFacility.name}`,
+                    },
+                  }
+                : {})}
+            />
+          ) : null}
+          <div className="flex items-end">
+            <Button type="submit" variant="secondary">
+              {t('Common.actions.apply')}
+            </Button>
+          </div>
+        </form>
+        {!teamsResult.failed && teamsResult.items.length ? (
           <div className="overflow-x-auto rounded-lg border bg-card">
             <ShadcnTable className="w-full border-collapse text-left text-sm">
               <ShadcnTableCaption className="sr-only">{t('Teams.caption')}</ShadcnTableCaption>
@@ -147,7 +211,7 @@ export default async function TeamsPage({
                 </ShadcnTableRow>
               </ShadcnTableHeader>
               <ShadcnTableBody>
-                {teamsResult.data.map((team) => (
+                {teamsResult.items.map((team) => (
                   <ShadcnTableRow key={team.id} className="border-b last:border-0">
                     <ShadcnTableCell className="px-4 py-3">
                       <Link
@@ -201,10 +265,26 @@ export default async function TeamsPage({
               </ShadcnTableBody>
             </ShadcnTable>
           </div>
-        ) : (
+        ) : teamsResult.failed ? null : (
           <EmptyState title={t('Teams.empty')} />
         )}
+        {!teamsResult.failed ? (
+          <DataPagination
+            pathname="/administration/teams"
+            page={teamsResult.page}
+            pageSize={teamsResult.pageSize}
+            totalItems={teamsResult.total}
+            filters={{ q: search, organizationId, facilityId }}
+          />
+        ) : null}
       </section>
     </div>
   );
+}
+
+function validUuid(value?: string): string | undefined {
+  return value &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : undefined;
 }

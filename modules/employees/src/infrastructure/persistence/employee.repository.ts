@@ -33,6 +33,8 @@ export interface EmployeeSearch {
   organizationId?: string;
   facilityId?: string;
   teamId?: string;
+  userId?: string;
+  ids?: string[];
   page: number;
   pageSize: number;
   sortBy: 'lastName' | 'firstName' | 'createdAt';
@@ -1215,7 +1217,9 @@ export class EmployeeRepository {
       eq(employeeRecords.tenantId, input.tenantId),
       employeeVisibilityPredicate(transaction, input.tenantId, visibleScopes),
     ];
+    if (input.ids) filters.push(inArray(employeeRecords.id, input.ids));
     if (input.status) filters.push(eq(employeeRecords.status, input.status));
+    if (input.userId) filters.push(eq(employeeRecords.userId, input.userId));
     if (input.organizationId) {
       filters.push(eq(employeeRecords.organizationId, input.organizationId));
     }

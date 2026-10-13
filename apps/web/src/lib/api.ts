@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { createCareApi } from '@care/api-client';
 import type { CareApi } from '@care/api-client';
 import type { ApiClientOptions } from '@care/api-client';
+import type { PermissionGrantDto } from '@care/api-client';
 import { loadWebConfig } from '@care/config';
 import { auth } from '@app/web/auth';
 
@@ -60,10 +61,10 @@ export async function getPermissionGrants(api?: CareApi) {
   const { data, error } = await client.GET('/api/v1/me/permissions', {
     params: { header: await getTenantHeader() },
   });
-  return error ? [] : (data ?? []);
+  return error ? [] : ((data as unknown as PermissionGrantDto[] | undefined) ?? []);
 }
 
-export type CurrentPermissionGrant = Awaited<ReturnType<typeof getPermissionGrants>>[number];
+export type CurrentPermissionGrant = PermissionGrantDto;
 
 export function hasPermission(
   grants: readonly CurrentPermissionGrant[],

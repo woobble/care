@@ -70,6 +70,13 @@ export type InviteUserResponseDto = {
     invitation: TenantInvitationDto;
 };
 
+export type TenantInvitationListDto = {
+    items: Array<TenantInvitationDto>;
+    page: number;
+    pageSize: number;
+    total: number;
+};
+
 export type ReplaceMembershipRolesDto = {
     roleIds: Array<string>;
 };
@@ -96,6 +103,14 @@ export type OrganizationResponseDto = {
     timezone: string;
     createdAt: string;
     updatedAt: string;
+};
+
+export type PaginatedOrganizationsResponseDto = {
+    items: Array<OrganizationResponseDto>;
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
 };
 
 export type CreateOrganizationDto = {
@@ -135,6 +150,14 @@ export type FacilityResponseDto = {
     updatedAt: string;
 };
 
+export type PaginatedFacilitiesResponseDto = {
+    items: Array<FacilityResponseDto>;
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+};
+
 export type CreateFacilityDto = {
     organizationId: string;
     name: string;
@@ -165,6 +188,14 @@ export type TeamResponseDto = {
     status: 'active' | 'archived';
     createdAt: string;
     updatedAt: string;
+};
+
+export type PaginatedTeamsResponseDto = {
+    items: Array<TeamResponseDto>;
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
 };
 
 export type CreateTeamDto = {
@@ -2476,6 +2507,8 @@ export type BillingInvoiceListResponseDto = {
     items: Array<BillingInvoiceResponseDto>;
     page: number;
     pageSize: number;
+    total: number;
+    totalPages: number;
 };
 
 export type BillingInvoiceLineSelectionDto = {
@@ -2539,6 +2572,66 @@ export type BillingPaymentListResponseDto = {
     items: Array<BillingPaymentResponseDto>;
     page: number;
     pageSize: number;
+    total: number;
+    totalPages: number;
+};
+
+export type PayerDirectoryEntryDto = {
+    id: string;
+    tenantId: string;
+    organizationId: string;
+    payerType: 'statutory_pflegekasse' | 'private_pflegeversicherung' | 'self_pay' | 'other';
+    name: string;
+    payerIdentifier?: string | null;
+    addressText?: string | null;
+    billingContactName?: string | null;
+    billingContactEmail?: string | null;
+    billingContactPhone?: string | null;
+    submissionInstructions?: string | null;
+    status: 'active' | 'inactive';
+    validFrom: string;
+    validUntil?: string | null;
+    version: number;
+    createdBy: string;
+    updatedBy: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type PayerListResponseDto = {
+    items: Array<PayerDirectoryEntryDto>;
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+    hasMore: boolean;
+};
+
+export type PayerBillingProfileResponseDto = {
+    id: string;
+    tenantId: string;
+    organizationId: string;
+    payerId: string;
+    version: number;
+    channel: 'manual_portal' | 'manual_email' | 'postal' | 'customer_reimbursement';
+    fundingSourceType: 'statutory_long_term_care_insurance' | 'private_long_term_care_insurance' | 'self_pay' | 'other';
+    validFrom: string;
+    validUntil?: string | null;
+    sourceName: string;
+    sourceVersion: string;
+    sourceEffectiveDate: string;
+    sourceUrl?: string | null;
+    requiresClientInsuranceNumber: boolean;
+    requiresPayerIdentifier: boolean;
+    requiresAcknowledgement: boolean;
+    requiresMandate: boolean;
+    requiresInvoicePdf: boolean;
+    requiresEvidencePdf: boolean;
+    requiresMandateDocument: boolean;
+    requiresExternalReference: boolean;
+    requiresProviderRecognition: boolean;
+    createdBy: string;
+    createdAt: string;
 };
 
 export type PayerInputDto = {
@@ -3000,7 +3093,10 @@ export type TenantAccessControllerListInvitationsData = {
         'X-Tenant-Id': string;
     };
     path?: never;
-    query?: never;
+    query?: {
+        page?: number;
+        pageSize?: number;
+    };
     url: '/api/v1/admin/invitations';
 };
 
@@ -3014,7 +3110,7 @@ export type TenantAccessControllerListInvitationsErrors = {
 export type TenantAccessControllerListInvitationsError = TenantAccessControllerListInvitationsErrors[keyof TenantAccessControllerListInvitationsErrors];
 
 export type TenantAccessControllerListInvitationsResponses = {
-    200: Array<TenantInvitationDto>;
+    200: TenantInvitationListDto;
 };
 
 export type TenantAccessControllerListInvitationsResponse = TenantAccessControllerListInvitationsResponses[keyof TenantAccessControllerListInvitationsResponses];
@@ -3283,6 +3379,40 @@ export type OrganizationsControllerCreateOrganizationResponses = {
 
 export type OrganizationsControllerCreateOrganizationResponse = OrganizationsControllerCreateOrganizationResponses[keyof OrganizationsControllerCreateOrganizationResponses];
 
+export type OrganizationsControllerSearchOrganizationsData = {
+    body?: never;
+    headers: {
+        'X-Tenant-Id': string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Comma-separated UUIDs; maximum 100
+         */
+        ids?: string;
+        pageSize?: number;
+        page?: number;
+        status?: 'active' | 'archived';
+        q?: string;
+    };
+    url: '/api/v1/organizations/search';
+};
+
+export type OrganizationsControllerSearchOrganizationsErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type OrganizationsControllerSearchOrganizationsError = OrganizationsControllerSearchOrganizationsErrors[keyof OrganizationsControllerSearchOrganizationsErrors];
+
+export type OrganizationsControllerSearchOrganizationsResponses = {
+    200: PaginatedOrganizationsResponseDto;
+};
+
+export type OrganizationsControllerSearchOrganizationsResponse = OrganizationsControllerSearchOrganizationsResponses[keyof OrganizationsControllerSearchOrganizationsResponses];
+
 export type OrganizationsControllerGetOrganizationData = {
     body?: never;
     headers: {
@@ -3400,6 +3530,10 @@ export type OrganizationsControllerListFacilitiesData = {
     query?: {
         organizationId?: string;
         status?: 'active' | 'archived';
+        /**
+         * Comma-separated facility IDs (up to 100)
+         */
+        ids?: string;
     };
     url: '/api/v1/facilities';
 };
@@ -3443,6 +3577,41 @@ export type OrganizationsControllerCreateFacilityResponses = {
 };
 
 export type OrganizationsControllerCreateFacilityResponse = OrganizationsControllerCreateFacilityResponses[keyof OrganizationsControllerCreateFacilityResponses];
+
+export type OrganizationsControllerSearchFacilitiesData = {
+    body?: never;
+    headers: {
+        'X-Tenant-Id': string;
+    };
+    path?: never;
+    query?: {
+        pageSize?: number;
+        page?: number;
+        status?: 'active' | 'archived';
+        /**
+         * Comma-separated facility IDs (up to 100)
+         */
+        ids?: string;
+        organizationId?: unknown;
+        q?: string;
+    };
+    url: '/api/v1/facilities/search';
+};
+
+export type OrganizationsControllerSearchFacilitiesErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type OrganizationsControllerSearchFacilitiesError = OrganizationsControllerSearchFacilitiesErrors[keyof OrganizationsControllerSearchFacilitiesErrors];
+
+export type OrganizationsControllerSearchFacilitiesResponses = {
+    200: PaginatedFacilitiesResponseDto;
+};
+
+export type OrganizationsControllerSearchFacilitiesResponse = OrganizationsControllerSearchFacilitiesResponses[keyof OrganizationsControllerSearchFacilitiesResponses];
 
 export type OrganizationsControllerGetFacilityData = {
     body?: never;
@@ -3605,6 +3774,42 @@ export type OrganizationsControllerCreateTeamResponses = {
 };
 
 export type OrganizationsControllerCreateTeamResponse = OrganizationsControllerCreateTeamResponses[keyof OrganizationsControllerCreateTeamResponses];
+
+export type OrganizationsControllerSearchTeamsData = {
+    body?: never;
+    headers: {
+        'X-Tenant-Id': string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Comma-separated UUIDs; maximum 100
+         */
+        ids?: string;
+        pageSize?: number;
+        page?: number;
+        status?: 'active' | 'archived';
+        facilityId?: unknown;
+        organizationId?: unknown;
+        q?: string;
+    };
+    url: '/api/v1/teams/search';
+};
+
+export type OrganizationsControllerSearchTeamsErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type OrganizationsControllerSearchTeamsError = OrganizationsControllerSearchTeamsErrors[keyof OrganizationsControllerSearchTeamsErrors];
+
+export type OrganizationsControllerSearchTeamsResponses = {
+    200: PaginatedTeamsResponseDto;
+};
+
+export type OrganizationsControllerSearchTeamsResponse = OrganizationsControllerSearchTeamsResponses[keyof OrganizationsControllerSearchTeamsResponses];
 
 export type OrganizationsControllerGetTeamData = {
     body?: never;
@@ -3971,6 +4176,11 @@ export type EmployeesControllerSearchData = {
         organizationId?: string;
         facilityId?: string;
         teamId?: string;
+        userId?: string;
+        /**
+         * Comma-separated employee IDs (up to 100)
+         */
+        ids?: string;
         page?: number;
         pageSize?: number;
         sortBy?: 'lastName' | 'firstName' | 'createdAt';
@@ -9354,6 +9564,7 @@ export type BillingControllerReceivablesData = {
     query?: {
         pageSize?: number;
         page?: number;
+        q?: unknown;
         clientId?: unknown;
         organizationId?: unknown;
     };
@@ -9387,6 +9598,7 @@ export type BillingControllerPaymentsData = {
     query?: {
         pageSize?: number;
         page?: number;
+        remainingOnly?: 'true' | 'false';
         organizationId?: unknown;
     };
     url: '/api/v1/billing/payments';
@@ -9513,7 +9725,11 @@ export type ClaimsControllerListPayersData = {
     };
     path?: never;
     query: {
-        organizationId: string;
+        pageSize?: number;
+        page?: number;
+        status?: 'active' | 'inactive';
+        q?: string;
+        organizationId: unknown;
     };
     url: '/api/v1/billing/payers';
 };
@@ -9528,9 +9744,7 @@ export type ClaimsControllerListPayersErrors = {
 export type ClaimsControllerListPayersError = ClaimsControllerListPayersErrors[keyof ClaimsControllerListPayersErrors];
 
 export type ClaimsControllerListPayersResponses = {
-    200: Array<{
-        [key: string]: unknown;
-    }>;
+    200: PayerListResponseDto;
 };
 
 export type ClaimsControllerListPayersResponse = ClaimsControllerListPayersResponses[keyof ClaimsControllerListPayersResponses];
@@ -9564,6 +9778,74 @@ export type ClaimsControllerCreatePayerResponses = {
 };
 
 export type ClaimsControllerCreatePayerResponse = ClaimsControllerCreatePayerResponses[keyof ClaimsControllerCreatePayerResponses];
+
+export type ClaimsControllerLookupPayersData = {
+    body?: never;
+    headers: {
+        /**
+         * Tenant selected for this request
+         */
+        'X-Tenant-Id': string;
+    };
+    path?: never;
+    query: {
+        /**
+         * Comma-separated payer UUIDs; maximum 100
+         */
+        payerIds: string;
+        organizationId: unknown;
+    };
+    url: '/api/v1/billing/payer-directory/lookup';
+};
+
+export type ClaimsControllerLookupPayersErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type ClaimsControllerLookupPayersError = ClaimsControllerLookupPayersErrors[keyof ClaimsControllerLookupPayersErrors];
+
+export type ClaimsControllerLookupPayersResponses = {
+    200: Array<PayerDirectoryEntryDto>;
+};
+
+export type ClaimsControllerLookupPayersResponse = ClaimsControllerLookupPayersResponses[keyof ClaimsControllerLookupPayersResponses];
+
+export type ClaimsControllerPayerProfilesForOrganizationData = {
+    body?: never;
+    headers: {
+        /**
+         * Tenant selected for this request
+         */
+        'X-Tenant-Id': string;
+    };
+    path?: never;
+    query: {
+        /**
+         * Comma-separated payer UUIDs; maximum 100
+         */
+        payerIds: string;
+        organizationId: unknown;
+    };
+    url: '/api/v1/billing/payer-directory/profiles';
+};
+
+export type ClaimsControllerPayerProfilesForOrganizationErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type ClaimsControllerPayerProfilesForOrganizationError = ClaimsControllerPayerProfilesForOrganizationErrors[keyof ClaimsControllerPayerProfilesForOrganizationErrors];
+
+export type ClaimsControllerPayerProfilesForOrganizationResponses = {
+    200: Array<PayerBillingProfileResponseDto>;
+};
+
+export type ClaimsControllerPayerProfilesForOrganizationResponse = ClaimsControllerPayerProfilesForOrganizationResponses[keyof ClaimsControllerPayerProfilesForOrganizationResponses];
 
 export type ClaimsControllerGetPayerData = {
     body?: never;
@@ -9654,9 +9936,7 @@ export type ClaimsControllerPayerProfilesErrors = {
 export type ClaimsControllerPayerProfilesError = ClaimsControllerPayerProfilesErrors[keyof ClaimsControllerPayerProfilesErrors];
 
 export type ClaimsControllerPayerProfilesResponses = {
-    200: Array<{
-        [key: string]: unknown;
-    }>;
+    200: Array<PayerBillingProfileResponseDto>;
 };
 
 export type ClaimsControllerPayerProfilesResponse = ClaimsControllerPayerProfilesResponses[keyof ClaimsControllerPayerProfilesResponses];

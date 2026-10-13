@@ -13,8 +13,12 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { FilterDisclosure } from '@app/web/components/filter-disclosure';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import { ResourceReference } from '@app/web/components/resource-reference';
 import type { Locale } from '@app/web/i18n/config';
+import type { components } from '@care/api-client';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate, formatDateTime } from '@app/web/i18n/format';
 import {
@@ -73,6 +77,8 @@ export default async function AdmissionsPage({
     );
   }
   const page = validPage(query.page);
+  const parsedPageSize = Number(query.pageSize ?? '20');
+  const pageSize = [10, 20, 50, 100].includes(parsedPageSize) ? parsedPageSize : 20;
   const stage = enumValue(query.stage, stages);
   const readiness = enumValue(query.readiness, ['ready', 'blocked'] as const);
   const organizationId = validUuid(query.organizationId);
@@ -85,12 +91,12 @@ export default async function AdmissionsPage({
   const canReadOrganizations = hasPermission(permissions, 'organization.read');
   const canReadFacilities = hasPermission(permissions, 'facility.read');
   const canReadEmployees = hasPermission(permissions, 'employee.read');
-  const [result, organizationResult, facilityResult, employeeResult] = await Promise.all([
+  const [result, organizationResult, facilityResult, selectedOwnerResult] = await Promise.all([
     api.GET('/api/v1/onboarding/cases', {
       params: {
         query: {
           page,
-          pageSize: 25,
+          pageSize,
           ...(search ? { search } : {}),
           ...(stage ? { stage } : {}),
           ...(readiness ? { readiness } : {}),
@@ -104,46 +110,42 @@ export default async function AdmissionsPage({
         header,
       },
     }),
-    canReadOrganizations
-      ? api.GET('/api/v1/organizations', { params: { query: { status: 'active' }, header } })
-      : Promise.resolve({ data: undefined, error: undefined }),
-    canReadFacilities
-      ? api.GET('/api/v1/facilities', {
-          params: { query: organizationId ? { organizationId } : {}, header },
+    canReadOrganizations && organizationId
+      ? api.GET('/api/v1/organizations/{id}', {
+          params: { path: { id: organizationId }, header },
         })
       : Promise.resolve({ data: undefined, error: undefined }),
-    canReadEmployees
-      ? api.GET('/api/v1/employees', {
-          params: {
-            query: {
-              status: 'active',
-              page: 1,
-              pageSize: 100,
-              sortBy: 'lastName',
-              sortOrder: 'asc',
-              ...(organizationId ? { organizationId } : {}),
-              ...(facilityId ? { facilityId } : {}),
-            },
-            header,
-          },
+    canReadFacilities && facilityId
+      ? api.GET('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
+      : Promise.resolve({ data: undefined, error: undefined }),
+    canReadEmployees && ownerEmployeeId
+      ? api.GET('/api/v1/employees/{id}', {
+          params: { path: { id: ownerEmployeeId }, header },
         })
       : Promise.resolve({ data: undefined, error: undefined }),
   ]);
   const resultData = result.data as unknown as
     | { items: AdmissionRow[]; total: number; page: number; pageSize: number }
     | undefined;
+  if (resultData)
+    redirectToValidPage(
+      '/admissions',
+      query,
+      resultData.page,
+      resultData.pageSize,
+      resultData.total,
+    );
   const rows = resultData?.items ?? [];
   const total = resultData?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / 25));
-  const organizations = organizationResult.data ?? [];
-  const facilities = facilityResult.data ?? [];
-  const employees = employeeResult.data?.items ?? [];
-  const employeeNames = new Map(
-    employees.map((employee) => [
-      employee.id,
-      `${employee.preferredName || employee.firstName} ${employee.lastName}`,
-    ]),
-  );
+  const selectedOrganization = organizationResult.data as
+    | components['schemas']['OrganizationResponseDto']
+    | undefined;
+  const selectedFacility = facilityResult.data as
+    | components['schemas']['FacilityResponseDto']
+    | undefined;
+  const selectedOwner = selectedOwnerResult.data as
+    | components['schemas']['EmployeeResponseDto']
+    | undefined;
 
   return (
     <div className="grid gap-6">
@@ -175,7 +177,7 @@ export default async function AdmissionsPage({
           {translate(errorMessageKey(query.error))}
         </p>
       ) : null}
-      {result.error || organizationResult.error || facilityResult.error || employeeResult.error ? (
+      {result.error || organizationResult.error || facilityResult.error ? (
         <p
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
@@ -186,40 +188,56 @@ export default async function AdmissionsPage({
 
       <FilterDisclosure title={t('filters')}>
         <form method="get" className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <input type="hidden" name="pageSize" value={pageSize} />
           <Field name="search" label={t('search')} type="search" defaultValue={search} />
           {canReadOrganizations ? (
-            <SelectField
+            <AsyncEntityCombobox
               name="organizationId"
               label={t('organization')}
-              value={organizationId ?? ''}
-            >
-              <option value="">{t('allOrganizations')}</option>
-              {organizations.map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-            </SelectField>
+              entity="organizations"
+              placeholder={t('allOrganizations')}
+              {...(selectedOrganization
+                ? {
+                    initialOption: {
+                      id: selectedOrganization.id,
+                      label: selectedOrganization.name,
+                    },
+                  }
+                : {})}
+            />
           ) : null}
           {canReadFacilities ? (
-            <SelectField name="facilityId" label={t('facility')} value={facilityId ?? ''}>
-              <option value="">{t('allFacilities')}</option>
-              {facilities.map((facility) => (
-                <option key={facility.id} value={facility.id}>
-                  {facility.name}
-                </option>
-              ))}
-            </SelectField>
+            <AsyncEntityCombobox
+              name="facilityId"
+              label={t('facility')}
+              entity="facilities"
+              {...(organizationId ? { organizationId } : {})}
+              placeholder={t('allFacilities')}
+              {...(selectedFacility
+                ? {
+                    initialOption: {
+                      id: selectedFacility.id,
+                      label: `${selectedFacility.organizationName} · ${selectedFacility.name}`,
+                    },
+                  }
+                : {})}
+            />
           ) : null}
           {canReadEmployees ? (
-            <SelectField name="ownerEmployeeId" label={t('owner')} value={ownerEmployeeId ?? ''}>
-              <option value="">{t('allOwners')}</option>
-              {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.preferredName || employee.firstName} {employee.lastName}
-                </option>
-              ))}
-            </SelectField>
+            <AsyncEntityCombobox
+              name="ownerEmployeeId"
+              label={t('owner')}
+              entity="employees"
+              placeholder={t('allOwners')}
+              {...(selectedOwner
+                ? {
+                    initialOption: {
+                      id: selectedOwner.id,
+                      label: `${selectedOwner.preferredName || selectedOwner.firstName} ${selectedOwner.lastName}`,
+                    },
+                  }
+                : {})}
+            />
           ) : null}
           <SelectField name="stage" label={t('stage')} value={stage ?? ''}>
             <option value="">{t('allStages')}</option>
@@ -320,14 +338,10 @@ export default async function AdmissionsPage({
                         {row.ownerEmployeeId ? (
                           <ResourceReference
                             label={
-                              row.ownerEmployeeName ??
-                              employeeNames.get(row.ownerEmployeeId) ??
-                              translate('Resources.unavailableEmployee')
+                              row.ownerEmployeeName ?? translate('Resources.unavailableEmployee')
                             }
                             href={
-                              row.ownerEmployeeName || employeeNames.has(row.ownerEmployeeId)
-                                ? `/employees/${row.ownerEmployeeId}`
-                                : null
+                              row.ownerEmployeeName ? `/employees/${row.ownerEmployeeId}` : null
                             }
                           />
                         ) : (
@@ -405,9 +419,7 @@ export default async function AdmissionsPage({
                       </ShadcnTableCell>
                       <ShadcnTableCell className="p-3">
                         {row.ownerEmployeeId
-                          ? (row.ownerEmployeeName ??
-                            employeeNames.get(row.ownerEmployeeId) ??
-                            translate('Resources.unavailableEmployee'))
+                          ? (row.ownerEmployeeName ?? translate('Resources.unavailableEmployee'))
                           : '—'}
                       </ShadcnTableCell>
                       <ShadcnTableCell className="p-3">
@@ -424,21 +436,25 @@ export default async function AdmissionsPage({
         )}
       </section>
 
-      <nav aria-label={t('worklist')} className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">{total}</span>
-        <div className="flex gap-2">
-          {page > 1 ? (
-            <Button asChild variant="secondary">
-              <Link href={pageHref(query, page - 1)}>{translate('Common.actions.previous')}</Link>
-            </Button>
-          ) : null}
-          {page < totalPages ? (
-            <Button asChild variant="secondary">
-              <Link href={pageHref(query, page + 1)}>{translate('Common.actions.next')}</Link>
-            </Button>
-          ) : null}
-        </div>
-      </nav>
+      {resultData ? (
+        <DataPagination
+          pathname="/admissions"
+          page={resultData.page}
+          pageSize={resultData.pageSize}
+          totalItems={total}
+          filters={{
+            search,
+            stage,
+            readiness,
+            organizationId,
+            facilityId,
+            ownerEmployeeId,
+            createdFrom,
+            createdTo,
+            overdue: overdue ? 'true' : undefined,
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -524,12 +540,4 @@ function validUuid(value: string | undefined) {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
     ? value
     : undefined;
-}
-
-function pageHref(query: Record<string, string | undefined>, page: number) {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query))
-    if (value && key !== 'page') params.set(key, value);
-  params.set('page', String(page));
-  return `/admissions?${params.toString()}`;
 }

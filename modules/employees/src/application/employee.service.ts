@@ -64,6 +64,8 @@ export interface EmployeeSearchInput {
   organizationId?: string;
   facilityId?: string;
   teamId?: string;
+  userId?: string;
+  ids?: string[];
   page?: number;
   pageSize?: number;
   sortBy?: 'lastName' | 'firstName' | 'createdAt';
@@ -178,6 +180,8 @@ export class EmployeeApplicationService {
         ...(query.organizationId === undefined ? {} : { organizationId: query.organizationId }),
         ...(query.facilityId === undefined ? {} : { facilityId: query.facilityId }),
         ...(query.teamId === undefined ? {} : { teamId: query.teamId }),
+        ...(query.userId === undefined ? {} : { userId: query.userId }),
+        ...(query.ids === undefined ? {} : { ids: query.ids }),
         page,
         pageSize,
         sortBy: query.sortBy ?? 'lastName',

@@ -33,6 +33,20 @@ export class TenantInvitationDto {
   createdAt!: string;
 }
 
+export class TenantInvitationListDto {
+  @ApiProperty({ type: [TenantInvitationDto] })
+  items!: TenantInvitationDto[];
+
+  @ApiProperty()
+  page!: number;
+
+  @ApiProperty()
+  pageSize!: number;
+
+  @ApiProperty()
+  total!: number;
+}
+
 export class InviteUserResponseDto {
   @ApiProperty({ type: TenantInvitationDto })
   invitation!: TenantInvitationDto;

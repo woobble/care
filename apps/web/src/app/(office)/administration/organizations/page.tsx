@@ -1,29 +1,44 @@
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
-import { getLocale, getTranslations } from 'next-intl/server';
+import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label, StatusBadge } from '@care/ui';
-import { formatNumber } from '@app/web/i18n/format';
 import { statusLabelKey } from '@app/web/i18n/status';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import { searchStructurePage } from '@app/web/lib/structure-search';
+import type { components } from '@care/api-client';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import { createOrganizationAction } from '@app/web/app/(office)/administration/actions';
 
-type SearchParams = Promise<{ error?: string; updated?: string }>;
+type SearchParams = Promise<{
+  error?: string;
+  updated?: string;
+  q?: string;
+  page?: string;
+  pageSize?: string;
+}>;
 
 export default async function OrganizationsPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
-  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
-  const api = await getApiClient();
-  const header = await getTenantHeader();
-  const get = api.GET;
-  const [organizationsResult, facilitiesResult, teamsResult] = await Promise.all([
-    get('/api/v1/organizations', { params: { header } }),
-    get('/api/v1/facilities', { params: { header } }),
-    get('/api/v1/teams', { params: { header } }),
-  ]);
+  const t = await getTranslations();
+  const page = positivePage(query.page);
+  const requestedPageSize = Number(query.pageSize ?? '20');
+  const pageSize = [10, 20, 50, 100].includes(requestedPageSize) ? requestedPageSize : 20;
+  const search = query.q?.trim().slice(0, 120) ?? '';
+  const organizationsResult = await searchStructurePage<
+    components['schemas']['OrganizationResponseDto']
+  >('organizations', { page, pageSize, ...(search ? { q: search } : {}) });
+  if (!organizationsResult.failed)
+    redirectToValidPage(
+      '/administration/organizations',
+      query,
+      page,
+      pageSize,
+      organizationsResult.total,
+    );
 
   return (
     <div className="grid gap-8">
@@ -33,7 +48,7 @@ export default async function OrganizationsPage({
         description={t('Organizations.description')}
       />
       <ActionNotice error={query.error} updated={query.updated} />
-      {organizationsResult.error || facilitiesResult.error || teamsResult.error ? (
+      {organizationsResult.failed ? (
         <p
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
@@ -123,14 +138,19 @@ export default async function OrganizationsPage({
             </Link>
           </div>
         </div>
-        {organizationsResult.data?.length ? (
-          organizationsResult.data.map((organization) => {
-            const facilities = (facilitiesResult.data ?? []).filter(
-              (facility) => facility.organizationId === organization.id,
-            );
-            const teams = (teamsResult.data ?? []).filter(
-              (team) => team.organizationId === organization.id,
-            );
+        <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
+          <input type="hidden" name="page" value="1" />
+          <input type="hidden" name="pageSize" value={pageSize} />
+          <label className="grid min-w-56 gap-1 text-sm">
+            <span>{t('Organizations.listTitle')}</span>
+            <Input type="search" name="q" maxLength={120} defaultValue={search} />
+          </label>
+          <Button type="submit" variant="secondary">
+            {t('Common.actions.apply')}
+          </Button>
+        </form>
+        {!organizationsResult.failed && organizationsResult.items.length ? (
+          organizationsResult.items.map((organization) => {
             return (
               <article key={organization.id} className="rounded-lg border bg-card p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -146,12 +166,6 @@ export default async function OrganizationsPage({
                     {organization.legalName ? (
                       <p className="text-sm text-muted-foreground">{organization.legalName}</p>
                     ) : null}
-                    <p className="text-sm text-muted-foreground">
-                      {t('Organizations.facilityAndTeamCount', {
-                        facilities: formatNumber(facilities.length, locale),
-                        teams: formatNumber(teams.length, locale),
-                      })}
-                    </p>
                   </div>
                   <StatusBadge
                     status={organization.status}
@@ -161,12 +175,26 @@ export default async function OrganizationsPage({
               </article>
             );
           })
-        ) : (
+        ) : organizationsResult.failed ? null : (
           <EmptyState title={t('Organizations.empty')} />
         )}
+        {!organizationsResult.failed ? (
+          <DataPagination
+            pathname="/administration/organizations"
+            page={organizationsResult.page}
+            pageSize={organizationsResult.pageSize}
+            totalItems={organizationsResult.total}
+            filters={{ q: search }}
+          />
+        ) : null}
       </section>
     </div>
   );
+}
+
+function positivePage(value?: string): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, 100_000) : 1;
 }
 
 function Field({

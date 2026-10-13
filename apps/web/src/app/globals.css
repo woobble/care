@@ -224,7 +224,7 @@ textarea {
   font: inherit;
 }
 
-:focus-visible {
+:focus-visible:not(.outline-none):not(.outline-hidden) {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }

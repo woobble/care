@@ -189,16 +189,41 @@ export class TenantAccessService {
     });
   }
 
-  async listInvitations(principal: AuthorizationPrincipal): Promise<TenantInvitationView[]> {
+  async listInvitationsPage(
+    principal: AuthorizationPrincipal,
+    input: { page?: number; pageSize?: number } = {},
+  ): Promise<{ items: TenantInvitationView[]; page: number; pageSize: number; total: number }> {
+    const page = input.page ?? 1;
+    const pageSize = input.pageSize ?? 20;
+    if (
+      !Number.isInteger(page) ||
+      page < 1 ||
+      !Number.isInteger(pageSize) ||
+      pageSize < 1 ||
+      pageSize > 100
+    ) {
+      throw new TenantAccessError('INVALID_PAGINATION', 400, 'Pagination values are invalid');
+    }
     this.requirePermission(principal, 'tenant.members.read', tenantResource(principal.tenantId));
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       await this.setActor(transaction, principal.userId);
-      const rows = await transaction
-        .select()
-        .from(tenantInvitations)
-        .where(eq(tenantInvitations.tenantId, principal.tenantId))
-        .orderBy(desc(tenantInvitations.createdAt));
-      return rows.map((row) => invitationView(row));
+      const where = eq(tenantInvitations.tenantId, principal.tenantId);
+      const [rows, totals] = await Promise.all([
+        transaction
+          .select()
+          .from(tenantInvitations)
+          .where(where)
+          .orderBy(desc(tenantInvitations.createdAt), desc(tenantInvitations.id))
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
+        transaction.select({ total: count() }).from(tenantInvitations).where(where),
+      ]);
+      return {
+        items: rows.map((row) => invitationView(row)),
+        page,
+        pageSize,
+        total: totals[0]?.total ?? 0,
+      };
     });
   }
 

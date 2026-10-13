@@ -27,6 +27,13 @@ export const employeeSearchSchema = z
   .object({
     q: z.string().trim().max(120).optional(),
     status: employeeStatusSchema.optional(),
+    userId: z.string().uuid().optional(),
+    ids: z
+      .preprocess(
+        (value) => (typeof value === 'string' ? value.split(',').map((id) => id.trim()) : value),
+        z.array(z.string().uuid()).min(1).max(100),
+      )
+      .optional(),
     organizationId: z.string().uuid().optional(),
     facilityId: z.string().uuid().optional(),
     teamId: z.string().uuid().optional(),

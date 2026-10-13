@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { auditActionKey } from '@app/web/i18n/audit';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
@@ -30,6 +31,7 @@ import {
   hasPermission,
 } from '@app/web/lib/api';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import type { components } from '@care/api-client';
 import { amendDocumentationAction } from '@app/web/app/(office)/documentation/actions';
 import {
   assignVisitAction,
@@ -75,19 +77,13 @@ export default async function VisitDetailPage({
       </p>
     );
   }
-  const employeesResult = await get('/api/v1/employees', {
-    params: {
-      query: {
-        status: 'active',
-        organizationId: visit.organizationId,
-        facilityId: visit.facilityId,
-        page: 1,
-        pageSize: 100,
-      },
-      header,
-    },
-  });
   const permissions = await getPermissionGrants(api);
+  const conflictEmployeeResult =
+    query.employeeId && hasPermission(permissions, 'employee.read')
+      ? await get('/api/v1/employees/{id}', {
+          params: { path: { id: query.employeeId }, header },
+        })
+      : null;
   const canReadExecution = hasPermission(permissions, 'visit_execution.read');
   const canCorrectExecution = hasPermission(permissions, 'visit_execution.correct');
   const canReadDocumentation = hasPermission(permissions, 'care_documentation.read');
@@ -126,12 +122,13 @@ export default async function VisitDetailPage({
         }),
       ])
     : [null, null];
-  const employees = employeesResult.data?.items ?? [];
+  const conflictEmployee = conflictEmployeeResult?.data as
+    | components['schemas']['EmployeeDetailResponseDto']
+    | undefined;
   const substituteCandidates = candidateResult?.data ?? [];
   const proposedSubstitutions =
     worklistResult?.data?.items.find((item) => item.visit.id === visit.id)?.proposedSubstitutions ??
     [];
-  const conflictEmployee = employees.find((employee) => employee.id === query.employeeId);
   const conflictInterval = readConflictInterval(
     query.conflictStart,
     query.conflictEnd,
@@ -710,34 +707,22 @@ export default async function VisitDetailPage({
           <p className="text-muted-foreground">{t('Visits.noAssignees')}</p>
         )}
         {canAssign ? (
-          employees.length ? (
-            <RHFActionForm
-              action={assignVisitAction}
-              className="grid min-w-0 gap-3 sm:flex sm:flex-wrap sm:items-end"
-            >
-              <input type="hidden" name="visitId" value={visit.id} />
-              <div className="grid min-w-0 gap-2">
-                <Label htmlFor="employeeId">{t('Visits.assignEmployee')}</Label>
-                <NativeSelect
-                  id="employeeId"
-                  name="employeeId"
-                  required
-                  selectClassName="h-10 w-full min-w-0 max-w-full rounded-md border bg-card px-3"
-                  className="w-full"
-                >
-                  <option value="">{t('Visits.selectEmployee')}</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.preferredName || employee.firstName} {employee.lastName}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
-              <Button type="submit">{t('Visits.assign')}</Button>
-            </RHFActionForm>
-          ) : (
-            <p className="text-sm text-muted-foreground">{t('Visits.noActiveEmployees')}</p>
-          )
+          <RHFActionForm
+            action={assignVisitAction}
+            className="grid min-w-0 gap-3 sm:flex sm:flex-wrap sm:items-end"
+          >
+            <input type="hidden" name="visitId" value={visit.id} />
+            <AsyncEntityCombobox
+              name="employeeId"
+              entity="employees"
+              label={t('Visits.assignEmployee')}
+              placeholder={t('Visits.selectEmployee')}
+              organizationId={visit.organizationId}
+              facilityId={visit.facilityId ?? undefined}
+              required
+            />
+            <Button type="submit">{t('Visits.assign')}</Button>
+          </RHFActionForm>
         ) : null}
         {proposedSubstitutions.length ? (
           <div className="grid gap-3 rounded-md border border-warning/40 bg-warning-muted p-3">

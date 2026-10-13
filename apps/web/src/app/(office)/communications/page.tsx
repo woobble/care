@@ -3,8 +3,11 @@ import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import { ResourceReference } from '@app/web/components/resource-reference';
 import type { components } from '@care/api-client';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { formatDateTime } from '@app/web/i18n/format';
 import {
   getApiClient,
@@ -57,6 +60,7 @@ export default async function CommunicationsPage({
     recordedByUserId?: string;
     followUpStatus?: string;
     page?: string;
+    pageSize?: string;
   }>;
 }>) {
   const [query, t, common, locale] = await Promise.all([
@@ -84,56 +88,60 @@ export default async function CommunicationsPage({
   const canReadOrganizations = hasPermission(permissionGrants, 'organization.read');
   const canReadFacilities = hasPermission(permissionGrants, 'facility.read');
   const canReadEmployees = hasPermission(permissionGrants, 'employee.read');
+  const selectedOrganizationId =
+    canReadOrganizations && isUuid(query.organizationId) ? query.organizationId : undefined;
+  const selectedFacilityId =
+    canReadFacilities && isUuid(query.facilityId) ? query.facilityId : undefined;
   const [organizationResult, facilityResult, employeeResult] = await Promise.all([
-    canReadOrganizations
-      ? get('/api/v1/organizations', { params: { query: { status: 'active' }, header } })
-      : Promise.resolve({ data: undefined, error: undefined }),
-    canReadFacilities
-      ? get('/api/v1/facilities', {
+    selectedOrganizationId
+      ? get('/api/v1/organizations/{id}', {
+          params: { path: { id: selectedOrganizationId }, header },
+        })
+      : Promise.resolve(null),
+    selectedFacilityId
+      ? get('/api/v1/facilities/{id}', { params: { path: { id: selectedFacilityId }, header } })
+      : Promise.resolve(null),
+    canReadEmployees && isUuid(query.recordedByUserId)
+      ? get('/api/v1/employees', {
           params: {
-            query: {
-              status: 'active',
-              ...(isUuid(query.organizationId) ? { organizationId: query.organizationId } : {}),
-            },
+            query: { userId: query.recordedByUserId, page: 1, pageSize: 1 },
             header,
           },
         })
       : Promise.resolve({ data: undefined, error: undefined }),
-    canReadEmployees
-      ? get('/api/v1/employees', {
-          params: { query: { status: 'active', page: 1, pageSize: 100 }, header },
-        })
-      : Promise.resolve({ data: undefined, error: undefined }),
   ]);
-  const organizations = organizationResult.data ?? [];
-  const facilities = facilityResult.data ?? [];
-  const employees = employeeResult.data?.items ?? [];
-  const organizationId = organizations.some((item) => item.id === query.organizationId)
-    ? query.organizationId
-    : undefined;
-  const facilityId = facilities.some((item) => item.id === query.facilityId)
-    ? query.facilityId
-    : undefined;
+  const selectedOrganization = organizationResult?.data as
+    | components['schemas']['OrganizationResponseDto']
+    | undefined;
+  const selectedFacility = facilityResult?.data as
+    | components['schemas']['FacilityResponseDto']
+    | undefined;
+  const selectedEmployeeData = employeeResult.data as unknown as
+    | components['schemas']['EmployeeListResponseDto']
+    | undefined;
+  const selectedEmployee = selectedEmployeeData?.items[0];
+  const organizationId = selectedOrganization?.id;
+  const facilityId = selectedFacility?.id;
   const channel = channels.find((value) => value === query.channel);
   const direction = directions.find((value) => value === query.direction);
   const category = categories.find((value) => value === query.category);
   const outcome = outcomes.find((value) => value === query.outcome);
   const followUpStatus = followUpStatuses.find((value) => value === query.followUpStatus);
-  const employeeId = employees.some((item) => item.userId === query.recordedByUserId)
-    ? query.recordedByUserId
-    : undefined;
+  const employeeId = selectedEmployee?.userId;
   const from = dateBoundary(query.from, false);
   const until = dateBoundary(query.until, true);
   const pageNumber = Number(query.page);
   const page =
     Number.isSafeInteger(pageNumber) && pageNumber > 0 ? Math.min(pageNumber, 100_000) : 1;
+  const pageSizeNumber = Number(query.pageSize ?? '20');
+  const pageSize = [10, 20, 50, 100].includes(pageSizeNumber) ? pageSizeNumber : 20;
   const search = query.q?.trim().slice(0, 120) ?? '';
   const clientSearch = query.clientSearch?.trim().slice(0, 120) ?? '';
   const result = await get('/api/v1/communications', {
     params: {
       query: {
         page,
-        pageSize: 50,
+        pageSize,
         ...(organizationId ? { organizationId } : {}),
         ...(facilityId ? { facilityId } : {}),
         ...(clientSearch ? { clientSearch } : {}),
@@ -150,8 +158,18 @@ export default async function CommunicationsPage({
       header,
     },
   });
-  const interactions: Interaction[] = result.data?.items ?? [];
-  const pages = Math.max(1, Math.ceil((result.data?.total ?? 0) / (result.data?.pageSize ?? 50)));
+  const responseData = result.data as unknown as
+    | components['schemas']['CommunicationInteractionListResponseDto']
+    | undefined;
+  const interactions: Interaction[] = responseData?.items ?? [];
+  if (responseData)
+    redirectToValidPage(
+      '/communications',
+      query,
+      responseData.page,
+      responseData.pageSize,
+      responseData.total,
+    );
   const filters = {
     q: search,
     clientSearch,
@@ -163,7 +181,7 @@ export default async function CommunicationsPage({
     outcome,
     from: validDateInput(query.from),
     until: validDateInput(query.until),
-    recordedByUserId: employeeId,
+    recordedByUserId: employeeId ?? undefined,
     followUpStatus: canReadOperations ? followUpStatus : undefined,
   };
 
@@ -186,6 +204,7 @@ export default async function CommunicationsPage({
 
       <section aria-label={t('globalTitle')} className="grid gap-4 rounded-lg border bg-card p-5">
         <form method="get" className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
+          <input type="hidden" name="pageSize" value={pageSize} />
           <TextField
             id="communications-search"
             name="q"
@@ -199,34 +218,37 @@ export default async function CommunicationsPage({
             defaultValue={clientSearch}
           />
           {canReadOrganizations ? (
-            <SelectField
-              id="communications-organization"
+            <AsyncEntityCombobox
               name="organizationId"
               label={t('filterOrganization')}
-              defaultValue={organizationId ?? ''}
-            >
-              <option value="">{t('all')}</option>
-              {organizations.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </SelectField>
+              entity="organizations"
+              placeholder={t('all')}
+              {...(selectedOrganization
+                ? {
+                    initialOption: {
+                      id: selectedOrganization.id,
+                      label: selectedOrganization.name,
+                    },
+                  }
+                : {})}
+            />
           ) : null}
           {canReadFacilities ? (
-            <SelectField
-              id="communications-facility"
+            <AsyncEntityCombobox
               name="facilityId"
               label={t('filterFacility')}
-              defaultValue={facilityId ?? ''}
-            >
-              <option value="">{t('all')}</option>
-              {facilities.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </SelectField>
+              entity="facilities"
+              {...(organizationId ? { organizationId } : {})}
+              placeholder={t('all')}
+              {...(selectedFacility
+                ? {
+                    initialOption: {
+                      id: selectedFacility.id,
+                      label: `${selectedFacility.organizationName} · ${selectedFacility.name}`,
+                    },
+                  }
+                : {})}
+            />
           ) : null}
           <SelectField
             id="communications-channel"
@@ -281,21 +303,20 @@ export default async function CommunicationsPage({
             ))}
           </SelectField>
           {canReadEmployees ? (
-            <SelectField
-              id="communications-employee"
+            <AsyncEntityCombobox
               name="recordedByUserId"
               label={t('filterEmployee')}
-              defaultValue={employeeId ?? ''}
-            >
-              <option value="">{t('all')}</option>
-              {employees
-                .filter((item) => item.userId)
-                .map((item) => (
-                  <option key={item.id} value={item.userId!}>
-                    {item.preferredName || item.firstName} {item.lastName}
-                  </option>
-                ))}
-            </SelectField>
+              entity="employee-users"
+              placeholder={t('all')}
+              {...(selectedEmployee?.userId
+                ? {
+                    initialOption: {
+                      id: selectedEmployee.userId,
+                      label: `${selectedEmployee.preferredName || selectedEmployee.firstName} ${selectedEmployee.lastName}`,
+                    },
+                  }
+                : {})}
+            />
           ) : null}
           <TextField
             id="communications-from"
@@ -389,24 +410,14 @@ export default async function CommunicationsPage({
           <EmptyState title={t('empty')} />
         )}
 
-        {pages > 1 ? (
-          <nav aria-label={t('globalTitle')} className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {page} / {pages}
-            </p>
-            <div className="flex gap-2">
-              {page > 1 ? (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(filters, page - 1)}>{t('previousPage')}</Link>
-                </Button>
-              ) : null}
-              {page < pages ? (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(filters, page + 1)}>{t('nextPage')}</Link>
-                </Button>
-              ) : null}
-            </div>
-          </nav>
+        {responseData ? (
+          <DataPagination
+            pathname="/communications"
+            page={responseData.page}
+            pageSize={responseData.pageSize}
+            totalItems={responseData.total}
+            filters={filters}
+          />
         ) : null}
       </section>
     </div>
@@ -461,13 +472,6 @@ function SelectField({
       </NativeSelect>
     </div>
   );
-}
-
-function pageHref(filters: Record<string, string | undefined>, page: number) {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
-  params.set('page', String(page));
-  return `/communications?${params.toString()}`;
 }
 
 function dateBoundary(value: string | undefined, endOfDay: boolean): string | undefined {

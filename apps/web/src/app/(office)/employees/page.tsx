@@ -9,7 +9,7 @@ import {
 } from '@care/ui';
 import { NativeSelect } from '@care/ui';
 import Link from 'next/link';
-import { getLocale, getTranslations } from 'next-intl/server';
+import { getTranslations } from 'next-intl/server';
 import { Button, StatusBadge } from '@care/ui';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
@@ -20,6 +20,10 @@ import {
   hasClientPermission,
 } from '@app/web/lib/api';
 import { statusLabelKey } from '@app/web/i18n/status';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import type { components } from '@care/api-client';
 
 type SearchParams = Promise<{
   q?: string;
@@ -28,6 +32,7 @@ type SearchParams = Promise<{
   facilityId?: string;
   teamId?: string;
   page?: string;
+  pageSize?: string;
   sortBy?: string;
   sortOrder?: string;
   error?: string;
@@ -38,7 +43,7 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}
 export default async function EmployeesPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
-  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
+  const t = await getTranslations();
   const query = await searchParams;
   const status = ['active', 'inactive', 'archived'].includes(query.status ?? '')
     ? (query.status as 'active' | 'inactive' | 'archived')
@@ -55,18 +60,20 @@ export default async function EmployeesPage({
     : 'lastName';
   const sortOrder = query.sortOrder === 'desc' ? 'desc' : 'asc';
   const parsedPage = Number(query.page ?? '1');
-  const page = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const page = Number.isInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
+  const parsedPageSize = Number(query.pageSize ?? '20');
+  const pageSize = [10, 20, 50, 100].includes(parsedPageSize) ? parsedPageSize : 20;
   const text = query.q?.trim().slice(0, 120) || undefined;
 
   const api = await getApiClient();
   const header = await getTenantHeader();
   const get = api.GET;
-  const [employeesResult, organizationsResult, facilitiesResult, teamsResult] = await Promise.all([
+  const [employeesResult, organizationResult, facilityResult, teamResult] = await Promise.all([
     get('/api/v1/employees', {
       params: {
         query: {
           page,
-          pageSize: 25,
+          pageSize,
           sortBy,
           sortOrder,
           ...(text ? { q: text } : {}),
@@ -78,13 +85,30 @@ export default async function EmployeesPage({
         header,
       },
     }),
-    get('/api/v1/organizations', { params: { header } }),
-    get('/api/v1/facilities', { params: { header } }),
-    get('/api/v1/teams', { params: { header } }),
+    organizationId
+      ? get('/api/v1/organizations/{id}', { params: { path: { id: organizationId }, header } })
+      : Promise.resolve(null),
+    facilityId
+      ? get('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
+      : Promise.resolve(null),
+    teamId
+      ? get('/api/v1/teams/{id}', { params: { path: { id: teamId }, header } })
+      : Promise.resolve(null),
   ]);
   const permissions = await getPermissionGrants(api);
   const tenantId = header['X-Tenant-Id'];
-  const employees = employeesResult.data;
+  const employees = employeesResult.data as unknown as
+    | components['schemas']['EmployeeListResponseDto']
+    | undefined;
+  const selectedOrganization = organizationResult?.data as
+    | components['schemas']['OrganizationResponseDto']
+    | undefined;
+  const selectedFacility = facilityResult?.data as
+    | components['schemas']['FacilityResponseDto']
+    | undefined;
+  const selectedTeam = teamResult?.data as components['schemas']['TeamResponseDto'] | undefined;
+  if (employees)
+    redirectToValidPage('/employees', query, employees.page, employees.pageSize, employees.total);
   const filters = { q: text, status, organizationId, facilityId, teamId, sortBy, sortOrder };
 
   return (
@@ -123,6 +147,7 @@ export default async function EmployeesPage({
           {t('Employees.searchAndFilter')}
         </h2>
         <form method="get" className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+          <input type="hidden" name="pageSize" value={pageSize} />
           <label className="grid gap-1 text-sm">
             {t('Employees.searchNameOrNumber')}
             <input
@@ -138,38 +163,50 @@ export default async function EmployeesPage({
             <option value="inactive">{t('Common.status.inactive')}</option>
             <option value="archived">{t('Common.status.archived')}</option>
           </SelectFilter>
-          <SelectFilter
+          <AsyncEntityCombobox
             name="organizationId"
             label={t('Common.fields.organization')}
-            value={organizationId ?? ''}
-          >
-            <option value="">{t('Common.filters.allOrganizations')}</option>
-            {(organizationsResult.data ?? []).map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organization.name}
-              </option>
-            ))}
-          </SelectFilter>
-          <SelectFilter
+            entity="organizations"
+            placeholder={t('Common.filters.allOrganizations')}
+            {...(selectedOrganization
+              ? {
+                  initialOption: {
+                    id: selectedOrganization.id,
+                    label: selectedOrganization.name,
+                  },
+                }
+              : {})}
+          />
+          <AsyncEntityCombobox
             name="facilityId"
             label={t('Common.fields.facility')}
-            value={facilityId ?? ''}
-          >
-            <option value="">{t('Common.filters.allFacilities')}</option>
-            {(facilitiesResult.data ?? []).map((facility) => (
-              <option key={facility.id} value={facility.id}>
-                {facility.organizationName} — {facility.name}
-              </option>
-            ))}
-          </SelectFilter>
-          <SelectFilter name="teamId" label={t('Common.fields.team')} value={teamId ?? ''}>
-            <option value="">{t('Common.filters.allTeams')}</option>
-            {(teamsResult.data ?? []).map((team) => (
-              <option key={team.id} value={team.id}>
-                {team.organizationName} — {team.name}
-              </option>
-            ))}
-          </SelectFilter>
+            entity="facilities"
+            {...(organizationId ? { organizationId } : {})}
+            placeholder={t('Common.filters.allFacilities')}
+            {...(selectedFacility
+              ? {
+                  initialOption: {
+                    id: selectedFacility.id,
+                    label: `${selectedFacility.organizationName} · ${selectedFacility.name}`,
+                  },
+                }
+              : {})}
+          />
+          <AsyncEntityCombobox
+            name="teamId"
+            label={t('Common.fields.team')}
+            entity="teams"
+            {...(organizationId ? { organizationId } : {})}
+            placeholder={t('Common.filters.allTeams')}
+            {...(selectedTeam
+              ? {
+                  initialOption: {
+                    id: selectedTeam.id,
+                    label: `${selectedTeam.organizationName} · ${selectedTeam.name}`,
+                  },
+                }
+              : {})}
+          />
           <SelectFilter name="sortBy" label={t('Common.fields.sortBy')} value={sortBy}>
             <option value="lastName">{t('Common.fields.lastName')}</option>
             <option value="firstName">{t('Common.fields.firstName')}</option>
@@ -257,32 +294,13 @@ export default async function EmployeesPage({
               </ShadcnTableBody>
             </ShadcnTable>
           </div>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {t('Common.pagination', {
-                page: new Intl.NumberFormat(locale).format(employees.page),
-                pages: new Intl.NumberFormat(locale).format(
-                  Math.max(1, Math.ceil(employees.total / employees.pageSize)),
-                ),
-              })}
-            </p>
-            <div className="flex gap-2">
-              {employees.page > 1 ? (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(filters, employees.page - 1)}>
-                    {t('Common.actions.previous')}
-                  </Link>
-                </Button>
-              ) : null}
-              {employees.page * employees.pageSize < employees.total ? (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(filters, employees.page + 1)}>
-                    {t('Common.actions.next')}
-                  </Link>
-                </Button>
-              ) : null}
-            </div>
-          </div>
+          <DataPagination
+            pathname="/employees"
+            page={employees.page}
+            pageSize={employees.pageSize}
+            totalItems={employees.total}
+            filters={filters}
+          />
         </section>
       ) : !employeesResult.error ? (
         <p className="rounded-lg border bg-card p-6 text-muted-foreground">
@@ -312,11 +330,4 @@ function SelectFilter({
       </NativeSelect>
     </label>
   );
-}
-
-function pageHref(filters: Record<string, string | undefined>, page: number): string {
-  const params = new URLSearchParams();
-  for (const [name, value] of Object.entries(filters)) if (value) params.set(name, value);
-  params.set('page', String(page));
-  return `/employees?${params.toString()}`;
 }

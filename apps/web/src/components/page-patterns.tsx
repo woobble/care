@@ -17,7 +17,7 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <header className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
       <div className="grid min-w-0 gap-1.5">
         {eyebrow ? (
           <p className="text-xs font-semibold uppercase tracking-[0.13em] text-primary">

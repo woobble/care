@@ -5,13 +5,9 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Button, Input, Label } from '@care/ui';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasPermission,
-} from '@app/web/lib/api';
+import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
 import { createClientAction } from '@app/web/app/(office)/clients/actions';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 
 export default async function NewClientPage({
   searchParams,
@@ -19,18 +15,9 @@ export default async function NewClientPage({
   const t = await getTranslations();
   const params = await searchParams;
   const api = await getApiClient();
-  const get = api.GET;
-  const header = await getTenantHeader();
   const permissions = await getPermissionGrants(api);
   if (!hasPermission(permissions, 'client.create'))
     redirect('/clients?error=INSUFFICIENT_PERMISSION');
-  const [organizationsResult, facilitiesResult] = await Promise.all([
-    get('/api/v1/organizations', { params: { query: { status: 'active' }, header } }),
-    get('/api/v1/facilities', { params: { query: { status: 'active' }, header } }),
-  ]);
-  const organizations = organizationsResult.data ?? [];
-  const facilities = facilitiesResult.data ?? [];
-
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
       <PageHeader
@@ -44,14 +31,6 @@ export default async function NewClientPage({
           className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
         >
           {t('Clients.saveFailed')}
-        </p>
-      ) : null}
-      {organizationsResult.error || facilitiesResult.error ? (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
-        >
-          {t('Errors.generic')}
         </p>
       ) : null}
       <RHFActionForm
@@ -112,32 +91,20 @@ export default async function NewClientPage({
         <fieldset className="grid gap-4">
           <legend className="mb-2 text-lg font-semibold">{t('Clients.form.careContext')}</legend>
           <div className="grid gap-4 md:grid-cols-2">
-            <SelectField
-              id="organizationId"
+            <AsyncEntityCombobox
               name="organizationId"
+              entity="organizations"
               label={t('Clients.form.organization')}
               required
-            >
-              <option value="">{t('Clients.form.selectOrganization')}</option>
-              {organizations.map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField
-              id="primaryFacilityId"
+              placeholder={t('Clients.form.selectOrganization')}
+            />
+            <AsyncEntityCombobox
               name="primaryFacilityId"
+              entity="facilities"
               label={t('Clients.form.primaryFacility')}
               required
-            >
-              <option value="">{t('Clients.form.selectFacility')}</option>
-              {facilities.map((facility) => (
-                <option key={facility.id} value={facility.id}>
-                  {facility.name}
-                </option>
-              ))}
-            </SelectField>
+              placeholder={t('Clients.form.selectFacility')}
+            />
           </div>
           <p className="text-sm text-muted-foreground">{t('Clients.form.facilityMustMatch')}</p>
         </fieldset>
@@ -217,9 +184,7 @@ export default async function NewClientPage({
         </fieldset>
 
         <div className="flex flex-wrap gap-3">
-          <Button type="submit" disabled={!organizations.length || !facilities.length}>
-            {t('Clients.create')}
-          </Button>
+          <Button type="submit">{t('Clients.create')}</Button>
           <Button asChild variant="secondary">
             <Link href="/clients">{t('Common.actions.cancel')}</Link>
           </Button>

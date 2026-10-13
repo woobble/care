@@ -1,5 +1,6 @@
 import { v7 as uuidv7 } from 'uuid';
-import { and, asc, count, eq, lt, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
@@ -87,6 +88,21 @@ export class OperationsRecurrenceApplicationService {
     const pageSize = bounded(query.pageSize, 25, 1, 100);
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const conditions = [eq(recurringTaskDefinitions.tenantId, principal.tenantId)];
+      const operationsScope = recurrencePermissionScope(principal, 'operations.read');
+      if (operationsScope) conditions.push(operationsScope);
+      const clientScope = recurrencePermissionScope(principal, 'client.read');
+      if (clientScope) {
+        conditions.push(or(isNull(recurringTaskDefinitions.clientId), clientScope)!);
+      } else if (
+        !principal.grants.some(
+          (grant) =>
+            grant.permission === 'client.read' &&
+            grant.scopeType === 'tenant' &&
+            grant.scopeId === principal.tenantId,
+        )
+      ) {
+        conditions.push(isNull(recurringTaskDefinitions.clientId));
+      }
       if (query.organizationId)
         conditions.push(eq(recurringTaskDefinitions.organizationId, query.organizationId));
       if (query.facilityId)
@@ -110,12 +126,11 @@ export class OperationsRecurrenceApplicationService {
         )
         .limit(pageSize)
         .offset((page - 1) * pageSize);
-      const visible = rows.filter((row) => this.canReadDefinition(principal, row));
       return {
-        items: visible.map(definitionView),
+        items: rows.map(definitionView),
         page,
         pageSize,
-        total: visible.length === rows.length ? (totalRow?.total ?? 0) : visible.length,
+        total: totalRow?.total ?? 0,
       };
     });
   }
@@ -1091,6 +1106,33 @@ function definitionResource(definition: RecurringTaskDefinition): ResourceContex
     ...(definition.facilityId ? { facilityId: definition.facilityId } : {}),
     ...(definition.clientId ? { clientId: definition.clientId } : {}),
   };
+}
+
+function recurrencePermissionScope(
+  principal: AuthorizationPrincipal,
+  permission: 'operations.read' | 'client.read',
+): SQL | undefined {
+  const grants = principal.grants.filter((grant) => grant.permission === permission);
+  if (
+    grants.some((grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId)
+  ) {
+    return undefined;
+  }
+  const organizationIds = [
+    ...new Set(
+      grants.filter((grant) => grant.scopeType === 'organization').map((grant) => grant.scopeId),
+    ),
+  ];
+  const facilityIds = [
+    ...new Set(
+      grants.filter((grant) => grant.scopeType === 'facility').map((grant) => grant.scopeId),
+    ),
+  ];
+  const scopes: SQL[] = [];
+  if (organizationIds.length)
+    scopes.push(inArray(recurringTaskDefinitions.organizationId, organizationIds));
+  if (facilityIds.length) scopes.push(inArray(recurringTaskDefinitions.facilityId, facilityIds));
+  return scopes.length ? or(...scopes)! : sql`false`;
 }
 
 function inputResource(

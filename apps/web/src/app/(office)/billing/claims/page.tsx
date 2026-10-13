@@ -25,6 +25,8 @@ import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
 import { formatCents } from '@app/web/app/(office)/billing/format';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 
 type ClaimStatus =
   | 'draft'
@@ -49,7 +51,13 @@ type ClaimListItem = {
   status: ClaimStatus;
   createdAt: string;
 };
-type SearchParams = Promise<{ status?: string; error?: string; updated?: string }>;
+type SearchParams = Promise<{
+  status?: string;
+  page?: string;
+  pageSize?: string;
+  error?: string;
+  updated?: string;
+}>;
 const statuses: ClaimStatus[] = [
   'draft',
   'ready',
@@ -67,6 +75,8 @@ export default async function ClaimsWorklistPage({
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
   const status = statuses.find((candidate) => candidate === query.status);
+  const page = positivePage(query.page);
+  const pageSize = positivePageSize(query.pageSize);
   const [t, translate, locale] = await Promise.all([
     getTranslations('Billing'),
     getTranslations(),
@@ -77,13 +87,30 @@ export default async function ClaimsWorklistPage({
   const [permissions, result] = await Promise.all([
     getPermissionGrants(api),
     api.GET('/api/v1/billing/claims', {
-      params: { query: { page: 1, pageSize: 50, ...(status ? { status } : {}) }, header },
+      params: { query: { page, pageSize, ...(status ? { status } : {}) }, header },
     }),
   ]);
   const canRead = hasPermission(permissions, 'claims.read');
-  const response = result.data as { items?: ClaimListItem[]; hasMore?: boolean } | undefined;
+  const response = result.data as
+    | {
+        items?: ClaimListItem[];
+        page: number;
+        pageSize: number;
+        total: number;
+      }
+    | undefined;
+  if (response) {
+    redirectToValidPage(
+      '/billing/claims',
+      status ? { status } : {},
+      page,
+      pageSize,
+      response.total,
+    );
+  }
   const claims = canRead ? (response?.items ?? []) : [];
-  const error = query.error ?? result.error?.code;
+  const resultError = result.error as { code?: string } | undefined;
+  const error = query.error ?? resultError?.code;
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
@@ -104,6 +131,7 @@ export default async function ClaimsWorklistPage({
             <p className="mt-1 text-sm text-muted-foreground">{t('claimsWorklistDescription')}</p>
           </div>
           <form action="/billing/claims" className="flex flex-wrap items-end gap-2">
+            <input type="hidden" name="pageSize" value={pageSize} />
             <label className="grid gap-1 text-sm" htmlFor="claim-status-filter">
               {t('claimStatusLabel')}
               <NativeSelect
@@ -201,8 +229,14 @@ export default async function ClaimsWorklistPage({
             {result.error ? t('claimsUnavailable') : t('claimsEmpty')}
           </p>
         )}
-        {response?.hasMore ? (
-          <p className="text-sm text-muted-foreground">{t('claimsFirstPageOnly')}</p>
+        {canRead && response ? (
+          <DataPagination
+            pathname="/billing/claims"
+            page={response.page}
+            pageSize={response.pageSize}
+            totalItems={response.total}
+            filters={status ? { status } : {}}
+          />
         ) : null}
       </section>
     </div>
@@ -233,4 +267,15 @@ function statusLabel(
     case 'cancelled':
       return t('claimStatus.cancelled');
   }
+}
+
+function positivePage(value: string | undefined): number {
+  if (!value || !/^\d+$/.test(value)) return 1;
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page > 0 && page <= 100_000 ? page : 1;
+}
+
+function positivePageSize(value: string | undefined): number {
+  const pageSize = Number(value);
+  return [10, 20, 50, 100].includes(pageSize) ? pageSize : 20;
 }

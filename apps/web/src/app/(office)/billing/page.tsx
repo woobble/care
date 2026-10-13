@@ -19,6 +19,7 @@ import { BillingNavigation } from './billing-nav';
 import { euroInput, formatCents, lineAmountField } from './format';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { FilterDisclosure } from '@app/web/components/filter-disclosure';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 
 type Candidate = components['schemas']['BillingCandidateResponseDto'];
 type CandidateGroup = {
@@ -39,7 +40,6 @@ type SearchParams = Promise<{
   organizationId?: string;
   facilityId?: string;
   clientId?: string;
-  clientSearch?: string;
   fundingSourceId?: string;
   ready?: string;
   evidenceStatus?: string;
@@ -68,7 +68,9 @@ export default async function BillingWorklistPage({
   const fundingSourceId = validUuid(query.fundingSourceId);
   const ready = query.ready === 'true' || query.ready === 'false' ? query.ready : undefined;
   const evidenceStatus = query.evidenceStatus?.trim().slice(0, 80) || undefined;
-  const clientSearch = query.clientSearch?.trim().slice(0, 100) || undefined;
+  const canReadOrganizations = hasPermission(permissions, 'organization.read');
+  const canReadFacilities = hasPermission(permissions, 'facility.read');
+  const canReadClients = hasPermission(permissions, 'client.read');
   const candidateResult = await get('/api/v1/billing/candidates', {
     params: {
       query: {
@@ -85,41 +87,45 @@ export default async function BillingWorklistPage({
     },
   });
   const [organizationResult, facilityResult, clientResult] = await Promise.all([
-    get('/api/v1/organizations', { params: { header } }),
-    get('/api/v1/facilities', {
-      params: { query: organizationId ? { organizationId } : {}, header },
-    }),
-    get('/api/v1/clients', {
-      params: {
-        query: { page: 1, pageSize: 100, ...(clientSearch ? { q: clientSearch } : {}) },
-        header,
-      },
-    }),
+    organizationId && canReadOrganizations
+      ? get('/api/v1/organizations/{id}', { params: { path: { id: organizationId }, header } })
+      : Promise.resolve({ data: undefined, error: undefined }),
+    facilityId && canReadFacilities
+      ? get('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
+      : Promise.resolve({ data: undefined, error: undefined }),
+    clientId && canReadClients
+      ? get('/api/v1/clients/{id}', { params: { path: { id: clientId }, header } })
+      : Promise.resolve({ data: undefined, error: undefined }),
   ]);
-  const clients = (clientResult.data?.items ?? []).map(
-    ({ id, preferredName, firstName, lastName }) => ({ id, preferredName, firstName, lastName }),
-  );
-  if (clientId && !clients.some((client) => client.id === clientId)) {
-    const selectedClient = await get('/api/v1/clients/{id}', {
-      params: { path: { id: clientId }, header },
-    });
-    if (selectedClient.data) {
-      clients.unshift({
-        id: selectedClient.data.id,
-        preferredName: selectedClient.data.preferredName,
-        firstName: selectedClient.data.firstName,
-        lastName: selectedClient.data.lastName,
-      });
-    }
-  }
-  const candidates = candidateResult.data?.items ?? [];
+  const candidateData = candidateResult.data as unknown as
+    | components['schemas']['BillingCandidateListResponseDto']
+    | undefined;
+  const selectedOrganization = organizationResult.data as
+    | components['schemas']['OrganizationResponseDto']
+    | undefined;
+  const selectedFacility = facilityResult.data as
+    | components['schemas']['FacilityResponseDto']
+    | undefined;
+  const selectedClient = clientResult.data as
+    | components['schemas']['ClientResponseDto']
+    | undefined;
+  const candidateError = candidateResult.error as { code?: string } | undefined;
+  const organizationError = organizationResult.error as { code?: string } | undefined;
+  const facilityError = facilityResult.error as { code?: string } | undefined;
+  const clientError = clientResult.error as { code?: string } | undefined;
+  const candidates = candidateData?.items ?? [];
   const groups = await candidateGroups(api, candidates);
   const canManage = hasPermission(permissions, 'billing.manage');
   const canExport =
     hasPermission(permissions, 'documents.exports.read') &&
     hasPermission(permissions, 'billing.read');
   const updated = query.updated === 'draft';
-  const error = query.error ?? candidateResult.error?.code;
+  const error =
+    query.error ??
+    candidateError?.code ??
+    organizationError?.code ??
+    facilityError?.code ??
+    clientError?.code;
 
   return (
     <div className="mx-auto grid w-full min-w-0 max-w-6xl grid-cols-[minmax(0,1fr)] gap-6">
@@ -156,53 +162,55 @@ export default async function BillingWorklistPage({
               type="date"
               defaultValue={until ?? ''}
             />
-            <SelectField
-              id="billing-organization"
-              name="organizationId"
-              label={t('organizationFilter')}
-              defaultValue={organizationId ?? ''}
-            >
-              <option value="">{t('allOrganizations')}</option>
-              {(organizationResult.data ?? []).map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField
-              id="billing-facility"
-              name="facilityId"
-              label={t('facilityFilter')}
-              defaultValue={facilityId ?? ''}
-            >
-              <option value="">{t('allFacilities')}</option>
-              {(facilityResult.data ?? []).map((facility) => (
-                <option key={facility.id} value={facility.id}>
-                  {facility.name}
-                </option>
-              ))}
-            </SelectField>
-            <div className="grid min-w-0 gap-2">
-              <Field
-                id="client-search"
-                name="clientSearch"
-                label={t('clientSearch')}
-                defaultValue={clientSearch ?? ''}
+            {canReadOrganizations ? (
+              <AsyncEntityCombobox
+                name="organizationId"
+                label={t('organizationFilter')}
+                entity="organizations"
+                placeholder={t('allOrganizations')}
+                {...(selectedOrganization
+                  ? {
+                      initialOption: {
+                        id: selectedOrganization.id,
+                        label: selectedOrganization.name,
+                      },
+                    }
+                  : {})}
               />
-              <SelectField
-                id="billing-client"
+            ) : null}
+            {canReadFacilities ? (
+              <AsyncEntityCombobox
+                name="facilityId"
+                label={t('facilityFilter')}
+                entity="facilities"
+                {...(organizationId ? { organizationId } : {})}
+                placeholder={t('allFacilities')}
+                {...(selectedFacility
+                  ? {
+                      initialOption: {
+                        id: selectedFacility.id,
+                        label: `${selectedFacility.organizationName} · ${selectedFacility.name}`,
+                      },
+                    }
+                  : {})}
+              />
+            ) : null}
+            {canReadClients ? (
+              <AsyncEntityCombobox
                 name="clientId"
                 label={t('clientFilter')}
-                defaultValue={clientId ?? ''}
-              >
-                <option value="">{t('allClients')}</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.preferredName || client.firstName} {client.lastName}
-                  </option>
-                ))}
-              </SelectField>
-            </div>
+                entity="clients"
+                placeholder={t('allClients')}
+                {...(selectedClient
+                  ? {
+                      initialOption: {
+                        id: selectedClient.id,
+                        label: `${selectedClient.preferredName || selectedClient.firstName} ${selectedClient.lastName}`,
+                      },
+                    }
+                  : {})}
+              />
+            ) : null}
             <Field
               id="funding-source"
               name="fundingSourceId"
@@ -448,9 +456,12 @@ async function candidateGroups(
     [...payerIds].map(async (key) => {
       const [clientId, organizationId, arrangementId] = key.split('|');
       if (!clientId || !organizationId || !arrangementId) return [key, null] as const;
-      const { data } = await api.GET('/api/v1/billing/payer-arrangements', {
+      const arrangementResult = await api.GET('/api/v1/billing/payer-arrangements', {
         params: { query: { clientId, organizationId }, header: await getTenantHeader() },
       });
+      const data = arrangementResult.data as unknown as
+        | components['schemas']['PayerArrangementListResponseDto']
+        | undefined;
       return [
         key,
         data?.items.find((arrangement) => arrangement.id === arrangementId)?.recipientName ?? null,

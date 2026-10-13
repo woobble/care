@@ -189,14 +189,7 @@ export class BillingController {
   async invoices(@Req() request: ApiRequest, @Query() query: Record<string, string | undefined>) {
     const parsed = invoiceListQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException();
-    return {
-      items: await this.billing.listInvoices(
-        this.principal(request),
-        withoutUndefined(parsed.data),
-      ),
-      page: parsed.data.page,
-      pageSize: parsed.data.pageSize,
-    };
+    return this.billing.listInvoicesPage(this.principal(request), withoutUndefined(parsed.data));
   }
 
   @Post('invoices')
@@ -350,6 +343,7 @@ export class BillingController {
   @ApiOperation({ summary: 'List issued invoices with outstanding balances and derived status' })
   @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'clientId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'q', required: false, minLength: 2, maxLength: 120 })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiOkResponse({ type: BillingInvoiceListResponseDto })
@@ -359,30 +353,20 @@ export class BillingController {
   ) {
     const parsed = receivablesQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException();
-    return {
-      items: await this.billing.receivables(this.principal(request), withoutUndefined(parsed.data)),
-      page: parsed.data.page,
-      pageSize: parsed.data.pageSize,
-    };
+    return this.billing.receivablesPage(this.principal(request), withoutUndefined(parsed.data));
   }
 
   @Get('payments')
   @ApiOperation({ summary: 'List recorded payment facts and remaining unallocated amounts' })
   @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'remainingOnly', required: false, enum: ['true', 'false'] })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiOkResponse({ type: BillingPaymentListResponseDto })
   async payments(@Req() request: ApiRequest, @Query() query: Record<string, string | undefined>) {
     const parsed = paymentsQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException();
-    return {
-      items: await this.billing.listPayments(
-        this.principal(request),
-        withoutUndefined(parsed.data),
-      ),
-      page: parsed.data.page,
-      pageSize: parsed.data.pageSize,
-    };
+    return this.billing.listPaymentsPage(this.principal(request), withoutUndefined(parsed.data));
   }
 
   @Post('payments')

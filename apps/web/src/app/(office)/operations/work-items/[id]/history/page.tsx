@@ -4,6 +4,8 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { formatDateTime } from '@app/web/i18n/format';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import {
   getApiClient,
   getPermissionGrants,
@@ -14,8 +16,9 @@ import {
   categoryTranslationKey,
   type OperationsWorkItem,
 } from '@app/web/app/(office)/operations/ui';
+import type { components } from '@care/api-client';
 
-type SearchParams = Promise<{ page?: string }>;
+type SearchParams = Promise<{ page?: string; pageSize?: string }>;
 const issueIdPattern = /^[a-f0-9]{64}$/i;
 
 export default async function OperationsDeadlineHistoryPage({
@@ -41,16 +44,30 @@ export default async function OperationsDeadlineHistoryPage({
       </p>
     );
 
-  const page = Math.max(1, Math.min(100_000, Number.parseInt(query.page ?? '1', 10) || 1));
-  const { data, error } = await api.GET('/api/v1/operations/work-items/{id}/history', {
-    params: { path: { id }, query: { page, pageSize: 25 }, header },
-  });
+  const page = positiveInteger(query.page, 1, 100_000, 1);
+  const pageSize = positiveInteger(query.pageSize, 20, 100, 20);
+  const { data: responseData, error } = await api.GET(
+    '/api/v1/operations/work-items/{id}/history',
+    {
+      params: { path: { id }, query: { page, pageSize }, header },
+    },
+  );
+  const data = responseData as
+    | components['schemas']['OperationsExceptionHistoryResponseDto']
+    | undefined;
   if (!data) notFound();
 
   const pageCount = Math.max(
     1,
     Math.ceil(data.totalOccurrences / data.pageSize),
     Math.ceil(data.totalInteractions / data.pageSize),
+  );
+  redirectToValidPage(
+    `/operations/work-items/${id}/history`,
+    query,
+    page,
+    data.pageSize,
+    Math.max(data.totalOccurrences, data.totalInteractions),
   );
 
   return (
@@ -156,33 +173,27 @@ export default async function OperationsDeadlineHistoryPage({
             )}
           </section>
 
-          {pageCount > 1 ? (
-            <nav aria-label={t('issuePages')} className="flex items-center justify-between">
-              {page > 1 ? (
-                <Link
-                  className="text-primary underline"
-                  href={`/operations/work-items/${id}/history?page=${page - 1}`}
-                >
-                  {t('previousPage')}
-                </Link>
-              ) : (
-                <span className="text-muted-foreground">{t('previousPage')}</span>
-              )}
-              <span>{t('pageOf', { page: data.page, pages: pageCount })}</span>
-              {page < pageCount ? (
-                <Link
-                  className="text-primary underline"
-                  href={`/operations/work-items/${id}/history?page=${page + 1}`}
-                >
-                  {t('nextPage')}
-                </Link>
-              ) : (
-                <span className="text-muted-foreground">{t('nextPage')}</span>
-              )}
-            </nav>
-          ) : null}
+          <DataPagination
+            pathname={`/operations/work-items/${id}/history`}
+            page={data.page}
+            pageSize={data.pageSize}
+            totalPages={pageCount}
+            summaryLabel={t('pageOf', { page: data.page, pages: pageCount })}
+            filters={{}}
+          />
         </>
       )}
     </div>
   );
+}
+
+function positiveInteger(
+  value: string | undefined,
+  minimum: number,
+  maximum: number,
+  fallback: number,
+): number {
+  if (!value || !/^\d+$/.test(value)) return fallback;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
 }
