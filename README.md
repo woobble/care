@@ -49,6 +49,7 @@ Mailpit is at <http://localhost:8025> and accepts local SMTP on port `1026`. Pro
 | `bun run seed`                          | Create demo tenant, organization, facility, and roles                                  |
 | `bun run seed:identity`                 | Grant a configured Authentik subject demo tenant access                                |
 | `bun run infra:down`                    | Stop local services; keeps named volumes                                               |
+| `bun run clean`                         | Remove workspace build outputs, caches, coverage, and Playwright reports               |
 | `bun run reset`                         | Confirm and reset Compose data; reruns migrations and demo seed                        |
 | `bun run deploy:check`                  | Validate production Compose, configuration, dependencies and recovery destination      |
 | `bun run deploy:bootstrap-admin -- ...` | Create the first production tenant administrator on a fresh database                   |

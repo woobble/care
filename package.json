@@ -31,6 +31,7 @@
     "backup:verify": "bun scripts/deploy.mjs verify",
     "backup:restore": "bun scripts/deploy.mjs restore",
     "backup:prune": "bun scripts/deploy.mjs prune",
+    "clean": "node scripts/clean.mjs",
     "routing:setup": "node scripts/routing.mjs setup",
     "routing:update": "node scripts/routing.mjs update",
     "routing:status": "node scripts/routing.mjs status",
