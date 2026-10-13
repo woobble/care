@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { paths } from '@care/api-client';
+import type { DocumentsControllerSaveTemplateData } from '@care/api-client';
 import { fetchCareApi, getApiClient, getTenantHeader } from '@app/web/lib/api';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -15,8 +15,7 @@ const documentTypes = [
   'claim_summary',
 ] as const;
 type DocumentType = (typeof documentTypes)[number];
-type TemplateInput =
-  paths['/api/v1/document-templates/{type}']['put']['requestBody']['content']['application/json'];
+type TemplateInput = DocumentsControllerSaveTemplateData['body'];
 
 export async function saveDocumentTemplateAction(formData: FormData): Promise<void> {
   const organizationId = readUuid(formData.get('organizationId'));

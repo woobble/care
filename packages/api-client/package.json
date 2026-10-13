@@ -1,24 +1,21 @@
 {
   "name": "@care/api-client",
-  "private": true,
-  "type": "module",
-  "types": "./src/index.ts",
+  "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
+    "typescript": "^7.0.2"
+  },
   "exports": {
     ".": "./src/index.ts"
   },
+  "private": true,
   "scripts": {
-    "generate": "openapi-typescript ../../apps/api/openapi.json -o src/generated/schema.d.ts",
+    "generate": "openapi-ts -i ../../apps/api/openapi.json -o src/generated -c @hey-api/client-next && bun scripts/generate-components.ts",
     "build": "bun run generate && bun build src/index.ts --outdir dist --target bun --packages external",
     "lint": "oxlint src",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "typecheck": "tsc --noEmit --pretty false -p tsconfig.json"
   },
-  "dependencies": {
-    "openapi-fetch": "^0.17.0"
-  },
-  "devDependencies": {
-    "openapi-typescript": "^7.13.0",
-    "typescript": "^5.9.3"
-  }
+  "type": "module",
+  "types": "./src/index.ts"
 }

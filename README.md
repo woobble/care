@@ -88,7 +88,7 @@ bunx playwright install chromium
 
 On Linux hosts missing browser libraries, install them through Playwright with `bunx playwright install --with-deps chromium`. The browser suite uses the local Authentik blueprint and API token; see [Authentik setup](infra/authentik/README.md).
 
-`openapi-typescript` requires TypeScript 5.x and currently fails against the workspace's TypeScript 7 AST API. The API client package therefore pins TypeScript 5.9.3 for schema generation; application workspaces use TypeScript 7.0.2. Keep the split until the generator supports the workspace compiler version.
+The API client is generated from `apps/api/openapi.json` with Hey API (`@hey-api/openapi-ts`) and its Next.js Fetch client. The generator version is pinned in `packages/api-client` so upgrades can be reviewed deliberately.
 
 ## Production pilot
 
