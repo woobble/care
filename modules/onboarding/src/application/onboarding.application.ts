@@ -113,6 +113,8 @@ export type AdmissionSearchQuery = {
   overdue?: boolean;
   readiness?: 'ready' | 'blocked';
   search?: string;
+  sortBy?: 'createdAt' | 'lastActivityAt' | 'name' | 'nextFollowUpAt';
+  sortDirection?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
 };
@@ -230,6 +232,10 @@ export class OnboardingApplicationService {
           or(
             ilike(admissionCases.firstName, pattern),
             ilike(admissionCases.lastName, pattern),
+            ilike(
+              sql<string>`concat_ws(' ', ${admissionCases.firstName}, ${admissionCases.lastName})`,
+              pattern,
+            ),
             ilike(admissionCases.requesterName, pattern),
             ilike(admissionCases.contactEmail, pattern),
             ilike(admissionCases.contactPhone, pattern),
@@ -237,6 +243,14 @@ export class OnboardingApplicationService {
         );
       }
       const where = and(...filters);
+      const sortBy = query.sortBy ?? 'lastActivityAt';
+      const sortDirection = query.sortDirection ?? 'desc';
+      if (
+        !['createdAt', 'lastActivityAt', 'name', 'nextFollowUpAt'].includes(sortBy) ||
+        !['asc', 'desc'].includes(sortDirection)
+      )
+        throw new InvalidOnboardingQueryError();
+      const orderBy = admissionSortOrder(sortBy, sortDirection);
       if (query.readiness) {
         const offset = (page - 1) * pageSize;
         const matchingItems: Array<{
@@ -244,28 +258,18 @@ export class OnboardingApplicationService {
           readiness: AdmissionReadiness;
         }> = [];
         let total = 0;
-        let cursor: typeof admissionCases.$inferSelect | null = null;
+        let scanned = 0;
         const batchSize = 100;
         while (true) {
-          const batchFilters: typeof filters = cursor
-            ? [
-                ...filters,
-                or(
-                  lt(admissionCases.lastActivityAt, cursor.lastActivityAt),
-                  and(
-                    eq(admissionCases.lastActivityAt, cursor.lastActivityAt),
-                    lt(admissionCases.id, cursor.id),
-                  ),
-                )!,
-              ]
-            : filters;
           const candidates: Array<typeof admissionCases.$inferSelect> = await transaction
             .select()
             .from(admissionCases)
-            .where(and(...batchFilters))
-            .orderBy(desc(admissionCases.lastActivityAt), desc(admissionCases.id))
-            .limit(batchSize);
+            .where(where)
+            .orderBy(...orderBy)
+            .limit(batchSize)
+            .offset(scanned);
           if (!candidates.length) break;
+          scanned += candidates.length;
           const readinessByCase = await this.evaluateReadinessBatch(
             transaction,
             principal,
@@ -278,7 +282,6 @@ export class OnboardingApplicationService {
               matchingItems.push({ admission, readiness });
             total += 1;
           }
-          cursor = candidates[candidates.length - 1]!;
           if (candidates.length < batchSize) break;
         }
         const items = matchingItems.map(({ admission, readiness }) => ({
@@ -302,7 +305,7 @@ export class OnboardingApplicationService {
         .select()
         .from(admissionCases)
         .where(where)
-        .orderBy(desc(admissionCases.lastActivityAt), desc(admissionCases.id))
+        .orderBy(...orderBy)
         .limit(pageSize)
         .offset((page - 1) * pageSize);
       const readinessByCase = await this.evaluateReadinessBatch(transaction, principal, items);
@@ -552,6 +555,16 @@ export class OnboardingApplicationService {
     });
   }
 
+  async summary(principal: AuthorizationPrincipal, id: string) {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const admission = await this.requireCase(transaction, principal, id, 'onboarding.read');
+      const [namedAdmission] = await this.addCaseReferenceNames(transaction, principal, [
+        redactCaseLinks(principal, admission),
+      ]);
+      return namedAdmission;
+    });
+  }
+
   async get(principal: AuthorizationPrincipal, id: string) {
     const detail = await this.unitOfWork.transaction(
       { tenantId: principal.tenantId },
@@ -747,6 +760,7 @@ export class OnboardingApplicationService {
           ...namedAdmission!,
           firstVisitStartsAt: firstVisitRows[0]?.plannedStart ?? null,
           assessment: assessment?.data ?? null,
+          assessmentUpdatedAt: assessment?.updatedAt ?? null,
           checklist: items.map((item) => ({
             ...item,
             response: responses.find((response) => response.itemCode === item.code) ?? null,
@@ -3139,6 +3153,32 @@ export class OnboardingApplicationService {
     });
     await this.outbox.enqueue(transaction, input.event);
   }
+}
+
+function admissionSortOrder(
+  sortBy: NonNullable<AdmissionSearchQuery['sortBy']>,
+  direction: NonNullable<AdmissionSearchQuery['sortDirection']>,
+) {
+  const isAscending = direction === 'asc';
+  if (sortBy === 'name') {
+    const lastName = sql`lower(${admissionCases.lastName})`;
+    const firstName = sql`lower(${admissionCases.firstName})`;
+    return isAscending
+      ? [asc(lastName), asc(firstName), asc(admissionCases.id)]
+      : [desc(lastName), desc(firstName), desc(admissionCases.id)];
+  }
+  if (sortBy === 'nextFollowUpAt') {
+    const dateOrder = isAscending ? sql`asc` : sql`desc`;
+    const idOrder = isAscending ? sql`asc` : sql`desc`;
+    return [
+      sql`${admissionCases.nextFollowUpAt} ${dateOrder} nulls last`,
+      sql`${admissionCases.id} ${idOrder}`,
+    ];
+  }
+  const column = sortBy === 'createdAt' ? admissionCases.createdAt : admissionCases.lastActivityAt;
+  return isAscending
+    ? [asc(column), asc(admissionCases.id)]
+    : [desc(column), desc(admissionCases.id)];
 }
 
 function automaticItemStatus(

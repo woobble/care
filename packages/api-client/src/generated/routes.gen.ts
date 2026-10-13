@@ -477,6 +477,9 @@ export const routeOperations = {
   "/api/v1/onboarding/cases/{id}/register-client": {
     post: "onboardingControllerRegisterClient",
   },
+  "/api/v1/onboarding/cases/{id}/summary": {
+    get: "onboardingControllerSummary",
+  },
   "/api/v1/onboarding/cases/{id}/tasks": {
     post: "onboardingControllerLinkTask",
   },

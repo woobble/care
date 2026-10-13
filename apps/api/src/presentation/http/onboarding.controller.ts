@@ -93,6 +93,12 @@ export class OnboardingController {
   @ApiQuery({ name: 'overdue', required: false, enum: ['true', 'false'] })
   @ApiQuery({ name: 'readiness', required: false, enum: ['ready', 'blocked'] })
   @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['createdAt', 'lastActivityAt', 'name', 'nextFollowUpAt'],
+  })
+  @ApiQuery({ name: 'sortDirection', required: false, enum: ['asc', 'desc'] })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiOkResponse({ schema: { type: 'object', additionalProperties: true } })
@@ -166,6 +172,14 @@ export class OnboardingController {
   @ApiOkResponse({ schema: { type: 'object', additionalProperties: true } })
   get(@Req() request: ApiRequest, @Param('id') id: string) {
     return this.onboarding.get(principal(request), parseId(id));
+  }
+
+  @Get('cases/:id/summary')
+  @ApiOperation({ summary: 'Read the admission identity and worklist context' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ schema: { type: 'object', additionalProperties: true } })
+  summary(@Req() request: ApiRequest, @Param('id') id: string) {
+    return this.onboarding.summary(principal(request), parseId(id));
   }
 
   @Patch('cases/:id')

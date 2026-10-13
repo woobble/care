@@ -1,15 +1,20 @@
 'use client';
 
-import { Button } from '@care/ui/components/button';
+import { Button, type ButtonProps } from '@care/ui/components/button';
 
 export function ConfirmSubmitButton({
   children,
   confirmation,
-}: Readonly<{ children: React.ReactNode; confirmation: string }>) {
+  variant = 'destructive',
+}: Readonly<{
+  children: React.ReactNode;
+  confirmation: string;
+  variant?: ButtonProps['variant'];
+}>) {
   return (
     <Button
       type="submit"
-      variant="destructive"
+      variant={variant}
       onClick={(event) => {
         if (!window.confirm(confirmation)) event.preventDefault();
       }}

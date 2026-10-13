@@ -6,14 +6,17 @@ import { ResourceReference } from '@app/web/components/resource-reference';
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import type { components } from '@care/api-client';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { Button } from '@care/ui/components/button';
+import { Badge } from '@care/ui/components/badge';
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatCurrency, formatDate, formatDateTime } from '@app/web/i18n/format';
-import { visitDateTimeInputValue } from '@app/web/lib/care-date';
+import { todayDateKey, visitDateTimeInputValue } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
@@ -112,6 +115,7 @@ type AdmissionCaseDetail = {
     preferences: string;
     organizationalNotes: string;
   } | null;
+  assessmentUpdatedAt?: string | null;
   checklist: ChecklistItem[];
   readiness: {
     canAdmit: boolean;
@@ -121,7 +125,10 @@ type AdmissionCaseDetail = {
     fundingBalance: string;
   };
   history: Transition[];
-  documents: Array<{ link: { requirementCode: string }; artifact: { id: string; status: string } }>;
+  documents: Array<{
+    link: { requirementCode: string };
+    artifact: { id: string; status: 'pending' | 'ready' | 'failed' | 'superseded' };
+  }>;
   tasks: Array<{ task: { id: string; title: string; status: string } }>;
   communications: Array<{
     interaction: { id: string; subject: string; occurredAt: string; summary?: string | null };
@@ -139,17 +146,212 @@ const stageValues = [
 ] as const;
 const emptyChecklistItems: ChecklistItem[] = [];
 
+type AdmissionSearchParams = {
+  error?: string;
+  updated?: string;
+  createdVisitId?: string;
+  createdTaskId?: string;
+};
+
+type AdmissionCaseSummary = Pick<
+  AdmissionCaseDetail,
+  | 'id'
+  | 'organizationId'
+  | 'facilityId'
+  | 'ownerEmployeeId'
+  | 'clientId'
+  | 'clientName'
+  | 'organizationName'
+  | 'facilityName'
+  | 'ownerEmployeeName'
+  | 'firstName'
+  | 'lastName'
+  | 'contactEmail'
+  | 'contactPhone'
+  | 'requesterName'
+  | 'requestedServices'
+  | 'preferredStartDate'
+  | 'fundingPlan'
+  | 'firstVisitId'
+  | 'version'
+  | 'stage'
+  | 'nextFollowUpAt'
+  | 'lastActivityAt'
+>;
+
 export default async function AdmissionCasePage({
   params,
   searchParams,
 }: Readonly<{
   params: Promise<{ id: string }>;
-  searchParams: Promise<{
-    error?: string;
-    updated?: string;
-    createdVisitId?: string;
-    createdTaskId?: string;
-  }>;
+  searchParams: Promise<AdmissionSearchParams>;
+}>) {
+  const { id } = await params;
+  const [t, translate, locale] = await Promise.all([
+    getTranslations('Onboarding'),
+    getTranslations(),
+    getLocale(),
+  ]);
+  const api = await getApiClient();
+  const header = await getTenantHeader();
+  const permissions = await getPermissionGrants(api);
+  if (!hasPermission(permissions, 'onboarding.read')) {
+    return (
+      <p role="alert" className="rounded-md border bg-card p-5">
+        {t('noAccess')}
+      </p>
+    );
+  }
+  const summaryResult = await api.GET('/api/v1/onboarding/cases/{id}/summary', {
+    params: { path: { id }, header },
+  });
+  if ((summaryResult.error as { code?: string } | undefined)?.code === 'ONBOARDING_CASE_NOT_FOUND')
+    notFound();
+  const summary = summaryResult.data as unknown as AdmissionCaseSummary | undefined;
+  if (!summary) {
+    return (
+      <p role="alert" className="rounded-md border bg-card p-5">
+        {t('loadFailed')}
+      </p>
+    );
+  }
+  const tenantId = header['X-Tenant-Id'];
+  const canReadClient = hasClientPermission(
+    permissions,
+    'client.read',
+    tenantId,
+    summary.organizationId,
+    summary.facilityId,
+  );
+  const clientName = summary.clientName ?? translate('Resources.unavailableClient');
+  const organizationName =
+    summary.organizationName ?? translate('Resources.unavailableOrganization');
+  const facilityName = summary.facilityId
+    ? (summary.facilityName ?? translate('Resources.unavailableFacility'))
+    : null;
+  const nextAction = nextActionForStage(summary.stage);
+  return (
+    <div className="grid min-w-0 grid-cols-1 gap-5">
+      <PageHeader
+        eyebrow={<Link href="/admissions">{t('title')}</Link>}
+        title={`${summary.firstName} ${summary.lastName}`}
+        description={[organizationName, facilityName].filter(Boolean).join(' · ')}
+        meta={
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge data-testid="admission-stage" variant={stageBadgeVariant(summary.stage)}>
+              {t(labelForStage(summary.stage))}
+            </Badge>
+            {summary.ownerEmployeeId ? (
+              <span className="text-sm text-muted-foreground">
+                {t('owner')}:{' '}
+                {summary.ownerEmployeeName ?? translate('Resources.unavailableEmployee')}
+              </span>
+            ) : null}
+          </div>
+        }
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {summary.clientId && canReadClient ? (
+              <Button asChild variant="secondary">
+                <Link href={`/clients/${summary.clientId}`}>{clientName}</Link>
+              </Button>
+            ) : null}
+            <Button asChild variant="ghost">
+              <Link href="/admissions">{t('backToWorklist')}</Link>
+            </Button>
+          </div>
+        }
+      />
+
+      <nav
+        aria-label={t('workspaceNavigation')}
+        className="flex w-full min-w-0 max-w-full gap-1 overflow-x-auto rounded-lg border bg-card p-1 text-sm"
+      >
+        {[
+          ['overview', '#overview'],
+          ['readinessNav', '#readiness-title'],
+          ['assessmentNav', '#assessment-title'],
+          ['checklistNav', '#checklist-title'],
+          ['fundingNav', '#funding-title'],
+          ['agreementNav', '#agreement-title'],
+          ['firstVisitNav', '#first-visit-title'],
+          ['historyNav', '#history-title'],
+        ].map(([label, href]) => (
+          <a
+            key={label}
+            className="min-h-10 shrink-0 rounded-md px-3 py-2 hover:bg-accent"
+            href={href}
+          >
+            {t(
+              label as
+                | 'overview'
+                | 'readinessNav'
+                | 'assessmentNav'
+                | 'checklistNav'
+                | 'fundingNav'
+                | 'agreementNav'
+                | 'firstVisitNav'
+                | 'historyNav',
+            )}
+          </a>
+        ))}
+      </nav>
+
+      <section
+        id="overview"
+        aria-labelledby="overview-title"
+        className="grid min-w-0 gap-4 rounded-lg border bg-card p-5 scroll-mt-4"
+      >
+        <div className="grid min-w-0 gap-1">
+          <h2 id="overview-title" className="text-xl font-semibold">
+            {t('overview')}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {t('nextAction')}:{' '}
+            <Link className="text-primary underline" href={nextAction.href}>
+              {t(nextAction.label)}
+            </Link>
+          </p>
+        </div>
+        <dl className="grid min-w-0 gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+          <Data
+            label={t('primaryContact')}
+            value={summary.requesterName || summary.contactEmail || summary.contactPhone}
+          />
+          <Data
+            label={t('followUp')}
+            value={formatDateTime(summary.nextFollowUpAt, locale as Locale, 'Europe/Berlin')}
+          />
+          <Data
+            label={t('lastActivity')}
+            value={formatDate(summary.lastActivityAt, locale as Locale)}
+          />
+          <Data label={t('requestedServices')} value={summary.requestedServices.join(', ')} />
+        </dl>
+      </section>
+
+      <Suspense fallback={<AdmissionWorkspaceSkeleton />}>
+        <AdmissionFundingSummary admission={summary} />
+      </Suspense>
+      <Suspense fallback={<AdmissionWorkspaceSkeleton />}>
+        <AdmissionAgreementsSummary admission={summary} />
+      </Suspense>
+      <Suspense fallback={<AdmissionWorkspaceSkeleton />}>
+        <AdmissionFirstVisitSummary admission={summary} />
+      </Suspense>
+      <Suspense key={`${summary.id}:${summary.version}`} fallback={<AdmissionWorkspaceSkeleton />}>
+        <AdmissionCaseWorkspaceContent params={params} searchParams={searchParams} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function AdmissionCaseWorkspaceContent({
+  params,
+  searchParams,
+}: Readonly<{
+  params: Promise<{ id: string }>;
+  searchParams: Promise<AdmissionSearchParams>;
 }>) {
   const { id } = await params;
   const query = await searchParams;
@@ -197,13 +399,6 @@ export default async function AdmissionCasePage({
     admission.organizationId,
     admission.facilityId,
   );
-  const canScheduleCreate = hasClientPermission(
-    permissions,
-    'schedule.create',
-    tenantId,
-    admission.organizationId,
-    admission.facilityId,
-  );
   const canScheduleRead = hasClientPermission(
     permissions,
     'schedule.read',
@@ -223,28 +418,12 @@ export default async function AdmissionCasePage({
         })
       : Promise.resolve({ data: undefined, error: undefined }),
   ]);
-  const linkedClientResult =
-    admission.clientId && canReadClient && canScheduleCreate
-      ? await api.GET('/api/v1/clients/{id}', {
-          params: { path: { id: admission.clientId }, header },
-        })
-      : null;
-  const linkedClient = linkedClientResult?.data as
-    | components['schemas']['ClientResponseDto']
-    | undefined;
   const createdVisit = createdVisitResult.data as
     | components['schemas']['VisitResponseDto']
     | undefined;
   const createdTask = createdTaskResult.data as
     | components['schemas']['OperationsTaskResponseDto']
     | undefined;
-  const canPlanFirstVisit =
-    Boolean(linkedClient && linkedClient.status === 'active') &&
-    canScheduleCreate &&
-    canScheduleRead &&
-    canManage &&
-    ['preparation', 'ready_for_admission', 'admitted'].includes(admission.stage) &&
-    !['declined', 'withdrawn'].includes(admission.stage);
   const timezone = 'Europe/Berlin';
   const allowedStages = transitionsFrom(admission.stage);
   const defaultChecklistLabels: Record<string, string> = {
@@ -258,21 +437,7 @@ export default async function AdmissionCasePage({
   };
 
   return (
-    <div className="grid gap-6">
-      <PageHeader
-        eyebrow={<Link href="/admissions">{t('title')}</Link>}
-        title={`${admission.firstName} ${admission.lastName}`}
-        description={`${t(labelForStage(admission.stage))} · ${t('stage')} ${admission.version}`}
-        actions={
-          admission.clientId && canReadClient ? (
-            <Button asChild variant="secondary">
-              <Link href={`/clients/${admission.clientId}`}>
-                {admission.clientName ?? translate('Resources.unavailableClient')}
-              </Link>
-            </Button>
-          ) : undefined
-        }
-      />
+    <div className="grid min-w-0 gap-6">
       {query.error ? (
         <p
           role="alert"
@@ -337,7 +502,7 @@ export default async function AdmissionCasePage({
 
       <section
         aria-labelledby="readiness-title"
-        className="grid gap-4 rounded-lg border bg-card p-5"
+        className="grid min-w-0 gap-4 rounded-lg border bg-card p-5"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="readiness-title" className="text-xl font-semibold">
@@ -354,7 +519,9 @@ export default async function AdmissionCasePage({
             title={t('blockers')}
             findings={admission.readiness.blockers.map((finding) => localizeFinding(t, finding))}
           />
-        ) : null}
+        ) : (
+          <p className="text-sm text-muted-foreground">{t('noBlockers')}</p>
+        )}
         {admission.readiness.warnings.length ? (
           <FindingList
             title={t('warnings')}
@@ -365,18 +532,23 @@ export default async function AdmissionCasePage({
         admission.stage === 'ready_for_admission' &&
         admission.readiness.canAdmit &&
         admission.clientId ? (
-          <form action={admitCaseAction}>
+          <RHFActionForm action={admitCaseAction} refreshOnSuccess>
             <HiddenCase admission={admission} />
-            <Button type="submit">{t('admit')}</Button>
-          </form>
+            <ConfirmSubmitButton confirmation={t('admitConfirmation')} variant="default">
+              {t('admit')}
+            </ConfirmSubmitButton>
+          </RHFActionForm>
         ) : null}
       </section>
 
-      <section aria-labelledby="details-title" className="grid gap-4 rounded-lg border bg-card p-5">
+      <section
+        aria-labelledby="details-title"
+        className="grid min-w-0 gap-4 rounded-lg border bg-card p-5"
+      >
         <h2 id="details-title" className="text-xl font-semibold">
           {t('caseDetails')}
         </h2>
-        <dl className="grid gap-x-4 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        <dl className="grid min-w-0 gap-x-4 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
           <Data
             label={t('organization')}
             value={
@@ -454,12 +626,15 @@ export default async function AdmissionCasePage({
           <Data label={t('initialNotes')} value={admission.initialNotes} />
         </dl>
         {admission.servicePricing.length ? (
-          <section aria-labelledby="service-pricing-title" className="grid gap-2 border-t pt-4">
+          <section
+            aria-labelledby="service-pricing-title"
+            className="grid min-w-0 gap-2 border-t pt-4"
+          >
             <h3 id="service-pricing-title" className="font-medium">
               {t('servicePricing')}
             </h3>
             <p className="text-sm text-muted-foreground">{t('servicePricingNote')}</p>
-            <ul className="grid gap-2 text-sm">
+            <ul className="grid min-w-0 gap-2 text-sm">
               {admission.servicePricing.map((item) => (
                 <li key={item.requestedService} className="flex flex-wrap gap-x-2">
                   <span>{item.serviceName ?? item.requestedService}</span>
@@ -486,7 +661,9 @@ export default async function AdmissionCasePage({
             <summary className="cursor-pointer font-medium text-primary">{t('saveCase')}</summary>
             <RHFActionForm
               action={updateAdmissionCaseAction}
+              refreshOnSuccess
               className="mt-4 grid gap-4 rounded-md border p-4 md:grid-cols-2"
+              warnOnUnsavedChanges
             >
               <HiddenCase admission={admission} timezone={timezone} />
               <Field
@@ -501,16 +678,42 @@ export default async function AdmissionCasePage({
                 defaultValue={admission.lastName}
                 required
               />
-              <Field
-                name="facilityId"
-                label={t('facility')}
-                defaultValue={admission.facilityId ?? ''}
-              />
-              <Field
-                name="ownerEmployeeId"
-                label={t('owner')}
-                defaultValue={admission.ownerEmployeeId ?? ''}
-              />
+              {hasPermission(permissions, 'facility.read') ? (
+                <AsyncEntityCombobox
+                  name="facilityId"
+                  label={t('facility')}
+                  entity="facilities"
+                  organizationId={admission.organizationId}
+                  placeholder={t('noFacility')}
+                  {...(admission.facilityId && admission.facilityName
+                    ? { initialOption: { id: admission.facilityId, label: admission.facilityName } }
+                    : {})}
+                />
+              ) : (
+                <input type="hidden" name="facilityId" value={admission.facilityId ?? ''} />
+              )}
+              {hasPermission(permissions, 'employee.read') ? (
+                <AsyncEntityCombobox
+                  name="ownerEmployeeId"
+                  label={t('owner')}
+                  entity="employees"
+                  placeholder={t('unassigned')}
+                  {...(admission.ownerEmployeeId && admission.ownerEmployeeName
+                    ? {
+                        initialOption: {
+                          id: admission.ownerEmployeeId,
+                          label: admission.ownerEmployeeName,
+                        },
+                      }
+                    : {})}
+                />
+              ) : (
+                <input
+                  type="hidden"
+                  name="ownerEmployeeId"
+                  value={admission.ownerEmployeeId ?? ''}
+                />
+              )}
               <SelectField
                 name="contactMethod"
                 label={t('contactMethod')}
@@ -606,7 +809,8 @@ export default async function AdmissionCasePage({
         {canManage && canReadClient && !admission.clientId ? (
           <RHFActionForm
             action={linkAdmissionClientAction}
-            className="grid gap-3 rounded-md border p-4 sm:grid-cols-[1fr_1fr_auto]"
+            refreshOnSuccess
+            className="grid min-w-0 gap-3 rounded-md border p-4 sm:grid-cols-[1fr_1fr_auto]"
           >
             <HiddenCase admission={admission} />
             <AsyncEntityCombobox
@@ -627,7 +831,7 @@ export default async function AdmissionCasePage({
           admission.facilityId ? (
             <form
               action={registerAdmissionClientAction}
-              className="grid gap-2 rounded-md border p-4"
+              className="grid min-w-0 gap-2 rounded-md border p-4"
             >
               <HiddenCase admission={admission} />
               <p className="text-sm text-muted-foreground">{t('registerClientHelp')}</p>
@@ -674,54 +878,13 @@ export default async function AdmissionCasePage({
                 {t('openCommunicationPreferences')}
               </Link>
             ) : null}
-            {hasClientPermission(
-              permissions,
-              'benefits.read',
-              tenantId,
-              admission.organizationId,
-              admission.facilityId,
-            ) ? (
-              <Link
-                className="text-primary underline"
-                href={`/clients/${admission.clientId}/benefits`}
-              >
-                {t('openFunding')}
-              </Link>
-            ) : null}
-            {hasClientPermission(
-              permissions,
-              'service_agreement.read',
-              tenantId,
-              admission.organizationId,
-              admission.facilityId,
-            ) ? (
-              <Link
-                className="text-primary underline"
-                href={`/clients/${admission.clientId}/service-agreements`}
-              >
-                {t('openAgreement')}
-              </Link>
-            ) : null}
-            {canPlanFirstVisit ? (
-              <Link
-                className="text-primary underline"
-                href={planningHref(
-                  admission.id,
-                  admission.clientId,
-                  admission.preferredStartDate ?? admission.assessment?.preferredStartDate,
-                  admission.organizationId,
-                  admission.facilityId,
-                )}
-              >
-                {t('openScheduling')}
-              </Link>
-            ) : null}
           </div>
         ) : null}
         {canManage && allowedStages.length && admission.stage !== 'admitted' ? (
           <RHFActionForm
             action={transitionAdmissionAction}
-            className="grid gap-3 rounded-md border p-4 sm:grid-cols-[1fr_1fr_auto]"
+            refreshOnSuccess
+            className="grid min-w-0 gap-3 rounded-md border p-4 sm:grid-cols-[1fr_1fr_auto]"
           >
             <HiddenCase admission={admission} />
             <SelectField name="toStage" label={t('moveTo')} value={allowedStages[0]!}>
@@ -732,16 +895,16 @@ export default async function AdmissionCasePage({
               ))}
             </SelectField>
             <Field name="reason" label={t('reason')} />
-            <Button type="submit" className="self-end">
+            <ConfirmSubmitButton confirmation={t('moveStageConfirmation')} variant="secondary">
               {t('moveTo')}
-            </Button>
+            </ConfirmSubmitButton>
           </RHFActionForm>
         ) : null}
       </section>
 
       <section
         aria-labelledby="assessment-title"
-        className="grid gap-4 rounded-lg border bg-card p-5"
+        className="grid min-w-0 gap-4 rounded-lg border bg-card p-5"
       >
         <h2 id="assessment-title" className="text-xl font-semibold">
           {t('assessment')}
@@ -749,9 +912,21 @@ export default async function AdmissionCasePage({
         {canManage && admission.stage !== 'admitted' ? (
           <RHFActionForm
             action={saveAdmissionAssessmentAction}
-            className="grid gap-4 md:grid-cols-2"
+            refreshOnSuccess
+            className="grid min-w-0 gap-4 md:grid-cols-2"
+            warnOnUnsavedChanges
           >
             <HiddenCase admission={admission} />
+            {admission.assessmentUpdatedAt ? (
+              <p className="text-sm text-muted-foreground md:col-span-2">
+                {t('assessmentLastUpdated', {
+                  date:
+                    formatDateTime(admission.assessmentUpdatedAt, locale as Locale, timezone) ??
+                    '—',
+                })}
+              </p>
+            ) : null}
+            <p className="font-semibold md:col-span-2">{t('requestedServicesAssessment')}</p>
             <TextArea
               name="requestedServicesAssessment"
               label={t('requestedServicesAssessment')}
@@ -775,11 +950,45 @@ export default async function AdmissionCasePage({
               label={t('accompaniment')}
               defaultValue={admission.assessment?.accompaniment ?? ''}
             />
-            <Field
-              name="preferredDays"
-              label={t('preferredDays')}
-              defaultValue={admission.assessment?.preferredDays.join(', ') ?? ''}
-            />
+            <fieldset className="grid min-w-0 gap-2 md:col-span-2">
+              <legend className="text-sm font-medium">{t('preferredDays')}</legend>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(
+                  [
+                    'monday',
+                    'tuesday',
+                    'wednesday',
+                    'thursday',
+                    'friday',
+                    'saturday',
+                    'sunday',
+                  ] as const
+                ).map((day) => (
+                  <label
+                    key={day}
+                    className="flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      name="preferredDays"
+                      value={day}
+                      defaultChecked={admission.assessment?.preferredDays.includes(day) ?? false}
+                    />
+                    {t(
+                      `weekday_${day}` as
+                        | 'weekday_monday'
+                        | 'weekday_tuesday'
+                        | 'weekday_wednesday'
+                        | 'weekday_thursday'
+                        | 'weekday_friday'
+                        | 'weekday_saturday'
+                        | 'weekday_sunday',
+                    )}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <p className="font-semibold md:col-span-2">{t('preferredTimeWindows')}</p>
             <Field
               name="preferredTimeStart"
               label={t('preferredTimeStart')}
@@ -834,19 +1043,24 @@ export default async function AdmissionCasePage({
 
       <section
         aria-labelledby="checklist-title"
-        className="grid gap-3 rounded-lg border bg-card p-5"
+        className="grid min-w-0 gap-3 rounded-lg border bg-card p-5"
       >
         <h2 id="checklist-title" className="text-xl font-semibold">
           {t('checklist')}
         </h2>
-        <ul className="grid gap-3">
+        <ul className="grid min-w-0 gap-3">
           {admission.checklist.map((item) => (
             <li
               key={item.code}
-              className="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_auto] md:items-center"
+              className={`grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_auto] md:items-center ${item.finding?.severity === 'blocker' ? 'border-warning/70 bg-warning-muted/20' : item.finding?.severity === 'complete' || item.finding?.severity === 'not_applicable' ? 'bg-muted/30' : ''}`}
             >
               <div>
-                <p className="font-medium">{defaultChecklistLabels[item.code] ?? item.label}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium">{defaultChecklistLabels[item.code] ?? item.label}</p>
+                  <Badge variant={item.mandatory ? 'warning' : 'secondary'}>
+                    {item.mandatory ? t('requiredItem') : t('optionalItem')}
+                  </Badge>
+                </div>
                 <p className="text-sm text-muted-foreground">
                   {t(item.source)} ·{' '}
                   {item.finding
@@ -864,10 +1078,17 @@ export default async function AdmissionCasePage({
                       ? ` · ${localizeFinding(t, item.finding).detail}`
                       : ''}
                 </p>
+                <Link
+                  className="mt-1 inline-flex min-h-10 items-center text-sm text-primary underline-offset-4 hover:underline"
+                  href={checklistTarget(item.code)}
+                >
+                  {t('reviewSection')}
+                </Link>
               </div>
               {canManage && item.source === 'manual' && admission.stage !== 'admitted' ? (
                 <RHFActionForm
                   action={respondAdmissionChecklistAction}
+                  refreshOnSuccess
                   className="flex flex-wrap items-end gap-2"
                 >
                   <HiddenCase admission={admission} />
@@ -875,8 +1096,12 @@ export default async function AdmissionCasePage({
                   <SelectField
                     name="status"
                     label={t('checklist')}
-                    value={item.response?.status ?? 'complete'}
+                    value={item.response?.status ?? ''}
+                    required
                   >
+                    <option value="" disabled>
+                      {t('chooseChecklistStatus')}
+                    </option>
                     <option value="complete">{t('complete')}</option>
                     <option value="not_applicable">{t('notApplicable')}</option>
                   </SelectField>
@@ -893,28 +1118,43 @@ export default async function AdmissionCasePage({
         </ul>
       </section>
 
-      <section aria-labelledby="sources-title" className="grid gap-4 rounded-lg border bg-card p-5">
+      <section
+        aria-labelledby="sources-title"
+        className="grid min-w-0 gap-4 rounded-lg border bg-card p-5"
+      >
         <h2 id="sources-title" className="text-xl font-semibold">
           {t('linkedSources')}
         </h2>
-        <ul className="grid gap-2 text-sm">
-          {admission.firstVisitId && admission.firstVisitStartsAt ? (
-            <li>
-              {t('firstScheduledVisit')}:{' '}
-              <ResourceReference
-                label={
-                  formatDateTime(admission.firstVisitStartsAt, locale as Locale, timezone) ??
-                  t('firstScheduledVisit')
-                }
-                href={canScheduleRead ? `/visits/${admission.firstVisitId}` : null}
-              />
-            </li>
-          ) : null}
-          {admission.documents.map(({ link, artifact }) => (
-            <li key={artifact.id}>
-              {t('document')}: {link.requirementCode} · {artifact.status}
-            </li>
-          ))}
+        <ul className="grid min-w-0 gap-2 text-sm">
+          {admission.documents.map(({ link, artifact }) => {
+            const documentTitle =
+              admission.checklist.find((item) => item.code === link.requirementCode)?.label ??
+              translate('Documents.title');
+            const documentStatus =
+              artifact.status === 'ready'
+                ? translate('Documents.status.ready')
+                : artifact.status === 'pending'
+                  ? translate('Documents.status.pending')
+                  : artifact.status === 'failed'
+                    ? translate('Documents.status.failed')
+                    : translate('Documents.status.superseded');
+            return (
+              <li key={artifact.id}>
+                {t('document')}:{' '}
+                {artifact.status === 'ready' ? (
+                  <Link
+                    className="text-primary underline"
+                    href={'/documents/' + artifact.id + '/pdf'}
+                  >
+                    {documentTitle}
+                  </Link>
+                ) : (
+                  documentTitle
+                )}{' '}
+                · {documentStatus}
+              </li>
+            );
+          })}
           {admission.tasks.map(({ task }) => (
             <li key={task.id}>
               {t('linkTask')}:{' '}
@@ -942,7 +1182,7 @@ export default async function AdmissionCasePage({
           ) : null}
         </ul>
         {canManage ? (
-          <div className="grid gap-3 border-t pt-4">
+          <div className="grid min-w-0 gap-3 border-t pt-4">
             {admission.stage !== 'admitted' ? (
               <>
                 {hasPermission(permissions, 'documents.read') &&
@@ -1000,14 +1240,15 @@ export default async function AdmissionCasePage({
       admission.stage !== 'admitted' ? (
         <section
           aria-labelledby="record-communication-title"
-          className="grid gap-4 rounded-lg border bg-card p-5"
+          className="grid min-w-0 gap-4 rounded-lg border bg-card p-5"
         >
           <h2 id="record-communication-title" className="text-xl font-semibold">
             {t('recordCommunication')}
           </h2>
           <RHFActionForm
             action={recordAdmissionCommunicationAction}
-            className="grid gap-4 md:grid-cols-2"
+            refreshOnSuccess
+            className="grid min-w-0 gap-4 md:grid-cols-2"
           >
             <HiddenCase admission={admission} timezone={timezone} />
             <SelectField name="direction" label={t('direction')} value="inbound">
@@ -1112,11 +1353,14 @@ export default async function AdmissionCasePage({
         </section>
       ) : null}
 
-      <section aria-labelledby="history-title" className="grid gap-3 rounded-lg border bg-card p-5">
+      <section
+        aria-labelledby="history-title"
+        className="grid min-w-0 gap-3 rounded-lg border bg-card p-5"
+      >
         <h2 id="history-title" className="text-xl font-semibold">
           {t('history')}
         </h2>
-        <ol className="grid gap-3">
+        <ol className="grid min-w-0 gap-3">
           {admission.history.map((entry) => (
             <li
               key={`${entry.toStage}-${entry.occurredAt}`}
@@ -1140,6 +1384,446 @@ export default async function AdmissionCasePage({
       </Button>
     </div>
   );
+}
+
+async function AdmissionFundingSummary({ admission }: { admission: AdmissionCaseSummary }) {
+  const [t, locale] = await Promise.all([getTranslations('Onboarding'), getLocale()]);
+  const api = await getApiClient();
+  const header = await getTenantHeader();
+  const permissions = await getPermissionGrants(api);
+  const canReadBenefits = Boolean(
+    admission.clientId &&
+    hasClientPermission(
+      permissions,
+      'benefits.read',
+      header['X-Tenant-Id'],
+      admission.organizationId,
+      admission.facilityId,
+    ),
+  );
+  const [readinessResult, budgetResult, insurancesResult, gradesResult] = await Promise.all([
+    api.GET('/api/v1/onboarding/cases/{id}/readiness', {
+      params: { path: { id: admission.id }, header },
+    }),
+    canReadBenefits
+      ? api.GET('/api/v1/clients/{clientId}/budgets', {
+          params: { path: { clientId: admission.clientId! }, header },
+        })
+      : Promise.resolve({ data: undefined, error: undefined }),
+    canReadBenefits
+      ? api.GET('/api/v1/clients/{clientId}/insurances', {
+          params: { path: { clientId: admission.clientId! }, header },
+        })
+      : Promise.resolve({ data: undefined, error: undefined }),
+    canReadBenefits
+      ? api.GET('/api/v1/clients/{clientId}/pflegegrade', {
+          params: { path: { clientId: admission.clientId! }, header },
+        })
+      : Promise.resolve({ data: undefined, error: undefined }),
+  ]);
+  const readiness = readinessResult.data as AdmissionCaseDetail['readiness'] | undefined;
+  const budget = budgetResult.data as components['schemas']['BenefitBudgetResponseDto'] | undefined;
+  const insurances = (insurancesResult.data ??
+    []) as components['schemas']['ClientInsuranceResponseDto'][];
+  const grades = (gradesResult.data ?? []) as components['schemas']['PflegegradResponseDto'][];
+  const today = todayDateKey('Europe/Berlin');
+  const currentGrade = grades
+    .filter(
+      (grade) =>
+        grade.status === 'confirmed' &&
+        grade.validFrom <= today &&
+        (!grade.validUntil || grade.validUntil >= today),
+    )
+    .sort((left, right) => right.validFrom.localeCompare(left.validFrom))[0];
+  const fundingFindings = (readiness?.findings ?? []).filter((finding) =>
+    finding.code.toLowerCase().includes('funding'),
+  );
+  const intakePlan = fundingPlanLabel(t, admission.fundingPlan);
+  const benefitsFailed = Boolean(
+    budgetResult.error || insurancesResult.error || gradesResult.error,
+  );
+
+  return (
+    <section
+      id="funding-title"
+      aria-labelledby="funding-heading"
+      className="grid scroll-mt-4 gap-3 rounded-lg border bg-card p-5"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="grid min-w-0 gap-1">
+          <h2 id="funding-heading" className="text-xl font-semibold">
+            {t('fundingSummary')}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {t('fundingPlanReported', { plan: intakePlan })}
+          </p>
+        </div>
+        {canReadBenefits ? (
+          <Button asChild variant="secondary">
+            <Link href={`/clients/${admission.clientId}/benefits`}>{t('openFunding')}</Link>
+          </Button>
+        ) : null}
+      </div>
+      {!admission.clientId ? (
+        <p className="text-sm text-muted-foreground">{t('fundingAvailableAfterClient')}</p>
+      ) : !canReadBenefits ? (
+        <p className="text-sm text-muted-foreground">{t('fundingAccessRequired')}</p>
+      ) : benefitsFailed ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t('fundingSummaryUnavailable')}
+        </p>
+      ) : (
+        <dl className="grid min-w-0 gap-3 text-sm sm:grid-cols-3">
+          <Data
+            label={t('careLevel')}
+            value={
+              currentGrade ? t('careLevelNumber', { grade: currentGrade.grade }) : t('notConfirmed')
+            }
+          />
+          <Data
+            label={t('healthInsurer')}
+            value={
+              insurances.find((insurance) => insurance.isPrimary)?.insurerName ??
+              t('notRecordedYet')
+            }
+          />
+          <Data
+            label={t('benefitFundingSources')}
+            value={
+              budget?.fundingSources.length
+                ? budget.fundingSources
+                    .map(
+                      (source) =>
+                        source.label ??
+                        t(
+                          `fundingSourceType_${source.sourceType}` as
+                            | 'fundingSourceType_statutory_long_term_care_insurance'
+                            | 'fundingSourceType_private_long_term_care_insurance'
+                            | 'fundingSourceType_self_pay'
+                            | 'fundingSourceType_other',
+                        ),
+                    )
+                    .join(', ')
+                : t('notRecordedYet')
+            }
+          />
+        </dl>
+      )}
+      {readinessResult.error ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t('readinessUnavailable')}
+        </p>
+      ) : fundingFindings.length ? (
+        <ul className="grid min-w-0 gap-2 text-sm">
+          {fundingFindings.map((finding) => {
+            const localized = localizeFinding(t, finding);
+            return (
+              <li key={finding.code} className="rounded-md bg-background p-3">
+                <p className="font-medium">{localized.label}</p>
+                {localized.detail ? (
+                  <p className="text-muted-foreground">{localized.detail}</p>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      <p className="text-xs text-muted-foreground">
+        {t('fundingBalanceNotDisplayed', {
+          date: formatDate(budget?.asOf ?? null, locale as Locale) ?? '—',
+        })}
+      </p>
+    </section>
+  );
+}
+
+async function AdmissionAgreementsSummary({ admission }: { admission: AdmissionCaseSummary }) {
+  const [t, locale] = await Promise.all([getTranslations('Onboarding'), getLocale()]);
+  const api = await getApiClient();
+  const header = await getTenantHeader();
+  const permissions = await getPermissionGrants(api);
+  const canReadAgreements = Boolean(
+    admission.clientId &&
+    hasClientPermission(
+      permissions,
+      'service_agreement.read',
+      header['X-Tenant-Id'],
+      admission.organizationId,
+      admission.facilityId,
+    ),
+  );
+  const canCreateAgreement = Boolean(
+    admission.clientId &&
+    hasClientPermission(
+      permissions,
+      'service_agreement.create',
+      header['X-Tenant-Id'],
+      admission.organizationId,
+      admission.facilityId,
+    ),
+  );
+  const result = canReadAgreements
+    ? await api.GET('/api/v1/clients/{clientId}/service-agreements', {
+        params: {
+          path: { clientId: admission.clientId! },
+          query: { page: 1, pageSize: 5, sortBy: 'validFrom', sortOrder: 'desc' },
+          header,
+        },
+      })
+    : null;
+  const data = result?.data as components['schemas']['ServiceAgreementListResponseDto'] | undefined;
+  return (
+    <section
+      id="agreement-title"
+      aria-labelledby="agreement-heading"
+      className="grid scroll-mt-4 gap-3 rounded-lg border bg-card p-5"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="grid min-w-0 gap-1">
+          <h2 id="agreement-heading" className="text-xl font-semibold">
+            {t('agreementSummary')}
+          </h2>
+          <p className="text-sm text-muted-foreground">{t('agreementHandoffHelp')}</p>
+        </div>
+        {admission.clientId && canReadAgreements ? (
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="secondary">
+              <Link href={`/clients/${admission.clientId}/service-agreements#agreements`}>
+                {t('openAgreement')}
+              </Link>
+            </Button>
+            {canCreateAgreement ? (
+              <Button asChild>
+                <Link href={`/clients/${admission.clientId}/service-agreements#agreements`}>
+                  {t('createAgreement')}
+                </Link>
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      {!admission.clientId ? (
+        <p className="text-sm text-muted-foreground">{t('agreementAvailableAfterClient')}</p>
+      ) : !canReadAgreements ? (
+        <p className="text-sm text-muted-foreground">{t('agreementAccessRequired')}</p>
+      ) : result?.error ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t('agreementSummaryUnavailable')}
+        </p>
+      ) : data?.items.length ? (
+        <ul className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {data.items.map((agreement) => (
+            <li key={agreement.id} className="grid min-w-0 gap-2 rounded-md border p-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Link
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                  href={`/clients/${admission.clientId}/service-agreements?findServicesFor=${agreement.id}#agreements`}
+                >
+                  {agreement.reference ||
+                    t('agreementPeriod', {
+                      from: formatDate(agreement.validFrom, locale as Locale) ?? '—',
+                      until:
+                        formatDate(agreement.validUntil ?? null, locale as Locale) ??
+                        t('openEnded'),
+                    })}
+                </Link>
+                <Badge variant={agreementStatusVariant(agreement.status)}>
+                  {t(
+                    `agreementStatus_${agreement.status}` as
+                      | 'agreementStatus_draft'
+                      | 'agreementStatus_active'
+                      | 'agreementStatus_suspended'
+                      | 'agreementStatus_ended',
+                  )}
+                </Badge>
+              </div>
+              <p className="text-muted-foreground">
+                {t('agreementServicesCount', { count: agreement.serviceCount })}
+              </p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-muted-foreground">{t('noAgreementsYet')}</p>
+      )}
+    </section>
+  );
+}
+
+async function AdmissionFirstVisitSummary({ admission }: { admission: AdmissionCaseSummary }) {
+  const [t, locale] = await Promise.all([getTranslations('Onboarding'), getLocale()]);
+  const api = await getApiClient();
+  const header = await getTenantHeader();
+  const permissions = await getPermissionGrants(api);
+  const tenantId = header['X-Tenant-Id'];
+  const canReadVisit = hasClientPermission(
+    permissions,
+    'schedule.read',
+    tenantId,
+    admission.organizationId,
+    admission.facilityId,
+  );
+  const canCreateVisit = hasClientPermission(
+    permissions,
+    'schedule.create',
+    tenantId,
+    admission.organizationId,
+    admission.facilityId,
+  );
+  const canManage = hasPermission(permissions, 'onboarding.manage');
+  const [visitResult, clientResult] = await Promise.all([
+    admission.firstVisitId && canReadVisit
+      ? api.GET('/api/v1/visits/{id}', {
+          params: { path: { id: admission.firstVisitId }, header },
+        })
+      : Promise.resolve({ data: undefined, error: undefined }),
+    admission.clientId && canCreateVisit
+      ? api.GET('/api/v1/clients/{id}', {
+          params: { path: { id: admission.clientId }, header },
+        })
+      : Promise.resolve({ data: undefined, error: undefined }),
+  ]);
+  const visit = visitResult.data as components['schemas']['VisitResponseDto'] | undefined;
+  const client = clientResult.data as components['schemas']['ClientResponseDto'] | undefined;
+  const canPlan = Boolean(
+    !admission.firstVisitId &&
+    admission.clientId &&
+    client?.status === 'active' &&
+    canReadVisit &&
+    canCreateVisit &&
+    canManage &&
+    ['preparation', 'ready_for_admission', 'admitted'].includes(admission.stage),
+  );
+  return (
+    <section
+      id="first-visit-title"
+      aria-labelledby="first-visit-heading"
+      className="grid scroll-mt-4 gap-3 rounded-lg border bg-card p-5"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="grid min-w-0 gap-1">
+          <h2 id="first-visit-heading" className="text-xl font-semibold">
+            {t('firstVisitSummary')}
+          </h2>
+          <p className="text-sm text-muted-foreground">{t('firstVisitHandoffHelp')}</p>
+        </div>
+        {canPlan && admission.clientId ? (
+          <Button asChild>
+            <Link
+              href={planningHref(
+                admission.id,
+                admission.clientId,
+                admission.preferredStartDate,
+                admission.organizationId,
+                admission.facilityId,
+              )}
+            >
+              {t('openScheduling')}
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+      {admission.firstVisitId ? (
+        !canReadVisit ? (
+          <p className="text-sm text-muted-foreground">{t('firstVisitAccessRequired')}</p>
+        ) : visit ? (
+          <div className="grid min-w-0 gap-2 text-sm sm:grid-cols-2">
+            <Data
+              label={t('firstScheduledVisit')}
+              value={
+                <ResourceReference
+                  label={
+                    formatDateTime(visit.plannedStart, locale as Locale, visit.timezone) ??
+                    t('firstScheduledVisit')
+                  }
+                  href={`/visits/${visit.id}`}
+                />
+              }
+            />
+            <Data
+              label={t('assignedEmployee')}
+              value={
+                visit.assignments
+                  .filter((assignment) => assignment.status === 'active')
+                  .map((assignment) => assignment.employeeDisplayName)
+                  .filter(Boolean)
+                  .join(', ') || t('unassigned')
+              }
+            />
+          </div>
+        ) : (
+          <p role="status" className="text-sm text-muted-foreground">
+            {t('firstVisitUnavailable')}
+          </p>
+        )
+      ) : canPlan ? null : admission.clientId && admission.stage !== 'admitted' ? (
+        <p className="text-sm text-muted-foreground">{t('scheduleAfterAdmission')}</p>
+      ) : !admission.clientId ? (
+        <p className="text-sm text-muted-foreground">{t('linkOrCreateClientBeforeScheduling')}</p>
+      ) : (
+        <p className="text-sm text-muted-foreground">{t('firstVisitNotScheduled')}</p>
+      )}
+    </section>
+  );
+}
+
+function AdmissionWorkspaceSkeleton() {
+  return (
+    <section aria-busy="true" className="grid min-w-0 gap-3 rounded-lg border bg-card p-5">
+      <div className="h-6 w-48 animate-pulse rounded bg-muted" />
+      <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+      <div className="h-24 animate-pulse rounded-md bg-muted/70" />
+    </section>
+  );
+}
+
+function stageBadgeVariant(stage: string): 'success' | 'warning' | 'secondary' | 'destructive' {
+  if (stage === 'ready_for_admission' || stage === 'admitted') return 'success';
+  if (stage === 'declined' || stage === 'withdrawn') return 'secondary';
+  if (stage === 'preparation') return 'warning';
+  return 'secondary';
+}
+
+function agreementStatusVariant(
+  status: string,
+): 'success' | 'warning' | 'secondary' | 'destructive' {
+  if (status === 'active') return 'success';
+  if (status === 'draft') return 'warning';
+  if (status === 'suspended') return 'destructive';
+  return 'secondary';
+}
+
+function fundingPlanLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'Onboarding'>>>,
+  fundingPlan: string,
+) {
+  if (fundingPlan === 'other') return t('fundingOther');
+  if (fundingPlan === 'private_pay' || fundingPlan === 'benefits' || fundingPlan === 'unknown')
+    return t(fundingPlan);
+  return t('unknown');
+}
+
+function nextActionForStage(stage: string) {
+  if (stage === 'inquiry')
+    return { label: 'nextAction_inquiry' as const, href: '#assessment-title' };
+  if (stage === 'assessment')
+    return { label: 'nextAction_assessment' as const, href: '#checklist-title' };
+  if (stage === 'preparation')
+    return { label: 'nextAction_preparation' as const, href: '#readiness-title' };
+  if (stage === 'ready_for_admission')
+    return { label: 'nextAction_ready' as const, href: '#readiness-title' };
+  if (stage === 'admitted')
+    return { label: 'nextAction_admitted' as const, href: '#first-visit-title' };
+  return { label: 'nextAction_closed' as const, href: '#history-title' };
+}
+
+function checklistTarget(code: string) {
+  if (code === 'needs_assessment') return '#assessment-title';
+  if (code === 'funding_arrangement') return '#funding-title';
+  if (code === 'service_agreement') return '#agreement-title';
+  if (code === 'first_visit') return '#first-visit-title';
+  if (code === 'provider_document_evidence') return '#sources-title';
+  return '#details-title';
 }
 
 function HiddenCase({
@@ -1249,9 +1933,9 @@ function localizeFinding(
 
 function FindingList({ title, findings }: { title: string; findings: Finding[] }) {
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 gap-2">
       <h3 className="font-semibold">{title}</h3>
-      <ul className="grid gap-2">
+      <ul className="grid min-w-0 gap-2">
         {findings.map((finding) => (
           <li key={finding.code} className="rounded-md bg-background p-3">
             <span className="font-medium">{finding.label}</span>
@@ -1288,7 +1972,7 @@ function Field({
   required?: boolean;
 }) {
   return (
-    <label className="grid gap-1 text-sm font-medium">
+    <label className="grid min-w-0 gap-1 text-sm font-medium">
       {label}
       <input
         className="h-10 rounded-md border px-3 font-normal"
@@ -1311,7 +1995,7 @@ function TextArea({
   defaultValue: string;
 }) {
   return (
-    <label className="grid gap-1 text-sm font-medium">
+    <label className="grid min-w-0 gap-1 text-sm font-medium">
       {label}
       <Textarea
         className="min-h-20 rounded-md border p-3 font-normal"
@@ -1328,19 +2012,22 @@ function SelectField({
   label,
   value,
   children,
+  required = false,
 }: {
   name: string;
   label: string;
   value: string;
   children: React.ReactNode;
+  required?: boolean;
 }) {
   return (
-    <label className="grid gap-1 text-sm font-medium">
+    <label className="grid min-w-0 gap-1 text-sm font-medium">
       {label}
       <NativeSelect
         selectClassName="h-10 rounded-md border bg-card px-3 font-normal"
         name={name}
         defaultValue={value}
+        required={required}
         className="w-full"
       >
         {children}
@@ -1363,7 +2050,11 @@ function SourceForm({
   defaultSourceId?: string;
 }) {
   return (
-    <RHFActionForm action={linkAdmissionSourceAction} className="flex flex-wrap items-end gap-2">
+    <RHFActionForm
+      action={linkAdmissionSourceAction}
+      refreshOnSuccess
+      className="flex flex-wrap items-end gap-2"
+    >
       <HiddenCase admission={admission} />
       <input type="hidden" name="sourceKind" value={kind} />
       <Field

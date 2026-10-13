@@ -27,6 +27,10 @@ export const onboardingSearchSchema = z.object({
     .transform((value) => value === 'true'),
   readiness: z.enum(['ready', 'blocked']).optional(),
   search: z.string().trim().min(1).max(120).optional(),
+  sortBy: z
+    .enum(['createdAt', 'lastActivityAt', 'name', 'nextFollowUpAt'])
+    .default('lastActivityAt'),
+  sortDirection: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().min(1).max(100_000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });

@@ -332,6 +332,57 @@ describe('communications and onboarding PostgreSQL/API integration', () => {
         id: string;
         version: number;
       };
+      const fullNameSearchResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases?search=Nora%20Prospect`,
+        { headers },
+      );
+      expect(fullNameSearchResponse.status).toBe(200);
+      const fullNameSearch = (await fullNameSearchResponse.json()) as {
+        total: number;
+        items: Array<{ id: string }>;
+      };
+      expect(fullNameSearch).toMatchObject({ total: 1, items: [{ id: admission.id }] });
+      const admissionSummaryResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${admission.id}/summary`,
+        { headers },
+      );
+      expect(admissionSummaryResponse.status).toBe(200);
+      expect(await admissionSummaryResponse.json()).toMatchObject({
+        id: admission.id,
+        firstName: 'Nora',
+        lastName: 'Prospect',
+        organizationName: null,
+        facilityName: null,
+      });
+      const sortedAdmissionsResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases?sortBy=name&sortDirection=asc&page=1&pageSize=1`,
+        { headers },
+      );
+      expect(sortedAdmissionsResponse.status).toBe(200);
+      const sortedAdmissions = (await sortedAdmissionsResponse.json()) as {
+        total: number;
+        page: number;
+        pageSize: number;
+        items: Array<{ id: string; firstName: string }>;
+      };
+      expect(sortedAdmissions).toMatchObject({ total: 2, page: 1, pageSize: 1 });
+      expect(sortedAdmissions.items[0]).toMatchObject({ id: admission.id, firstName: 'Nora' });
+      const secondSortedPageResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases?sortBy=name&sortDirection=asc&page=2&pageSize=1`,
+        { headers },
+      );
+      const secondSortedPage = (await secondSortedPageResponse.json()) as {
+        items: Array<{ id: string; firstName: string }>;
+      };
+      expect(secondSortedPage.items[0]).toMatchObject({
+        id: secondAdmission.id,
+        firstName: 'Omar',
+      });
+      const crossTenantSummaryResponse = await fetch(
+        `${baseUrl}/api/v1/onboarding/cases/${admission.id}/summary`,
+        { headers: otherTenantHeaders },
+      );
+      expect(crossTenantSummaryResponse.status).toBe(404);
       const otherFundingResponse = await fetch(
         `${baseUrl}/api/v1/onboarding/cases/${secondAdmission.id}`,
         {

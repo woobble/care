@@ -20,6 +20,7 @@ import {
 } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@care/ui/components/field';
 import { Input } from '@care/ui/components/input';
@@ -196,6 +197,7 @@ export function RHFActionForm({
   onChange,
   errorMessage,
   warnOnUnsavedChanges = false,
+  refreshOnSuccess = false,
   children,
   ...props
 }: Omit<FormHTMLAttributes<HTMLFormElement>, 'action' | 'onSubmit' | 'onChange'> & {
@@ -204,9 +206,11 @@ export function RHFActionForm({
   onChange?: FormHTMLAttributes<HTMLFormElement>['onChange'];
   errorMessage?: ReactNode;
   warnOnUnsavedChanges?: boolean;
+  refreshOnSuccess?: boolean;
   children: ReactNode;
 }) {
   const t = useTranslations('Common.formValidation');
+  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [nativeSchema, setNativeSchema] = useState<z.ZodType>(permissiveFormSchema);
   const [actionFailed, setActionFailed] = useState(false);
@@ -318,6 +322,7 @@ export function RHFActionForm({
     if (beforeAction && !(await beforeAction(form, data))) return;
     const result = await action(data);
     setActionFailed(result === false);
+    if (result !== false && refreshOnSuccess) router.refresh();
   }
 
   function handleChange(event: React.ChangeEvent<HTMLFormElement>) {

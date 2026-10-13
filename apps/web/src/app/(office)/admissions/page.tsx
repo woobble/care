@@ -11,6 +11,7 @@ import { NativeSelect } from '@care/ui/components/native-select';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui/components/button';
+import { Badge } from '@care/ui/components/badge';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { FilterDisclosure } from '@app/web/components/filter-disclosure';
 import { DataPagination } from '@app/web/components/data-pagination';
@@ -88,6 +89,10 @@ export default async function AdmissionsPage({
   const createdFrom = validDate(query.createdFrom);
   const createdTo = validDate(query.createdTo);
   const overdue = query.overdue === 'true';
+  const sortBy =
+    enumValue(query.sortBy, ['createdAt', 'lastActivityAt', 'name', 'nextFollowUpAt'] as const) ??
+    'lastActivityAt';
+  const sortDirection = enumValue(query.sortDirection, ['asc', 'desc'] as const) ?? 'desc';
   const canReadOrganizations = hasPermission(permissions, 'organization.read');
   const canReadFacilities = hasPermission(permissions, 'facility.read');
   const canReadEmployees = hasPermission(permissions, 'employee.read');
@@ -106,6 +111,8 @@ export default async function AdmissionsPage({
           ...(createdFrom ? { createdFrom } : {}),
           ...(createdTo ? { createdTo } : {}),
           ...(overdue ? { overdue: 'true' as const } : {}),
+          sortBy,
+          sortDirection,
         },
         header,
       },
@@ -259,6 +266,16 @@ export default async function AdmissionsPage({
             defaultValue={createdFrom}
           />
           <Field name="createdTo" label={t('createdTo')} type="date" defaultValue={createdTo} />
+          <SelectField name="sortBy" label={t('sortBy')} value={sortBy}>
+            <option value="lastActivityAt">{t('sortLastActivity')}</option>
+            <option value="createdAt">{t('sortCreatedAt')}</option>
+            <option value="name">{t('sortName')}</option>
+            <option value="nextFollowUpAt">{t('sortFollowUp')}</option>
+          </SelectField>
+          <SelectField name="sortDirection" label={t('sortDirection')} value={sortDirection}>
+            <option value="desc">{t('newestFirst')}</option>
+            <option value="asc">{t('oldestFirst')}</option>
+          </SelectField>
           <label className="flex items-center gap-2 text-sm font-medium">
             <ShadcnCheckbox name="overdue" value="true" defaultChecked={overdue} />
             {t('overdue')}
@@ -277,7 +294,10 @@ export default async function AdmissionsPage({
           <>
             <div className="grid gap-3 lg:hidden">
               {rows.map((row) => (
-                <article key={row.id} className="grid min-w-0 gap-3 rounded-xl border bg-card p-4">
+                <article
+                  key={row.id}
+                  className={`grid min-w-0 gap-3 rounded-xl border bg-card p-4 ${isOverdue(row) ? 'border-warning/70' : ''}`}
+                >
                   <div className="flex min-w-0 items-start justify-between gap-3">
                     <div className="min-w-0">
                       <Link
@@ -295,13 +315,16 @@ export default async function AdmissionsPage({
                         </p>
                       ) : null}
                     </div>
-                    <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium">
-                      {t(
-                        row.stage === 'assessment'
-                          ? 'assessmentStage'
-                          : (row.stage as (typeof stages)[number]),
-                      )}
-                    </span>
+                    <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                      <Badge variant={stageBadgeVariant(row.stage)}>
+                        {t(
+                          row.stage === 'assessment'
+                            ? 'assessmentStage'
+                            : (row.stage as (typeof stages)[number]),
+                        )}
+                      </Badge>
+                      {isOverdue(row) ? <Badge variant="warning">{t('overdue')}</Badge> : null}
+                    </div>
                   </div>
                   <dl className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 text-sm">
                     <div className="min-w-0">
@@ -375,7 +398,10 @@ export default async function AdmissionsPage({
                 </ShadcnTableHeader>
                 <ShadcnTableBody className="divide-y">
                   {rows.map((row) => (
-                    <ShadcnTableRow key={row.id}>
+                    <ShadcnTableRow
+                      key={row.id}
+                      className={isOverdue(row) ? 'bg-warning-muted/30' : undefined}
+                    >
                       <ShadcnTableCell className="p-3">
                         <Link
                           className="font-semibold text-primary underline"
@@ -393,11 +419,16 @@ export default async function AdmissionsPage({
                         ) : null}
                       </ShadcnTableCell>
                       <ShadcnTableCell className="p-3">
-                        {t(
-                          row.stage === 'assessment'
-                            ? 'assessmentStage'
-                            : (row.stage as (typeof stages)[number]),
-                        )}
+                        <div className="flex flex-wrap gap-1.5">
+                          <Badge variant={stageBadgeVariant(row.stage)}>
+                            {t(
+                              row.stage === 'assessment'
+                                ? 'assessmentStage'
+                                : (row.stage as (typeof stages)[number]),
+                            )}
+                          </Badge>
+                          {isOverdue(row) ? <Badge variant="warning">{t('overdue')}</Badge> : null}
+                        </div>
                       </ShadcnTableCell>
                       <ShadcnTableCell className="p-3">
                         {formatDate(row.preferredStartDate, locale as Locale)}
@@ -452,6 +483,8 @@ export default async function AdmissionsPage({
             createdFrom,
             createdTo,
             overdue: overdue ? 'true' : undefined,
+            sortBy,
+            sortDirection,
           }}
         />
       ) : null}
@@ -533,6 +566,21 @@ function validDate(value?: string) {
 function admissionAgeInDays(createdAt: string): number {
   // oxlint-disable-next-line react/purity -- Admission age is measured at request time.
   return Math.max(0, Math.floor((Date.now() - Date.parse(createdAt)) / 86_400_000));
+}
+
+function isOverdue(row: AdmissionRow) {
+  return Boolean(
+    row.nextFollowUpAt &&
+    Date.parse(row.nextFollowUpAt) <= Date.now() &&
+    ['inquiry', 'assessment', 'preparation', 'ready_for_admission'].includes(row.stage),
+  );
+}
+
+function stageBadgeVariant(stage: string): 'success' | 'warning' | 'secondary' | 'destructive' {
+  if (stage === 'ready_for_admission' || stage === 'admitted') return 'success';
+  if (stage === 'declined' || stage === 'withdrawn') return 'secondary';
+  if (stage === 'preparation') return 'warning';
+  return 'secondary';
 }
 
 function validUuid(value: string | undefined) {

@@ -11706,6 +11706,8 @@ export type OnboardingControllerSearchData = {
     query?: {
         pageSize?: number;
         page?: number;
+        sortDirection?: 'asc' | 'desc';
+        sortBy?: 'createdAt' | 'lastActivityAt' | 'name' | 'nextFollowUpAt';
         search?: unknown;
         readiness?: 'ready' | 'blocked';
         overdue?: 'true' | 'false';
@@ -11868,6 +11870,38 @@ export type OnboardingControllerUpdateResponses = {
 };
 
 export type OnboardingControllerUpdateResponse = OnboardingControllerUpdateResponses[keyof OnboardingControllerUpdateResponses];
+
+export type OnboardingControllerSummaryData = {
+    body?: never;
+    headers: {
+        /**
+         * Tenant selected for this request
+         */
+        'X-Tenant-Id': string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/onboarding/cases/{id}/summary';
+};
+
+export type OnboardingControllerSummaryErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type OnboardingControllerSummaryError = OnboardingControllerSummaryErrors[keyof OnboardingControllerSummaryErrors];
+
+export type OnboardingControllerSummaryResponses = {
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type OnboardingControllerSummaryResponse = OnboardingControllerSummaryResponses[keyof OnboardingControllerSummaryResponses];
 
 export type OnboardingControllerLinkClientData = {
     body: {

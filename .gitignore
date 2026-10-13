@@ -383,6 +383,7 @@ $RECYCLE.BIN/
 *.lnk
 
 # Custom
+artifacts/
 .tmp/
 /secrets/
 /backups/

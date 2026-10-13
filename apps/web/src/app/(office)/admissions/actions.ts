@@ -42,10 +42,11 @@ const communicationOutcomes = [
 const checklistSources = ['automatic', 'manual', 'document'] as const;
 const requirementTypes = ['policy', 'external'] as const;
 
-export async function createAdmissionCaseAction(formData: FormData): Promise<void> {
+export async function createAdmissionCaseAction(formData: FormData): Promise<boolean | void> {
   const organizationId = readUuid(formData.get('organizationId'));
   const facilityId = optionalUuid(formData.get('facilityId'));
   const ownerEmployeeId = optionalUuid(formData.get('ownerEmployeeId'));
+  const clientId = optionalUuid(formData.get('clientId'));
   const firstName = read(formData, 'firstName').trim();
   const lastName = read(formData, 'lastName').trim();
   const contactMethod = choice(formData, 'contactMethod', contactMethods);
@@ -59,14 +60,14 @@ export async function createAdmissionCaseAction(formData: FormData): Promise<voi
     !organizationId ||
     facilityId === undefined ||
     ownerEmployeeId === undefined ||
+    clientId === undefined ||
     !firstName ||
     !lastName ||
     !contactMethod ||
     !inquirySource ||
-    !fundingPlan ||
     (nextFollowUpAt && !followUp)
   ) {
-    redirect('/admissions/new?error=ONBOARDING_INVALID_INPUT');
+    return false;
   }
   const requestedServices = read(formData, 'requestedServices')
     .split('\n')
@@ -81,8 +82,9 @@ export async function createAdmissionCaseAction(formData: FormData): Promise<voi
       lastName,
       contactMethod,
       inquirySource,
-      fundingPlan,
+      ...(fundingPlan ? { fundingPlan } : {}),
       ...(fundingPlanDetails ? { fundingPlanDetails } : {}),
+      ...(clientId ? { clientId } : {}),
       ...(facilityId ? { facilityId } : {}),
       ...(ownerEmployeeId ? { ownerEmployeeId } : {}),
       ...(read(formData, 'requesterName').trim()
@@ -110,13 +112,12 @@ export async function createAdmissionCaseAction(formData: FormData): Promise<voi
       ...(followUp ? { nextFollowUpAt: followUp } : {}),
     },
   });
-  if (error || !data || typeof data.id !== 'string')
-    redirect(`/admissions/new?error=${error?.code ?? 'ONBOARDING_INVALID_INPUT'}`);
+  if (error || !data || typeof data.id !== 'string') return false;
   revalidatePath('/admissions');
   redirect(`/admissions/${data.id}`);
 }
 
-export async function updateAdmissionCaseAction(formData: FormData): Promise<void> {
+export async function updateAdmissionCaseAction(formData: FormData): Promise<boolean | void> {
   const id = caseId(formData);
   const expectedVersion = positiveInteger(formData.get('expectedVersion'));
   const facilityId = optionalUuid(formData.get('facilityId'));
@@ -142,7 +143,7 @@ export async function updateAdmissionCaseAction(formData: FormData): Promise<voi
     !inquirySource ||
     (followUpValue && !followUp)
   ) {
-    redirect(casePath(id, 'ONBOARDING_INVALID_INPUT'));
+    return false;
   }
   const requestedServices = read(formData, 'requestedServices')
     .split('\n')
@@ -172,9 +173,8 @@ export async function updateAdmissionCaseAction(formData: FormData): Promise<voi
       nextFollowUpAt: followUp,
     },
   });
-  if (error) redirect(casePath(id, error.code));
-  refresh(id);
-  redirect(casePath(id, ''));
+  if (error) return false;
+  refreshAdmissionPage(id);
 }
 
 export async function linkAdmissionClientAction(formData: FormData): Promise<void> {
@@ -192,8 +192,7 @@ export async function linkAdmissionClientAction(formData: FormData): Promise<voi
     },
   });
   if (error) redirect(casePath(id, error.code));
-  refresh(id);
-  redirect(casePath(id, ''));
+  refreshAdmissionPage(id);
 }
 
 export async function registerAdmissionClientAction(formData: FormData): Promise<void> {
@@ -206,25 +205,22 @@ export async function registerAdmissionClientAction(formData: FormData): Promise
     body: { expectedVersion },
   });
   if (error) redirect(casePath(id, error.code));
-  refresh(id);
+  refreshAdmissionPage(id);
   redirect(casePath(id, ''));
 }
 
-export async function saveAdmissionAssessmentAction(formData: FormData): Promise<void> {
+export async function saveAdmissionAssessmentAction(formData: FormData): Promise<boolean | void> {
   const id = caseId(formData);
   const expectedVersion = positiveInteger(formData.get('expectedVersion'));
   const visitsRaw = read(formData, 'visitsPerWeek').trim();
   const visitsPerWeek = visitsRaw ? Number(visitsRaw) : null;
   if (!id || !expectedVersion || (visitsPerWeek !== null && !Number.isFinite(visitsPerWeek)))
-    redirect(casePath(id, 'ONBOARDING_INVALID_INPUT'));
+    return false;
   const requestedServices = read(formData, 'requestedServicesAssessment')
     .split('\n')
     .map((value) => value.trim())
     .filter(Boolean);
-  const preferredDays = read(formData, 'preferredDays')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean);
+  const preferredDays = stringValues(formData, 'preferredDays');
   const api = await getApiClient();
   const { error } = await api.PUT('/api/v1/onboarding/cases/{id}/assessment', {
     params: { path: { id }, header: await getTenantHeader() },
@@ -246,9 +242,8 @@ export async function saveAdmissionAssessmentAction(formData: FormData): Promise
       },
     },
   });
-  if (error) redirect(casePath(id, error.code));
-  refresh(id);
-  redirect(casePath(id, ''));
+  if (error) return false;
+  refreshAdmissionPage(id);
 }
 
 export async function transitionAdmissionAction(formData: FormData): Promise<void> {
@@ -266,8 +261,7 @@ export async function transitionAdmissionAction(formData: FormData): Promise<voi
     },
   });
   if (error) redirect(casePath(id, error.code));
-  refresh(id);
-  redirect(casePath(id, ''));
+  refreshAdmissionPage(id);
 }
 
 export async function admitCaseAction(formData: FormData): Promise<void> {
@@ -281,26 +275,23 @@ export async function admitCaseAction(formData: FormData): Promise<void> {
   });
   if (error) redirect(casePath(id, error.code));
   revalidatePath('/clients');
-  refresh(id);
-  redirect(casePath(id, ''));
+  refreshAdmissionPage(id);
 }
 
-export async function respondAdmissionChecklistAction(formData: FormData): Promise<void> {
+export async function respondAdmissionChecklistAction(formData: FormData): Promise<boolean | void> {
   const id = caseId(formData);
   const code = read(formData, 'itemCode');
   const expectedVersion = positiveInteger(formData.get('expectedVersion'));
   const status = choice(formData, 'status', ['complete', 'not_applicable'] as const);
-  if (!id || !/^[a-z][a-z0-9_]{1,63}$/.test(code) || !expectedVersion || !status)
-    redirect(casePath(id, 'ONBOARDING_INVALID_INPUT'));
+  if (!id || !/^[a-z][a-z0-9_]{1,63}$/.test(code) || !expectedVersion || !status) return false;
   const reason = read(formData, 'reason').trim();
   const api = await getApiClient();
   const { error } = await api.PUT('/api/v1/onboarding/cases/{id}/checklist/{code}', {
     params: { path: { id, code }, header: await getTenantHeader() },
     body: { expectedVersion, status, ...(status === 'not_applicable' && reason ? { reason } : {}) },
   });
-  if (error) redirect(casePath(id, error.code));
-  refresh(id);
-  redirect(casePath(id, ''));
+  if (error) return false;
+  refreshAdmissionPage(id);
 }
 
 export async function linkAdmissionSourceAction(formData: FormData): Promise<void> {
@@ -331,8 +322,7 @@ export async function linkAdmissionSourceAction(formData: FormData): Promise<voi
               body: { visitId: value, expectedVersion: expectedVersion! },
             });
   if (result.error) redirect(casePath(id, result.error.code));
-  refresh(id);
-  redirect(casePath(id, ''));
+  refreshAdmissionPage(id);
 }
 
 export async function recordAdmissionCommunicationAction(formData: FormData): Promise<void> {
@@ -374,8 +364,7 @@ export async function recordAdmissionCommunicationAction(formData: FormData): Pr
     },
   });
   if (error) redirect(casePath(id, error.code));
-  refresh(id);
-  redirect(casePath(id, ''));
+  refreshAdmissionPage(id);
 }
 
 export async function updateAdmissionTemplateAction(formData: FormData): Promise<void> {
@@ -446,7 +435,7 @@ export async function updateAdmissionTemplateAction(formData: FormData): Promise
   redirect('/admissions/templates');
 }
 
-function refresh(id: string) {
+function refreshAdmissionPage(id: string) {
   revalidatePath('/admissions');
   revalidatePath(`/admissions/${id}`);
 }
