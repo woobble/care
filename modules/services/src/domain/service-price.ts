@@ -82,10 +82,157 @@ export function calculateServicePriceCents(
   return Number(cents);
 }
 
+export type ServicePricingScheduleRule =
+  | { type: 'daily' }
+  | { type: 'weekly'; weekdays: readonly string[] }
+  | { type: 'occurrences_per_week'; count: number }
+  | { type: 'interval_days'; intervalDays: number }
+  | { type: 'on_demand' }
+  | null
+  | undefined;
+
+export type ServicePriceEstimateReason =
+  | 'unitUnknown'
+  | 'shortValidity'
+  | 'priceBoundary'
+  | 'quantityRequired'
+  | 'quantityInvalid'
+  | 'cadenceRequired'
+  | 'cadenceIncomplete'
+  | 'weekdaysRequired'
+  | 'onDemand'
+  | 'unitMismatch';
+
+export type FourWeekServiceEstimate =
+  | { totalCents: number; occurrences: number }
+  | { reason: ServicePriceEstimateReason };
+
+export function summarizeFourWeekServiceEstimates(estimates: readonly FourWeekServiceEstimate[]): {
+  totalCents: number | null;
+  calculableCount: number;
+  complete: boolean;
+  overflow: boolean;
+} {
+  let totalCents = 0n;
+  let calculableCount = 0;
+  for (const estimate of estimates) {
+    if (!('totalCents' in estimate)) continue;
+    if (!Number.isSafeInteger(estimate.totalCents) || estimate.totalCents < 0) {
+      return { totalCents: null, calculableCount, complete: false, overflow: true };
+    }
+    totalCents += BigInt(estimate.totalCents);
+    calculableCount += 1;
+    if (totalCents > BigInt(Number.MAX_SAFE_INTEGER)) {
+      return { totalCents: null, calculableCount, complete: false, overflow: true };
+    }
+  }
+  return {
+    totalCents: Number(totalCents),
+    calculableCount,
+    complete: calculableCount === estimates.length,
+    overflow: false,
+  };
+}
+
+export function estimateServicePriceForFourWeeks(input: {
+  price: Pick<ServicePriceSnapshot, 'priceCents' | 'pricingUnit' | 'validUntil'>;
+  serviceUnit: ServiceUnit | undefined;
+  quantity: string;
+  scheduleRule: ServicePricingScheduleRule;
+  validFrom: string;
+  validUntil: string | null;
+  serviceValidFrom?: string;
+}): { totalCents: number; occurrences: number } | { reason: ServicePriceEstimateReason } {
+  if (!input.serviceUnit) return { reason: 'unitUnknown' };
+  if (!isIsoDate(input.validFrom)) return { reason: 'shortValidity' };
+  if (input.serviceValidFrom && input.serviceValidFrom > input.validFrom) {
+    return { reason: 'shortValidity' };
+  }
+  const estimateEnd = addDays(input.validFrom, 27);
+  if (input.validUntil !== null && input.validUntil < estimateEnd) {
+    return { reason: 'shortValidity' };
+  }
+  if (input.price.validUntil !== null && input.price.validUntil <= estimateEnd) {
+    return { reason: 'priceBoundary' };
+  }
+
+  let occurrences: number;
+  const rule = input.scheduleRule;
+  if (!rule) return { reason: 'cadenceRequired' };
+  switch (rule.type) {
+    case 'daily':
+      occurrences = 28;
+      break;
+    case 'weekly':
+      if (rule.weekdays.length === 0) return { reason: 'weekdaysRequired' };
+      if (
+        rule.weekdays.some(
+          (weekday) =>
+            ![
+              'monday',
+              'tuesday',
+              'wednesday',
+              'thursday',
+              'friday',
+              'saturday',
+              'sunday',
+            ].includes(weekday),
+        )
+      ) {
+        return { reason: 'cadenceIncomplete' };
+      }
+      occurrences = new Set(rule.weekdays).size * 4;
+      break;
+    case 'occurrences_per_week':
+      if (!Number.isInteger(rule.count) || rule.count < 1 || rule.count > 14) {
+        return { reason: 'cadenceIncomplete' };
+      }
+      occurrences = rule.count * 4;
+      break;
+    case 'interval_days':
+      if (
+        !Number.isInteger(rule.intervalDays) ||
+        rule.intervalDays < 1 ||
+        rule.intervalDays > 365
+      ) {
+        return { reason: 'cadenceIncomplete' };
+      }
+      occurrences = Math.ceil(28 / rule.intervalDays);
+      break;
+    case 'on_demand':
+      return { reason: 'onDemand' };
+  }
+
+  if (input.price.pricingUnit !== 'fixed' && !input.quantity.trim()) {
+    return { reason: 'quantityRequired' };
+  }
+  try {
+    const perOccurrenceCents = calculateServicePriceCents(
+      input.price.priceCents,
+      input.price.pricingUnit,
+      input.serviceUnit,
+      input.quantity || '1',
+    );
+    const totalCents = BigInt(perOccurrenceCents) * BigInt(occurrences);
+    if (totalCents > BigInt(Number.MAX_SAFE_INTEGER)) return { reason: 'quantityInvalid' };
+    return { totalCents: Number(totalCents), occurrences };
+  } catch (error) {
+    return {
+      reason: error instanceof ServicePricingUnitMismatchError ? 'unitMismatch' : 'quantityInvalid',
+    };
+  }
+}
+
 function isIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function addDays(value: string, count: number): string {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + count);
+  return date.toISOString().slice(0, 10);
 }
 
 export class InvalidServicePriceError extends Error {

@@ -833,7 +833,27 @@ test('Authentik users can be invited and administered from the office UI', async
       page.getByText(`${e2eFacilityName} · Primary facility`, { exact: true }),
     ).toBeVisible();
 
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/services');
+    await expect(page.getByRole('heading', { name: 'Service catalog' })).toBeVisible();
+    const catalogFilters = page.getByRole('region', { name: 'Search and filters' });
+    await catalogFilters
+      .getByRole('textbox', { name: 'Name, code, or description' })
+      .fill('COMPANIONSHIP');
+    await catalogFilters.getByRole('button', { name: 'Apply' }).click();
+    await expect(page.getByRole('link', { name: 'Companionship', exact: true })).toBeVisible();
+    await captureReviewScreenshot(page, 'service-catalog-desktop-light-1440.png');
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await captureReviewScreenshot(page, 'service-catalog-desktop-dark-1440.png');
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Light' }).click();
+    await expect(page.locator('html')).not.toHaveClass(/dark/);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'service-catalog-mobile-390.png');
+    await page.setViewportSize({ width: 1440, height: 900 });
     const categoryForm = page.locator('form').filter({
       has: page.getByRole('button', { name: 'Create category' }),
     });
@@ -866,6 +886,18 @@ test('Authentik users can be invited and administered from the office UI', async
     await priceForm.locator('input[name="validFrom"]').fill(serviceValidFrom);
     await priceForm.getByRole('button', { name: 'Record price' }).click();
     await expect(page.getByText('Price recorded.', { exact: true })).toBeVisible();
+    const effectivePrice = page.getByText('€45.00', { exact: true }).first();
+    await expect(effectivePrice).toBeVisible();
+    await captureReviewScreenshot(page, 'service-detail-desktop-1440.png');
+    await effectivePrice.scrollIntoViewIfNeeded();
+    await captureReviewScreenshot(page, 'service-detail-pricing-desktop-1440.png');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await captureReviewScreenshot(page, 'service-detail-mobile-390.png');
+    await effectivePrice.scrollIntoViewIfNeeded();
+    await captureReviewScreenshot(page, 'service-detail-pricing-mobile-390.png');
+    await page.setViewportSize({ width: 1440, height: 900 });
 
     await page.goto('/clients/new');
     await selectEntity(page, 'Organization', e2eOrganizationName, e2eOrganizationName);
@@ -1151,13 +1183,43 @@ test('Authentik users can be invited and administered from the office UI', async
     await agreementServiceForm.getByRole('checkbox', { name: 'Wednesday' }).click();
     await agreementServiceForm.locator('input[name="preferredTimeStart"]').fill('08:00');
     await agreementServiceForm.locator('input[name="preferredTimeEnd"]').fill('09:00');
+    await expect(agreementCard.getByText('Estimated agreement total:')).toBeVisible({
+      timeout: 15_000,
+    });
+    await agreementCard.scrollIntoViewIfNeeded();
+    await blurFocusedElement(page);
+    await captureReviewScreenshot(page, 'agreement-editor-desktop-1440.png');
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await agreementCard.scrollIntoViewIfNeeded();
+    await blurFocusedElement(page);
+    await captureReviewScreenshot(page, 'agreement-editor-tablet-768.png');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await agreementCard.scrollIntoViewIfNeeded();
+    await blurFocusedElement(page);
+    await captureReviewScreenshot(page, 'agreement-editor-mobile-390.png');
+    await agreementServiceForm.locator('input[name="quantity"]').scrollIntoViewIfNeeded();
+    await blurFocusedElement(page);
+    await captureReviewScreenshot(page, 'agreement-editor-quantity-mobile-390.png');
+    await page.setViewportSize({ width: 1440, height: 900 });
     await agreementServiceForm.getByRole('button', { name: 'Add service' }).click();
     await expect(page.getByRole('heading', { name: `E2E Service ${runId}` })).toBeVisible();
     await expect(page.getByText('Weekly: Monday, Wednesday')).toBeVisible();
 
+    page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Activate', exact: true }).click();
     await expect(page.getByText('Service planning activated', { exact: true })).toBeVisible();
     await expect(agreementCard.getByText('Active', { exact: true }).first()).toBeVisible();
+    await agreementCard.scrollIntoViewIfNeeded();
+    await captureReviewScreenshot(page, 'agreement-detail-desktop-1440.png');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await agreementCard.scrollIntoViewIfNeeded();
+    await captureReviewScreenshot(page, 'agreement-detail-mobile-390.png');
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    if (process.env.CARE_SERVICE_AGREEMENTS_FOCUS === 'true') return;
 
     await test.step('complete an admission with existing client handoff', async () => {
       const viewportScreens = [
@@ -3426,6 +3488,18 @@ async function cleanupOrganizationRecords(
     if (employees.rows.length) {
       const employeeIds = employees.rows.map((row) => row.id);
       await database.query(
+        'DELETE FROM scheduling.employee_unavailability WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[])',
+        [tenantId, employeeIds],
+      );
+      await database.query(
+        'DELETE FROM scheduling.employee_availability_exceptions WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[])',
+        [tenantId, employeeIds],
+      );
+      await database.query(
+        'DELETE FROM scheduling.employee_availability WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[])',
+        [tenantId, employeeIds],
+      );
+      await database.query(
         'DELETE FROM employees.employee_facility_assignments WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[])',
         [tenantId, employeeIds],
       );
@@ -3994,6 +4068,12 @@ async function captureReviewScreenshot(
   fullPage = false,
 ): Promise<void> {
   await page.screenshot({ path: resolve(reviewDirectory, filename), fullPage });
+}
+
+async function blurFocusedElement(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
 }
 
 async function retryCareToday(page: Page, buttonName: string): Promise<void> {

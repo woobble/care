@@ -738,6 +738,7 @@ describe('clients API', () => {
         body: JSON.stringify({
           code: `CARE-${uuidv7()}`,
           name: 'Morning care',
+          description: 'Gentle morning support with comforting routine',
           categoryId: serviceCategory.id,
           unit: 'occurrence',
           defaultDurationMinutes: 30,
@@ -812,6 +813,25 @@ describe('clients API', () => {
         total: 1,
         items: [expect.objectContaining({ id: service.id, name: 'Morning care' })],
       });
+      const serviceDescriptionSearch = await fetch(
+        `${baseUrl}/api/v1/services?q=comforting&organizationId=${organizationId}&facilityId=${facilityId}`,
+        { headers },
+      );
+      expect(await serviceDescriptionSearch.json()).toMatchObject({
+        total: 1,
+        items: [expect.objectContaining({ id: service.id })],
+      });
+      const sortedServices = await fetch(
+        `${baseUrl}/api/v1/services?status=all&sortBy=name&sortOrder=asc&organizationId=${organizationId}&facilityId=${facilityId}`,
+        { headers },
+      );
+      const sortedServiceItems = (await sortedServices.json()) as {
+        items: { name: string }[];
+      };
+      expect(sortedServiceItems.items.map((item) => item.name)).toEqual([
+        'Facility-only evening care',
+        'Morning care',
+      ]);
       const archivedServiceCategory = await fetch(
         `${baseUrl}/api/v1/service-categories/${serviceCategory.id}/archive`,
         { method: 'POST', headers },

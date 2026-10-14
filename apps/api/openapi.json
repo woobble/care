@@ -7192,6 +7192,32 @@
             }
           },
           {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "name",
+                "category",
+                "status",
+                "code"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "pageSize",
             "required": false,
             "in": "query",

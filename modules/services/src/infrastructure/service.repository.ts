@@ -38,7 +38,7 @@ export interface ServiceSearchFilter {
   tenantId: string;
   access: ServiceReadScope;
   text?: string;
-  status?: 'active' | 'archived';
+  status?: 'active' | 'archived' | 'all';
   categoryId?: string;
   organizationId?: string;
   facilityId?: string;
@@ -48,6 +48,8 @@ export interface ServiceSearchFilter {
   validUntil?: string;
   page: number;
   pageSize: number;
+  sortBy?: 'name' | 'category' | 'status' | 'code';
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface ServiceSearchItem {
@@ -188,7 +190,9 @@ export class ServiceRepository {
     input: ServiceSearchFilter,
   ): Promise<{ items: ServiceSearchItem[]; total: number }> {
     const filters: SQL[] = [eq(serviceDefinitions.tenantId, input.tenantId)];
-    filters.push(eq(serviceDefinitions.status, input.status ?? 'active'));
+    if (input.status !== 'all') {
+      filters.push(eq(serviceDefinitions.status, input.status ?? 'active'));
+    }
     if (input.validFrom) {
       filters.push(lte(serviceDefinitions.validFrom, input.validFrom));
       filters.push(
@@ -218,7 +222,11 @@ export class ServiceRepository {
         .replaceAll('_', '\\_');
       const pattern = `%${escaped}%`;
       filters.push(
-        or(ilike(serviceDefinitions.name, pattern), ilike(serviceDefinitions.code, pattern))!,
+        or(
+          ilike(serviceDefinitions.name, pattern),
+          ilike(serviceDefinitions.code, pattern),
+          ilike(serviceDefinitions.description, pattern),
+        )!,
       );
     }
 
@@ -272,7 +280,13 @@ export class ServiceRepository {
       .leftJoin(serviceAvailability, and(...availabilityFilters))
       .where(and(...filters, ...(hasAvailabilityFilter ? [isNotNull(serviceAvailability.id)] : [])))
       .groupBy(serviceDefinitions.id, serviceCategories.name)
-      .orderBy(asc(serviceDefinitions.code), asc(serviceDefinitions.id))
+      .orderBy(
+        input.sortOrder === 'desc'
+          ? desc(sortColumn(input.sortBy ?? 'code'))
+          : asc(sortColumn(input.sortBy ?? 'code')),
+        asc(serviceDefinitions.code),
+        asc(serviceDefinitions.id),
+      )
       .limit(input.pageSize)
       .offset((input.page - 1) * input.pageSize);
     const totals = await transaction
@@ -413,6 +427,19 @@ export class ServiceRepository {
 
 function toCategory(row: typeof serviceCategories.$inferSelect): ServiceCategorySnapshot {
   return { ...row };
+}
+
+function sortColumn(sortBy: NonNullable<ServiceSearchFilter['sortBy']>) {
+  switch (sortBy) {
+    case 'name':
+      return serviceDefinitions.name;
+    case 'category':
+      return serviceCategories.name;
+    case 'status':
+      return serviceDefinitions.status;
+    case 'code':
+      return serviceDefinitions.code;
+  }
 }
 
 function toDefinition(row: typeof serviceDefinitions.$inferSelect): ServiceDefinitionSnapshot {

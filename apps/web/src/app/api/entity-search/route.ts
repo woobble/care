@@ -22,6 +22,7 @@ type EntityRecord = {
   payerIdentifier?: string | null;
   outstandingCents?: number | null;
   timezone?: string;
+  unit?: 'occurrence' | 'minute' | 'hour' | 'day';
 };
 
 export async function GET(request: Request) {
@@ -65,7 +66,17 @@ export async function GET(request: Request) {
     }
   } else if (entity === 'services') {
     search.set('status', 'active');
-    search.set('validAt', url.searchParams.get('validAt') ?? new Date().toISOString().slice(0, 10));
+    const validFrom = url.searchParams.get('validFrom');
+    const validUntil = url.searchParams.get('validUntil');
+    if (validFrom) {
+      search.set('validFrom', validFrom);
+      if (validUntil) search.set('validUntil', validUntil);
+    } else {
+      search.set(
+        'validAt',
+        url.searchParams.get('validAt') ?? new Date().toISOString().slice(0, 10),
+      );
+    }
     const organizationId = url.searchParams.get('organizationId');
     const facilityId = url.searchParams.get('facilityId');
     if (organizationId) search.set('organizationId', organizationId);
@@ -106,6 +117,7 @@ export async function GET(request: Request) {
             id,
             label,
             ...(entity === 'organizations' && record.timezone ? { timezone: record.timezone } : {}),
+            ...(entity === 'services' && record.unit ? { serviceUnit: record.unit } : {}),
           },
         ]
       : [];

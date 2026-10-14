@@ -62,7 +62,7 @@ const categoryListQuery = z
 const serviceSearchQuery = z
   .object({
     q: z.string().max(120).optional(),
-    status: z.enum(['active', 'archived']).optional(),
+    status: z.enum(['active', 'archived', 'all']).optional(),
     categoryId: z.string().uuid().optional(),
     organizationId: z.string().uuid().optional(),
     facilityId: z.string().uuid().optional(),
@@ -71,6 +71,8 @@ const serviceSearchQuery = z
     validUntil: z.string().optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    sortBy: z.enum(['name', 'category', 'status', 'code']).default('code'),
+    sortOrder: z.enum(['asc', 'desc']).default('asc'),
   })
   .strict();
 
@@ -194,6 +196,8 @@ export class ServicesController {
   @ApiQuery({ name: 'validUntil', required: false, type: String, format: 'date' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({ name: 'sortBy', required: false, enum: ['name', 'category', 'status', 'code'] })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   @ApiOkResponse({ type: ServiceListResponseDto })
   async list(@Req() request: ApiRequest, @Query() query: Record<string, string | undefined>) {
     const parsed = serviceSearchQuery.safeParse(query);

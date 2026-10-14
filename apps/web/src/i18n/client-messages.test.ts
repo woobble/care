@@ -11,6 +11,12 @@ describe('client translation messages', () => {
     expect(english.Common.language).toBe(en.Common.language);
     expect(english.Common.formValidation).toEqual(en.Common.formValidation);
     expect(english.Common.entitySelector).toEqual(en.Common.entitySelector);
+    expect(english.Common.units).toEqual({
+      occurrence: en.Common.units.occurrence,
+      minute: en.Common.units.minute,
+      hour: en.Common.units.hour,
+      day: en.Common.units.day,
+    });
     expect(english.Navigation).toEqual({
       currentOrganization: en.Navigation.currentOrganization,
       appearance: en.Navigation.appearance,
@@ -25,6 +31,40 @@ describe('client translation messages', () => {
     });
     expect(english.Caregiver.drafts).toEqual(en.Caregiver.drafts);
     expect(english.ServiceEvidence.care).toEqual(en.ServiceEvidence.care);
+    expect(english.Services.pricing.units).toEqual(en.Services.pricing.units);
+    expect(english.ServiceAgreements.costEstimate).toEqual({
+      agreementTitle: en.ServiceAgreements.costEstimate.agreementTitle,
+      loading: en.ServiceAgreements.costEstimate.loading,
+      loadFailed: en.ServiceAgreements.costEstimate.loadFailed,
+      noPrice: en.ServiceAgreements.costEstimate.noPrice,
+      effectiveFrom: en.ServiceAgreements.costEstimate.effectiveFrom,
+      period: en.ServiceAgreements.costEstimate.period,
+      lineTotal: en.ServiceAgreements.costEstimate.lineTotal,
+      pendingAddition: en.ServiceAgreements.costEstimate.pendingAddition,
+      agreementTotal: en.ServiceAgreements.costEstimate.agreementTotal,
+      calculableSubtotal: en.ServiceAgreements.costEstimate.calculableSubtotal,
+      incompleteTotal: en.ServiceAgreements.costEstimate.incompleteTotal,
+      aggregateTooLarge: en.ServiceAgreements.costEstimate.aggregateTooLarge,
+      note: en.ServiceAgreements.costEstimate.note,
+      reason: en.ServiceAgreements.costEstimate.reason,
+    });
+    expect(english.ServiceAgreements.weekdays).toEqual(en.ServiceAgreements.weekdays);
+    expect(german.ServiceAgreements.costEstimate).toEqual({
+      agreementTitle: de.ServiceAgreements.costEstimate.agreementTitle,
+      loading: de.ServiceAgreements.costEstimate.loading,
+      loadFailed: de.ServiceAgreements.costEstimate.loadFailed,
+      noPrice: de.ServiceAgreements.costEstimate.noPrice,
+      effectiveFrom: de.ServiceAgreements.costEstimate.effectiveFrom,
+      period: de.ServiceAgreements.costEstimate.period,
+      lineTotal: de.ServiceAgreements.costEstimate.lineTotal,
+      pendingAddition: de.ServiceAgreements.costEstimate.pendingAddition,
+      agreementTotal: de.ServiceAgreements.costEstimate.agreementTotal,
+      calculableSubtotal: de.ServiceAgreements.costEstimate.calculableSubtotal,
+      incompleteTotal: de.ServiceAgreements.costEstimate.incompleteTotal,
+      aggregateTooLarge: de.ServiceAgreements.costEstimate.aggregateTooLarge,
+      note: de.ServiceAgreements.costEstimate.note,
+      reason: de.ServiceAgreements.costEstimate.reason,
+    });
     expect(german.Common.language).toBe(de.Common.language);
     expect(german.Caregiver.drafts).toEqual(de.Caregiver.drafts);
     expect(german.ServiceEvidence.care).toEqual(de.ServiceEvidence.care);

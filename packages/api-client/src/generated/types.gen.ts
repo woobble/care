@@ -6124,6 +6124,8 @@ export type ServicesControllerListData = {
     };
     path?: never;
     query?: {
+        sortOrder?: 'asc' | 'desc';
+        sortBy?: 'name' | 'category' | 'status' | 'code';
         pageSize?: number;
         page?: number;
         validUntil?: string;

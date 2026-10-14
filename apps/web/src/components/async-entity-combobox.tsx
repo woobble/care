@@ -14,7 +14,12 @@ import {
 import { Label } from '@care/ui/components/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@care/ui/components/popover';
 
-export type EntityOption = { id: string; label: string; timezone?: string };
+export type EntityOption = {
+  id: string;
+  label: string;
+  timezone?: string;
+  serviceUnit?: 'occurrence' | 'minute' | 'hour' | 'day';
+};
 type EntityOptionPage = { page: number; items: EntityOption[]; hasMore: boolean };
 const PAGE_SIZE = 20;
 const MAX_RETAINED_PAGES = 2;
@@ -50,7 +55,10 @@ export function AsyncEntityCombobox({
   multiple = false,
   valuePrefix,
   validAt,
+  validFrom,
+  validUntil,
   timezoneFieldName,
+  onSelectionChange,
 }: Readonly<{
   name: string;
   label: string;
@@ -69,12 +77,20 @@ export function AsyncEntityCombobox({
   multiple?: boolean;
   valuePrefix?: string;
   validAt?: string;
+  validFrom?: string;
+  validUntil?: string;
   timezoneFieldName?: string;
+  onSelectionChange?: (options: EntityOption[]) => void;
 }>) {
   const t = useTranslations('Common');
   const initialSelectedOptions = initialOptions ?? (initialOption ? [initialOption] : []);
   const initialSelectionKey = JSON.stringify(
-    initialSelectedOptions.map((option) => [option.id, option.label, option.timezone]),
+    initialSelectedOptions.map((option) => [
+      option.id,
+      option.label,
+      option.timezone,
+      option.serviceUnit,
+    ]),
   );
   const [selection, setSelection] = useState({
     key: initialSelectionKey,
@@ -126,6 +142,8 @@ export function AsyncEntityCombobox({
       if (organizationId) params.set('organizationId', organizationId);
       if (facilityId) params.set('facilityId', facilityId);
       if (validAt) params.set('validAt', validAt);
+      if (validFrom) params.set('validFrom', validFrom);
+      if (validUntil) params.set('validUntil', validUntil);
       try {
         const response = await fetch(`/api/entity-search?${params.toString()}`, {
           signal: controller.signal,
@@ -170,6 +188,8 @@ export function AsyncEntityCombobox({
     query,
     retryCount,
     validAt,
+    validFrom,
+    validUntil,
   ]);
 
   async function loadAdjacentPage(direction: 'previous' | 'next') {
@@ -198,6 +218,8 @@ export function AsyncEntityCombobox({
     if (organizationId) params.set('organizationId', organizationId);
     if (facilityId) params.set('facilityId', facilityId);
     if (validAt) params.set('validAt', validAt);
+    if (validFrom) params.set('validFrom', validFrom);
+    if (validUntil) params.set('validUntil', validUntil);
 
     try {
       const response = await fetch(`/api/entity-search?${params.toString()}`, {
@@ -274,11 +296,11 @@ export function AsyncEntityCombobox({
 
   function selectOption(option: EntityOption) {
     if (multiple) {
-      updateSelectedOptions((current) =>
-        current.some((selected) => selected.id === option.id)
-          ? current.filter((selected) => selected.id !== option.id)
-          : [...current, option],
-      );
+      const next = selectedOptions.some((selected) => selected.id === option.id)
+        ? selectedOptions.filter((selected) => selected.id !== option.id)
+        : [...selectedOptions, option];
+      updateSelectedOptions(next);
+      onSelectionChange?.(next);
       setQuery('');
       setPages([]);
       setStatus('idle');
@@ -286,6 +308,7 @@ export function AsyncEntityCombobox({
       return;
     }
     updateSelectedOptions([option]);
+    onSelectionChange?.([option]);
     setQuery('');
     setPages([]);
     setStatus('idle');
@@ -295,6 +318,7 @@ export function AsyncEntityCombobox({
 
   function clearSelection() {
     updateSelectedOptions([]);
+    onSelectionChange?.([]);
     setQuery('');
     setPages([]);
     setStatus('idle');

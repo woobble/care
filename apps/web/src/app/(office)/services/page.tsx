@@ -36,6 +36,8 @@ import type { components } from '@care/api-client';
 type SearchParams = Promise<{
   q?: string;
   status?: string;
+  sortBy?: string;
+  sortOrder?: string;
   categoryId?: string;
   organizationId?: string;
   facilityId?: string;
@@ -54,7 +56,12 @@ export default async function ServicesPage({
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const query = await searchParams;
   const q = query.q?.trim().slice(0, 120) || undefined;
-  const status = query.status === 'archived' ? 'archived' : 'active';
+  const status =
+    query.status === 'all' ? 'all' : query.status === 'archived' ? 'archived' : 'active';
+  const sortBy = ['name', 'category', 'status', 'code'].includes(query.sortBy ?? '')
+    ? (query.sortBy as 'name' | 'category' | 'status' | 'code')
+    : 'code';
+  const sortOrder = query.sortOrder === 'desc' ? 'desc' : 'asc';
   const categoryId = validUuid(query.categoryId);
   const organizationId = validUuid(query.organizationId);
   const facilityId = validUuid(query.facilityId);
@@ -82,6 +89,8 @@ export default async function ServicesPage({
           page,
           pageSize,
           status,
+          sortBy,
+          sortOrder,
           validAt,
           ...(q ? { q } : {}),
           ...(categoryId ? { categoryId } : {}),
@@ -114,7 +123,7 @@ export default async function ServicesPage({
   const selectedFacility = facilityResult?.data as
     | components['schemas']['FacilityResponseDto']
     | undefined;
-  const filters = { q, status, categoryId, organizationId, facilityId, validAt };
+  const filters = { q, status, categoryId, organizationId, facilityId, validAt, sortBy, sortOrder };
 
   return (
     <div className="grid gap-6">
@@ -150,10 +159,21 @@ export default async function ServicesPage({
           className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-3 lg:grid-cols-4"
         >
           <input type="hidden" name="pageSize" value={pageSize} />
-          <Field label={t('Services.nameOrCode')} name="q" defaultValue={q ?? ''} maxLength={120} />
+          <Field label={t('Services.searchText')} name="q" defaultValue={q ?? ''} maxLength={120} />
           <SelectField label={t('Common.fields.status')} name="status" defaultValue={status}>
+            <option value="all">{t('Common.filters.allStatuses')}</option>
             <option value="active">{t('Common.status.active')}</option>
             <option value="archived">{t('Common.status.archived')}</option>
+          </SelectField>
+          <SelectField label={t('Services.sortBy')} name="sortBy" defaultValue={sortBy}>
+            <option value="name">{t('Services.name')}</option>
+            <option value="category">{t('Services.category')}</option>
+            <option value="status">{t('Common.fields.status')}</option>
+            <option value="code">{t('Services.code')}</option>
+          </SelectField>
+          <SelectField label={t('Common.fields.order')} name="sortOrder" defaultValue={sortOrder}>
+            <option value="asc">{t('Common.filters.ascending')}</option>
+            <option value="desc">{t('Common.filters.descending')}</option>
           </SelectField>
           <SelectField
             label={t('Services.category')}
@@ -211,7 +231,49 @@ export default async function ServicesPage({
           <h2 id="service-list-title" className="text-lg font-semibold">
             {t('Services.resultCount', { count: services.total })}
           </h2>
-          <div className="overflow-x-auto rounded-lg border bg-card shadow-sm">
+          <ul className="grid gap-3 lg:hidden" aria-label={t('Services.listCaption')}>
+            {services.items.map((service) => (
+              <li key={service.id} className="grid gap-3 rounded-lg border bg-card p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="grid min-w-0 gap-1">
+                    <Link
+                      className="font-semibold text-primary underline-offset-4 hover:underline"
+                      href={`/services/${service.id}`}
+                    >
+                      {service.name}
+                    </Link>
+                    <span className="font-mono text-xs text-muted-foreground">{service.code}</span>
+                  </div>
+                  <StatusBadge status={service.status} label={t(statusLabelKey(service.status))} />
+                </div>
+                {service.description ? (
+                  <p className="text-sm text-muted-foreground">{service.description}</p>
+                ) : null}
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                  <div>
+                    <dt className="text-muted-foreground">{t('Services.category')}</dt>
+                    <dd>{service.categoryName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t('Services.unit')}</dt>
+                    <dd>{t(unitLabelKey(service.unit))}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t('Services.availability')}</dt>
+                    <dd>{formatNumber(service.availabilityCount, locale)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t('Services.validity')}</dt>
+                    <dd>
+                      {formatDate(service.validFrom, locale)} –{' '}
+                      {formatDate(service.validUntil, locale) ?? t('Services.openEnded')}
+                    </dd>
+                  </div>
+                </dl>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto rounded-lg border bg-card shadow-sm lg:block">
             <ShadcnTable className="w-full border-collapse text-left text-sm">
               <ShadcnTableCaption className="sr-only">
                 {t('Services.listCaption')}
@@ -257,6 +319,11 @@ export default async function ServicesPage({
                       >
                         {service.name}
                       </Link>
+                      {service.description ? (
+                        <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                          {service.description}
+                        </p>
+                      ) : null}
                     </ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">{service.categoryName}</ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">

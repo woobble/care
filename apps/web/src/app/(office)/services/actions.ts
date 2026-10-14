@@ -168,7 +168,7 @@ export async function recordServicePriceAction(formData: FormData): Promise<void
     validUntil === undefined ||
     (validUntil !== null && validUntil <= validFrom)
   ) {
-    redirect(servicePricePath(serviceId, organizationId, validFrom, 'INVALID_REQUEST'));
+    redirect(servicePricePath(serviceId, organizationId, facilityId, validFrom, 'INVALID_REQUEST'));
   }
   const api = await getApiClient();
   const { error } = await api.POST('/api/v1/services/{serviceId}/prices', {
@@ -187,6 +187,7 @@ export async function recordServicePriceAction(formData: FormData): Promise<void
       servicePricePath(
         serviceId,
         organizationId,
+        facilityId,
         validFrom,
         apiErrorCode(error) ?? 'UNKNOWN_ERROR',
       ),
@@ -194,7 +195,7 @@ export async function recordServicePriceAction(formData: FormData): Promise<void
   revalidatePath(`/services/${serviceId}`);
   revalidatePath('/planning');
   revalidatePath('/benefits');
-  redirect(servicePricePath(serviceId, organizationId, validFrom, null));
+  redirect(servicePricePath(serviceId, organizationId, facilityId, validFrom, null));
 }
 
 export async function archiveServiceAction(formData: FormData): Promise<void> {
@@ -335,12 +336,14 @@ function servicePath(id: string | undefined, error: string): string {
 function servicePricePath(
   id: string | undefined,
   organizationId: string | undefined,
+  facilityId: string | undefined,
   validAt: string,
   error: string | null,
 ): string {
   if (!id) return '/services?error=INVALID_REQUEST';
   const query = new URLSearchParams();
   if (organizationId) query.set('priceOrganizationId', organizationId);
+  if (facilityId) query.set('priceFacilityId', facilityId);
   if (datePattern.test(validAt)) query.set('priceDate', validAt);
   if (error) query.set('error', error);
   else query.set('updated', 'price');

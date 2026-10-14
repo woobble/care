@@ -17,6 +17,7 @@ const careApiRoutes = {
   qualificationsSearch: () => '/api/v1/qualifications/search',
   skillsSearch: () => '/api/v1/skills/search',
   services: () => '/api/v1/services',
+  servicePrices: (serviceId: string) => `/api/v1/services/${encodePathSegment(serviceId)}/prices`,
   teamsSearch: () => '/api/v1/teams/search',
   payers: () => '/api/v1/billing/payers',
   receivables: () => '/api/v1/billing/receivables',

@@ -31,6 +31,8 @@ export {
 } from './domain/service';
 export {
   calculateServicePriceCents,
+  estimateServicePriceForFourWeeks,
+  summarizeFourWeekServiceEstimates,
   validateServicePrice,
   selectEffectiveServicePrice,
   InvalidServicePriceError,
@@ -40,6 +42,9 @@ export {
   ServicePriceNotFoundError,
   ServicePriceConflictError,
   type ServicePricingUnit,
+  type ServicePricingScheduleRule,
+  type ServicePriceEstimateReason,
+  type FourWeekServiceEstimate,
   type ServicePriceInput,
   type ServicePriceSnapshot,
 } from './domain/service-price';

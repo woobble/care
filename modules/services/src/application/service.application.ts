@@ -34,7 +34,7 @@ type AuditContext = { ip?: string; userAgent?: string };
 
 export interface ServiceSearchQuery {
   text?: string;
-  status?: 'active' | 'archived';
+  status?: 'active' | 'archived' | 'all';
   categoryId?: string;
   organizationId?: string;
   facilityId?: string;
@@ -43,6 +43,8 @@ export interface ServiceSearchQuery {
   validUntil?: string;
   page?: number;
   pageSize?: number;
+  sortBy?: 'name' | 'category' | 'status' | 'code';
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface ServiceAgreementArchiveGuard {
@@ -267,6 +269,8 @@ export class ServiceApplicationService {
         validAt,
         page,
         pageSize,
+        sortBy: query.sortBy ?? 'code',
+        sortOrder: query.sortOrder ?? 'asc',
       }),
     );
   }
