@@ -644,14 +644,8 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page.locator('span').filter({ hasText: /^Archived$/ })).toBeVisible();
 
     await page.goto('/administration/organizations');
-    await captureReviewScreenshot(page, 'administration-organizations-desktop-light.png');
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expectMobileLayoutToFit(page);
-    await captureReviewScreenshot(page, 'administration-organizations-mobile-390.png', true);
-    await page.setViewportSize({ width: 768, height: 1024 });
-    await expectMobileLayoutToFit(page);
-    await captureReviewScreenshot(page, 'administration-organizations-tablet-768.png', true);
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(page.getByRole('heading', { name: 'Create organization' })).toBeVisible();
+    await expect(page.getByLabel('Name', { exact: true })).toBeVisible();
     await page.getByLabel('Name', { exact: true }).fill(e2eOrganizationName);
     await page.getByLabel('Legal name').fill(`E2E Betreuungsdienst ${runId}`);
     await page.getByLabel('Address').fill('E2E Provider Street 1, 10115 Berlin');
@@ -679,6 +673,21 @@ test('Authentik users can be invited and administered from the office UI', async
     const e2eOrganizationId = e2eOrganizationRow.rows[0]?.id;
     if (!e2eOrganizationId) throw new Error('The office UI did not create the organization');
 
+    await page.goto(`/administration/organizations?q=${encodeURIComponent(e2eOrganizationName)}`);
+    await expect(page.getByRole('heading', { name: e2eOrganizationName })).toBeVisible();
+    await captureReviewScreenshot(page, 'administration-organizations-desktop-light.png', true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'administration-organizations-mobile-390.png', true);
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'administration-organizations-tablet-768.png', true);
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    await page.goto('/administration/facilities');
+    await expect(page.getByRole('heading', { name: 'Create facility' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'All facilities' })).toBeVisible();
+    await page.goto(`/administration/organizations/${e2eOrganizationId}`);
     await page.locator('#facility-name').fill(e2eFacilityName);
     await page.getByRole('button', { name: 'Create facility' }).click();
     await expect(page.getByRole('heading', { name: e2eFacilityName })).toBeVisible();
@@ -688,6 +697,12 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     const e2eFacilityId = e2eFacilityRow.rows[0]?.id;
     if (!e2eFacilityId) throw new Error('The office UI did not create the facility');
+
+    await page.goto(`/administration/facilities?q=${encodeURIComponent(e2eFacilityName)}`);
+    await expect(page.getByRole('link', { name: e2eFacilityName })).toBeVisible();
+    await captureReviewScreenshot(page, 'administration-facilities-desktop-1440.png', true);
+    await page.goto(`/administration/facilities/${e2eFacilityId}`);
+    await expect(page.getByRole('heading', { name: e2eFacilityName })).toBeVisible();
 
     await page.locator('#team-name').fill(e2eTeamName);
     const teamCreateNavigation = page.waitForURL(
@@ -710,6 +725,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await selectEntity(page, 'Organization', e2eOrganizationName, e2eOrganizationName);
     await page.getByLabel('First name').fill('E2E');
     await page.getByLabel('Last name').fill(runId);
+    await page.getByLabel('Email').fill(caregiverEmail);
     await page.getByLabel('Personnel number').fill(caregiverPersonnelNumber);
     await page.getByRole('button', { name: 'Create employee' }).click();
     await page.waitForURL(/\/employees\/[0-9a-f-]{36}$/i, { timeout: 30_000 });
@@ -722,6 +738,22 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     const caregiverEmployeeId = caregiverEmployeeRow.rows[0]?.id;
     if (!caregiverEmployeeId) throw new Error('The office UI did not create the employee');
+
+    await page.goto(
+      `/employees?q=${encodeURIComponent(caregiverEmail)}&status=active&sortBy=status`,
+    );
+    await expect(page.getByRole('link', { name: `E2E ${runId}` })).toBeVisible();
+    await captureReviewScreenshot(page, 'employees-directory-desktop-1440.png');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await expect(page.getByRole('link', { name: `E2E ${runId}` })).toBeVisible();
+    await captureReviewScreenshot(page, 'employees-directory-mobile-390.png', true);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/employees/${caregiverEmployeeId}`);
+    await page.getByLabel('Phone').fill('+49 30 5550101');
+    await page.getByRole('button', { name: 'Save master data' }).click();
+    await expect(page).toHaveURL(/updated=employee/);
+    await expect(page.getByLabel('Phone')).toHaveValue('+49 30 5550101');
 
     await selectEntity(page, 'Assign facility', e2eFacilityName, /E2E Facility/);
     await page.getByRole('button', { name: 'Assign facility' }).click();
@@ -743,7 +775,37 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(
       page.locator('#assignments article').filter({ hasText: e2eTeamName }),
     ).toBeVisible();
-    await page.getByLabel('Add qualification').selectOption({ label: 'Pflegefachkraft (PFK)' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await page.getByRole('heading', { name: 'Weekly hours' }).scrollIntoViewIfNeeded();
+    await expect(page.getByRole('button', { name: 'Save availability' })).toBeVisible();
+    await captureReviewScreenshot(page, 'employee-availability-editor-mobile-390.png');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const availabilityDate = dateInBerlin();
+    const availabilityWeekdays = new Set([
+      weekdayInBerlin(availabilityDate),
+      weekdayInBerlin(addDaysToDate(availabilityDate, 1)),
+      1,
+      3,
+    ]);
+    for (const weekday of availabilityWeekdays) {
+      await page.locator(`input[name="window_${weekday}_1_start"]`).fill('00:00');
+      await page.locator(`input[name="window_${weekday}_1_end"]`).fill('23:59');
+    }
+    await page.getByRole('button', { name: 'Save availability' }).click();
+    await expect(page).toHaveURL(/updated=availability/);
+    const absenceDate = addDaysToDate(dateInBerlin(), 14);
+    await page.getByLabel('Starts at').fill(`${absenceDate}T09:00`);
+    await page.getByLabel('Ends at').fill(`${absenceDate}T17:00`);
+    await page.getByRole('button', { name: 'Record absence' }).click();
+    await expect(page).toHaveURL(/updated=absence/);
+    await expect(page.locator('#availability')).toContainText('Vacation');
+    await page.getByRole('combobox', { name: 'Add qualification' }).click();
+    await page.getByRole('combobox', { name: 'Search by name' }).fill('Pflegefachkraft');
+    await page
+      .getByRole('dialog')
+      .getByRole('option', { name: /Pflegefachkraft.*PFK/ })
+      .click();
     await page.getByRole('button', { name: 'Save qualification' }).click();
     await expect(
       page.locator('#qualifications li').filter({ hasText: 'Pflegefachkraft (PFK)' }),
@@ -1417,6 +1479,14 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.goto(`/employees/${caregiverEmployeeId}`);
     await expect(page.getByRole('heading', { name: 'Upcoming visits' })).toBeVisible();
     await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true })).toBeVisible();
+    await captureReviewScreenshot(page, 'employee-profile-desktop-1440.png', true);
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'employee-profile-tablet-768.png', true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'employee-profile-mobile-390.png', true);
+    await page.setViewportSize({ width: 1440, height: 900 });
 
     await page.goto(`/visits/${generatedVisit.id}`);
     page.once('dialog', (dialog) => dialog.accept());
@@ -1533,7 +1603,15 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(employeeLinkError).toBeVisible();
 
     await page.goto(`/employees/${caregiverEmployeeId}`);
-    await page.getByLabel('Link an active user').selectOption(caregiverPlatformUserId);
+    await page.getByRole('combobox', { name: 'Link an active user' }).click();
+    await page.getByRole('combobox', { name: 'Search by name' }).fill(caregiverName);
+    const linkableAccount = page
+      .getByRole('dialog')
+      .getByRole('option', { name: new RegExp(`${caregiverName}.*${caregiverEmail}`) });
+    await expect(linkableAccount).toBeVisible();
+    await captureReviewScreenshot(page, 'employee-account-link-dialog.png');
+    await linkableAccount.click();
+    page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Link user' }).click();
     await expect(page.getByText(caregiverName, { exact: true })).toBeVisible();
     await retryCareToday(caregiverPage, 'Try again');
@@ -2551,18 +2629,25 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
+    await expectMembershipScopes(database, invitedMembershipId, [
+      { scopeType: 'facility', scopeId: facilityWestId },
+    ]);
     await expect(facilityScope).toHaveCount(1);
     await selectEntity(page, 'Facilities', 'Facility West', /Facility West/);
     await page.getByRole('button', { name: 'Save scopes' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
+    await expectMembershipScopes(database, invitedMembershipId, []);
     await expect(facilityScope).toHaveCount(0);
     await selectEntity(page, 'Facilities', 'Facility West', /Facility West/);
     await page.getByRole('button', { name: 'Save scopes' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
+    await expectMembershipScopes(database, invitedMembershipId, [
+      { scopeType: 'facility', scopeId: facilityWestId },
+    ]);
     await page.getByRole('button', { name: 'Activate membership' }).click();
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
     await expect(page.getByText('Office', { exact: true })).toBeVisible();
@@ -3200,6 +3285,31 @@ function dateInBerlin(): string {
   return dateInTimezone(new Date(), 'Europe/Berlin');
 }
 
+function addDaysToDate(date: string, days: number): string {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function weekdayInBerlin(date: string): number {
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Berlin',
+    weekday: 'short',
+  }).format(new Date(`${date}T12:00:00Z`));
+  const weekdays: Record<string, number> = {
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+    Sun: 7,
+  };
+  const value = weekdays[weekday];
+  if (!value) throw new Error(`Unexpected weekday ${weekday}`);
+  return value;
+}
+
 function nextVisitTimesInBerlin(): { date: string; start: string; end: string } {
   const timezone = 'Europe/Berlin';
   const today = dateInTimezone(new Date(), timezone);
@@ -3827,6 +3937,25 @@ async function expectVisibleTextToOmitIds(
   for (const id of ids) {
     if (id) expect(visibleText).not.toContain(id);
   }
+}
+
+async function expectMembershipScopes(
+  database: Client,
+  membershipId: string,
+  expected: Array<{ scopeType: string; scopeId: string }>,
+): Promise<void> {
+  await expect
+    .poll(async () => {
+      const result = await database.query<{ scopeType: string; scopeId: string }>(
+        `SELECT scope_type AS "scopeType", scope_id AS "scopeId"
+         FROM identity.membership_scopes
+         WHERE membership_id = $1
+         ORDER BY scope_type, scope_id`,
+        [membershipId],
+      );
+      return result.rows;
+    })
+    .toEqual(expected);
 }
 
 async function selectEntity(

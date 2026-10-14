@@ -99,6 +99,7 @@ import type {
   DeadlineTaskRequestDto,
   DeclineEvidenceRequestDto,
   DefinitionResponseDto,
+  DefinitionSearchResponseDto,
   DocumentationAmendmentDto,
   DocumentationCompletenessDto,
   DocumentationEntryDto,
@@ -147,6 +148,7 @@ import type {
   InvoicePaymentHistoryResponseDto,
   LinkUserDto,
   LinkableUserResponseDto,
+  LinkableUserSearchResponseDto,
   MeResponseDto,
   MyTodayTourResponseDto,
   OperationsDashboardResponseDto,
@@ -373,6 +375,7 @@ export type components = {
     DeadlineTaskRequestDto: DeadlineTaskRequestDto;
     DeclineEvidenceRequestDto: DeclineEvidenceRequestDto;
     DefinitionResponseDto: DefinitionResponseDto;
+    DefinitionSearchResponseDto: DefinitionSearchResponseDto;
     DocumentationAmendmentDto: DocumentationAmendmentDto;
     DocumentationCompletenessDto: DocumentationCompletenessDto;
     DocumentationEntryDto: DocumentationEntryDto;
@@ -421,6 +424,7 @@ export type components = {
     InvoicePaymentHistoryResponseDto: InvoicePaymentHistoryResponseDto;
     LinkUserDto: LinkUserDto;
     LinkableUserResponseDto: LinkableUserResponseDto;
+    LinkableUserSearchResponseDto: LinkableUserSearchResponseDto;
     MeResponseDto: MeResponseDto;
     MyTodayTourResponseDto: MyTodayTourResponseDto;
     OperationsDashboardResponseDto: OperationsDashboardResponseDto;

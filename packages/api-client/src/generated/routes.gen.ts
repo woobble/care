@@ -373,6 +373,9 @@ export const routeOperations = {
   "/api/v1/employees/{id}/linkable-users": {
     get: "employeesControllerLinkableUsers",
   },
+  "/api/v1/employees/{id}/linkable-users/search": {
+    get: "employeesControllerSearchLinkableUsers",
+  },
   "/api/v1/employees/{id}/qualifications/{qualificationId}": {
     delete: "employeesControllerRemoveQualification",
     put: "employeesControllerAssignQualification",
@@ -599,6 +602,9 @@ export const routeOperations = {
   "/api/v1/qualifications/{id}/archive": {
     post: "employeesControllerArchiveQualification",
   },
+  "/api/v1/qualifications/search": {
+    get: "employeesControllerSearchQualifications",
+  },
   "/api/v1/scheduling/conflicts": {
     get: "schedulingOperationsControllerConflicts",
   },
@@ -698,6 +704,9 @@ export const routeOperations = {
   },
   "/api/v1/skills/{id}/archive": {
     post: "employeesControllerArchiveSkill",
+  },
+  "/api/v1/skills/search": {
+    get: "employeesControllerSearchSkills",
   },
   "/api/v1/substitutions/{id}/cancel": {
     post: "substitutionsControllerCancel",

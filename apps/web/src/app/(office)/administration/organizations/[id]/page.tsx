@@ -282,7 +282,7 @@ export default async function OrganizationDetailPage({
                     {facility.name}
                   </Link>
                 ) : (
-                  <span className="font-medium">{facility.name}</span>
+                  <span className="font-medium">{t('Resources.unavailableFacility')}</span>
                 )}
                 <StatusBadge status={facility.status} label={t(statusLabelKey(facility.status))} />
               </li>
@@ -330,6 +330,7 @@ export default async function OrganizationDetailPage({
                   tenantId,
                   organization.id,
                   team.facilityId,
+                  team.id,
                 ) ? (
                   <Link
                     className="font-medium text-primary underline"
@@ -338,10 +339,20 @@ export default async function OrganizationDetailPage({
                     {team.name}
                   </Link>
                 ) : (
-                  <span className="font-medium">{team.name}</span>
+                  <span className="font-medium">{t('Resources.unavailableTeam')}</span>
                 )}
                 <span className="text-sm text-muted-foreground">
-                  {team.facilityName ?? t('Organizations.organizationWide')}
+                  {team.facilityId
+                    ? hasClientPermission(
+                        permissions,
+                        'facility.read',
+                        tenantId,
+                        organization.id,
+                        team.facilityId,
+                      )
+                      ? (team.facilityName ?? t('Resources.unavailableFacility'))
+                      : t('Resources.unavailableFacility')
+                    : t('Organizations.organizationWide')}
                 </span>
               </li>
             ))}

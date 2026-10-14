@@ -37,6 +37,7 @@ type SearchParams = Promise<{
   updated?: string;
   organizationId?: string;
   q?: string;
+  status?: string;
   page?: string;
   pageSize?: string;
 }>;
@@ -55,6 +56,8 @@ export default async function FacilitiesPage({
       ? query.organizationId
       : undefined;
   const search = query.q?.trim().slice(0, 120) ?? '';
+  const status =
+    query.status === 'active' || query.status === 'archived' ? query.status : undefined;
   const parsedPage = Number(query.page);
   const page =
     Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
@@ -76,6 +79,7 @@ export default async function FacilitiesPage({
       pageSize,
       ...(search ? { q: search } : {}),
       ...(organizationId ? { organizationId } : {}),
+      ...(status ? { status } : {}),
     }),
   ]);
   if (!facilitiesResult.failed)
@@ -156,12 +160,27 @@ export default async function FacilitiesPage({
         <h2 id="facility-list-title" className="text-xl font-semibold">
           {t('Facilities.listTitle')}
         </h2>
-        <form method="get" className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-3">
+        <form
+          method="get"
+          className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-2 xl:grid-cols-4"
+        >
           <input type="hidden" name="page" value="1" />
           <input type="hidden" name="pageSize" value={pageSize} />
           <label className="grid gap-1 text-sm">
             <span>{t('Facilities.listTitle')}</span>
             <Input type="search" name="q" maxLength={120} defaultValue={search} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            {t('Common.fields.status')}
+            <select
+              name="status"
+              defaultValue={status ?? ''}
+              className="h-10 rounded-md border bg-card px-3"
+            >
+              <option value="">{t('Common.filters.allStatuses')}</option>
+              <option value="active">{t('Common.status.active')}</option>
+              <option value="archived">{t('Common.status.archived')}</option>
+            </select>
           </label>
           {hasPermission(permissions, 'organization.read') ? (
             <AsyncEntityCombobox
@@ -217,7 +236,17 @@ export default async function FacilitiesPage({
                     </ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">
                       <ResourceReference
-                        label={facility.organizationName}
+                        label={
+                          hasClientPermission(
+                            permissions,
+                            'organization.read',
+                            tenantId,
+                            facility.organizationId,
+                            null,
+                          )
+                            ? facility.organizationName
+                            : t('Resources.unavailableOrganization')
+                        }
                         href={
                           hasClientPermission(
                             permissions,
@@ -251,7 +280,7 @@ export default async function FacilitiesPage({
             page={facilitiesResult.page}
             pageSize={facilitiesResult.pageSize}
             totalItems={facilitiesResult.total}
-            filters={{ q: search, organizationId }}
+            filters={{ q: search, organizationId, status }}
           />
         ) : null}
       </section>

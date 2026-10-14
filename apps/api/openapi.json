@@ -2752,6 +2752,7 @@
               "enum": [
                 "lastName",
                 "firstName",
+                "status",
                 "createdAt"
               ],
               "type": "string"
@@ -3200,6 +3201,89 @@
           }
         ],
         "summary": "List active local users in this tenant that can be linked",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/employees/{id}/linkable-users/search": {
+      "get": {
+        "operationId": "EmployeesController_searchLinkableUsers",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minLength": 2,
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 50,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkableUserSearchResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Search eligible local users in the employee tenant",
         "tags": [
           "employees"
         ]
@@ -3718,6 +3802,80 @@
         ]
       }
     },
+    "/api/v1/qualifications/search": {
+      "get": {
+        "operationId": "EmployeesController_searchQualifications",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minLength": 2,
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 50,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefinitionSearchResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Search active tenant qualification definitions",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
     "/api/v1/qualifications/{id}": {
       "patch": {
         "operationId": "EmployeesController_updateQualification",
@@ -4090,6 +4248,80 @@
           }
         ],
         "summary": "Create a tenant skill definition",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/v1/skills/search": {
+      "get": {
+        "operationId": "EmployeesController_searchSkills",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minLength": 2,
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 50,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefinitionSearchResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Search active tenant skill definitions",
         "tags": [
           "employees"
         ]
@@ -23165,6 +23397,10 @@
             "format": "uuid",
             "nullable": true
           },
+          "hasLinkedUser": {
+            "type": "boolean",
+            "description": "Whether an employee is linked to a local user account."
+          },
           "firstName": {
             "type": "string"
           },
@@ -23229,6 +23465,7 @@
           "organizationId",
           "organizationName",
           "userId",
+          "hasLinkedUser",
           "firstName",
           "lastName",
           "preferredName",
@@ -23583,6 +23820,13 @@
             "format": "email",
             "nullable": true
           },
+          "userStatus": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ]
+          },
           "membershipStatus": {
             "type": "string",
             "enum": [
@@ -23597,6 +23841,7 @@
           "id",
           "displayName",
           "email",
+          "userStatus",
           "membershipStatus"
         ]
       },
@@ -23624,6 +23869,10 @@
             "type": "string",
             "format": "uuid",
             "nullable": true
+          },
+          "hasLinkedUser": {
+            "type": "boolean",
+            "description": "Whether an employee is linked to a local user account."
           },
           "firstName": {
             "type": "string"
@@ -23682,6 +23931,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "canLinkUser": {
+            "type": "boolean",
+            "description": "Whether the current principal may link or unlink a user account."
+          },
           "facilityAssignments": {
             "type": "array",
             "items": {
@@ -23722,6 +23975,7 @@
           "organizationId",
           "organizationName",
           "userId",
+          "hasLinkedUser",
           "firstName",
           "lastName",
           "preferredName",
@@ -23735,6 +23989,7 @@
           "status",
           "createdAt",
           "updatedAt",
+          "canLinkUser",
           "facilityAssignments",
           "teamMemberships",
           "qualifications",
@@ -23819,6 +24074,32 @@
           "id",
           "displayName",
           "email"
+        ]
+      },
+      "LinkableUserSearchResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkableUserResponseDto"
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
         ]
       },
       "LinkUserDto": {
@@ -23918,6 +24199,32 @@
           "status",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "DefinitionSearchResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DefinitionResponseDto"
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
         ]
       },
       "CreateDefinitionDto": {

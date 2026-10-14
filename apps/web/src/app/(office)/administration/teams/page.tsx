@@ -38,6 +38,7 @@ type SearchParams = Promise<{
   organizationId?: string;
   facilityId?: string;
   q?: string;
+  status?: string;
   page?: string;
   pageSize?: string;
 }>;
@@ -55,6 +56,8 @@ export default async function TeamsPage({
   const organizationId = validUuid(query.organizationId);
   const facilityId = validUuid(query.facilityId);
   const search = query.q?.trim().slice(0, 120) ?? '';
+  const status =
+    query.status === 'active' || query.status === 'archived' ? query.status : undefined;
   const parsedPage = Number(query.page);
   const page =
     Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
@@ -75,6 +78,7 @@ export default async function TeamsPage({
       ...(search ? { q: search } : {}),
       ...(organizationId ? { organizationId } : {}),
       ...(facilityId ? { facilityId } : {}),
+      ...(status ? { status } : {}),
     }),
   ]);
   if (!teamsResult.failed)
@@ -147,12 +151,27 @@ export default async function TeamsPage({
         <h2 id="team-list-title" className="text-xl font-semibold">
           {t('Teams.listTitle')}
         </h2>
-        <form method="get" className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-3">
+        <form
+          method="get"
+          className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5"
+        >
           <input type="hidden" name="page" value="1" />
           <input type="hidden" name="pageSize" value={pageSize} />
           <label className="grid gap-1 text-sm">
             <span>{t('Teams.listTitle')}</span>
             <Input type="search" name="q" maxLength={120} defaultValue={search} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            {t('Common.fields.status')}
+            <select
+              name="status"
+              defaultValue={status ?? ''}
+              className="h-10 rounded-md border bg-card px-3"
+            >
+              <option value="">{t('Common.filters.allStatuses')}</option>
+              <option value="active">{t('Common.status.active')}</option>
+              <option value="archived">{t('Common.status.archived')}</option>
+            </select>
           </label>
           {hasPermission(permissions, 'organization.read') ? (
             <AsyncEntityCombobox
@@ -226,7 +245,18 @@ export default async function TeamsPage({
                     </ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">
                       <ResourceReference
-                        label={team.organizationName}
+                        label={
+                          hasClientPermission(
+                            permissions,
+                            'organization.read',
+                            tenantId,
+                            team.organizationId,
+                            null,
+                            team.id,
+                          )
+                            ? team.organizationName
+                            : t('Resources.unavailableOrganization')
+                        }
                         href={
                           hasClientPermission(
                             permissions,
@@ -241,9 +271,20 @@ export default async function TeamsPage({
                       />
                     </ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">
-                      {team.facilityName && team.facilityId ? (
+                      {team.facilityId ? (
                         <ResourceReference
-                          label={team.facilityName}
+                          label={
+                            hasClientPermission(
+                              permissions,
+                              'facility.read',
+                              tenantId,
+                              team.organizationId,
+                              team.facilityId,
+                              team.id,
+                            )
+                              ? (team.facilityName ?? t('Resources.unavailableFacility'))
+                              : t('Resources.unavailableFacility')
+                          }
                           href={
                             hasClientPermission(
                               permissions,
@@ -277,7 +318,7 @@ export default async function TeamsPage({
             page={teamsResult.page}
             pageSize={teamsResult.pageSize}
             totalItems={teamsResult.total}
-            filters={{ q: search, organizationId, facilityId }}
+            filters={{ q: search, organizationId, facilityId, status }}
           />
         ) : null}
       </section>

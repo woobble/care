@@ -203,6 +203,40 @@ describe('employee application rules', () => {
     ).rejects.toBeInstanceOf(EmployeeAlreadyLinkedError);
   });
 
+  test('searches only eligible account links after employee-scope authorization', async () => {
+    const eligibleUsers = [{ id: userId, displayName: 'Ada Lovelace', email: 'ada@example.test' }];
+    let receivedSearch: { query: string; page: number; pageSize: number } | undefined;
+    const allowed = createService({
+      searchLinkableUsers: async (_transaction, receivedTenantId, input) => {
+        expect(receivedTenantId).toBe(tenantId);
+        receivedSearch = input;
+        return { items: eligibleUsers, page: input.page, pageSize: input.pageSize, total: 1 };
+      },
+    });
+
+    await expect(
+      allowed.service.searchLinkableUsers(principal('employee.link_user'), employeeId, {
+        query: 'ada',
+        page: 1,
+        pageSize: 20,
+      }),
+    ).resolves.toMatchObject({ items: eligibleUsers, total: 1 });
+    expect(receivedSearch).toEqual({ query: 'ada', page: 1, pageSize: 20 });
+
+    const denied = createService({
+      searchLinkableUsers: async () => {
+        throw new Error('Unauthorized search must not reach account lookup');
+      },
+    });
+    await expect(
+      denied.service.searchLinkableUsers(principal('employee.read'), employeeId, {
+        query: 'ada',
+        page: 1,
+        pageSize: 20,
+      }),
+    ).rejects.toThrow();
+  });
+
   test('rejects team membership across the employee owning organization', async () => {
     const service = createService({
       teamContext: async () => ({

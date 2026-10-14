@@ -26,6 +26,8 @@ export default async function NewEmployeePage({
       <ActionNotice error={query.error} />
       <RHFActionForm
         action={createEmployeeAction}
+        errorMessage={t('Employees.createFailed')}
+        warnOnUnsavedChanges
         className="grid gap-5 rounded-lg border bg-card p-5"
       >
         <div className="grid gap-4 md:grid-cols-2">

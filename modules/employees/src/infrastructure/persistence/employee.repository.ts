@@ -37,7 +37,7 @@ export interface EmployeeSearch {
   ids?: string[];
   page: number;
   pageSize: number;
-  sortBy: 'lastName' | 'firstName' | 'createdAt';
+  sortBy: 'lastName' | 'firstName' | 'status' | 'createdAt';
   sortOrder: 'asc' | 'desc';
 }
 
@@ -95,21 +95,34 @@ export class EmployeeRepository {
               asc(employeeRecords.id),
             ]
           : [asc(employeeRecords.firstName), asc(employeeRecords.lastName), asc(employeeRecords.id)]
-        : input.sortBy === 'createdAt'
-          ? input.sortOrder === 'desc'
-            ? [desc(employeeRecords.createdAt), asc(employeeRecords.id)]
-            : [asc(employeeRecords.createdAt), asc(employeeRecords.id)]
-          : input.sortOrder === 'desc'
-            ? [
-                desc(employeeRecords.lastName),
-                desc(employeeRecords.firstName),
-                asc(employeeRecords.id),
-              ]
-            : [
-                asc(employeeRecords.lastName),
-                asc(employeeRecords.firstName),
-                asc(employeeRecords.id),
-              ];
+        : input.sortBy === 'status'
+          ? [
+              input.sortOrder === 'desc'
+                ? desc(
+                    sql<number>`case ${employeeRecords.status} when 'active' then 1 when 'inactive' then 2 else 3 end`,
+                  )
+                : asc(
+                    sql<number>`case ${employeeRecords.status} when 'active' then 1 when 'inactive' then 2 else 3 end`,
+                  ),
+              asc(employeeRecords.lastName),
+              asc(employeeRecords.firstName),
+              asc(employeeRecords.id),
+            ]
+          : input.sortBy === 'createdAt'
+            ? input.sortOrder === 'desc'
+              ? [desc(employeeRecords.createdAt), asc(employeeRecords.id)]
+              : [asc(employeeRecords.createdAt), asc(employeeRecords.id)]
+            : input.sortOrder === 'desc'
+              ? [
+                  desc(employeeRecords.lastName),
+                  desc(employeeRecords.firstName),
+                  asc(employeeRecords.id),
+                ]
+              : [
+                  asc(employeeRecords.lastName),
+                  asc(employeeRecords.firstName),
+                  asc(employeeRecords.id),
+                ];
     const rows = await transaction
       .select({
         id: employeeRecords.id,
@@ -479,6 +492,7 @@ export class EmployeeRepository {
         id: users.id,
         displayName: users.displayName,
         email: users.email,
+        userStatus: users.status,
         membershipStatus: tenantMemberships.status,
       })
       .from(tenantMemberships)
@@ -490,7 +504,52 @@ export class EmployeeRepository {
       id: first.id,
       displayName: first.displayName,
       email: first.email,
+      userStatus: first.userStatus,
       membershipStatus: first.membershipStatus,
+    };
+  }
+
+  async searchLinkableUsers(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    input: { query: string; page: number; pageSize: number },
+  ): Promise<{
+    items: Array<{ id: string; displayName: string | null; email: string | null }>;
+    page: number;
+    pageSize: number;
+    total: number;
+  }> {
+    const pattern = `%${input.query}%`;
+    const where = and(
+      eq(tenantMemberships.tenantId, tenantId),
+      eq(tenantMemberships.status, 'active'),
+      eq(users.status, 'active'),
+      or(ilike(users.displayName, pattern), ilike(users.email, pattern)),
+      notExists(
+        transaction
+          .select({ id: employeeRecords.id })
+          .from(employeeRecords)
+          .where(and(eq(employeeRecords.tenantId, tenantId), eq(employeeRecords.userId, users.id))),
+      ),
+    );
+    const totals = await transaction
+      .select({ total: count() })
+      .from(tenantMemberships)
+      .innerJoin(users, eq(users.id, tenantMemberships.userId))
+      .where(where);
+    const items = await transaction
+      .select({ id: users.id, displayName: users.displayName, email: users.email })
+      .from(tenantMemberships)
+      .innerJoin(users, eq(users.id, tenantMemberships.userId))
+      .where(where)
+      .orderBy(asc(users.displayName), asc(users.email), asc(users.id))
+      .limit(input.pageSize)
+      .offset((input.page - 1) * input.pageSize);
+    return {
+      items,
+      page: input.page,
+      pageSize: input.pageSize,
+      total: Number(totals[0]?.total ?? 0),
     };
   }
 
@@ -877,6 +936,36 @@ export class EmployeeRepository {
       .orderBy(asc(qualificationDefinitions.name), asc(qualificationDefinitions.id));
   }
 
+  async searchQualifications(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    query: string,
+    page: number,
+    pageSize: number,
+  ) {
+    const pattern = `%${query}%`;
+    const where = and(
+      eq(qualificationDefinitions.tenantId, tenantId),
+      eq(qualificationDefinitions.status, 'active'),
+      or(
+        ilike(qualificationDefinitions.name, pattern),
+        ilike(qualificationDefinitions.code, pattern),
+      ),
+    );
+    const totals = await transaction
+      .select({ total: count() })
+      .from(qualificationDefinitions)
+      .where(where);
+    const items = await transaction
+      .select()
+      .from(qualificationDefinitions)
+      .where(where)
+      .orderBy(asc(qualificationDefinitions.name), asc(qualificationDefinitions.id))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    return { items, page, pageSize, total: Number(totals[0]?.total ?? 0) };
+  }
+
   async getQualification(
     transaction: DatabaseTransaction,
     tenantId: string,
@@ -1051,6 +1140,30 @@ export class EmployeeRepository {
       .from(skillDefinitions)
       .where(and(...filters))
       .orderBy(asc(skillDefinitions.name), asc(skillDefinitions.id));
+  }
+
+  async searchSkills(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    query: string,
+    page: number,
+    pageSize: number,
+  ) {
+    const pattern = `%${query}%`;
+    const where = and(
+      eq(skillDefinitions.tenantId, tenantId),
+      eq(skillDefinitions.status, 'active'),
+      or(ilike(skillDefinitions.name, pattern), ilike(skillDefinitions.code, pattern)),
+    );
+    const totals = await transaction.select({ total: count() }).from(skillDefinitions).where(where);
+    const items = await transaction
+      .select()
+      .from(skillDefinitions)
+      .where(where)
+      .orderBy(asc(skillDefinitions.name), asc(skillDefinitions.id))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    return { items, page, pageSize, total: Number(totals[0]?.total ?? 0) };
   }
 
   async getSkill(
@@ -1279,7 +1392,15 @@ export class EmployeeRepository {
         or(
           ilike(employeeRecords.firstName, pattern),
           ilike(employeeRecords.lastName, pattern),
+          ilike(employeeRecords.preferredName, pattern),
+          ilike(
+            sql`coalesce(${employeeRecords.preferredName}, ${employeeRecords.firstName}) || ' ' || ${employeeRecords.lastName}`,
+            pattern,
+          ),
+          ilike(sql`${employeeRecords.firstName} || ' ' || ${employeeRecords.lastName}`, pattern),
           ilike(employeeRecords.personnelNumber, pattern),
+          ilike(employeeRecords.email, pattern),
+          ilike(employeeRecords.phone, pattern),
         )!,
       );
     }

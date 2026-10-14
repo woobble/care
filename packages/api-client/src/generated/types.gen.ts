@@ -356,6 +356,10 @@ export type EmployeeResponseDto = {
     organizationId: string | null;
     organizationName: string | null;
     userId: string | null;
+    /**
+     * Whether an employee is linked to a local user account.
+     */
+    hasLinkedUser: boolean;
     firstName: string;
     lastName: string;
     preferredName: string | null;
@@ -444,6 +448,7 @@ export type EmployeeUserResponseDto = {
     id: string;
     displayName: string | null;
     email: string | null;
+    userStatus: 'active' | 'disabled';
     membershipStatus: 'pending' | 'active' | 'inactive' | 'revoked';
 };
 
@@ -453,6 +458,10 @@ export type EmployeeDetailResponseDto = {
     organizationId: string | null;
     organizationName: string | null;
     userId: string | null;
+    /**
+     * Whether an employee is linked to a local user account.
+     */
+    hasLinkedUser: boolean;
     firstName: string;
     lastName: string;
     preferredName: string | null;
@@ -466,6 +475,10 @@ export type EmployeeDetailResponseDto = {
     status: 'active' | 'inactive' | 'archived';
     createdAt: string;
     updatedAt: string;
+    /**
+     * Whether the current principal may link or unlink a user account.
+     */
+    canLinkUser: boolean;
     facilityAssignments: Array<FacilityAssignmentResponseDto>;
     teamMemberships: Array<TeamMembershipResponseDto>;
     qualifications: Array<EmployeeQualificationResponseDto>;
@@ -490,6 +503,13 @@ export type LinkableUserResponseDto = {
     id: string;
     displayName: string | null;
     email: string | null;
+};
+
+export type LinkableUserSearchResponseDto = {
+    items: Array<LinkableUserResponseDto>;
+    page: number;
+    pageSize: number;
+    total: number;
 };
 
 export type LinkUserDto = {
@@ -517,6 +537,13 @@ export type DefinitionResponseDto = {
     status: 'active' | 'archived';
     createdAt: string;
     updatedAt: string;
+};
+
+export type DefinitionSearchResponseDto = {
+    items: Array<DefinitionResponseDto>;
+    page: number;
+    pageSize: number;
+    total: number;
 };
 
 export type CreateDefinitionDto = {
@@ -4174,7 +4201,7 @@ export type EmployeesControllerSearchData = {
         ids?: string;
         page?: number;
         pageSize?: number;
-        sortBy?: 'lastName' | 'firstName' | 'createdAt';
+        sortBy?: 'lastName' | 'firstName' | 'status' | 'createdAt';
         sortOrder?: 'asc' | 'desc';
     };
     url: '/api/v1/employees';
@@ -4381,6 +4408,37 @@ export type EmployeesControllerLinkableUsersResponses = {
 };
 
 export type EmployeesControllerLinkableUsersResponse = EmployeesControllerLinkableUsersResponses[keyof EmployeesControllerLinkableUsersResponses];
+
+export type EmployeesControllerSearchLinkableUsersData = {
+    body?: never;
+    headers: {
+        'X-Tenant-Id': string;
+    };
+    path: {
+        id: string;
+    };
+    query: {
+        q: string;
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/v1/employees/{id}/linkable-users/search';
+};
+
+export type EmployeesControllerSearchLinkableUsersErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type EmployeesControllerSearchLinkableUsersError = EmployeesControllerSearchLinkableUsersErrors[keyof EmployeesControllerSearchLinkableUsersErrors];
+
+export type EmployeesControllerSearchLinkableUsersResponses = {
+    200: LinkableUserSearchResponseDto;
+};
+
+export type EmployeesControllerSearchLinkableUsersResponse = EmployeesControllerSearchLinkableUsersResponses[keyof EmployeesControllerSearchLinkableUsersResponses];
 
 export type EmployeesControllerUnlinkUserData = {
     body?: never;
@@ -4600,6 +4658,35 @@ export type EmployeesControllerCreateQualificationResponses = {
 
 export type EmployeesControllerCreateQualificationResponse = EmployeesControllerCreateQualificationResponses[keyof EmployeesControllerCreateQualificationResponses];
 
+export type EmployeesControllerSearchQualificationsData = {
+    body?: never;
+    headers: {
+        'X-Tenant-Id': string;
+    };
+    path?: never;
+    query: {
+        q: string;
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/v1/qualifications/search';
+};
+
+export type EmployeesControllerSearchQualificationsErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type EmployeesControllerSearchQualificationsError = EmployeesControllerSearchQualificationsErrors[keyof EmployeesControllerSearchQualificationsErrors];
+
+export type EmployeesControllerSearchQualificationsResponses = {
+    200: DefinitionSearchResponseDto;
+};
+
+export type EmployeesControllerSearchQualificationsResponse = EmployeesControllerSearchQualificationsResponses[keyof EmployeesControllerSearchQualificationsResponses];
+
 export type EmployeesControllerUpdateQualificationData = {
     body: UpdateDefinitionDto;
     headers: {
@@ -4761,6 +4848,35 @@ export type EmployeesControllerCreateSkillResponses = {
 };
 
 export type EmployeesControllerCreateSkillResponse = EmployeesControllerCreateSkillResponses[keyof EmployeesControllerCreateSkillResponses];
+
+export type EmployeesControllerSearchSkillsData = {
+    body?: never;
+    headers: {
+        'X-Tenant-Id': string;
+    };
+    path?: never;
+    query: {
+        q: string;
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/v1/skills/search';
+};
+
+export type EmployeesControllerSearchSkillsErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type EmployeesControllerSearchSkillsError = EmployeesControllerSearchSkillsErrors[keyof EmployeesControllerSearchSkillsErrors];
+
+export type EmployeesControllerSearchSkillsResponses = {
+    200: DefinitionSearchResponseDto;
+};
+
+export type EmployeesControllerSearchSkillsResponse = EmployeesControllerSearchSkillsResponses[keyof EmployeesControllerSearchSkillsResponses];
 
 export type EmployeesControllerUpdateSkillData = {
     body: UpdateDefinitionDto;

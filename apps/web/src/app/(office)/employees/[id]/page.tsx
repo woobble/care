@@ -1,6 +1,7 @@
 import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
 import { Textarea } from '@care/ui/components/textarea';
 import { NativeSelect } from '@care/ui/components/native-select';
+import { Suspense } from 'react';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -23,9 +24,12 @@ import {
   getTenantHeader,
   hasPermission,
   hasClientPermission,
+  type CurrentPermissionGrant,
 } from '@app/web/lib/api';
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { EmployeeVisitSection } from '@app/web/app/(office)/employees/employee-visit-section';
+import { WeeklyAvailabilityEditor } from '@app/web/app/(office)/employees/weekly-availability-editor';
 import {
   assignFacilityAction,
   cancelEmployeeAbsenceAction,
@@ -67,108 +71,17 @@ export default async function EmployeeDetailPage({
   const employeeResult = await get('/api/v1/employees/{id}', { params: { path: { id }, header } });
   if (!employeeResult.data) notFound();
   const employee = employeeResult.data;
-  const { scheduleNow, scheduleFrom, scheduleUntil } = employeeVisitRange();
-  const [qualificationsResult, skillsResult, linkableUsersResult] = await Promise.all([
-    get('/api/v1/qualifications', { params: { query: { status: 'active' }, header } }),
-    get('/api/v1/skills', { params: { query: { status: 'active' }, header } }),
-    employee.linkedUser
-      ? Promise.resolve({ data: undefined, error: undefined })
-      : get('/api/v1/employees/{id}/linkable-users', { params: { path: { id }, header } }),
-  ]);
-  const visitsResult = await get('/api/v1/visits', {
-    params: {
-      query: {
-        from: scheduleNow.toISOString(),
-        until: scheduleUntil.toISOString(),
-        employeeId: id,
-        page: 1,
-        pageSize: 100,
-      },
-      header,
-    },
-  });
-  const recentVisitsResult = await get('/api/v1/visits', {
-    params: {
-      query: {
-        from: scheduleFrom.toISOString(),
-        until: scheduleNow.toISOString(),
-        employeeId: id,
-        page: 1,
-        pageSize: 100,
-      },
-      header,
-    },
-  });
-  const absenceUntil = new Date(scheduleNow.getTime() + 30 * 24 * 60 * 60 * 1000);
-  const [availabilityResult, absencesResult, preferencesResult] = canReadSchedule
-    ? await Promise.all([
-        get('/api/v1/employees/{employeeId}/availability', {
-          params: { path: { employeeId: id }, header },
-        }),
-        get('/api/v1/employees/{employeeId}/unavailability', {
-          params: {
-            path: { employeeId: id },
-            query: { from: scheduleNow.toISOString(), until: absenceUntil.toISOString() },
-            header,
-          },
-        }),
-        canManageSchedule
-          ? get('/api/v1/employees/{employeeId}/scheduling-preferences', {
-              params: { path: { employeeId: id }, header },
-            })
-          : Promise.resolve({ data: undefined, error: undefined }),
-      ])
-    : [null, null, null];
-  const visitItems = visitsResult.data?.items ?? [];
-  const recentVisitItems = recentVisitsResult.data?.items ?? [];
-  const fetchExecutionSummaries = (items: typeof visitItems) =>
-    items.length
-      ? get('/api/v1/visit-executions/summaries', {
-          params: {
-            query: { visitIds: items.map((visit) => visit.id).join(',') },
-            header,
-          },
-        })
-      : Promise.resolve({ data: [], error: undefined });
-  const [executionSummariesResult, recentExecutionSummariesResult] = await Promise.all([
-    fetchExecutionSummaries(visitItems),
-    fetchExecutionSummaries(recentVisitItems),
-  ]);
-  const executionByVisitId = new Map(
-    (executionSummariesResult.data ?? []).map((summary) => [summary.visitId, summary]),
-  );
-  const recentExecutionByVisitId = new Map(
-    (recentExecutionSummariesResult.data ?? []).map((summary) => [summary.visitId, summary]),
-  );
-  const recentExecutionItems = recentVisitItems.filter(
-    (visit) =>
-      recentExecutionByVisitId.get(visit.id)?.executionStatus !== undefined &&
-      recentExecutionByVisitId.get(visit.id)?.executionStatus !== 'not_started',
-  );
-  const qualifications = qualificationsResult.data ?? [];
-  const skills = skillsResult.data ?? [];
+  const scheduleData = canReadSchedule
+    ? fetchEmployeeScheduleData(id, header, canManageSchedule)
+    : null;
   const assignments = employee.facilityAssignments.filter(
     (assignment) => assignment.status === 'active',
   );
+  const primaryAssignment = assignments.find((assignment) => assignment.isPrimary) ?? null;
   const teamMemberships = employee.teamMemberships.filter(
     (membership) => membership.status === 'active',
   );
   const writable = employee.status !== 'archived';
-  const availability = availabilityResult?.data?.availability ?? null;
-  const availabilityVersion = availabilityResult?.data?.version ?? 0;
-  const absences = absencesResult?.data?.absences ?? [];
-  const schedulingPreferences = preferencesResult?.data ?? null;
-  const impactedVisits = absencesResult?.data?.impactedVisits ?? [];
-  const availabilityTimezone = availability?.timezone ?? 'Europe/Berlin';
-  const weekdays = [
-    { weekday: 1, label: t('Employees.detail.weekdays.monday') },
-    { weekday: 2, label: t('Employees.detail.weekdays.tuesday') },
-    { weekday: 3, label: t('Employees.detail.weekdays.wednesday') },
-    { weekday: 4, label: t('Employees.detail.weekdays.thursday') },
-    { weekday: 5, label: t('Employees.detail.weekdays.friday') },
-    { weekday: 6, label: t('Employees.detail.weekdays.saturday') },
-    { weekday: 7, label: t('Employees.detail.weekdays.sunday') },
-  ];
 
   return (
     <div className="grid gap-8">
@@ -179,25 +92,52 @@ export default async function EmployeeDetailPage({
           <div className="flex flex-wrap items-center gap-3">
             <StatusBadge status={employee.status} label={t(statusLabelKey(employee.status))} />
             <p className="text-sm text-muted-foreground">
-              {employee.organizationName ? (
+              {employee.organizationId &&
+              hasClientPermission(
+                permissions,
+                'organization.read',
+                tenantId,
+                employee.organizationId,
+                null,
+              ) ? (
                 <ResourceReference
-                  label={employee.organizationName}
-                  href={
-                    employee.organizationId &&
-                    hasClientPermission(
-                      permissions,
-                      'organization.read',
-                      tenantId,
-                      employee.organizationId,
-                      null,
-                    )
-                      ? `/administration/organizations/${employee.organizationId}`
-                      : null
-                  }
+                  label={employee.organizationName ?? t('Resources.unavailableOrganization')}
+                  href={`/administration/organizations/${employee.organizationId}`}
                 />
+              ) : employee.organizationId ? (
+                t('Resources.unavailableOrganization')
               ) : (
                 t('Employees.detail.noOrganization')
               )}
+              {primaryAssignment ? (
+                <>
+                  {' · '}
+                  <ResourceReference
+                    label={
+                      hasClientPermission(
+                        permissions,
+                        'facility.read',
+                        tenantId,
+                        primaryAssignment.organizationId,
+                        primaryAssignment.facilityId,
+                      )
+                        ? primaryAssignment.facilityName
+                        : t('Resources.unavailableFacility')
+                    }
+                    href={
+                      hasClientPermission(
+                        permissions,
+                        'facility.read',
+                        tenantId,
+                        primaryAssignment.organizationId,
+                        primaryAssignment.facilityId,
+                      )
+                        ? `/administration/facilities/${primaryAssignment.facilityId}`
+                        : null
+                    }
+                  />
+                </>
+              ) : null}
               {employee.personnelNumber ? ` · ${employee.personnelNumber}` : ''}
             </p>
           </div>
@@ -212,7 +152,12 @@ export default async function EmployeeDetailPage({
               </Button>
             ) : null}
             {employee.status === 'active' ? (
-              <StatusForm id={id} operation="deactivate" label={t('Employees.detail.deactivate')} />
+              <StatusForm
+                id={id}
+                operation="deactivate"
+                label={t('Employees.detail.deactivate')}
+                confirmation={t('Employees.detail.deactivateConfirmation')}
+              />
             ) : employee.status === 'inactive' ? (
               <StatusForm id={id} operation="activate" label={t('Employees.detail.activate')} />
             ) : null}
@@ -231,145 +176,866 @@ export default async function EmployeeDetailPage({
       <ActionNotice error={query.error} updated={query.updated} />
 
       <section
-        aria-labelledby="schedule-title"
-        className="grid gap-3 rounded-lg border bg-card p-5"
+        aria-labelledby="readiness-title"
+        className="grid gap-4 rounded-lg border bg-card p-5"
       >
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="schedule-title" className="text-xl font-semibold">
-            {t('Employees.detail.upcomingVisits')}
+        <div>
+          <h2 id="readiness-title" className="text-xl font-semibold">
+            {t('Employees.detail.readinessTitle')}
           </h2>
-          <Button asChild variant="secondary" size="sm">
-            <Link href={`/planning?employeeId=${employee.id}`}>
-              {t('Employees.detail.openPlanning')}
-            </Link>
-          </Button>
+          <p className="text-sm text-muted-foreground">
+            {t('Employees.detail.readinessDescription')}
+          </p>
         </div>
-        {visitsResult.error ? (
-          <p className="text-sm text-muted-foreground">{t('Employees.detail.visitsUnavailable')}</p>
-        ) : visitItems.length ? (
-          <ol className="grid gap-2">
-            {visitItems.map((visit) => {
-              const execution = executionByVisitId.get(visit.id);
-              const visitHref = hasClientPermission(
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <article className="grid content-start gap-2 rounded-md border p-3">
+            <h3 className="font-semibold">{t('Employees.detail.assignmentReadiness')}</h3>
+            <p className="text-sm">
+              {employee.organizationId &&
+              hasClientPermission(
                 permissions,
-                'schedule.read',
+                'organization.read',
                 tenantId,
-                visit.organizationId,
-                visit.facilityId,
+                employee.organizationId,
+                null,
               )
-                ? `/visits/${visit.id}`
-                : null;
-              return (
-                <li key={visit.id}>
-                  <ResourceCardLink
-                    className="grid gap-1 rounded-md border p-3 hover:border-primary/40 sm:grid-cols-[12rem_1fr_auto]"
-                    href={visitHref}
+                ? (employee.organizationName ?? t('Resources.unavailableOrganization'))
+                : employee.organizationId
+                  ? t('Resources.unavailableOrganization')
+                  : t('Employees.detail.noOrganization')}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {primaryAssignment
+                ? t('Employees.detail.primaryFacilitySummary', {
+                    facility: hasClientPermission(
+                      permissions,
+                      'facility.read',
+                      tenantId,
+                      primaryAssignment.organizationId,
+                      primaryAssignment.facilityId,
+                    )
+                      ? primaryAssignment.facilityName
+                      : t('Resources.unavailableFacility'),
+                  })
+                : t('Employees.detail.noPrimaryFacilitySummary')}
+              {' · '}
+              {t('Employees.detail.teamCountSummary', { count: teamMemberships.length })}
+            </p>
+            <Link className="text-sm text-primary underline" href="#assignments">
+              {t('Employees.detail.manageAssignments')}
+            </Link>
+          </article>
+          <Suspense
+            fallback={
+              <>
+                <article
+                  role="status"
+                  aria-busy="true"
+                  aria-label={t('Employees.detail.schedulingReadiness')}
+                  className="min-h-32 animate-pulse rounded-md border p-3"
+                />
+                <article
+                  role="status"
+                  aria-busy="true"
+                  aria-label={t('Employees.detail.absenceReadiness')}
+                  className="min-h-32 animate-pulse rounded-md border p-3"
+                />
+              </>
+            }
+          >
+            <EmployeeScheduleReadiness
+              scheduleData={scheduleData}
+              canReadSchedule={canReadSchedule}
+            />
+          </Suspense>
+
+          <article className="grid content-start gap-2 rounded-md border p-3">
+            <h3 className="font-semibold">{t('Employees.detail.digitalAccess')}</h3>
+            {employee.linkedUser ? (
+              <p className="text-sm">
+                {employee.linkedUser.userStatus === 'active' &&
+                employee.linkedUser.membershipStatus === 'active'
+                  ? t('Employees.detail.accountAndMembershipActive')
+                  : t('Employees.detail.accountNeedsReview')}
+              </p>
+            ) : employee.hasLinkedUser ? (
+              <p className="text-sm">{t('Employees.detail.linkedUserUnavailable')}</p>
+            ) : (
+              <p className="text-sm">{t('Employees.detail.accountLinkOptional')}</p>
+            )}
+            <p className="text-sm text-muted-foreground">
+              {t('Employees.detail.rolesAndScopeRemainSeparate')}
+            </p>
+            <Link className="text-sm text-primary underline" href="#access">
+              {t('Employees.detail.reviewAccess')}
+            </Link>
+          </article>
+        </div>
+      </section>
+
+      <Suspense
+        fallback={
+          <section
+            aria-labelledby="schedule-title"
+            aria-busy="true"
+            className="grid gap-3 rounded-lg border bg-card p-5"
+          >
+            <h2 id="schedule-title" className="text-xl font-semibold">
+              {t('Employees.detail.upcomingVisits')}
+            </h2>
+            <p role="status" className="text-sm text-muted-foreground">
+              {t('Employees.detail.relatedScheduleLoading')}
+            </p>
+            <div className="grid gap-2" aria-hidden="true">
+              <div className="h-14 animate-pulse rounded-md bg-muted" />
+              <div className="h-14 animate-pulse rounded-md bg-muted" />
+            </div>
+          </section>
+        }
+      >
+        <EmployeeVisitSection
+          employeeId={employee.id}
+          tenantId={tenantId}
+          permissions={permissions}
+          canReadSchedule={canReadSchedule}
+        />
+      </Suspense>
+
+      <Suspense
+        fallback={
+          <section
+            role="status"
+            aria-busy="true"
+            aria-label={t('Employees.detail.availabilityTitle')}
+            className="min-h-64 animate-pulse rounded-lg border bg-card p-5"
+          />
+        }
+      >
+        <EmployeeAvailabilitySection
+          employeeId={employee.id}
+          employeeStatus={employee.status}
+          canReadSchedule={canReadSchedule}
+          canManageSchedule={canManageSchedule}
+          permissions={permissions}
+          tenantId={tenantId}
+          scheduleData={scheduleData}
+        />
+      </Suspense>
+
+      <section
+        id="overview"
+        aria-labelledby="overview-title"
+        className="grid gap-4 rounded-lg border bg-card p-5"
+      >
+        <div>
+          <h2 id="overview-title" className="text-xl font-semibold">
+            {t('Employees.detail.overview')}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {t('Employees.detail.overviewDescription')}
+          </p>
+        </div>
+        <RHFActionForm
+          action={updateEmployeeAction}
+          errorMessage={t('Employees.detail.saveMasterDataFailed')}
+          warnOnUnsavedChanges
+          className="grid gap-4 md:grid-cols-2"
+        >
+          <input type="hidden" name="id" value={employee.id} />
+          <Field
+            id="firstName"
+            name="firstName"
+            label={t('Employees.detail.firstName')}
+            defaultValue={employee.firstName}
+            required
+            maxLength={120}
+          />
+          <Field
+            id="lastName"
+            name="lastName"
+            label={t('Employees.detail.lastName')}
+            defaultValue={employee.lastName}
+            required
+            maxLength={120}
+          />
+          <Field
+            id="preferredName"
+            name="preferredName"
+            label={t('Employees.detail.preferredName')}
+            defaultValue={employee.preferredName ?? ''}
+            maxLength={120}
+          />
+          <Field
+            id="personnelNumber"
+            name="personnelNumber"
+            label={t('Employees.detail.personnelNumber')}
+            defaultValue={employee.personnelNumber ?? ''}
+            maxLength={64}
+          />
+          <Field
+            id="email"
+            name="email"
+            label={t('Employees.detail.email')}
+            type="email"
+            defaultValue={employee.email ?? ''}
+            maxLength={320}
+          />
+          <Field
+            id="phone"
+            name="phone"
+            label={t('Employees.detail.phone')}
+            type="tel"
+            defaultValue={employee.phone ?? ''}
+            maxLength={40}
+          />
+          <Field
+            id="employmentType"
+            name="employmentType"
+            label={t('Employees.detail.employmentType')}
+            defaultValue={employee.employmentType ?? ''}
+            maxLength={80}
+          />
+          <Field
+            id="startDate"
+            name="startDate"
+            label={t('Employees.detail.startDate')}
+            type="date"
+            defaultValue={employee.startDate ?? ''}
+          />
+          <Field
+            id="endDate"
+            name="endDate"
+            label={t('Employees.detail.endDate')}
+            type="date"
+            defaultValue={employee.endDate ?? ''}
+          />
+          <Field
+            id="weeklyHours"
+            name="weeklyHours"
+            label={t('Employees.detail.weeklyHours')}
+            type="number"
+            defaultValue={employee.weeklyHours?.toString() ?? ''}
+            min="0"
+            max="168"
+            step="0.25"
+          />
+          <div className="md:col-span-2">
+            <Button type="submit" disabled={!writable}>
+              {t('Employees.detail.saveMasterData')}
+            </Button>
+          </div>
+        </RHFActionForm>
+      </section>
+
+      <section
+        id="assignments"
+        aria-labelledby="assignments-title"
+        className="grid gap-5 rounded-lg border bg-card p-5"
+      >
+        <div>
+          <h2 id="assignments-title" className="text-xl font-semibold">
+            {t('Employees.detail.assignments')}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {t('Employees.detail.assignmentsDescription')}
+          </p>
+        </div>
+        {employee.organizationId ? (
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div className="grid content-start gap-3">
+              <h3 className="font-semibold">{t('Employees.detail.facilities')}</h3>
+              {assignments.length ? (
+                assignments.map((assignment) => (
+                  <article
+                    key={assignment.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
                   >
-                    <time dateTime={visit.plannedStart}>
-                      {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
-                    </time>
-                    <span>
-                      <strong>{visit.clientDisplayName}</strong>
-                      <span className="block text-sm text-muted-foreground">
-                        {visit.services.map((service) => service.serviceName).join(' · ')}
-                      </span>
-                      {execution ? (
-                        <span className="block text-sm text-muted-foreground">
-                          {t('Employees.detail.execution')}{' '}
-                          {execution.executionStatus === 'completed'
-                            ? t('Common.status.completed')
-                            : execution.executionStatus === 'in_progress'
-                              ? t('Common.status.inProgress')
-                              : t('VisitExecution.executionStatus.notStarted')}
-                          {execution.actualStart ? (
-                            <>
-                              {` · ${t('Employees.detail.actual')} `}
-                              {formatVisitDateTime(execution.actualStart, visit.timezone, locale)}
-                              {execution.actualEnd
-                                ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone, locale)}`
-                                : ''}
-                            </>
-                          ) : null}
-                        </span>
-                      ) : executionSummariesResult.error ? (
-                        <span className="block text-sm text-muted-foreground">
-                          {t('Employees.detail.executionStatusUnavailable')}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="text-sm">
-                      {visit.status === 'cancelled'
-                        ? t('Common.status.cancelled')
-                        : visit.status === 'confirmed'
-                          ? t('Common.status.confirmed')
-                          : t('Common.status.planned')}
-                    </span>
-                  </ResourceCardLink>
+                    <div>
+                      <p className="font-medium">
+                        <ResourceReference
+                          label={
+                            hasClientPermission(
+                              permissions,
+                              'facility.read',
+                              tenantId,
+                              assignment.organizationId,
+                              assignment.facilityId,
+                            )
+                              ? assignment.facilityName
+                              : t('Resources.unavailableFacility')
+                          }
+                          href={
+                            hasClientPermission(
+                              permissions,
+                              'facility.read',
+                              tenantId,
+                              assignment.organizationId,
+                              assignment.facilityId,
+                            )
+                              ? `/administration/facilities/${assignment.facilityId}`
+                              : null
+                          }
+                        />
+                        {assignment.isPrimary ? ` · ${t('Employees.detail.primaryFacility')}` : ''}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {dateRange(
+                          assignment.validFrom,
+                          assignment.validUntil,
+                          locale,
+                          t('Employees.detail.open'),
+                          t('Employees.detail.unlimited'),
+                        )}
+                      </p>
+                    </div>
+                    <form action={unassignFacilityAction}>
+                      <input type="hidden" name="employeeId" value={id} />
+                      <input type="hidden" name="facilityId" value={assignment.facilityId} />
+                      <ConfirmSubmitButton
+                        confirmation={t('Employees.detail.removeFacilityConfirmation')}
+                      >
+                        {t('Employees.detail.remove')}
+                      </ConfirmSubmitButton>
+                    </form>
+                  </article>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">{t('Employees.detail.noFacility')}</p>
+              )}
+              <RHFActionForm
+                action={assignFacilityAction}
+                className="grid gap-3 rounded-md border p-3"
+              >
+                <input type="hidden" name="employeeId" value={id} />
+                <AsyncEntityCombobox
+                  name="facilityId"
+                  entity="facilities"
+                  label={t('Employees.detail.assignFacility')}
+                  placeholder={t('Employees.detail.selectFacility')}
+                  organizationId={employee.organizationId ?? undefined}
+                  required
+                />
+                <label className="flex items-center gap-2 text-sm">
+                  <ShadcnCheckbox name="isPrimary" /> {t('Employees.detail.setPrimaryFacility')}
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field
+                    id="facility-valid-from"
+                    name="validFrom"
+                    label={t('Employees.detail.validFrom')}
+                    type="date"
+                  />
+                  <Field
+                    id="facility-valid-until"
+                    name="validUntil"
+                    label={t('Employees.detail.validUntil')}
+                    type="date"
+                  />
+                </div>
+                <Button type="submit" disabled={!writable || employee.status !== 'active'}>
+                  {t('Employees.detail.assignFacilityAction')}
+                </Button>
+              </RHFActionForm>
+            </div>
+            <div className="grid content-start gap-3">
+              <h3 className="font-semibold">{t('Employees.detail.teams')}</h3>
+              {teamMemberships.length ? (
+                teamMemberships.map((membership) => (
+                  <article
+                    key={membership.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+                  >
+                    <div>
+                      <p className="font-medium">
+                        <ResourceReference
+                          label={
+                            hasClientPermission(
+                              permissions,
+                              'team.read',
+                              tenantId,
+                              employee.organizationId,
+                              membership.facilityId,
+                              membership.teamId,
+                            )
+                              ? membership.teamName
+                              : t('Resources.unavailableTeam')
+                          }
+                          href={
+                            hasClientPermission(
+                              permissions,
+                              'team.read',
+                              tenantId,
+                              employee.organizationId,
+                              membership.facilityId,
+                              membership.teamId,
+                            )
+                              ? `/administration/teams/${membership.teamId}`
+                              : null
+                          }
+                        />
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {membership.role || t('Employees.detail.member')} ·{' '}
+                        {dateRange(
+                          membership.validFrom,
+                          membership.validUntil,
+                          locale,
+                          t('Employees.detail.open'),
+                          t('Employees.detail.unlimited'),
+                        )}
+                      </p>
+                    </div>
+                    <form action={unassignTeamAction}>
+                      <input type="hidden" name="employeeId" value={id} />
+                      <input type="hidden" name="teamId" value={membership.teamId} />
+                      <ConfirmSubmitButton
+                        confirmation={t('Employees.detail.removeTeamConfirmation')}
+                      >
+                        {t('Employees.detail.remove')}
+                      </ConfirmSubmitButton>
+                    </form>
+                  </article>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">{t('Employees.detail.noTeam')}</p>
+              )}
+              <RHFActionForm action={assignTeamAction} className="grid gap-3 rounded-md border p-3">
+                <input type="hidden" name="employeeId" value={id} />
+                <AsyncEntityCombobox
+                  name="teamId"
+                  entity="teams"
+                  label={t('Employees.detail.assignTeam')}
+                  placeholder={t('Employees.detail.selectTeam')}
+                  organizationId={employee.organizationId ?? undefined}
+                  required
+                />
+                <Field
+                  id="team-role"
+                  name="role"
+                  label={t('Employees.detail.teamRoleOptional')}
+                  maxLength={80}
+                />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field
+                    id="team-valid-from"
+                    name="validFrom"
+                    label={t('Employees.detail.validFrom')}
+                    type="date"
+                  />
+                  <Field
+                    id="team-valid-until"
+                    name="validUntil"
+                    label={t('Employees.detail.validUntil')}
+                    type="date"
+                  />
+                </div>
+                <Button type="submit" disabled={!writable || employee.status !== 'active'}>
+                  {t('Employees.detail.assignTeamAction')}
+                </Button>
+              </RHFActionForm>
+            </div>
+          </div>
+        ) : (
+          <p
+            role="alert"
+            className="rounded-md border border-warning/40 bg-warning-muted p-3 text-warning-foreground"
+          >
+            {t('Employees.detail.organizationRequired')}
+          </p>
+        )}
+      </section>
+
+      <section
+        id="qualifications"
+        aria-labelledby="qualifications-title"
+        className="grid gap-4 rounded-lg border bg-card p-5"
+      >
+        <div>
+          <h2 id="qualifications-title" className="text-xl font-semibold">
+            {t('Employees.detail.qualifications')}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {t('Employees.detail.qualificationsDescription')}
+          </p>
+        </div>
+        {employee.qualifications.length ? (
+          <ul className="grid gap-2">
+            {employee.qualifications.map((qualification) => {
+              const revokedAt = qualification.revokedAt;
+              const revokedDate = revokedAt ? formatDate(revokedAt, locale) : null;
+              return (
+                <li
+                  key={qualification.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+                >
+                  <div>
+                    <p className="font-medium">
+                      {qualification.name}
+                      {qualification.code ? ` (${qualification.code})` : ''}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {dateRange(
+                        qualification.validFrom,
+                        qualification.validUntil,
+                        locale,
+                        t('Employees.detail.open'),
+                        t('Employees.detail.unlimited'),
+                      )}
+                      {qualification.issuer ? ` · ${qualification.issuer}` : ''}
+                      {qualification.status === 'archived'
+                        ? ` · ${t('Employees.detail.archived')}`
+                        : ''}
+                      {qualification.assignmentStatus === 'revoked'
+                        ? ` · ${t('Employees.detail.qualificationRevoked')}`
+                        : ''}
+                      {revokedDate
+                        ? ` · ${t('Employees.detail.qualificationRevokedAt', { date: revokedDate })}`
+                        : ''}
+                    </p>
+                  </div>
+                  {qualification.assignmentStatus === 'active' ? (
+                    <form action={removeQualificationAction}>
+                      <input type="hidden" name="employeeId" value={id} />
+                      <input
+                        type="hidden"
+                        name="qualificationId"
+                        value={qualification.qualificationId}
+                      />
+                      <ConfirmSubmitButton
+                        confirmation={t('Employees.detail.removeQualificationConfirmation')}
+                      >
+                        {t('Employees.detail.remove')}
+                      </ConfirmSubmitButton>
+                    </form>
+                  ) : null}
                 </li>
               );
             })}
-          </ol>
+          </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">{t('Employees.detail.noAssignedVisits')}</p>
+          <p className="text-sm text-muted-foreground">{t('Employees.detail.noQualifications')}</p>
         )}
-        {recentVisitsResult.error ? (
-          <p className="text-sm text-muted-foreground">
-            {t('Employees.detail.pastExecutionsUnavailable')}
-          </p>
-        ) : recentExecutionSummariesResult.error ? (
-          <p className="text-sm text-muted-foreground">
-            {t('Employees.detail.pastExecutionStatusUnavailable')}
-          </p>
-        ) : recentExecutionItems.length ? (
-          <div className="grid gap-3">
-            <h3 className="font-semibold">{t('Employees.detail.recentVisits')}</h3>
-            <ol className="grid gap-2">
-              {recentExecutionItems.map((visit) => {
-                const execution = recentExecutionByVisitId.get(visit.id);
-                if (!execution) return null;
-                const visitHref = hasClientPermission(
-                  permissions,
-                  'schedule.read',
-                  tenantId,
-                  visit.organizationId,
-                  visit.facilityId,
-                )
-                  ? `/visits/${visit.id}`
-                  : null;
-                return (
-                  <li key={visit.id}>
-                    <ResourceCardLink
-                      className="grid gap-1 rounded-md border p-3 hover:border-primary/40"
-                      href={visitHref}
-                    >
-                      <time dateTime={visit.plannedStart}>
-                        {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
-                      </time>
-                      <strong>{visit.clientDisplayName}</strong>
-                      <span className="text-sm text-muted-foreground">
-                        {visit.services.map((service) => service.serviceName).join(' · ')}
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        {t('Employees.detail.execution')}{' '}
-                        {execution.executionStatus === 'completed'
-                          ? t('Common.status.completed')
-                          : t('Common.status.inProgress')}
-                        {execution.actualStart
-                          ? ` · ${t('Employees.detail.actual')} ${formatVisitDateTime(execution.actualStart, visit.timezone, locale)}`
-                          : ''}
-                        {execution.actualEnd
-                          ? ` – ${formatVisitDateTime(execution.actualEnd, visit.timezone, locale)}`
-                          : ''}
-                      </span>
-                    </ResourceCardLink>
-                  </li>
-                );
-              })}
-            </ol>
+        <RHFActionForm
+          action={assignQualificationAction}
+          className="grid gap-3 rounded-md border p-3 sm:max-w-2xl"
+        >
+          <input type="hidden" name="employeeId" value={id} />
+          <AsyncEntityCombobox
+            name="qualificationId"
+            entity="qualifications"
+            label={t('Employees.detail.addQualification')}
+            placeholder={t('Employees.detail.selectQualification')}
+            minQueryLength={2}
+            required
+          />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field
+              id="qualification-valid-from"
+              name="validFrom"
+              label={t('Employees.detail.validFrom')}
+              type="date"
+            />
+            <Field
+              id="qualification-valid-until"
+              name="validUntil"
+              label={t('Employees.detail.validUntil')}
+              type="date"
+            />
+            <Field
+              id="qualification-issuer"
+              name="issuer"
+              label={t('Employees.detail.issuer')}
+              maxLength={160}
+            />
           </div>
+          <Button type="submit" disabled={!writable}>
+            {t('Employees.detail.saveQualification')}
+          </Button>
+        </RHFActionForm>
+        {employee.qualifications.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            <Link className="underline" href="/administration/qualifications">
+              {t('Employees.detail.manageQualifications')}
+            </Link>
+          </p>
         ) : null}
       </section>
 
+      <section
+        id="skills"
+        aria-labelledby="skills-title"
+        className="grid gap-4 rounded-lg border bg-card p-5"
+      >
+        <div>
+          <h2 id="skills-title" className="text-xl font-semibold">
+            {t('Employees.detail.skills')}
+          </h2>
+          <p className="text-sm text-muted-foreground">{t('Employees.detail.skillsDescription')}</p>
+        </div>
+        {employee.skills.length ? (
+          <ul className="grid gap-2">
+            {employee.skills.map((skill) => (
+              <li
+                key={skill.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+              >
+                <span className="font-medium">
+                  {skill.name}
+                  {skill.code ? ` (${skill.code})` : ''}
+                  {skill.status === 'archived' ? ` · ${t('Employees.detail.archived')}` : ''}
+                </span>
+                {skill.status === 'active' ? (
+                  <form action={removeSkillAction}>
+                    <input type="hidden" name="employeeId" value={id} />
+                    <input type="hidden" name="skillId" value={skill.skillId} />
+                    <ConfirmSubmitButton
+                      confirmation={t('Employees.detail.removeSkillConfirmation')}
+                    >
+                      {t('Employees.detail.remove')}
+                    </ConfirmSubmitButton>
+                  </form>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t('Employees.detail.noSkills')}</p>
+        )}
+        <RHFActionForm
+          action={assignSkillAction}
+          className="flex flex-wrap items-end gap-3 rounded-md border p-3 sm:max-w-2xl"
+        >
+          <input type="hidden" name="employeeId" value={id} />
+          <div className="grid min-w-0 gap-2 sm:min-w-72">
+            <AsyncEntityCombobox
+              name="skillId"
+              entity="skills"
+              label={t('Employees.detail.addSkill')}
+              placeholder={t('Employees.detail.selectSkill')}
+              minQueryLength={2}
+              required
+            />
+          </div>
+          <Button type="submit" disabled={!writable}>
+            {t('Employees.detail.assignSkill')}
+          </Button>
+        </RHFActionForm>
+        {employee.skills.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            <Link className="underline" href="/administration/qualifications">
+              {t('Employees.detail.manageSkills')}
+            </Link>
+          </p>
+        ) : null}
+      </section>
+
+      <section
+        id="access"
+        aria-labelledby="access-title"
+        className="grid gap-4 rounded-lg border bg-card p-5"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 id="access-title" className="text-xl font-semibold">
+              {t('Employees.detail.access')}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {t('Employees.detail.accessDescription')}
+            </p>
+          </div>
+          <Link className="text-sm text-primary underline" href="/administration/users">
+            {t('Employees.detail.manageAccess')}
+          </Link>
+        </div>
+        {employee.linkedUser ? (
+          <div className="grid gap-2 rounded-md border p-3">
+            <p className="font-medium">
+              {employee.linkedUser.displayName ||
+                employee.linkedUser.email ||
+                t('Resources.unavailableUser')}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {employee.linkedUser.email ?? t('Employees.detail.noEmail')} ·{' '}
+              {t('Employees.detail.loginAccount')}{' '}
+              {t(`Employees.detail.userStatuses.${employee.linkedUser.userStatus}`)} ·{' '}
+              {t('Employees.detail.tenantMembership')}{' '}
+              {t(statusLabelKey(employee.linkedUser.membershipStatus))}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {t('Employees.detail.caregiverAccessHelp')}{' '}
+              <Link className="underline" href="/administration/users">
+                {t('Employees.detail.manageAccess')}
+              </Link>
+            </p>
+            <form action={unlinkEmployeeUserAction}>
+              <input type="hidden" name="employeeId" value={id} />
+              <ConfirmSubmitButton confirmation={t('Employees.detail.unlinkConfirmation')}>
+                {t('Employees.detail.unlinkUser')}
+              </ConfirmSubmitButton>
+            </form>
+          </div>
+        ) : employee.hasLinkedUser ? (
+          <p className="text-sm text-muted-foreground">
+            {t('Employees.detail.linkedUserUnavailable')}
+          </p>
+        ) : employee.canLinkUser ? (
+          <RHFActionForm action={linkEmployeeUserAction} className="grid gap-3 sm:max-w-xl">
+            <input type="hidden" name="employeeId" value={id} />
+            <p className="text-sm text-muted-foreground">
+              {t('Employees.detail.linkableUserHelp')}
+            </p>
+            <AsyncEntityCombobox
+              name="userId"
+              entity="employee-users"
+              employeeId={id}
+              label={t('Employees.detail.linkActiveUser')}
+              placeholder={t('Employees.detail.selectUser')}
+              minQueryLength={2}
+              browseOnEmpty
+              required
+            />
+            <ConfirmSubmitButton
+              confirmation={t('Employees.detail.linkConfirmation')}
+              variant="default"
+              disabled={!writable}
+            >
+              {t('Employees.detail.linkUser')}
+            </ConfirmSubmitButton>
+          </RHFActionForm>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {t('Employees.detail.linkPermissionRequired')}
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+async function fetchEmployeeScheduleData(
+  employeeId: string,
+  header: Awaited<ReturnType<typeof getTenantHeader>>,
+  canManageSchedule: boolean,
+) {
+  const api = await getApiClient();
+  const get = api.GET;
+  const scheduleNow = employeeScheduleRange().now;
+  const absenceUntil = new Date(scheduleNow.getTime() + 30 * 24 * 60 * 60 * 1000);
+  return Promise.all([
+    get('/api/v1/employees/{employeeId}/availability', {
+      params: { path: { employeeId }, header },
+    }),
+    get('/api/v1/employees/{employeeId}/unavailability', {
+      params: {
+        path: { employeeId },
+        query: { from: scheduleNow.toISOString(), until: absenceUntil.toISOString() },
+        header,
+      },
+    }),
+    canManageSchedule
+      ? get('/api/v1/employees/{employeeId}/scheduling-preferences', {
+          params: { path: { employeeId }, header },
+        })
+      : Promise.resolve({ data: undefined, error: undefined }),
+  ]);
+}
+
+type EmployeeScheduleDataPromise = ReturnType<typeof fetchEmployeeScheduleData> | null;
+
+async function EmployeeScheduleReadiness({
+  scheduleData,
+  canReadSchedule,
+}: Readonly<{
+  scheduleData: EmployeeScheduleDataPromise;
+  canReadSchedule: boolean;
+}>) {
+  const t = await getTranslations();
+  if (!canReadSchedule || !scheduleData) {
+    return (
+      <article className="grid content-start gap-2 rounded-md border p-3">
+        <h3 className="font-semibold">{t('Employees.detail.schedulingReadiness')}</h3>
+        <p className="text-sm">{t('Employees.detail.scheduleStatusUnavailable')}</p>
+      </article>
+    );
+  }
+  const [availabilityResult, absencesResult] = await scheduleData;
+  const availability = availabilityResult.data?.availability ?? null;
+  const activeAbsences = (absencesResult.data?.absences ?? []).filter(
+    (absence) => absence.status === 'active',
+  );
+  const impactedVisitCount = absencesResult.data?.impactedVisitCount ?? 0;
+  return (
+    <>
+      <article className="grid content-start gap-2 rounded-md border p-3">
+        <h3 className="font-semibold">{t('Employees.detail.schedulingReadiness')}</h3>
+        <p className="text-sm">
+          {availability?.windows.length
+            ? t('Employees.detail.availabilityConfigured', { count: availability.windows.length })
+            : t('Employees.detail.availabilityNotConfigured')}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {t('Employees.detail.availabilityDoesNotBlockManualPlanning')}
+        </p>
+        <Link className="text-sm text-primary underline" href="#availability">
+          {t('Employees.detail.openAvailability')}
+        </Link>
+      </article>
+      <article className="grid content-start gap-2 rounded-md border p-3">
+        <h3 className="font-semibold">{t('Employees.detail.absenceReadiness')}</h3>
+        <p className="text-sm">
+          {t('Employees.detail.activeAbsenceCount', { count: activeAbsences.length })}
+        </p>
+        {impactedVisitCount > 0 ? (
+          <p className="text-sm text-warning-foreground">
+            {t('Employees.detail.impactedVisitCount', { count: impactedVisitCount })}
+          </p>
+        ) : null}
+        <Link className="text-sm text-primary underline" href="#availability">
+          {t('Employees.detail.openAbsences')}
+        </Link>
+      </article>
+    </>
+  );
+}
+
+async function EmployeeAvailabilitySection({
+  employeeId,
+  employeeStatus,
+  canReadSchedule,
+  canManageSchedule,
+  permissions,
+  tenantId,
+  scheduleData,
+}: Readonly<{
+  employeeId: string;
+  employeeStatus: string;
+  canReadSchedule: boolean;
+  canManageSchedule: boolean;
+  permissions: readonly CurrentPermissionGrant[];
+  tenantId: string;
+  scheduleData: EmployeeScheduleDataPromise;
+}>) {
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
+  if (!canReadSchedule || !scheduleData) return null;
+  const [availabilityResult, absencesResult, preferencesResult] = await scheduleData;
+  const employee = { id: employeeId, status: employeeStatus };
+  const availability = availabilityResult.data?.availability ?? null;
+  const availabilityVersion = availabilityResult.data?.version ?? 0;
+  const absences = absencesResult.data?.absences ?? [];
+  const schedulingPreferences = preferencesResult.data ?? null;
+  const impactedVisits = absencesResult.data?.impactedVisits ?? [];
+  const availabilityTimezone = availability?.timezone ?? 'Europe/Berlin';
+  const weekdays = [
+    { weekday: 1, label: t('Employees.detail.weekdays.monday') },
+    { weekday: 2, label: t('Employees.detail.weekdays.tuesday') },
+    { weekday: 3, label: t('Employees.detail.weekdays.wednesday') },
+    { weekday: 4, label: t('Employees.detail.weekdays.thursday') },
+    { weekday: 5, label: t('Employees.detail.weekdays.friday') },
+    { weekday: 6, label: t('Employees.detail.weekdays.saturday') },
+    { weekday: 7, label: t('Employees.detail.weekdays.sunday') },
+  ];
+  return (
+    <>
       {canReadSchedule ? (
         <section
           id="availability"
@@ -390,7 +1056,11 @@ export default async function EmployeeDetailPage({
             </p>
           ) : null}
           {canManageSchedule && employee.status === 'active' ? (
-            <RHFActionForm action={saveEmployeeAvailabilityAction} className="grid gap-4">
+            <RHFActionForm
+              action={saveEmployeeAvailabilityAction}
+              warnOnUnsavedChanges
+              className="grid gap-4"
+            >
               <input type="hidden" name="employeeId" value={employee.id} />
               <input type="hidden" name="expectedVersion" value={availabilityVersion} />
               <div className="grid gap-4 md:grid-cols-3">
@@ -424,42 +1094,21 @@ export default async function EmployeeDetailPage({
               </div>
               <div className="grid gap-3">
                 <h3 className="font-semibold">{t('Employees.detail.weeklyHours')}</h3>
-                <div className="grid gap-3">
-                  {weekdays.map(({ weekday, label }) => {
-                    const windows =
-                      availability?.windows.filter((window) => window.weekday === weekday) ?? [];
-                    return (
-                      <fieldset key={weekday} className="grid gap-2 rounded-md border p-3">
-                        <legend className="px-1 font-medium">{label}</legend>
-                        {[1, 2, 3, 4].map((slot) => {
-                          const window = windows[slot - 1];
-                          return (
-                            <div key={slot} className="grid gap-3 sm:grid-cols-[1fr_1fr]">
-                              <Field
-                                id={`availability-${weekday}-${slot}-start`}
-                                name={`window_${weekday}_${slot}_start`}
-                                label={t('Employees.detail.windowStart')}
-                                type="time"
-                                defaultValue={window?.startsAt ?? ''}
-                              />
-                              <Field
-                                id={`availability-${weekday}-${slot}-end`}
-                                name={`window_${weekday}_${slot}_end`}
-                                label={t('Employees.detail.windowEnd')}
-                                type="time"
-                                defaultValue={window?.endsAt ?? ''}
-                              />
-                            </div>
-                          );
-                        })}
-                      </fieldset>
-                    );
-                  })}
-                </div>
+                <WeeklyAvailabilityEditor
+                  weekdays={weekdays}
+                  windows={availability?.windows ?? []}
+                  startLabel={t('Employees.detail.windowStart')}
+                  endLabel={t('Employees.detail.windowEnd')}
+                  addLabel={t('Employees.detail.addAvailabilityWindow')}
+                  removeLabel={t('Employees.detail.removeAvailabilityWindow')}
+                />
               </div>
-              <Button type="submit" className="w-fit">
-                {t('Employees.detail.saveAvailability')}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit">{t('Employees.detail.saveAvailability')}</Button>
+                <Button type="reset" variant="secondary">
+                  {t('Employees.detail.cancelAvailabilityChanges')}
+                </Button>
+              </div>
             </RHFActionForm>
           ) : null}
 
@@ -750,6 +1399,15 @@ export default async function EmployeeDetailPage({
                   )
                     ? `/visits/${visit.id}`
                     : null;
+                  const clientLabel = hasClientPermission(
+                    permissions,
+                    'client.read',
+                    tenantId,
+                    visit.organizationId,
+                    visit.facilityId,
+                  )
+                    ? visit.clientDisplayName
+                    : t('Resources.unavailableClient');
                   return (
                     <li key={visit.id}>
                       <ResourceCardLink
@@ -757,7 +1415,7 @@ export default async function EmployeeDetailPage({
                         href={visitHref}
                       >
                         {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)} ·{' '}
-                        {visit.clientDisplayName}
+                        {clientLabel}
                       </ResourceCardLink>
                     </li>
                   );
@@ -767,588 +1425,13 @@ export default async function EmployeeDetailPage({
           ) : null}
         </section>
       ) : null}
-
-      <section
-        id="overview"
-        aria-labelledby="overview-title"
-        className="grid gap-4 rounded-lg border bg-card p-5"
-      >
-        <div>
-          <h2 id="overview-title" className="text-xl font-semibold">
-            {t('Employees.detail.overview')}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {t('Employees.detail.overviewDescription')}
-          </p>
-        </div>
-        <RHFActionForm action={updateEmployeeAction} className="grid gap-4 md:grid-cols-2">
-          <input type="hidden" name="id" value={employee.id} />
-          <Field
-            id="firstName"
-            name="firstName"
-            label={t('Employees.detail.firstName')}
-            defaultValue={employee.firstName}
-            required
-            maxLength={120}
-          />
-          <Field
-            id="lastName"
-            name="lastName"
-            label={t('Employees.detail.lastName')}
-            defaultValue={employee.lastName}
-            required
-            maxLength={120}
-          />
-          <Field
-            id="preferredName"
-            name="preferredName"
-            label={t('Employees.detail.preferredName')}
-            defaultValue={employee.preferredName ?? ''}
-            maxLength={120}
-          />
-          <Field
-            id="personnelNumber"
-            name="personnelNumber"
-            label={t('Employees.detail.personnelNumber')}
-            defaultValue={employee.personnelNumber ?? ''}
-            maxLength={64}
-          />
-          <Field
-            id="email"
-            name="email"
-            label={t('Employees.detail.email')}
-            type="email"
-            defaultValue={employee.email ?? ''}
-            maxLength={320}
-          />
-          <Field
-            id="phone"
-            name="phone"
-            label={t('Employees.detail.phone')}
-            type="tel"
-            defaultValue={employee.phone ?? ''}
-            maxLength={40}
-          />
-          <Field
-            id="employmentType"
-            name="employmentType"
-            label={t('Employees.detail.employmentType')}
-            defaultValue={employee.employmentType ?? ''}
-            maxLength={80}
-          />
-          <Field
-            id="startDate"
-            name="startDate"
-            label={t('Employees.detail.startDate')}
-            type="date"
-            defaultValue={employee.startDate ?? ''}
-          />
-          <Field
-            id="endDate"
-            name="endDate"
-            label={t('Employees.detail.endDate')}
-            type="date"
-            defaultValue={employee.endDate ?? ''}
-          />
-          <Field
-            id="weeklyHours"
-            name="weeklyHours"
-            label={t('Employees.detail.weeklyHours')}
-            type="number"
-            defaultValue={employee.weeklyHours?.toString() ?? ''}
-            min="0"
-            max="168"
-            step="0.25"
-          />
-          <div className="md:col-span-2">
-            <Button type="submit" disabled={!writable}>
-              {t('Employees.detail.saveMasterData')}
-            </Button>
-          </div>
-        </RHFActionForm>
-      </section>
-
-      <section
-        id="assignments"
-        aria-labelledby="assignments-title"
-        className="grid gap-5 rounded-lg border bg-card p-5"
-      >
-        <div>
-          <h2 id="assignments-title" className="text-xl font-semibold">
-            {t('Employees.detail.assignments')}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {t('Employees.detail.assignmentsDescription')}
-          </p>
-        </div>
-        {employee.organizationId ? (
-          <div className="grid gap-5 lg:grid-cols-2">
-            <div className="grid content-start gap-3">
-              <h3 className="font-semibold">{t('Employees.detail.facilities')}</h3>
-              {assignments.length ? (
-                assignments.map((assignment) => (
-                  <article
-                    key={assignment.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
-                  >
-                    <div>
-                      <p className="font-medium">
-                        <ResourceReference
-                          label={assignment.facilityName}
-                          href={
-                            hasClientPermission(
-                              permissions,
-                              'facility.read',
-                              tenantId,
-                              assignment.organizationId,
-                              assignment.facilityId,
-                            )
-                              ? `/administration/facilities/${assignment.facilityId}`
-                              : null
-                          }
-                        />
-                        {assignment.isPrimary ? ` · ${t('Employees.detail.primaryFacility')}` : ''}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {dateRange(
-                          assignment.validFrom,
-                          assignment.validUntil,
-                          locale,
-                          t('Employees.detail.open'),
-                          t('Employees.detail.unlimited'),
-                        )}
-                      </p>
-                    </div>
-                    <form action={unassignFacilityAction}>
-                      <input type="hidden" name="employeeId" value={id} />
-                      <input type="hidden" name="facilityId" value={assignment.facilityId} />
-                      <ConfirmSubmitButton
-                        confirmation={t('Employees.detail.removeFacilityConfirmation')}
-                      >
-                        {t('Employees.detail.remove')}
-                      </ConfirmSubmitButton>
-                    </form>
-                  </article>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">{t('Employees.detail.noFacility')}</p>
-              )}
-              <RHFActionForm
-                action={assignFacilityAction}
-                className="grid gap-3 rounded-md border p-3"
-              >
-                <input type="hidden" name="employeeId" value={id} />
-                <AsyncEntityCombobox
-                  name="facilityId"
-                  entity="facilities"
-                  label={t('Employees.detail.assignFacility')}
-                  placeholder={t('Employees.detail.selectFacility')}
-                  organizationId={employee.organizationId ?? undefined}
-                  required
-                />
-                <label className="flex items-center gap-2 text-sm">
-                  <ShadcnCheckbox name="isPrimary" /> {t('Employees.detail.setPrimaryFacility')}
-                </label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Field
-                    id="facility-valid-from"
-                    name="validFrom"
-                    label={t('Employees.detail.validFrom')}
-                    type="date"
-                  />
-                  <Field
-                    id="facility-valid-until"
-                    name="validUntil"
-                    label={t('Employees.detail.validUntil')}
-                    type="date"
-                  />
-                </div>
-                <Button type="submit" disabled={!writable || employee.status !== 'active'}>
-                  {t('Employees.detail.assignFacilityAction')}
-                </Button>
-              </RHFActionForm>
-            </div>
-            <div className="grid content-start gap-3">
-              <h3 className="font-semibold">{t('Employees.detail.teams')}</h3>
-              {teamMemberships.length ? (
-                teamMemberships.map((membership) => (
-                  <article
-                    key={membership.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
-                  >
-                    <div>
-                      <p className="font-medium">
-                        <ResourceReference
-                          label={membership.teamName}
-                          href={
-                            hasClientPermission(
-                              permissions,
-                              'team.read',
-                              tenantId,
-                              employee.organizationId,
-                              membership.facilityId,
-                            )
-                              ? `/administration/teams/${membership.teamId}`
-                              : null
-                          }
-                        />
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {membership.role || t('Employees.detail.member')} ·{' '}
-                        {dateRange(
-                          membership.validFrom,
-                          membership.validUntil,
-                          locale,
-                          t('Employees.detail.open'),
-                          t('Employees.detail.unlimited'),
-                        )}
-                      </p>
-                    </div>
-                    <form action={unassignTeamAction}>
-                      <input type="hidden" name="employeeId" value={id} />
-                      <input type="hidden" name="teamId" value={membership.teamId} />
-                      <ConfirmSubmitButton
-                        confirmation={t('Employees.detail.removeTeamConfirmation')}
-                      >
-                        {t('Employees.detail.remove')}
-                      </ConfirmSubmitButton>
-                    </form>
-                  </article>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">{t('Employees.detail.noTeam')}</p>
-              )}
-              <RHFActionForm action={assignTeamAction} className="grid gap-3 rounded-md border p-3">
-                <input type="hidden" name="employeeId" value={id} />
-                <AsyncEntityCombobox
-                  name="teamId"
-                  entity="teams"
-                  label={t('Employees.detail.assignTeam')}
-                  placeholder={t('Employees.detail.selectTeam')}
-                  organizationId={employee.organizationId ?? undefined}
-                  required
-                />
-                <Field
-                  id="team-role"
-                  name="role"
-                  label={t('Employees.detail.teamRoleOptional')}
-                  maxLength={80}
-                />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Field
-                    id="team-valid-from"
-                    name="validFrom"
-                    label={t('Employees.detail.validFrom')}
-                    type="date"
-                  />
-                  <Field
-                    id="team-valid-until"
-                    name="validUntil"
-                    label={t('Employees.detail.validUntil')}
-                    type="date"
-                  />
-                </div>
-                <Button type="submit" disabled={!writable || employee.status !== 'active'}>
-                  {t('Employees.detail.assignTeamAction')}
-                </Button>
-              </RHFActionForm>
-            </div>
-          </div>
-        ) : (
-          <p
-            role="alert"
-            className="rounded-md border border-warning/40 bg-warning-muted p-3 text-warning-foreground"
-          >
-            {t('Employees.detail.organizationRequired')}
-          </p>
-        )}
-      </section>
-
-      <section
-        id="qualifications"
-        aria-labelledby="qualifications-title"
-        className="grid gap-4 rounded-lg border bg-card p-5"
-      >
-        <div>
-          <h2 id="qualifications-title" className="text-xl font-semibold">
-            {t('Employees.detail.qualifications')}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {t('Employees.detail.qualificationsDescription')}
-          </p>
-        </div>
-        {employee.qualifications.length ? (
-          <ul className="grid gap-2">
-            {employee.qualifications.map((qualification) => {
-              const revokedAt = qualification.revokedAt;
-              const revokedDate = revokedAt ? formatDate(revokedAt, locale) : null;
-              return (
-                <li
-                  key={qualification.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
-                >
-                  <div>
-                    <p className="font-medium">
-                      {qualification.name}
-                      {qualification.code ? ` (${qualification.code})` : ''}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {dateRange(
-                        qualification.validFrom,
-                        qualification.validUntil,
-                        locale,
-                        t('Employees.detail.open'),
-                        t('Employees.detail.unlimited'),
-                      )}
-                      {qualification.issuer ? ` · ${qualification.issuer}` : ''}
-                      {qualification.status === 'archived'
-                        ? ` · ${t('Employees.detail.archived')}`
-                        : ''}
-                      {qualification.assignmentStatus === 'revoked'
-                        ? ` · ${t('Employees.detail.qualificationRevoked')}`
-                        : ''}
-                      {revokedDate
-                        ? ` · ${t('Employees.detail.qualificationRevokedAt', { date: revokedDate })}`
-                        : ''}
-                    </p>
-                  </div>
-                  {qualification.assignmentStatus === 'active' ? (
-                    <form action={removeQualificationAction}>
-                      <input type="hidden" name="employeeId" value={id} />
-                      <input
-                        type="hidden"
-                        name="qualificationId"
-                        value={qualification.qualificationId}
-                      />
-                      <ConfirmSubmitButton
-                        confirmation={t('Employees.detail.removeQualificationConfirmation')}
-                      >
-                        {t('Employees.detail.remove')}
-                      </ConfirmSubmitButton>
-                    </form>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted-foreground">{t('Employees.detail.noQualifications')}</p>
-        )}
-        {qualifications.length ? (
-          <RHFActionForm
-            action={assignQualificationAction}
-            className="grid gap-3 rounded-md border p-3"
-          >
-            <input type="hidden" name="employeeId" value={id} />
-            <div className="grid gap-2">
-              <Label htmlFor="qualificationId">{t('Employees.detail.addQualification')}</Label>
-              <NativeSelect
-                id="qualificationId"
-                name="qualificationId"
-                selectClassName="h-10 rounded-md border bg-card px-3"
-                required
-                defaultValue=""
-                className="w-full"
-              >
-                <option value="" disabled>
-                  {t('Employees.detail.selectQualification')}
-                </option>
-                {qualifications.map((qualification) => (
-                  <option key={qualification.id} value={qualification.id}>
-                    {qualification.name}
-                    {qualification.code ? ` (${qualification.code})` : ''}
-                  </option>
-                ))}
-              </NativeSelect>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field
-                id="qualification-valid-from"
-                name="validFrom"
-                label={t('Employees.detail.validFrom')}
-                type="date"
-              />
-              <Field
-                id="qualification-valid-until"
-                name="validUntil"
-                label={t('Employees.detail.validUntil')}
-                type="date"
-              />
-              <Field
-                id="qualification-issuer"
-                name="issuer"
-                label={t('Employees.detail.issuer')}
-                maxLength={160}
-              />
-            </div>
-            <Button type="submit" disabled={!writable}>
-              {t('Employees.detail.saveQualification')}
-            </Button>
-          </RHFActionForm>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            <Link className="underline" href="/administration/qualifications">
-              {t('Employees.detail.manageQualifications')}
-            </Link>
-          </p>
-        )}
-      </section>
-
-      <section
-        id="skills"
-        aria-labelledby="skills-title"
-        className="grid gap-4 rounded-lg border bg-card p-5"
-      >
-        <div>
-          <h2 id="skills-title" className="text-xl font-semibold">
-            {t('Employees.detail.skills')}
-          </h2>
-          <p className="text-sm text-muted-foreground">{t('Employees.detail.skillsDescription')}</p>
-        </div>
-        {employee.skills.length ? (
-          <ul className="grid gap-2">
-            {employee.skills.map((skill) => (
-              <li
-                key={skill.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
-              >
-                <span className="font-medium">
-                  {skill.name}
-                  {skill.code ? ` (${skill.code})` : ''}
-                  {skill.status === 'archived' ? ` · ${t('Employees.detail.archived')}` : ''}
-                </span>
-                {skill.status === 'active' ? (
-                  <form action={removeSkillAction}>
-                    <input type="hidden" name="employeeId" value={id} />
-                    <input type="hidden" name="skillId" value={skill.skillId} />
-                    <ConfirmSubmitButton
-                      confirmation={t('Employees.detail.removeSkillConfirmation')}
-                    >
-                      {t('Employees.detail.remove')}
-                    </ConfirmSubmitButton>
-                  </form>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted-foreground">{t('Employees.detail.noSkills')}</p>
-        )}
-        {skills.length ? (
-          <RHFActionForm
-            action={assignSkillAction}
-            className="flex flex-wrap items-end gap-3 rounded-md border p-3"
-          >
-            <input type="hidden" name="employeeId" value={id} />
-            <div className="grid gap-2">
-              <Label htmlFor="skillId">{t('Employees.detail.addSkill')}</Label>
-              <NativeSelect
-                id="skillId"
-                name="skillId"
-                selectClassName="h-10 rounded-md border bg-card px-3"
-                required
-                defaultValue=""
-                className="w-full"
-              >
-                <option value="" disabled>
-                  {t('Employees.detail.selectSkill')}
-                </option>
-                {skills.map((skill) => (
-                  <option key={skill.id} value={skill.id}>
-                    {skill.name}
-                    {skill.code ? ` (${skill.code})` : ''}
-                  </option>
-                ))}
-              </NativeSelect>
-            </div>
-            <Button type="submit" disabled={!writable}>
-              {t('Employees.detail.assignSkill')}
-            </Button>
-          </RHFActionForm>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            <Link className="underline" href="/administration/qualifications">
-              {t('Employees.detail.manageSkills')}
-            </Link>
-          </p>
-        )}
-      </section>
-
-      <section
-        id="access"
-        aria-labelledby="access-title"
-        className="grid gap-4 rounded-lg border bg-card p-5"
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 id="access-title" className="text-xl font-semibold">
-              {t('Employees.detail.access')}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {t('Employees.detail.accessDescription')}
-            </p>
-          </div>
-          <Link className="text-sm text-primary underline" href="/administration/users">
-            {t('Employees.detail.manageAccess')}
-          </Link>
-        </div>
-        {employee.linkedUser ? (
-          <div className="grid gap-2 rounded-md border p-3">
-            <p className="font-medium">
-              {employee.linkedUser.displayName ||
-                employee.linkedUser.email ||
-                t('Resources.unavailableUser')}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {employee.linkedUser.email ?? t('Employees.detail.noEmail')} ·{' '}
-              {t('Employees.detail.tenantMembership')}{' '}
-              {t(statusLabelKey(employee.linkedUser.membershipStatus))}
-            </p>
-            <form action={unlinkEmployeeUserAction}>
-              <input type="hidden" name="employeeId" value={id} />
-              <ConfirmSubmitButton confirmation={t('Employees.detail.unlinkConfirmation')}>
-                {t('Employees.detail.unlinkUser')}
-              </ConfirmSubmitButton>
-            </form>
-          </div>
-        ) : linkableUsersResult.error ? (
-          <p className="text-sm text-muted-foreground">
-            {t(errorMessageKey(linkableUsersResult.error.code))}
-          </p>
-        ) : linkableUsersResult.data?.length ? (
-          <RHFActionForm action={linkEmployeeUserAction} className="flex flex-wrap items-end gap-3">
-            <input type="hidden" name="employeeId" value={id} />
-            <div className="grid gap-2">
-              <Label htmlFor="userId">{t('Employees.detail.linkActiveUser')}</Label>
-              <NativeSelect
-                id="userId"
-                name="userId"
-                selectClassName="h-10 rounded-md border bg-card px-3"
-                required
-                defaultValue=""
-                className="w-full"
-              >
-                <option value="" disabled>
-                  {t('Employees.detail.selectUser')}
-                </option>
-                {linkableUsersResult.data.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.displayName || user.email || t('Resources.unavailableUser')}
-                    {user.email ? ` · ${user.email}` : ''}
-                  </option>
-                ))}
-              </NativeSelect>
-            </div>
-            <Button type="submit" disabled={!writable}>
-              {t('Employees.detail.linkUser')}
-            </Button>
-          </RHFActionForm>
-        ) : (
-          <p className="text-sm text-muted-foreground">{t('Employees.detail.noLinkableUser')}</p>
-        )}
-      </section>
-    </div>
+    </>
   );
+}
+
+function employeeScheduleRange() {
+  const now = new Date();
+  return { now };
 }
 
 function Field({
@@ -1426,14 +1509,26 @@ function StatusForm({
   id,
   operation,
   label,
-}: Readonly<{ id: string; operation: 'activate' | 'deactivate'; label: string }>) {
+  confirmation,
+}: Readonly<{
+  id: string;
+  operation: 'activate' | 'deactivate';
+  label: string;
+  confirmation?: string;
+}>) {
   return (
     <form action={changeEmployeeStatusAction}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="operation" value={operation} />
-      <Button variant="secondary" type="submit">
-        {label}
-      </Button>
+      {confirmation ? (
+        <ConfirmSubmitButton confirmation={confirmation} variant="secondary">
+          {label}
+        </ConfirmSubmitButton>
+      ) : (
+        <Button variant="secondary" type="submit">
+          {label}
+        </Button>
+      )}
     </form>
   );
 }
@@ -1447,13 +1542,4 @@ function dateRange(
 ): string {
   if (!from && !until) return unlimited;
   return `${formatDate(from, locale) ?? open} — ${formatDate(until, locale) ?? open}`;
-}
-
-function employeeVisitRange(): { scheduleNow: Date; scheduleFrom: Date; scheduleUntil: Date } {
-  const scheduleNow = new Date();
-  return {
-    scheduleNow,
-    scheduleFrom: new Date(scheduleNow.getTime() - 30 * 24 * 60 * 60 * 1000),
-    scheduleUntil: new Date(scheduleNow.getTime() + 30 * 24 * 60 * 60 * 1000),
-  };
 }

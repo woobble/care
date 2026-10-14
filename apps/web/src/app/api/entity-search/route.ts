@@ -7,10 +7,13 @@ type EntityRecord = {
   userId?: string | null;
   firstName?: string;
   preferredName?: string | null;
+  displayName?: string | null;
+  email?: string | null;
   lastName?: string;
   name?: string;
   legalName?: string | null;
   code?: string | null;
+  description?: string | null;
   organizationName?: string;
   facilityName?: string | null;
   clientName?: string;
@@ -37,7 +40,7 @@ export async function GET(request: Request) {
     Number.isInteger(requestedPage) && requestedPage > 0 ? Math.min(requestedPage, 100_000) : 1;
   const search = new URLSearchParams({ page: String(page), pageSize: '20' });
   if (query) search.set('q', query);
-  if (entity === 'clients' || entity === 'employees' || entity === 'employee-users') {
+  if (entity === 'clients' || entity === 'employees') {
     search.set('status', 'active');
     search.set('sortBy', 'lastName');
     search.set('sortOrder', 'asc');
@@ -45,6 +48,14 @@ export async function GET(request: Request) {
     const facilityId = url.searchParams.get('facilityId');
     if (organizationId) search.set('organizationId', organizationId);
     if (facilityId) search.set('facilityId', facilityId);
+  } else if (entity === 'employee-users') {
+    const employeeId = url.searchParams.get('employeeId');
+    if (!employeeId || !/^[0-9a-f-]{36}$/i.test(employeeId) || query.length < 2) {
+      return NextResponse.json({ items: [] satisfies EntityOption[] });
+    }
+    search.set('pageSize', '20');
+  } else if (entity === 'qualifications' || entity === 'skills') {
+    search.set('pageSize', '20');
   } else if (entity === 'organizations' || entity === 'facilities' || entity === 'teams') {
     search.set('status', 'active');
     const organizationId = url.searchParams.get('organizationId');
@@ -70,15 +81,19 @@ export async function GET(request: Request) {
     if (organizationId) search.set('organizationId', organizationId);
   }
 
-  const apiEntity = entity === 'employee-users' ? 'employees' : entity;
+  const employeeId = url.searchParams.get('employeeId');
   const path =
     entity === 'receivables'
       ? '/api/v1/billing/receivables'
       : entity === 'payers'
         ? '/api/v1/billing/payers'
-        : entity === 'organizations' || entity === 'facilities' || entity === 'teams'
-          ? `/api/v1/${entity}/search`
-          : `/api/v1/${apiEntity}`;
+        : entity === 'employee-users' && employeeId
+          ? `/api/v1/employees/${employeeId}/linkable-users/search`
+          : entity === 'qualifications' || entity === 'skills'
+            ? `/api/v1/${entity}/search`
+            : entity === 'organizations' || entity === 'facilities' || entity === 'teams'
+              ? `/api/v1/${entity}/search`
+              : `/api/v1/${entity}`;
   const response = await fetchCareApi(`${path}?${search.toString()}`, {
     method: 'GET',
     cache: 'no-store',
@@ -91,9 +106,11 @@ export async function GET(request: Request) {
     items?: EntityRecord[];
     page?: number;
     totalPages?: number;
+    pageSize?: number;
+    total?: number;
   };
   const items = (payload.items ?? []).flatMap((record) => {
-    const id = entity === 'employee-users' ? record.userId : record.id;
+    const id = entity === 'employee-users' ? (record.userId ?? record.id) : record.id;
     if (!id) return [];
     const label = getEntityLabel(entity, record);
     return label
@@ -108,10 +125,16 @@ export async function GET(request: Request) {
   });
   return NextResponse.json({
     items,
-    ...(canBrowseWithoutQuery
+    ...(canBrowseWithoutQuery ||
+    entity === 'employee-users' ||
+    entity === 'qualifications' ||
+    entity === 'skills'
       ? {
           page: payload.page ?? page,
-          hasMore: (payload.page ?? page) < (payload.totalPages ?? 0),
+          hasMore:
+            entity === 'employee-users' || entity === 'qualifications' || entity === 'skills'
+              ? (payload.page ?? page) * (payload.pageSize ?? 20) < (payload.total ?? 0)
+              : (payload.page ?? page) < (payload.totalPages ?? 0),
         }
       : {}),
   });
@@ -122,6 +145,8 @@ function isSearchableEntity(value: string | null): value is SearchableEntity {
     value === 'clients' ||
     value === 'employees' ||
     value === 'employee-users' ||
+    value === 'qualifications' ||
+    value === 'skills' ||
     value === 'services' ||
     value === 'organizations' ||
     value === 'facilities' ||
@@ -132,7 +157,13 @@ function isSearchableEntity(value: string | null): value is SearchableEntity {
 }
 
 function getEntityLabel(entity: SearchableEntity, record: EntityRecord): string | undefined {
-  if (entity === 'clients' || entity === 'employees' || entity === 'employee-users') {
+  if (entity === 'employee-users') {
+    return [record.displayName, record.email].filter(Boolean).join(' · ') || undefined;
+  }
+  if (entity === 'qualifications' || entity === 'skills') {
+    return [record.name, record.code].filter(Boolean).join(' · ') || undefined;
+  }
+  if (entity === 'clients' || entity === 'employees') {
     if (!record.firstName || !record.lastName) return undefined;
     return `${record.preferredName || record.firstName} ${record.lastName}`.trim();
   }

@@ -68,7 +68,7 @@ export interface EmployeeSearchInput {
   ids?: string[];
   page?: number;
   pageSize?: number;
-  sortBy?: 'lastName' | 'firstName' | 'createdAt';
+  sortBy?: 'lastName' | 'firstName' | 'status' | 'createdAt';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -495,6 +495,19 @@ export class EmployeeApplicationService {
       const context = await this.employeeContext(transaction, principal.tenantId, employee);
       this.authorize(principal, 'employee.link_user', context);
       return this.employees.linkableUsers(transaction, principal.tenantId);
+    });
+  }
+
+  async searchLinkableUsers(
+    principal: AuthorizationPrincipal,
+    employeeId: string,
+    input: { query: string; page: number; pageSize: number },
+  ) {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const employee = await this.requireEmployee(transaction, principal.tenantId, employeeId);
+      const context = await this.employeeContext(transaction, principal.tenantId, employee);
+      this.authorize(principal, 'employee.link_user', context);
+      return this.employees.searchLinkableUsers(transaction, principal.tenantId, input);
     });
   }
 
@@ -932,6 +945,22 @@ export class EmployeeApplicationService {
     );
   }
 
+  async searchQualifications(
+    principal: AuthorizationPrincipal,
+    input: { query: string; page: number; pageSize: number },
+  ) {
+    this.requireGrant(principal, 'employee.read');
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+      this.employees.searchQualifications(
+        transaction,
+        principal.tenantId,
+        input.query,
+        input.page,
+        input.pageSize,
+      ),
+    );
+  }
+
   async createQualification(
     principal: AuthorizationPrincipal,
     input: DefinitionInput,
@@ -1260,6 +1289,22 @@ export class EmployeeApplicationService {
     this.requireGrant(principal, 'employee.read');
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
       this.employees.listSkills(transaction, principal.tenantId, status),
+    );
+  }
+
+  async searchSkills(
+    principal: AuthorizationPrincipal,
+    input: { query: string; page: number; pageSize: number },
+  ) {
+    this.requireGrant(principal, 'employee.read');
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+      this.employees.searchSkills(
+        transaction,
+        principal.tenantId,
+        input.query,
+        input.page,
+        input.pageSize,
+      ),
     );
   }
 
@@ -1643,7 +1688,8 @@ export class EmployeeApplicationService {
       };
       return can(principal, { action: 'employee.read', resource: teamContext });
     });
-    if (!can(principal, { action: 'employee.link_user', resource: context })) {
+    detail.canLinkUser = can(principal, { action: 'employee.link_user', resource: context });
+    if (!detail.canLinkUser) {
       detail.linkedUser = null;
     }
     return detail;

@@ -23,6 +23,8 @@ export type SearchableEntity =
   | 'clients'
   | 'employees'
   | 'employee-users'
+  | 'qualifications'
+  | 'skills'
   | 'services'
   | 'organizations'
   | 'facilities'
@@ -34,6 +36,7 @@ export function AsyncEntityCombobox({
   name,
   label,
   entity,
+  employeeId,
   organizationId,
   facilityId,
   initialOption,
@@ -52,6 +55,7 @@ export function AsyncEntityCombobox({
   name: string;
   label: string;
   entity: SearchableEntity;
+  employeeId?: string | undefined;
   organizationId?: string | undefined;
   facilityId?: string | undefined;
   initialOption?: EntityOption | undefined;
@@ -118,6 +122,7 @@ export function AsyncEntityCombobox({
       setPages([]);
       const params = new URLSearchParams({ entity, page: '1', pageSize: String(PAGE_SIZE) });
       if (search) params.set('q', search);
+      if (employeeId) params.set('employeeId', employeeId);
       if (organizationId) params.set('organizationId', organizationId);
       if (facilityId) params.set('facilityId', facilityId);
       if (validAt) params.set('validAt', validAt);
@@ -157,6 +162,7 @@ export function AsyncEntityCombobox({
     browseOnEmpty,
     debounceMs,
     entity,
+    employeeId,
     facilityId,
     minQueryLength,
     open,
@@ -167,7 +173,8 @@ export function AsyncEntityCombobox({
   ]);
 
   async function loadAdjacentPage(direction: 'previous' | 'next') {
-    if (!browseOnEmpty || pagingRef.current || pages.length === 0) return;
+    if ((!browseOnEmpty && query.trim().length === 0) || pagingRef.current || pages.length === 0)
+      return;
     const firstPage = pages[0]!;
     const lastPage = pages.at(-1)!;
     const targetPage = direction === 'next' ? lastPage.page + 1 : firstPage.page - 1;
@@ -187,6 +194,7 @@ export function AsyncEntityCombobox({
     });
     const search = query.trim();
     if (search) params.set('q', search);
+    if (employeeId) params.set('employeeId', employeeId);
     if (organizationId) params.set('organizationId', organizationId);
     if (facilityId) params.set('facilityId', facilityId);
     if (validAt) params.set('validAt', validAt);
@@ -248,7 +256,13 @@ export function AsyncEntityCombobox({
 
   function handleListScroll() {
     const list = listRef.current;
-    if (!list || !browseOnEmpty || pagingRef.current || status !== 'success') return;
+    if (
+      !list ||
+      (!browseOnEmpty && query.trim().length === 0) ||
+      pagingRef.current ||
+      status !== 'success'
+    )
+      return;
     if (list.scrollTop < OPTION_ROW_HEIGHT && pages[0]!.page > 1) {
       void loadAdjacentPage('previous');
       return;

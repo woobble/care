@@ -64,13 +64,6 @@ export default async function FacilityDetailPage({
   if (!facilityResult.data) notFound();
   const facility = facilityResult.data as components['schemas']['FacilityResponseDto'];
   const tenantId = header['X-Tenant-Id'];
-  const canReadTeams = hasClientPermission(
-    permissions,
-    'team.read',
-    tenantId,
-    facility.organizationId,
-    facility.id,
-  );
   const canReadEmployees = hasClientPermission(
     permissions,
     'employee.read',
@@ -124,7 +117,17 @@ export default async function FacilityDetailPage({
           <>
             <Link href="/administration/facilities">{t('Facilities.title')}</Link> ·{' '}
             <ResourceReference
-              label={facility.organizationName}
+              label={
+                hasClientPermission(
+                  permissions,
+                  'organization.read',
+                  tenantId,
+                  facility.organizationId,
+                  null,
+                )
+                  ? facility.organizationName
+                  : t('Resources.unavailableOrganization')
+              }
               href={
                 hasClientPermission(
                   permissions,
@@ -240,7 +243,14 @@ export default async function FacilityDetailPage({
           <ul className="grid gap-2">
             {teams.items.map((team) => (
               <li key={team.id} className="flex justify-between gap-3 rounded-md border p-3">
-                {canReadTeams ? (
+                {hasClientPermission(
+                  permissions,
+                  'team.read',
+                  tenantId,
+                  facility.organizationId,
+                  facility.id,
+                  team.id,
+                ) ? (
                   <Link
                     className="font-medium text-primary underline"
                     href={`/administration/teams/${team.id}`}
@@ -248,9 +258,18 @@ export default async function FacilityDetailPage({
                     {team.name}
                   </Link>
                 ) : (
-                  <span className="font-medium">{team.name}</span>
+                  <span className="font-medium">{t('Resources.unavailableTeam')}</span>
                 )}
-                <StatusBadge status={team.status} label={t(statusLabelKey(team.status))} />
+                {hasClientPermission(
+                  permissions,
+                  'team.read',
+                  tenantId,
+                  facility.organizationId,
+                  facility.id,
+                  team.id,
+                ) ? (
+                  <StatusBadge status={team.status} label={t(statusLabelKey(team.status))} />
+                ) : null}
               </li>
             ))}
           </ul>
@@ -301,11 +320,14 @@ export default async function FacilityDetailPage({
                     {employee.firstName} {employee.lastName}
                   </Link>
                 ) : (
-                  <span className="font-medium">
-                    {employee.firstName} {employee.lastName}
-                  </span>
+                  <span className="font-medium">{t('Resources.unavailableEmployee')}</span>
                 )}
-                <StatusBadge status={employee.status} label={t(statusLabelKey(employee.status))} />
+                {canReadEmployees ? (
+                  <StatusBadge
+                    status={employee.status}
+                    label={t(statusLabelKey(employee.status))}
+                  />
+                ) : null}
               </li>
             ))}
           </ul>

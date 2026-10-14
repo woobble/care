@@ -106,6 +106,7 @@ export interface EmployeeUserLinkSnapshot {
   id: string;
   displayName: string | null;
   email: string | null;
+  userStatus: 'active' | 'disabled';
   membershipStatus: 'pending' | 'active' | 'inactive' | 'revoked';
 }
 
@@ -115,6 +116,7 @@ export interface EmployeeDetailSnapshot extends EmployeeSnapshot {
   qualifications: EmployeeQualificationSnapshot[];
   skills: EmployeeSkillSnapshot[];
   linkedUser: EmployeeUserLinkSnapshot | null;
+  canLinkUser?: boolean;
 }
 
 export interface EmployeeListResult {

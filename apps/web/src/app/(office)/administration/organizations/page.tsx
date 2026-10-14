@@ -18,6 +18,7 @@ type SearchParams = Promise<{
   error?: string;
   updated?: string;
   q?: string;
+  status?: string;
   page?: string;
   pageSize?: string;
 }>;
@@ -31,9 +32,16 @@ export default async function OrganizationsPage({
   const requestedPageSize = Number(query.pageSize ?? '20');
   const pageSize = [10, 20, 50, 100].includes(requestedPageSize) ? requestedPageSize : 20;
   const search = query.q?.trim().slice(0, 120) ?? '';
+  const status =
+    query.status === 'active' || query.status === 'archived' ? query.status : undefined;
   const organizationsResult = await searchStructurePage<
     components['schemas']['OrganizationResponseDto']
-  >('organizations', { page, pageSize, ...(search ? { q: search } : {}) });
+  >('organizations', {
+    page,
+    pageSize,
+    ...(search ? { q: search } : {}),
+    ...(status ? { status } : {}),
+  });
   if (!organizationsResult.failed)
     redirectToValidPage(
       '/administration/organizations',
@@ -141,16 +149,33 @@ export default async function OrganizationsPage({
             </Link>
           </div>
         </div>
-        <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
+        <form
+          method="get"
+          className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-2 xl:grid-cols-3"
+        >
           <input type="hidden" name="page" value="1" />
           <input type="hidden" name="pageSize" value={pageSize} />
           <label className="grid min-w-56 gap-1 text-sm">
             <span>{t('Organizations.listTitle')}</span>
             <Input type="search" name="q" maxLength={120} defaultValue={search} />
           </label>
-          <Button type="submit" variant="secondary">
-            {t('Common.actions.apply')}
-          </Button>
+          <label className="grid gap-1 text-sm">
+            {t('Common.fields.status')}
+            <select
+              name="status"
+              defaultValue={status ?? ''}
+              className="h-10 rounded-md border bg-card px-3"
+            >
+              <option value="">{t('Common.filters.allStatuses')}</option>
+              <option value="active">{t('Common.status.active')}</option>
+              <option value="archived">{t('Common.status.archived')}</option>
+            </select>
+          </label>
+          <div className="flex items-end">
+            <Button type="submit" variant="secondary">
+              {t('Common.actions.apply')}
+            </Button>
+          </div>
         </form>
         {!organizationsResult.failed && organizationsResult.items.length ? (
           organizationsResult.items.map((organization) => {
@@ -187,7 +212,7 @@ export default async function OrganizationsPage({
             page={organizationsResult.page}
             pageSize={organizationsResult.pageSize}
             totalItems={organizationsResult.total}
-            filters={{ q: search }}
+            filters={{ q: search, status }}
           />
         ) : null}
       </section>

@@ -39,8 +39,24 @@ export const employeeSearchSchema = z
     teamId: z.string().uuid().optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
-    sortBy: z.enum(['lastName', 'firstName', 'createdAt']).default('lastName'),
+    sortBy: z.enum(['lastName', 'firstName', 'status', 'createdAt']).default('lastName'),
     sortOrder: z.enum(['asc', 'desc']).default('asc'),
+  })
+  .strict();
+
+export const linkableUserSearchSchema = z
+  .object({
+    q: z.string().trim().min(2).max(120),
+    page: z.coerce.number().int().min(1).max(100_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(50).default(20),
+  })
+  .strict();
+
+export const definitionSearchSchema = z
+  .object({
+    q: z.string().trim().min(2).max(120),
+    page: z.coerce.number().int().min(1).max(100_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(50).default(20),
   })
   .strict();
 
@@ -98,6 +114,9 @@ export class EmployeeResponseDto {
 
   @ApiProperty({ format: 'uuid', nullable: true })
   userId!: string | null;
+
+  @ApiProperty({ description: 'Whether an employee is linked to a local user account.' })
+  hasLinkedUser!: boolean;
 
   @ApiProperty()
   firstName!: string;
@@ -265,11 +284,17 @@ export class EmployeeUserResponseDto {
   @ApiProperty({ type: String, format: 'email', nullable: true })
   email!: string | null;
 
+  @ApiProperty({ enum: ['active', 'disabled'] })
+  userStatus!: 'active' | 'disabled';
+
   @ApiProperty({ enum: ['pending', 'active', 'inactive', 'revoked'] })
   membershipStatus!: 'pending' | 'active' | 'inactive' | 'revoked';
 }
 
 export class EmployeeDetailResponseDto extends EmployeeResponseDto {
+  @ApiProperty({ description: 'Whether the current principal may link or unlink a user account.' })
+  canLinkUser!: boolean;
+
   @ApiProperty({ type: [FacilityAssignmentResponseDto] })
   facilityAssignments!: FacilityAssignmentResponseDto[];
 
@@ -326,6 +351,20 @@ export class DefinitionResponseDto {
   updatedAt!: string;
 }
 
+export class DefinitionSearchResponseDto {
+  @ApiProperty({ type: [DefinitionResponseDto] })
+  items!: DefinitionResponseDto[];
+
+  @ApiProperty()
+  page!: number;
+
+  @ApiProperty()
+  pageSize!: number;
+
+  @ApiProperty()
+  total!: number;
+}
+
 export class LinkableUserResponseDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -335,6 +374,20 @@ export class LinkableUserResponseDto {
 
   @ApiProperty({ type: String, format: 'email', nullable: true })
   email!: string | null;
+}
+
+export class LinkableUserSearchResponseDto {
+  @ApiProperty({ type: [LinkableUserResponseDto] })
+  items!: LinkableUserResponseDto[];
+
+  @ApiProperty()
+  page!: number;
+
+  @ApiProperty()
+  pageSize!: number;
+
+  @ApiProperty()
+  total!: number;
 }
 
 export class CreateEmployeeDto {

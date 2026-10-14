@@ -7,7 +7,7 @@ import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
-export async function createEmployeeAction(formData: FormData): Promise<void> {
+export async function createEmployeeAction(formData: FormData): Promise<void | boolean> {
   const organizationId = readUuid(formData.get('organizationId'));
   const firstName = readText(formData, 'firstName');
   const lastName = readText(formData, 'lastName');
@@ -22,7 +22,7 @@ export async function createEmployeeAction(formData: FormData): Promise<void> {
     startDate === undefined ||
     endDate === undefined
   ) {
-    redirect('/employees/new?error=INVALID_REQUEST');
+    return false;
   }
   const api = await getApiClient();
   const { data, error } = await api.POST('/api/v1/employees', {
@@ -41,13 +41,12 @@ export async function createEmployeeAction(formData: FormData): Promise<void> {
       weeklyHours,
     },
   });
-  if (error || !data)
-    redirect(`/employees/new?error=${encodeURIComponent(error?.code ?? 'CREATE_FAILED')}`);
+  if (error || !data) return false;
   revalidatePath('/employees');
   redirect(`/employees/${data.id}`);
 }
 
-export async function updateEmployeeAction(formData: FormData): Promise<void> {
+export async function updateEmployeeAction(formData: FormData): Promise<void | boolean> {
   const id = readUuid(formData.get('id'));
   const firstName = readText(formData, 'firstName');
   const lastName = readText(formData, 'lastName');
@@ -62,7 +61,7 @@ export async function updateEmployeeAction(formData: FormData): Promise<void> {
     startDate === undefined ||
     endDate === undefined
   ) {
-    redirect(`/employees/${encodeURIComponent(id ?? '')}?error=INVALID_REQUEST`);
+    return false;
   }
   const api = await getApiClient();
   const { error } = await api.PATCH('/api/v1/employees/{id}', {
@@ -80,7 +79,7 @@ export async function updateEmployeeAction(formData: FormData): Promise<void> {
       weeklyHours,
     },
   });
-  if (error) redirect(`/employees/${id}?error=${encodeURIComponent(error.code)}`);
+  if (error) return false;
   revalidatePath('/employees');
   revalidatePath(`/employees/${id}`);
   redirect(`/employees/${id}?updated=employee`);

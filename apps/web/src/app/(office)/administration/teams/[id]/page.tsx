@@ -62,6 +62,7 @@ export default async function TeamDetailPage({
     tenantId,
     team.organizationId,
     team.facilityId,
+    team.id,
   );
   const employees = employeesResult.data as unknown as
     | {
@@ -90,7 +91,17 @@ export default async function TeamDetailPage({
           <>
             <Link href="/administration/teams">{t('Teams.title')}</Link> ·{' '}
             <ResourceReference
-              label={team.organizationName}
+              label={
+                hasClientPermission(
+                  permissions,
+                  'organization.read',
+                  tenantId,
+                  team.organizationId,
+                  null,
+                )
+                  ? team.organizationName
+                  : t('Resources.unavailableOrganization')
+              }
               href={
                 hasClientPermission(
                   permissions,
@@ -128,9 +139,21 @@ export default async function TeamDetailPage({
             label={t('Teams.facility')}
             organizationId={team.organizationId}
             placeholder={t('Teams.organizationWide')}
-            {...(team.facilityId && team.facilityName
+            {...(team.facilityId
               ? {
-                  initialOption: { id: team.facilityId, label: team.facilityName },
+                  initialOption: {
+                    id: team.facilityId,
+                    label: hasClientPermission(
+                      permissions,
+                      'facility.read',
+                      tenantId,
+                      team.organizationId,
+                      team.facilityId,
+                      team.id,
+                    )
+                      ? (team.facilityName ?? t('Resources.unavailableFacility'))
+                      : t('Resources.unavailableFacility'),
+                  },
                 }
               : {})}
           />
@@ -182,11 +205,14 @@ export default async function TeamDetailPage({
                     {employee.firstName} {employee.lastName}
                   </Link>
                 ) : (
-                  <span className="font-medium">
-                    {employee.firstName} {employee.lastName}
-                  </span>
+                  <span className="font-medium">{t('Resources.unavailableEmployee')}</span>
                 )}
-                <StatusBadge status={employee.status} label={t(statusLabelKey(employee.status))} />
+                {canReadEmployees ? (
+                  <StatusBadge
+                    status={employee.status}
+                    label={t(statusLabelKey(employee.status))}
+                  />
+                ) : null}
               </li>
             ))}
           </ul>

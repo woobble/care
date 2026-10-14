@@ -178,7 +178,7 @@ export default async function MemberDetailPage({
           </h2>
           <p className="text-sm text-muted-foreground">{t('Users.scopeHelp')}</p>
         </div>
-        <RHFActionForm action={replaceMemberScopesAction} className="grid gap-4">
+        <form action={replaceMemberScopesAction} className="grid gap-4">
           <input type="hidden" name="membershipId" value={member.id} />
           <fieldset className="grid gap-3">
             <legend className="font-medium">{t('Users.scope')}</legend>
@@ -230,7 +230,7 @@ export default async function MemberDetailPage({
           <Button type="submit" disabled={member.status === 'revoked'}>
             {t('Users.saveScopes')}
           </Button>
-        </RHFActionForm>
+        </form>
       </section>
 
       <section

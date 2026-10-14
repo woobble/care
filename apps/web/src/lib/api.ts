@@ -111,12 +111,14 @@ export function hasClientPermission(
   tenantId: string,
   organizationId: string | null,
   facilityId: string | null,
+  teamId: string | null = null,
 ): boolean {
   return grants.some(
     (grant) =>
       grant.permission === permission &&
       ((grant.scopeType === 'tenant' && grant.scopeId === tenantId) ||
         (grant.scopeType === 'organization' && grant.scopeId === organizationId) ||
-        (grant.scopeType === 'facility' && grant.scopeId === facilityId)),
+        (grant.scopeType === 'facility' && grant.scopeId === facilityId) ||
+        (grant.scopeType === 'team' && grant.scopeId === teamId)),
   );
 }

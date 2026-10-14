@@ -42,6 +42,7 @@ import { ProblemDetailsDto } from './dto';
 import {
   CreateDefinitionDto,
   CreateEmployeeDto,
+  DefinitionSearchResponseDto,
   DefinitionResponseDto,
   EmployeeDetailResponseDto,
   EmployeeListResponseDto,
@@ -49,16 +50,19 @@ import {
   FacilityAssignmentDto,
   LinkUserDto,
   LinkableUserResponseDto,
+  LinkableUserSearchResponseDto,
   QualificationAssignmentDto,
   TeamMembershipDto,
   UpdateDefinitionDto,
   UpdateEmployeeDto,
   createDefinitionSchema,
   createEmployeeSchema,
+  definitionSearchSchema,
   definitionStatusSchema,
   employeeSearchSchema,
   facilityAssignmentSchema,
   linkUserSchema,
+  linkableUserSearchSchema,
   qualificationAssignmentSchema,
   teamMembershipSchema,
   updateDefinitionSchema,
@@ -93,7 +97,11 @@ export class EmployeesController {
   })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
-  @ApiQuery({ name: 'sortBy', required: false, enum: ['lastName', 'firstName', 'createdAt'] })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['lastName', 'firstName', 'status', 'createdAt'],
+  })
   @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   @ApiOkResponse({ type: EmployeeListResponseDto })
   async search(
@@ -270,6 +278,29 @@ export class EmployeesController {
     return this.employees.listLinkableUsers(this.principal(request), parseId(id));
   }
 
+  @Get('employees/:id/linkable-users/search')
+  @ApiOperation({ summary: 'Search eligible local users in the employee tenant' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiQuery({ name: 'q', required: true, minLength: 2, maxLength: 120 })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, maximum: 50 })
+  @ApiOkResponse({ type: LinkableUserSearchResponseDto })
+  async searchLinkableUsers(
+    @Req() request: ApiRequest,
+    @Param('id') id: string,
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ): Promise<LinkableUserSearchResponseDto> {
+    const parsed = linkableUserSearchSchema.safeParse({ q, page, pageSize });
+    if (!parsed.success) throw new BadRequestException();
+    return this.employees.searchLinkableUsers(this.principal(request), parseId(id), {
+      query: parsed.data.q,
+      page: parsed.data.page,
+      pageSize: parsed.data.pageSize,
+    });
+  }
+
   @Put('employees/:id/user')
   @ApiOperation({ summary: 'Link an employee to an existing local user' })
   @ApiParam({ name: 'id', format: 'uuid' })
@@ -411,6 +442,28 @@ export class EmployeesController {
     ).map(definitionResponse);
   }
 
+  @Get('qualifications/search')
+  @ApiOperation({ summary: 'Search active tenant qualification definitions' })
+  @ApiQuery({ name: 'q', required: true, minLength: 2, maxLength: 120 })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, maximum: 50 })
+  @ApiOkResponse({ type: DefinitionSearchResponseDto })
+  async searchQualifications(
+    @Req() request: ApiRequest,
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ): Promise<DefinitionSearchResponseDto> {
+    const parsed = definitionSearchSchema.safeParse({ q, page, pageSize });
+    if (!parsed.success) throw new BadRequestException();
+    const results = await this.employees.searchQualifications(this.principal(request), {
+      query: parsed.data.q,
+      page: parsed.data.page,
+      pageSize: parsed.data.pageSize,
+    });
+    return { ...results, items: results.items.map(definitionResponse) };
+  }
+
   @Post('qualifications')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a tenant qualification definition' })
@@ -527,6 +580,28 @@ export class EmployeesController {
     return (
       await this.employees.listSkills(this.principal(request), parseDefinitionStatus(status))
     ).map(definitionResponse);
+  }
+
+  @Get('skills/search')
+  @ApiOperation({ summary: 'Search active tenant skill definitions' })
+  @ApiQuery({ name: 'q', required: true, minLength: 2, maxLength: 120 })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, maximum: 50 })
+  @ApiOkResponse({ type: DefinitionSearchResponseDto })
+  async searchSkills(
+    @Req() request: ApiRequest,
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ): Promise<DefinitionSearchResponseDto> {
+    const parsed = definitionSearchSchema.safeParse({ q, page, pageSize });
+    if (!parsed.success) throw new BadRequestException();
+    const results = await this.employees.searchSkills(this.principal(request), {
+      query: parsed.data.q,
+      page: parsed.data.page,
+      pageSize: parsed.data.pageSize,
+    });
+    return { ...results, items: results.items.map(definitionResponse) };
   }
 
   @Post('skills')
@@ -667,6 +742,7 @@ function employeeResponse(employee: EmployeeSnapshot, includeUserId: boolean): E
   return {
     ...employee,
     userId: includeUserId ? employee.userId : null,
+    hasLinkedUser: employee.userId !== null,
     createdAt: employee.createdAt.toISOString(),
     updatedAt: employee.updatedAt.toISOString(),
   };
@@ -675,6 +751,7 @@ function employeeResponse(employee: EmployeeSnapshot, includeUserId: boolean): E
 function employeeDetailResponse(employee: EmployeeDetailSnapshot): EmployeeDetailResponseDto {
   return {
     ...employeeResponse(employee, employee.linkedUser !== null),
+    canLinkUser: Boolean(employee.canLinkUser),
     facilityAssignments: employee.facilityAssignments,
     teamMemberships: employee.teamMemberships,
     qualifications: employee.qualifications.map((qualification) => ({

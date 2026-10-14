@@ -56,8 +56,8 @@ export default async function EmployeesPage({
   const facilityId =
     query.facilityId && uuidPattern.test(query.facilityId) ? query.facilityId : undefined;
   const teamId = query.teamId && uuidPattern.test(query.teamId) ? query.teamId : undefined;
-  const sortBy = ['lastName', 'firstName', 'createdAt'].includes(query.sortBy ?? '')
-    ? (query.sortBy as 'lastName' | 'firstName' | 'createdAt')
+  const sortBy = ['lastName', 'firstName', 'status', 'createdAt'].includes(query.sortBy ?? '')
+    ? (query.sortBy as 'lastName' | 'firstName' | 'status' | 'createdAt')
     : 'lastName';
   const sortOrder = query.sortOrder === 'desc' ? 'desc' : 'asc';
   const parsedPage = Number(query.page ?? '1');
@@ -214,6 +214,7 @@ export default async function EmployeesPage({
           <SelectFilter name="sortBy" label={t('Common.fields.sortBy')} value={sortBy}>
             <option value="lastName">{t('Common.fields.lastName')}</option>
             <option value="firstName">{t('Common.fields.firstName')}</option>
+            <option value="status">{t('Common.fields.status')}</option>
             <option value="createdAt">{t('Common.fields.created')}</option>
           </SelectFilter>
           <SelectFilter name="sortOrder" label={t('Common.fields.order')} value={sortOrder}>
@@ -231,7 +232,73 @@ export default async function EmployeesPage({
           <h2 id="employee-list-title" className="text-lg font-semibold">
             {t('Employees.resultCount', { count: employees.total })}
           </h2>
-          <div className="overflow-x-auto rounded-lg border bg-card shadow-sm">
+          <ul className="grid gap-3 md:hidden">
+            {employees.items.map((employee) => (
+              <li key={employee.id}>
+                <article className="grid gap-3 rounded-lg border bg-card p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        className="break-words font-semibold text-primary underline-offset-4 hover:underline"
+                        href={`/employees/${employee.id}`}
+                      >
+                        {employee.preferredName || employee.firstName} {employee.lastName}
+                      </Link>
+                      <p className="break-all text-sm text-muted-foreground">
+                        {employee.email ??
+                          employee.personnelNumber ??
+                          t('Employees.noContactDetails')}
+                      </p>
+                    </div>
+                    <StatusBadge
+                      status={employee.status}
+                      label={t(statusLabelKey(employee.status))}
+                    />
+                  </div>
+                  <dl className="grid gap-2 border-t pt-3 text-sm">
+                    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-2">
+                      <dt className="text-muted-foreground">{t('Common.fields.organization')}</dt>
+                      <dd className="min-w-0 break-words">
+                        {employee.organizationId &&
+                        hasClientPermission(
+                          permissions,
+                          'organization.read',
+                          tenantId,
+                          employee.organizationId,
+                          null,
+                        ) ? (
+                          <ResourceReference
+                            label={
+                              employee.organizationName ?? t('Resources.unavailableOrganization')
+                            }
+                            href={`/administration/organizations/${employee.organizationId}`}
+                          />
+                        ) : employee.organizationId ? (
+                          t('Resources.unavailableOrganization')
+                        ) : (
+                          '—'
+                        )}
+                      </dd>
+                    </div>
+                    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-2">
+                      <dt className="text-muted-foreground">{t('Employees.accountLink')}</dt>
+                      <dd>
+                        <StatusBadge
+                          status={employee.hasLinkedUser ? 'active' : 'inactive'}
+                          label={
+                            employee.hasLinkedUser
+                              ? t('Employees.linkedAccount')
+                              : t('Employees.noLinkedAccount')
+                          }
+                        />
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto rounded-lg border bg-card shadow-sm md:block">
             <ShadcnTable className="w-full border-collapse text-left text-sm">
               <ShadcnTableCaption className="sr-only">
                 {t('Employees.listCaption')}
@@ -250,6 +317,9 @@ export default async function EmployeesPage({
                   <ShadcnTableHead scope="col" className="px-4 py-3">
                     {t('Common.fields.status')}
                   </ShadcnTableHead>
+                  <ShadcnTableHead scope="col" className="px-4 py-3">
+                    {t('Employees.accountLink')}
+                  </ShadcnTableHead>
                 </ShadcnTableRow>
               </ShadcnTableHeader>
               <ShadcnTableBody>
@@ -261,25 +331,30 @@ export default async function EmployeesPage({
                         href={`/employees/${employee.id}`}
                       >
                         {employee.preferredName || employee.firstName} {employee.lastName}
+                        <span className="block text-sm font-normal text-muted-foreground">
+                          {employee.email ??
+                            employee.personnelNumber ??
+                            t('Employees.noContactDetails')}
+                        </span>
                       </Link>
                     </ShadcnTableCell>
                     <ShadcnTableCell className="px-4 py-3">
-                      {employee.organizationName ? (
+                      {employee.organizationId &&
+                      hasClientPermission(
+                        permissions,
+                        'organization.read',
+                        tenantId,
+                        employee.organizationId,
+                        null,
+                      ) ? (
                         <ResourceReference
-                          label={employee.organizationName}
-                          href={
-                            employee.organizationId &&
-                            hasClientPermission(
-                              permissions,
-                              'organization.read',
-                              tenantId,
-                              employee.organizationId,
-                              null,
-                            )
-                              ? `/administration/organizations/${employee.organizationId}`
-                              : null
+                          label={
+                            employee.organizationName ?? t('Resources.unavailableOrganization')
                           }
+                          href={`/administration/organizations/${employee.organizationId}`}
                         />
+                      ) : employee.organizationId ? (
+                        t('Resources.unavailableOrganization')
                       ) : (
                         '—'
                       )}
@@ -291,6 +366,16 @@ export default async function EmployeesPage({
                       <StatusBadge
                         status={employee.status}
                         label={t(statusLabelKey(employee.status))}
+                      />
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="px-4 py-3">
+                      <StatusBadge
+                        status={employee.hasLinkedUser ? 'active' : 'inactive'}
+                        label={
+                          employee.hasLinkedUser
+                            ? t('Employees.linkedAccount')
+                            : t('Employees.noLinkedAccount')
+                        }
                       />
                     </ShadcnTableCell>
                   </ShadcnTableRow>
