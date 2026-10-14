@@ -31,6 +31,18 @@ describe('client translation messages', () => {
     });
     expect(english.Caregiver.drafts).toEqual(en.Caregiver.drafts);
     expect(english.ServiceEvidence.care).toEqual(en.ServiceEvidence.care);
+    expect(english.Visits).toEqual({
+      detailsSheetTitle: en.Visits.detailsSheetTitle,
+      detailsSheetDescription: en.Visits.detailsSheetDescription,
+      closeDetails: en.Visits.closeDetails,
+    });
+    expect(english.Planning).toEqual({
+      stopLabel: en.Planning.stopLabel,
+      moveStopUp: en.Planning.moveStopUp,
+      moveStopDown: en.Planning.moveStopDown,
+      unsavedTourOrder: en.Planning.unsavedTourOrder,
+      saveTourOrder: en.Planning.saveTourOrder,
+    });
     expect(english.Services.pricing.units).toEqual(en.Services.pricing.units);
     expect(english.ServiceAgreements.costEstimate).toEqual({
       agreementTitle: en.ServiceAgreements.costEstimate.agreementTitle,
@@ -68,6 +80,18 @@ describe('client translation messages', () => {
     expect(german.Common.language).toBe(de.Common.language);
     expect(german.Caregiver.drafts).toEqual(de.Caregiver.drafts);
     expect(german.ServiceEvidence.care).toEqual(de.ServiceEvidence.care);
+    expect(german.Visits).toEqual({
+      detailsSheetTitle: de.Visits.detailsSheetTitle,
+      detailsSheetDescription: de.Visits.detailsSheetDescription,
+      closeDetails: de.Visits.closeDetails,
+    });
+    expect(german.Planning).toEqual({
+      stopLabel: de.Planning.stopLabel,
+      moveStopUp: de.Planning.moveStopUp,
+      moveStopDown: de.Planning.moveStopDown,
+      unsavedTourOrder: de.Planning.unsavedTourOrder,
+      saveTourOrder: de.Planning.saveTourOrder,
+    });
   });
 
   test('keeps the client message payload below one tenth of the full catalog', () => {

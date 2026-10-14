@@ -125,6 +125,7 @@ export interface VisitSearchQuery {
   teamId?: string;
   status?: VisitStatus;
   serviceDefinitionId?: string;
+  search?: string;
   unassigned?: boolean;
   origin?: 'agreement_generated' | 'manual';
   relatedToVisitId?: string;
@@ -3929,6 +3930,7 @@ function toSearchFilter(
     ...(query.serviceDefinitionId === undefined
       ? {}
       : { serviceDefinitionId: query.serviceDefinitionId }),
+    ...(query.search === undefined ? {} : { search: query.search }),
     ...(query.unassigned === undefined ? {} : { unassigned: query.unassigned }),
     ...(query.origin === undefined ? {} : { origin: query.origin }),
     ...(query.relatedToVisitId === undefined ? {} : { relatedToVisitId: query.relatedToVisitId }),

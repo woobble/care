@@ -8,15 +8,21 @@ import { signOutAction } from '@app/web/app/actions/auth';
 import { OfficeShell, type OfficeNavigationGroup } from '@app/web/components/office-shell';
 import { PageLoadingSkeleton } from '@app/web/components/page-loading-skeleton';
 
-export default function OfficeLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function OfficeLayout({
+  children,
+  modal,
+}: Readonly<{ children: React.ReactNode; modal: React.ReactNode }>) {
   return (
     <Suspense fallback={<PageLoadingSkeleton />}>
-      <OfficeWorkspaceLayout>{children}</OfficeWorkspaceLayout>
+      <OfficeWorkspaceLayout modal={modal}>{children}</OfficeWorkspaceLayout>
     </Suspense>
   );
 }
 
-async function OfficeWorkspaceLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+async function OfficeWorkspaceLayout({
+  children,
+  modal,
+}: Readonly<{ children: React.ReactNode; modal: React.ReactNode }>) {
   const [api, cookieStore, t, locale, session] = await Promise.all([
     getApiClient(false),
     cookies(),
@@ -165,6 +171,7 @@ async function OfficeWorkspaceLayout({ children }: Readonly<{ children: React.Re
       }}
     >
       {children}
+      {modal}
     </OfficeShell>
   );
 }

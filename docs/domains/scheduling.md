@@ -44,11 +44,17 @@ Mutations write audit records and version 1 outbox events in the same transactio
 
 Future non-cancelled visits prevent client, facility, or organization archive when their context would become invalid. Future assigned visits prevent employee deactivation or archive. Ending an agreement or agreement service is blocked while incompatible future visits remain. Cancelling a visit resolves these guards while preserving operational history. Catalog archival may proceed after active agreements no longer depend on the service; existing visit snapshots remain readable.
 
+## Office planner and visit editor
+
+The Office planner now has a day dispatch view with employee lanes and a separate unassigned lane, a week workload view, and a searchable paginated list for the selected week. Shared date and resource filters stay in the URL. Day and week requests use the visible date range and a bounded 100-visit response; when that ceiling is reached, the planner directs staff to the paginated list. The list query applies its search terms and authorization scope in the database before pagination.
+
+Planner visit links open the existing visit detail workflow in an accessible side Sheet during client navigation. The same detail page remains available as a full route for direct links and reloads, and closing the Sheet returns to the planner state. The Sheet uses the existing server actions for time changes, assignment, confirmation, cancellation, and substitution, so the backend remains authoritative for conflicts and lifecycle rules. Dragging visits between time or employee lanes is not enabled: all such changes go through the validated visit commands, while the Sheet provides a direct editor that works with keyboard and touch input.
+
 ## API and interface
 
-The versioned API supports bounded calendar queries, manual creation, rescheduling, lifecycle commands, assignment history, agreement generation, and employee unavailability. Calendar queries return a joined read model with related service and assignment summaries rather than issuing one request or query per visit.
+The versioned API supports bounded calendar queries, searchable and paginated visit lists, manual creation, rescheduling, lifecycle commands, assignment history, agreement generation, and employee unavailability. Calendar queries return a joined read model with related service and assignment summaries rather than issuing one request or query per visit.
 
-The Office UI provides a week/day planning board, filters, open visits, manual planning, visit details and history, assignment, lifecycle actions, and agreement generation. Client and employee detail pages show upcoming visits. Visit execution is a separate module; once it starts, planning cannot cancel, reschedule, or alter that visit's planned services.
+The Office UI provides day/week/list planning, filters, open visits, manual planning, visit details and history, assignment, lifecycle actions, and agreement generation. Client and employee detail pages show upcoming visits. Visit execution is a separate module; once it starts, planning cannot cancel, reschedule, or alter that visit's planned services.
 
 ## Operational availability and substitutions
 
@@ -59,6 +65,8 @@ Employee and client scheduling preferences are advisory. Preferred weekdays, tim
 ## Tours, routing, and publication
 
 A tour is unique per employee and local date and contains ordered references to existing visits. Stop edits and assignment/time changes increment the tour version and put it back in draft; route estimates are cleared when the underlying assignment changes. Route estimates never change visit times or service quantities. Publishing checks assignment, execution, availability, and known route feasibility, writes an immutable publication snapshot, and advances the publication version. Each snapshot records stop order, visit IDs, planned instants, employee, travel estimates, publisher, timestamp, and a compact change summary. Earlier snapshots remain stored when a later version is published.
+
+Office staff reorder stops with labeled move-up and move-down controls that work with keyboard and touch. The editor shows the changed draft order and keeps it marked unsaved until staff explicitly save; saving submits the full order and keeps each stop's dispatcher note with its visit. The server checks the expected tour version and validates the proposed sequence before writing it.
 
 Client coordinates are entered and reviewed by authorized Office staff; addresses are not automatically geocoded. When `ROUTING_OSRM_URL` is configured, the self-hosted OSRM driving backend receives normalized coordinates only, without client identity or care information. An employee's optional work-start coordinate can be used for the first route leg; it is intended for an authorized work location and must not be a private home address. If coordinates or the routing service are unavailable, route status is `unresolved` or `unavailable` and feasibility is reported as unknown. Driving is the only supported travel mode. Route order suggestions are previews and do not move appointments or overwrite a publication.
 

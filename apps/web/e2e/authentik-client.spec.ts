@@ -1158,6 +1158,11 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(
       page.getByRole('heading', { name: 'Planned service budget estimate' }),
     ).toBeVisible();
+    await page
+      .locator('details')
+      .filter({ has: page.getByRole('heading', { name: 'Planned service budget estimate' }) })
+      .locator('summary')
+      .click();
     await expect(page.getByText('Estimated service cost', { exact: true })).toBeVisible();
     await expect(page.getByText('Eligible for this service date')).toBeVisible();
 
@@ -1496,6 +1501,8 @@ test('Authentik users can be invited and administered from the office UI', async
     const generatedVisitLink = page.locator(`a[href="/visits/${generatedVisit.id}"]`);
     await expect(generatedVisitLink).toContainText(`Agreement E2E ${runId}`);
     await generatedVisitLink.click();
+    const visitDetailDialog = page.getByRole('dialog');
+    await expect(visitDetailDialog).toBeVisible();
     await expect(page.getByRole('heading', { name: `Agreement E2E ${runId}` })).toBeVisible();
     await selectEntity(page, 'Assign employee', runId, new RegExp(`^E2E ${runId}$`));
     await page.getByRole('button', { name: 'Assign', exact: true }).click();
@@ -1506,15 +1513,179 @@ test('Authentik users can be invited and administered from the office UI', async
         .filter({ has: page.getByText(`E2E ${runId}`, { exact: true }) }),
     ).toBeVisible();
 
-    await page.getByLabel('Start', { exact: true }).fill('08:15');
-    await page.getByLabel('End', { exact: true }).fill('08:45');
-    await page.getByRole('button', { name: 'Save' }).click();
+    await visitDetailDialog.locator('input[name="localStartTime"]').fill('08:15');
+    await visitDetailDialog.locator('input[name="localEndTime"]').fill('08:45');
+    await expect(visitDetailDialog.locator('input[name="localStartTime"]')).toHaveValue('08:15');
+    await expect(visitDetailDialog.locator('input[name="localEndTime"]')).toHaveValue('08:45');
+    await visitDetailDialog.getByRole('button', { name: 'Save' }).click();
+    await expect(page).toHaveURL(/updated=updated/);
+    const rescheduledVisit = await database.query<{
+      planned_start: Date;
+      planned_end: Date;
+      manually_adjusted: boolean;
+    }>(
+      `SELECT planned_start, planned_end, manually_adjusted
+       FROM scheduling.visits WHERE tenant_id = $1 AND id = $2`,
+      [tenantId, generatedVisit.id],
+    );
+    expect(timeInTimezone(rescheduledVisit.rows[0]!.planned_start, 'Europe/Berlin')).toBe('08:15');
+    expect(timeInTimezone(rescheduledVisit.rows[0]!.planned_end, 'Europe/Berlin')).toBe('08:45');
+    expect(rescheduledVisit.rows[0]!.manually_adjusted).toBe(true);
     await expect(page.getByText('Yes', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Confirm' }).click();
-    await expect(page.getByText('Confirmed', { exact: true })).toBeVisible();
+    await expect(
+      visitDetailDialog.getByRole('region', { name: 'Visit' }).getByText('Confirmed', {
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    const generatedAssignment = await database.query<{
+      employee_id: string;
+      facility_id: string;
+    }>(
+      `SELECT assignment.employee_id, visit.facility_id
+       FROM scheduling.visit_assignments AS assignment
+       JOIN scheduling.visits AS visit
+         ON visit.tenant_id = assignment.tenant_id AND visit.id = assignment.visit_id
+       WHERE assignment.tenant_id = $1 AND assignment.visit_id = $2 AND assignment.status = 'active'
+       LIMIT 1`,
+      [tenantId, generatedVisit.id],
+    );
+    const generatedScope = generatedAssignment.rows[0];
+    if (!generatedScope) throw new Error('The generated visit does not have an active employee');
+
+    await test.step('day, week, and searchable list planner across desktop and mobile', async () => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      const scopedQuery =
+        `date=${generatedDate}&employeeId=${generatedScope.employee_id}` +
+        `&facilityId=${generatedScope.facility_id}`;
+
+      await page.goto(`/planning?view=day&clientId=${agreementClientId}&${scopedQuery}`);
+      const tourVisitForm = page.locator('form').filter({
+        has: page.getByRole('button', { name: 'Create visit' }),
+      });
+      await expect(tourVisitForm.locator('input[name="clientId"]')).toHaveValue(agreementClientId!);
+      await tourVisitForm.locator('input[name="localDate"]').fill(generatedDate);
+      await tourVisitForm.locator('input[name="localStartTime"]').fill('10:00');
+      await tourVisitForm.locator('input[name="localEndTime"]').fill('10:30');
+      await selectEntity(
+        page,
+        'Services (select multiple)',
+        serviceCode,
+        new RegExp(`^${serviceCode} · E2E Service ${runId}$`),
+        tourVisitForm,
+      );
+      await selectEntity(
+        page,
+        'Employees (optional)',
+        runId,
+        new RegExp(`^E2E ${runId}$`),
+        tourVisitForm,
+      );
+      await tourVisitForm.locator('textarea[name="note"]').fill(`Tour order E2E ${runId}`);
+      await tourVisitForm.getByRole('button', { name: 'Create visit' }).click();
+      await expect(page).toHaveURL(/(?:\?|&)updated=visit(?:&|$)/);
+
+      await page.goto(`/planning?view=day&${scopedQuery}`);
+      await expect(page.getByRole('heading', { name: 'Day overview' })).toBeVisible();
+      await expect(page.locator(`a[href^="/visits/${generatedVisit.id}"]`)).toBeVisible();
+      await page.getByRole('button', { name: 'Appearance' }).click();
+      await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+      await expect(page.locator('html')).toHaveClass(/dark/);
+      await captureReviewScreenshot(page, 'planning-day-desktop-dark.png');
+
+      const tourSection = page.locator('section[aria-labelledby="tour-planning-title"]');
+      await expect(tourSection.getByText('2 assigned visits', { exact: true })).toBeVisible();
+      await tourSection.getByRole('button', { name: 'Create draft tour' }).click();
+      await expect(page).toHaveURL(/updated=tour_created/);
+      const dailyTours = page.getByRole('region', { name: 'Daily tours' });
+      await expect(dailyTours.getByText(/Draft changes/)).toBeVisible();
+      const tourQuery = new URLSearchParams(new URL(page.url()).searchParams);
+      const createdTourId = tourQuery.get('tourId');
+      if (!createdTourId) throw new Error('The Office UI did not return the created tour');
+      const tourEditor = page
+        .locator('form')
+        .filter({ has: page.getByRole('button', { name: 'Save stop order' }) });
+      await expect(tourEditor.getByRole('button', { name: /Move .* down/ }).first()).toBeEnabled();
+      await tourEditor
+        .getByRole('button', { name: /Move .* down/ })
+        .first()
+        .click();
+      await expect(
+        page.getByText('Stop order changed. Save to update the tour draft.'),
+      ).toBeVisible();
+      await tourEditor.getByRole('button', { name: 'Save stop order' }).click();
+      await expect(page).toHaveURL(/updated=tour_reordered/);
+      await expect(page.getByRole('status')).toContainText('Tour order saved.');
+      await expect(dailyTours.getByText(/Draft changes/)).toBeVisible();
+      await dailyTours.getByRole('button', { name: 'Estimate travel' }).click();
+      await expect(page).toHaveURL(/updated=travel_estimated/);
+      await expect(page.getByRole('status')).toContainText('Travel estimates updated.');
+      await expect(page.getByText('Routing service is unavailable', { exact: true })).toBeVisible();
+      await dailyTours.getByRole('button', { name: 'Publish schedule' }).click();
+      await expect(page).toHaveURL(/updated=tour_published/);
+      await expect(dailyTours.getByText(/Published schedule/)).toBeVisible();
+      await expect(dailyTours.getByText(/Published version 1/)).toBeVisible();
+      await dailyTours.scrollIntoViewIfNeeded();
+      await captureReviewScreenshot(page, 'tour-workspace-desktop.png');
+      await page.setViewportSize({ width: 768, height: 1024 });
+      await expectMobileLayoutToFit(page);
+      await dailyTours.scrollIntoViewIfNeeded();
+      await captureReviewScreenshot(page, 'tour-workspace-tablet-768.png');
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expectMobileLayoutToFit(page);
+      await dailyTours.scrollIntoViewIfNeeded();
+      await captureReviewScreenshot(page, 'tour-workspace-mobile-390.png');
+      await page.setViewportSize({ width: 1440, height: 900 });
+
+      await page.locator(`a[href^="/visits/${generatedVisit.id}"]`).first().click();
+      const visitSheet = page.getByRole('dialog');
+      await expect(visitSheet).toBeVisible();
+      await expect(visitSheet.locator('input[name="localStartTime"]')).toBeVisible();
+      await expect
+        .poll(() => visitSheet.evaluate((element) => element.getBoundingClientRect().width))
+        .toBeGreaterThan(600);
+      await captureReviewScreenshot(page, 'visit-editor-desktop.png');
+      await visitSheet.getByRole('button', { name: 'Close visit details' }).click();
+      await expect(page).toHaveURL(/view=day/);
+
+      await page.getByRole('button', { name: 'Appearance' }).click();
+      await page.getByRole('menuitemradio', { name: 'Light' }).click();
+      await page.goto(`/planning?view=week&${scopedQuery}`);
+      await expect(page.getByRole('heading', { name: 'Week overview' })).toBeVisible();
+      await expect(page.locator(`a[href^="/visits/${generatedVisit.id}"]`)).toBeVisible();
+      await captureReviewScreenshot(page, 'planning-week-desktop-light.png');
+
+      await page.goto(
+        `/planning?view=list&${scopedQuery}&search=${encodeURIComponent(`E2E Service ${runId}`)}`,
+      );
+      await expect(page.getByRole('heading', { name: 'Visits in this week' })).toBeVisible();
+      await expect(page.locator(`a[href^="/visits/${generatedVisit.id}"]`)).toBeVisible();
+      await captureReviewScreenshot(page, 'planning-list-desktop.png');
+
+      await page.setViewportSize({ width: 768, height: 1024 });
+      await page.goto(`/planning?view=day&${scopedQuery}`);
+      await expectMobileLayoutToFit(page);
+      await expect(page.locator(`a[href^="/visits/${generatedVisit.id}"]`)).toBeVisible();
+      await captureReviewScreenshot(page, 'planning-day-tablet-768.png');
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expectMobileLayoutToFit(page);
+      await expect(page.locator(`a[href^="/visits/${generatedVisit.id}"]`)).toBeVisible();
+      await captureReviewScreenshot(page, 'planning-agenda-mobile-390.png', true);
+      await page.locator(`a[href^="/visits/${generatedVisit.id}"]`).first().click();
+      const mobileVisitSheet = page.getByRole('dialog');
+      await expect(mobileVisitSheet).toBeVisible();
+      await expect
+        .poll(() => mobileVisitSheet.evaluate((element) => element.getBoundingClientRect().width))
+        .toBeGreaterThan(380);
+      await captureReviewScreenshot(page, 'visit-editor-mobile-390.png', true);
+      await mobileVisitSheet.getByRole('button', { name: 'Close visit details' }).click();
+      await expect(page).toHaveURL(/view=day/);
+    });
 
     await page.goto(`/clients/${agreementClientId}`);
-    await expect(page.getByRole('heading', { name: 'Upcoming visits' })).toBeVisible();
+    await expect(page.locator('#visits-title')).toBeVisible();
     await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true })).toBeVisible();
     await page.setViewportSize({ width: 1440, height: 900 });
     if ((await sidebar.getAttribute('data-collapsed')) === 'true') {
@@ -1540,7 +1711,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/employees/${caregiverEmployeeId}`);
     await expect(page.getByRole('heading', { name: 'Upcoming visits' })).toBeVisible();
-    await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true })).toBeVisible();
+    await expect(page.getByText(`Agreement E2E ${runId}`, { exact: true }).first()).toBeVisible();
     await captureReviewScreenshot(page, 'employee-profile-desktop-1440.png', true);
     await page.setViewportSize({ width: 768, height: 1024 });
     await expectMobileLayoutToFit(page);
@@ -1570,8 +1741,10 @@ test('Authentik users can be invited and administered from the office UI', async
 
     await page.goto(`/clients/${agreementClientId}/service-agreements`);
     await expect(page.getByRole('heading', { name: 'Service planning' })).toBeVisible();
+    page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Suspend' }).click();
     await expect(agreementCard.getByText('Suspended', { exact: true })).toBeVisible();
+    page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Resume' }).click();
     await expect(agreementCard.getByText('Active', { exact: true }).first()).toBeVisible();
     page.once('dialog', (dialog) => dialog.accept());
@@ -1745,6 +1918,7 @@ test('Authentik users can be invited and administered from the office UI', async
     if (!executionVisitId) {
       throw new Error('The Office UI reported success but the execution visit was not persisted');
     }
+
     await page.setViewportSize({ width: 1024, height: 768 });
     await expectMobileLayoutToFit(page);
     await captureReviewScreenshot(page, 'planning-1024-compact.png');
@@ -1831,6 +2005,26 @@ test('Authentik users can be invited and administered from the office UI', async
       caregiverPage.getByRole('heading', { name: `Agreement E2E ${runId}` }),
     ).toBeVisible({ timeout: 30_000 });
     await expectMobileLayoutToFit(caregiverPage);
+    await caregiverPage.setViewportSize({ width: 390, height: 844 });
+    await captureReviewScreenshot(
+      caregiverPage,
+      'caregiver-visit-before-start-mobile-390.png',
+      true,
+    );
+    await caregiverPage.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(caregiverPage);
+    await captureReviewScreenshot(
+      caregiverPage,
+      'caregiver-visit-before-start-tablet-768.png',
+      true,
+    );
+    await caregiverPage.setViewportSize({ width: 1440, height: 900 });
+    await captureReviewScreenshot(
+      caregiverPage,
+      'caregiver-visit-before-start-desktop-1440.png',
+      true,
+    );
+    await caregiverPage.setViewportSize({ width: 390, height: 844 });
     if (!replacementEmployeeId) throw new Error('The cover employee is missing for reassignment');
     await page.goto(`/visits/${executionVisitId}`);
     await selectEntity(page, 'Assign employee', runId, new RegExp(`^Cover E2E ${runId}$`));
@@ -1875,9 +2069,15 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(caregiverPage.getByText('In progress', { exact: true })).toBeVisible();
     await expectMobileLayoutToFit(caregiverPage);
     await expect(caregiverPage.getByRole('heading', { name: 'Planned services' })).toBeVisible();
+    await captureReviewScreenshot(caregiverPage, 'caregiver-active-visit-mobile-390.png', true);
     const plannedServiceForm = caregiverPage.locator('form').filter({
       has: caregiverPage.getByRole('button', { name: 'Save outcome' }),
     });
+    await captureReviewScreenshot(
+      caregiverPage,
+      'caregiver-performed-service-editor-mobile-390.png',
+      true,
+    );
     const plannedExecutionVersion = await plannedServiceForm
       .locator('input[name="expectedVersion"]')
       .inputValue();
@@ -1905,6 +2105,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(
       caregiverPage.getByRole('heading', { name: 'Service documentation' }),
     ).toBeVisible();
+    await captureReviewScreenshot(caregiverPage, 'caregiver-documentation-mobile-390.png', true);
 
     const observationText = `E2E observation ${runId}`;
     const observationSection = caregiverPage
@@ -1915,10 +2116,17 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(observationForm.getByRole('status')).toContainText(
       'Draft kept temporarily in this browser tab',
     );
+    await caregiverContext.setOffline(true);
+    await observationForm.getByRole('button', { name: 'Save changes' }).tap();
+    await expect(observationForm.getByRole('status')).toContainText(
+      'You are offline. Your local draft is not on the server; reconnect before submitting.',
+    );
+    await expect(observationSection.locator('textarea[name="content"]')).toHaveValue(
+      observationText,
+    );
+    await caregiverContext.setOffline(false);
     await caregiverPage.goto('/care/today');
     await caregiverPage.goto(`/care/visits/${executionVisitId}`);
-    await expectMobileLayoutToFit(caregiverPage);
-    await captureReviewScreenshot(caregiverPage, 'caregiver-visit-detail-mobile-390.png', true);
     const recoveredObservationForm = caregiverPage
       .getByRole('heading', { name: 'Observations', level: 3 })
       .locator('..')
@@ -1928,6 +2136,8 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(recoveredObservationForm.locator('textarea[name="content"]')).toHaveValue(
       observationText,
     );
+    await expectMobileLayoutToFit(caregiverPage);
+    await captureReviewScreenshot(caregiverPage, 'caregiver-visit-detail-mobile-390.png', true);
     const visitPath = new URL(caregiverPage.url()).pathname;
     const observationSaveResponse = caregiverPage.waitForResponse(
       (response) =>
@@ -1983,6 +2193,11 @@ test('Authentik users can be invited and administered from the office UI', async
         .getByText(/Service evidence is missing/)
         .first(),
     ).toBeVisible();
+    await captureReviewScreenshot(
+      caregiverPage,
+      'caregiver-completion-review-mobile-390.png',
+      true,
+    );
 
     await caregiverPage.getByRole('button', { name: 'Complete visit' }).click();
     await expect(caregiverPage.getByText('Completed', { exact: true })).toBeVisible();
@@ -2066,6 +2281,11 @@ test('Authentik users can be invited and administered from the office UI', async
     ).toBeVisible();
     const firstSignaturePad = caregiverPage.locator('#acknowledge-evidence').getByRole('img');
     await firstSignaturePad.scrollIntoViewIfNeeded();
+    await captureReviewScreenshot(
+      caregiverPage,
+      'caregiver-signature-interface-mobile-390.png',
+      true,
+    );
     const signatureBounds = await firstSignaturePad.boundingBox();
     if (!signatureBounds) throw new Error('The mobile signature pad is not visible');
     const touch = await caregiverPage.context().newCDPSession(caregiverPage);
@@ -2285,6 +2505,11 @@ test('Authentik users can be invited and administered from the office UI', async
         .getByRole('status')
         .filter({ hasText: 'The decline is recorded for this version' }),
     ).toBeVisible();
+    await captureReviewScreenshot(
+      caregiverPage,
+      'caregiver-declined-acknowledgement-mobile-390.png',
+      true,
+    );
     expect(
       await caregiverPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
@@ -2400,6 +2625,8 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(
       budgetHistory.getByRole('table').getByText('Completed service allocation', { exact: true }),
     ).toBeVisible();
+
+    if (process.env.CARE_E2E_STOP_BEFORE_BILLING === 'true') return;
 
     const billingFilters = new URLSearchParams({
       from: serviceValidFrom,

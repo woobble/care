@@ -33,6 +33,18 @@ export function getClientMessages(messages: MessageCatalog) {
     ServiceEvidence: {
       care: messages.ServiceEvidence.care,
     },
+    Visits: {
+      detailsSheetTitle: messages.Visits.detailsSheetTitle,
+      detailsSheetDescription: messages.Visits.detailsSheetDescription,
+      closeDetails: messages.Visits.closeDetails,
+    },
+    Planning: {
+      stopLabel: messages.Planning.stopLabel,
+      moveStopUp: messages.Planning.moveStopUp,
+      moveStopDown: messages.Planning.moveStopDown,
+      unsavedTourOrder: messages.Planning.unsavedTourOrder,
+      saveTourOrder: messages.Planning.saveTourOrder,
+    },
     Services: {
       pricing: {
         units: messages.Services.pricing.units,

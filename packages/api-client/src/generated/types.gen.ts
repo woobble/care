@@ -6828,6 +6828,7 @@ export type VisitsControllerListData = {
         serviceDefinitionId?: unknown;
         status?: 'planned' | 'confirmed' | 'cancelled';
         clientId?: unknown;
+        search?: string;
         teamId?: unknown;
         facilityId?: unknown;
         organizationId?: unknown;
@@ -7445,6 +7446,7 @@ export type SchedulingOperationsControllerWorklistData = {
         unassigned?: 'true' | 'false';
         status?: 'planned' | 'confirmed' | 'cancelled';
         origin?: 'agreement_generated' | 'manual';
+        search?: string;
         serviceDefinitionId?: unknown;
         clientId?: unknown;
         teamId?: unknown;
@@ -7486,6 +7488,7 @@ export type SchedulingOperationsControllerConflictsData = {
         page?: number;
         unassigned?: 'true' | 'false';
         status?: 'planned' | 'confirmed' | 'cancelled';
+        search?: string;
         teamId?: unknown;
         facilityId?: unknown;
         organizationId?: unknown;

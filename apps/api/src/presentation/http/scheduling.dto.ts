@@ -21,6 +21,7 @@ export const visitQuerySchema = z
     teamId: z.string().uuid().optional(),
     status: visitStatus.optional(),
     serviceDefinitionId: z.string().uuid().optional(),
+    search: z.string().trim().min(1).max(100).optional(),
     unassigned: z
       .enum(['true', 'false'])
       .transform((value) => value === 'true')

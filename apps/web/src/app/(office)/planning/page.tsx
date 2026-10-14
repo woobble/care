@@ -17,6 +17,7 @@ import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
+  hasClientPermission,
   hasPermission,
 } from '@app/web/lib/api';
 import {
@@ -26,11 +27,11 @@ import {
   estimateTourRouteAction,
   publishTourAction,
   suggestTourOrderAction,
-  updateTourStopsAction,
 } from './actions';
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { DataPagination } from '@app/web/components/data-pagination';
 import { redirectToValidPage } from '@app/web/lib/pagination';
+import { TourStopOrderForm } from '@app/web/components/tour-stop-order-form';
 import type { components } from '@care/api-client';
 
 type SearchParams = Promise<{
@@ -47,6 +48,7 @@ type SearchParams = Promise<{
   status?: string;
   assigned?: string;
   serviceDefinitionId?: string;
+  search?: string;
   estimateClientId?: string;
   estimateServiceId?: string;
   estimateDate?: string;
@@ -89,11 +91,16 @@ export default async function PlanningPage({
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
-  const view = query.view === 'day' ? 'day' : 'week';
+  const view = query.view === 'day' || query.view === 'list' ? query.view : 'week';
   const selectedDate = validDate(query.date) ?? todayInBerlin();
-  const page = positivePage(query.page);
+  const page = view === 'list' ? positivePage(query.page) : 1;
   const requestedPageSize = Number(query.pageSize ?? '20');
-  const pageSize = [10, 20, 50, 100].includes(requestedPageSize) ? requestedPageSize : 20;
+  const pageSize =
+    view === 'list'
+      ? [10, 20, 50, 100].includes(requestedPageSize)
+        ? requestedPageSize
+        : 20
+      : 100;
   const requestedClientId = validUuid(query.clientId);
   const employeeId = validUuid(query.employeeId);
   const requestedOrganizationId = validUuid(query.organizationId);
@@ -102,6 +109,7 @@ export default async function PlanningPage({
   const admissionCaseId = validUuid(requestedAdmissionCaseId);
   const teamId = validUuid(query.teamId);
   const serviceDefinitionId = validUuid(query.serviceDefinitionId);
+  const search = query.search?.trim().slice(0, 100) || undefined;
   const estimateClientId = validUuid(query.estimateClientId);
   const estimateServiceId = validUuid(query.estimateServiceId);
   const estimateDate = validDate(query.estimateDate) ?? selectedDate;
@@ -111,10 +119,32 @@ export default async function PlanningPage({
     query.assigned === 'assigned' || query.assigned === 'unassigned' ? query.assigned : 'all';
   const period = view === 'day' ? dayPeriod(selectedDate) : weekPeriod(selectedDate);
   const requestRange = apiRange(period.start, period.endExclusive);
+  const plannerHref = viewHref({
+    date: selectedDate,
+    view,
+    ...(view === 'list' ? { page, pageSize } : {}),
+    clientId: requestedClientId,
+    admissionCaseId,
+    employeeId,
+    organizationId: requestedOrganizationId,
+    facilityId: requestedFacilityId,
+    teamId,
+    status,
+    assigned: assigned === 'all' ? undefined : assigned,
+    serviceDefinitionId,
+    search,
+  });
+  const visitHref = (visitId: string) =>
+    `/visits/${visitId}?returnTo=${encodeURIComponent(plannerHref)}`;
 
   const api = await getApiClient();
   const header = await getTenantHeader();
+  const tenantId = header['X-Tenant-Id'];
   const permissions = await getPermissionGrants(api);
+  const canCreate = hasPermission(permissions, 'schedule.create');
+  const canAssign = hasPermission(permissions, 'schedule.assign');
+  const canEstimate = hasPermission(permissions, 'benefits.read');
+  const canReadClient = hasPermission(permissions, 'client.read');
   const admissionResult =
     admissionCaseId && hasPermission(permissions, 'onboarding.read')
       ? await api.GET('/api/v1/onboarding/cases/{id}', {
@@ -175,6 +205,7 @@ export default async function PlanningPage({
           ...(teamId ? { teamId } : {}),
           ...(serviceDefinitionId ? { serviceDefinitionId } : {}),
           ...(status ? { status } : {}),
+          ...(search ? { search } : {}),
           ...(assigned === 'all'
             ? {}
             : { unassigned: assigned === 'unassigned' ? 'true' : 'false' }),
@@ -197,30 +228,28 @@ export default async function PlanningPage({
     teamId
       ? get('/api/v1/teams/{id}', { params: { path: { id: teamId }, header } })
       : Promise.resolve(null),
-    get('/api/v1/services', {
-      params: {
-        query: {
-          status: 'active',
-          validAt: selectedDate,
-          page: 1,
-          pageSize: 100,
-          ...(organizationId ? { organizationId } : {}),
-          ...(facilityId ? { facilityId } : {}),
-        },
-        header,
-      },
-    }),
+    canCreate && admissionContextUsable
+      ? get('/api/v1/services', {
+          params: {
+            query: {
+              status: 'active',
+              validAt: selectedDate,
+              page: 1,
+              pageSize: 100,
+              ...(organizationId ? { organizationId } : {}),
+              ...(facilityId ? { facilityId } : {}),
+            },
+            header,
+          },
+        })
+      : Promise.resolve(null),
   ]);
 
-  const canCreate = hasPermission(permissions, 'schedule.create');
-  const canAssign = hasPermission(permissions, 'schedule.assign');
-  const canEstimate = hasPermission(permissions, 'benefits.read');
-  const canReadClient = hasPermission(permissions, 'client.read');
   const visitData = visitResult.data as unknown as
     | components['schemas']['VisitListResponseDto']
     | undefined;
   const visitError = visitResult.error as { code?: string } | undefined;
-  if (visitData) {
+  if (view === 'list' && visitData) {
     redirectToValidPage('/planning', query, page, pageSize, visitData.total);
   }
   const [selectedServiceResult, estimateClientResult, estimateServiceResult] = await Promise.all([
@@ -260,13 +289,14 @@ export default async function PlanningPage({
   const estimateService = estimateServiceResult?.data as
     | components['schemas']['ServiceResponseDto']
     | undefined;
-  const serviceData = serviceResult.data as unknown as
+  const serviceData = serviceResult?.data as unknown as
     | components['schemas']['ServiceListResponseDto']
     | undefined;
   const services = serviceData?.items ?? [];
-  const estimateResult =
+  const visits = visitData?.items ?? [];
+  const [estimateResult, worklistResult] = await Promise.all([
     canEstimate && estimateClientId && estimateServiceId && validQuantity(query.estimateQuantity)
-      ? await get('/api/v1/clients/{clientId}/budgets/estimate', {
+      ? get('/api/v1/clients/{clientId}/budgets/estimate', {
           params: {
             path: { clientId: estimateClientId },
             query: {
@@ -277,31 +307,32 @@ export default async function PlanningPage({
             header,
           },
         })
-      : null;
-  const visits = visitData?.items ?? [];
-  const worklistResult = hasPermission(permissions, 'schedule.read')
-    ? await get('/api/v1/scheduling/worklist', {
-        params: {
-          query: {
-            from: requestRange.from,
-            until: requestRange.until,
-            page,
-            pageSize: 100,
-            sortBy: 'plannedStart',
-            sortOrder: 'asc',
-            ...(employeeId ? { employeeId } : {}),
-            ...(organizationId ? { organizationId } : {}),
-            ...(facilityId ? { facilityId } : {}),
-            ...(teamId ? { teamId } : {}),
-            ...(status ? { status } : {}),
-            ...(assigned === 'all'
-              ? {}
-              : { unassigned: assigned === 'unassigned' ? 'true' : 'false' }),
+      : Promise.resolve(null),
+    hasPermission(permissions, 'schedule.read')
+      ? get('/api/v1/scheduling/worklist', {
+          params: {
+            query: {
+              from: requestRange.from,
+              until: requestRange.until,
+              page: view === 'list' ? page : 1,
+              pageSize: view === 'list' ? pageSize : 100,
+              sortBy: 'plannedStart',
+              sortOrder: 'asc',
+              ...(employeeId ? { employeeId } : {}),
+              ...(organizationId ? { organizationId } : {}),
+              ...(facilityId ? { facilityId } : {}),
+              ...(teamId ? { teamId } : {}),
+              ...(status ? { status } : {}),
+              ...(search ? { search } : {}),
+              ...(assigned === 'all'
+                ? {}
+                : { unassigned: assigned === 'unassigned' ? 'true' : 'false' }),
+            },
+            header,
           },
-          header,
-        },
-      })
-    : null;
+        })
+      : Promise.resolve(null),
+  ]);
   const worklistData = worklistResult?.data as unknown as
     | components['schemas']['SchedulingWorklistResponseDto']
     | undefined;
@@ -364,6 +395,7 @@ export default async function PlanningPage({
         .slice(0, 2000)
     : '';
   const selectedDayVisits = visitsByDate.get(selectedDate) ?? [];
+  const unassignedDayVisits = selectedDayVisits.filter((visit) => visit.assignments.length === 0);
   const employeeVisitGroups = new Map<string, typeof selectedDayVisits>();
   for (const visit of selectedDayVisits) {
     for (const assignment of visit.assignments) {
@@ -372,9 +404,10 @@ export default async function PlanningPage({
       employeeVisitGroups.set(assignment.employeeId, group);
     }
   }
-  const tourRows =
+  const selectedTourId = validUuid(query.tourId);
+  const [tourRows, selectedTourResult] = await Promise.all([
     view === 'day' && canAssign
-      ? await Promise.all(
+      ? Promise.all(
           [...employeeVisitGroups].map(async ([tourEmployeeId]) => {
             const result = await get('/api/v1/scheduling/tours', {
               params: {
@@ -396,15 +429,14 @@ export default async function PlanningPage({
             };
           }),
         )
-      : [];
-  const toursByEmployee = new Map(tourRows.map((row) => [row.employeeId, row.tours]));
-  const selectedTourId = validUuid(query.tourId);
-  const selectedTourResult =
+      : Promise.resolve([]),
     selectedTourId && canAssign
-      ? await get('/api/v1/scheduling/tours/{id}', {
+      ? get('/api/v1/scheduling/tours/{id}', {
           params: { path: { id: selectedTourId }, header },
         })
-      : null;
+      : Promise.resolve(null),
+  ]);
+  const toursByEmployee = new Map(tourRows.map((row) => [row.employeeId, row.tours]));
   const selectedTour = selectedTourResult?.data as
     | components['schemas']['TourResponseDto']
     | undefined;
@@ -451,6 +483,19 @@ export default async function PlanningPage({
             <Button asChild variant={view === 'day' ? 'default' : 'secondary'} size="sm">
               <Link href={viewHref({ ...query, date: selectedDate, view: 'day', page: '1' })}>
                 {t('Planning.day')}
+              </Link>
+            </Button>
+            <Button asChild variant={view === 'list' ? 'default' : 'secondary'} size="sm">
+              <Link
+                href={viewHref({
+                  ...query,
+                  date: selectedDate,
+                  view: 'list',
+                  page: '1',
+                  pageSize: '20',
+                })}
+              >
+                {t('Planning.list')}
               </Link>
             </Button>
           </>
@@ -503,6 +548,43 @@ export default async function PlanningPage({
             : `${formatDay(period.start, locale)} – ${formatDay(addDays(period.endExclusive, -1), locale)}`}
         </h2>
         <Button asChild variant="secondary">
+          <Link href={viewHref({ ...query, date: todayInBerlin(), page: '1' })}>
+            {t('Planning.today')}
+          </Link>
+        </Button>
+        <form method="get" className="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="view" value={view} />
+          <input type="hidden" name="page" value="1" />
+          {view === 'list' ? <input type="hidden" name="pageSize" value={pageSize} /> : null}
+          {[
+            ['clientId', clientId],
+            ['admissionCaseId', admissionCaseId],
+            ['employeeId', employeeId],
+            ['organizationId', organizationId],
+            ['facilityId', facilityId],
+            ['teamId', teamId],
+            ['status', status],
+            ['assigned', assigned === 'all' ? undefined : assigned],
+            ['serviceDefinitionId', serviceDefinitionId],
+            ['search', search],
+          ].map(([name, value]) =>
+            value ? <input key={name} type="hidden" name={name} value={value} /> : null,
+          )}
+          <div className="grid gap-1">
+            <Label htmlFor="planner-date-jump">{t('Planning.date')}</Label>
+            <Input
+              id="planner-date-jump"
+              name="date"
+              type="date"
+              defaultValue={selectedDate}
+              required
+            />
+          </div>
+          <Button type="submit" variant="secondary">
+            {t('Planning.goToDate')}
+          </Button>
+        </form>
+        <Button asChild variant="secondary">
           <Link
             href={viewHref({
               ...query,
@@ -523,7 +605,12 @@ export default async function PlanningPage({
           <input type="hidden" name="view" value={view} />
           <input type="hidden" name="page" value="1" />
           <input type="hidden" name="pageSize" value={pageSize} />
-          <Field label={t('Planning.date')} name="date" type="date" defaultValue={selectedDate} />
+          <Field
+            label={t('Planning.search')}
+            name="search"
+            type="search"
+            defaultValue={search ?? ''}
+          />
           <AsyncEntityCombobox
             label={t('Planning.organization')}
             name="organizationId"
@@ -621,141 +708,140 @@ export default async function PlanningPage({
       </FilterDisclosure>
 
       {canEstimate ? (
-        <section
-          aria-labelledby="budget-estimate-title"
-          className="grid gap-3 rounded-lg border bg-card p-5"
-        >
-          <div className="grid gap-1">
+        <details className="rounded-lg border bg-card">
+          <summary className="cursor-pointer list-none p-4 [&::-webkit-details-marker]:hidden">
             <h2 id="budget-estimate-title" className="text-xl font-semibold">
               {t('Benefits.planningEstimateTitle')}
             </h2>
             <p className="text-sm text-muted-foreground">
               {t('Benefits.planningEstimateDescription')}
             </p>
-          </div>
-          <form method="get" className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <input type="hidden" name="date" value={selectedDate} />
-            <input type="hidden" name="view" value={view} />
-            {canReadClient ? (
+          </summary>
+          <section aria-labelledby="budget-estimate-title" className="grid gap-3 border-t p-4">
+            <form method="get" className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              <input type="hidden" name="date" value={selectedDate} />
+              <input type="hidden" name="view" value={view} />
+              {canReadClient ? (
+                <AsyncEntityCombobox
+                  label={t('Benefits.planningEstimateClient')}
+                  name="estimateClientId"
+                  entity="clients"
+                  required
+                  placeholder={t('Planning.selectClient')}
+                  {...(estimateClient
+                    ? {
+                        initialOption: {
+                          id: estimateClient.id,
+                          label: `${estimateClient.preferredName || estimateClient.firstName} ${estimateClient.lastName}`,
+                        },
+                      }
+                    : {})}
+                />
+              ) : null}
               <AsyncEntityCombobox
-                label={t('Benefits.planningEstimateClient')}
-                name="estimateClientId"
-                entity="clients"
+                label={t('Benefits.planningEstimateService')}
+                name="estimateServiceId"
+                entity="services"
+                validAt={estimateDate}
                 required
-                placeholder={t('Planning.selectClient')}
-                {...(estimateClient
+                placeholder={t('Planning.allServices')}
+                {...(estimateService
                   ? {
                       initialOption: {
-                        id: estimateClient.id,
-                        label: `${estimateClient.preferredName || estimateClient.firstName} ${estimateClient.lastName}`,
+                        id: estimateService.id,
+                        label: `${estimateService.code} · ${estimateService.name}`,
                       },
                     }
                   : {})}
               />
-            ) : null}
-            <AsyncEntityCombobox
-              label={t('Benefits.planningEstimateService')}
-              name="estimateServiceId"
-              entity="services"
-              validAt={estimateDate}
-              required
-              placeholder={t('Planning.allServices')}
-              {...(estimateService
-                ? {
-                    initialOption: {
-                      id: estimateService.id,
-                      label: `${estimateService.code} · ${estimateService.name}`,
-                    },
-                  }
-                : {})}
-            />
-            <Field
-              label={t('Benefits.planningEstimateDate')}
-              name="estimateDate"
-              type="date"
-              defaultValue={estimateDate}
-              required
-            />
-            <Field
-              label={t('Benefits.planningEstimateQuantity')}
-              name="estimateQuantity"
-              type="number"
-              min="0.001"
-              step="0.001"
-              defaultValue={estimateQuantity}
-              required
-            />
-            <Button type="submit" className="w-fit">
-              {t('Benefits.showEstimate')}
-            </Button>
-          </form>
-          {estimateError ? (
-            <p
-              role="alert"
-              className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
-            >
-              {t(errorMessageKey(estimateError))}
-            </p>
-          ) : null}
-          {estimate ? (
-            <div className="grid gap-3 rounded-md bg-accent p-4 text-sm text-primary">
-              <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <Metric
-                  label={t('Benefits.estimatedCost')}
-                  value={
-                    estimate.serviceAmountCents === null
-                      ? t('Benefits.priceUnknown')
-                      : money(estimate.serviceAmountCents, locale)
-                  }
-                />
-                <Metric
-                  label={t('Benefits.available45b')}
-                  value={money(estimate.estimated45bAvailableCents, locale)}
-                />
-                <Metric
-                  label={t('Benefits.confirmedRemaining')}
-                  value={money(estimate.confirmed45bAvailableCents, locale)}
-                />
-                <Metric
-                  label={t('Benefits.estimated45bAfter')}
-                  value={
-                    estimate.estimated45bAfterCents === null
-                      ? t('Benefits.unknownBalance')
-                      : money(estimate.estimated45bAfterCents, locale)
-                  }
-                />
-              </dl>
-              <p>
-                {t('Benefits.plannedEligible')}: {money(estimate.plannedEligible45bCents, locale)}.{' '}
-                {t('Benefits.plannedNotReserved')}
+              <Field
+                label={t('Benefits.planningEstimateDate')}
+                name="estimateDate"
+                type="date"
+                defaultValue={estimateDate}
+                required
+              />
+              <Field
+                label={t('Benefits.planningEstimateQuantity')}
+                name="estimateQuantity"
+                type="number"
+                min="0.001"
+                step="0.001"
+                defaultValue={estimateQuantity}
+                required
+              />
+              <Button type="submit" className="w-fit">
+                {t('Benefits.showEstimate')}
+              </Button>
+            </form>
+            {estimateError ? (
+              <p
+                role="alert"
+                className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+              >
+                {t(errorMessageKey(estimateError))}
               </p>
-              {estimate.benefitOptions.length ? (
-                <ul className="grid gap-1">
-                  {estimate.benefitOptions.map((option) => (
-                    <li key={option.entitlementId}>
-                      {option.benefitType === 'entlastungsbetrag_45b'
-                        ? t('Benefits.benefitTypes.entlastungsbetrag_45b')
-                        : option.benefitType === 'umwandlungsanspruch_45a_4'
-                          ? t('Benefits.benefitTypes.umwandlungsanspruch_45a_4')
-                          : option.benefitType === 'private'
-                            ? t('Benefits.benefitTypes.private')
-                            : t('Benefits.benefitTypes.other')}
-                      :{' '}
-                      {option.eligible
-                        ? t('Benefits.eligible')
-                        : t('Benefits.errors.serviceNotEligible')}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>{t('Benefits.noEstimateEntitlement')}</p>
-              )}
-            </div>
-          ) : null}
-          {!canReadClient || !services.length ? (
-            <p className="text-sm text-muted-foreground">{t('Benefits.noEstimateOptions')}</p>
-          ) : null}
-        </section>
+            ) : null}
+            {estimate ? (
+              <div className="grid gap-3 rounded-md bg-accent p-4 text-sm text-primary">
+                <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <Metric
+                    label={t('Benefits.estimatedCost')}
+                    value={
+                      estimate.serviceAmountCents === null
+                        ? t('Benefits.priceUnknown')
+                        : money(estimate.serviceAmountCents, locale)
+                    }
+                  />
+                  <Metric
+                    label={t('Benefits.available45b')}
+                    value={money(estimate.estimated45bAvailableCents, locale)}
+                  />
+                  <Metric
+                    label={t('Benefits.confirmedRemaining')}
+                    value={money(estimate.confirmed45bAvailableCents, locale)}
+                  />
+                  <Metric
+                    label={t('Benefits.estimated45bAfter')}
+                    value={
+                      estimate.estimated45bAfterCents === null
+                        ? t('Benefits.unknownBalance')
+                        : money(estimate.estimated45bAfterCents, locale)
+                    }
+                  />
+                </dl>
+                <p>
+                  {t('Benefits.plannedEligible')}: {money(estimate.plannedEligible45bCents, locale)}
+                  . {t('Benefits.plannedNotReserved')}
+                </p>
+                {estimate.benefitOptions.length ? (
+                  <ul className="grid gap-1">
+                    {estimate.benefitOptions.map((option) => (
+                      <li key={option.entitlementId}>
+                        {option.benefitType === 'entlastungsbetrag_45b'
+                          ? t('Benefits.benefitTypes.entlastungsbetrag_45b')
+                          : option.benefitType === 'umwandlungsanspruch_45a_4'
+                            ? t('Benefits.benefitTypes.umwandlungsanspruch_45a_4')
+                            : option.benefitType === 'private'
+                              ? t('Benefits.benefitTypes.private')
+                              : t('Benefits.benefitTypes.other')}
+                        :{' '}
+                        {option.eligible
+                          ? t('Benefits.eligible')
+                          : t('Benefits.errors.serviceNotEligible')}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>{t('Benefits.noEstimateEntitlement')}</p>
+                )}
+              </div>
+            ) : null}
+            {!canReadClient || !services.length ? (
+              <p className="text-sm text-muted-foreground">{t('Benefits.noEstimateOptions')}</p>
+            ) : null}
+          </section>
+        </details>
       ) : null}
 
       <section
@@ -764,7 +850,13 @@ export default async function PlanningPage({
       >
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="calendar-title" className="text-xl font-semibold">
-            {t(view === 'week' ? 'Planning.weekOverview' : 'Planning.dayOverview')}
+            {t(
+              view === 'list'
+                ? 'Planning.listOverview'
+                : view === 'week'
+                  ? 'Planning.weekOverview'
+                  : 'Planning.dayOverview',
+            )}
           </h2>
           <p className="text-sm text-muted-foreground">
             {t('Planning.visitCount', { count: visitData?.total ?? 0 })} ·{' '}
@@ -778,80 +870,363 @@ export default async function PlanningPage({
           >
             {t(errorMessageKey(visitError?.code ?? 'UNKNOWN'))}
           </p>
-        ) : (
-          days.map((day) => {
-            const dayVisits = visitsByDate.get(day) ?? [];
-            return (
-              <section
-                key={day}
-                aria-labelledby={`day-${day}`}
-                className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border bg-card p-4"
-              >
-                <h3 id={`day-${day}`} className="font-semibold">
-                  {formatDay(day, locale)}
-                </h3>
-                {dayVisits.length ? (
-                  <ol className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
-                    {dayVisits.map((visit) => (
-                      <li key={visit.id}>
+        ) : view === 'list' ? (
+          visits.length ? (
+            <ol aria-label={t('Planning.listOverview')} className="grid gap-2">
+              {visits.map((visit) => {
+                const visitConflicts = conflictsByVisit.get(visit.id) ?? [];
+                const clientLinkAllowed = hasClientPermission(
+                  permissions,
+                  'client.read',
+                  tenantId,
+                  visit.organizationId,
+                  visit.facilityId,
+                );
+                return (
+                  <li key={visit.id}>
+                    <article className="grid min-w-0 gap-3 rounded-lg border bg-card p-3 md:grid-cols-[9rem_minmax(0,1.2fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-center">
+                      <div className="grid min-w-0 gap-1">
+                        <span className="text-xs text-muted-foreground md:hidden">
+                          {t('Planning.dateTime')}
+                        </span>
                         <Link
-                          className="grid min-w-0 gap-1 rounded-md border p-3 hover:border-primary/40 hover:bg-accent sm:grid-cols-[8rem_minmax(0,1fr)_auto]"
-                          href={`/visits/${visit.id}`}
+                          className="font-medium tabular-nums text-primary underline"
+                          href={visitHref(visit.id)}
                         >
-                          <span className="font-medium">
+                          {formatDay(dateAtZone(visit.plannedStart, visit.timezone), locale)}
+                          <span className="block">
                             {formatTime(visit.plannedStart, locale, visit.timezone)}–
                             {formatTime(visit.plannedEnd, locale, visit.timezone)}
                           </span>
-                          <span>
-                            <strong>{visit.clientDisplayName}</strong>
-                            <span className="block text-sm text-muted-foreground">
-                              {visit.services
-                                .map((service) => `${service.serviceCode} ${service.serviceName}`)
-                                .join(' · ')}
-                            </span>
-                            <span className="block text-sm text-muted-foreground">
-                              {visit.assignments.length
-                                ? visit.assignments
-                                    .map((item) => item.employeeDisplayName)
-                                    .join(', ')
-                                : t('Planning.open')}{' '}
-                              · {visit.facilityName}
-                            </span>
-                          </span>
-                          <span className="self-start rounded-full border px-2 py-1 text-xs">
-                            {t(visitStatusKey(visit.status))}
-                          </span>
-                          {(conflictsByVisit.get(visit.id)?.length ?? 0) > 0 ? (
-                            <span className="sm:col-span-3">
-                              <span className="flex flex-wrap gap-1 pt-1">
-                                {(conflictsByVisit.get(visit.id) ?? []).map((conflict, index) => (
-                                  <span
-                                    key={`${conflict.code}-${conflict.relatedVisitId ?? index}`}
-                                    className={
-                                      'rounded-full px-2 py-1 text-xs ' +
-                                      (conflict.severity === 'blocking'
-                                        ? 'bg-destructive/15 text-destructive'
-                                        : 'bg-warning-muted text-warning-foreground')
-                                    }
-                                  >
-                                    {conflictMessages[conflict.code] ?? conflict.code}
-                                  </span>
-                                ))}
-                              </span>
-                            </span>
-                          ) : null}
                         </Link>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p className="text-sm text-muted-foreground">{t('Planning.noVisits')}</p>
-                )}
-              </section>
-            );
-          })
+                      </div>
+                      <div className="grid min-w-0 gap-1">
+                        <span className="text-xs text-muted-foreground md:hidden">
+                          {t('Planning.client')}
+                        </span>
+                        <ResourceReference
+                          className="truncate font-medium"
+                          label={visit.clientDisplayName}
+                          href={clientLinkAllowed ? `/clients/${visit.clientId}` : null}
+                        />
+                      </div>
+                      <div className="grid min-w-0 gap-1">
+                        <span className="text-xs text-muted-foreground md:hidden">
+                          {t('Planning.service')}
+                        </span>
+                        <span className="text-sm">
+                          {visit.services
+                            .map((service) => `${service.serviceCode} · ${service.serviceName}`)
+                            .join(' · ') || '–'}
+                        </span>
+                      </div>
+                      <div className="grid min-w-0 gap-1">
+                        <span className="text-xs text-muted-foreground md:hidden">
+                          {t('Planning.employees')}
+                        </span>
+                        {visit.assignments.length ? (
+                          <div className="flex min-w-0 flex-wrap gap-x-2 text-sm">
+                            {visit.assignments.map((assignment) => (
+                              <ResourceReference
+                                key={assignment.id}
+                                className="truncate"
+                                label={assignment.employeeDisplayName}
+                                href={
+                                  hasPermission(permissions, 'employee.read')
+                                    ? `/employees/${assignment.employeeId}`
+                                    : null
+                                }
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-sm">{t('Planning.open')}</span>
+                        )}
+                      </div>
+                      <div className="grid min-w-0 gap-1 md:justify-items-start">
+                        <span className="text-xs text-muted-foreground md:hidden">
+                          {t('Planning.facility')}
+                        </span>
+                        <span className="truncate text-sm">
+                          {visit.facilityName} · {visit.organizationName}
+                        </span>
+                        <span className="rounded-full border px-2 py-1 text-xs">
+                          {t(visitStatusKey(visit.status))}
+                        </span>
+                      </div>
+                      {visitConflicts.length ? (
+                        <ul className="flex flex-wrap gap-1 md:col-span-5">
+                          {visitConflicts.map((conflict, index) => (
+                            <li
+                              key={`${conflict.code}-${conflict.relatedVisitId ?? index}`}
+                              className={
+                                'rounded-full px-2 py-1 text-xs ' +
+                                (conflict.severity === 'blocking'
+                                  ? 'bg-destructive/15 text-destructive'
+                                  : 'bg-warning-muted text-warning-foreground')
+                              }
+                            >
+                              {conflictMessages[conflict.code] ?? conflict.code}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </article>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : (
+            <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+              {t('Planning.noVisits')}
+            </p>
+          )
+        ) : (
+          <>
+            {visitData && visitData.total > visits.length ? (
+              <p className="rounded-md border border-warning/40 bg-warning-muted p-3 text-sm text-warning-foreground">
+                {t('Planning.calendarLimit', { limit: visits.length })}{' '}
+                <Link
+                  className="font-medium underline"
+                  href={viewHref({ ...query, view: 'list', page: '1', pageSize: '20' })}
+                >
+                  {t('Planning.list')}
+                </Link>
+              </p>
+            ) : null}
+            {view === 'day' ? (
+              selectedDayVisits.length ? (
+                <div className="grid min-w-0 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+                  {[...employeeVisitGroups].map(([dayEmployeeId, employeeVisits]) => {
+                    const employeeName = employeeVisits[0]?.assignments.find(
+                      (assignment) => assignment.employeeId === dayEmployeeId,
+                    )?.employeeDisplayName;
+                    return (
+                      <section
+                        key={dayEmployeeId}
+                        aria-label={employeeName ?? t('Planning.employeeTour')}
+                        className="grid min-w-0 content-start gap-3 rounded-lg border bg-card p-3"
+                      >
+                        <header className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
+                          <ResourceReference
+                            className="font-semibold"
+                            label={employeeName ?? t('Planning.employeeTour')}
+                            href={
+                              hasPermission(permissions, 'employee.read')
+                                ? `/employees/${dayEmployeeId}`
+                                : null
+                            }
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {t('Planning.visitCount', { count: employeeVisits.length })}
+                          </span>
+                        </header>
+                        <ol className="grid min-w-0 gap-2">
+                          {employeeVisits.map((visit) => {
+                            const visitConflicts = conflictsByVisit.get(visit.id) ?? [];
+                            return (
+                              <li key={visit.id}>
+                                <Link
+                                  className="grid min-w-0 gap-1 rounded-md border p-3 hover:border-primary/40 hover:bg-accent"
+                                  href={visitHref(visit.id)}
+                                >
+                                  <span className="flex flex-wrap items-baseline justify-between gap-2">
+                                    <span className="font-medium tabular-nums">
+                                      {formatTime(visit.plannedStart, locale, visit.timezone)}–
+                                      {formatTime(visit.plannedEnd, locale, visit.timezone)}
+                                    </span>
+                                    <span className="rounded-full border px-2 py-1 text-xs">
+                                      {t(visitStatusKey(visit.status))}
+                                    </span>
+                                  </span>
+                                  <strong className="truncate">{visit.clientDisplayName}</strong>
+                                  <span className="text-sm text-muted-foreground">
+                                    {visit.services
+                                      .map(
+                                        (service) =>
+                                          `${service.serviceCode} ${service.serviceName}`,
+                                      )
+                                      .join(' · ')}
+                                  </span>
+                                  <span className="text-sm text-muted-foreground">
+                                    {visit.facilityName}
+                                  </span>
+                                  {visitConflicts.length ? (
+                                    <span className="flex flex-wrap gap-1 pt-1">
+                                      {visitConflicts.map((conflict, index) => (
+                                        <span
+                                          key={`${conflict.code}-${conflict.relatedVisitId ?? index}`}
+                                          className={
+                                            'rounded-full px-2 py-1 text-xs ' +
+                                            (conflict.severity === 'blocking'
+                                              ? 'bg-destructive/15 text-destructive'
+                                              : 'bg-warning-muted text-warning-foreground')
+                                          }
+                                        >
+                                          {conflictMessages[conflict.code] ?? conflict.code}
+                                        </span>
+                                      ))}
+                                    </span>
+                                  ) : null}
+                                </Link>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      </section>
+                    );
+                  })}
+                  {unassignedDayVisits.length ? (
+                    <section
+                      aria-labelledby="unassigned-day-visits"
+                      className="grid min-w-0 content-start gap-3 rounded-lg border border-dashed bg-card p-3"
+                    >
+                      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
+                        <h3 id="unassigned-day-visits" className="font-semibold">
+                          {t('Planning.openVisits')}
+                        </h3>
+                        <span className="text-sm text-muted-foreground">
+                          {t('Planning.visitCount', { count: unassignedDayVisits.length })}
+                        </span>
+                      </header>
+                      <ol className="grid min-w-0 gap-2">
+                        {unassignedDayVisits.map((visit) => (
+                          <li key={visit.id}>
+                            <Link
+                              className="grid min-w-0 gap-1 rounded-md border p-3 hover:border-primary/40 hover:bg-accent"
+                              href={visitHref(visit.id)}
+                            >
+                              <span className="flex flex-wrap items-baseline justify-between gap-2">
+                                <span className="font-medium tabular-nums">
+                                  {formatTime(visit.plannedStart, locale, visit.timezone)}–
+                                  {formatTime(visit.plannedEnd, locale, visit.timezone)}
+                                </span>
+                                <span className="rounded-full border px-2 py-1 text-xs">
+                                  {t(visitStatusKey(visit.status))}
+                                </span>
+                              </span>
+                              <strong className="truncate">{visit.clientDisplayName}</strong>
+                              <span className="text-sm text-muted-foreground">
+                                {visit.services
+                                  .map((service) => `${service.serviceCode} ${service.serviceName}`)
+                                  .join(' · ')}
+                              </span>
+                              {conflictsByVisit.get(visit.id)?.length ? (
+                                <span className="flex flex-wrap gap-1 pt-1">
+                                  {(conflictsByVisit.get(visit.id) ?? []).map((conflict, index) => (
+                                    <span
+                                      key={`${conflict.code}-${conflict.relatedVisitId ?? index}`}
+                                      className={
+                                        'rounded-full px-2 py-1 text-xs ' +
+                                        (conflict.severity === 'blocking'
+                                          ? 'bg-destructive/15 text-destructive'
+                                          : 'bg-warning-muted text-warning-foreground')
+                                      }
+                                    >
+                                      {conflictMessages[conflict.code] ?? conflict.code}
+                                    </span>
+                                  ))}
+                                </span>
+                              ) : null}
+                            </Link>
+                          </li>
+                        ))}
+                      </ol>
+                    </section>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+                  {t('Planning.noVisits')}
+                </p>
+              )
+            ) : (
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {days.map((day) => {
+                  const dayVisits = visitsByDate.get(day) ?? [];
+                  const dayUnassigned = dayVisits.filter((visit) => visit.assignments.length === 0);
+                  return (
+                    <section
+                      key={day}
+                      aria-labelledby={`day-${day}`}
+                      className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-2 rounded-lg border bg-card p-4"
+                    >
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <h3 id={`day-${day}`} className="font-semibold">
+                          {formatDay(day, locale)}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {t('Planning.visitCount', { count: dayVisits.length })} ·{' '}
+                          {t('Planning.openCount', { count: dayUnassigned.length })}
+                        </p>
+                      </div>
+                      {dayVisits.length ? (
+                        <ol className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
+                          {dayVisits.map((visit) => (
+                            <li key={visit.id}>
+                              <Link
+                                className="grid min-w-0 gap-1 rounded-md border p-3 hover:border-primary/40 hover:bg-accent"
+                                href={`/visits/${visit.id}`}
+                              >
+                                <span className="flex flex-wrap items-baseline justify-between gap-2">
+                                  <span className="font-medium">
+                                    {formatTime(visit.plannedStart, locale, visit.timezone)}–
+                                    {formatTime(visit.plannedEnd, locale, visit.timezone)}
+                                  </span>
+                                  <span className="rounded-full border px-2 py-1 text-xs">
+                                    {t(visitStatusKey(visit.status))}
+                                  </span>
+                                </span>
+                                <strong>{visit.clientDisplayName}</strong>
+                                <span className="text-sm text-muted-foreground">
+                                  {visit.services
+                                    .map(
+                                      (service) => `${service.serviceCode} ${service.serviceName}`,
+                                    )
+                                    .join(' · ')}
+                                </span>
+                                <span className="text-sm text-muted-foreground">
+                                  {visit.assignments.length
+                                    ? visit.assignments
+                                        .map((item) => item.employeeDisplayName)
+                                        .join(', ')
+                                    : t('Planning.open')}{' '}
+                                  · {visit.facilityName}
+                                </span>
+                                {(conflictsByVisit.get(visit.id)?.length ?? 0) > 0 ? (
+                                  <span className="flex flex-wrap gap-1 pt-1">
+                                    {(conflictsByVisit.get(visit.id) ?? []).map(
+                                      (conflict, index) => (
+                                        <span
+                                          key={`${conflict.code}-${conflict.relatedVisitId ?? index}`}
+                                          className={
+                                            'rounded-full px-2 py-1 text-xs ' +
+                                            (conflict.severity === 'blocking'
+                                              ? 'bg-destructive/15 text-destructive'
+                                              : 'bg-warning-muted text-warning-foreground')
+                                          }
+                                        >
+                                          {conflictMessages[conflict.code] ?? conflict.code}
+                                        </span>
+                                      ),
+                                    )}
+                                  </span>
+                                ) : null}
+                              </Link>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">{t('Planning.noVisits')}</p>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
-        {visitData ? (
+        {view === 'list' && visitData ? (
           <DataPagination
             pathname="/planning"
             page={visitData.page}
@@ -869,6 +1244,7 @@ export default async function PlanningPage({
               status,
               assigned,
               serviceDefinitionId,
+              search,
             }}
           />
         ) : null}
@@ -957,7 +1333,7 @@ export default async function PlanningPage({
                                     label={
                                       visit?.clientDisplayName ?? t('Resources.unavailableVisit')
                                     }
-                                    href={visit ? `/visits/${stop.visitId}` : null}
+                                    href={visit ? visitHref(stop.visitId) : null}
                                   />
                                   <span className="text-sm tabular-nums">
                                     {formatTime(stop.plannedStart, locale, stop.timezone)}–
@@ -1020,44 +1396,22 @@ export default async function PlanningPage({
                           </Button>
                         </form>
                       ) : null}
-                      <RHFActionForm
-                        action={updateTourStopsAction}
-                        className="grid gap-3 rounded-md border p-3"
-                      >
-                        <input type="hidden" name="tourId" value={tour.id} />
-                        <input type="hidden" name="expectedVersion" value={tour.version} />
-                        <input type="hidden" name="localDate" value={tour.localDate} />
-                        <input type="hidden" name="employeeId" value={tour.employeeId} />
-                        {tour.stops.map((stop) => (
-                          <div key={stop.id} className="grid gap-1 sm:grid-cols-[1fr_1fr]">
-                            <Label htmlFor={`tour-stop-${stop.id}`}>
-                              {t('Planning.stopLabel', { sequence: stop.sequence })}
-                            </Label>
-                            <NativeSelect
-                              id={`tour-stop-${stop.id}`}
-                              name="visitId"
-                              defaultValue={stop.visitId}
-                              selectClassName="h-10 rounded-md border bg-card px-3 text-sm"
-                              className="w-full"
-                            >
-                              {tour.stops.map((candidate) => (
-                                <option key={candidate.visitId} value={candidate.visitId}>
-                                  {selectedDayVisits.find((item) => item.id === candidate.visitId)
-                                    ?.clientDisplayName ?? t('Resources.unavailableVisit')}
-                                </option>
-                              ))}
-                            </NativeSelect>
-                            <input
-                              type="hidden"
-                              name="dispatcherNote"
-                              value={stop.dispatcherNote ?? ''}
-                            />
-                          </div>
-                        ))}
-                        <Button type="submit" variant="secondary" className="w-fit">
-                          {t('Planning.saveTourOrder')}
-                        </Button>
-                      </RHFActionForm>
+                      {tour.stops.length ? (
+                        <TourStopOrderForm
+                          key={`${tour.id}:${tour.version}`}
+                          tourId={tour.id}
+                          expectedVersion={tour.version}
+                          localDate={tour.localDate}
+                          employeeId={tour.employeeId}
+                          stops={tour.stops.map((stop) => ({
+                            visitId: stop.visitId,
+                            clientName:
+                              selectedDayVisits.find((item) => item.id === stop.visitId)
+                                ?.clientDisplayName ?? t('Resources.unavailableVisit'),
+                            dispatcherNote: stop.dispatcherNote ?? '',
+                          }))}
+                        />
+                      ) : null}
                       <div className="flex flex-wrap gap-2">
                         <form action={suggestTourOrderAction}>
                           <input type="hidden" name="tourId" value={tour.id} />
@@ -1126,7 +1480,7 @@ export default async function PlanningPage({
               ) : null}
             </div>
           ) : null}
-          {canReadClient && services.length ? (
+          {canReadClient ? (
             <RHFActionForm action={createVisitAction} className="grid gap-4 md:grid-cols-2">
               {admissionContextUsable && admission ? (
                 <>

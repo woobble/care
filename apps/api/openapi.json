@@ -8889,6 +8889,15 @@
             }
           },
           {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
             "name": "teamId",
             "required": false,
             "in": "query",
@@ -10209,6 +10218,15 @@
             }
           },
           {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
             "name": "serviceDefinitionId",
             "required": false,
             "in": "query",
@@ -10357,6 +10375,15 @@
                 "confirmed",
                 "cancelled"
               ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 100,
               "type": "string"
             }
           },

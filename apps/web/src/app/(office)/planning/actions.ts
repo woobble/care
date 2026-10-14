@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { safePlanningReturnTo } from '@app/web/lib/planning-return-to';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -144,6 +145,7 @@ export async function updateVisitAction(formData: FormData): Promise<void> {
   const localDate = readString(formData, 'localDate');
   const localStartTime = readString(formData, 'localStartTime');
   const localEndTime = readString(formData, 'localEndTime');
+  const returnTo = safePlanningReturnTo(readString(formData, 'returnTo'));
   if (
     !visitId ||
     !datePattern.test(localDate) ||
@@ -151,7 +153,7 @@ export async function updateVisitAction(formData: FormData): Promise<void> {
     !timePattern.test(localEndTime) ||
     localEndTime <= localStartTime
   ) {
-    redirect(visitPath(visitId, 'INVALID_REQUEST'));
+    redirect(visitPath(visitId, 'INVALID_REQUEST', returnTo));
   }
   const api = await getApiClient();
   const { error } = await api.PATCH('/api/v1/visits/{id}', {
@@ -163,10 +165,12 @@ export async function updateVisitAction(formData: FormData): Promise<void> {
       note: readNullableText(formData, 'note'),
     },
   });
-  if (error) redirect(visitPath(visitId, error.code));
+  if (error) redirect(visitPath(visitId, error.code, returnTo));
   revalidatePath('/planning');
   revalidatePath(`/visits/${visitId}`);
-  redirect(`/visits/${visitId}?updated=updated`);
+  const params = new URLSearchParams({ updated: 'updated' });
+  if (returnTo) params.set('returnTo', returnTo);
+  redirect(`/visits/${visitId}?${params.toString()}`);
 }
 
 export async function assignVisitAction(formData: FormData): Promise<void> {
@@ -541,10 +545,11 @@ function readUuids(formData: FormData, name: string): string[] {
   ];
 }
 
-function visitPath(visitId: string | undefined, message: string): string {
-  return visitId
-    ? `/visits/${visitId}?error=${encodeURIComponent(message)}`
-    : '/planning?error=INVALID_REQUEST';
+function visitPath(visitId: string | undefined, message: string, returnTo?: string | null): string {
+  if (!visitId) return '/planning?error=INVALID_REQUEST';
+  const params = new URLSearchParams({ error: message });
+  if (returnTo) params.set('returnTo', returnTo);
+  return `/visits/${visitId}?${params.toString()}`;
 }
 
 function agreementPath(clientId: string | undefined, message: string): string {

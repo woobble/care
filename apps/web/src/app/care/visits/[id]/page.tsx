@@ -1,5 +1,6 @@
 import { Textarea } from '@care/ui/components/textarea';
 import { NativeSelect } from '@care/ui/components/native-select';
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { v7 as uuidv7 } from 'uuid';
@@ -8,6 +9,7 @@ import { Button } from '@care/ui/components/button';
 import { Input } from '@care/ui/components/input';
 import { Label } from '@care/ui/components/label';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { CaregiverRetryButton } from '@app/web/components/caregiver-retry-button';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatNumber } from '@app/web/i18n/format';
@@ -44,43 +46,25 @@ export default async function CareVisitPage({
   if (error?.code === 'VISIT_EXECUTION_NOT_FOUND') notFound();
   if (!data) {
     return (
-      <p
+      <section
         role="alert"
-        className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+        className="flex flex-col gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive sm:flex-row sm:items-center sm:justify-between"
       >
-        {t('VisitExecution.loadFailed')} {error?.code ? t(errorMessageKey(error.code)) : null}
-      </p>
+        <p>
+          {t('VisitExecution.loadFailed')} {error?.code ? t(errorMessageKey(error.code)) : null}
+        </p>
+        <CaregiverRetryButton label={t('Caregiver.retry')} pendingLabel={t('Caregiver.retrying')} />
+      </section>
     );
   }
 
   const { visit, execution, services } = data;
-  const [documentationResult, availableResult] = await Promise.all([
-    get('/api/v1/visits/{visitId}/documentation', {
-      params: { path: { visitId: id }, header },
-    }),
+  const documentationPromise = getVisitDocumentation(api, header, id);
+  const evidencePromise = getVisitEvidencePackage(api, header, id, documentationPromise);
+  const availableServicesPromise =
     execution.status === 'in_progress'
-      ? get('/api/v1/visits/{visitId}/execution/available-services', {
-          params: { path: { visitId: id }, header },
-        })
-      : Promise.resolve(null),
-  ]);
-  const evidencePackageResult =
-    documentationResult.data?.documentation?.status === 'finalized'
-      ? await get('/api/v1/visits/{visitId}/evidence-package', {
-          params: { path: { visitId: id }, header },
-        })
-      : null;
-  const evidenceStatusUnavailable = Boolean(
-    evidencePackageResult &&
-    ((!evidencePackageResult.data &&
-      evidencePackageResult.error?.code !== 'EVIDENCE_PACKAGE_NOT_FOUND') ||
-      (evidencePackageResult.error &&
-        evidencePackageResult.error.code !== 'EVIDENCE_PACKAGE_NOT_FOUND')),
-  );
-  const availableServices = availableResult?.data ?? [];
-  const availableServicesUnavailable = Boolean(
-    availableResult && (availableResult.error || !availableResult.data),
-  );
+      ? getVisitAvailableServices(api, header, id)
+      : Promise.resolve(null);
   const unresolved = services.some((service) => service.status === 'not_recorded');
   const startAllowed = execution.status === 'not_started' && visit.status !== 'cancelled';
 
@@ -217,12 +201,22 @@ export default async function CareVisitPage({
         ) : null}
       </section>
 
-      <CompletionChecklist
-        executionStatus={execution.status}
-        serviceStatuses={services.map((service) => service.status)}
-        documentation={documentationResult.data}
-        documentationUnavailable={Boolean(documentationResult.error || !documentationResult.data)}
-      />
+      <Suspense
+        fallback={
+          <section
+            role="status"
+            className="rounded-lg border bg-card p-4 text-sm text-muted-foreground"
+          >
+            {t('Caregiver.workflowLoading')}
+          </section>
+        }
+      >
+        <CompletionChecklistLoader
+          executionStatus={execution.status}
+          serviceStatuses={services.map((service) => service.status)}
+          documentationPromise={documentationPromise}
+        />
+      </Suspense>
 
       <section className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
         <h2 className="text-xl font-semibold">{t('VisitExecution.plannedServices')}</h2>
@@ -270,60 +264,23 @@ export default async function CareVisitPage({
 
       {execution.status === 'in_progress' ? (
         <>
-          <section className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
-            <h2 className="text-xl font-semibold">{t('VisitExecution.unplannedService')}</h2>
-            {availableServicesUnavailable ? (
-              <p role="status" className="text-warning-foreground">
-                {t('VisitExecution.availableServicesUnavailable')}
-              </p>
-            ) : availableServices.length ? (
-              <CareForm
-                action={recordPerformedServiceAction}
-                className="grid gap-4"
-                notice={query.notice}
-                successNotices={['service-saved']}
-                draft={{
-                  visitId: visit.id,
-                  formId: 'unplanned-service',
-                  revision: `execution:${execution.version}`,
-                  fields: ['serviceDefinitionId', 'status', 'actualQuantity', 'reasonCode'],
-                }}
-              >
-                <input type="hidden" name="visitId" value={visit.id} />
-                <input type="hidden" name="performedServiceId" value={uuidv7()} />
-                <input type="hidden" name="expectedVersion" value={execution.version} />
-                <div className="grid gap-2">
-                  <Label htmlFor="serviceDefinitionId">{t('VisitExecution.service')}</Label>
-                  <NativeSelect
-                    id="serviceDefinitionId"
-                    name="serviceDefinitionId"
-                    required
-                    selectClassName="min-h-12 w-full min-w-0 rounded-md border bg-card px-3"
-                    className="w-full"
-                  >
-                    <option value="">{t('VisitExecution.selectService')}</option>
-                    {availableServices.map((service) => (
-                      <option key={service.id} value={service.id}>
-                        {service.code} · {service.name} ({t(unitKey(service.unit))})
-                      </option>
-                    ))}
-                  </NativeSelect>
-                </div>
-                <DecisionFields
-                  status=""
-                  actualQuantity=""
-                  reasonCode={null}
-                  unit="unknown"
-                  prefix="unplanned"
-                />
-                <Button type="submit" variant="secondary" className="min-h-12 w-full sm:w-fit">
-                  {t('VisitExecution.recordService')}
-                </Button>
-              </CareForm>
-            ) : (
-              <p className="text-muted-foreground">{t('VisitExecution.noMoreServices')}</p>
-            )}
-          </section>
+          <Suspense
+            fallback={
+              <section className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
+                <h2 className="text-xl font-semibold">{t('VisitExecution.unplannedService')}</h2>
+                <p role="status" className="text-sm text-muted-foreground">
+                  {t('Caregiver.workflowLoading')}
+                </p>
+              </section>
+            }
+          >
+            <AvailableServicesSection
+              resultPromise={availableServicesPromise}
+              visitId={visit.id}
+              executionVersion={execution.version}
+              notice={query.notice}
+            />
+          </Suspense>
 
           <section className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
             <h2 className="text-xl font-semibold">{t('VisitExecution.completeVisit')}</h2>
@@ -345,17 +302,191 @@ export default async function CareVisitPage({
         </>
       ) : null}
 
-      <DocumentationSection
-        detail={documentationResult.data}
-        {...(documentationResult.error?.code ? { errorCode: documentationResult.error.code } : {})}
-        evidenceStatus={evidencePackageResult?.data?.status ?? null}
-        evidenceStatusUnavailable={evidenceStatusUnavailable}
-        visitId={visit.id}
-        executionStatus={execution.status}
-        locale={locale}
-        notice={query.notice}
-      />
+      <Suspense
+        fallback={
+          <section
+            role="status"
+            className="rounded-lg border bg-card p-4 text-sm text-muted-foreground"
+          >
+            {t('Caregiver.workflowLoading')}
+          </section>
+        }
+      >
+        <DocumentationSectionLoader
+          documentationPromise={documentationPromise}
+          evidencePromise={evidencePromise}
+          visitId={visit.id}
+          executionStatus={execution.status}
+          locale={locale}
+          notice={query.notice}
+        />
+      </Suspense>
     </div>
+  );
+}
+
+type ApiClient = Awaited<ReturnType<typeof getApiClient>>;
+type TenantHeader = Awaited<ReturnType<typeof getTenantHeader>>;
+
+function getVisitDocumentation(api: ApiClient, header: TenantHeader, visitId: string) {
+  return api.GET('/api/v1/visits/{visitId}/documentation', {
+    params: { path: { visitId }, header },
+  });
+}
+
+function getVisitAvailableServices(api: ApiClient, header: TenantHeader, visitId: string) {
+  return api.GET('/api/v1/visits/{visitId}/execution/available-services', {
+    params: { path: { visitId }, header },
+  });
+}
+
+async function getVisitEvidencePackage(
+  api: ApiClient,
+  header: TenantHeader,
+  visitId: string,
+  documentationPromise: ReturnType<typeof getVisitDocumentation>,
+) {
+  const documentation = await documentationPromise;
+  if (documentation.data?.documentation?.status !== 'finalized') return null;
+  return api.GET('/api/v1/visits/{visitId}/evidence-package', {
+    params: { path: { visitId }, header },
+  });
+}
+
+type AvailableServicesResponse = Awaited<ReturnType<typeof getVisitAvailableServices>>;
+
+async function CompletionChecklistLoader({
+  executionStatus,
+  serviceStatuses,
+  documentationPromise,
+}: {
+  executionStatus: 'not_started' | 'in_progress' | 'completed';
+  serviceStatuses: string[];
+  documentationPromise: ReturnType<typeof getVisitDocumentation>;
+}) {
+  const documentation = await documentationPromise;
+  return (
+    <CompletionChecklist
+      executionStatus={executionStatus}
+      serviceStatuses={serviceStatuses}
+      documentation={documentation.data}
+      documentationUnavailable={Boolean(documentation.error || !documentation.data)}
+    />
+  );
+}
+
+async function DocumentationSectionLoader({
+  documentationPromise,
+  evidencePromise,
+  visitId,
+  executionStatus,
+  locale,
+  notice,
+}: {
+  documentationPromise: ReturnType<typeof getVisitDocumentation>;
+  evidencePromise: ReturnType<typeof getVisitEvidencePackage>;
+  visitId: string;
+  executionStatus: 'not_started' | 'in_progress' | 'completed';
+  locale: Locale;
+  notice?: string | undefined;
+}) {
+  const [documentation, evidence] = await Promise.all([documentationPromise, evidencePromise]);
+  const evidenceNotFound = evidence?.error?.code === 'EVIDENCE_PACKAGE_NOT_FOUND';
+  const evidenceStatusUnavailable = Boolean(
+    evidence && !evidenceNotFound && (evidence.error || !evidence.data),
+  );
+  return (
+    <DocumentationSection
+      detail={documentation.data}
+      {...(documentation.error?.code ? { errorCode: documentation.error.code } : {})}
+      evidenceStatus={evidence?.data?.status ?? null}
+      evidenceStatusUnavailable={evidenceStatusUnavailable}
+      visitId={visitId}
+      executionStatus={executionStatus}
+      locale={locale}
+      notice={notice}
+    />
+  );
+}
+
+async function AvailableServicesSection({
+  resultPromise,
+  visitId,
+  executionVersion,
+  notice,
+}: {
+  resultPromise: Promise<AvailableServicesResponse | null>;
+  visitId: string;
+  executionVersion: number;
+  notice?: string | undefined;
+}) {
+  const t = await getTranslations();
+  const result = await resultPromise;
+  const availableServices = result?.data ?? [];
+  const unavailable = Boolean(result && (result.error || !result.data));
+
+  return (
+    <section className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
+      <h2 className="text-xl font-semibold">{t('VisitExecution.unplannedService')}</h2>
+      {unavailable ? (
+        <div
+          role="status"
+          className="flex flex-col gap-2 text-warning-foreground sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p>{t('VisitExecution.availableServicesUnavailable')}</p>
+          <CaregiverRetryButton
+            label={t('Caregiver.retry')}
+            pendingLabel={t('Caregiver.retrying')}
+          />
+        </div>
+      ) : availableServices.length ? (
+        <CareForm
+          action={recordPerformedServiceAction}
+          className="grid gap-4"
+          notice={notice}
+          successNotices={['service-saved']}
+          draft={{
+            visitId,
+            formId: 'unplanned-service',
+            revision: `execution:${executionVersion}`,
+            fields: ['serviceDefinitionId', 'status', 'actualQuantity', 'reasonCode'],
+          }}
+        >
+          <input type="hidden" name="visitId" value={visitId} />
+          <input type="hidden" name="performedServiceId" value={uuidv7()} />
+          <input type="hidden" name="expectedVersion" value={executionVersion} />
+          <div className="grid gap-2">
+            <Label htmlFor="serviceDefinitionId">{t('VisitExecution.service')}</Label>
+            <NativeSelect
+              id="serviceDefinitionId"
+              name="serviceDefinitionId"
+              required
+              selectClassName="min-h-12 w-full min-w-0 rounded-md border bg-card px-3"
+              className="w-full"
+            >
+              <option value="">{t('VisitExecution.selectService')}</option>
+              {availableServices.map((service) => (
+                <option key={service.id} value={service.id}>
+                  {service.code} · {service.name} ({t(unitKey(service.unit))})
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+          <DecisionFields
+            status=""
+            actualQuantity=""
+            reasonCode={null}
+            unit="unknown"
+            prefix="unplanned"
+          />
+          <Button type="submit" variant="secondary" className="min-h-12 w-full sm:w-fit">
+            {t('VisitExecution.recordService')}
+          </Button>
+        </CareForm>
+      ) : (
+        <p className="text-muted-foreground">{t('VisitExecution.noMoreServices')}</p>
+      )}
+    </section>
   );
 }
 
@@ -548,9 +679,16 @@ async function DocumentationSection({
     return (
       <section className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
         <h2 className="text-xl font-semibold">{t('CareDocumentation.visit.title')}</h2>
-        <p role="alert" className="text-destructive">
-          {t('CareDocumentation.visit.unavailable')}
-        </p>
+        <div
+          role="alert"
+          className="flex flex-col gap-2 text-destructive sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p>{t('CareDocumentation.visit.unavailable')}</p>
+          <CaregiverRetryButton
+            label={t('Caregiver.retry')}
+            pendingLabel={t('Caregiver.retrying')}
+          />
+        </div>
       </section>
     );
   }
@@ -604,12 +742,20 @@ async function DocumentationSection({
                       ? t('CareDocumentation.visit.revoked')
                       : t('CareDocumentation.visit.pending')}
           </span>
-          <Link
-            href={`/care/visits/${visitId}/evidence`}
-            className="min-h-10 rounded-md border border-border px-3 py-2 text-sm font-semibold text-primary underline"
-          >
-            {t('CareDocumentation.visit.reviewEvidence')}
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/care/visits/${visitId}/evidence`}
+              className="min-h-10 rounded-md border border-border px-3 py-2 text-sm font-semibold text-primary underline"
+            >
+              {t('CareDocumentation.visit.reviewEvidence')}
+            </Link>
+            {evidenceStatusUnavailable ? (
+              <CaregiverRetryButton
+                label={t('Caregiver.retry')}
+                pendingLabel={t('Caregiver.retrying')}
+              />
+            ) : null}
+          </div>
         </div>
       ) : null}
 

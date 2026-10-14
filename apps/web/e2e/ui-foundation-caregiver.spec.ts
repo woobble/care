@@ -35,13 +35,18 @@ test('Caregiver Today review screenshots use a temporary assigned employee', asy
       employee_id: string;
       tenant_id: string;
       user_id: string | null;
+      visit_id: string;
+      execution_id: string | null;
     }>(`
-      SELECT employee.id AS employee_id, employee.tenant_id, employee.user_id
+      SELECT employee.id AS employee_id, employee.tenant_id, employee.user_id,
+        visit.id AS visit_id, execution.id AS execution_id
       FROM employees.employees AS employee
       JOIN scheduling.visit_assignments AS assignment
         ON assignment.tenant_id = employee.tenant_id AND assignment.employee_id = employee.id
       JOIN scheduling.visits AS visit
         ON visit.tenant_id = assignment.tenant_id AND visit.id = assignment.visit_id
+      LEFT JOIN visit_execution.executions AS execution
+        ON execution.tenant_id = visit.tenant_id AND execution.visit_id = visit.id
       WHERE employee.status = 'active'
         AND employee.user_id IS NULL
         AND assignment.status = 'active'
@@ -53,7 +58,7 @@ test('Caregiver Today review screenshots use a temporary assigned employee', asy
     `);
     const employee = target.rows[0];
     if (!employee)
-      throw new Error('No unlinked caregiver with a visit scheduled today is available');
+      throw new Error('No unlinked caregiver with an assigned visit today is available');
     employeeId = employee.employee_id;
     tenantId = employee.tenant_id;
     previousEmployeeUserId = employee.user_id;
@@ -144,6 +149,49 @@ test('Caregiver Today review screenshots use a temporary assigned employee', asy
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     });
     await capture(page, 'caregiver-today-mobile-dark.png', true);
+
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Light' }).click();
+    const assignedVisit = page.locator(`a[href="/care/visits/${employee.visit_id}"]`).first();
+    await expect(assignedVisit).toBeVisible();
+    const clientName = (await assignedVisit.textContent())?.trim();
+    if (!clientName) throw new Error('The assigned visit link has no client name');
+    await assignedVisit.click();
+    await expect(page).toHaveURL(`/care/visits/${employee.visit_id}`);
+    await expect(page.getByRole('heading', { name: clientName, exact: true })).toBeVisible();
+    if (!employee.execution_id) {
+      await expect(page.getByRole('button', { name: 'Start visit' })).toBeVisible();
+    }
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await assertNoHorizontalOverflow(page);
+    await capture(
+      page,
+      employee.execution_id
+        ? 'caregiver-assigned-visit-desktop.png'
+        : 'caregiver-visit-before-start-desktop.png',
+      true,
+    );
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await assertNoHorizontalOverflow(page);
+    await capture(
+      page,
+      employee.execution_id
+        ? 'caregiver-assigned-visit-tablet-768.png'
+        : 'caregiver-visit-before-start-tablet-768.png',
+      true,
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    await assertNoHorizontalOverflow(page);
+    await capture(
+      page,
+      employee.execution_id
+        ? 'caregiver-assigned-visit-mobile-390.png'
+        : 'caregiver-visit-before-start-mobile-390.png',
+      true,
+    );
+    await page.setViewportSize({ width: 360, height: 844 });
+    await assertNoHorizontalOverflow(page);
   } finally {
     if (platformUserId && tenantId && membershipId) {
       await cleanupReviewIdentity(database, {

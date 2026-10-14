@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, gte, inArray, lt, not, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, ilike, inArray, lt, not, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
 import { v7 as uuidv7 } from 'uuid';
@@ -63,6 +63,7 @@ export interface VisitSearchFilter {
   teamId?: string;
   status?: 'planned' | 'confirmed' | 'cancelled';
   serviceDefinitionId?: string;
+  search?: string;
   unassigned?: boolean;
   origin?: 'agreement_generated' | 'manual';
   visitId?: string;
@@ -1368,6 +1369,45 @@ export class SchedulingRepository {
       filters.push(
         sql`exists (SELECT 1 FROM scheduling.visit_services vs WHERE vs.tenant_id = ${filter.tenantId} AND vs.visit_id = ${visits.id} AND vs.service_definition_id = ${filter.serviceDefinitionId})`,
       );
+    }
+    if (filter.search) {
+      const terms = filter.search.trim().split(/\s+/).filter(Boolean).slice(0, 8);
+      for (const term of terms) {
+        const pattern = `%${term}%`;
+        filters.push(
+          or(
+            ilike(clientRecords.firstName, pattern),
+            ilike(clientRecords.preferredName, pattern),
+            ilike(clientRecords.lastName, pattern),
+            ilike(visits.note, pattern),
+            sql`exists (
+              select 1
+              from scheduling.visit_services search_service
+              where search_service.tenant_id = ${filter.tenantId}
+                and search_service.visit_id = ${visits.id}
+                and (
+                  search_service.service_code_snapshot ilike ${pattern}
+                  or search_service.service_name_snapshot ilike ${pattern}
+                )
+            )`,
+            sql`exists (
+              select 1
+              from scheduling.visit_assignments search_assignment
+              inner join employees.employees search_employee
+                on search_employee.tenant_id = search_assignment.tenant_id
+               and search_employee.id = search_assignment.employee_id
+              where search_assignment.tenant_id = ${filter.tenantId}
+                and search_assignment.visit_id = ${visits.id}
+                and search_assignment.status = 'active'
+                and (
+                  search_employee.first_name ilike ${pattern}
+                  or search_employee.preferred_name ilike ${pattern}
+                  or search_employee.last_name ilike ${pattern}
+                )
+            )`,
+          )!,
+        );
+      }
     }
     if (filter.unassigned === true) {
       filters.push(

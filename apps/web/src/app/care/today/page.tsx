@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Badge } from '@care/ui/components/badge';
 import { Button } from '@care/ui/components/button';
@@ -17,28 +17,15 @@ export default async function CareTodayPage() {
   const api = await getApiClient();
   const get = api.GET;
   const header = await getTenantHeader();
-  const [visitsResult, documentationResult, evidenceResult, tourResult] = await Promise.all([
+  const documentationPromise = getDocumentationResult(api, header, range);
+  const evidencePromise = getEvidenceResult(api, header, range);
+  const [visitsResult, tourResult] = await Promise.all([
     get('/api/v1/me/visits', {
-      params: { query: { from: range.from, until: range.until }, header },
-    }),
-    get('/api/v1/me/documentation', {
-      params: { query: { from: range.from, until: range.until }, header },
-    }),
-    get('/api/v1/me/service-evidence', {
       params: { query: { from: range.from, until: range.until }, header },
     }),
     get('/api/v1/me/today/tour', { params: { header } }),
   ]);
   const visits = visitsResult.data ?? [];
-  const documentationItems = documentationResult.data?.items ?? [];
-  const documentationByVisit = new Map(documentationItems.map((item) => [item.visitId, item]));
-  const evidenceItems = evidenceResult.data?.items ?? [];
-  const evidenceByVisit = new Map<string, (typeof evidenceItems)[number]>();
-  for (const item of [...evidenceItems].sort(
-    (left, right) => (left.packageVersion ?? 0) - (right.packageVersion ?? 0),
-  )) {
-    evidenceByVisit.set(item.visitId, item);
-  }
 
   const tour = tourResult.data;
   const visitById = new Map(visits.map((visit) => [visit.id, visit]));
@@ -82,14 +69,7 @@ export default async function CareTodayPage() {
   ];
   const recentTourPublication = tour && isRecent(tour.publishedAt, now);
   const visitLoadFailed = Boolean(visitsResult.error || !visitsResult.data);
-  const documentationUnavailable = Boolean(documentationResult.error || !documentationResult.data);
-  const evidenceUnavailable = Boolean(evidenceResult.error || !evidenceResult.data);
-  const workflowStatusUnavailable = documentationUnavailable || evidenceUnavailable;
-  const employeeLinkRequired = [
-    visitsResult.error?.code,
-    documentationResult.error?.code,
-    evidenceResult.error?.code,
-  ].some((code) => code?.endsWith('EMPLOYEE_LINK_REQUIRED'));
+  const employeeLinkRequired = visitsResult.error?.code?.endsWith('EMPLOYEE_LINK_REQUIRED');
 
   return (
     <div className="grid gap-5">
@@ -168,7 +148,7 @@ export default async function CareTodayPage() {
           <p>
             {t(tourResult.error ? 'Caregiver.tourUnavailable' : 'Caregiver.chronologicalFallback')}
           </p>
-          {tourResult.error && !visitLoadFailed && !workflowStatusUnavailable ? (
+          {tourResult.error && !visitLoadFailed ? (
             <CaregiverRetryButton
               label={t('Caregiver.retry')}
               pendingLabel={t('Caregiver.retrying')}
@@ -176,23 +156,13 @@ export default async function CareTodayPage() {
           ) : null}
         </section>
       ) : null}
-      {workflowStatusUnavailable && !visitLoadFailed ? (
-        <section
-          role="status"
-          className="flex flex-col gap-3 rounded-xl border border-warning/40 bg-warning-muted p-3 text-sm text-warning-foreground sm:flex-row sm:items-center sm:justify-between"
-        >
-          <p>
-            {employeeLinkRequired
-              ? t('Caregiver.employeeLinkRequired')
-              : t('Caregiver.workflowStatusUnavailable')}
-          </p>
-          {!visitLoadFailed ? (
-            <CaregiverRetryButton
-              label={t('Caregiver.retry')}
-              pendingLabel={t('Caregiver.retrying')}
-            />
-          ) : null}
-        </section>
+      {!visitLoadFailed ? (
+        <Suspense fallback={null}>
+          <WorkflowStatusNotice
+            documentationPromise={documentationPromise}
+            evidencePromise={evidencePromise}
+          />
+        </Suspense>
       ) : null}
 
       {orderedVisits.length > 0 ? (
@@ -202,9 +172,14 @@ export default async function CareTodayPage() {
             const recentlyChanged = isRecent(changedAt.toISOString(), now);
             const isFocusVisit = inProgressVisit?.id === visit.id;
             const isNextVisit = !isFocusVisit && nextVisit?.id === visit.id;
-            const documentation = documentationByVisit.get(visit.id);
-            const evidence = evidenceByVisit.get(visit.id);
-
+            const immediateAction =
+              visit.status === 'cancelled'
+                ? t('Caregiver.viewVisit')
+                : visit.executionStatus === 'in_progress'
+                  ? t('Caregiver.continueVisit')
+                  : visit.executionStatus === 'not_started'
+                    ? t('Caregiver.startVisit')
+                    : t('Caregiver.openVisit');
             return (
               <li key={visit.id}>
                 <article
@@ -275,25 +250,30 @@ export default async function CareTodayPage() {
                         ? t('Caregiver.status.cancelled')
                         : t(executionStatusKey(visit.executionStatus))}
                     </p>
-                    <p className="text-sm">
-                      {documentationUnavailable
-                        ? `⚠ ${t('CareDocumentation.visit.unavailable')}`
-                        : documentation?.documentationStatus === 'finalized'
-                          ? `✓ ${t('CareDocumentation.finalized')}`
-                          : documentation?.documentationStatus === 'draft'
-                            ? `⚠ ${t('CareDocumentation.incomplete')}`
-                            : visit.executionStatus === 'completed'
-                              ? `⚠ ${t('CareDocumentation.missing')}`
-                              : `${t('CareDocumentation.visit.title')}: ${t('CareDocumentation.visit.notCreated')}`}
-                      {visit.executionStatus === 'completed' ? (
-                        <>
-                          {' · '}
-                          {evidenceUnavailable
-                            ? `⚠ ${t('ServiceEvidence.care.loadFailed')}`
-                            : t(acknowledgementStatusKey(evidence?.status))}
-                        </>
-                      ) : null}
-                    </p>
+                    <Suspense
+                      fallback={
+                        <div className="grid gap-2">
+                          <p className="text-sm text-muted-foreground">
+                            {t('Caregiver.workflowLoading')}
+                          </p>
+                          <Button
+                            asChild
+                            variant={isFocusVisit ? 'default' : 'outline'}
+                            className="min-h-11 w-full sm:w-auto"
+                          >
+                            <Link href={'/care/visits/' + visit.id}>{immediateAction}</Link>
+                          </Button>
+                        </div>
+                      }
+                    >
+                      <VisitWorkflowStatus
+                        visitId={visit.id}
+                        visitStatus={visit.status}
+                        executionStatus={visit.executionStatus}
+                        documentationPromise={documentationPromise}
+                        evidencePromise={evidencePromise}
+                      />
+                    </Suspense>
                   </div>
                   <div className="grid gap-2 sm:justify-items-end">
                     {visit.address ? (
@@ -306,13 +286,6 @@ export default async function CareTodayPage() {
                         {t('Caregiver.openNavigation')}
                       </a>
                     ) : null}
-                    <Button
-                      asChild
-                      variant={isFocusVisit ? 'default' : 'outline'}
-                      className="min-h-11 w-full sm:w-auto"
-                    >
-                      <Link href={'/care/visits/' + visit.id}>{t('Caregiver.openVisit')}</Link>
-                    </Button>
                   </div>
                 </article>
               </li>
@@ -329,6 +302,134 @@ export default async function CareTodayPage() {
           />
         </section>
       )}
+    </div>
+  );
+}
+
+function getDocumentationResult(
+  api: Awaited<ReturnType<typeof getApiClient>>,
+  header: Awaited<ReturnType<typeof getTenantHeader>>,
+  range: ReturnType<typeof todayRange>,
+) {
+  return api.GET('/api/v1/me/documentation', {
+    params: { query: { from: range.from, until: range.until }, header },
+  });
+}
+
+function getEvidenceResult(
+  api: Awaited<ReturnType<typeof getApiClient>>,
+  header: Awaited<ReturnType<typeof getTenantHeader>>,
+  range: ReturnType<typeof todayRange>,
+) {
+  return api.GET('/api/v1/me/service-evidence', {
+    params: { query: { from: range.from, until: range.until }, header },
+  });
+}
+
+async function WorkflowStatusNotice({
+  documentationPromise,
+  evidencePromise,
+}: {
+  documentationPromise: ReturnType<typeof getDocumentationResult>;
+  evidencePromise: ReturnType<typeof getEvidenceResult>;
+}) {
+  const [documentation, evidence] = await Promise.all([documentationPromise, evidencePromise]);
+  const unavailable =
+    documentation.error || !documentation.data || evidence.error || !evidence.data;
+  if (!unavailable) return null;
+
+  const t = await getTranslations();
+  const employeeLinkRequired = [documentation.error?.code, evidence.error?.code].some((code) =>
+    code?.endsWith('EMPLOYEE_LINK_REQUIRED'),
+  );
+  return (
+    <section
+      role="status"
+      className="flex flex-col gap-3 rounded-xl border border-warning/40 bg-warning-muted p-3 text-sm text-warning-foreground sm:flex-row sm:items-center sm:justify-between"
+    >
+      <p>
+        {employeeLinkRequired
+          ? t('Caregiver.employeeLinkRequired')
+          : t('Caregiver.workflowStatusUnavailable')}
+      </p>
+      <CaregiverRetryButton label={t('Caregiver.retry')} pendingLabel={t('Caregiver.retrying')} />
+    </section>
+  );
+}
+
+async function VisitWorkflowStatus({
+  visitId,
+  visitStatus,
+  executionStatus,
+  documentationPromise,
+  evidencePromise,
+}: {
+  visitId: string;
+  visitStatus: string;
+  executionStatus: string;
+  documentationPromise: ReturnType<typeof getDocumentationResult>;
+  evidencePromise: ReturnType<typeof getEvidenceResult>;
+}) {
+  const [documentationResult, evidenceResult] = await Promise.all([
+    documentationPromise,
+    evidencePromise,
+  ]);
+  const t = await getTranslations();
+  const documentationUnavailable = Boolean(documentationResult.error || !documentationResult.data);
+  const evidenceUnavailable = Boolean(evidenceResult.error || !evidenceResult.data);
+  const documentation = documentationResult.data?.items.find((item) => item.visitId === visitId);
+  const evidence = evidenceResult.data?.items
+    .filter((item) => item.visitId === visitId)
+    .sort((left, right) => (left.packageVersion ?? 0) - (right.packageVersion ?? 0))
+    .at(-1);
+  const documentationStatus = documentationUnavailable
+    ? `⚠ ${t('CareDocumentation.visit.unavailable')}`
+    : documentation?.documentationStatus === 'finalized'
+      ? `✓ ${t('CareDocumentation.finalized')}`
+      : documentation?.documentationStatus === 'draft'
+        ? `⚠ ${t('CareDocumentation.incomplete')}`
+        : executionStatus === 'completed'
+          ? `⚠ ${t('CareDocumentation.missing')}`
+          : `${t('CareDocumentation.visit.title')}: ${t('CareDocumentation.visit.notCreated')}`;
+  const showEvidenceStatus = executionStatus === 'completed' && visitStatus !== 'cancelled';
+  const evidenceStatus = evidenceUnavailable
+    ? `⚠ ${t('ServiceEvidence.care.loadFailed')}`
+    : t(acknowledgementStatusKey(evidence?.status));
+  const href = `/care/visits/${visitId}`;
+  const action =
+    visitStatus === 'cancelled'
+      ? t('Caregiver.viewVisit')
+      : executionStatus === 'in_progress'
+        ? t('Caregiver.continueVisit')
+        : executionStatus === 'not_started'
+          ? t('Caregiver.startVisit')
+          : documentationUnavailable
+            ? t('Caregiver.openVisit')
+            : documentation?.documentationStatus !== 'finalized'
+              ? t('Caregiver.reviewDocumentation')
+              : evidenceUnavailable || !evidence || evidence.status !== 'acknowledged'
+                ? t('Caregiver.reviewAcknowledgement')
+                : t('Caregiver.viewVisit');
+  const actionHref =
+    executionStatus === 'completed' &&
+    !documentationUnavailable &&
+    documentation?.documentationStatus === 'finalized'
+      ? `/care/visits/${visitId}/evidence`
+      : href;
+
+  return (
+    <div className="grid gap-2">
+      <p className="text-sm">
+        {documentationStatus}
+        {showEvidenceStatus ? <> · {evidenceStatus}</> : null}
+      </p>
+      <Button
+        asChild
+        variant={executionStatus === 'in_progress' ? 'default' : 'outline'}
+        className="min-h-11 w-full sm:w-auto"
+      >
+        <Link href={actionHref}>{action}</Link>
+      </Button>
     </div>
   );
 }
