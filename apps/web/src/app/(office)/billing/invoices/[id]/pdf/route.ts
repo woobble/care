@@ -6,7 +6,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await params;
   if (!isUuid(id)) return new Response(null, { status: 404 });
-  const upstream = await fetchCareApi(`/api/v1/billing/invoices/${id}/pdf`);
+  const upstream = await fetchCareApi({ route: 'invoicePdf', pathParams: [id] });
   return proxyDocument(upstream);
 }
 

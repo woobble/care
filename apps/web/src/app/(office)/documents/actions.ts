@@ -57,14 +57,17 @@ export async function generateDocumentAction(formData: FormData): Promise<void> 
     redirect(withError(returnTo, 'INVALID_REQUEST'));
   }
 
-  const response = await fetchCareApi('/api/v1/documents/generate', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      ...command,
-      ...(locale ? { locale } : {}),
-      idempotencyKey: randomUUID(),
-    }),
+  const response = await fetchCareApi({
+    route: 'documentGenerate',
+    init: {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        ...command,
+        ...(locale ? { locale } : {}),
+        idempotencyKey: randomUUID(),
+      }),
+    },
   });
   if (!response.ok) {
     const body = await response.json().catch(() => null);

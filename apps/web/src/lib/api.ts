@@ -8,7 +8,8 @@ import type { PermissionGrantDto } from '@care/api-client';
 import { loadWebConfig } from '@care/config';
 import { auth } from '@app/web/auth';
 import { getPermissionGrantsForTenant } from '@app/web/lib/permission-cache';
-import { resolveCareApiUrl } from './api-url';
+import { buildCareApiUrl } from './api-routes';
+import type { CareApiRequest } from './api-routes';
 
 const getRequestHeaders = cache(() => headers());
 
@@ -59,14 +60,17 @@ export function getApiClient(requireTenant = true) {
   return createRequestApiClient(requireTenant);
 }
 
-export async function fetchCareApi(path: string, init: RequestInit = {}): Promise<Response> {
+export async function fetchCareApi(request: CareApiRequest): Promise<Response> {
   const options = await apiClientOptions(true);
-  const requestHeaders = new Headers(init.headers);
+  const requestHeaders = new Headers(request.init?.headers);
   requestHeaders.set('Authorization', `Bearer ${options.accessToken}`);
   requestHeaders.set('X-Tenant-Id', options.tenantId!);
   if (options.requestId) requestHeaders.set('X-Request-Id', options.requestId);
   if (options.correlationId) requestHeaders.set('X-Correlation-Id', options.correlationId);
-  return fetch(resolveCareApiUrl(path, options.baseUrl), { ...init, headers: requestHeaders });
+  return fetch(buildCareApiUrl(request, options.baseUrl), {
+    ...request.init,
+    headers: requestHeaders,
+  });
 }
 
 const getTenantHeaderForRequest = cache(async (): Promise<{ 'X-Tenant-Id': string }> => {

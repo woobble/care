@@ -6,9 +6,10 @@ export async function GET(
 ): Promise<Response> {
   const { id, correctionId } = await params;
   if (!isUuid(id) || !isUuid(correctionId)) return new Response(null, { status: 404 });
-  const upstream = await fetchCareApi(
-    `/api/v1/billing/invoices/${id}/corrections/${correctionId}/pdf`,
-  );
+  const upstream = await fetchCareApi({
+    route: 'invoiceCorrectionPdf',
+    pathParams: [id, correctionId],
+  });
   const headers = new Headers();
   for (const name of ['content-disposition', 'content-length', 'content-type']) {
     const value = upstream.headers.get(name);

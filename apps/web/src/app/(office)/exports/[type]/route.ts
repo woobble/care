@@ -1,10 +1,10 @@
 import { fetchCareApi } from '@app/web/lib/api';
 
 const endpoints = {
-  invoices: '/api/v1/billing/exports/invoices',
-  'invoice-lines': '/api/v1/billing/exports/invoice-lines',
-  receivables: '/api/v1/billing/exports/receivables',
-  'benefit-allocations': '/api/v1/benefits/exports/allocations',
+  invoices: 'invoiceExport',
+  'invoice-lines': 'invoiceLinesExport',
+  receivables: 'receivablesExport',
+  'benefit-allocations': 'benefitAllocationsExport',
 } as const;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -38,8 +38,10 @@ export async function GET(
   const filters = new URLSearchParams({ from, until, organizationId });
   if (facilityId) filters.set('facilityId', facilityId);
   if (clientId) filters.set('clientId', clientId);
-  const endpoint = endpoints[type as keyof typeof endpoints];
-  const upstream = await fetchCareApi(`${endpoint}?${filters.toString()}`);
+  const upstream = await fetchCareApi({
+    route: endpoints[type as keyof typeof endpoints],
+    query: filters,
+  });
   const headers = new Headers();
   for (const name of ['content-disposition', 'content-length', 'content-type']) {
     const value = upstream.headers.get(name);

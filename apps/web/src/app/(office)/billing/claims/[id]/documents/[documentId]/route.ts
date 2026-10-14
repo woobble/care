@@ -6,7 +6,10 @@ export async function GET(
 ): Promise<Response> {
   const { id, documentId } = await params;
   if (!isUuid(id) || !isUuid(documentId)) return new Response(null, { status: 404 });
-  const upstream = await fetchCareApi('/api/v1/billing/claims/' + id + '/documents/' + documentId);
+  const upstream = await fetchCareApi({
+    route: 'claimDocument',
+    pathParams: [id, documentId],
+  });
   const headers = new Headers();
   for (const name of ['cache-control', 'content-disposition', 'content-length', 'content-type']) {
     const value = upstream.headers.get(name);

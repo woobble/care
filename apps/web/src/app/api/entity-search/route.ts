@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchCareApi } from '@app/web/lib/api';
+import type { CareApiRequest } from '@app/web/lib/api-routes';
 import type { EntityOption, SearchableEntity } from '@app/web/components/async-entity-combobox';
 
 type EntityRecord = {
@@ -82,22 +83,8 @@ export async function GET(request: Request) {
   }
 
   const employeeId = url.searchParams.get('employeeId');
-  const path =
-    entity === 'receivables'
-      ? '/api/v1/billing/receivables'
-      : entity === 'payers'
-        ? '/api/v1/billing/payers'
-        : entity === 'employee-users' && employeeId
-          ? `/api/v1/employees/${employeeId}/linkable-users/search`
-          : entity === 'qualifications' || entity === 'skills'
-            ? `/api/v1/${entity}/search`
-            : entity === 'organizations' || entity === 'facilities' || entity === 'teams'
-              ? `/api/v1/${entity}/search`
-              : `/api/v1/${entity}`;
-  const response = await fetchCareApi(`${path}?${search.toString()}`, {
-    method: 'GET',
-    cache: 'no-store',
-  });
+  const apiRequest = getEntitySearchRequest(entity, employeeId, search);
+  const response = await fetchCareApi(apiRequest);
   if (!response.ok) {
     return NextResponse.json({ error: 'Entity search failed' }, { status: response.status });
   }
@@ -154,6 +141,39 @@ function isSearchableEntity(value: string | null): value is SearchableEntity {
     value === 'payers' ||
     value === 'receivables'
   );
+}
+
+function getEntitySearchRequest(
+  entity: SearchableEntity,
+  employeeId: string | null,
+  query: URLSearchParams,
+): CareApiRequest {
+  const init = { method: 'GET', cache: 'no-store' as const };
+  switch (entity) {
+    case 'clients':
+      return { route: 'clients', query, init };
+    case 'employees':
+      return { route: 'employees', query, init };
+    case 'employee-users':
+      if (!employeeId) throw new Error('Employee ID is required for employee-user search.');
+      return { route: 'employeeUsersSearch', pathParams: [employeeId], query, init };
+    case 'qualifications':
+      return { route: 'qualificationsSearch', query, init };
+    case 'skills':
+      return { route: 'skillsSearch', query, init };
+    case 'services':
+      return { route: 'services', query, init };
+    case 'organizations':
+      return { route: 'organizationsSearch', query, init };
+    case 'facilities':
+      return { route: 'facilitiesSearch', query, init };
+    case 'teams':
+      return { route: 'teamsSearch', query, init };
+    case 'payers':
+      return { route: 'payers', query, init };
+    case 'receivables':
+      return { route: 'receivables', query, init };
+  }
 }
 
 function getEntityLabel(entity: SearchableEntity, record: EntityRecord): string | undefined {

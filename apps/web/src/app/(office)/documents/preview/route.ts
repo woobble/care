@@ -30,10 +30,13 @@ export async function GET(request: Request): Promise<Response> {
             clientId: id,
             ...(asOf ? { asOf } : {}),
           };
-  const upstream = await fetchCareApi('/api/v1/documents/preview', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ ...command, preview: true, ...(locale ? { locale } : {}) }),
+  const upstream = await fetchCareApi({
+    route: 'documentPreview',
+    init: {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...command, preview: true, ...(locale ? { locale } : {}) }),
+    },
   });
   const headers = new Headers();
   const contentType = upstream.headers.get('content-type');

@@ -21,9 +21,15 @@ export async function searchStructurePage<T>(
     if (key !== 'page' && key !== 'pageSize' && value) params.set(key, String(value));
   }
   try {
-    const response = await fetchCareApi(`/api/v1/${entity}/search?${params.toString()}`, {
-      method: 'GET',
-      cache: 'no-store',
+    const response = await fetchCareApi({
+      route:
+        entity === 'organizations'
+          ? 'structureOrganizationsSearch'
+          : entity === 'facilities'
+            ? 'structureFacilitiesSearch'
+            : 'structureTeamsSearch',
+      query: params,
+      init: { method: 'GET', cache: 'no-store' },
     });
     if (!response.ok) {
       return { items: [], page: query.page, pageSize: query.pageSize, total: 0, failed: true };

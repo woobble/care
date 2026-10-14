@@ -6,7 +6,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await params;
   if (!isUuid(id)) return new Response(null, { status: 404 });
-  const upstream = await fetchCareApi(`/api/v1/documents/${id}/download`);
+  const upstream = await fetchCareApi({ route: 'documentDownload', pathParams: [id] });
   const headers = new Headers();
   for (const name of ['content-disposition', 'content-length', 'content-type']) {
     const value = upstream.headers.get(name);

@@ -19,9 +19,10 @@ export async function getOrganizationsByIds(ids: readonly string[]) {
         pageSize: String(batch.length),
       });
       try {
-        const response = await fetchCareApi(`/api/v1/organizations/search?${params.toString()}`, {
-          method: 'GET',
-          cache: 'no-store',
+        const response = await fetchCareApi({
+          route: 'organizationsSearch',
+          query: params,
+          init: { method: 'GET', cache: 'no-store' },
         });
         if (!response.ok) return { items: [] as Organization[], failed: true };
         const payload = (await response.json()) as { items?: Organization[] };

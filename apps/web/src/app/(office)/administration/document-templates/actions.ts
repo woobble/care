@@ -75,9 +75,9 @@ export async function uploadDocumentLogoAction(formData: FormData): Promise<void
   const payload = new FormData();
   payload.set('organizationId', organizationId);
   payload.set('file', file, file.name);
-  const response = await fetchCareApi('/api/v1/document-templates/logo', {
-    method: 'POST',
-    body: payload,
+  const response = await fetchCareApi({
+    route: 'documentTemplateLogo',
+    init: { method: 'POST', body: payload },
   });
   if (!response.ok) {
     const body = await response.json().catch(() => null);

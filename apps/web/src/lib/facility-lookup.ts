@@ -24,9 +24,10 @@ export async function getFacilitiesByIds(ids: readonly string[]) {
         pageSize: String(batch.length),
       });
       try {
-        const response = await fetchCareApi(`/api/v1/facilities/search?${params.toString()}`, {
-          method: 'GET',
-          cache: 'no-store',
+        const response = await fetchCareApi({
+          route: 'facilitiesSearch',
+          query: params,
+          init: { method: 'GET', cache: 'no-store' },
         });
         if (!response.ok) return { items: [] as FacilityLookupItem[], failed: true };
         const payload = (await response.json()) as { items?: FacilityLookupItem[] };

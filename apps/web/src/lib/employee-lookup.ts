@@ -24,9 +24,10 @@ export async function getEmployeesByIds(ids: readonly string[]) {
         pageSize: String(batch.length),
       });
       try {
-        const response = await fetchCareApi(`/api/v1/employees?${params.toString()}`, {
-          method: 'GET',
-          cache: 'no-store',
+        const response = await fetchCareApi({
+          route: 'employees',
+          query: params,
+          init: { method: 'GET', cache: 'no-store' },
         });
         if (!response.ok) return { items: [] as EmployeeLookupItem[], failed: true };
         const payload = (await response.json()) as { items?: EmployeeLookupItem[] };
