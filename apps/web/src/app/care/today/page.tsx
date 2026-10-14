@@ -19,36 +19,20 @@ export default async function CareTodayPage() {
   const header = await getTenantHeader();
   const documentationPromise = getDocumentationResult(api, header, range);
   const evidencePromise = getEvidenceResult(api, header, range);
-  const [visitsResult, tourResult] = await Promise.all([
-    get('/api/v1/me/visits', {
-      params: { query: { from: range.from, until: range.until }, header },
-    }),
-    get('/api/v1/me/today/tour', { params: { header } }),
-  ]);
+  const tourPromise = getTodayTourResult(api, header);
+  const visitsResult = await get('/api/v1/me/visits', {
+    params: { query: { from: range.from, until: range.until }, header },
+  });
   const visits = visitsResult.data ?? [];
 
-  const tour = tourResult.data;
-  const visitById = new Map(visits.map((visit) => [visit.id, visit]));
-  const tourVisits = (tour?.stops ?? [])
-    .slice()
-    .sort((left, right) => left.sequence - right.sequence)
-    .flatMap((stop) => {
-      const visit = visitById.get(stop.visitId);
-      return visit && visit.status !== 'cancelled' ? [{ visit, stop }] : [];
-    });
-  const tourVisitIds = new Set(tourVisits.map(({ visit }) => visit.id));
-  const fallbackVisits = visits
-    .filter((visit) => !tourVisitIds.has(visit.id))
+  const orderedVisits = visits
     .slice()
     .sort(
       (left, right) =>
         new Date(left.plannedStart).getTime() - new Date(right.plannedStart).getTime() ||
         left.id.localeCompare(right.id),
-    );
-  const orderedVisits = [
-    ...tourVisits.map(({ visit, stop }) => ({ visit, stop, isFallback: false })),
-    ...fallbackVisits.map((visit) => ({ visit, stop: null, isFallback: true })),
-  ];
+    )
+    .map((visit) => ({ visit }));
   const now = range.now;
   const inProgressVisit = visits.find((visit) => visit.executionStatus === 'in_progress');
   const nextVisit = visits
@@ -67,7 +51,6 @@ export default async function CareTodayPage() {
     ...featuredVisits,
     ...orderedVisits.filter(({ visit }) => !featuredVisitIds.has(visit.id)),
   ];
-  const recentTourPublication = tour && isRecent(tour.publishedAt, now);
   const visitLoadFailed = Boolean(visitsResult.error || !visitsResult.data);
   const employeeLinkRequired = visitsResult.error?.code?.endsWith('EMPLOYEE_LINK_REQUIRED');
 
@@ -85,45 +68,24 @@ export default async function CareTodayPage() {
         <p className="text-xs text-muted-foreground">{t('Caregiver.navigationPrivacy')}</p>
       ) : null}
 
-      {tour ? (
-        <section
-          className="grid gap-2 rounded-xl border border-border bg-card p-4"
-          aria-labelledby="tour-title"
+      {!visitLoadFailed ? (
+        <Suspense
+          fallback={
+            <section
+              role="status"
+              className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground"
+            >
+              {t('Caregiver.tourLoading')}
+            </section>
+          }
         >
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 id="tour-title" className="text-lg font-semibold">
-              {t('Caregiver.dailyTour')}
-            </h2>
-            <Badge variant="secondary">
-              {t('Caregiver.publishedTourVersion', { version: tour.version })}
-            </Badge>
-            {recentTourPublication ? (
-              <Badge variant="warning">{t('Caregiver.recentTourChange')}</Badge>
-            ) : null}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {t('Caregiver.schedulePublishedAt', {
-              date: formatVisitDateTime(tour.publishedAt, tour.timezone, locale),
-            })}
-          </p>
-          {tour.version > 1 ? (
-            <p className="text-sm text-muted-foreground">
-              {tour.changeSummary.length
-                ? t('Caregiver.publicationChanges', {
-                    changes: tour.changeSummary
-                      .map((change) => t(publicationChangeKey(change.type)))
-                      .join(', '),
-                  })
-                : t('Caregiver.noPublicationChanges')}
-            </p>
-          ) : null}
-          {tourVisits.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t('Caregiver.noPublishedTourStops')}</p>
-          ) : null}
-          {fallbackVisits.length > 0 ? (
-            <p className="text-sm text-muted-foreground">{t('Caregiver.fallbackVisitsIncluded')}</p>
-          ) : null}
-        </section>
+          <PublishedTourContext
+            tourPromise={tourPromise}
+            visits={visits}
+            now={now}
+            locale={locale}
+          />
+        </Suspense>
       ) : null}
 
       {visitLoadFailed ? (
@@ -140,22 +102,6 @@ export default async function CareTodayPage() {
           />
         </section>
       ) : null}
-      {!tour && !visitLoadFailed ? (
-        <section
-          role="status"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 text-sm text-muted-foreground"
-        >
-          <p>
-            {t(tourResult.error ? 'Caregiver.tourUnavailable' : 'Caregiver.chronologicalFallback')}
-          </p>
-          {tourResult.error && !visitLoadFailed ? (
-            <CaregiverRetryButton
-              label={t('Caregiver.retry')}
-              pendingLabel={t('Caregiver.retrying')}
-            />
-          ) : null}
-        </section>
-      ) : null}
       {!visitLoadFailed ? (
         <Suspense fallback={null}>
           <WorkflowStatusNotice
@@ -167,7 +113,7 @@ export default async function CareTodayPage() {
 
       {orderedVisits.length > 0 ? (
         <ol className="grid gap-3" aria-label={t('Caregiver.visitsTitle')}>
-          {prioritizedVisits.map(({ visit, stop, isFallback }) => {
+          {prioritizedVisits.map(({ visit }) => {
             const changedAt = laterDate(visit.assignmentAssignedAt, visit.updatedAt);
             const recentlyChanged = isRecent(changedAt.toISOString(), now);
             const isFocusVisit = inProgressVisit?.id === visit.id;
@@ -219,20 +165,10 @@ export default async function CareTodayPage() {
                     <p className="break-words text-sm text-muted-foreground">
                       {visit.address ?? t('Caregiver.addressUnavailable')}
                     </p>
-                    {stop ? (
-                      <p className="text-sm text-muted-foreground">
-                        {t('Caregiver.stopNumber', { sequence: stop.sequence })}
-                        {stop.estimatedTravelMinutes == null
-                          ? ` · ${t('Caregiver.travelUnknown')}`
-                          : ` · ${t('Caregiver.travelEstimate', { minutes: stop.estimatedTravelMinutes })}`}
-                        {stop.estimatedDistanceMeters != null
-                          ? ` · ${t('Caregiver.travelDistance', { meters: stop.estimatedDistanceMeters })}`
-                          : ''}
-                      </p>
-                    ) : isFallback ? (
-                      <p className="text-sm text-muted-foreground">
-                        {t('Caregiver.chronologicalFallbackCard')}
-                      </p>
+                    {!visitLoadFailed ? (
+                      <Suspense fallback={null}>
+                        <PublishedTourStop tourPromise={tourPromise} visitId={visit.id} />
+                      </Suspense>
                     ) : null}
                     {recentlyChanged ? (
                       <p className="text-xs text-muted-foreground">
@@ -324,6 +260,122 @@ function getEvidenceResult(
   return api.GET('/api/v1/me/service-evidence', {
     params: { query: { from: range.from, until: range.until }, header },
   });
+}
+
+function getTodayTourResult(
+  api: Awaited<ReturnType<typeof getApiClient>>,
+  header: Awaited<ReturnType<typeof getTenantHeader>>,
+) {
+  return api.GET('/api/v1/me/today/tour', { params: { header } });
+}
+
+async function PublishedTourContext({
+  tourPromise,
+  visits,
+  now,
+  locale,
+}: {
+  tourPromise: ReturnType<typeof getTodayTourResult>;
+  visits: Array<{ id: string; status: string }>;
+  now: number;
+  locale: Awaited<ReturnType<typeof getLocale>>;
+}) {
+  const [tourResult, t] = await Promise.all([tourPromise, getTranslations()]);
+  const tour = tourResult.data;
+  const tourVisitIds = new Set(tour?.stops.map((stop) => stop.visitId) ?? []);
+
+  return (
+    <section
+      className="grid gap-2 rounded-xl border border-border bg-card p-4"
+      aria-labelledby="tour-title"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 id="tour-title" className="text-lg font-semibold">
+          {t('Caregiver.dailyTour')}
+        </h2>
+        {tour ? (
+          <>
+            <Badge variant="secondary">
+              {t('Caregiver.publishedTourVersion', { version: tour.version })}
+            </Badge>
+            {isRecent(tour.publishedAt, now) ? (
+              <Badge variant="warning">{t('Caregiver.recentTourChange')}</Badge>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+      <p className="text-sm text-muted-foreground">{t('Caregiver.tourOrderGuidance')}</p>
+      {tour ? (
+        <>
+          <p className="text-sm text-muted-foreground">
+            {t('Caregiver.schedulePublishedAt', {
+              date: formatVisitDateTime(tour.publishedAt, tour.timezone, locale),
+            })}
+          </p>
+          {tour.version > 1 ? (
+            <p className="text-sm text-muted-foreground">
+              {tour.changeSummary.length
+                ? t('Caregiver.publicationChanges', {
+                    changes: tour.changeSummary
+                      .map((change) => t(publicationChangeKey(change.type)))
+                      .join(', '),
+                  })
+                : t('Caregiver.noPublicationChanges')}
+            </p>
+          ) : null}
+          {tour.stops.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('Caregiver.noPublishedTourStops')}</p>
+          ) : null}
+          {visits.some((visit) => visit.status !== 'cancelled' && !tourVisitIds.has(visit.id)) ? (
+            <p className="text-sm text-muted-foreground">{t('Caregiver.fallbackVisitsIncluded')}</p>
+          ) : null}
+        </>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {tourResult.error
+              ? t('Caregiver.tourUnavailable')
+              : t('Caregiver.chronologicalFallback')}
+          </p>
+          {tourResult.error ? (
+            <CaregiverRetryButton
+              label={t('Caregiver.retry')}
+              pendingLabel={t('Caregiver.retrying')}
+            />
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+async function PublishedTourStop({
+  tourPromise,
+  visitId,
+}: {
+  tourPromise: ReturnType<typeof getTodayTourResult>;
+  visitId: string;
+}) {
+  const [tourResult, t] = await Promise.all([tourPromise, getTranslations()]);
+  const stop = tourResult.data?.stops.find((item) => item.visitId === visitId);
+
+  return (
+    <p className="text-sm text-muted-foreground">
+      {stop ? (
+        <>
+          {t('Caregiver.stopNumber', { sequence: stop.sequence })}
+          {stop.estimatedTravelMinutes == null
+            ? ` · ${t('Caregiver.travelUnknown')}`
+            : ` · ${t('Caregiver.travelEstimate', { minutes: stop.estimatedTravelMinutes })}`}
+          {stop.estimatedDistanceMeters != null
+            ? ` · ${t('Caregiver.travelDistance', { meters: stop.estimatedDistanceMeters })}`
+            : ''}
+        </>
+      ) : (
+        t('Caregiver.chronologicalFallbackCard')
+      )}
+    </p>
+  );
 }
 
 async function WorkflowStatusNotice({

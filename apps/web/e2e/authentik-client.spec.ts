@@ -2054,6 +2054,28 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     expect(deniedExecution.rows).toHaveLength(0);
 
+    await moveEmployeeUserLink(
+      page,
+      caregiverEmployeeId,
+      replacementEmployeeId,
+      caregiverName,
+      caregiverEmail,
+    );
+    await caregiverPage.goto('/care/today');
+    const reassignedVisitCard = caregiverPage.getByRole('listitem').filter({
+      has: caregiverPage.getByRole('link', { name: `Agreement E2E ${runId}` }),
+    });
+    await expect(reassignedVisitCard).toContainText('Not started');
+    await expect(reassignedVisitCard.getByRole('link', { name: 'Start visit' })).toBeVisible();
+    await moveEmployeeUserLink(
+      page,
+      replacementEmployeeId,
+      caregiverEmployeeId,
+      caregiverName,
+      caregiverEmail,
+    );
+    await page.goto(`/visits/${executionVisitId}`);
+
     await selectEntity(page, 'Assign employee', runId, new RegExp(`^E2E ${runId}$`));
     await page.getByRole('button', { name: 'Assign', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/visits/${executionVisitId}\\?updated=assigned$`));
@@ -2063,7 +2085,7 @@ test('Authentik users can be invited and administered from the office UI', async
         .getByRole('listitem')
         .filter({ has: page.getByText(`E2E ${runId}`, { exact: true }) }),
     ).toBeVisible();
-    await caregiverPage.reload();
+    await caregiverPage.goto(`/care/visits/${executionVisitId}`);
     await expect(caregiverPage.getByRole('button', { name: 'Start visit' })).toBeVisible();
     await caregiverPage.getByRole('button', { name: 'Start visit' }).tap();
     await expect(caregiverPage.getByText('In progress', { exact: true })).toBeVisible();
@@ -4287,6 +4309,31 @@ async function selectEntity(
     await search.press('ArrowDown');
   }
   throw new Error(`Could not navigate to the ${String(optionName)} option`);
+}
+
+async function moveEmployeeUserLink(
+  page: Page,
+  fromEmployeeId: string,
+  toEmployeeId: string,
+  userName: string,
+  userEmail: string,
+): Promise<void> {
+  await page.goto(`/employees/${fromEmployeeId}`);
+  await page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Unlink user' }).click();
+  await expect(page).toHaveURL(new RegExp(`/employees/${fromEmployeeId}\\?updated=access$`));
+
+  await page.goto(`/employees/${toEmployeeId}`);
+  await page.getByRole('combobox', { name: 'Link an active user' }).click();
+  await page.getByRole('combobox', { name: 'Search by name' }).fill(userName);
+  const linkableAccount = page
+    .getByRole('dialog')
+    .getByRole('option', { name: new RegExp(`${userName}.*${userEmail}`) });
+  await expect(linkableAccount).toBeVisible();
+  await linkableAccount.click();
+  await page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Link user' }).click();
+  await expect(page).toHaveURL(new RegExp(`/employees/${toEmployeeId}\\?updated=access$`));
 }
 
 async function captureReviewScreenshot(

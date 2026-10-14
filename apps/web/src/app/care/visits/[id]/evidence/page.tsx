@@ -12,6 +12,7 @@ import { prepareEvidencePackageAction } from '@app/web/app/care/actions';
 import { CareForm } from '@app/web/app/care/care-form';
 import { EvidenceAcknowledgementForm } from './evidence-acknowledgement-form';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { CaregiverRetryButton } from '@app/web/components/caregiver-retry-button';
 
 type EvidencePackage = components['schemas']['EvidencePackageResponseDto'];
 
@@ -75,13 +76,19 @@ export default async function CareEvidencePage({
       ) : null}
 
       {documentationUnavailable ? (
-        <section className="grid gap-2 rounded-lg border bg-card p-4">
-          <h2 className="text-lg font-semibold">{t('CareDocumentation.visit.unavailable')}</h2>
-          {documentationResult.error ? (
-            <p className="text-sm text-muted-foreground">
-              {t(errorMessageKey(documentationResult.error.code))}
-            </p>
-          ) : null}
+        <section className="grid gap-3 rounded-lg border bg-card p-4">
+          <div className="grid gap-2">
+            <h2 className="text-lg font-semibold">{t('CareDocumentation.visit.unavailable')}</h2>
+            {documentationResult.error ? (
+              <p className="text-sm text-muted-foreground">
+                {t(errorMessageKey(documentationResult.error.code))}
+              </p>
+            ) : null}
+          </div>
+          <CaregiverRetryButton
+            label={t('Caregiver.retry')}
+            pendingLabel={t('Caregiver.retrying')}
+          />
         </section>
       ) : !documentation ? (
         <section className="grid gap-2 rounded-lg border bg-card p-4">
@@ -180,12 +187,16 @@ export default async function CareEvidencePage({
       ) : null}
 
       {finalized && packageUnavailable ? (
-        <p
+        <section
           role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
         >
-          {t('ServiceEvidence.care.loadFailed')}
-        </p>
+          <p>{t('ServiceEvidence.care.loadFailed')}</p>
+          <CaregiverRetryButton
+            label={t('Caregiver.retry')}
+            pendingLabel={t('Caregiver.retrying')}
+          />
+        </section>
       ) : null}
     </div>
   );
