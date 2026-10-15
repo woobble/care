@@ -30,7 +30,7 @@ const outcomes = [
   'other',
 ] as const;
 
-export async function createCommunicationAction(formData: FormData): Promise<void> {
+export async function createCommunicationAction(formData: FormData): Promise<void | string> {
   const clientId = validUuid(formData.get('clientId'));
   const direction = choice(formData.get('direction'), directions);
   const channel = choice(formData.get('channel'), channels);
@@ -63,7 +63,7 @@ export async function createCommunicationAction(formData: FormData): Promise<voi
           sourceType,
         )))
   )
-    redirect(clientPath(clientId, 'COMMUNICATION_INVALID_INPUT'));
+    return 'COMMUNICATION_INVALID_INPUT';
 
   const api = await getApiClient();
   const { error } = await api.POST('/api/v1/communications/clients/{clientId}/interactions', {
@@ -94,7 +94,7 @@ export async function createCommunicationAction(formData: FormData): Promise<voi
         : {}),
     },
   });
-  if (error) redirect(clientPath(clientId, error.code));
+  if (error) return error.code;
   refreshClient(clientId);
   redirect(clientPath(clientId, 'recorded'));
 }

@@ -64,6 +64,8 @@ import type {
   ClientContactInputDto,
   ClientContactPatchDto,
   ClientContactResponseDto,
+  ClientContactSearchOptionDto,
+  ClientContactSearchResponseDto,
   ClientInsuranceInputDto,
   ClientInsurancePatchDto,
   ClientInsuranceResponseDto,
@@ -340,6 +342,8 @@ export type components = {
     ClientContactInputDto: ClientContactInputDto;
     ClientContactPatchDto: ClientContactPatchDto;
     ClientContactResponseDto: ClientContactResponseDto;
+    ClientContactSearchOptionDto: ClientContactSearchOptionDto;
+    ClientContactSearchResponseDto: ClientContactSearchResponseDto;
     ClientInsuranceInputDto: ClientInsuranceInputDto;
     ClientInsurancePatchDto: ClientInsurancePatchDto;
     ClientInsuranceResponseDto: ClientInsuranceResponseDto;

@@ -12,6 +12,8 @@ const careApiRoutes = {
   structureFacilitiesSearch: () => '/api/v1/facilities/search',
   structureTeamsSearch: () => '/api/v1/teams/search',
   clients: () => '/api/v1/clients',
+  clientContactsSearch: (clientId: string) =>
+    `/api/v1/clients/${encodePathSegment(clientId)}/contacts/search`,
   employeeUsersSearch: (employeeId: string) =>
     `/api/v1/employees/${encodePathSegment(employeeId)}/linkable-users/search`,
   qualificationsSearch: () => '/api/v1/qualifications/search',

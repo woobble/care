@@ -72,6 +72,7 @@ const clientDocumentTypes = [
 type ClientDocumentType = (typeof clientDocumentTypes)[number];
 type ClientDocument = {
   id: string;
+  title?: string | null;
   documentType: ClientDocumentType;
   status: 'pending' | 'ready' | 'failed' | 'superseded';
   locale: 'de' | 'en';
@@ -1890,18 +1891,26 @@ async function ClientDocumentsSection({
             >
               <div>
                 <h3 className="font-medium">
-                  {t(`Documents.documentTypes.${document.documentType}`)}
+                  {document.title || t(`Documents.documentTypes.${document.documentType}`)}
                 </h3>
+                <p className="text-sm text-muted-foreground">
+                  {t(`Documents.documentTypes.${document.documentType}`)}
+                </p>
                 <p className="text-sm text-muted-foreground">
                   {formatDateTime(document.generatedAt ?? document.createdAt, locale)} ·{' '}
                   {t(`Documents.status.${document.status}`)} · {document.locale.toUpperCase()}
                 </p>
               </div>
-              {document.status === 'ready' ? (
+              <div className="flex flex-wrap gap-2">
                 <Button asChild variant="secondary">
-                  <Link href={`/documents/${document.id}/pdf`}>{t('Documents.download')}</Link>
+                  <Link href={`/documents/${document.id}`}>{t('Documents.workspace.open')}</Link>
                 </Button>
-              ) : null}
+                {document.status === 'ready' || document.status === 'superseded' ? (
+                  <Button asChild>
+                    <Link href={`/documents/${document.id}/pdf`}>{t('Documents.download')}</Link>
+                  </Button>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

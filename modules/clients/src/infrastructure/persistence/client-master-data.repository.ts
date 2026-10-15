@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 import type { DatabaseTransaction } from '@care/database';
 import { auditEntries } from '@care/audit';
 import {
@@ -146,6 +146,64 @@ export class ClientMasterDataRepository {
       byContact.set(role.contactId, current);
     }
     return rows.map((row) => toContact(row, byContact.get(row.id) ?? []));
+  }
+
+  async searchContacts(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    clientId: string,
+    search: string,
+    page: number,
+    pageSize: number,
+  ) {
+    const pattern = `%${search.replace(/[\\%_]/g, '\\$&')}%`;
+    const conditions = and(
+      eq(clientContacts.tenantId, tenantId),
+      eq(clientContacts.clientId, clientId),
+      or(
+        ilike(clientContacts.firstName, pattern),
+        ilike(clientContacts.lastName, pattern),
+        ilike(sql`concat(${clientContacts.firstName}, ' ', ${clientContacts.lastName})`, pattern),
+      ),
+    );
+    const rows = await transaction
+      .select()
+      .from(clientContacts)
+      .where(conditions)
+      .orderBy(asc(clientContacts.lastName), asc(clientContacts.firstName), asc(clientContacts.id))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    const [count] = await transaction
+      .select({ value: sql<number>`count(*)::int` })
+      .from(clientContacts)
+      .where(conditions);
+    if (rows.length === 0) return { items: [], page, pageSize, total: count?.value ?? 0 };
+
+    const roles = await transaction
+      .select()
+      .from(clientContactRoles)
+      .where(
+        and(
+          eq(clientContactRoles.tenantId, tenantId),
+          eq(clientContactRoles.clientId, clientId),
+          inArray(
+            clientContactRoles.contactId,
+            rows.map((row) => row.id),
+          ),
+        ),
+      );
+    const byContact = new Map<string, ClientContactRole[]>();
+    for (const role of roles) {
+      const current = byContact.get(role.contactId) ?? [];
+      current.push(role.role);
+      byContact.set(role.contactId, current);
+    }
+    return {
+      items: rows.map((row) => toContact(row, byContact.get(row.id) ?? [])),
+      page,
+      pageSize,
+      total: count?.value ?? 0,
+    };
   }
 
   async findContact(

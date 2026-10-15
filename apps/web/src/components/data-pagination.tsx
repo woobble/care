@@ -25,6 +25,7 @@ type DataPaginationBaseProps = Readonly<{
   pageParam?: string;
   pageSizeParam?: string;
   controlId?: string;
+  stacked?: boolean;
 }>;
 
 type DataPaginationProps = DataPaginationBaseProps &
@@ -45,6 +46,7 @@ export async function DataPagination({
   pageParam = 'page',
   pageSizeParam = 'pageSize',
   controlId = 'page-size',
+  stacked = false,
 }: DataPaginationProps) {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const safePageSize = Math.max(1, Math.min(100, pageSize));
@@ -67,7 +69,11 @@ export async function DataPagination({
   };
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border bg-card px-3 py-3 xl:flex-row xl:items-center xl:justify-between">
+    <div
+      className={`flex min-w-0 flex-col gap-3 rounded-lg border bg-card px-3 py-3 ${
+        stacked ? '' : 'xl:flex-row xl:items-center xl:justify-between'
+      }`}
+    >
       {totalItems === undefined ? (
         <p className="text-sm text-muted-foreground" aria-live="polite">
           {summaryLabel}
@@ -81,8 +87,12 @@ export async function DataPagination({
           })}
         </p>
       )}
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-end">
-        <form method="get" action={pathname} className="flex items-center gap-2">
+      <div
+        className={`flex min-w-0 flex-col gap-3 ${
+          stacked ? '' : 'xl:flex-row xl:items-center xl:justify-end'
+        }`}
+      >
+        <form method="get" action={pathname} className="flex flex-wrap items-center gap-2">
           {Object.entries(filters).map(([key, value]) =>
             value === undefined ||
             value === '' ||
@@ -114,9 +124,9 @@ export async function DataPagination({
         </form>
         <Pagination
           aria-label={t('Common.fields.pagination')}
-          className="mx-0 w-auto justify-start xl:justify-end"
+          className={`mx-0 w-auto justify-start ${stacked ? '' : 'xl:justify-end'}`}
         >
-          <PaginationContent className="gap-1">
+          <PaginationContent className="max-w-full flex-wrap gap-1">
             <PaginationItem>
               {currentPage === 1 ? (
                 <Button
@@ -146,12 +156,14 @@ export async function DataPagination({
                   aria-label={t('Common.actions.previous')}
                 >
                   <ChevronLeft aria-hidden="true" />
-                  <span className="hidden sm:inline">{t('Common.actions.previous')}</span>
+                  <span className="hidden sm:inline">
+                    {stacked ? '' : t('Common.actions.previous')}
+                  </span>
                 </Button>
               ) : (
                 <PaginationPrevious
                   href={hrefForPage(currentPage - 1)}
-                  text={t('Common.actions.previous')}
+                  text={stacked ? '' : t('Common.actions.previous')}
                 />
               )}
             </PaginationItem>
@@ -184,13 +196,15 @@ export async function DataPagination({
                   disabled
                   aria-label={t('Common.actions.next')}
                 >
-                  <span className="hidden sm:inline">{t('Common.actions.next')}</span>
+                  <span className="hidden sm:inline">
+                    {stacked ? '' : t('Common.actions.next')}
+                  </span>
                   <ChevronRight aria-hidden="true" />
                 </Button>
               ) : (
                 <PaginationNext
                   href={hrefForPage(currentPage + 1)}
-                  text={t('Common.actions.next')}
+                  text={stacked ? '' : t('Common.actions.next')}
                 />
               )}
             </PaginationItem>

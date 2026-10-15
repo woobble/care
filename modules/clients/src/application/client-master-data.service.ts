@@ -251,6 +251,24 @@ export class ClientMasterDataApplicationService {
     });
   }
 
+  async searchContacts(
+    principal: AuthorizationPrincipal,
+    clientId: string,
+    input: { search: string; page: number; pageSize: number },
+  ) {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      await this.requireClient(transaction, principal, clientId, 'client.read');
+      return this.masterData.searchContacts(
+        transaction,
+        principal.tenantId,
+        clientId,
+        input.search,
+        input.page,
+        input.pageSize,
+      );
+    });
+  }
+
   async addContact(
     principal: AuthorizationPrincipal,
     clientId: string,

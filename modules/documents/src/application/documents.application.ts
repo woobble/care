@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
-import type { SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import type { SQL, SQLWrapper } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
@@ -8,6 +8,7 @@ import type { UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
 import { PDFDocument } from 'pdf-lib';
 import { assertCan, can } from '@care/permissions';
+import { clientRecords, displayClientName } from '@care/clients';
 import type { AuthorizationPrincipal, Permission, ResourceContext } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
 import type { ObjectStorage } from '@care/storage';
@@ -25,6 +26,7 @@ import {
 } from '@module/documents/domain/documents';
 import type {
   DocumentArtifactView,
+  DocumentArtifactStatus,
   DocumentGenerationInput,
   DocumentPayload,
   DocumentTemplateConfig,
@@ -63,6 +65,14 @@ export interface DocumentArtifactFilters {
   organizationId?: string;
   facilityId?: string;
   documentType?: DocumentType;
+  status?: DocumentArtifactStatus;
+  from?: string;
+  until?: string;
+  search?: string;
+  sourceEntityType?: string;
+  sourceEntityId?: string;
+  sort?: 'createdAt' | 'name' | 'type' | 'status';
+  order?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
 }
@@ -399,16 +409,16 @@ export class DocumentsApplicationService {
     const artifact = await this.reserveArtifact(principal, input, artifactId);
     if (artifact.status === 'ready' || artifact.status === 'superseded')
       return artifactView(artifact);
-    const configured = await this.renderingConfiguration(
-      principal.tenantId,
-      input.organizationId,
-      input.documentType,
-      artifact.templateVersion,
-    );
-    const payload: DocumentPayload = { ...input.payload, locale: artifact.locale };
     const objectKey = `documents/artifacts/${principal.tenantId}/${input.organizationId}/${artifact.id}.pdf`;
     let stored = false;
     try {
+      const configured = await this.renderingConfiguration(
+        principal.tenantId,
+        input.organizationId,
+        input.documentType,
+        artifact.templateVersion,
+      );
+      const payload: DocumentPayload = { ...input.payload, locale: artifact.locale };
       const bytes = await renderDocumentPdf(payload, configured.branding);
       if (bytes.byteLength === 0 || bytes.byteLength > MAX_PDF_BYTES) {
         throw new DocumentGenerationFailedError();
@@ -416,6 +426,14 @@ export class DocumentsApplicationService {
       const sha256 = createHash('sha256').update(bytes).digest('hex');
       await this.storage.put({ key: objectKey, body: bytes, contentType: 'application/pdf' });
       stored = true;
+      const storedBytes = await this.storage.get(objectKey);
+      if (
+        !storedBytes ||
+        storedBytes.byteLength !== bytes.byteLength ||
+        createHash('sha256').update(storedBytes).digest('hex') !== sha256
+      ) {
+        throw new DocumentGenerationFailedError();
+      }
       const updated = await this.finishArtifact(
         principal,
         artifact,
@@ -472,17 +490,21 @@ export class DocumentsApplicationService {
       page < 1 ||
       !Number.isInteger(pageSize) ||
       pageSize < 1 ||
-      pageSize > 100 ||
-      (!filters.clientId && !filters.organizationId)
+      pageSize > 100
     ) {
       throw new DocumentAccessDeniedError();
     }
-    this.requireScopedGrant(principal, 'documents.read', {
+    const selectedScope = {
       tenantId: principal.tenantId,
       ...(filters.organizationId ? { organizationId: filters.organizationId } : {}),
       ...(filters.clientId ? { clientId: filters.clientId } : {}),
       ...(filters.facilityId ? { facilityId: filters.facilityId } : {}),
-    });
+    };
+    if (filters.organizationId || filters.clientId || filters.facilityId) {
+      this.requireScopedGrant(principal, 'documents.read', selectedScope);
+    } else if (!principal.grants.some((grant) => grant.permission === 'documents.read')) {
+      throw new DocumentAccessDeniedError();
+    }
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const conditions = [eq(documentArtifacts.tenantId, principal.tenantId)];
       if (filters.clientId) conditions.push(eq(documentArtifacts.clientId, filters.clientId));
@@ -491,39 +513,152 @@ export class DocumentsApplicationService {
       if (filters.facilityId) conditions.push(eq(documentArtifacts.facilityId, filters.facilityId));
       if (filters.documentType)
         conditions.push(eq(documentArtifacts.documentType, filters.documentType));
-      const listableTypes: DocumentType[] = principal.roles?.includes('Caregiver')
-        ? []
-        : ['service_evidence', 'service_agreement', 'benefit_overview'];
-      const permittedTypes = listableTypes.filter(
-        (type) => !filters.documentType || type === filters.documentType,
-      );
+      if (filters.status) conditions.push(eq(documentArtifacts.status, filters.status));
+      if (filters.from)
+        conditions.push(
+          gte(documentArtifacts.createdAt, new Date(`${filters.from}T00:00:00.000Z`)),
+        );
+      if (filters.until) {
+        const untilExclusive = new Date(`${filters.until}T00:00:00.000Z`);
+        untilExclusive.setUTCDate(untilExclusive.getUTCDate() + 1);
+        conditions.push(lt(documentArtifacts.createdAt, untilExclusive));
+      }
+      if (filters.sourceEntityType)
+        conditions.push(eq(documentArtifacts.sourceEntityType, filters.sourceEntityType));
+      if (filters.sourceEntityId)
+        conditions.push(eq(documentArtifacts.sourceEntityId, filters.sourceEntityId));
+      if (filters.search?.trim()) {
+        const pattern = `%${escapeLike(filters.search.trim())}%`;
+        conditions.push(
+          or(
+            ilike(documentArtifacts.title, pattern),
+            ilike(documentArtifacts.sourceReference, pattern),
+            ilike(documentArtifacts.documentType, pattern),
+            ilike(documentArtifacts.sourceEntityType, pattern),
+            ilike(clientRecords.firstName, pattern),
+            ilike(clientRecords.preferredName, pattern),
+            ilike(clientRecords.lastName, pattern),
+            ilike(
+              sql`concat(coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}), ' ', ${clientRecords.lastName})`,
+              pattern,
+            ),
+          )!,
+        );
+      }
+      const supportedTypes: DocumentType[] = [
+        'service_evidence',
+        'service_agreement',
+        'invoice',
+        'invoice_correction',
+        'benefit_overview',
+        'claim_summary',
+      ];
+      const permittedTypes = (principal.roles?.includes('Caregiver') ? [] : supportedTypes)
+        .filter((type) => !filters.documentType || type === filters.documentType)
+        .filter((type) =>
+          principal.grants.some((grant) => grant.permission === sourceReadPermission(type)),
+        );
+      const documentsScope = documentArtifactPermissionScope(principal, 'documents.read');
+      const clientScope = documentArtifactPermissionScope(principal, 'client.read');
       conditions.push(
         permittedTypes.length
           ? or(
               ...permittedTypes.map((type) =>
                 and(
                   eq(documentArtifacts.documentType, type),
+                  documentsScope,
                   documentArtifactPermissionScope(principal, sourceReadPermission(type)),
                   ...(type === 'service_agreement'
-                    ? [documentArtifactPermissionScope(principal, 'client.read')]
+                    ? [or(isNull(documentArtifacts.clientId), clientScope)!]
                     : []),
                 ),
               ),
             )!
           : sql`false`,
       );
+      const order = filters.order ?? 'desc';
+      const direction = (expression: SQLWrapper) =>
+        order === 'asc' ? asc(expression) : desc(expression);
+      const orderBy =
+        filters.sort === 'type'
+          ? [
+              direction(documentArtifacts.documentType),
+              desc(documentArtifacts.createdAt),
+              desc(documentArtifacts.id),
+            ]
+          : filters.sort === 'status'
+            ? [
+                direction(documentArtifacts.status),
+                desc(documentArtifacts.createdAt),
+                desc(documentArtifacts.id),
+              ]
+            : filters.sort === 'name'
+              ? [
+                  direction(
+                    sql`coalesce(${documentArtifacts.title}, ${documentArtifacts.documentType})`,
+                  ),
+                  desc(documentArtifacts.createdAt),
+                  desc(documentArtifacts.id),
+                ]
+              : [direction(documentArtifacts.createdAt), direction(documentArtifacts.id)];
       const rows = await transaction
-        .select()
+        .select({
+          artifact: documentArtifacts,
+          clientFirstName: clientRecords.firstName,
+          clientPreferredName: clientRecords.preferredName,
+          clientLastName: clientRecords.lastName,
+        })
         .from(documentArtifacts)
+        .leftJoin(
+          clientRecords,
+          and(
+            eq(clientRecords.tenantId, documentArtifacts.tenantId),
+            eq(clientRecords.id, documentArtifacts.clientId),
+          ),
+        )
         .where(and(...conditions))
-        .orderBy(desc(documentArtifacts.createdAt), desc(documentArtifacts.id))
+        .orderBy(...orderBy)
         .limit(pageSize)
         .offset((page - 1) * pageSize);
       const [count] = await transaction
         .select({ value: sql<number>`count(*)::int` })
         .from(documentArtifacts)
+        .leftJoin(
+          clientRecords,
+          and(
+            eq(clientRecords.tenantId, documentArtifacts.tenantId),
+            eq(clientRecords.id, documentArtifacts.clientId),
+          ),
+        )
         .where(and(...conditions));
-      return { items: rows.map(artifactView), page, pageSize, total: count?.value ?? 0 };
+      return {
+        items: rows.map((row) =>
+          artifactView(
+            row.artifact,
+            row.artifact.clientId &&
+              can(principal, {
+                action: 'client.read',
+                resource: {
+                  tenantId: principal.tenantId,
+                  organizationId: row.artifact.organizationId,
+                  ...(row.artifact.facilityId ? { facilityId: row.artifact.facilityId } : {}),
+                  clientId: row.artifact.clientId,
+                },
+              }) &&
+              row.clientFirstName &&
+              row.clientLastName
+              ? displayClientName({
+                  firstName: row.clientFirstName,
+                  preferredName: row.clientPreferredName,
+                  lastName: row.clientLastName,
+                })
+              : null,
+          ),
+        ),
+        page,
+        pageSize,
+        total: count?.value ?? 0,
+      };
     });
   }
 
@@ -533,8 +668,20 @@ export class DocumentsApplicationService {
   ): Promise<DocumentArtifactView> {
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const [row] = await transaction
-        .select()
+        .select({
+          artifact: documentArtifacts,
+          clientFirstName: clientRecords.firstName,
+          clientPreferredName: clientRecords.preferredName,
+          clientLastName: clientRecords.lastName,
+        })
         .from(documentArtifacts)
+        .leftJoin(
+          clientRecords,
+          and(
+            eq(clientRecords.tenantId, documentArtifacts.tenantId),
+            eq(clientRecords.id, documentArtifacts.clientId),
+          ),
+        )
         .where(
           and(
             eq(documentArtifacts.tenantId, principal.tenantId),
@@ -543,19 +690,40 @@ export class DocumentsApplicationService {
         )
         .limit(1);
       if (!row) throw new DocumentArtifactNotFoundError();
+      const artifact = row.artifact;
       this.requireScopedGrant(principal, 'documents.read', {
         tenantId: principal.tenantId,
-        organizationId: row.organizationId,
-        ...(row.clientId ? { clientId: row.clientId } : {}),
-        ...(row.facilityId ? { facilityId: row.facilityId } : {}),
+        organizationId: artifact.organizationId,
+        ...(artifact.clientId ? { clientId: artifact.clientId } : {}),
+        ...(artifact.facilityId ? { facilityId: artifact.facilityId } : {}),
       });
-      this.requireScopedGrant(principal, sourceReadPermission(row.documentType), {
+      this.requireScopedGrant(principal, sourceReadPermission(artifact.documentType), {
         tenantId: principal.tenantId,
-        organizationId: row.organizationId,
-        ...(row.clientId ? { clientId: row.clientId } : {}),
-        ...(row.facilityId ? { facilityId: row.facilityId } : {}),
+        organizationId: artifact.organizationId,
+        ...(artifact.clientId ? { clientId: artifact.clientId } : {}),
+        ...(artifact.facilityId ? { facilityId: artifact.facilityId } : {}),
       });
-      return artifactView(row);
+      const canReadClientName = artifact.clientId
+        ? can(principal, {
+            action: 'client.read',
+            resource: {
+              tenantId: principal.tenantId,
+              organizationId: artifact.organizationId,
+              ...(artifact.facilityId ? { facilityId: artifact.facilityId } : {}),
+              clientId: artifact.clientId,
+            },
+          })
+        : false;
+      return artifactView(
+        artifact,
+        canReadClientName && row.clientFirstName && row.clientLastName
+          ? displayClientName({
+              firstName: row.clientFirstName,
+              preferredName: row.clientPreferredName,
+              lastName: row.clientLastName,
+            })
+          : null,
+      );
     });
   }
 
@@ -620,7 +788,7 @@ export class DocumentsApplicationService {
       );
     });
     return {
-      fileName: `${full.documentType}-${full.id}.pdf`,
+      fileName: documentFileName(full.title, full.documentType, full.generatedAt),
       bytes,
     };
   }
@@ -721,6 +889,8 @@ export class DocumentsApplicationService {
           organizationId: input.organizationId,
           facilityId: input.facilityId,
           clientId: input.clientId,
+          title: input.payload.title.trim() || null,
+          sourceReference: cleanText(input.sourceReference)?.slice(0, 160) ?? null,
           documentType: input.documentType,
           sourceEntityType: input.sourceEntityType,
           sourceEntityId: input.sourceEntityId,
@@ -1020,9 +1190,15 @@ function templateView(row: typeof documentTemplates.$inferSelect): DocumentTempl
   };
 }
 
-function artifactView(row: typeof documentArtifacts.$inferSelect): DocumentArtifactView {
+function artifactView(
+  row: typeof documentArtifacts.$inferSelect,
+  clientName: string | null = null,
+): DocumentArtifactView {
   return {
     id: row.id,
+    title: row.title,
+    sourceReference: row.sourceReference,
+    clientName,
     clientId: row.clientId,
     organizationId: row.organizationId,
     facilityId: row.facilityId,
@@ -1042,12 +1218,35 @@ function artifactView(row: typeof documentArtifacts.$inferSelect): DocumentArtif
   };
 }
 
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
+function documentFileName(
+  title: string | null,
+  documentType: DocumentType,
+  generatedAt: Date | null,
+): string {
+  const slug = (title || documentType)
+    .normalize('NFKD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80);
+  const date = generatedAt?.toISOString().slice(0, 10).replaceAll('-', '') ?? '';
+  return `${slug || 'document'}${date ? `-${date}` : ''}.pdf`;
+}
+
 function validateGenerationInput(input: DocumentGenerationInput): void {
   if (
     !isUuid(input.idempotencyKey) ||
     !isUuid(input.organizationId) ||
     (input.facilityId !== null && !isUuid(input.facilityId)) ||
     (input.clientId !== null && !isUuid(input.clientId)) ||
+    (input.sourceReference !== undefined &&
+      input.sourceReference !== null &&
+      input.sourceReference.length > 160) ||
     !isUuid(input.sourceEntityId) ||
     !input.sourceEntityType.trim() ||
     input.sourceEntityType.length > 80 ||

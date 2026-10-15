@@ -51,6 +51,7 @@ async function OfficeWorkspaceLayout({
     claims: t('claims'),
     documentation: t('documentation'),
     serviceEvidence: t('serviceEvidence'),
+    documents: t('documents'),
     communications: t('communications'),
     administration: t('administration'),
   };
@@ -98,6 +99,12 @@ async function OfficeWorkspaceLayout({
       id: 'management',
       key: 'management',
       items: [
+        {
+          id: 'documents',
+          key: 'documents',
+          href: '/documents',
+          permission: 'documents.read',
+        },
         {
           id: 'communications',
           key: 'communications',

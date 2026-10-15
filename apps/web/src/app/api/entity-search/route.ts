@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getTranslations } from 'next-intl/server';
 import { fetchCareApi } from '@app/web/lib/api';
 import type { CareApiRequest } from '@app/web/lib/api-routes';
 import type { EntityOption, SearchableEntity } from '@app/web/components/async-entity-combobox';
@@ -11,6 +12,14 @@ type EntityRecord = {
   displayName?: string | null;
   email?: string | null;
   lastName?: string;
+  relationshipType?:
+    | 'daughter'
+    | 'son'
+    | 'spouse'
+    | 'relative'
+    | 'legal_representative'
+    | 'guardian'
+    | 'other';
   name?: string;
   legalName?: string | null;
   code?: string | null;
@@ -58,6 +67,15 @@ export async function GET(request: Request) {
     search.set('pageSize', '20');
   } else if (entity === 'qualifications' || entity === 'skills') {
     search.set('pageSize', '20');
+  } else if (entity === 'client-contacts') {
+    const clientId = url.searchParams.get('clientId');
+    if (
+      !clientId ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientId)
+    ) {
+      return NextResponse.json({ items: [] satisfies EntityOption[] });
+    }
+    search.set('pageSize', '20');
   } else if (entity === 'organizations' || entity === 'facilities' || entity === 'teams') {
     search.set('status', 'active');
     const organizationId = url.searchParams.get('organizationId');
@@ -94,7 +112,8 @@ export async function GET(request: Request) {
   }
 
   const employeeId = url.searchParams.get('employeeId');
-  const apiRequest = getEntitySearchRequest(entity, employeeId, search);
+  const clientId = url.searchParams.get('clientId');
+  const apiRequest = getEntitySearchRequest(entity, employeeId, clientId, search);
   const response = await fetchCareApi(apiRequest);
   if (!response.ok) {
     return NextResponse.json({ error: 'Entity search failed' }, { status: response.status });
@@ -107,10 +126,18 @@ export async function GET(request: Request) {
     pageSize?: number;
     total?: number;
   };
+  const communications =
+    entity === 'client-contacts' ? await getTranslations('Communications') : undefined;
   const items = (payload.items ?? []).flatMap((record) => {
     const id = entity === 'employee-users' ? (record.userId ?? record.id) : record.id;
     if (!id) return [];
-    const label = getEntityLabel(entity, record);
+    const label = getEntityLabel(
+      entity,
+      record,
+      communications
+        ? (relationshipType) => communications(`contactRelationships.${relationshipType}`)
+        : undefined,
+    );
     return label
       ? [
           {
@@ -127,13 +154,16 @@ export async function GET(request: Request) {
     ...(canBrowseWithoutQuery ||
     entity === 'employee-users' ||
     entity === 'qualifications' ||
-    entity === 'skills'
+    entity === 'skills' ||
+    entity === 'client-contacts'
       ? {
           page: payload.page ?? page,
           hasMore:
             entity === 'employee-users' || entity === 'qualifications' || entity === 'skills'
               ? (payload.page ?? page) * (payload.pageSize ?? 20) < (payload.total ?? 0)
-              : (payload.page ?? page) < (payload.totalPages ?? 0),
+              : entity === 'client-contacts'
+                ? (payload.page ?? page) * (payload.pageSize ?? 20) < (payload.total ?? 0)
+                : (payload.page ?? page) < (payload.totalPages ?? 0),
         }
       : {}),
   });
@@ -151,13 +181,15 @@ function isSearchableEntity(value: string | null): value is SearchableEntity {
     value === 'facilities' ||
     value === 'teams' ||
     value === 'payers' ||
-    value === 'receivables'
+    value === 'receivables' ||
+    value === 'client-contacts'
   );
 }
 
 function getEntitySearchRequest(
   entity: SearchableEntity,
   employeeId: string | null,
+  clientId: string | null,
   query: URLSearchParams,
 ): CareApiRequest {
   const init = { method: 'GET', cache: 'no-store' as const };
@@ -169,6 +201,9 @@ function getEntitySearchRequest(
     case 'employee-users':
       if (!employeeId) throw new Error('Employee ID is required for employee-user search.');
       return { route: 'employeeUsersSearch', pathParams: [employeeId], query, init };
+    case 'client-contacts':
+      if (!clientId) throw new Error('Client ID is required for client-contact search.');
+      return { route: 'clientContactsSearch', pathParams: [clientId], query, init };
     case 'qualifications':
       return { route: 'qualificationsSearch', query, init };
     case 'skills':
@@ -188,7 +223,13 @@ function getEntitySearchRequest(
   }
 }
 
-function getEntityLabel(entity: SearchableEntity, record: EntityRecord): string | undefined {
+function getEntityLabel(
+  entity: SearchableEntity,
+  record: EntityRecord,
+  translateRelationship?: (
+    relationshipType: NonNullable<EntityRecord['relationshipType']>,
+  ) => string,
+): string | undefined {
   if (entity === 'employee-users') {
     return [record.displayName, record.email].filter(Boolean).join(' · ') || undefined;
   }
@@ -198,6 +239,13 @@ function getEntityLabel(entity: SearchableEntity, record: EntityRecord): string 
   if (entity === 'clients' || entity === 'employees') {
     if (!record.firstName || !record.lastName) return undefined;
     return `${record.preferredName || record.firstName} ${record.lastName}`.trim();
+  }
+  if (entity === 'client-contacts') {
+    if (!record.firstName || !record.lastName) return undefined;
+    const relationship = record.relationshipType
+      ? translateRelationship?.(record.relationshipType)
+      : undefined;
+    return [record.firstName, record.lastName, relationship].filter(Boolean).join(' · ');
   }
   if (entity === 'organizations') return record.name ?? record.legalName ?? undefined;
   if (entity === 'facilities') {

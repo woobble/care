@@ -124,6 +124,8 @@ export const documentArtifacts = documents.table(
     organizationId: uuid('organization_id').notNull(),
     facilityId: uuid('facility_id'),
     clientId: uuid('client_id'),
+    title: text('title'),
+    sourceReference: text('source_reference'),
     documentType: text('document_type').$type<DocumentType>().notNull(),
     sourceEntityType: text('source_entity_type').notNull(),
     sourceEntityId: uuid('source_entity_id').notNull(),
@@ -156,9 +158,20 @@ export const documentArtifacts = documents.table(
       table.documentType,
       table.createdAt,
     ),
+    index('document_artifacts_worklist_idx').on(table.tenantId, table.createdAt, table.id),
+    index('document_artifacts_org_worklist_idx').on(
+      table.tenantId,
+      table.organizationId,
+      table.createdAt,
+      table.id,
+    ),
     check(
       'document_artifacts_source_ck',
       sql`length(trim(${table.sourceEntityType})) BETWEEN 1 AND 80 AND length(trim(${table.sourceVersion})) BETWEEN 1 AND 200`,
+    ),
+    check(
+      'document_artifacts_source_reference_ck',
+      sql`length(coalesce(${table.sourceReference}, '')) <= 160`,
     ),
     check(
       'document_artifacts_type_ck',

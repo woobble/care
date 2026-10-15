@@ -35,13 +35,15 @@ export type SearchableEntity =
   | 'facilities'
   | 'teams'
   | 'payers'
-  | 'receivables';
+  | 'receivables'
+  | 'client-contacts';
 
 export function AsyncEntityCombobox({
   name,
   label,
   entity,
   employeeId,
+  clientId,
   organizationId,
   facilityId,
   initialOption,
@@ -64,6 +66,7 @@ export function AsyncEntityCombobox({
   label: string;
   entity: SearchableEntity;
   employeeId?: string | undefined;
+  clientId?: string | undefined;
   organizationId?: string | undefined;
   facilityId?: string | undefined;
   initialOption?: EntityOption | undefined;
@@ -139,6 +142,7 @@ export function AsyncEntityCombobox({
       const params = new URLSearchParams({ entity, page: '1', pageSize: String(PAGE_SIZE) });
       if (search) params.set('q', search);
       if (employeeId) params.set('employeeId', employeeId);
+      if (clientId) params.set('clientId', clientId);
       if (organizationId) params.set('organizationId', organizationId);
       if (facilityId) params.set('facilityId', facilityId);
       if (validAt) params.set('validAt', validAt);
@@ -181,6 +185,7 @@ export function AsyncEntityCombobox({
     debounceMs,
     entity,
     employeeId,
+    clientId,
     facilityId,
     minQueryLength,
     open,
@@ -215,6 +220,7 @@ export function AsyncEntityCombobox({
     const search = query.trim();
     if (search) params.set('q', search);
     if (employeeId) params.set('employeeId', employeeId);
+    if (clientId) params.set('clientId', clientId);
     if (organizationId) params.set('organizationId', organizationId);
     if (facilityId) params.set('facilityId', facilityId);
     if (validAt) params.set('validAt', validAt);

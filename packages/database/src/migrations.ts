@@ -68,7 +68,7 @@ const migrations = {
   'care-documentation': ['0001_care_documentation.sql'],
   'service-evidence': ['0001_service_evidence.sql'],
   benefits: ['0001_benefits.sql', '0002_bucket_rule_version.sql', '0003_worker_deadline_read.sql'],
-  documents: ['0001_documents.sql', '0002_claim_summary.sql'],
+  documents: ['0001_documents.sql', '0002_claim_summary.sql', '0003_artifact_worklist.sql'],
   billing: [
     '0001_billing.sql',
     '0002_invoice_document_rendering.sql',

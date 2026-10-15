@@ -69,11 +69,19 @@ export const documentListQuerySchema = z
     clientId: uuid.optional(),
     facilityId: uuid.optional(),
     documentType: documentTypeSchema.optional(),
+    status: z.enum(['pending', 'ready', 'failed', 'superseded']).optional(),
+    from: date.optional(),
+    until: date.optional(),
+    search: z.string().trim().min(1).max(120).optional(),
+    sourceEntityType: z.string().trim().min(1).max(80).optional(),
+    sourceEntityId: uuid.optional(),
+    sort: z.enum(['createdAt', 'name', 'type', 'status']).optional(),
+    order: z.enum(['asc', 'desc']).optional(),
     page,
     pageSize,
   })
   .strict()
-  .refine((value) => Boolean(value.organizationId || value.clientId));
+  .refine((value) => !value.from || !value.until || value.from <= value.until);
 
 export const documentTemplateTypeSchema = documentTypeSchema;
 export const documentTemplateQuerySchema = z.object({ organizationId: uuid }).strict();

@@ -44,6 +44,7 @@ const outcomes = [
   'other',
 ] as const;
 const followUpStatuses: FollowUpStatus[] = ['needs_task', 'open', 'overdue', 'completed'];
+const sorts = ['occurredAt', 'client', 'subject', 'channel'] as const;
 
 export default async function CommunicationsPage({
   searchParams,
@@ -63,6 +64,8 @@ export default async function CommunicationsPage({
     followUpStatus?: string;
     page?: string;
     pageSize?: string;
+    sort?: string;
+    order?: string;
   }>;
 }>) {
   const [query, t, common, locale] = await Promise.all([
@@ -129,6 +132,8 @@ export default async function CommunicationsPage({
   const category = categories.find((value) => value === query.category);
   const outcome = outcomes.find((value) => value === query.outcome);
   const followUpStatus = followUpStatuses.find((value) => value === query.followUpStatus);
+  const sort = sorts.find((value) => value === query.sort) ?? 'occurredAt';
+  const order = query.order === 'asc' ? 'asc' : 'desc';
   const employeeId = selectedEmployee?.userId;
   const from = dateBoundary(query.from, false);
   const until = dateBoundary(query.until, true);
@@ -156,6 +161,8 @@ export default async function CommunicationsPage({
         ...(until ? { until } : {}),
         ...(followUpStatus && canReadOperations ? { followUpStatus } : {}),
         ...(search ? { search } : {}),
+        sort,
+        order,
       },
       header,
     },
@@ -185,6 +192,8 @@ export default async function CommunicationsPage({
     until: validDateInput(query.until),
     recordedByUserId: employeeId ?? undefined,
     followUpStatus: canReadOperations ? followUpStatus : undefined,
+    sort,
+    order,
   };
 
   return (
@@ -193,6 +202,13 @@ export default async function CommunicationsPage({
         eyebrow={t('title')}
         title={t('globalTitle')}
         description={t('globalDescription')}
+        actions={
+          hasPermission(permissionGrants, 'communications.create') ? (
+            <Button asChild>
+              <Link href="/communications/new">{t('recordCommunication')}</Link>
+            </Button>
+          ) : null
+        }
       />
 
       {result.error ? (
@@ -207,6 +223,7 @@ export default async function CommunicationsPage({
       <section aria-label={t('globalTitle')} className="grid gap-4 rounded-lg border bg-card p-5">
         <form method="get" className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
           <input type="hidden" name="pageSize" value={pageSize} />
+          <input type="hidden" name="page" value="1" />
           <TextField
             id="communications-search"
             name="q"
@@ -304,6 +321,22 @@ export default async function CommunicationsPage({
               </option>
             ))}
           </SelectField>
+          <SelectField id="communications-sort" name="sort" label={t('sortBy')} defaultValue={sort}>
+            {sorts.map((value) => (
+              <option key={value} value={value}>
+                {t(`sortOptions.${value}`)}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            id="communications-order"
+            name="order"
+            label={t('sortOrder')}
+            defaultValue={order}
+          >
+            <option value="desc">{t('sortOrderOptions.desc')}</option>
+            <option value="asc">{t('sortOrderOptions.asc')}</option>
+          </SelectField>
           {canReadEmployees ? (
             <AsyncEntityCombobox
               name="recordedByUserId"
@@ -357,57 +390,178 @@ export default async function CommunicationsPage({
         </form>
 
         {interactions.length ? (
-          <ul className="grid gap-3">
-            {interactions.map((interaction) => (
-              <li key={interaction.id} className="grid gap-3 rounded-md border p-4">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="grid gap-1">
-                    <h2 className="font-semibold">{interaction.subject}</h2>
-                    <p className="text-sm font-medium">
-                      <ResourceReference
-                        label={interaction.clientName ?? common('Resources.unavailableClient')}
-                        href={
-                          interaction.clientName
-                            ? `/clients/${interaction.clientId}/communications`
-                            : null
-                        }
-                      />
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatDateTime(interaction.occurredAt, locale)} ·{' '}
-                      {t(`channels.${interaction.channel}`)} ·{' '}
-                      {t(`categories.${interaction.category}`)} ·{' '}
-                      {t(`outcomes.${interaction.outcome}`)}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {interaction.contactLabel ?? t('noContact')} · {t('recordedBy')}:{' '}
-                      {interaction.recordedByName ?? common('Resources.unavailableUser')}
-                    </p>
+          <>
+            <div className="hidden overflow-x-auto rounded-md border xl:block">
+              <table className="w-full text-left text-sm">
+                <caption className="sr-only">{t('globalTitle')}</caption>
+                <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-4 py-3">
+                      {t('tableColumns.date')}
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      {t('tableColumns.communication')}
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      {t('tableColumns.client')}
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      {t('tableColumns.channel')}
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      {t('tableColumns.followUp')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {interactions.map((interaction) => (
+                    <tr key={interaction.id} className="align-top">
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {formatDateTime(interaction.occurredAt, locale)}
+                      </td>
+                      <td className="min-w-64 px-4 py-3">
+                        <div className="grid gap-1">
+                          {interaction.clientName ? (
+                            <Link
+                              className="font-medium text-primary underline"
+                              href={`/clients/${interaction.clientId}/communications?interactionId=${interaction.id}`}
+                            >
+                              {interaction.subject}
+                            </Link>
+                          ) : (
+                            <span className="font-medium">{interaction.subject}</span>
+                          )}
+                          {interaction.summary ? (
+                            <span className="line-clamp-2 text-muted-foreground">
+                              {interaction.summary}
+                            </span>
+                          ) : null}
+                          <span className="text-xs text-muted-foreground">
+                            {t(`outcomes.${interaction.outcome}`)} ·{' '}
+                            {interaction.recordedByName ?? common('Resources.unavailableUser')}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <ResourceReference
+                          label={interaction.clientName ?? common('Resources.unavailableClient')}
+                          href={
+                            interaction.clientName
+                              ? `/clients/${interaction.clientId}/communications`
+                              : null
+                          }
+                        />
+                        {interaction.contactLabel ? (
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {interaction.contactLabel}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3">
+                        {t(`channels.${interaction.channel}`)}
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {t(`categories.${interaction.category}`)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {interaction.followUpStatus ? (
+                          <Link
+                            className="text-primary underline"
+                            href={`/clients/${interaction.clientId}/communications?interactionId=${interaction.id}`}
+                          >
+                            {t(`followUpStatuses.${interaction.followUpStatus}`)}
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {t('followUpStatuses.none')}
+                          </span>
+                        )}
+                        {interaction.source ? (
+                          <div className="mt-1">
+                            <Link
+                              className="text-xs text-primary underline"
+                              href={sourceHref(interaction.source, interaction.clientId)}
+                            >
+                              {t('source')}: {t(`sourceTypes.${interaction.source.type}`)}
+                            </Link>
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ul className="grid gap-3 xl:hidden">
+              {interactions.map((interaction) => (
+                <li key={interaction.id} className="grid gap-3 rounded-md border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="grid gap-1">
+                      <h2 className="font-semibold">
+                        {interaction.clientName ? (
+                          <Link
+                            className="text-primary underline"
+                            href={`/clients/${interaction.clientId}/communications?interactionId=${interaction.id}`}
+                          >
+                            {interaction.subject}
+                          </Link>
+                        ) : (
+                          interaction.subject
+                        )}
+                      </h2>
+                      <p className="text-sm font-medium">
+                        <ResourceReference
+                          label={interaction.clientName ?? common('Resources.unavailableClient')}
+                          href={
+                            interaction.clientName
+                              ? `/clients/${interaction.clientId}/communications`
+                              : null
+                          }
+                        />
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatDateTime(interaction.occurredAt, locale)} ·{' '}
+                        {t(`channels.${interaction.channel}`)} ·{' '}
+                        {t(`categories.${interaction.category}`)} ·{' '}
+                        {t(`outcomes.${interaction.outcome}`)}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {interaction.contactLabel ?? t('noContact')} · {t('recordedBy')}:{' '}
+                        {interaction.recordedByName ?? common('Resources.unavailableUser')}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                {interaction.source ? (
-                  <p className="text-sm">
-                    {t('source')}:{' '}
-                    <Link
-                      className="text-primary underline"
-                      href={sourceHref(interaction.source, interaction.clientId)}
-                    >
-                      {t(`sourceTypes.${interaction.source.type}`)}
-                    </Link>
-                  </p>
-                ) : null}
-
-                {interaction.followUpStatus ? (
-                  <div>
-                    <p className="text-sm font-medium">
-                      {t('followUpStatus')}: {t(`followUpStatuses.${interaction.followUpStatus}`)}
+                  {interaction.source ? (
+                    <p className="text-sm">
+                      {t('source')}:{' '}
+                      <Link
+                        className="text-primary underline"
+                        href={sourceHref(interaction.source, interaction.clientId)}
+                      >
+                        {t(`sourceTypes.${interaction.source.type}`)}
+                      </Link>
                     </p>
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+                  ) : null}
+
+                  {interaction.followUpStatus ? (
+                    <div>
+                      <p className="text-sm font-medium">
+                        {t('followUpStatus')}:{' '}
+                        <Link
+                          className="text-primary underline"
+                          href={`/clients/${interaction.clientId}/communications?interactionId=${interaction.id}`}
+                        >
+                          {t(`followUpStatuses.${interaction.followUpStatus}`)} ·{' '}
+                          {t('openInteraction')}
+                        </Link>
+                      </p>
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </>
         ) : (
           <EmptyState title={t('empty')} />
         )}

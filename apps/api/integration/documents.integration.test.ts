@@ -9,6 +9,7 @@ import {
   DocumentAccessDeniedError,
   DocumentArtifactIntegrityError,
   DocumentArtifactNotFoundError,
+  DocumentGenerationFailedError,
   DocumentLogoInvalidError,
   DocumentTemplateVersionConflictError,
 } from '@care/documents';
@@ -50,6 +51,7 @@ describe('documents PostgreSQL integration', () => {
           'documents.read',
           'documents.exports.read',
           'documents.templates.manage',
+          'client.read',
           'billing.read',
           'benefits.read',
           'service_evidence.read',
@@ -66,6 +68,8 @@ describe('documents PostgreSQL integration', () => {
       })),
     };
     const objects = new Map<string, Uint8Array>();
+    let corruptNextReadback = false;
+    let corruptedObjectKey: string | null = null;
     const serviceDate = now.toISOString().slice(0, 10);
     const allocationId = uuidv7();
     const invoice = {
@@ -117,8 +121,13 @@ describe('documents PostgreSQL integration', () => {
     const storage: ObjectStorage = {
       async put({ key, body }) {
         objects.set(key, new Uint8Array(body));
+        if (corruptNextReadback) {
+          corruptNextReadback = false;
+          corruptedObjectKey = key;
+        }
       },
       async get(key) {
+        if (key === corruptedObjectKey) return new Uint8Array([0, 1, 2]);
         return objects.get(key) ?? null;
       },
       async delete(key) {
@@ -149,6 +158,7 @@ describe('documents PostgreSQL integration', () => {
         exportReceivables: async () => [invoice],
         invoiceReferencesForAllocations: async () => new Map([[allocationId, 'CARE-2026-001']]),
       } as never,
+      { getClaim: async () => undefined } as never,
       {} as never,
       {} as never,
       {} as never,
@@ -224,6 +234,7 @@ describe('documents PostgreSQL integration', () => {
         documentType: 'service_evidence' as const,
         sourceEntityType: 'evidence_package',
         sourceEntityId,
+        sourceReference: 'EVIDENCE-APR-2026',
         sourceVersion: 'v1',
         expectedTemplateVersion: 2,
         locale: 'en' as const,
@@ -244,6 +255,8 @@ describe('documents PostgreSQL integration', () => {
       };
       const firstArtifact = await documents.generate(principal, input, request, {});
       expect(firstArtifact).toMatchObject({
+        title: 'Service evidence',
+        sourceReference: 'EVIDENCE-APR-2026',
         status: 'ready',
         documentType: 'service_evidence',
         templateVersion: 2,
@@ -257,6 +270,28 @@ describe('documents PostgreSQL integration', () => {
         (await documents.listArtifacts(principal, { clientId, documentType: 'service_evidence' }))
           .items,
       ).toHaveLength(1);
+      expect(await documents.listArtifacts(principal, {})).toMatchObject({
+        items: [
+          {
+            title: 'Service evidence',
+            sourceReference: 'EVIDENCE-APR-2026',
+            clientName: 'Ada Example',
+          },
+        ],
+        total: 1,
+      });
+      expect(await documents.listArtifacts(principal, { search: 'Ada Example' })).toMatchObject({
+        items: [{ id: firstArtifact.id, clientName: 'Ada Example' }],
+        total: 1,
+      });
+      expect(
+        await documents.listArtifacts(principal, {
+          search: 'EVIDENCE-APR-2026',
+          status: 'ready',
+          sourceEntityType: 'evidence_package',
+          sourceEntityId,
+        }),
+      ).toMatchObject({ items: [{ id: firstArtifact.id }], total: 1 });
       const documentsOnlyPrincipal: AuthorizationPrincipal = {
         userId: uuidv7(),
         tenantId,
@@ -269,6 +304,8 @@ describe('documents PostgreSQL integration', () => {
 
       const downloadable = await documents.download(principal, firstArtifact.id, request, {});
       expect(new TextDecoder().decode(downloadable.bytes.slice(0, 4))).toBe('%PDF');
+      expect(downloadable.fileName).toMatch(/^service-evidence-\d{8}\.pdf$/);
+      expect(downloadable.fileName).not.toContain(firstArtifact.id);
       const apiList = await controller.list(apiRequest, {
         clientId,
         documentType: 'service_evidence',
@@ -376,13 +413,32 @@ describe('documents PostgreSQL integration', () => {
         documents.download(principal, secondArtifact.id, request, {}),
       ).rejects.toBeInstanceOf(DocumentArtifactIntegrityError);
 
+      corruptNextReadback = true;
+      await expect(
+        documents.generate(
+          principal,
+          { ...input, idempotencyKey: uuidv7(), sourceVersion: 'v3' },
+          request,
+          {},
+        ),
+      ).rejects.toBeInstanceOf(DocumentGenerationFailedError);
+      expect(corruptedObjectKey).not.toBeNull();
+      expect(objects.has(corruptedObjectKey!)).toBe(false);
+      expect(
+        await documents.listArtifacts(principal, {
+          clientId,
+          status: 'failed',
+          sourceEntityId,
+        }),
+      ).toMatchObject({ items: [{ status: 'failed' }], total: 1 });
+
       await appRole.query('BEGIN');
       await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
       const tenantArtifacts = await appRole.query<{ id: string }>(
         'SELECT id FROM documents.artifacts WHERE tenant_id = $1',
         [tenantId],
       );
-      expect(tenantArtifacts.rows.length).toBe(2);
+      expect(tenantArtifacts.rows.length).toBe(3);
       await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [otherTenantId]);
       const otherTenantArtifacts = await appRole.query<{ id: string }>(
         'SELECT id FROM documents.artifacts WHERE tenant_id = $1',

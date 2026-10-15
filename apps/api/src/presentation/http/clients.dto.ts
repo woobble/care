@@ -731,6 +731,36 @@ export class ClientContactResponseDto {
   updatedAt!: string;
 }
 
+export class ClientContactSearchOptionDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty()
+  firstName!: string;
+
+  @ApiProperty()
+  lastName!: string;
+
+  @ApiProperty({
+    enum: ['daughter', 'son', 'spouse', 'relative', 'legal_representative', 'guardian', 'other'],
+  })
+  relationshipType!: string;
+}
+
+export class ClientContactSearchResponseDto {
+  @ApiProperty({ type: [ClientContactSearchOptionDto] })
+  items!: ClientContactSearchOptionDto[];
+
+  @ApiProperty({ minimum: 1 })
+  page!: number;
+
+  @ApiProperty({ minimum: 1, maximum: 100 })
+  pageSize!: number;
+
+  @ApiProperty({ minimum: 0 })
+  total!: number;
+}
+
 export class ClientInsuranceResponseDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;

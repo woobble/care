@@ -48,6 +48,7 @@ import {
   ClientApplicationService,
   ClientMasterDataApplicationService,
 } from '@care/clients';
+import type { BillingClaimsApplicationService } from '@care/billing';
 import { AuthorizationDeniedError, type AuthorizationPrincipal } from '@care/permissions';
 import { ServiceAgreementApplicationService } from '@care/service-agreements';
 import { ServiceEvidenceApplicationService } from '@care/service-evidence';
@@ -60,6 +61,7 @@ import { apiMetrics } from '@app/api/operational-metrics';
 import {
   BENEFITS_APPLICATION,
   BILLING_APPLICATION,
+  BILLING_CLAIMS_APPLICATION,
   CLIENT_APPLICATION,
   CLIENT_MASTER_DATA_APPLICATION,
   DOCUMENTS_APPLICATION,
@@ -99,6 +101,8 @@ export class DocumentsController {
     private readonly agreements: ServiceAgreementApplicationService,
     @Inject(BENEFITS_APPLICATION) private readonly benefits: BenefitsApplicationService,
     @Inject(BILLING_APPLICATION) private readonly billing: BillingApplicationService,
+    @Inject(BILLING_CLAIMS_APPLICATION)
+    private readonly claims: BillingClaimsApplicationService,
     @Inject(CLIENT_APPLICATION) private readonly clients: ClientApplicationService,
     @Inject(CLIENT_MASTER_DATA_APPLICATION)
     private readonly clientMasterData: ClientMasterDataApplicationService,
@@ -108,7 +112,7 @@ export class DocumentsController {
   ) {}
 
   @Get('documents')
-  @ApiOperation({ summary: 'List authorized document metadata for an organization or client' })
+  @ApiOperation({ summary: 'List authorized document metadata across the caller scope' })
   @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'clientId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
@@ -124,6 +128,14 @@ export class DocumentsController {
       'claim_summary',
     ],
   })
+  @ApiQuery({ name: 'status', required: false, enum: ['pending', 'ready', 'failed', 'superseded'] })
+  @ApiQuery({ name: 'from', required: false, type: String, format: 'date' })
+  @ApiQuery({ name: 'until', required: false, type: String, format: 'date' })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'sourceEntityType', required: false, type: String })
+  @ApiQuery({ name: 'sourceEntityId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'sort', required: false, enum: ['createdAt', 'name', 'type', 'status'] })
+  @ApiQuery({ name: 'order', required: false, enum: ['asc', 'desc'] })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiOkResponse({ schema: { type: 'object', additionalProperties: true } })
@@ -847,6 +859,7 @@ export class DocumentsController {
       documentType: 'service_agreement',
       sourceEntityType: 'service_agreement',
       sourceEntityId: agreement.id,
+      sourceReference: agreement.reference,
       sourceVersion,
       configTemplateVersion: config.template.version,
       payload,
@@ -958,6 +971,7 @@ export class DocumentsController {
       documentType: DocumentType;
       sourceEntityType: string;
       sourceEntityId: string;
+      sourceReference?: string | null;
       sourceVersion: string;
       configTemplateVersion: number;
       payload: DocumentPayload;
@@ -982,6 +996,7 @@ export class DocumentsController {
         documentType: input.documentType,
         sourceEntityType: input.sourceEntityType,
         sourceEntityId: input.sourceEntityId,
+        ...(input.sourceReference !== undefined ? { sourceReference: input.sourceReference } : {}),
         sourceVersion: input.sourceVersion,
         expectedTemplateVersion: input.configTemplateVersion,
         locale: input.payload.locale,
@@ -1063,7 +1078,10 @@ export class DocumentsController {
   ): Promise<void> {
     switch (artifact.documentType) {
       case 'service_evidence':
-        if (artifact.sourceEntityType === 'evidence_package') {
+        if (
+          artifact.sourceEntityType === 'evidence_package' ||
+          artifact.sourceEntityType === 'claim_evidence'
+        ) {
           const source = await this.evidence.getPackage(principal, artifact.sourceEntityId);
           if (source.snapshot.clientId !== artifact.clientId)
             throw new DocumentArtifactNotFoundError();
@@ -1108,6 +1126,27 @@ export class DocumentsController {
           artifact.sourceVersion.slice(0, 10),
         );
         return;
+      case 'claim_summary': {
+        const source = await this.claims.getClaim(principal, artifact.sourceEntityId);
+        if (
+          source.claim.clientId !== artifact.clientId ||
+          source.claim.organizationId !== artifact.organizationId ||
+          source.claim.facilityId !== artifact.facilityId
+        )
+          throw new DocumentArtifactNotFoundError();
+        return;
+      }
+      case 'invoice':
+      case 'invoice_correction': {
+        const source = await this.billing.getInvoice(principal, artifact.sourceEntityId);
+        if (
+          source.clientId !== artifact.clientId ||
+          source.organizationId !== artifact.organizationId ||
+          source.facilityId !== artifact.facilityId
+        )
+          throw new DocumentArtifactNotFoundError();
+        return;
+      }
       default:
         throw new DocumentArtifactNotFoundError();
     }

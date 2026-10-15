@@ -739,6 +739,20 @@ export type ClientContactResponseDto = {
     updatedAt: string;
 };
 
+export type ClientContactSearchOptionDto = {
+    id: string;
+    firstName: string;
+    lastName: string;
+    relationshipType: 'daughter' | 'son' | 'spouse' | 'relative' | 'legal_representative' | 'guardian' | 'other';
+};
+
+export type ClientContactSearchResponseDto = {
+    items: Array<ClientContactSearchOptionDto>;
+    page: number;
+    pageSize: number;
+    total: number;
+};
+
 export type ClientContactInputDto = {
     firstName: string;
     lastName: string;
@@ -5428,6 +5442,40 @@ export type ClientMasterDataControllerAddContactResponses = {
 
 export type ClientMasterDataControllerAddContactResponse = ClientMasterDataControllerAddContactResponses[keyof ClientMasterDataControllerAddContactResponses];
 
+export type ClientMasterDataControllerSearchContactsData = {
+    body?: never;
+    headers: {
+        /**
+         * Tenant selected for this request
+         */
+        'X-Tenant-Id': string;
+    };
+    path: {
+        clientId: string;
+    };
+    query: {
+        pageSize?: number;
+        page?: number;
+        q: string;
+    };
+    url: '/api/v1/clients/{clientId}/contacts/search';
+};
+
+export type ClientMasterDataControllerSearchContactsErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type ClientMasterDataControllerSearchContactsError = ClientMasterDataControllerSearchContactsErrors[keyof ClientMasterDataControllerSearchContactsErrors];
+
+export type ClientMasterDataControllerSearchContactsResponses = {
+    200: ClientContactSearchResponseDto;
+};
+
+export type ClientMasterDataControllerSearchContactsResponse = ClientMasterDataControllerSearchContactsResponses[keyof ClientMasterDataControllerSearchContactsResponses];
+
 export type ClientMasterDataControllerRemoveContactData = {
     body?: never;
     headers: {
@@ -5714,6 +5762,8 @@ export type CommunicationsControllerListData = {
     query?: {
         pageSize?: number;
         page?: number;
+        order?: 'asc' | 'desc';
+        sort?: 'occurredAt' | 'client' | 'subject' | 'channel';
         search?: string;
         until?: string;
         from?: string;
@@ -10566,6 +10616,14 @@ export type DocumentsControllerListData = {
     query?: {
         pageSize?: number;
         page?: number;
+        order?: 'asc' | 'desc';
+        sort?: 'createdAt' | 'name' | 'type' | 'status';
+        sourceEntityId?: unknown;
+        sourceEntityType?: string;
+        search?: string;
+        until?: string;
+        from?: string;
+        status?: 'pending' | 'ready' | 'failed' | 'superseded';
         documentType?: 'service_evidence' | 'service_agreement' | 'invoice' | 'invoice_correction' | 'benefit_overview' | 'claim_summary';
         facilityId?: unknown;
         clientId?: unknown;

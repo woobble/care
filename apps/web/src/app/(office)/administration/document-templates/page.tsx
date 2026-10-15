@@ -2,6 +2,7 @@ import { Textarea } from '@care/ui/components/textarea';
 import { NativeSelect } from '@care/ui/components/native-select';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui/components/button';
@@ -193,6 +194,33 @@ export default async function DocumentTemplatesPage({
         </Button>
       </form>
 
+      <section
+        aria-labelledby="document-template-overview-title"
+        className="grid gap-3 rounded-lg border bg-card p-5"
+      >
+        <h2 id="document-template-overview-title" className="text-xl font-semibold">
+          {t('Documents.templates.overview')}
+        </h2>
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {templates.map((item) => (
+            <li key={item.documentType} className="rounded-md border p-3">
+              <Link
+                className="font-medium text-primary underline"
+                href={`/administration/document-templates?organizationId=${selectedOrganization.id}&type=${item.documentType}`}
+                aria-current={item.documentType === selectedType ? 'page' : undefined}
+              >
+                {t(`Documents.documentTypes.${item.documentType}`)}
+              </Link>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {item.id
+                  ? t('Documents.templates.version', { version: item.version })
+                  : t('Documents.templates.defaultTemplate')}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <section className="grid gap-4 rounded-lg border bg-card p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-xl font-semibold">{t('Documents.templates.configuration')}</h2>
@@ -217,9 +245,9 @@ export default async function DocumentTemplatesPage({
               required
             />
             <p className="text-sm text-muted-foreground">
-              {t('Documents.templates.currentLogo', {
-                id: logoAssetId || t('Documents.templates.noLogo'),
-              })}
+              {logoAssetId
+                ? t('Documents.templates.logoConfigured')
+                : t('Documents.templates.noLogo')}
             </p>
           </div>
           <Button type="submit" variant="secondary">

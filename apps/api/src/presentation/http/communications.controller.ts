@@ -85,6 +85,8 @@ const listSchema = z.object({
   from: z.iso.datetime({ offset: true }).optional(),
   until: z.iso.datetime({ offset: true }).optional(),
   search: z.string().trim().min(1).max(120).optional(),
+  sort: z.enum(['occurredAt', 'client', 'subject', 'channel']).optional(),
+  order: z.enum(['asc', 'desc']).optional(),
   page: pageSchema,
   pageSize: pageSizeSchema,
 });
@@ -272,6 +274,8 @@ export class CommunicationsController {
   @ApiQuery({ name: 'from', required: false, type: String })
   @ApiQuery({ name: 'until', required: false, type: String })
   @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'sort', required: false, enum: ['occurredAt', 'client', 'subject', 'channel'] })
+  @ApiQuery({ name: 'order', required: false, enum: ['asc', 'desc'] })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiOkResponse({ type: CommunicationInteractionListResponseDto })
@@ -407,6 +411,8 @@ function toListQuery(query: z.infer<typeof listSchema>): CommunicationListQuery 
     ...(query.outcome ? { outcome: query.outcome } : {}),
     ...(query.followUpStatus ? { followUpStatus: query.followUpStatus } : {}),
     ...(query.search ? { search: query.search } : {}),
+    ...(query.sort ? { sort: query.sort } : {}),
+    ...(query.order ? { order: query.order } : {}),
     page: query.page,
     pageSize: query.pageSize,
     ...(query.from ? { from: new Date(query.from) } : {}),

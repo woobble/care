@@ -110,7 +110,15 @@ export const clientContacts = clients.table(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
-  (table) => [index('client_contacts_client_idx').on(table.tenantId, table.clientId, table.id)],
+  (table) => [
+    index('client_contacts_client_idx').on(
+      table.tenantId,
+      table.clientId,
+      table.lastName,
+      table.firstName,
+      table.id,
+    ),
+  ],
 );
 
 export const clientContactRoles = clients.table(

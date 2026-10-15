@@ -238,6 +238,9 @@ export const routeOperations = {
     delete: "clientMasterDataControllerRemoveContact",
     patch: "clientMasterDataControllerUpdateContact",
   },
+  "/api/v1/clients/{clientId}/contacts/search": {
+    get: "clientMasterDataControllerSearchContacts",
+  },
   "/api/v1/clients/{clientId}/funding-sources": {
     get: "benefitsControllerFundingSources",
     post: "benefitsControllerCreateFundingSource",

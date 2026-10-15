@@ -461,6 +461,23 @@ describe('clients API', () => {
         firstName: 'Grace',
         roles: ['primary_contact', 'emergency_contact', 'legal_representative'],
       });
+      const searchedContactsResponse = await fetch(
+        `${baseUrl}/api/v1/clients/${created.id}/contacts/search?q=Grace&page=1&pageSize=20`,
+        { headers },
+      );
+      expect(searchedContactsResponse.status).toBe(200);
+      expect(await searchedContactsResponse.json()).toMatchObject({
+        items: [
+          {
+            firstName: 'Grace',
+            lastName: 'Hopper',
+            relationshipType: 'legal_representative',
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        total: 1,
+      });
 
       const insuranceNumber = `PRIVATE-${uuidv7()}`;
       const insuranceResponse = await fetch(`${baseUrl}/api/v1/clients/${created.id}/insurances`, {

@@ -79,6 +79,7 @@ type SearchParams = Promise<{
   group?: string;
   organizationId?: string;
   facilityId?: string;
+  clientId?: string;
   payerId?: string;
   submissionFrom?: string;
   submissionUntil?: string;
@@ -120,6 +121,7 @@ export default async function ClaimsWorklistPage({
   const search = query.q?.trim().slice(0, 120) ?? '';
   const organizationId = validUuid(query.organizationId) ? query.organizationId : undefined;
   const facilityId = validUuid(query.facilityId) ? query.facilityId : undefined;
+  const clientId = validUuid(query.clientId) ? query.clientId : undefined;
   const payerId = validUuid(query.payerId) ? query.payerId : undefined;
   const submissionFrom = validDate(query.submissionFrom) ? query.submissionFrom : undefined;
   const submissionUntil = validDate(query.submissionUntil) ? query.submissionUntil : undefined;
@@ -131,6 +133,7 @@ export default async function ClaimsWorklistPage({
     ...(group ? { group } : {}),
     ...(organizationId ? { organizationId } : {}),
     ...(facilityId ? { facilityId } : {}),
+    ...(clientId ? { clientId } : {}),
     ...(payerId ? { payerId } : {}),
     ...(submissionFrom ? { submissionFrom } : {}),
     ...(submissionUntil ? { submissionUntil } : {}),
@@ -145,41 +148,46 @@ export default async function ClaimsWorklistPage({
   ]);
   const api = await getApiClient();
   const header = await getTenantHeader();
-  const [permissions, result, organizationResult, facilityResult, payerResult] = await Promise.all([
-    getPermissionGrants(api),
-    api.GET('/api/v1/billing/claims', {
-      params: {
-        query: {
-          page,
-          pageSize,
-          sort,
-          sortOrder,
-          ...(search ? { q: search } : {}),
-          ...(status ? { status } : {}),
-          ...(group ? { group } : {}),
-          ...(organizationId ? { organizationId } : {}),
-          ...(facilityId ? { facilityId } : {}),
-          ...(payerId ? { payerId } : {}),
-          ...(submissionFrom ? { submissionFrom } : {}),
-          ...(submissionUntil ? { submissionUntil } : {}),
+  const [permissions, result, organizationResult, facilityResult, payerResult, clientResult] =
+    await Promise.all([
+      getPermissionGrants(api),
+      api.GET('/api/v1/billing/claims', {
+        params: {
+          query: {
+            page,
+            pageSize,
+            sort,
+            sortOrder,
+            ...(search ? { q: search } : {}),
+            ...(status ? { status } : {}),
+            ...(group ? { group } : {}),
+            ...(organizationId ? { organizationId } : {}),
+            ...(facilityId ? { facilityId } : {}),
+            ...(clientId ? { clientId } : {}),
+            ...(payerId ? { payerId } : {}),
+            ...(submissionFrom ? { submissionFrom } : {}),
+            ...(submissionUntil ? { submissionUntil } : {}),
+          },
+          header,
         },
-        header,
-      },
-    }),
-    organizationId
-      ? api.GET('/api/v1/organizations/{id}', {
-          params: { path: { id: organizationId }, header },
-        })
-      : Promise.resolve(null),
-    facilityId
-      ? api.GET('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
-      : Promise.resolve(null),
-    organizationId && payerId
-      ? api.GET('/api/v1/billing/payer-directory/lookup', {
-          params: { query: { organizationId, payerIds: payerId }, header },
-        })
-      : Promise.resolve(null),
-  ]);
+      }),
+      organizationId
+        ? api.GET('/api/v1/organizations/{id}', {
+            params: { path: { id: organizationId }, header },
+          })
+        : Promise.resolve(null),
+      facilityId
+        ? api.GET('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
+        : Promise.resolve(null),
+      organizationId && payerId
+        ? api.GET('/api/v1/billing/payer-directory/lookup', {
+            params: { query: { organizationId, payerIds: payerId }, header },
+          })
+        : Promise.resolve(null),
+      clientId
+        ? api.GET('/api/v1/clients/{id}', { params: { path: { id: clientId }, header } })
+        : Promise.resolve(null),
+    ]);
   const canRead = hasPermission(permissions, 'claims.read');
   const response = result.data as
     | {
@@ -198,6 +206,8 @@ export default async function ClaimsWorklistPage({
   const organization = organizationResult?.data as Organization | undefined;
   const facility = facilityResult?.data as Facility | undefined;
   const payer = (payerResult?.data as Payer[] | undefined)?.[0];
+  const selectedClient = clientResult?.data;
+  const canReadClients = hasPermission(permissions, 'client.read');
   const resultError = result.error as { code?: string } | undefined;
   const error = query.error ?? resultError?.code;
   const groupHref = (nextGroup: ClaimGroup) => {
@@ -333,6 +343,22 @@ export default async function ClaimsWorklistPage({
                 : undefined
             }
           />
+          {canReadClients ? (
+            <AsyncEntityCombobox
+              name="clientId"
+              entity="clients"
+              label={t('client')}
+              placeholder={translate('Common.fields.all')}
+              initialOption={
+                selectedClient
+                  ? {
+                      id: selectedClient.id,
+                      label: `${selectedClient.preferredName || selectedClient.firstName} ${selectedClient.lastName}`,
+                    }
+                  : undefined
+              }
+            />
+          ) : null}
           {organizationId ? (
             <AsyncEntityCombobox
               name="payerId"

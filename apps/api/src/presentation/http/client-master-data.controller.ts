@@ -10,6 +10,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -23,6 +24,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -36,6 +38,7 @@ import {
   ClientContactInputDto,
   ClientContactPatchDto,
   ClientContactResponseDto,
+  ClientContactSearchResponseDto,
   ClientInsuranceInputDto,
   ClientInsurancePatchDto,
   ClientInsuranceResponseDto,
@@ -163,6 +166,43 @@ export class ClientMasterDataController {
     return (await this.clients.listContacts(this.principal(request), parseId(clientId))).map(
       clientContactResponse,
     );
+  }
+
+  @Get('contacts/search')
+  @ApiOperation({ summary: 'Search a single client’s contacts for a bounded selector' })
+  @ApiParam({ name: 'clientId', format: 'uuid' })
+  @ApiQuery({ name: 'q', required: true, type: String, minLength: 2, maxLength: 120 })
+  @ApiQuery({ name: 'page', required: false, type: Number, minimum: 1 })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number, minimum: 1, maximum: 100 })
+  @ApiOkResponse({ type: ClientContactSearchResponseDto })
+  async searchContacts(
+    @Req() request: ApiRequest,
+    @Param('clientId') clientId: string,
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<ClientContactSearchResponseDto> {
+    const parsed = z
+      .object({
+        q: z.string().trim().min(2).max(120),
+        page: z.coerce.number().int().min(1).default(1),
+        pageSize: z.coerce.number().int().min(1).max(100).default(20),
+      })
+      .strict()
+      .safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    const result = await this.clients.searchContacts(this.principal(request), parseId(clientId), {
+      search: parsed.data.q,
+      page: parsed.data.page,
+      pageSize: parsed.data.pageSize,
+    });
+    return {
+      ...result,
+      items: result.items.map(({ id, firstName, lastName, relationshipType }) => ({
+        id,
+        firstName,
+        lastName,
+        relationshipType,
+      })),
+    };
   }
 
   @Post('contacts')

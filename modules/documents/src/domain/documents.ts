@@ -93,6 +93,9 @@ export interface DocumentTemplateInput {
 
 export interface DocumentArtifactView {
   id: string;
+  title: string | null;
+  sourceReference: string | null;
+  clientName?: string | null;
   clientId: string | null;
   organizationId: string;
   facilityId: string | null;
@@ -119,6 +122,7 @@ export interface DocumentGenerationInput {
   documentType: DocumentType;
   sourceEntityType: string;
   sourceEntityId: string;
+  sourceReference?: string | null;
   sourceVersion: string;
   expectedTemplateVersion?: number;
   locale?: DocumentLocale;

@@ -10,6 +10,7 @@ import {
   lte,
   or,
   type SQL,
+  type SQLWrapper,
   sql,
 } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
@@ -101,6 +102,8 @@ export interface CommunicationListQuery {
   until?: Date;
   followUpStatus?: 'needs_task' | 'open' | 'overdue' | 'completed';
   search?: string;
+  sort?: 'occurredAt' | 'client' | 'subject' | 'channel';
+  order?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
 }
@@ -303,7 +306,7 @@ export class CommunicationsApplicationService {
         .from(interactions)
         .leftJoin(users, eq(users.id, interactions.recordedByUserId))
         .where(where)
-        .orderBy(desc(interactions.occurredAt), desc(interactions.id))
+        .orderBy(...interactionOrder(query))
         .limit(pageSize)
         .offset((page - 1) * pageSize);
       return {
@@ -359,7 +362,7 @@ export class CommunicationsApplicationService {
         )
         .leftJoin(users, eq(users.id, interactions.recordedByUserId))
         .where(where)
-        .orderBy(desc(interactions.occurredAt), desc(interactions.id))
+        .orderBy(...interactionOrder(query, true))
         .limit(pageSize)
         .offset((page - 1) * pageSize);
       const operationReadableRows = rows.filter((row) =>
@@ -1415,6 +1418,28 @@ function followUpStatusFor(
   if (taskSummary?.hasOpen) return 'open';
   if (taskSummary?.hasCompleted) return 'completed';
   return outcome === 'action_required' ? 'needs_task' : 'none';
+}
+
+function interactionOrder(query: CommunicationListQuery, includeClient = false): SQL[] {
+  const direction = (expression: SQLWrapper) =>
+    query.order === 'asc' ? asc(expression) : desc(expression);
+  const recentFirst = [desc(interactions.occurredAt), desc(interactions.id)];
+  switch (query.sort ?? 'occurredAt') {
+    case 'client':
+      return includeClient
+        ? [
+            direction(sql`coalesce(${clientRecords.preferredName}, ${clientRecords.firstName})`),
+            direction(clientRecords.lastName),
+            ...recentFirst,
+          ]
+        : recentFirst;
+    case 'subject':
+      return [direction(interactions.subject), ...recentFirst];
+    case 'channel':
+      return [direction(interactions.channel), ...recentFirst];
+    default:
+      return [direction(interactions.occurredAt), direction(interactions.id)];
+  }
 }
 
 function resourceFor(client: {

@@ -10,6 +10,7 @@ import { Input } from '@care/ui/components/input';
 import { Label } from '@care/ui/components/label';
 import type { components } from '@care/api-client';
 import { formatDateTime } from '@app/web/i18n/format';
+import { visitDateTimeInputValue } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
@@ -73,6 +74,7 @@ export default async function ClientCommunicationsPage({
     error?: string;
     updated?: string;
     interactionId?: string;
+    documentId?: string;
     q?: string;
     channel?: string;
     category?: string;
@@ -216,6 +218,7 @@ export default async function ClientCommunicationsPage({
   const historyFrom = dateBoundary(query.from, false);
   const historyUntil = dateBoundary(query.until, true);
   const historySearch = query.q?.trim().slice(0, 120);
+  const selectedDocumentId = validUuid(query.documentId) ? query.documentId : undefined;
   const [
     interactionResult,
     contactsResult,
@@ -228,6 +231,7 @@ export default async function ClientCommunicationsPage({
     documentsResult,
     organizationResult,
     selectedResult,
+    selectedDocumentResult,
   ] = await Promise.all([
     canRead
       ? get('/api/v1/communications/clients/{clientId}/interactions', {
@@ -246,7 +250,9 @@ export default async function ClientCommunicationsPage({
           },
         })
       : Promise.resolve({ data: undefined, error: undefined }),
-    get('/api/v1/clients/{clientId}/contacts', { params: { path: { clientId }, header } }),
+    canManagePreferences
+      ? get('/api/v1/clients/{clientId}/contacts', { params: { path: { clientId }, header } })
+      : Promise.resolve({ data: undefined, error: undefined }),
     canRead || canManagePreferences
       ? get('/api/v1/communications/clients/{clientId}/preferences', {
           params: { path: { clientId }, header },
@@ -301,6 +307,11 @@ export default async function ClientCommunicationsPage({
           params: { path: { id: query.interactionId }, header },
         })
       : Promise.resolve({ data: undefined, error: undefined }),
+    canReadDocuments && selectedDocumentId
+      ? get('/api/v1/documents/{id}', {
+          params: { path: { id: selectedDocumentId }, header },
+        })
+      : Promise.resolve({ data: undefined, error: undefined }),
   ]);
   const interactionData = interactionResult.data as
     | { items: Interaction[]; page: number; pageSize: number; total: number }
@@ -334,6 +345,16 @@ export default async function ClientCommunicationsPage({
   const documents =
     (documentsResult.data as { items?: Array<{ id: string; documentType?: string }> } | undefined)
       ?.items ?? [];
+  const selectedDocument = selectedDocumentResult.data as
+    | { id: string; clientId: string | null; documentType?: string }
+    | undefined;
+  const documentSources = [
+    ...documents,
+    ...(selectedDocument?.clientId === client.id &&
+    !documents.some((document) => document.id === selectedDocument.id)
+      ? [selectedDocument]
+      : []),
+  ];
   const timezone = organizationResult.data?.timezone ?? 'Europe/Berlin';
   const taskStatusLabels: Record<string, string> = {
     open: t('taskStatuses.open'),
@@ -377,7 +398,7 @@ export default async function ClientCommunicationsPage({
       id: claim.id,
       label: t('sourceTypes.claim'),
     })),
-    ...documents.map((document) => ({
+    ...documentSources.map((document) => ({
       type: 'document' as const,
       id: document.id,
       label: `${t('sourceTypes.document')} · ${document.documentType ?? common('Resources.unavailableDocument')}`,
@@ -540,6 +561,7 @@ export default async function ClientCommunicationsPage({
         <>
           {canCreate ? (
             <section
+              id="new-interaction"
               aria-labelledby="new-interaction-title"
               className="grid gap-4 rounded-lg border bg-card p-5"
             >
@@ -549,6 +571,8 @@ export default async function ClientCommunicationsPage({
               <RHFActionForm
                 action={createCommunicationAction}
                 className="grid gap-4 md:grid-cols-2"
+                warnOnUnsavedChanges
+                errorMessage={t('saveFailed')}
               >
                 <input type="hidden" name="clientId" value={client.id} />
                 <input type="hidden" name="timezone" value={timezone} />
@@ -611,22 +635,17 @@ export default async function ClientCommunicationsPage({
                     name="occurredAt"
                     type="datetime-local"
                     required
+                    defaultValue={currentCommunicationDateTime(timezone)}
                   />
                 </div>
-                <SelectField
-                  id="communication-contact"
+                <AsyncEntityCombobox
                   name="contactId"
+                  entity="client-contacts"
+                  clientId={client.id}
                   label={t('contact')}
-                  defaultValue=""
-                >
-                  <option value="">{t('noContact')}</option>
-                  {contacts.map((contact) => (
-                    <option key={contact.id} value={contact.id}>
-                      {contact.firstName} {contact.lastName} ·{' '}
-                      {t(`contactRelationships.${contact.relationshipType}`)}
-                    </option>
-                  ))}
-                </SelectField>
+                  placeholder={t('noContact')}
+                  minQueryLength={2}
+                />
                 <div className="grid gap-2">
                   <Label htmlFor="communication-contact-label">{t('contactLabel')}</Label>
                   <Input id="communication-contact-label" name="contactLabel" maxLength={120} />
@@ -636,7 +655,11 @@ export default async function ClientCommunicationsPage({
                     id="communication-source"
                     name="source"
                     label={t('source')}
-                    defaultValue=""
+                    defaultValue={
+                      selectedDocument?.clientId === client.id
+                        ? `document:${selectedDocument.id}`
+                        : ''
+                    }
                   >
                     <option value="">{t('noSource')}</option>
                     {sourceOptions.map((source) => (
@@ -885,6 +908,7 @@ export default async function ClientCommunicationsPage({
                       <RHFActionForm
                         action={amendCommunicationAction}
                         className="grid gap-3 border-t pt-4 md:grid-cols-2"
+                        warnOnUnsavedChanges
                       >
                         <input type="hidden" name="clientId" value={client.id} />
                         <input type="hidden" name="interactionId" value={interaction.id} />
@@ -932,6 +956,7 @@ export default async function ClientCommunicationsPage({
                       <RHFActionForm
                         action={createCommunicationFollowUpAction}
                         className="grid gap-3 border-t pt-4 sm:grid-cols-2"
+                        warnOnUnsavedChanges
                       >
                         <input type="hidden" name="clientId" value={client.id} />
                         <input type="hidden" name="interactionId" value={interaction.id} />
@@ -1057,6 +1082,17 @@ function validDateInput(value: string | undefined): string {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? '' : value;
+}
+
+function currentCommunicationDateTime(timezone: string): string {
+  return visitDateTimeInputValue(new Date(), timezone);
+}
+
+function validUuid(value: string | undefined): value is string {
+  return Boolean(
+    value &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value),
+  );
 }
 
 function sourceHref(source: { [key: string]: unknown } | null, clientId: string): string | null {
