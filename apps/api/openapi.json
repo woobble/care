@@ -12714,6 +12714,32 @@
             }
           },
           {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "date",
+                "client",
+                "status",
+                "acknowledgement"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "signatoryType",
             "required": false,
             "in": "query",
@@ -14424,6 +14450,31 @@
             }
           },
           {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 2,
+              "maxLength": 120
+            }
+          },
+          {
             "name": "fundingSourceId",
             "required": false,
             "in": "query",
@@ -14537,6 +14588,45 @@
             }
           },
           {
+            "name": "until",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 2,
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "recipientType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "client",
+                "payer"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "status",
             "required": false,
             "in": "query",
@@ -14551,6 +14641,14 @@
           },
           {
             "name": "clientId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "facilityId",
             "required": false,
             "in": "query",
             "schema": {
@@ -15181,6 +15279,40 @@
             }
           },
           {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "open",
+                "unpaid",
+                "partially_paid",
+                "paid",
+                "overdue",
+                "corrected"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
             "name": "q",
             "required": false,
             "in": "query",
@@ -15190,7 +15322,27 @@
             }
           },
           {
+            "name": "recipientType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "client",
+                "payer"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "clientId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "facilityId",
             "required": false,
             "in": "query",
             "schema": {
@@ -15278,6 +15430,46 @@
                 "false"
               ],
               "type": "string"
+            }
+          },
+          {
+            "name": "method",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "bank_transfer",
+                "cash",
+                "other"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 2,
+              "maxLength": 120
             }
           },
           {
@@ -16073,13 +16265,93 @@
             }
           },
           {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "date",
+                "amount",
+                "status"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "submissionUntil",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date"
+            }
+          },
+          {
+            "name": "submissionFrom",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date"
+            }
+          },
+          {
+            "name": "group",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "preparation",
+                "ready_to_submit",
+                "awaiting_response",
+                "requires_action",
+                "resolved"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "status",
             "required": false,
             "in": "query",
             "schema": {}
           },
           {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "payerId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
             "name": "clientId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "facilityId",
             "required": false,
             "in": "query",
             "schema": {
@@ -16123,7 +16395,7 @@
             "bearer": []
           }
         ],
-        "summary": "List claims using deterministic pagination and resource scope",
+        "summary": "Search and filter claims using database-backed pagination and resource scope",
         "tags": [
           "billing claims"
         ]
@@ -30514,6 +30786,14 @@
             "type": "number",
             "nullable": true
           },
+          "serviceSummary": {
+            "type": "string",
+            "nullable": true
+          },
+          "caregiverSummary": {
+            "type": "string",
+            "nullable": true
+          },
           "clientId": {
             "type": "string",
             "format": "uuid"
@@ -32832,6 +33112,18 @@
             "items": {
               "$ref": "#/components/schemas/BillingCandidateResponseDto"
             }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "totalServices": {
+            "type": "number"
+          },
+          "totalPages": {
+            "type": "number"
           }
         },
         "required": [
@@ -33166,6 +33458,9 @@
             ],
             "nullable": true
           },
+          "paidCents": {
+            "type": "number"
+          },
           "outstandingCents": {
             "type": "number",
             "nullable": true
@@ -33217,6 +33512,7 @@
           "grandTotalCents",
           "pdfStatus",
           "receivableStatus",
+          "paidCents",
           "outstandingCents",
           "evidenceDiscrepancy",
           "lines",

@@ -37,6 +37,7 @@
     "@care/storage": "workspace:*",
     "@playwright/test": "^1.64.0",
     "@tailwindcss/postcss": "^4.3.3",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.23.1",
     "tailwindcss": "^4.3.3"
   }

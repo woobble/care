@@ -3533,6 +3533,30 @@ describe('clients API', () => {
             status: 'awaiting_acknowledgement',
           }),
         ],
+        page: 1,
+        pageSize: 50,
+        total: 1,
+      });
+      const secondWorklistPageQuery = new URLSearchParams({
+        from: executionRange.get('from')!,
+        until: executionRange.get('until')!,
+        visitId: executionVisit.id,
+        status: 'awaiting_acknowledgement',
+        sort: 'status',
+        sortOrder: 'asc',
+        page: '2',
+        pageSize: '1',
+      });
+      const secondWorklistPageResponse = await fetch(
+        `${baseUrl}/api/v1/service-evidence?${secondWorklistPageQuery}`,
+        { headers: officeHeaders },
+      );
+      expect(secondWorklistPageResponse.status).toBe(200);
+      expect(await secondWorklistPageResponse.json()).toMatchObject({
+        items: [],
+        page: 2,
+        pageSize: 1,
+        total: 1,
       });
 
       const officeCannotCapture = await fetch(

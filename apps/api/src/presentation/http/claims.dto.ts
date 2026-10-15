@@ -83,7 +83,17 @@ export const payerProfileSchema = z
 export const claimsListQuerySchema = z
   .object({
     organizationId: z.uuid().optional(),
+    facilityId: z.uuid().optional(),
     clientId: z.uuid().optional(),
+    payerId: z.uuid().optional(),
+    q: z.string().trim().max(120).optional(),
+    submissionFrom: date.optional(),
+    submissionUntil: date.optional(),
+    group: z
+      .enum(['preparation', 'ready_to_submit', 'awaiting_response', 'requires_action', 'resolved'])
+      .optional(),
+    sort: z.enum(['date', 'amount', 'status']).default('date'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
     status: z
       .enum([
         'draft',
@@ -99,6 +109,19 @@ export const claimsListQuerySchema = z
       .optional(),
     page: z.coerce.number().int().min(1).max(100_000).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .superRefine((value, context) => {
+    if (
+      value.submissionFrom &&
+      value.submissionUntil &&
+      value.submissionUntil < value.submissionFrom
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['submissionUntil'],
+        message: 'Submission end date must not be before its start date',
+      });
+    }
   })
   .strict();
 

@@ -22,6 +22,8 @@ import { euroInput, formatCents, lineAmountField } from './format';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { FilterDisclosure } from '@app/web/components/filter-disclosure';
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 
 type Candidate = components['schemas']['BillingCandidateResponseDto'];
 type CandidateGroup = {
@@ -37,6 +39,9 @@ type CandidateGroup = {
   candidates: Candidate[];
 };
 type SearchParams = Promise<{
+  page?: string;
+  pageSize?: string;
+  q?: string;
   from?: string;
   until?: string;
   organizationId?: string;
@@ -64,6 +69,9 @@ export default async function BillingWorklistPage({
   const permissions = await getPermissionGrants(api);
   const from = validDate(query.from);
   const until = validDate(query.until);
+  const page = positivePage(query.page);
+  const pageSize = positivePageSize(query.pageSize);
+  const q = validSearch(query.q);
   const organizationId = validUuid(query.organizationId);
   const facilityId = validUuid(query.facilityId);
   const clientId = validUuid(query.clientId);
@@ -82,6 +90,9 @@ export default async function BillingWorklistPage({
         ...(facilityId ? { facilityId } : {}),
         ...(clientId ? { clientId } : {}),
         ...(fundingSourceId ? { fundingSourceId } : {}),
+        ...(q ? { q } : {}),
+        page,
+        pageSize,
         ...(ready ? { ready } : {}),
         ...(evidenceStatus ? { evidenceStatus } : {}),
       },
@@ -100,7 +111,12 @@ export default async function BillingWorklistPage({
       : Promise.resolve({ data: undefined, error: undefined }),
   ]);
   const candidateData = candidateResult.data as unknown as
-    | components['schemas']['BillingCandidateListResponseDto']
+    | (components['schemas']['BillingCandidateListResponseDto'] & {
+        page: number;
+        pageSize: number;
+        totalServices: number;
+        totalPages: number;
+      })
     | undefined;
   const selectedOrganization = organizationResult.data as
     | components['schemas']['OrganizationResponseDto']
@@ -116,6 +132,25 @@ export default async function BillingWorklistPage({
   const facilityError = facilityResult.error as { code?: string } | undefined;
   const clientError = clientResult.error as { code?: string } | undefined;
   const candidates = candidateData?.items ?? [];
+  if (candidateData) {
+    redirectToValidPage(
+      '/billing',
+      candidateFilters({
+        q,
+        from,
+        until,
+        organizationId,
+        facilityId,
+        clientId,
+        fundingSourceId,
+        ready,
+        evidenceStatus,
+      }),
+      page,
+      pageSize,
+      candidateData.totalServices,
+    );
+  }
   const groups = await candidateGroups(api, candidates);
   const canManage = hasPermission(permissions, 'billing.manage');
   const canExport =
@@ -150,6 +185,16 @@ export default async function BillingWorklistPage({
         </div>
         <FilterDisclosure title={t('filters')}>
           <form method="get" className="grid min-w-0 gap-3 md:grid-cols-3">
+            <input type="hidden" name="page" value="1" />
+            <input type="hidden" name="pageSize" value={pageSize} />
+            <Field
+              id="candidate-search"
+              name="q"
+              label={t('searchBillingServices')}
+              defaultValue={q ?? ''}
+              minLength={2}
+              maxLength={120}
+            />
             <Field
               id="billing-from"
               name="from"
@@ -299,7 +344,9 @@ export default async function BillingWorklistPage({
 
         {candidates.length === 0 ? (
           <p className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">
-            {t('worklistEmpty')}
+            {candidateData && candidateData.totalServices > 0
+              ? t('candidatePageEmpty')
+              : t('worklistEmpty')}
           </p>
         ) : (
           <div className="grid min-w-0 gap-4">
@@ -410,6 +457,30 @@ export default async function BillingWorklistPage({
             ))}
           </div>
         )}
+        {candidateData ? (
+          <DataPagination
+            pathname="/billing"
+            page={candidateData.page}
+            pageSize={candidateData.pageSize}
+            totalPages={candidateData.totalPages}
+            summaryLabel={t('candidateServicesPage', {
+              page: candidateData.page,
+              pageCount: Math.max(1, candidateData.totalPages),
+              total: candidateData.totalServices,
+            })}
+            filters={candidateFilters({
+              q,
+              from,
+              until,
+              organizationId,
+              facilityId,
+              clientId,
+              fundingSourceId,
+              ready,
+              evidenceStatus,
+            })}
+          />
+        ) : null}
       </section>
     </div>
   );
@@ -525,6 +596,38 @@ function validDate(value: string | undefined): string | undefined {
     : undefined;
 }
 
+function validSearch(value: string | undefined): string | undefined {
+  const search = value?.trim().slice(0, 120);
+  return search && search.length >= 2 ? search : undefined;
+}
+
+function positivePage(value: string | undefined): number {
+  if (!value || !/^\d+$/.test(value)) return 1;
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page > 0 && page <= 100_000 ? page : 1;
+}
+
+function positivePageSize(value: string | undefined): number {
+  const pageSize = Number(value);
+  return [10, 20, 50, 100].includes(pageSize) ? pageSize : 20;
+}
+
+function candidateFilters(filters: {
+  q?: string | undefined;
+  from?: string | undefined;
+  until?: string | undefined;
+  organizationId?: string | undefined;
+  facilityId?: string | undefined;
+  clientId?: string | undefined;
+  fundingSourceId?: string | undefined;
+  ready?: string | undefined;
+  evidenceStatus?: string | undefined;
+}): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(filters).filter((entry): entry is [string, string] => Boolean(entry[1])),
+  );
+}
+
 function validUuid(value: string | undefined): string | undefined {
   return value &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
@@ -557,6 +660,8 @@ function Field({
   step,
   disabled,
   required,
+  minLength,
+  maxLength,
 }: Readonly<{
   id: string;
   name: string;
@@ -568,6 +673,8 @@ function Field({
   step?: string;
   disabled?: boolean;
   required?: boolean;
+  minLength?: number;
+  maxLength?: number;
 }>) {
   return (
     <label className="grid min-w-0 gap-2 text-sm">
@@ -582,6 +689,8 @@ function Field({
         step={step}
         disabled={disabled}
         required={required}
+        minLength={minLength}
+        maxLength={maxLength}
       />
     </label>
   );

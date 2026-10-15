@@ -43,6 +43,7 @@ describe('billing PostgreSQL integration', () => {
     const categoryId = uuidv7();
     const serviceDate = new Date().toISOString().slice(0, 10);
     const now = new Date();
+    let corruptNextBillingPdfReadback = false;
     const request = {
       requestId: asUUID(uuidv7()),
       correlationId: asUUID(uuidv7()),
@@ -81,7 +82,15 @@ describe('billing PostgreSQL integration', () => {
         objects.set(key, new Uint8Array(body));
       },
       async get(key) {
-        return objects.get(key) ?? null;
+        const body = objects.get(key);
+        if (!body) return null;
+        if (corruptNextBillingPdfReadback && key.startsWith('billing/invoices/')) {
+          corruptNextBillingPdfReadback = false;
+          const corrupted = new Uint8Array(body);
+          corrupted[0] = corrupted[0]! ^ 0xff;
+          return corrupted;
+        }
+        return body;
       },
       async delete(key) {
         objects.delete(key);
@@ -189,6 +198,21 @@ describe('billing PostgreSQL integration', () => {
         ready: true,
         remainingBillableAmountCents: 10_000,
       });
+      const candidatePage = await billing.candidatesPage(principal, {
+        from: serviceDate,
+        until: serviceDate,
+        clientId,
+        q: 'SERVICE-MAIN',
+        page: 1,
+        pageSize: 1,
+      });
+      expect(candidatePage).toMatchObject({
+        page: 1,
+        pageSize: 1,
+        totalServices: 1,
+        totalPages: 1,
+      });
+      expect(candidatePage.items[0]?.performedServiceId).toBe(service.main.performedServiceId);
 
       const abandonedDraft = await billing.createDraft(
         principal,
@@ -234,6 +258,18 @@ describe('billing PostgreSQL integration', () => {
       if (!mainInvoiceNumber) throw new Error('Issued invoice number is missing');
       expect(mainInvoiceNumber).toMatch(/^CARE\d{4}-\d{6}$/);
 
+      if (!mainInvoice.issueDate) throw new Error('Issued invoice date is missing');
+      const invoiceSearch = await billing.listInvoicesPage(principal, {
+        q: mainInvoiceNumber,
+        facilityId,
+        recipientType: mainInvoice.recipientType,
+        from: mainInvoice.issueDate,
+        until: mainInvoice.issueDate,
+        page: 1,
+        pageSize: 1,
+      });
+      expect(invoiceSearch).toMatchObject({ page: 1, pageSize: 1, total: 1, totalPages: 1 });
+      expect(invoiceSearch.items.map((invoice) => invoice.id)).toEqual([mainInvoice.id]);
       const invoicePage = await billing.listInvoicesPage(principal, {
         status: 'issued',
         page: 1,
@@ -243,11 +279,21 @@ describe('billing PostgreSQL integration', () => {
       expect(invoicePage.items.map((invoice) => invoice.id)).toEqual([mainInvoice.id]);
       const receivablesSearch = await billing.receivablesPage(principal, {
         q: mainInvoiceNumber,
+        facilityId,
+        recipientType: 'client',
+        from: mainInvoice.dueDate ?? serviceDate,
+        until: mainInvoice.dueDate ?? serviceDate,
+        status: 'unpaid',
         page: 1,
         pageSize: 1,
       });
       expect(receivablesSearch).toMatchObject({ page: 1, pageSize: 1, total: 1, totalPages: 1 });
-      expect(receivablesSearch.items.map((invoice) => invoice.id)).toEqual([mainInvoice.id]);
+      expect(receivablesSearch.items[0]).toMatchObject({
+        id: mainInvoice.id,
+        receivableStatus: 'unpaid',
+        paidCents: 0,
+        outstandingCents: 6_000,
+      });
 
       const pdf = await billing.getInvoicePdf(principal, mainInvoice.id);
       const storedDocument = await owner.query<{ sha256: string }>(
@@ -258,6 +304,26 @@ describe('billing PostgreSQL integration', () => {
       const storedSha256 = storedDocument.rows[0]?.sha256;
       if (!storedSha256) throw new Error('Issued invoice document hash is missing');
       expect(createHash('sha256').update(pdf.bytes).digest('hex')).toBe(storedSha256);
+
+      corruptNextBillingPdfReadback = true;
+      const failedPdfRetry = await billing.regenerateInvoicePdf(
+        principal,
+        mainInvoice.id,
+        request,
+        {},
+      );
+      expect(failedPdfRetry.pdfStatus).toBe('failed');
+      const failedDocument = await owner.query<{ status: string; failure_code: string | null }>(
+        `SELECT status, failure_code FROM billing.invoice_documents
+         WHERE tenant_id = $1 AND invoice_id = $2 AND correction_id IS NULL
+         ORDER BY document_version DESC LIMIT 1`,
+        [tenantId, mainInvoice.id],
+      );
+      expect(failedDocument.rows[0]).toEqual({
+        status: 'failed',
+        failure_code: 'PDF_STORAGE_VERIFICATION_FAILED',
+      });
+
       const deniedPrincipal: AuthorizationPrincipal = {
         userId: uuidv7(),
         tenantId,
@@ -467,6 +533,32 @@ describe('billing PostgreSQL integration', () => {
       const claimPage = await claims.listClaims(principal, { page: 1, pageSize: 1 });
       expect(claimPage).toMatchObject({ page: 1, pageSize: 1, total: 1, totalPages: 1 });
       expect(claimPage.items.map((item) => item.id)).toEqual([claim.claim.id]);
+      const shortReference = `CLM-${claim.claim.id.replaceAll('-', '').slice(-8).toUpperCase()}`;
+      expect(await claims.listClaims(principal, { q: shortReference })).toMatchObject({
+        total: 1,
+        items: [expect.objectContaining({ id: claim.claim.id })],
+      });
+      expect(await claims.listClaims(principal, { q: payerInvoice.invoiceNumber! })).toMatchObject({
+        total: 1,
+        items: [expect.objectContaining({ id: claim.claim.id })],
+      });
+      expect(await claims.listClaims(principal, { q: payer.name })).toMatchObject({
+        total: 1,
+        items: [expect.objectContaining({ id: claim.claim.id })],
+      });
+      expect(
+        await claims.listClaims(principal, {
+          group: 'preparation',
+          payerId: payer.id,
+          organizationId,
+          facilityId,
+          sort: 'amount',
+          sortOrder: 'asc',
+        }),
+      ).toMatchObject({
+        total: 1,
+        summary: { needsPreparation: 1, readyToSubmit: 0, awaitingResponse: 0 },
+      });
       const deniedClaimPrincipal: AuthorizationPrincipal = {
         userId: uuidv7(),
         tenantId,
@@ -537,6 +629,17 @@ describe('billing PostgreSQL integration', () => {
         {},
       );
       expect(submitted.claim.status).toBe('submitted');
+      const submittedOn = submitted.submissions[0]?.submittedAt.toISOString().slice(0, 10);
+      if (!submittedOn) throw new Error('Claim submission date was not recorded');
+      expect(
+        await claims.listClaims(principal, {
+          submissionFrom: submittedOn,
+          submissionUntil: submittedOn,
+        }),
+      ).toMatchObject({
+        total: 1,
+        items: [expect.objectContaining({ id: claim.claim.id, status: 'submitted' })],
+      });
       const claimLine = submitted.lines[0];
       if (!claimLine) throw new Error('Claim line was not persisted');
       const decided = await claims.recordDecision(
@@ -566,6 +669,10 @@ describe('billing PostgreSQL integration', () => {
         status: 'draft',
         amountCents: 1_000,
         supersedesClaimId: claim.claim.id,
+      });
+      expect(await claims.listClaims(principal, { group: 'preparation' })).toMatchObject({
+        total: 1,
+        summary: { needsPreparation: 1, requiresAction: 0 },
       });
       const claimHistory = await claims.history(principal, claim.claim.id);
       expect(claimHistory.entries.map((entry) => entry.type)).toEqual(
@@ -716,6 +823,20 @@ describe('billing PostgreSQL integration', () => {
         request,
         {},
       );
+      const paymentDate = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Europe/Berlin',
+      }).format(now);
+      const paymentSearch = await billing.listPaymentsPage(principal, {
+        organizationId,
+        q: 'PAYMENT-1',
+        from: paymentDate,
+        until: paymentDate,
+        method: 'bank_transfer',
+        remainingOnly: true,
+        page: 1,
+        pageSize: 5,
+      });
+      expect(paymentSearch.items.map((item) => item.id)).toEqual([payment.id]);
       const paymentPage = await billing.listPaymentsPage(principal, { page: 1, pageSize: 1 });
       expect(paymentPage.page).toBe(1);
       expect(paymentPage.pageSize).toBe(1);
@@ -736,6 +857,55 @@ describe('billing PostgreSQL integration', () => {
       );
       expect((await billing.getInvoice(principal, mainInvoice.id)).receivableStatus).toBe(
         'partially_paid',
+      );
+      const partialReceivables = await billing.receivablesPage(principal, {
+        status: 'partially_paid',
+        q: mainInvoiceNumber,
+        page: 1,
+        pageSize: 5,
+      });
+      expect(partialReceivables.items[0]).toMatchObject({
+        id: mainInvoice.id,
+        receivableStatus: 'partially_paid',
+        paidCents: 3_000,
+        outstandingCents: 3_000,
+      });
+      const finalPayment = await billing.recordPayment(
+        principal,
+        {
+          organizationId,
+          amountCents: 3_000,
+          receivedAt: now.toISOString(),
+          method: 'bank_transfer',
+          reference: 'PAYMENT-2',
+        },
+        request,
+        {},
+      );
+      const finalAllocation = await billing.allocatePayment(
+        principal,
+        { paymentId: finalPayment.id, invoiceId: mainInvoice.id, amountCents: 3_000 },
+        request,
+        {},
+      );
+      const paidReceivables = await billing.receivablesPage(principal, {
+        status: 'paid',
+        q: mainInvoiceNumber,
+        page: 1,
+        pageSize: 5,
+      });
+      expect(paidReceivables.items[0]).toMatchObject({
+        id: mainInvoice.id,
+        receivableStatus: 'paid',
+        paidCents: 6_000,
+        outstandingCents: 0,
+      });
+      await billing.reversePaymentAllocation(
+        principal,
+        finalAllocation.id,
+        'Recorded against the wrong invoice',
+        request,
+        {},
       );
       const paymentsAfterAllocation = await billing.listPaymentsPage(principal, {
         organizationId,
@@ -771,6 +941,29 @@ describe('billing PostgreSQL integration', () => {
       });
       const originalPdfAfterCorrection = await billing.getInvoicePdf(principal, mainInvoice.id);
       expect(originalPdfAfterCorrection.bytes).toEqual(pdf.bytes);
+
+      const recoveredPdf = await billing.regenerateInvoicePdf(
+        principal,
+        mainInvoice.id,
+        request,
+        {},
+      );
+      expect(recoveredPdf.pdfStatus).toBe('ready');
+      const recoveredDocument = await owner.query<{ sha256: string }>(
+        `SELECT sha256 FROM billing.invoice_documents
+         WHERE tenant_id = $1 AND invoice_id = $2 AND correction_id IS NULL
+           AND status = 'ready'
+         ORDER BY document_version DESC LIMIT 1`,
+        [tenantId, mainInvoice.id],
+      );
+      const recoveredSha256 = recoveredDocument.rows[0]?.sha256;
+      if (!recoveredSha256) throw new Error('Recovered invoice PDF hash is missing');
+      expect(
+        createHash('sha256')
+          .update((await billing.getInvoicePdf(principal, mainInvoice.id)).bytes)
+          .digest('hex'),
+      ).toBe(recoveredSha256);
+
       await expect(
         owner.query(
           'UPDATE billing.invoices SET grand_total_cents = grand_total_cents + 1 WHERE id = $1',

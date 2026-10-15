@@ -10,6 +10,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   lte,
   or,
   sql,
@@ -19,6 +20,7 @@ import { createHash } from 'node:crypto';
 import { v7 as uuidv7 } from 'uuid';
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
+import { createLogger } from '@care/logging';
 import type { BenefitBillingAllocation, BenefitsApplicationService } from '@care/benefits';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
@@ -93,6 +95,30 @@ import {
   type InvoicePdfData,
 } from '@module/billing/infrastructure/invoice-pdf';
 
+const billingLogger = createLogger('care-billing');
+
+function invoicePdfFailureCode(
+  stage:
+    | 'template_configuration'
+    | 'pdf_render'
+    | 'storage_write'
+    | 'storage_verification'
+    | 'metadata_write',
+): string {
+  switch (stage) {
+    case 'template_configuration':
+      return 'PDF_TEMPLATE_CONFIGURATION_FAILED';
+    case 'pdf_render':
+      return 'PDF_RENDER_FAILED';
+    case 'storage_write':
+      return 'PDF_STORAGE_WRITE_FAILED';
+    case 'storage_verification':
+      return 'PDF_STORAGE_VERIFICATION_FAILED';
+    case 'metadata_write':
+      return 'PDF_METADATA_WRITE_FAILED';
+  }
+}
+
 type AuditContext = { ip?: string; userAgent?: string };
 type BillingPermission = Extract<Permission, `billing.${string}`>;
 
@@ -152,6 +178,9 @@ export interface CandidateQuery {
   clientId?: string;
   facilityId?: string;
   fundingSourceId?: string;
+  q?: string;
+  page?: number;
+  pageSize?: number;
   ready?: boolean;
   evidenceStatus?: string;
 }
@@ -291,6 +320,7 @@ export interface BillingInvoiceView {
   }>;
   pdfStatus: 'pending' | 'ready' | 'failed' | null;
   receivableStatus: ReceivableStatus | null;
+  paidCents: number;
   outstandingCents: number | null;
   evidenceDiscrepancy: boolean;
 }
@@ -824,10 +854,31 @@ export class BillingApplicationService {
     principal: AuthorizationPrincipal,
     query: CandidateQuery = {},
   ): Promise<BillingCandidateView[]> {
+    return (await this.candidatesQueryResult(principal, query)).items;
+  }
+
+  async candidatesPage(principal: AuthorizationPrincipal, query: CandidateQuery = {}) {
+    return this.candidatesQueryResult(principal, query);
+  }
+
+  private async candidatesQueryResult(principal: AuthorizationPrincipal, query: CandidateQuery) {
     const today = currentDate();
     const from = query.from ?? addDays(today, -90);
     const until = query.until ?? today;
+    const paginated = query.page !== undefined || query.pageSize !== undefined;
+    const page = query.page ?? 1;
+    const pageSize = paginated ? (query.pageSize ?? 25) : 1000;
     if (!isIsoDate(from) || !isIsoDate(until) || from > until) {
+      throw new InvalidBillingProfileError();
+    }
+    if (
+      paginated &&
+      (!Number.isSafeInteger(page) ||
+        page < 1 ||
+        !Number.isSafeInteger(pageSize) ||
+        pageSize < 1 ||
+        pageSize > 100)
+    ) {
       throw new InvalidBillingProfileError();
     }
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
@@ -842,68 +893,135 @@ export class BillingApplicationService {
       if (query.organizationId) where.push(eq(visits.organizationId, query.organizationId));
       if (query.clientId) where.push(eq(visits.clientId, query.clientId));
       if (query.facilityId) where.push(eq(visits.facilityId, query.facilityId));
-      const rows = await transaction
-        .select({
-          performedServiceId: performedServices.id,
-          visitId: performedServices.visitId,
-          executionId: performedServices.executionId,
-          serviceId: performedServices.serviceDefinitionId,
-          serviceCode: performedServices.serviceCodeSnapshot,
-          serviceName: performedServices.serviceNameSnapshot,
-          unit: performedServices.unitSnapshot,
-          actualQuantity: performedServices.actualQuantity,
-          status: performedServices.status,
-          clientId: visits.clientId,
-          clientFirstName: clientRecords.firstName,
-          clientPreferredName: clientRecords.preferredName,
-          clientLastName: clientRecords.lastName,
-          organizationId: visits.organizationId,
-          organizationName: organizationsTable.name,
-          organizationAddress: organizationsTable.address,
-          facilityId: visits.facilityId,
-          facilityName: facilities.name,
-          timezone: visits.timezone,
-          actualStart: visitExecutions.actualStart,
-          serviceDate: serviceDateExpression.as('service_date'),
-        })
-        .from(performedServices)
-        .innerJoin(
-          visitExecutions,
-          and(
-            eq(visitExecutions.tenantId, performedServices.tenantId),
-            eq(visitExecutions.id, performedServices.executionId),
-            eq(visitExecutions.visitId, performedServices.visitId),
-          ),
+      const billingReadGrants = principal.grants.filter(
+        (grant) => grant.permission === 'billing.read',
+      );
+      if (
+        !billingReadGrants.some(
+          (grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId,
         )
-        .innerJoin(
-          visits,
-          and(
-            eq(visits.tenantId, performedServices.tenantId),
-            eq(visits.id, performedServices.visitId),
-          ),
-        )
-        .innerJoin(
-          clientRecords,
-          and(eq(clientRecords.tenantId, visits.tenantId), eq(clientRecords.id, visits.clientId)),
-        )
-        .innerJoin(
-          organizationsTable,
-          and(
-            eq(organizationsTable.tenantId, visits.tenantId),
-            eq(organizationsTable.id, visits.organizationId),
-          ),
-        )
-        .innerJoin(
-          facilities,
-          and(
-            eq(facilities.tenantId, visits.tenantId),
-            eq(facilities.organizationId, visits.organizationId),
-            eq(facilities.id, visits.facilityId),
-          ),
-        )
-        .where(and(...where))
-        .orderBy(asc(serviceDateExpression), asc(performedServices.id))
-        .limit(1000);
+      ) {
+        const organizations = billingReadGrants
+          .filter((grant) => grant.scopeType === 'organization')
+          .map((grant) => grant.scopeId);
+        const facilities = billingReadGrants
+          .filter((grant) => grant.scopeType === 'facility')
+          .map((grant) => grant.scopeId);
+        where.push(
+          or(
+            ...(organizations.length ? [inArray(visits.organizationId, organizations)] : []),
+            ...(facilities.length ? [inArray(visits.facilityId, facilities)] : []),
+          ) ?? sql`false`,
+        );
+      }
+      const search = query.q?.trim();
+      if (search) {
+        const pattern = `%${search}%`;
+        where.push(
+          or(
+            ilike(performedServices.serviceNameSnapshot, pattern),
+            ilike(performedServices.serviceCodeSnapshot, pattern),
+            ilike(clientRecords.firstName, pattern),
+            ilike(clientRecords.preferredName, pattern),
+            ilike(clientRecords.lastName, pattern),
+            sql`concat(coalesce(${clientRecords.preferredName}, ${clientRecords.firstName}), ' ', ${clientRecords.lastName}) ilike ${pattern}`,
+          )!,
+        );
+      }
+      const whereClause = and(...where);
+      const [countRows, rows] = await Promise.all([
+        paginated
+          ? transaction
+              .select({ total: count() })
+              .from(performedServices)
+              .innerJoin(
+                visitExecutions,
+                and(
+                  eq(visitExecutions.tenantId, performedServices.tenantId),
+                  eq(visitExecutions.id, performedServices.executionId),
+                  eq(visitExecutions.visitId, performedServices.visitId),
+                ),
+              )
+              .innerJoin(
+                visits,
+                and(
+                  eq(visits.tenantId, performedServices.tenantId),
+                  eq(visits.id, performedServices.visitId),
+                ),
+              )
+              .innerJoin(
+                clientRecords,
+                and(
+                  eq(clientRecords.tenantId, visits.tenantId),
+                  eq(clientRecords.id, visits.clientId),
+                ),
+              )
+              .where(whereClause)
+          : Promise.resolve([{ total: 0 }]),
+        transaction
+          .select({
+            performedServiceId: performedServices.id,
+            visitId: performedServices.visitId,
+            executionId: performedServices.executionId,
+            serviceId: performedServices.serviceDefinitionId,
+            serviceCode: performedServices.serviceCodeSnapshot,
+            serviceName: performedServices.serviceNameSnapshot,
+            unit: performedServices.unitSnapshot,
+            actualQuantity: performedServices.actualQuantity,
+            status: performedServices.status,
+            clientId: visits.clientId,
+            clientFirstName: clientRecords.firstName,
+            clientPreferredName: clientRecords.preferredName,
+            clientLastName: clientRecords.lastName,
+            organizationId: visits.organizationId,
+            organizationName: organizationsTable.name,
+            organizationAddress: organizationsTable.address,
+            facilityId: visits.facilityId,
+            facilityName: facilities.name,
+            timezone: visits.timezone,
+            actualStart: visitExecutions.actualStart,
+            serviceDate: serviceDateExpression.as('service_date'),
+          })
+          .from(performedServices)
+          .innerJoin(
+            visitExecutions,
+            and(
+              eq(visitExecutions.tenantId, performedServices.tenantId),
+              eq(visitExecutions.id, performedServices.executionId),
+              eq(visitExecutions.visitId, performedServices.visitId),
+            ),
+          )
+          .innerJoin(
+            visits,
+            and(
+              eq(visits.tenantId, performedServices.tenantId),
+              eq(visits.id, performedServices.visitId),
+            ),
+          )
+          .innerJoin(
+            clientRecords,
+            and(eq(clientRecords.tenantId, visits.tenantId), eq(clientRecords.id, visits.clientId)),
+          )
+          .innerJoin(
+            organizationsTable,
+            and(
+              eq(organizationsTable.tenantId, visits.tenantId),
+              eq(organizationsTable.id, visits.organizationId),
+            ),
+          )
+          .innerJoin(
+            facilities,
+            and(
+              eq(facilities.tenantId, visits.tenantId),
+              eq(facilities.organizationId, visits.organizationId),
+              eq(facilities.id, visits.facilityId),
+            ),
+          )
+          .where(whereClause)
+          .orderBy(asc(serviceDateExpression), asc(performedServices.id))
+          .limit(pageSize)
+          .offset(paginated ? (page - 1) * pageSize : 0),
+      ]);
       const output: BillingCandidateView[] = [];
       const profiles = new Map<string, typeof billingProfiles.$inferSelect | null>();
       for (const row of rows) {
@@ -925,13 +1043,21 @@ export class BillingApplicationService {
         }
         output.push(...(await this.candidatesForService(transaction, principal, row, profile)));
       }
-      return output.filter(
+      const items = output.filter(
         (candidate) =>
           (query.fundingSourceId === undefined ||
             candidate.fundingSourceId === query.fundingSourceId) &&
           (query.ready === undefined || candidate.ready === query.ready) &&
           (query.evidenceStatus === undefined || candidate.evidenceStatus === query.evidenceStatus),
       );
+      const totalServices = paginated ? Number(countRows[0]?.total ?? 0) : rows.length;
+      return {
+        items,
+        page,
+        pageSize,
+        totalServices,
+        totalPages: Math.ceil(totalServices / pageSize),
+      };
     });
   }
 
@@ -1155,11 +1281,13 @@ export class BillingApplicationService {
     principal: AuthorizationPrincipal,
     query: {
       organizationId?: string;
+      facilityId?: string;
       clientId?: string;
       status?: 'draft' | 'issued' | 'cancelled';
+      recipientType?: 'client' | 'payer';
+      q?: string;
       from?: string;
       until?: string;
-      facilityId?: string;
       page?: number;
       pageSize?: number;
     } = {},
@@ -1171,11 +1299,13 @@ export class BillingApplicationService {
     principal: AuthorizationPrincipal,
     query: {
       organizationId?: string;
+      facilityId?: string;
       clientId?: string;
       status?: 'draft' | 'issued' | 'cancelled';
+      recipientType?: 'client' | 'payer';
+      q?: string;
       from?: string;
       until?: string;
-      facilityId?: string;
       page?: number;
       pageSize?: number;
     } = {},
@@ -1191,6 +1321,9 @@ export class BillingApplicationService {
     ) {
       throw new InvalidBillingProfileError();
     }
+    if (query.from && query.until && query.from > query.until) {
+      throw new InvalidBillingProfileError();
+    }
     if (query.organizationId)
       this.requireOrganization(principal, 'billing.read', query.organizationId);
     if (query.clientId && query.organizationId) {
@@ -1204,8 +1337,34 @@ export class BillingApplicationService {
       if (query.facilityId) where.push(eq(invoices.facilityId, query.facilityId));
       if (query.clientId) where.push(eq(invoices.clientId, query.clientId));
       if (query.status) where.push(eq(invoices.status, query.status));
+      if (query.recipientType) where.push(eq(invoices.recipientType, query.recipientType));
       if (query.from) where.push(gte(invoices.issueDate, query.from));
       if (query.until) where.push(lte(invoices.issueDate, query.until));
+      const search = query.q?.trim();
+      if (search) {
+        const pattern = `%${search}%`;
+        const matchingClients = transaction
+          .select({ id: clientRecords.id })
+          .from(clientRecords)
+          .where(
+            and(
+              eq(clientRecords.tenantId, principal.tenantId),
+              or(
+                ilike(clientRecords.firstName, pattern),
+                ilike(clientRecords.preferredName, pattern),
+                ilike(clientRecords.lastName, pattern),
+                sql`concat(coalesce(${clientRecords.preferredName}, ${clientRecords.firstName}), ' ', ${clientRecords.lastName}) ilike ${pattern}`,
+              ),
+            ),
+          );
+        where.push(
+          or(
+            ilike(invoices.invoiceNumber, pattern),
+            ilike(sql`coalesce(${invoices.recipientSnapshot}->>'name', '')`, pattern),
+            inArray(invoices.clientId, matchingClients),
+          )!,
+        );
+      }
       const whereClause = and(...where);
       const [countRows, rows] = await Promise.all([
         transaction.select({ total: count() }).from(invoices).where(whereClause),
@@ -1400,8 +1559,13 @@ export class BillingApplicationService {
     principal: AuthorizationPrincipal,
     query: {
       organizationId?: string;
+      facilityId?: string;
       clientId?: string;
+      recipientType?: 'client' | 'payer';
       q?: string;
+      from?: string;
+      until?: string;
+      status?: 'open' | ReceivableStatus;
       page?: number;
       pageSize?: number;
     } = {},
@@ -1413,8 +1577,13 @@ export class BillingApplicationService {
     principal: AuthorizationPrincipal,
     query: {
       organizationId?: string;
+      facilityId?: string;
       clientId?: string;
+      recipientType?: 'client' | 'payer';
       q?: string;
+      from?: string;
+      until?: string;
+      status?: 'open' | ReceivableStatus;
       page?: number;
       pageSize?: number;
     } = {},
@@ -1430,18 +1599,19 @@ export class BillingApplicationService {
     ) {
       throw new InvalidBillingProfileError();
     }
+    if (query.from && query.until && query.from > query.until) {
+      throw new InvalidBillingProfileError();
+    }
     if (query.organizationId)
       this.requireOrganization(principal, 'billing.payments.read', query.organizationId);
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const outstandingCents = sql<number>`
-        ${invoices.grandTotalCents}
-        - coalesce((
+      const correctionsCents = sql<number>`coalesce((
           select sum(${invoiceCorrections.amountCents})
           from ${invoiceCorrections}
           where ${invoiceCorrections.tenantId} = ${invoices.tenantId}
             and ${invoiceCorrections.invoiceId} = ${invoices.id}
-        ), 0)
-        - coalesce((
+        ), 0)`;
+      const paymentsCents = sql<number>`coalesce((
           select sum(${paymentAllocations.amountCents})
           from ${paymentAllocations}
           where ${paymentAllocations.tenantId} = ${invoices.tenantId}
@@ -1452,16 +1622,50 @@ export class BillingApplicationService {
               where ${paymentReversals.tenantId} = ${paymentAllocations.tenantId}
                 and ${paymentReversals.allocationId} = ${paymentAllocations.id}
             )
-        ), 0)
+        ), 0)`;
+      const outstandingCents = sql<number>`
+        ${invoices.grandTotalCents} - ${correctionsCents} - ${paymentsCents}
       `;
       const where = [
         eq(invoices.tenantId, principal.tenantId),
         eq(invoices.status, 'issued'),
-        gt(outstandingCents, 0),
         billingScopeConditions(principal, 'billing.payments.read') ?? sql`false`,
       ];
       if (query.organizationId) where.push(eq(invoices.organizationId, query.organizationId));
+      if (query.facilityId) where.push(eq(invoices.facilityId, query.facilityId));
       if (query.clientId) where.push(eq(invoices.clientId, query.clientId));
+      if (query.recipientType) where.push(eq(invoices.recipientType, query.recipientType));
+      if (query.from) where.push(gte(invoices.dueDate, query.from));
+      if (query.until) where.push(lte(invoices.dueDate, query.until));
+      const selectedStatus = query.status ?? 'open';
+      switch (selectedStatus) {
+        case 'open':
+          where.push(gt(outstandingCents, 0));
+          break;
+        case 'unpaid':
+          where.push(
+            gt(outstandingCents, 0),
+            eq(paymentsCents, 0),
+            gte(invoices.dueDate, currentDate()),
+          );
+          break;
+        case 'partially_paid':
+          where.push(
+            gt(outstandingCents, 0),
+            gt(paymentsCents, 0),
+            gte(invoices.dueDate, currentDate()),
+          );
+          break;
+        case 'paid':
+          where.push(eq(outstandingCents, 0), lt(correctionsCents, invoices.grandTotalCents));
+          break;
+        case 'overdue':
+          where.push(gt(outstandingCents, 0), lt(invoices.dueDate, currentDate()));
+          break;
+        case 'corrected':
+          where.push(eq(correctionsCents, invoices.grandTotalCents), eq(paymentsCents, 0));
+          break;
+      }
       const search = query.q?.trim();
       if (search) {
         const pattern = `%${search}%`;
@@ -1480,7 +1684,11 @@ export class BillingApplicationService {
             ),
           );
         where.push(
-          or(ilike(invoices.invoiceNumber, pattern), inArray(invoices.clientId, matchingClients))!,
+          or(
+            ilike(invoices.invoiceNumber, pattern),
+            ilike(sql`coalesce(${invoices.recipientSnapshot}->>'name', '')`, pattern),
+            inArray(invoices.clientId, matchingClients),
+          )!,
         );
       }
       const whereClause = and(...where);
@@ -1506,6 +1714,10 @@ export class BillingApplicationService {
     principal: AuthorizationPrincipal,
     query: {
       organizationId?: string;
+      q?: string;
+      from?: string;
+      until?: string;
+      method?: 'bank_transfer' | 'cash' | 'other';
       remainingOnly?: boolean;
       page?: number;
       pageSize?: number;
@@ -1518,6 +1730,10 @@ export class BillingApplicationService {
     principal: AuthorizationPrincipal,
     query: {
       organizationId?: string;
+      q?: string;
+      from?: string;
+      until?: string;
+      method?: 'bank_transfer' | 'cash' | 'other';
       remainingOnly?: boolean;
       page?: number;
       pageSize?: number;
@@ -1536,10 +1752,45 @@ export class BillingApplicationService {
     }
     if (query.organizationId)
       this.requireOrganization(principal, 'billing.payments.read', query.organizationId);
+    if (query.from && query.until && query.from > query.until) {
+      throw new InvalidBillingProfileError();
+    }
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const where = [eq(payments.tenantId, principal.tenantId)];
       where.push(billingPaymentScopeConditions(principal) ?? sql`false`);
       if (query.organizationId) where.push(eq(payments.organizationId, query.organizationId));
+      if (query.method) where.push(eq(payments.method, query.method));
+      const receivedDate = sql<string>`(${payments.receivedAt} at time zone 'Europe/Berlin')::date::text`;
+      if (query.from) where.push(gte(receivedDate, query.from));
+      if (query.until) where.push(lte(receivedDate, query.until));
+      const search = query.q?.trim();
+      if (search) {
+        const pattern = `%${search}%`;
+        const matchingPaymentsByInvoice = transaction
+          .select({ paymentId: paymentAllocations.paymentId })
+          .from(paymentAllocations)
+          .innerJoin(
+            invoices,
+            and(
+              eq(invoices.tenantId, paymentAllocations.tenantId),
+              eq(invoices.id, paymentAllocations.invoiceId),
+            ),
+          )
+          .where(
+            and(
+              eq(paymentAllocations.tenantId, principal.tenantId),
+              ilike(invoices.invoiceNumber, pattern),
+            ),
+          );
+        where.push(
+          or(
+            ilike(payments.reference, pattern),
+            ilike(payments.payerReference, pattern),
+            ilike(payments.payerNameSnapshot, pattern),
+            inArray(payments.id, matchingPaymentsByInvoice),
+          )!,
+        );
+      }
       if (query.remainingOnly) {
         where.push(sql`${payments.amountCents} > coalesce((
           select sum(${paymentAllocations.amountCents})
@@ -2182,6 +2433,8 @@ export class BillingApplicationService {
           organizationId: invoice.organizationId,
           documentId,
           documentVersion,
+          eventId: event.id,
+          correlationId: request.correlationId,
           pdfData,
         };
       },
@@ -2193,6 +2446,8 @@ export class BillingApplicationService {
       issued.documentId,
       issued.documentVersion,
       issued.pdfData,
+      issued.eventId,
+      issued.correlationId,
     );
     return this.getInvoice(principal, invoiceId);
   }
@@ -2305,6 +2560,8 @@ export class BillingApplicationService {
           organizationId: invoice.organizationId,
           documentId,
           documentVersion,
+          eventId,
+          correlationId: request.correlationId,
           pdfData: this.invoicePdfData(
             invoice,
             invoice.issuerSnapshot,
@@ -2321,6 +2578,8 @@ export class BillingApplicationService {
       generated.documentId,
       generated.documentVersion,
       generated.pdfData,
+      generated.eventId,
+      generated.correlationId,
     );
     return this.getInvoice(principal, invoiceId);
   }
@@ -3092,6 +3351,7 @@ export class BillingApplicationService {
       paymentHistory,
       pdfStatus: document?.status ?? null,
       receivableStatus: receivable?.status ?? null,
+      paidCents: facts?.paymentsCents ?? 0,
       outstandingCents: receivable?.outstandingCents ?? null,
       evidenceDiscrepancy,
     };
@@ -3369,8 +3629,27 @@ export class BillingApplicationService {
     documentId: string,
     documentVersion: number,
     data: InvoicePdfData,
+    eventId: string,
+    correlationId: string,
   ): Promise<void> {
     const objectKey = `billing/invoices/${tenantId}/${invoiceId}/v${documentVersion}.pdf`;
+    const startedAt = Date.now();
+    let stage:
+      | 'template_configuration'
+      | 'pdf_render'
+      | 'storage_write'
+      | 'storage_verification'
+      | 'metadata_write' = 'template_configuration';
+    const identifiers = {
+      tenantId,
+      organizationId,
+      invoiceId,
+      documentId,
+      documentVersion,
+      eventId,
+      correlationId,
+    };
+    billingLogger.info(identifiers, 'Invoice PDF generation started');
     try {
       const config = await this.documents?.renderingConfiguration(
         tenantId,
@@ -3378,11 +3657,19 @@ export class BillingApplicationService {
         'invoice',
       );
       const locale = config?.template.defaultLocale ?? 'de';
+      stage = 'pdf_render';
       const bytes = await this.pdfRenderer.renderInvoice(data, config?.branding, locale);
       const sha256 = createHash('sha256').update(bytes).digest('hex');
+      stage = 'storage_write';
       await this.storage.put({ key: objectKey, body: bytes, contentType: 'application/pdf' });
+      stage = 'storage_verification';
+      const storedBytes = await this.storage.get(objectKey);
+      if (!storedBytes || createHash('sha256').update(storedBytes).digest('hex') !== sha256) {
+        throw new Error('Stored invoice PDF did not match its generated digest');
+      }
+      stage = 'metadata_write';
       await this.unitOfWork.transaction({ tenantId }, async (transaction) => {
-        await transaction
+        const updated = await transaction
           .update(invoiceDocuments)
           .set({
             status: 'ready',
@@ -3394,10 +3681,44 @@ export class BillingApplicationService {
             failureCode: null,
             generatedAt: new Date(),
           })
-          .where(and(eq(invoiceDocuments.tenantId, tenantId), eq(invoiceDocuments.id, documentId)));
+          .where(
+            and(
+              eq(invoiceDocuments.tenantId, tenantId),
+              eq(invoiceDocuments.id, documentId),
+              eq(invoiceDocuments.status, 'pending'),
+            ),
+          )
+          .returning({ id: invoiceDocuments.id });
+        if (updated.length === 0) {
+          const [current] = await transaction
+            .select({ status: invoiceDocuments.status })
+            .from(invoiceDocuments)
+            .where(
+              and(eq(invoiceDocuments.tenantId, tenantId), eq(invoiceDocuments.id, documentId)),
+            )
+            .limit(1);
+          if (current?.status !== 'ready') {
+            throw new Error('Invoice PDF readiness transition was not applied');
+          }
+        }
       });
-    } catch {
-      await this.markDocumentFailed(tenantId, documentId);
+      billingLogger.info(
+        { ...identifiers, byteLength: storedBytes.length, durationMs: Date.now() - startedAt },
+        'Invoice PDF is ready',
+      );
+    } catch (error) {
+      const failureCode = invoicePdfFailureCode(stage);
+      billingLogger.error(
+        {
+          ...identifiers,
+          stage,
+          failureCode,
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+          durationMs: Date.now() - startedAt,
+        },
+        'Invoice PDF generation failed',
+      );
+      await this.markDocumentFailed(tenantId, documentId, failureCode, identifiers);
     }
   }
 
@@ -3441,7 +3762,12 @@ export class BillingApplicationService {
     }
   }
 
-  private async markDocumentFailed(tenantId: string, documentId: string): Promise<void> {
+  private async markDocumentFailed(
+    tenantId: string,
+    documentId: string,
+    failureCode = 'PDF_GENERATION_FAILED',
+    identifiers: Record<string, string | number> = { tenantId, documentId },
+  ): Promise<void> {
     try {
       await this.unitOfWork.transaction({ tenantId }, async (transaction) => {
         await transaction
@@ -3450,12 +3776,25 @@ export class BillingApplicationService {
             status: 'failed',
             objectKey: null,
             sha256: null,
-            failureCode: 'PDF_GENERATION_FAILED',
+            failureCode,
           })
-          .where(and(eq(invoiceDocuments.tenantId, tenantId), eq(invoiceDocuments.id, documentId)));
+          .where(
+            and(
+              eq(invoiceDocuments.tenantId, tenantId),
+              eq(invoiceDocuments.id, documentId),
+              eq(invoiceDocuments.status, 'pending'),
+            ),
+          );
       });
-    } catch {
-      // The invoice remains issued; the administrator can request regeneration from its snapshot.
+    } catch (error) {
+      billingLogger.error(
+        {
+          ...identifiers,
+          failureCode,
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+        },
+        'Invoice PDF failure state could not be recorded',
+      );
     }
   }
 

@@ -167,22 +167,32 @@ export class BillingController {
   @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'clientId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'fundingSourceId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'q', required: false, minLength: 2, maxLength: 120 })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiQuery({ name: 'ready', required: false, enum: ['true', 'false'] })
   @ApiQuery({ name: 'evidenceStatus', required: false, type: String })
   @ApiOkResponse({ type: BillingCandidateListResponseDto })
   async candidates(@Req() request: ApiRequest, @Query() query: Record<string, string | undefined>) {
     const parsed = billingCandidateQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException();
-    return {
-      items: await this.billing.candidates(this.principal(request), withoutUndefined(parsed.data)),
-    };
+    const input = withoutUndefined(parsed.data);
+    if (input.page !== undefined || input.pageSize !== undefined) {
+      return this.billing.candidatesPage(this.principal(request), input);
+    }
+    return { items: await this.billing.candidates(this.principal(request), input) };
   }
 
   @Get('invoices')
   @ApiOperation({ summary: 'List invoices within the current tenant and resource scope' })
   @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'clientId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'status', required: false, enum: ['draft', 'issued', 'cancelled'] })
+  @ApiQuery({ name: 'recipientType', required: false, enum: ['client', 'payer'] })
+  @ApiQuery({ name: 'q', required: false, minLength: 2, maxLength: 120 })
+  @ApiQuery({ name: 'from', required: false, type: String, format: 'date' })
+  @ApiQuery({ name: 'until', required: false, type: String, format: 'date' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiOkResponse({ type: BillingInvoiceListResponseDto })
@@ -342,8 +352,17 @@ export class BillingController {
   @Get('receivables')
   @ApiOperation({ summary: 'List issued invoices with outstanding balances and derived status' })
   @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'clientId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'recipientType', required: false, enum: ['client', 'payer'] })
   @ApiQuery({ name: 'q', required: false, minLength: 2, maxLength: 120 })
+  @ApiQuery({ name: 'from', required: false, type: String, format: 'date' })
+  @ApiQuery({ name: 'until', required: false, type: String, format: 'date' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['open', 'unpaid', 'partially_paid', 'paid', 'overdue', 'corrected'],
+  })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiOkResponse({ type: BillingInvoiceListResponseDto })
@@ -359,6 +378,10 @@ export class BillingController {
   @Get('payments')
   @ApiOperation({ summary: 'List recorded payment facts and remaining unallocated amounts' })
   @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'q', required: false, minLength: 2, maxLength: 120 })
+  @ApiQuery({ name: 'from', required: false, type: String, format: 'date' })
+  @ApiQuery({ name: 'until', required: false, type: String, format: 'date' })
+  @ApiQuery({ name: 'method', required: false, enum: ['bank_transfer', 'cash', 'other'] })
   @ApiQuery({ name: 'remainingOnly', required: false, enum: ['true', 'false'] })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })

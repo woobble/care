@@ -6,6 +6,7 @@ import {
   useId,
   useRef,
   useState,
+  useTransition,
   type FormEvent,
   type FormHTMLAttributes,
   type ReactNode,
@@ -27,7 +28,9 @@ import { Input } from '@care/ui/components/input';
 import { NativeSelect } from '@care/ui/components/native-select';
 import { Textarea } from '@care/ui/components/textarea';
 
-type ServerAction = (formData: FormData) => void | boolean | Promise<void | boolean>;
+type ServerAction = (
+  formData: FormData,
+) => void | boolean | string | Promise<void | boolean | string>;
 type FormValues = FieldValues;
 
 const permissiveFormSchema = z.record(z.string(), z.unknown());
@@ -212,8 +215,9 @@ export function RHFActionForm({
   const t = useTranslations('Common.formValidation');
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  const [actionPending, startActionTransition] = useTransition();
   const [nativeSchema, setNativeSchema] = useState<z.ZodType>(permissiveFormSchema);
-  const [actionFailed, setActionFailed] = useState(false);
+  const [actionFailure, setActionFailure] = useState<string | false | null>(null);
   const methods = useForm<FormValues>({
     mode: 'onSubmit',
     reValidateMode: 'onChange',
@@ -223,7 +227,12 @@ export function RHFActionForm({
   const nativeAction = action as (formData: FormData) => void | Promise<void>;
 
   useEffect(() => {
-    if (!warnOnUnsavedChanges || !methods.formState.isDirty || methods.formState.isSubmitting)
+    if (
+      !warnOnUnsavedChanges ||
+      !methods.formState.isDirty ||
+      methods.formState.isSubmitting ||
+      actionPending
+    )
       return;
 
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -276,7 +285,13 @@ export function RHFActionForm({
       document.removeEventListener('click', confirmNavigation, true);
       document.removeEventListener('submit', confirmOtherFormSubmit, true);
     };
-  }, [methods.formState.isDirty, methods.formState.isSubmitting, t, warnOnUnsavedChanges]);
+  }, [
+    actionPending,
+    methods.formState.isDirty,
+    methods.formState.isSubmitting,
+    t,
+    warnOnUnsavedChanges,
+  ]);
 
   useEffect(() => {
     const form = formRef.current;
@@ -320,13 +335,18 @@ export function RHFActionForm({
     const form = formRef.current;
     if (!form) return;
     if (beforeAction && !(await beforeAction(form, data))) return;
-    const result = await action(data);
-    setActionFailed(result === false);
-    if (result !== false && refreshOnSuccess) router.refresh();
+    startActionTransition(async () => {
+      // Keep redirect signals inside the transition so Next can handle server-action navigation.
+      const result = await action(data);
+      setActionFailure(result === false || typeof result === 'string' ? result : null);
+      if (result !== false && refreshOnSuccess) router.refresh();
+    });
   }
 
+  const submitting = methods.formState.isSubmitting || actionPending;
+
   function handleChange(event: React.ChangeEvent<HTMLFormElement>) {
-    setActionFailed(false);
+    setActionFailure(null);
     const control = event.target;
     if (
       !(
@@ -386,19 +406,19 @@ export function RHFActionForm({
         {...props}
         ref={formRef}
         action={nativeAction}
-        aria-busy={methods.formState.isSubmitting}
+        aria-busy={submitting}
         onChange={handleChange}
         onSubmit={handleSubmit}
       >
-        <fieldset disabled={methods.formState.isSubmitting} className="contents">
+        <fieldset disabled={submitting} className="contents">
           {children}
         </fieldset>
-        {methods.formState.isSubmitting ? (
+        {submitting ? (
           <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
             {t('saving')}
           </p>
         ) : null}
-        {actionFailed ? (
+        {actionFailure !== null ? (
           <div
             role="alert"
             className="rounded-md border border-destructive/30 bg-destructive/10 p-3"

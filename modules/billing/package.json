@@ -22,6 +22,7 @@
     "@care/database": "workspace:*",
     "@care/documents": "workspace:*",
     "@care/events": "workspace:*",
+    "@care/logging": "workspace:*",
     "@care/organizations": "workspace:*",
     "@care/permissions": "workspace:*",
     "@care/platform": "workspace:*",

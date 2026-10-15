@@ -5,11 +5,11 @@ import { PageHeader } from '@app/web/components/page-patterns';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
 import { Input } from '@care/ui/components/input';
 import type { Locale } from '@app/web/i18n/config';
 import type { components } from '@care/api-client';
 import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate } from '@app/web/i18n/format';
 import {
   getApiClient,
   getPermissionGrants,
@@ -17,6 +17,7 @@ import {
   hasClientPermission,
 } from '@app/web/lib/api';
 import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 import { formatCents } from '@app/web/app/(office)/billing/format';
 import { createClaimAction } from '@app/web/app/(office)/billing/actions';
 
@@ -27,6 +28,8 @@ type Arrangement = {
   validFrom: string;
   validUntil: string | null;
   mandateStatus: string;
+  documentedSource: string | null;
+  documentedReference: string | null;
 };
 type Payer = { id: string; name: string };
 type PayerProfile = {
@@ -75,6 +78,13 @@ export default async function NewClaimPage({
   const canReadClient = hasClientPermission(
     permissions,
     'client.read',
+    header['X-Tenant-Id'],
+    invoice.organizationId,
+    invoice.facilityId,
+  );
+  const canReadEvidence = hasClientPermission(
+    permissions,
+    'service_evidence.read',
     header['X-Tenant-Id'],
     invoice.organizationId,
     invoice.facilityId,
@@ -161,9 +171,100 @@ export default async function NewClaimPage({
           ) : null}
         </Alert>
       ) : null}
+      <section
+        aria-labelledby="claim-invoice-context"
+        className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5"
+      >
+        <h2 id="claim-invoice-context" className="text-lg font-semibold">
+          {t('claimInvoiceAndClient')}
+        </h2>
+        <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-1">
+            <dt className="text-muted-foreground">{t('invoiceNumber')}</dt>
+            <dd className="font-medium">{invoice.invoiceNumber ?? t('draftIdentifier')}</dd>
+          </div>
+          <div className="grid gap-1">
+            <dt className="text-muted-foreground">{t('client')}</dt>
+            <dd className="font-medium">
+              {canReadClient ? (
+                <Link
+                  className="text-primary underline"
+                  href={`/clients/${invoice.clientId}/invoices`}
+                >
+                  {invoice.clientName}
+                </Link>
+              ) : (
+                invoice.clientName
+              )}
+            </dd>
+          </div>
+          <div className="grid gap-1">
+            <dt className="text-muted-foreground">{t('invoiceTotal')}</dt>
+            <dd className="font-medium">
+              {formatCents(invoice.grandTotalCents, locale as Locale)}
+            </dd>
+          </div>
+          <div className="grid gap-1">
+            <dt className="text-muted-foreground">{t('claimRecipient')}</dt>
+            <dd className="font-medium">
+              {invoice.recipientType === 'payer'
+                ? t('directPayerBilling')
+                : t('customerReimbursement')}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      {eligibleArrangements.length ? (
+        <section className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
+          <h2 className="text-lg font-semibold">{t('claimPayerAndMandate')}</h2>
+          <ul className="grid gap-3 md:grid-cols-2">
+            {eligibleArrangements.map((arrangement) => (
+              <li key={arrangement.id} className="grid gap-2 rounded-md border p-3 text-sm">
+                <h3 className="font-semibold">
+                  {payerNames.get(arrangement.payerId ?? '') ?? t('payer')}
+                </h3>
+                <dl className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-muted-foreground">{t('claimArrangementType')}</dt>
+                    <dd>
+                      {arrangement.arrangementType === 'direct_payer_billing'
+                        ? t('directPayerBilling')
+                        : t('customerReimbursement')}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t('claimMandateStatus')}</dt>
+                    <dd>{mandateStatusLabel(t, arrangement.mandateStatus)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t('claimMandateValidity')}</dt>
+                    <dd>
+                      {formatValidity(
+                        arrangement.validFrom,
+                        arrangement.validUntil,
+                        locale as Locale,
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t('claimMandateSource')}</dt>
+                    <dd>{arrangement.documentedSource ?? t('claimMandateUnknown')}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t('claimMandateReference')}</dt>
+                    <dd>{arrangement.documentedReference ?? t('claimMandateUnknown')}</dd>
+                  </div>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {canCreate && eligibleArrangements.length ? (
         <RHFActionForm
           action={createClaimAction}
+          errorMessage={t('claimCreationFailed')}
           className="grid gap-5 rounded-lg border bg-card p-5"
         >
           <input type="hidden" name="invoiceId" value={invoice.id} />
@@ -184,7 +285,9 @@ export default async function NewClaimPage({
                   {payerNames.get(arrangement.payerId ?? '') ?? t('payer')} ·{' '}
                   {arrangement.arrangementType === 'direct_payer_billing'
                     ? t('directPayerBilling')
-                    : t('customerReimbursement')}
+                    : t('customerReimbursement')}{' '}
+                  · {mandateStatusLabel(t, arrangement.mandateStatus)} ·{' '}
+                  {formatValidity(arrangement.validFrom, arrangement.validUntil, locale as Locale)}
                 </option>
               ))}
             </NativeSelect>
@@ -230,6 +333,14 @@ export default async function NewClaimPage({
                     {line.serviceDate} · {line.fundingLabelSnapshot ?? t('fundingSource')} ·{' '}
                     {formatCents(line.grossCents, locale as Locale)}
                   </p>
+                  {canReadEvidence ? (
+                    <Link
+                      className="w-fit text-sm text-primary underline"
+                      href={`/service-evidence/${line.evidencePackageId}`}
+                    >
+                      {t('openEvidencePackage')}
+                    </Link>
+                  ) : null}
                 </div>
                 <label className="grid gap-1 text-sm" htmlFor={'claimAmount-' + line.id}>
                   {t('claimLineAmount')}
@@ -247,9 +358,9 @@ export default async function NewClaimPage({
               </div>
             ))}
           </fieldset>
-          <Button type="submit" className="w-fit">
+          <ConfirmSubmitButton confirmation={t('confirmCreateClaim')} variant="default">
             {t('createClaimDraft')}
-          </Button>
+          </ConfirmSubmitButton>
         </RHFActionForm>
       ) : null}
     </div>
@@ -258,6 +369,25 @@ export default async function NewClaimPage({
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function formatValidity(from: string, until: string | null, locale: Locale): string {
+  return `${formatDate(from, locale) ?? from} – ${until ? (formatDate(until, locale) ?? until) : '∞'}`;
+}
+
+function mandateStatusLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'Billing'>>>,
+  status: string,
+): string {
+  if (
+    status === 'authorized' ||
+    status === 'pending' ||
+    status === 'revoked' ||
+    status === 'not_applicable'
+  ) {
+    return t(`mandateStatuses.${status}`);
+  }
+  return t('claimMandateUnknown');
 }
 
 function channelLabel(

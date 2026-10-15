@@ -77,7 +77,7 @@ export class BillingPdfRenderer {
     const payload: DocumentPayload = {
       documentType: 'invoice',
       locale,
-      title: label(locale, 'Rechnung', 'Invoice'),
+      title: `${label(locale, 'Rechnung', 'Invoice')} ${invoice.invoiceNumber}`,
       provider: {
         name: invoice.issuer.legalName,
         addressLines: addressLines(invoice.issuer.address),

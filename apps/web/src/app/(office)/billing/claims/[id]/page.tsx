@@ -25,6 +25,7 @@ import {
   hasClientPermission,
 } from '@app/web/lib/api';
 import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 import { DataPagination } from '@app/web/components/data-pagination';
 import { redirectToValidPage } from '@app/web/lib/pagination';
 import { formatCents } from '@app/web/app/(office)/billing/format';
@@ -55,8 +56,10 @@ type ClaimDetail = {
     clientId: string;
     invoiceId: string;
     amountCents: number;
+    fundingSourceType: string;
     status: ClaimStatus;
     version: number;
+    supersedesClaimId: string | null;
     channel: string | null;
     packageVersion: number;
     packageHash: string | null;
@@ -70,6 +73,7 @@ type ClaimDetail = {
   lines: Array<{
     id: string;
     invoiceLineId: string;
+    evidencePackageId: string;
     amountCents: number;
     serviceDate: string;
     serviceNameSnapshot: string;
@@ -83,6 +87,7 @@ type ClaimDetail = {
     externalReference: string | null;
     packageVersion: number;
     packageHash: string;
+    submittedBy: string;
   }>;
   decisions: Array<{
     id: string;
@@ -91,7 +96,10 @@ type ClaimDetail = {
     acceptedCents: number;
     rejectedCents: number;
     reasonCode: string | null;
+    protectedExplanation: string | null;
     externalReference: string | null;
+    recordedBy: string;
+    createdAt: string;
     lines: Array<{ claimLineId: string; acceptedCents: number; rejectedCents: number }>;
   }>;
   packageDocuments: Array<{
@@ -176,6 +184,20 @@ export default async function ClaimDetailPage({
   const canReadInvoice = hasClientPermission(
     permissions,
     'billing.read',
+    header['X-Tenant-Id'],
+    claim.organizationId,
+    claim.facilityId,
+  );
+  const canReadClient = hasClientPermission(
+    permissions,
+    'client.read',
+    header['X-Tenant-Id'],
+    claim.organizationId,
+    claim.facilityId,
+  );
+  const canReadEvidence = hasClientPermission(
+    permissions,
+    'service_evidence.read',
     header['X-Tenant-Id'],
     claim.organizationId,
     claim.facilityId,
@@ -265,19 +287,37 @@ export default async function ClaimDetailPage({
     payment !== undefined &&
     payment.unpaidCents > 0 &&
     ['accepted', 'partially_accepted', 'resubmitted'].includes(claim.status);
+  const latestDecision = detail.decisions.at(-1);
+  const invoiceTotalCents = snapshotNumber(claim.invoiceSnapshot, 'grandTotalCents');
+  const arrangementStatus = snapshotText(claim.arrangementSnapshot, 'mandateStatus');
+  const profileConfigured = claim.profileSnapshot.configured === true;
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-6">
+    <div className="mx-auto grid w-full min-w-0 max-w-6xl grid-cols-1 gap-6">
       <PageHeader
-        eyebrow={<Link href="/billing/claims">{t('claims')}</Link>}
+        eyebrow={
+          <span className="flex flex-wrap items-center gap-2">
+            <Link href="/billing/claims">{t('claims')}</Link>
+            <span aria-hidden="true">·</span>
+            <span>{claimReference(claim.id)}</span>
+          </span>
+        }
         title={`${t('claim')} · ${invoiceNumber}`}
-        description={`${clientName} · ${payerName} · ${claimStatus(t, claim.status)}`}
+        description={`${clientName} · ${payerName}`}
+        meta={<StatusBadge status={claim.status} label={claimStatus(t, claim.status)} />}
         actions={
-          canReadInvoice ? (
-            <Button asChild variant="secondary">
-              <Link href={'/billing/invoices/' + claim.invoiceId}>{t('openInvoice')}</Link>
-            </Button>
-          ) : undefined
+          <div className="flex flex-wrap gap-2">
+            {canReadInvoice ? (
+              <Button asChild variant="secondary">
+                <Link href={'/billing/invoices/' + claim.invoiceId}>{t('openInvoice')}</Link>
+              </Button>
+            ) : null}
+            {canReadClient ? (
+              <Button asChild variant="secondary">
+                <Link href={`/clients/${claim.clientId}/invoices`}>{t('client')}</Link>
+              </Button>
+            ) : null}
+          </div>
         }
       />
       <BillingNavigation permissions={permissions} />
@@ -289,9 +329,16 @@ export default async function ClaimDetailPage({
           {t('claimSummary')}
         </h2>
         <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+          <Metric label={t('claimReference')} value={claimReference(claim.id)} />
           <Metric label={t('client')} value={clientName} />
           <Metric label={t('payer')} value={payerName} />
           <Metric label={t('invoiceNumber')} value={invoiceNumber} />
+          <Metric
+            label={t('invoiceTotal')}
+            value={
+              invoiceTotalCents === null ? '—' : formatCents(invoiceTotalCents, locale as Locale)
+            }
+          />
           <Metric
             label={t('claimAmount')}
             value={formatCents(claim.amountCents, locale as Locale)}
@@ -306,11 +353,100 @@ export default async function ClaimDetailPage({
             label={t('claimPackageVersion')}
             value={claim.packageVersion ? String(claim.packageVersion) : '—'}
           />
-          <Metric label={t('claimPackageHash')} value={claim.packageHash ?? '—'} />
+          <Metric
+            label={t('claimPackageHash')}
+            value={claim.packageHash ?? '—'}
+            valueClassName="break-all"
+          />
         </dl>
         <p className="rounded-md border border-primary/20 bg-accent p-3 text-sm text-primary">
           {t('manualSubmissionNotice')}
         </p>
+      </section>
+
+      <section
+        aria-labelledby="claim-payer-context"
+        className="grid gap-4 rounded-lg border bg-card p-5"
+      >
+        <div>
+          <h2 id="claim-payer-context" className="text-xl font-semibold">
+            {t('claimPayerAndMandate')}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('claimPayerContextDescription')}</p>
+        </div>
+        <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+          <Metric
+            label={t('payerIdentifier')}
+            value={snapshotText(claim.payerSnapshot, 'payerIdentifier') ?? '—'}
+          />
+          <Metric
+            label={t('claimArrangementType')}
+            value={arrangementTypeLabel(
+              t,
+              snapshotText(claim.arrangementSnapshot, 'arrangementType'),
+            )}
+          />
+          <Metric
+            label={t('claimMandateStatus')}
+            value={mandateStatusLabel(t, arrangementStatus)}
+          />
+          <Metric
+            label={t('claimMandateValidity')}
+            value={formatValidity(
+              snapshotText(claim.arrangementSnapshot, 'validFrom'),
+              snapshotText(claim.arrangementSnapshot, 'validUntil'),
+              locale as Locale,
+            )}
+          />
+          <Metric
+            label={t('claimMandateSource')}
+            value={snapshotText(claim.arrangementSnapshot, 'documentedSource') ?? '—'}
+          />
+          <Metric
+            label={t('claimMandateReference')}
+            value={snapshotText(claim.arrangementSnapshot, 'documentedReference') ?? '—'}
+          />
+          <Metric
+            label={t('fundingSource')}
+            value={fundingSourceLabel(t, claim.fundingSourceType)}
+          />
+          <Metric
+            label={t('payerRequirementsProfile')}
+            value={
+              profileConfigured
+                ? `${snapshotText(claim.profileSnapshot, 'sourceName') ?? t('claimConfigured')} · ${snapshotText(claim.profileSnapshot, 'sourceVersion') ?? ''}`
+                : t('unconfiguredPayerRequirements')
+            }
+          />
+          <Metric label={t('claimChannel')} value={channelLabel(t, claim.channel)} />
+        </dl>
+        {claim.supersedesClaimId ? (
+          <p className="rounded-md border bg-muted/40 p-3 text-sm">
+            {t('claimReplacesPrevious')}{' '}
+            <Link
+              className="font-medium text-primary underline"
+              href={`/billing/claims/${claim.supersedesClaimId}`}
+            >
+              {claimReference(claim.supersedesClaimId)}
+            </Link>
+          </p>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {canReadClient ? (
+            <Button asChild variant="secondary">
+              <Link href={`/clients/${claim.clientId}/invoices`}>
+                {t('managePayerArrangements')}
+              </Link>
+            </Button>
+          ) : null}
+          <Button asChild variant="secondary">
+            <Link
+              href={`/billing/claims/settings?organizationId=${claim.organizationId}&q=${encodeURIComponent(payerName)}`}
+            >
+              {t('payerDirectoryEntry')}
+            </Link>
+          </Button>
+        </div>
       </section>
 
       <section
@@ -329,7 +465,29 @@ export default async function ClaimDetailPage({
                 key={blocker.code + '-' + index}
                 className="rounded-md border border-warning/40 bg-warning-muted p-3 text-sm text-warning-foreground"
               >
-                <strong>{blocker.field}</strong>: {blocker.detail}
+                <strong>{readinessFieldLabel(t, blocker.field)}</strong>: {blocker.detail}
+                {readinessHref(
+                  blocker.field,
+                  detail.lines,
+                  claim,
+                  canReadClient,
+                  canReadInvoice,
+                  canReadEvidence,
+                ) ? (
+                  <Link
+                    className="mt-2 block font-medium underline"
+                    href={readinessHref(
+                      blocker.field,
+                      detail.lines,
+                      claim,
+                      canReadClient,
+                      canReadInvoice,
+                      canReadEvidence,
+                    )!}
+                  >
+                    {readinessActionLabel(t, blocker.field)}
+                  </Link>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -351,9 +509,9 @@ export default async function ClaimDetailPage({
               <form action={cancelClaimAction}>
                 <input type="hidden" name="claimId" value={claim.id} />
                 <input type="hidden" name="expectedVersion" value={claim.version} />
-                <Button type="submit" variant="secondary">
+                <ConfirmSubmitButton confirmation={t('confirmCancelClaim')} variant="secondary">
                   {t('cancelClaim')}
-                </Button>
+                </ConfirmSubmitButton>
               </form>
             ) : null}
           </div>
@@ -364,14 +522,15 @@ export default async function ClaimDetailPage({
         <h2 id="claim-lines" className="text-xl font-semibold">
           {t('claimLines')}
         </h2>
-        <div className="overflow-x-auto">
-          <ShadcnTable className="w-full min-w-[40rem] text-left text-sm">
+        <div className="hidden overflow-x-auto md:block">
+          <ShadcnTable className="w-full min-w-[48rem] text-left text-sm">
             <ShadcnTableHeader>
               <ShadcnTableRow className="border-b text-muted-foreground">
                 <ShadcnTableHead className="p-2">{t('service')}</ShadcnTableHead>
                 <ShadcnTableHead className="p-2">{t('serviceDate')}</ShadcnTableHead>
                 <ShadcnTableHead className="p-2">{t('fundingSource')}</ShadcnTableHead>
                 <ShadcnTableHead className="p-2">{t('claimAmount')}</ShadcnTableHead>
+                <ShadcnTableHead className="p-2">{t('claimEvidence')}</ShadcnTableHead>
               </ShadcnTableRow>
             </ShadcnTableHeader>
             <ShadcnTableBody>
@@ -389,11 +548,49 @@ export default async function ClaimDetailPage({
                   <ShadcnTableCell className="p-2">
                     {formatCents(line.amountCents, locale as Locale)}
                   </ShadcnTableCell>
+                  <ShadcnTableCell className="p-2">
+                    {canReadEvidence ? (
+                      <Link
+                        className="text-primary underline"
+                        href={`/service-evidence/${line.evidencePackageId}`}
+                      >
+                        {t('openEvidencePackage')}
+                      </Link>
+                    ) : (
+                      '—'
+                    )}
+                  </ShadcnTableCell>
                 </ShadcnTableRow>
               ))}
             </ShadcnTableBody>
           </ShadcnTable>
         </div>
+        <ul className="grid gap-2 md:hidden">
+          {detail.lines.map((line) => (
+            <li key={line.id} className="grid gap-2 rounded-md border p-3 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <strong>
+                  {line.serviceNameSnapshot || translate('Resources.unavailableService')}
+                </strong>
+                <span className="shrink-0 font-medium">
+                  {formatCents(line.amountCents, locale as Locale)}
+                </span>
+              </div>
+              <p className="text-muted-foreground">
+                {formatDate(line.serviceDate, locale as Locale) ?? line.serviceDate} ·{' '}
+                {line.fundingLabelSnapshot ?? '—'}
+              </p>
+              {canReadEvidence ? (
+                <Link
+                  className="w-fit text-primary underline"
+                  href={`/service-evidence/${line.evidencePackageId}`}
+                >
+                  {t('openEvidencePackage')}
+                </Link>
+              ) : null}
+            </li>
+          ))}
+        </ul>
       </section>
 
       {claim.packageVersion > 0 ? (
@@ -435,6 +632,45 @@ export default async function ClaimDetailPage({
         </section>
       ) : null}
 
+      <section
+        aria-labelledby="claim-submission-history"
+        className="grid gap-3 rounded-lg border bg-card p-5"
+      >
+        <h2 id="claim-submission-history" className="text-xl font-semibold">
+          {t('claimSubmissionHistory')}
+        </h2>
+        {detail.submissions.length ? (
+          <ol className="grid gap-3">
+            {detail.submissions.map((submission) => (
+              <li key={submission.id} className="grid gap-2 rounded-md border p-3 sm:grid-cols-2">
+                <Metric
+                  label={t('claimSubmissionNumber')}
+                  value={String(submission.submissionNumber)}
+                />
+                <Metric
+                  label={t('claimSubmittedAt')}
+                  value={formatDateTime(submission.submittedAt, locale as Locale) ?? '—'}
+                />
+                <Metric label={t('claimChannel')} value={channelLabel(t, submission.channel)} />
+                <Metric
+                  label={t('claimPackageVersion')}
+                  value={String(submission.packageVersion)}
+                />
+                <Metric
+                  label={t('externalReference')}
+                  value={submission.externalReference ?? '—'}
+                />
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t('claimNoSubmissionRecorded')}</p>
+        )}
+        <p className="rounded-md border border-primary/20 bg-accent p-3 text-sm text-primary">
+          {t('manualSubmissionNotice')}
+        </p>
+      </section>
+
       {canSubmitNow ? (
         <section
           aria-labelledby="claim-submit"
@@ -452,10 +688,71 @@ export default async function ClaimDetailPage({
               label={t('externalReference')}
             />
             <Field id="submission-note" name="protectedNote" label={t('protectedNote')} />
-            <Button type="submit" className="w-fit md:col-span-2">
-              {t('recordSubmission')}
-            </Button>
+            <div className="md:col-span-2">
+              <ConfirmSubmitButton confirmation={t('confirmRecordSubmission')} variant="default">
+                {t('recordSubmission')}
+              </ConfirmSubmitButton>
+            </div>
           </RHFActionForm>
+        </section>
+      ) : null}
+
+      {latestDecision ? (
+        <section
+          aria-labelledby="claim-latest-response"
+          className={`grid gap-3 rounded-lg border p-5 ${
+            ['rejected', 'partially_accepted', 'clarification_required'].includes(
+              latestDecision.decision,
+            )
+              ? 'border-warning/40 bg-warning-muted'
+              : 'bg-card'
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="claim-latest-response" className="text-xl font-semibold">
+              {t('latestPayerResponse')}
+            </h2>
+            <StatusBadge
+              status={latestDecision.decision as ClaimStatus}
+              label={claimStatus(t, latestDecision.decision as ClaimStatus)}
+            />
+          </div>
+          <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            <Metric
+              label={t('decisionDate')}
+              value={
+                formatDate(latestDecision.decisionDate, locale as Locale) ??
+                latestDecision.decisionDate
+              }
+            />
+            <Metric
+              label={t('acceptedAmount')}
+              value={formatCents(latestDecision.acceptedCents, locale as Locale)}
+            />
+            <Metric
+              label={t('rejectedAmount')}
+              value={formatCents(latestDecision.rejectedCents, locale as Locale)}
+            />
+            <Metric label={t('reasonCode')} value={latestDecision.reasonCode ?? '—'} />
+            <Metric
+              label={t('externalReference')}
+              value={latestDecision.externalReference ?? '—'}
+            />
+          </dl>
+          {latestDecision.protectedExplanation ? (
+            <p className="rounded-md border bg-card p-3 text-sm">
+              {latestDecision.protectedExplanation}
+            </p>
+          ) : ['rejected', 'partially_accepted', 'clarification_required'].includes(
+              latestDecision.decision,
+            ) ? (
+            <p className="text-sm">{t('payerResponseNeedsReview')}</p>
+          ) : null}
+          {['rejected', 'partially_accepted', 'clarification_required'].includes(
+            latestDecision.decision,
+          ) ? (
+            <p className="text-sm">{t('claimCorrectionContext')}</p>
+          ) : null}
         </section>
       ) : null}
 
@@ -537,9 +834,9 @@ export default async function ClaimDetailPage({
                 </div>
               ))}
             </div>
-            <Button type="submit" className="w-fit">
+            <ConfirmSubmitButton confirmation={t('confirmRecordPayerResponse')} variant="default">
               {t('savePayerDecision')}
-            </Button>
+            </ConfirmSubmitButton>
           </RHFActionForm>
         </section>
       ) : null}
@@ -556,7 +853,9 @@ export default async function ClaimDetailPage({
           <form action={resubmitClaimAction}>
             <input type="hidden" name="claimId" value={claim.id} />
             <input type="hidden" name="expectedVersion" value={claim.version} />
-            <Button type="submit">{t('createResubmission')}</Button>
+            <ConfirmSubmitButton confirmation={t('confirmResubmission')} variant="default">
+              {t('createResubmission')}
+            </ConfirmSubmitButton>
           </form>
         </section>
       ) : null}
@@ -627,9 +926,9 @@ export default async function ClaimDetailPage({
                       ).toFixed(2)}
                       required
                     />
-                    <Button type="submit" className="self-end">
+                    <ConfirmSubmitButton confirmation={t('confirmLinkPayment')} variant="default">
                       {t('linkPayment')}
-                    </Button>
+                    </ConfirmSubmitButton>
                   </RHFActionForm>
                 ))}
                 {paymentData ? (
@@ -681,6 +980,144 @@ export default async function ClaimDetailPage({
 function snapshotText(snapshot: Record<string, unknown>, key: string): string | null {
   const value = snapshot[key];
   return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function snapshotNumber(snapshot: Record<string, unknown>, key: string): number | null {
+  const value = snapshot[key];
+  return typeof value === 'number' && Number.isSafeInteger(value) ? value : null;
+}
+
+function claimReference(id: string): string {
+  return `CLM-${id.replaceAll('-', '').slice(-8).toUpperCase()}`;
+}
+
+function formatValidity(from: string | null, until: string | null, locale: Locale): string {
+  const start = from ? (formatDate(from, locale) ?? from) : '—';
+  const end = until ? (formatDate(until, locale) ?? until) : '∞';
+  return `${start} – ${end}`;
+}
+
+function arrangementTypeLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'Billing'>>>,
+  arrangementType: string | null,
+): string {
+  switch (arrangementType) {
+    case 'direct_payer_billing':
+      return t('directPayerBilling');
+    case 'reimbursement_to_client':
+      return t('customerReimbursement');
+    default:
+      return '—';
+  }
+}
+
+function mandateStatusLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'Billing'>>>,
+  status: string | null,
+): string {
+  if (
+    status === 'authorized' ||
+    status === 'pending' ||
+    status === 'revoked' ||
+    status === 'not_applicable'
+  ) {
+    return t(`mandateStatuses.${status}`);
+  }
+  return t('claimMandateUnknown');
+}
+
+function readinessFieldLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'Billing'>>>,
+  field: string,
+): string {
+  if (field.startsWith('lines.')) return t('readinessFields.evidence');
+  switch (field) {
+    case 'invoiceId':
+    case 'invoicePdf':
+      return t('readinessFields.invoice');
+    case 'payerId':
+      return t('readinessFields.payer');
+    case 'payerArrangementId':
+      return t('readinessFields.payerArrangement');
+    case 'payerBillingProfileId':
+      return t('readinessFields.payerProfile');
+    case 'payerIdentifier':
+      return t('readinessFields.payerIdentifier');
+    case 'insuranceNumber':
+      return t('readinessFields.insurance');
+    case 'mandateDocumentArtifactId':
+      return t('readinessFields.mandateDocument');
+    case 'providerRecognition':
+    case 'fundingSource':
+      return t('readinessFields.funding');
+    case 'lines':
+      return t('readinessFields.evidence');
+    default:
+      return t('readinessFields.other');
+  }
+}
+
+function fundingSourceLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'Billing'>>>,
+  fundingSourceType: string,
+): string {
+  switch (fundingSourceType) {
+    case 'statutory_long_term_care_insurance':
+      return t('fundingSourceTypes.statutory_long_term_care_insurance');
+    case 'private_long_term_care_insurance':
+      return t('fundingSourceTypes.private_long_term_care_insurance');
+    case 'self_pay':
+      return t('fundingSourceTypes.self_pay');
+    case 'other':
+      return t('fundingSourceTypes.other');
+    default:
+      return t('claimMandateUnknown');
+  }
+}
+
+function readinessActionLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'Billing'>>>,
+  field: string,
+): string {
+  if (field.startsWith('lines.')) return t('openEvidencePackage');
+  if (field === 'invoiceId' || field === 'invoicePdf') return t('openInvoice');
+  if (field === 'payerId' || field === 'payerBillingProfileId' || field === 'payerIdentifier') {
+    return t('payerDirectoryEntry');
+  }
+  if (field === 'providerRecognition' || field === 'fundingSource') {
+    return t('openBenefitsWorkspace');
+  }
+  if (field === 'mandateDocumentArtifactId') return t('openClaimDocuments');
+  return t('managePayerArrangements');
+}
+
+function readinessHref(
+  field: string,
+  lines: ClaimDetail['lines'],
+  claim: ClaimDetail['claim'],
+  canReadClient: boolean,
+  canReadInvoice: boolean,
+  canReadEvidence: boolean,
+): string | null {
+  if (field.startsWith('lines.')) {
+    const lineId = field.slice('lines.'.length);
+    const line = lines.find((candidate) => candidate.id === lineId);
+    return canReadEvidence && line ? `/service-evidence/${line.evidencePackageId}` : null;
+  }
+  if (field === 'invoiceId' || field === 'invoicePdf') {
+    return canReadInvoice ? `/billing/invoices/${claim.invoiceId}` : null;
+  }
+  if (field === 'payerId' || field === 'payerBillingProfileId' || field === 'payerIdentifier') {
+    const payerName = snapshotText(claim.payerSnapshot, 'name') ?? '';
+    return `/billing/claims/settings?organizationId=${claim.organizationId}&q=${encodeURIComponent(payerName)}`;
+  }
+  if (field === 'providerRecognition' || field === 'fundingSource') {
+    return canReadClient ? `/clients/${claim.clientId}/benefits` : null;
+  }
+  if (field === 'mandateDocumentArtifactId' && claim.packageVersion > 0) {
+    return '#claim-documents';
+  }
+  return canReadClient ? `/clients/${claim.clientId}/invoices` : null;
 }
 
 function isUuid(value: string): boolean {
@@ -790,12 +1227,32 @@ function historyLabel(
   }
 }
 
-function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
+function Metric({
+  label,
+  value,
+  valueClassName,
+}: Readonly<{ label: string; value: string; valueClassName?: string }>) {
   return (
-    <div className="grid gap-1">
+    <div className="grid min-w-0 gap-1">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="break-words font-medium">{value}</dd>
+      <dd className={`break-words font-medium ${valueClassName ?? ''}`}>{value}</dd>
     </div>
+  );
+}
+
+function StatusBadge({ status, label }: Readonly<{ status: ClaimStatus; label: string }>) {
+  const color =
+    status === 'ready' || status === 'accepted'
+      ? 'bg-success-muted text-success-foreground'
+      : ['rejected', 'partially_accepted', 'clarification_required'].includes(status)
+        ? 'bg-warning-muted text-warning-foreground'
+        : status === 'submitted' || status === 'resubmitted'
+          ? 'bg-accent text-primary'
+          : 'bg-muted text-muted-foreground';
+  return (
+    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${color}`}>
+      {label}
+    </span>
   );
 }
 

@@ -1,10 +1,12 @@
 import { v7 as uuidv7 } from 'uuid';
+import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
+import { PDFDocument } from 'pdf-lib';
 import { devices, expect, test } from '@playwright/test';
-import type { BrowserContext, Locator, Page } from '@playwright/test';
+import type { BrowserContext, Dialog, Locator, Page } from '@playwright/test';
 import { loadStorageConfig } from '@care/config';
 import { createS3ObjectStorage } from '@care/storage';
 
@@ -1269,8 +1271,9 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page.getByRole('heading', { name: `E2E Service ${runId}` })).toBeVisible();
     await expect(page.getByText('Weekly: Monday, Wednesday')).toBeVisible();
 
-    page.once('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Activate', exact: true }).click();
+    await acceptDialogDuringAction(page, () =>
+      page.getByRole('button', { name: 'Activate', exact: true }).click(),
+    );
     await expect(page.getByText('Service planning activated', { exact: true })).toBeVisible();
     await expect(agreementCard.getByText('Active', { exact: true }).first()).toBeVisible();
     await agreementCard.scrollIntoViewIfNeeded();
@@ -1391,8 +1394,9 @@ test('Authentik users can be invited and administered from the office UI', async
           has: page.getByRole('button', { name: 'Move to stage' }),
         });
         await stageForm.getByLabel('Move to stage').selectOption(stage);
-        page.once('dialog', (dialog) => dialog.accept());
-        await stageForm.getByRole('button', { name: 'Move to stage' }).click();
+        await acceptDialogDuringAction(page, () =>
+          stageForm.getByRole('button', { name: 'Move to stage' }).click(),
+        );
         await expect(page.getByTestId('admission-stage')).toHaveText(
           stage === 'assessment'
             ? 'Assessment'
@@ -1455,8 +1459,9 @@ test('Authentik users can be invited and administered from the office UI', async
       await page.goBack();
       await expect(page.getByRole('heading', { name: 'Admission readiness' })).toBeVisible();
 
-      page.once('dialog', (dialog) => dialog.accept());
-      await page.getByRole('button', { name: 'Admit client' }).click();
+      await acceptDialogDuringAction(page, () =>
+        page.getByRole('button', { name: 'Admit client' }).click(),
+      );
       await expect(page.getByText('Admitted', { exact: true }).first()).toBeVisible();
       const admittedClient = await database.query<{ status: string }>(
         'SELECT status FROM clients.clients WHERE tenant_id = $1 AND id = $2',
@@ -1779,8 +1784,9 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.setViewportSize({ width: 1440, height: 900 });
 
     await page.goto(`/visits/${generatedVisit.id}`);
-    page.once('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Cancel visit' }).click();
+    await acceptDialogDuringAction(page, () =>
+      page.getByRole('button', { name: 'Cancel visit' }).click(),
+    );
     await expect(page.getByText('Cancelled', { exact: true })).toBeVisible();
     const remainingVisits = await database.query<{ id: string; status: string }>(
       `SELECT id, status FROM scheduling.visits
@@ -1791,21 +1797,25 @@ test('Authentik users can be invited and administered from the office UI', async
     );
     for (const visit of remainingVisits.rows) {
       await page.goto(`/visits/${visit.id}`);
-      page.once('dialog', (dialog) => dialog.accept());
-      await page.getByRole('button', { name: 'Cancel visit' }).click();
+      await acceptDialogDuringAction(page, () =>
+        page.getByRole('button', { name: 'Cancel visit' }).click(),
+      );
       await expect(page.getByText('Cancelled', { exact: true })).toBeVisible();
     }
 
     await page.goto(`/clients/${agreementClientId}/service-agreements`);
     await expect(page.getByRole('heading', { name: 'Service planning' })).toBeVisible();
-    page.once('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Suspend' }).click();
+    await acceptDialogDuringAction(page, () =>
+      page.getByRole('button', { name: 'Suspend' }).click(),
+    );
     await expect(agreementCard.getByText('Suspended', { exact: true })).toBeVisible();
-    page.once('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Resume' }).click();
+    await acceptDialogDuringAction(page, () =>
+      page.getByRole('button', { name: 'Resume' }).click(),
+    );
     await expect(agreementCard.getByText('Active', { exact: true }).first()).toBeVisible();
-    page.once('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'End', exact: true }).click();
+    await acceptDialogDuringAction(page, () =>
+      page.getByRole('button', { name: 'End', exact: true }).click(),
+    );
     await expect(agreementCard.getByText('Ended', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Service planning ended', { exact: true })).toBeVisible();
 
@@ -1903,8 +1913,9 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(linkableAccount).toBeVisible();
     await captureReviewScreenshot(page, 'employee-account-link-dialog.png');
     await linkableAccount.click();
-    page.once('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Link user' }).click();
+    await acceptDialogDuringAction(page, () =>
+      page.getByRole('button', { name: 'Link user' }).click(),
+    );
     await expect(page.getByText(caregiverName, { exact: true })).toBeVisible();
     await retryCareToday(caregiverPage, 'Try again');
     await expect(employeeLinkError).toHaveCount(0);
@@ -2292,7 +2303,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page.getByText('1 visit', { exact: true })).toBeVisible();
     await documentationClientFilter.fill('Unknown client');
     await page.getByRole('button', { name: 'Apply filters' }).click();
-    await expect(page.getByText('0 visits', { exact: true })).toBeVisible();
+    await expect(page.getByText('0 visits', { exact: true })).toBeVisible({ timeout: 15_000 });
 
     await caregiverPage.goto(`/care/visits/${executionVisitId}`);
     const evidenceSection = caregiverPage
@@ -2323,8 +2334,9 @@ test('Authentik users can be invited and administered from the office UI', async
       ),
     ).toBeVisible();
     await expect(staleDraftAfterReload.locator('textarea[name="content"]')).toHaveValue('');
-    await caregiverPage.once('dialog', (dialog) => dialog.accept());
-    await staleDraftAfterReload.getByRole('button', { name: 'Discard draft' }).tap();
+    await acceptDialogDuringAction(caregiverPage, () =>
+      staleDraftAfterReload.getByRole('button', { name: 'Discard draft' }).tap(),
+    );
     await expect(
       staleDraftAfterReload.getByText(
         'A draft from an earlier server version cannot be restored safely',
@@ -2440,13 +2452,16 @@ test('Authentik users can be invited and administered from the office UI', async
     expect(acknowledgementFormState.valid).toBe(true);
     expect(acknowledgementFormState.serializedStrokeCount).toBeGreaterThan(0);
     let acknowledgementDialogSeen = false;
-    await caregiverPage.once('dialog', async (dialog) => {
-      acknowledgementDialogSeen = true;
-      await dialog.accept();
-    });
     const signatureSubmit = caregiverPage.getByRole('button', { name: 'Confirm signature' });
     await expect(signatureSubmit).toBeEnabled();
-    await signatureSubmit.click();
+    await acceptDialogDuringAction(
+      caregiverPage,
+      () => signatureSubmit.click(),
+      async (dialog) => {
+        acknowledgementDialogSeen = true;
+        await dialog.accept();
+      },
+    );
     expect(acknowledgementDialogSeen).toBe(true);
     await expect(
       caregiverPage.getByRole('status').filter({ hasText: 'Service evidence acknowledged' }),
@@ -2507,8 +2522,9 @@ test('Authentik users can be invited and administered from the office UI', async
     await signatoryPicker.selectOption(`representative:${representativeContactId}`);
     await caregiverPage.locator('input[name="method-choice"][value="typed_confirmation"]').check();
     await caregiverPage.locator('input[name="confirmationName"]').fill('E2E Representative');
-    await caregiverPage.once('dialog', (dialog) => dialog.accept());
-    await caregiverPage.getByRole('button', { name: 'Record acknowledgement' }).click();
+    await acceptDialogDuringAction(caregiverPage, () =>
+      caregiverPage.getByRole('button', { name: 'Record acknowledgement' }).click(),
+    );
     await expect(
       caregiverPage.getByRole('status').filter({ hasText: 'Service evidence acknowledged' }),
     ).toBeVisible();
@@ -2539,10 +2555,31 @@ test('Authentik users can be invited and administered from the office UI', async
       'href',
       `/service-evidence/${replacementEvidencePackageId}`,
     );
+    await captureReviewScreenshot(page, 'service-evidence-worklist-desktop-light.png', true);
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+    await captureReviewScreenshot(page, 'service-evidence-worklist-desktop-dark.png', true);
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Light' }).click();
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'service-evidence-worklist-tablet-768.png', true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'service-evidence-worklist-mobile-390.png', true);
+    await page.setViewportSize({ width: 1440, height: 900 });
     await acknowledgedRow.getByRole('link').click();
     await expect(page.getByText('E2E Representative', { exact: true })).toBeVisible();
     await expect(page.getByText('authorized representative', { exact: true })).toBeVisible();
     await expect(page.getByText('Name confirmation', { exact: true })).toBeVisible();
+    await captureReviewScreenshot(page, 'service-evidence-package-detail-desktop.png', true);
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'service-evidence-package-detail-tablet-768.png', true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'service-evidence-package-detail-mobile-390.png', true);
+    await page.setViewportSize({ width: 1440, height: 900 });
     const initialVersionLink = page.locator(
       `a[href="/service-evidence/${initialEvidencePackageId}"]`,
     );
@@ -2554,12 +2591,14 @@ test('Authentik users can be invited and administered from the office UI', async
       has: page.getByRole('button', { name: 'Revoke acknowledgement' }),
     });
     await revokeForm.locator('input[name="reason"]').fill(`E2E revocation ${runId}`);
-    await page.once('dialog', (dialog) => dialog.accept());
-    await revokeForm.getByRole('button', { name: 'Revoke acknowledgement' }).click();
+    await acceptDialogDuringAction(page, () =>
+      revokeForm.getByRole('button', { name: 'Revoke acknowledgement' }).click(),
+    );
     await expect(
       page.getByRole('status').filter({ hasText: 'The acknowledgement was revoked.' }),
     ).toBeVisible();
     await expect(page.getByText('Revoked', { exact: true }).first()).toBeVisible();
+    await captureReviewScreenshot(page, 'service-evidence-package-revoked-desktop.png', true);
 
     await caregiverPage.goto(`/care/visits/${executionVisitId}/evidence`);
     await caregiverPage
@@ -2577,8 +2616,9 @@ test('Authentik users can be invited and administered from the office UI', async
     });
     await declineForm.locator('select[name="reasonCode"]').selectOption('disagrees_with_record');
     await declineForm.locator('textarea[name="note"]').fill(`E2E decline note ${runId}`);
-    await caregiverPage.once('dialog', (dialog) => dialog.accept());
-    await declineForm.getByRole('button', { name: 'Record decline' }).click();
+    await acceptDialogDuringAction(caregiverPage, () =>
+      declineForm.getByRole('button', { name: 'Record decline' }).click(),
+    );
     await expect(
       caregiverPage
         .getByRole('status')
@@ -2592,6 +2632,17 @@ test('Authentik users can be invited and administered from the office UI', async
     expect(
       await caregiverPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
+    await page.goto(
+      `/service-evidence?clientQuery=${encodeURIComponent(`Agreement E2E ${runId}`)}`,
+    );
+    const declinedEvidenceRow = page.getByRole('row').filter({
+      has: page.locator(`a[href="/service-evidence/${replacementEvidencePackageId}"]`),
+    });
+    await expect(declinedEvidenceRow).toContainText('Declined');
+    await captureReviewScreenshot(page, 'service-evidence-worklist-declined-desktop.png', true);
+    await declinedEvidenceRow.getByRole('link').click();
+    await expect(page.getByText(`E2E decline note ${runId}`, { exact: false })).toBeVisible();
+    await captureReviewScreenshot(page, 'service-evidence-package-declined-desktop.png', true);
 
     const claimEvidenceRefresh = `E2E claim evidence refresh ${runId}`;
     await page.goto(`/visits/${executionVisitId}`);
@@ -2617,8 +2668,9 @@ test('Authentik users can be invited and administered from the office UI', async
       .selectOption(`representative:${representativeContactId}`);
     await caregiverPage.locator('input[name="method-choice"][value="typed_confirmation"]').check();
     await caregiverPage.locator('input[name="confirmationName"]').fill('E2E Representative');
-    await caregiverPage.once('dialog', (dialog) => dialog.accept());
-    await caregiverPage.getByRole('button', { name: 'Record acknowledgement' }).tap();
+    await acceptDialogDuringAction(caregiverPage, () =>
+      caregiverPage.getByRole('button', { name: 'Record acknowledgement' }).tap(),
+    );
     await expect(
       caregiverPage.getByRole('status').filter({ hasText: 'Service evidence acknowledged' }),
     ).toBeVisible();
@@ -2768,8 +2820,9 @@ test('Authentik users can be invited and administered from the office UI', async
       .filter({ hasText: 'E2E Private payment' });
     await privateAllocationRow.getByText('Reverse allocation').click();
     await privateAllocationRow.getByLabel('Reason for correction').fill('E2E funding correction');
-    await page.once('dialog', (dialog) => dialog.accept());
-    await privateAllocationRow.getByRole('button', { name: 'Confirm reversal' }).click();
+    await acceptDialogDuringAction(page, () =>
+      privateAllocationRow.getByRole('button', { name: 'Confirm reversal' }).click(),
+    );
     await expect(page).toHaveURL(/updated=reversal/);
     const correctedHistory = page.locator('section[aria-labelledby="history-title"]');
     const reversalRow = correctedHistory
@@ -2797,6 +2850,10 @@ test('Authentik users can be invited and administered from the office UI', async
     });
     await page.goto(`/billing?${billingFilters.toString()}`);
     await expect(page.getByRole('heading', { name: 'Billable service worklist' })).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath('billing-worklist-1440-desktop.png'),
+      fullPage: true,
+    });
     await page.setViewportSize({ width: 390, height: 844 });
     await expectMobileLayoutToFit(page);
     await page.screenshot({
@@ -2840,6 +2897,17 @@ test('Authentik users can be invited and administered from the office UI', async
         .getByRole('definition')
         .filter({ hasText: 'E2E Pflegekasse' }),
     ).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath('billing-invoice-review-1440-desktop.png'),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await page.screenshot({
+      path: testInfo.outputPath('billing-invoice-review-390-mobile.png'),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
 
     await page.getByRole('button', { name: 'Issue invoice' }).click();
     await expect(page).toHaveURL(new RegExp(`/billing/invoices/${invoiceId}\\?updated=issued$`));
@@ -2855,16 +2923,103 @@ test('Authentik users can be invited and administered from the office UI', async
       throw new Error('The issued invoice does not have a billable total');
     }
     const invoiceAmount = (invoiceAmountCents / 100).toFixed(2);
-    const invoicePdfLink = page.getByRole('link', { name: 'Download invoice PDF' });
+    const invoiceIdentityResult = await database.query<{ invoice_number: string }>(
+      'SELECT invoice_number FROM billing.invoices WHERE tenant_id = $1 AND id = $2',
+      [tenantId, invoiceId],
+    );
+    const invoiceNumber = invoiceIdentityResult.rows[0]?.invoice_number;
+    if (!invoiceNumber) throw new Error('The issued invoice number is missing');
+
+    const readInvoicePdfState = async () => {
+      const documentResult = await database.query<{
+        status: string;
+        failure_code: string | null;
+        object_key: string | null;
+        sha256: string | null;
+        document_version: number;
+        created_at: Date;
+      }>(
+        `SELECT status, failure_code, object_key, sha256, document_version, created_at
+         FROM billing.invoice_documents
+         WHERE tenant_id = $1 AND invoice_id = $2 AND correction_id IS NULL
+         ORDER BY document_version DESC LIMIT 1`,
+        [tenantId, invoiceId],
+      );
+      const eventResult = await database.query<{
+        status: string;
+        attempt_count: number;
+        last_error: string | null;
+      }>(
+        `SELECT status, attempt_count, last_error
+         FROM platform.outbox_messages
+         WHERE tenant_id = $1 AND event_type = 'invoice.issued'
+           AND event->>'aggregateId' = $2
+         ORDER BY created_at DESC LIMIT 1`,
+        [tenantId, invoiceId],
+      );
+      return {
+        document: documentResult.rows[0] ?? null,
+        event: eventResult.rows[0] ?? null,
+      };
+    };
+    // PDF readiness is an invoice document state. The outbox row is included in failure
+    // diagnostics only; its delivery status is not a proxy for PDF readiness.
     await expect
       .poll(
         async () => {
-          await page.reload();
-          return invoicePdfLink.isVisible();
+          const state = await readInvoicePdfState();
+          const status = state.document?.status ?? 'missing';
+          const ageSeconds = state.document
+            ? Math.floor((Date.now() - new Date(state.document.created_at).getTime()) / 1_000)
+            : null;
+          return [
+            state.document?.status === 'failed'
+              ? `failed:${state.document.failure_code ?? 'unknown'}`
+              : status,
+            `documentVersion=${state.document?.document_version ?? 'missing'}`,
+            `documentAgeSeconds=${ageSeconds ?? 'unknown'}`,
+            `outboxStatus=${state.event?.status ?? 'missing'}`,
+            `outboxAttempts=${state.event?.attempt_count ?? 0}`,
+            `outboxLastError=${state.event?.last_error ?? 'none'}`,
+          ].join(' ');
         },
-        { timeout: 60_000, intervals: [1_000, 2_000, 5_000] },
+        {
+          timeout: 60_000,
+          intervals: [250, 500, 1_000, 2_000],
+          message: 'Invoice PDF document should reach Ready or Failed with recorded state',
+        },
       )
-      .toBe(true);
+      .toMatch(/^(ready|failed:)/);
+    const pdfState = await readInvoicePdfState();
+    expect(
+      pdfState.document,
+      `Invoice PDF readiness diagnostics: ${JSON.stringify({
+        document: pdfState.document,
+        outbox: pdfState.event,
+      })}`,
+    ).toMatchObject({
+      status: 'ready',
+      object_key: expect.any(String),
+      sha256: expect.any(String),
+    });
+
+    const invoicePdfLink = page.getByRole('link', { name: 'Download invoice PDF' });
+    await page.reload();
+    await expect(page.getByText('PDF ready', { exact: true })).toBeVisible();
+    await expect(invoicePdfLink).toBeVisible();
+    const invoicePdfUrl = new URL(`/billing/invoices/${invoiceId}/pdf`, page.url()).toString();
+    const verificationResponse = await page.request.get(invoicePdfUrl);
+    expect(verificationResponse.status()).toBe(200);
+    expect(verificationResponse.headers()['content-type']).toContain('application/pdf');
+    expect(verificationResponse.headers()['content-disposition']).toContain(invoiceNumber);
+    const invoicePdfBytes = await verificationResponse.body();
+    expect(createHash('sha256').update(invoicePdfBytes).digest('hex')).toBe(
+      pdfState.document?.sha256,
+    );
+    const downloadedPdf = await PDFDocument.load(invoicePdfBytes);
+    expect(downloadedPdf.getPageCount()).toBeGreaterThan(0);
+    expect(downloadedPdf.getTitle()).toContain(invoiceNumber);
+
     const invoicePdfResponsePromise = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === `/billing/invoices/${invoiceId}/pdf` &&
@@ -2876,6 +3031,52 @@ test('Authentik users can be invited and administered from the office UI', async
     expect(invoicePdfResponse.headers()['content-type']).toContain('application/pdf');
 
     await page.goto(`/billing/invoices/${invoiceId}`);
+    await expect(page.getByText('PDF ready', { exact: true })).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath('billing-invoice-ready-1440-desktop.png'),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await page.screenshot({
+      path: testInfo.outputPath('billing-invoice-ready-390-mobile.png'),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    await page.goto(`/billing/receivables?q=${encodeURIComponent(invoiceNumber)}`);
+    await expect(page.getByRole('heading', { name: 'Receivables', level: 1 })).toBeVisible();
+    await expect(page.locator(`table a[href="/billing/invoices/${invoiceId}"]`)).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath('billing-receivables-1440-desktop.png'),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await page.screenshot({
+      path: testInfo.outputPath('billing-receivables-390-mobile.png'),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    await page.goto(`/billing/payments?invoiceId=${invoiceId}`);
+    await expect(page.getByRole('heading', { name: 'Record payment' })).toBeVisible();
+    await expect(
+      page.locator('section[aria-labelledby="record-payment-title"] input[name="invoiceId"]'),
+    ).toHaveValue(invoiceId);
+    await page.screenshot({
+      path: testInfo.outputPath('billing-payment-entry-1440-desktop.png'),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await page.screenshot({
+      path: testInfo.outputPath('billing-payment-entry-390-mobile.png'),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    await page.goto(`/billing/invoices/${invoiceId}`);
     await page.getByRole('link', { name: 'Create claim' }).click();
     await expect(page).toHaveURL(new RegExp(`/billing/claims/new\\?invoiceId=${invoiceId}$`));
     const claimCreationForm = page.locator('form').filter({
@@ -2884,13 +3085,44 @@ test('Authentik users can be invited and administered from the office UI', async
     await claimCreationForm.locator('select[name="payerBillingProfileId"]').selectOption({
       index: 1,
     });
-    await claimCreationForm.getByRole('button', { name: 'Create claim draft' }).click();
+    await acceptDialogDuringAction(page, () =>
+      claimCreationForm.getByRole('button', { name: 'Create claim draft' }).click(),
+    );
     await expect(page).toHaveURL(/\/billing\/claims\/[0-9a-f-]{36}\?updated=created$/i);
     claimId = new URL(page.url()).pathname.split('/').at(-1);
     if (!claimId) throw new Error('The issued invoice did not create a payer claim draft');
+    const originalClaimId = claimId;
+    await page.goto(`/billing/claims?q=${encodeURIComponent(invoiceNumber)}`);
+    await expect(page.getByRole('heading', { name: 'Claims worklist' })).toBeVisible();
+    const originalClaimRow = page
+      .locator(`a[href="/billing/claims/${originalClaimId}"]:visible`)
+      .first();
+    await expect(originalClaimRow).toBeVisible();
+    await captureReviewScreenshot(page, 'billing-claims-worklist-desktop-light.png', true);
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+    await captureReviewScreenshot(page, 'billing-claims-worklist-desktop-dark.png', true);
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Light' }).click();
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'billing-claims-worklist-tablet-768.png', true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'billing-claims-worklist-mobile-390.png', true);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/billing/claims/${originalClaimId}`);
     await expectVisibleTextToOmitIds(page, [claimId, invoiceId, agreementClientId]);
     await expect(page.getByRole('heading', { name: 'Readiness' })).toBeVisible();
     await expect(page.getByText('All configured readiness checks are satisfied.')).toBeVisible();
+    await captureReviewScreenshot(page, 'billing-claim-preparation-desktop.png', true);
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'billing-claim-preparation-tablet-768.png', true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'billing-claim-preparation-mobile-390.png', true);
+    await page.setViewportSize({ width: 1440, height: 900 });
     const prepareClaimButton = page.getByRole('button', { name: 'Prepare submission package' });
     await expect(prepareClaimButton).toBeEnabled();
     await prepareClaimButton.click();
@@ -2899,6 +3131,7 @@ test('Authentik users can be invited and administered from the office UI', async
       .locator('section[aria-labelledby="claim-documents"]')
       .locator('li');
     await expect(claimDocumentRows).toHaveCount(3);
+    await captureReviewScreenshot(page, 'billing-claim-supporting-documents-desktop.png', true);
     const claimDocumentResponsePromise = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname.startsWith(`/billing/claims/${claimId}/documents/`) &&
@@ -2919,18 +3152,88 @@ test('Authentik users can be invited and administered from the office UI', async
     await claimSubmissionForm
       .locator('input[name="protectedNote"]')
       .fill('Submitted manually through the payer portal.');
-    await claimSubmissionForm.getByRole('button', { name: 'Record submission' }).click();
+    await acceptDialogDuringAction(page, () =>
+      claimSubmissionForm.getByRole('button', { name: 'Record submission' }).click(),
+    );
     await expect(
       page.getByRole('status').filter({ hasText: 'Manual submission recorded.' }),
     ).toBeVisible();
     const claimDecisionForm = page.locator('form').filter({
       has: page.getByRole('button', { name: 'Save payer decision' }),
     });
+    await claimDecisionForm.locator('select[name="decision"]').selectOption('rejected');
+    const acceptedInput = claimDecisionForm.locator('input[name^="accepted-"]').first();
+    const acceptedName = await acceptedInput.getAttribute('name');
+    const claimLineId = acceptedName?.replace(/^accepted-/, '');
+    if (!claimLineId) throw new Error('The claim decision form has no claim line');
+    await acceptedInput.fill('0.00');
+    await claimDecisionForm.locator(`input[name="rejected-${claimLineId}"]`).fill(invoiceAmount);
     await claimDecisionForm
       .locator('input[name="externalReference"]')
-      .fill(`E2E decision ${runId}`);
-    await claimDecisionForm.getByRole('button', { name: 'Save payer decision' }).click();
-    await expect(page.getByText('Accepted', { exact: true })).toBeVisible();
+      .fill(`E2E rejection ${runId}`);
+    await claimDecisionForm.locator('input[name="reasonCode"]').fill('missing_documentation');
+    await claimDecisionForm
+      .locator('input[name="protectedExplanation"]')
+      .fill('Synthetic E2E payer response: the supporting evidence needs correction.');
+    await acceptDialogDuringAction(page, () =>
+      claimDecisionForm.getByRole('button', { name: 'Save payer decision' }).click(),
+    );
+    await expect(page.getByText('Rejected', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('missing_documentation', { exact: true })).toBeVisible();
+    await captureReviewScreenshot(page, 'billing-claim-rejected-desktop.png', true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'billing-claim-rejected-mobile-390.png', true);
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    await acceptDialogDuringAction(page, () =>
+      page.getByRole('button', { name: 'Create linked resubmission' }).click(),
+    );
+    await expect(page).toHaveURL(/\/billing\/claims\/[0-9a-f-]{36}\?updated=resubmitted$/i);
+    claimId = new URL(page.url()).pathname.split('/').at(-1);
+    if (!claimId || claimId === originalClaimId) {
+      throw new Error('The rejected claim did not create a linked resubmission');
+    }
+    await expect(
+      page.locator(`a[href="/billing/claims/${originalClaimId}"]:visible`).first(),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Readiness' })).toBeVisible();
+    await expect(page.getByText('All configured readiness checks are satisfied.')).toBeVisible();
+    await captureReviewScreenshot(page, 'billing-claim-resubmission-review-desktop.png', true);
+    await page.getByRole('button', { name: 'Prepare submission package' }).click();
+    await expect(page.getByRole('status')).toHaveText('Submission package prepared.');
+    const resubmissionForm = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Record submission' }),
+    });
+    await resubmissionForm
+      .locator('input[name="externalReference"]')
+      .fill(`E2E resubmission ${runId}`);
+    await resubmissionForm
+      .locator('input[name="protectedNote"]')
+      .fill('Corrected supporting evidence and resubmitted manually.');
+    await acceptDialogDuringAction(page, () =>
+      resubmissionForm.getByRole('button', { name: 'Record submission' }).click(),
+    );
+    await expect(page.getByText('Manual submission recorded.', { exact: false })).toBeVisible();
+    await expect(page.getByText(`E2E resubmission ${runId}`, { exact: true })).toBeVisible();
+    await captureReviewScreenshot(page, 'billing-claim-resubmission-history-desktop.png', true);
+
+    await page.goto(`/billing/claims/${originalClaimId}`);
+    await expect(page.getByText('Resubmitted', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('missing_documentation', { exact: true })).toBeVisible();
+    await captureReviewScreenshot(page, 'billing-claim-original-resubmitted-desktop.png', true);
+    await page.goto(`/billing/claims/${claimId}`);
+    const acceptedDecisionForm = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Save payer decision' }),
+    });
+    await acceptedDecisionForm
+      .locator('input[name="externalReference"]')
+      .fill(`E2E acceptance ${runId}`);
+    await acceptDialogDuringAction(page, () =>
+      acceptedDecisionForm.getByRole('button', { name: 'Save payer decision' }).click(),
+    );
+    await expect(page.getByText('Accepted', { exact: true }).first()).toBeVisible();
+    await captureReviewScreenshot(page, 'billing-claim-financial-summary-desktop.png', true);
 
     await page.goto('/billing/payments');
     const paymentEntryForm = page.locator('form').filter({
@@ -2959,16 +3262,36 @@ test('Authentik users can be invited and administered from the office UI', async
       })
       .filter({ hasText: paymentReference });
     await expect(claimPaymentForm).toBeVisible();
-    await claimPaymentForm.getByRole('button', { name: 'Link payment' }).click();
+    await acceptDialogDuringAction(page, () =>
+      claimPaymentForm.getByRole('button', { name: 'Link payment' }).click(),
+    );
     await expect(
       page.getByRole('status').filter({ hasText: 'Payment linked to claim.' }),
     ).toBeVisible();
+    const claimReconciliation = page.locator('section[aria-labelledby="claim-payment"]');
+    await expect(claimReconciliation).toContainText(paymentReference);
+    await expect(claimReconciliation.getByText('Payment received')).toBeVisible();
+    await expect(claimReconciliation.getByText('Accepted amount still unpaid')).toBeVisible();
+    await captureReviewScreenshot(page, 'billing-claim-financial-summary-paid-desktop.png', true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(
+      page,
+      'billing-claim-financial-summary-paid-mobile-390.png',
+      true,
+    );
+    await page.setViewportSize({ width: 1440, height: 900 });
 
     await page.goto(`/billing/invoices/${invoiceId}`);
     const invoiceSummary = page.locator('section[aria-labelledby="invoice-summary-title"]');
     await expect(invoiceSummary).toContainText('Paid');
     await page.goto(`/clients/${agreementClientId}/invoices`);
-    await expectVisibleTextToOmitIds(page, [agreementClientId, invoiceId, claimId]);
+    await expectVisibleTextToOmitIds(page, [
+      agreementClientId,
+      invoiceId,
+      claimId,
+      originalClaimId,
+    ]);
     const clientInvoiceRow = page
       .locator('section[aria-labelledby="client-invoice-history"]')
       .getByRole('row')
@@ -3081,7 +3404,10 @@ test('Authentik users can be invited and administered from the office UI', async
       { scopeType: 'facility', scopeId: facilityWestId },
     ]);
     await expect(facilityScope).toHaveCount(1);
-    await selectEntity(page, 'Facilities', 'Facility West', /Facility West/);
+    await page
+      .getByRole('group', { name: 'Facilities' })
+      .getByRole('button', { name: 'Clear selection' })
+      .click();
     await page.getByRole('button', { name: 'Save scopes' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
@@ -3123,8 +3449,9 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page.getByText('Inactive', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Activate membership' }).click();
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
-    page.once('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Revoke access' }).click();
+    await acceptDialogDuringAction(page, () =>
+      page.getByRole('button', { name: 'Revoke access' }).click(),
+    );
     await expect(page.getByText('Revoked', { exact: true })).toBeVisible();
     await expect(page.getByText('Revoked memberships cannot be reactivated.')).toBeVisible();
 
@@ -3961,7 +4288,14 @@ async function createAuthentikUser(
 async function signInWithAuthentik(page: Page, username: string, password: string): Promise<void> {
   await page.goto('/');
   await page.getByRole('button', { name: 'Sign in with Authentik' }).click();
-  await page.locator('input[name="uidField"]').fill(username);
+  const usernameField = page.locator('input[name="uidField"]');
+  try {
+    await expect(usernameField).toBeVisible({ timeout: 30_000 });
+  } catch {
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 45_000 });
+    await expect(usernameField).toBeVisible({ timeout: 45_000 });
+  }
+  await usernameField.fill(username);
   await page
     .getByRole('button', { name: /continue|log in|sign in/i })
     .last()
@@ -4481,8 +4815,9 @@ async function moveEmployeeUserLink(
   userEmail: string,
 ): Promise<void> {
   await page.goto(`/employees/${fromEmployeeId}`);
-  await page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Unlink user' }).click();
+  await acceptDialogDuringAction(page, () =>
+    page.getByRole('button', { name: 'Unlink user' }).click(),
+  );
   await expect(page).toHaveURL(new RegExp(`/employees/${fromEmployeeId}\\?updated=access$`));
 
   await page.goto(`/employees/${toEmployeeId}`);
@@ -4493,8 +4828,9 @@ async function moveEmployeeUserLink(
     .getByRole('option', { name: new RegExp(`${userName}.*${userEmail}`) });
   await expect(linkableAccount).toBeVisible();
   await linkableAccount.click();
-  await page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Link user' }).click();
+  await acceptDialogDuringAction(page, () =>
+    page.getByRole('button', { name: 'Link user' }).click(),
+  );
   await expect(page).toHaveURL(new RegExp(`/employees/${toEmployeeId}\\?updated=access$`));
 }
 
@@ -4504,6 +4840,17 @@ async function captureReviewScreenshot(
   fullPage = false,
 ): Promise<void> {
   await page.screenshot({ path: resolve(reviewDirectory, filename), fullPage });
+}
+
+async function acceptDialogDuringAction(
+  page: Page,
+  action: () => Promise<unknown>,
+  onDialog: (dialog: Dialog) => Promise<void> | void = (dialog) => dialog.accept(),
+): Promise<void> {
+  const dialogPromise = page.waitForEvent('dialog');
+  const actionPromise = action();
+  await onDialog(await dialogPromise);
+  await actionPromise;
 }
 
 async function blurFocusedElement(page: Page): Promise<void> {

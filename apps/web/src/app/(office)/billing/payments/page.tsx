@@ -31,6 +31,12 @@ type SearchParams = Promise<{
   invoiceId?: string;
   page?: string;
   pageSize?: string;
+  q?: string;
+  organizationId?: string;
+  from?: string;
+  until?: string;
+  method?: string;
+  remainingOnly?: string;
   error?: string;
   updated?: string;
 }>;
@@ -42,6 +48,18 @@ export default async function BillingPaymentsPage({
   const invoiceId = validUuid(query.invoiceId);
   const page = positivePage(query.page);
   const pageSize = positivePageSize(query.pageSize);
+  const q = validSearch(query.q);
+  const organizationId = validUuid(query.organizationId);
+  const from = validDate(query.from);
+  const until = validDate(query.until);
+  const method =
+    query.method === 'bank_transfer' || query.method === 'cash' || query.method === 'other'
+      ? query.method
+      : undefined;
+  const remainingOnly =
+    query.remainingOnly === 'true' || query.remainingOnly === 'false'
+      ? query.remainingOnly
+      : undefined;
   const [t, translate, locale] = await Promise.all([
     getTranslations('Billing'),
     getTranslations(),
@@ -50,7 +68,21 @@ export default async function BillingPaymentsPage({
   const api = await getApiClient();
   const header = await getTenantHeader();
   const [paymentResult, selectedInvoiceResult, permissions] = await Promise.all([
-    api.GET('/api/v1/billing/payments', { params: { query: { page, pageSize }, header } }),
+    api.GET('/api/v1/billing/payments', {
+      params: {
+        query: {
+          page,
+          pageSize,
+          ...(q ? { q } : {}),
+          ...(organizationId ? { organizationId } : {}),
+          ...(from ? { from } : {}),
+          ...(until ? { until } : {}),
+          ...(method ? { method } : {}),
+          ...(remainingOnly ? { remainingOnly } : {}),
+        },
+        header,
+      },
+    }),
     invoiceId
       ? api.GET('/api/v1/billing/invoices/{id}', { params: { path: { id: invoiceId }, header } })
       : Promise.resolve(null),
@@ -70,10 +102,18 @@ export default async function BillingPaymentsPage({
       : null;
   const paymentError = paymentResult.error as { code?: string } | undefined;
   const error = query.error ?? paymentError?.code;
+  const canReadOrganizations = hasPermission(permissions, 'organization.read');
+  const organizationResult =
+    organizationId && canReadOrganizations
+      ? await api.GET('/api/v1/organizations/{id}', {
+          params: { path: { id: organizationId }, header },
+        })
+      : null;
+  const selectedOrganization = organizationResult?.data;
   if (paymentData) {
     redirectToValidPage(
       '/billing/payments',
-      invoiceId ? { invoiceId } : {},
+      paymentFilters({ invoiceId, q, organizationId, from, until, method, remainingOnly }),
       page,
       pageSize,
       paymentData.total,
@@ -118,13 +158,38 @@ export default async function BillingPaymentsPage({
             action={recordPaymentAction}
             className="grid gap-3 md:grid-cols-2 lg:grid-cols-3"
           >
-            <AsyncEntityCombobox
-              name="organizationId"
-              label={t('organization')}
-              entity="organizations"
-              placeholder={t('selectOrganization')}
-              required
-            />
+            {invoiceId && selectedInvoice ? (
+              <>
+                <input type="hidden" name="invoiceId" value={invoiceId} />
+                <input type="hidden" name="organizationId" value={selectedInvoice.organizationId} />
+                <div className="grid content-center gap-1 rounded-md border p-3 text-sm md:col-span-2">
+                  <p className="font-medium">
+                    {t('paymentForInvoice', {
+                      invoice: selectedInvoice.invoiceNumber ?? t('draftIdentifier'),
+                      client: selectedInvoice.clientName,
+                    })}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {t('paymentBalanceSummary', {
+                      total: formatCents(selectedInvoice.grandTotalCents, locale),
+                      paid: formatCents(selectedInvoice.paidCents ?? 0, locale),
+                      outstanding: formatCents(selectedInvoice.outstandingCents ?? 0, locale),
+                    })}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                {invoiceId ? <input type="hidden" name="invoiceId" value={invoiceId} /> : null}
+                <AsyncEntityCombobox
+                  name="organizationId"
+                  label={t('organization')}
+                  entity="organizations"
+                  placeholder={t('selectOrganization')}
+                  required
+                />
+              </>
+            )}
             <Field id="payment-payer" name="payerName" label={t('payerName')} />
             <Field id="payment-payer-reference" name="payerReference" label={t('payerReference')} />
             <Field
@@ -135,6 +200,11 @@ export default async function BillingPaymentsPage({
               min="0.01"
               step="0.01"
               inputMode="decimal"
+              defaultValue={
+                selectedInvoice && (selectedInvoice.outstandingCents ?? 0) > 0
+                  ? euroInput(selectedInvoice.outstandingCents ?? 0)
+                  : ''
+              }
               required
             />
             <Field
@@ -165,6 +235,75 @@ export default async function BillingPaymentsPage({
         <h2 id="payments-title" className="text-xl font-semibold">
           {t('paymentHistory')}
         </h2>
+        <form method="get" className="grid gap-3 rounded-md border p-4 md:grid-cols-3">
+          {invoiceId ? <input type="hidden" name="invoiceId" value={invoiceId} /> : null}
+          <label className="grid gap-2 text-sm">
+            <span>{t('searchPayments')}</span>
+            <Input name="q" type="search" minLength={2} maxLength={120} defaultValue={q ?? ''} />
+          </label>
+          <label className="grid gap-2 text-sm">
+            <span>{t('from')}</span>
+            <Input name="from" type="date" defaultValue={from ?? ''} />
+          </label>
+          <label className="grid gap-2 text-sm">
+            <span>{t('until')}</span>
+            <Input name="until" type="date" defaultValue={until ?? ''} />
+          </label>
+          {canReadOrganizations ? (
+            <AsyncEntityCombobox
+              name="organizationId"
+              label={t('organizationFilter')}
+              entity="organizations"
+              placeholder={t('allOrganizations')}
+              {...(selectedOrganization?.id
+                ? {
+                    initialOption: {
+                      id: selectedOrganization.id,
+                      label: selectedOrganization.name,
+                    },
+                  }
+                : {})}
+            />
+          ) : null}
+          <label className="grid gap-2 text-sm">
+            <span>{t('paymentMethod')}</span>
+            <NativeSelect
+              name="method"
+              defaultValue={method ?? ''}
+              selectClassName="min-h-10 rounded-md border border-border bg-card px-3 py-2"
+              className="w-full"
+            >
+              <option value="">{t('allPaymentMethods')}</option>
+              <option value="bank_transfer">{t('paymentMethods.bank_transfer')}</option>
+              <option value="cash">{t('paymentMethods.cash')}</option>
+              <option value="other">{t('paymentMethods.other')}</option>
+            </NativeSelect>
+          </label>
+          <label className="grid gap-2 text-sm">
+            <span>{t('paymentAllocationStatus')}</span>
+            <NativeSelect
+              name="remainingOnly"
+              defaultValue={remainingOnly ?? ''}
+              selectClassName="min-h-10 rounded-md border border-border bg-card px-3 py-2"
+              className="w-full"
+            >
+              <option value="">{t('allPayments')}</option>
+              <option value="true">{t('paymentsWithBalance')}</option>
+              <option value="false">{t('paymentsFullyAllocated')}</option>
+            </NativeSelect>
+          </label>
+          <input type="hidden" name="pageSize" value={pageSize} />
+          <div className="flex flex-wrap items-end gap-2 md:col-span-3">
+            <Button type="submit">{t('applyFilters')}</Button>
+            <Button asChild variant="secondary">
+              <Link
+                href={invoiceId ? `/billing/payments?invoiceId=${invoiceId}` : '/billing/payments'}
+              >
+                {t('clearFilters')}
+              </Link>
+            </Button>
+          </div>
+        </form>
         {payments.length ? (
           <ul className="grid gap-4">
             {payments.map((payment) => {
@@ -284,7 +423,15 @@ export default async function BillingPaymentsPage({
             page={paymentData.page}
             pageSize={paymentData.pageSize}
             totalItems={paymentData.total}
-            filters={invoiceId ? { invoiceId } : {}}
+            filters={paymentFilters({
+              invoiceId,
+              q,
+              organizationId,
+              from,
+              until,
+              method,
+              remainingOnly,
+            })}
           />
         ) : null}
       </section>
@@ -322,6 +469,29 @@ function positivePage(value: string | undefined): number {
 function positivePageSize(value: string | undefined): number {
   const pageSize = Number(value);
   return [10, 20, 50, 100].includes(pageSize) ? pageSize : 20;
+}
+
+function validSearch(value: string | undefined): string | undefined {
+  const search = value?.trim().slice(0, 120);
+  return search && search.length >= 2 ? search : undefined;
+}
+
+function validDate(value: string | undefined): string | undefined {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
+}
+
+function paymentFilters(filters: {
+  invoiceId?: string | undefined;
+  q?: string | undefined;
+  organizationId?: string | undefined;
+  from?: string | undefined;
+  until?: string | undefined;
+  method?: string | undefined;
+  remainingOnly?: string | undefined;
+}): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(filters).filter((entry): entry is [string, string] => Boolean(entry[1])),
+  );
 }
 
 function Field({

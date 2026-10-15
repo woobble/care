@@ -221,10 +221,24 @@ export class ClaimsController {
   }
 
   @Get('claims')
-  @ApiOperation({ summary: 'List claims using deterministic pagination and resource scope' })
+  @ApiOperation({
+    summary: 'Search and filter claims using database-backed pagination and resource scope',
+  })
   @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'clientId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'payerId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'q', required: false, maxLength: 120 })
   @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({
+    name: 'group',
+    required: false,
+    enum: ['preparation', 'ready_to_submit', 'awaiting_response', 'requires_action', 'resolved'],
+  })
+  @ApiQuery({ name: 'submissionFrom', required: false, format: 'date' })
+  @ApiQuery({ name: 'submissionUntil', required: false, format: 'date' })
+  @ApiQuery({ name: 'sort', required: false, enum: ['date', 'amount', 'status'] })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiOkResponse({ schema: { type: 'object', additionalProperties: true } })

@@ -191,6 +191,12 @@ export class ServiceEvidenceController {
     required: false,
     enum: ['client', 'representative', 'other_authorized_person'],
   })
+  @ApiQuery({
+    name: 'sort',
+    required: false,
+    enum: ['date', 'client', 'status', 'acknowledgement'],
+  })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiOkResponse({ type: ServiceEvidenceWorklistDto })

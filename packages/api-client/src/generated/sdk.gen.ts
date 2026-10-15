@@ -2455,7 +2455,7 @@ export const claimsControllerSavePayerProfile = <ThrowOnError extends boolean = 
 });
 
 /**
- * List claims using deterministic pagination and resource scope
+ * Search and filter claims using database-backed pagination and resource scope
  */
 export const claimsControllerListClaims = <ThrowOnError extends boolean = false>(options: Options<ClaimsControllerListClaimsData, ThrowOnError>): RequestResult<ClaimsControllerListClaimsResponses, ClaimsControllerListClaimsErrors, ThrowOnError> => (options.client ?? client).get<ClaimsControllerListClaimsResponses, ClaimsControllerListClaimsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

@@ -21,6 +21,9 @@ export const billingCandidateQuerySchema = z
     facilityId: uuid.optional(),
     clientId: uuid.optional(),
     fundingSourceId: uuid.optional(),
+    q: z.string().trim().min(2).max(120).optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    pageSize: z.coerce.number().int().min(1).max(100).optional(),
     ready: z
       .enum(['true', 'false'])
       .transform((value) => value === 'true')
@@ -116,8 +119,13 @@ export const issueInvoiceSchema = z.object({ expectedVersion: z.number().int().m
 export const invoiceListQuerySchema = z
   .object({
     organizationId: uuid.optional(),
+    facilityId: uuid.optional(),
     clientId: uuid.optional(),
     status: z.enum(['draft', 'issued', 'cancelled']).optional(),
+    recipientType: z.enum(['client', 'payer']).optional(),
+    q: z.string().trim().min(2).max(120).optional(),
+    from: date.optional(),
+    until: date.optional(),
     page,
     pageSize,
   })
@@ -126,8 +134,15 @@ export const invoiceListQuerySchema = z
 export const receivablesQuerySchema = z
   .object({
     organizationId: uuid.optional(),
+    facilityId: uuid.optional(),
     clientId: uuid.optional(),
+    recipientType: z.enum(['client', 'payer']).optional(),
     q: z.string().trim().min(2).max(120).optional(),
+    from: date.optional(),
+    until: date.optional(),
+    status: z
+      .enum(['open', 'unpaid', 'partially_paid', 'paid', 'overdue', 'corrected'])
+      .default('open'),
     page,
     pageSize,
   })
@@ -135,6 +150,10 @@ export const receivablesQuerySchema = z
 export const paymentsQuerySchema = z
   .object({
     organizationId: uuid.optional(),
+    q: z.string().trim().min(2).max(120).optional(),
+    from: date.optional(),
+    until: date.optional(),
+    method: z.enum(['bank_transfer', 'cash', 'other']).optional(),
     remainingOnly: z
       .enum(['true', 'false'])
       .optional()
@@ -301,6 +320,10 @@ export class BillingCandidateResponseDto {
 
 export class BillingCandidateListResponseDto {
   @ApiProperty({ type: [BillingCandidateResponseDto] }) items!: BillingCandidateResponseDto[];
+  @ApiPropertyOptional() page?: number;
+  @ApiPropertyOptional() pageSize?: number;
+  @ApiPropertyOptional() totalServices?: number;
+  @ApiPropertyOptional() totalPages?: number;
 }
 
 export class BillingProfileResponseDto {
@@ -443,6 +466,7 @@ export class BillingInvoiceResponseDto {
     nullable: true,
   })
   receivableStatus!: 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'corrected' | null;
+  @ApiProperty() paidCents!: number;
   @ApiProperty({ nullable: true }) outstandingCents!: number | null;
   @ApiProperty() evidenceDiscrepancy!: boolean;
   @ApiProperty({ type: [BillingInvoiceLineResponseDto] }) lines!: BillingInvoiceLineResponseDto[];

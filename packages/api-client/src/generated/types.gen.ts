@@ -1890,6 +1890,8 @@ export type ServiceEvidenceWorklistItemDto = {
     documentationId: string;
     evidencePackageId?: string | null;
     packageVersion?: number | null;
+    serviceSummary?: string | null;
+    caregiverSummary?: string | null;
     clientId: string;
     clientName: string;
     plannedStart: string;
@@ -2438,6 +2440,10 @@ export type BillingCandidateResponseDto = {
 
 export type BillingCandidateListResponseDto = {
     items: Array<BillingCandidateResponseDto>;
+    page?: number;
+    pageSize?: number;
+    totalServices?: number;
+    totalPages?: number;
 };
 
 export type BillingInvoiceLineResponseDto = {
@@ -2515,6 +2521,7 @@ export type BillingInvoiceResponseDto = {
     grandTotalCents: number;
     pdfStatus: 'pending' | 'ready' | 'failed';
     receivableStatus: 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'corrected';
+    paidCents: number;
     outstandingCents: number | null;
     evidenceDiscrepancy: boolean;
     lines: Array<BillingInvoiceLineResponseDto>;
@@ -8588,6 +8595,8 @@ export type ServiceEvidenceControllerWorklistData = {
     query: {
         pageSize?: number;
         page?: number;
+        sortOrder?: 'asc' | 'desc';
+        sort?: 'date' | 'client' | 'status' | 'acknowledgement';
         signatoryType?: 'client' | 'representative' | 'other_authorized_person';
         facilityId?: unknown;
         organizationId?: unknown;
@@ -9340,6 +9349,9 @@ export type BillingControllerCandidatesData = {
     query?: {
         evidenceStatus?: string;
         ready?: 'true' | 'false';
+        pageSize?: number;
+        page?: number;
+        q?: unknown;
         fundingSourceId?: unknown;
         clientId?: unknown;
         facilityId?: unknown;
@@ -9377,8 +9389,13 @@ export type BillingControllerInvoicesData = {
     query?: {
         pageSize?: number;
         page?: number;
+        until?: string;
+        from?: string;
+        q?: unknown;
+        recipientType?: 'client' | 'payer';
         status?: 'draft' | 'issued' | 'cancelled';
         clientId?: unknown;
+        facilityId?: unknown;
         organizationId?: unknown;
     };
     url: '/api/v1/billing/invoices';
@@ -9684,8 +9701,13 @@ export type BillingControllerReceivablesData = {
     query?: {
         pageSize?: number;
         page?: number;
+        status?: 'open' | 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'corrected';
+        until?: string;
+        from?: string;
         q?: unknown;
+        recipientType?: 'client' | 'payer';
         clientId?: unknown;
+        facilityId?: unknown;
         organizationId?: unknown;
     };
     url: '/api/v1/billing/receivables';
@@ -9719,6 +9741,10 @@ export type BillingControllerPaymentsData = {
         pageSize?: number;
         page?: number;
         remainingOnly?: 'true' | 'false';
+        method?: 'bank_transfer' | 'cash' | 'other';
+        until?: string;
+        from?: string;
+        q?: unknown;
         organizationId?: unknown;
     };
     url: '/api/v1/billing/payments';
@@ -10105,8 +10131,16 @@ export type ClaimsControllerListClaimsData = {
     query?: {
         pageSize?: number;
         page?: number;
+        sortOrder?: 'asc' | 'desc';
+        sort?: 'date' | 'amount' | 'status';
+        submissionUntil?: unknown;
+        submissionFrom?: unknown;
+        group?: 'preparation' | 'ready_to_submit' | 'awaiting_response' | 'requires_action' | 'resolved';
         status?: unknown;
+        q?: unknown;
+        payerId?: unknown;
         clientId?: unknown;
+        facilityId?: unknown;
         organizationId?: unknown;
     };
     url: '/api/v1/billing/claims';

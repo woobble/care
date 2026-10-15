@@ -220,6 +220,23 @@ export default async function BillingInvoiceDetailPage({
                 <Link href={`/billing/invoices/${invoice.id}/pdf`}>{t('downloadPdf')}</Link>
               </Button>
             ) : null}
+            {invoice.pdfStatus === 'pending' ? (
+              <div
+                className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+                role="status"
+              >
+                <p>{t('pdfGenerating')}</p>
+                <Button asChild variant="secondary" size="sm">
+                  <Link href={`/billing/invoices/${invoice.id}`} prefetch={false}>
+                    {t('refreshPdfStatus')}
+                  </Link>
+                </Button>
+              </div>
+            ) : null}
+            {invoice.pdfStatus === 'failed' ? <Warning>{t('pdfGenerationFailed')}</Warning> : null}
+            {invoice.pdfStatus === null ? (
+              <p className="text-sm text-warning-foreground">{t('pdfUnavailable')}</p>
+            ) : null}
             {invoice.pdfStatus === 'failed' || invoice.pdfStatus === null ? (
               canIssue ? (
                 <form action={regenerateInvoicePdfAction}>
@@ -228,9 +245,7 @@ export default async function BillingInvoiceDetailPage({
                     {t('regeneratePdf')}
                   </Button>
                 </form>
-              ) : (
-                <p className="text-sm text-warning-foreground">{t('pdfUnavailable')}</p>
-              )
+              ) : null
             ) : null}
           </div>
         ) : null}

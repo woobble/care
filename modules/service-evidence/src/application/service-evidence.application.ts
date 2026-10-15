@@ -7,7 +7,7 @@ import type { DomainEvent, EventName } from '@care/events';
 import { createDomainEvent } from '@care/events';
 import { evaluateDocumentationCompleteness } from '@care/care-documentation';
 import type { ClientRepresentationType, ClientRelationshipType } from '@care/clients';
-import { assertCan, can } from '@care/permissions';
+import { assertCan } from '@care/permissions';
 import type { AuthorizationPrincipal, Permission, ResourceContext } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
 import type { ObjectStorage } from '@care/storage';
@@ -129,6 +129,8 @@ export interface ServiceEvidenceWorklistQuery {
   until: Date;
   page: number;
   pageSize: number;
+  sort?: 'date' | 'client' | 'status' | 'acknowledgement';
+  sortOrder?: 'asc' | 'desc';
   status?: ServiceEvidenceWorklistStatus;
   visitId?: string;
   clientId?: string;
@@ -144,6 +146,8 @@ export interface ServiceEvidenceWorklistItem {
   documentationId: string;
   evidencePackageId: string | null;
   packageVersion: number | null;
+  serviceSummary: string | null;
+  caregiverSummary: string | null;
   clientId: string;
   clientName: string;
   plannedStart: string;
@@ -625,134 +629,17 @@ export class ServiceEvidenceApplicationService {
   ): Promise<ServiceEvidenceWorklist> {
     validateWorklistQuery(query);
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const rows = await this.repository.finalizedDocumentationRows(
-        transaction,
-        principal.tenantId,
-        query,
-      );
-      const visitIds = rows.map((row) => row.visit.id);
       const employee = principal.roles?.includes('Caregiver')
         ? await this.requireEmployee(transaction, principal)
         : null;
-      const relatedVisits = employee
-        ? await this.repository.caregiverVisitIds(transaction, principal.tenantId, employee.id)
-        : null;
-      const teamsByVisit = await this.repository.teamIdsForVisits(
+      const result = await this.repository.worklistRows(
         transaction,
         principal.tenantId,
-        visitIds,
+        query,
+        principal,
+        employee?.id,
       );
-      const allowedRows = rows.filter((row) => {
-        const resource: ResourceContext = {
-          tenantId: row.visit.tenantId,
-          clientId: row.visit.clientId,
-          organizationId: row.visit.organizationId,
-          facilityId: row.visit.facilityId,
-          teamIds: teamsByVisit.get(row.visit.id) ?? [],
-        };
-        return (
-          can(principal, { action: 'service_evidence.read', resource }) &&
-          (!relatedVisits || relatedVisits.has(row.visit.id))
-        );
-      });
-      const packages = await this.repository.packagesForDocuments(
-        transaction,
-        principal.tenantId,
-        allowedRows.map((row) => row.documentation.id),
-      );
-      const acks = await this.repository.acknowledgementsForPackages(
-        transaction,
-        principal.tenantId,
-        packages.map((item) => item.id),
-      );
-      const acksByPackage = groupBy(acks, (item) => item.evidencePackageId);
-      const packagesByDocument = groupBy(packages, (item) => item.documentationId);
-      const items: ServiceEvidenceWorklistItem[] = [];
-
-      for (const row of allowedRows) {
-        const history = packagesByDocument.get(row.documentation.id) ?? [];
-        if (history.length === 0) {
-          if (query.status && query.status !== 'awaiting_acknowledgement') continue;
-          if (query.signatoryType) continue;
-          items.push({
-            visitId: row.visit.id,
-            documentationId: row.documentation.id,
-            evidencePackageId: null,
-            packageVersion: null,
-            clientId: row.visit.clientId,
-            clientName: row.clientName,
-            plannedStart: row.visit.plannedStart.toISOString(),
-            timezone: row.visit.timezone,
-            status: 'awaiting_acknowledgement',
-            snapshotHash: null,
-            signatoryType: null,
-            signatoryName: null,
-            capacity: null,
-            method: null,
-            acknowledgedAt: null,
-            signatureAvailable: false,
-          });
-          continue;
-        }
-        const latestVersion = history.at(-1)!.version;
-        for (const evidencePackage of history) {
-          const isLatest = evidencePackage.version === latestVersion;
-          const isCurrent =
-            evidencePackage.documentationVersion === row.documentation.version &&
-            evidencePackage.executionVersion === row.execution.version &&
-            evidencePackage.amendmentCount === row.amendmentCount;
-          const historyAcks = acksByPackage.get(evidencePackage.id) ?? [];
-          const acknowledgement = historyAcks.at(-1) ?? null;
-          const status: ServiceEvidenceWorklistStatus = isCurrent
-            ? acknowledgement?.revokedAt
-              ? 'revoked'
-              : acknowledgement?.status === 'acknowledged'
-                ? 'acknowledged'
-                : acknowledgement?.status === 'declined'
-                  ? 'declined'
-                  : 'awaiting_acknowledgement'
-            : isLatest
-              ? 'outdated'
-              : 'superseded';
-          if (query.status && query.status !== status) continue;
-          if (query.signatoryType && acknowledgement?.signatoryType !== query.signatoryType) {
-            continue;
-          }
-          items.push({
-            visitId: row.visit.id,
-            documentationId: row.documentation.id,
-            evidencePackageId: evidencePackage.id,
-            packageVersion: evidencePackage.version,
-            clientId: evidencePackage.snapshot.clientId,
-            clientName: evidencePackage.snapshot.clientName,
-            plannedStart: evidencePackage.snapshot.plannedStart,
-            timezone: evidencePackage.snapshot.timezone,
-            status,
-            snapshotHash: evidencePackage.snapshotHash,
-            signatoryType: acknowledgement?.signatoryType ?? null,
-            signatoryName: acknowledgement?.signatoryNameSnapshot ?? null,
-            capacity: acknowledgement?.signatoryCapacity ?? null,
-            method: acknowledgement?.method ?? null,
-            acknowledgedAt:
-              acknowledgement?.acknowledgedAt?.toISOString() ??
-              acknowledgement?.declinedAt?.toISOString() ??
-              null,
-            signatureAvailable:
-              acknowledgement?.signatureStorageKey !== null &&
-              acknowledgement?.signatureStorageKey !== undefined,
-          });
-        }
-      }
-
-      items.sort((left, right) => right.plannedStart.localeCompare(left.plannedStart));
-      const total = items.length;
-      const offset = (query.page - 1) * query.pageSize;
-      return {
-        items: items.slice(offset, offset + query.pageSize),
-        page: query.page,
-        pageSize: query.pageSize,
-        total,
-      };
+      return { ...result, page: query.page, pageSize: query.pageSize };
     });
   }
 
@@ -1432,17 +1319,6 @@ function sameSubmission(
   if (existing.status !== 'acknowledged' || existing.method !== input.method) return false;
   if (input.method === 'touch_signature') return existing.signatureSha256 === signatureSha256;
   return isTypedConfirmationValid(existing.signatoryNameSnapshot, input.confirmationName ?? '');
-}
-
-function groupBy<T, K extends string>(items: T[], key: (item: T) => K): Map<K, T[]> {
-  const grouped = new Map<K, T[]>();
-  for (const item of items) {
-    const value = key(item);
-    const current = grouped.get(value) ?? [];
-    current.push(item);
-    grouped.set(value, current);
-  }
-  return grouped;
 }
 
 function localDate(date: Date, timeZone: string): string {

@@ -455,7 +455,7 @@ export async function savePayerRequirementsAction(formData: FormData): Promise<v
   redirect(claimSettingsPath(undefined, 'profile-saved', organizationId));
 }
 
-export async function createClaimAction(formData: FormData): Promise<void> {
+export async function createClaimAction(formData: FormData): Promise<void | string> {
   const invoiceId = readUuid(formData.get('invoiceId'));
   const expectedInvoiceVersion = readPositiveInteger(formData.get('expectedInvoiceVersion'));
   const payerArrangementId = readUuid(formData.get('payerArrangementId'));
@@ -468,7 +468,7 @@ export async function createClaimAction(formData: FormData): Promise<void> {
     payerBillingProfileId === undefined ||
     !lines
   ) {
-    redirect('/billing/claims?error=INVALID_REQUEST');
+    return 'INVALID_REQUEST';
   }
   const api = await getApiClient();
   const { data, error } = await api.POST('/api/v1/billing/claims', {
@@ -481,11 +481,11 @@ export async function createClaimAction(formData: FormData): Promise<void> {
       lines,
     },
   });
-  if (error || !data) redirect(claimsInvoicePath(invoiceId, error?.code ?? 'CLAIM_NOT_FOUND'));
+  if (error || !data) return error?.code ?? 'CLAIM_NOT_FOUND';
   const detail = data as { claim?: { id?: string }; id?: string };
   const claimId = detail.claim?.id ?? detail.id;
   if (!claimId || !uuidPattern.test(claimId)) {
-    redirect(claimsInvoicePath(invoiceId, 'CLAIM_NOT_FOUND'));
+    return 'CLAIM_NOT_FOUND';
   }
   revalidatePath('/billing/claims');
   revalidatePath('/billing/invoices');
@@ -589,11 +589,12 @@ export async function cancelClaimAction(formData: FormData): Promise<void> {
 
 export async function recordPaymentAction(formData: FormData): Promise<void> {
   const organizationId = readUuid(formData.get('organizationId'));
+  const invoiceId = readUuid(formData.get('invoiceId'));
   const amountCents = readEuroCents(formData.get('amount'));
   const receivedAt = readBerlinDateTime(formData.get('receivedAt'));
   const method = readChoice(formData.get('method'), paymentMethods);
   if (!organizationId || amountCents === null || !receivedAt || !method) {
-    redirect('/billing/payments?error=PAYMENT_AMOUNT_INVALID');
+    redirect(paymentPath(invoiceId, 'PAYMENT_AMOUNT_INVALID'));
   }
   const api = await getApiClient();
   const { error } = await api.POST('/api/v1/billing/payments', {
@@ -608,9 +609,9 @@ export async function recordPaymentAction(formData: FormData): Promise<void> {
       reference: readNullableText(formData.get('reference')),
     },
   });
-  if (error) redirect(`/billing/payments?error=${encodeURIComponent(error.code)}`);
+  if (error) redirect(paymentPath(invoiceId, error.code));
   refreshBilling();
-  redirect('/billing/payments?updated=payment');
+  redirect(paymentPath(invoiceId, undefined, 'payment'));
 }
 
 export async function allocatePaymentAction(formData: FormData): Promise<void> {
@@ -901,8 +902,12 @@ function claimsPath(error?: string, updated?: string): string {
   return queryPath('/billing/claims', error, updated);
 }
 
-function claimsInvoicePath(invoiceId: string, error?: string): string {
-  return queryPath('/billing/claims/new?invoiceId=' + encodeURIComponent(invoiceId), error);
+function paymentPath(invoiceId: string | null, error?: string, updated?: string): string {
+  const query = new URLSearchParams();
+  if (invoiceId) query.set('invoiceId', invoiceId);
+  if (error) query.set('error', error);
+  if (updated) query.set('updated', updated);
+  return query.size ? `/billing/payments?${query.toString()}` : '/billing/payments';
 }
 
 function claimSettingsPath(error?: string, updated?: string, organizationId?: string): string {

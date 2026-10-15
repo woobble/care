@@ -83,6 +83,8 @@ export const serviceEvidenceWorklistQuerySchema = z.object({
   organizationId: z.string().uuid().optional(),
   facilityId: z.string().uuid().optional(),
   signatoryType: z.enum(['client', 'representative', 'other_authorized_person']).optional(),
+  sort: z.enum(['date', 'client', 'status', 'acknowledgement']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(50),
 });
@@ -182,6 +184,8 @@ export class ServiceEvidenceWorklistItemDto {
   @ApiProperty({ format: 'uuid' }) documentationId!: string;
   @ApiPropertyOptional({ format: 'uuid', nullable: true }) evidencePackageId!: string | null;
   @ApiPropertyOptional({ nullable: true }) packageVersion!: number | null;
+  @ApiPropertyOptional({ nullable: true }) serviceSummary!: string | null;
+  @ApiPropertyOptional({ nullable: true }) caregiverSummary!: string | null;
   @ApiProperty({ format: 'uuid' }) clientId!: string;
   @ApiProperty() clientName!: string;
   @ApiProperty({ format: 'date-time' }) plannedStart!: string;

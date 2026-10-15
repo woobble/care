@@ -1,5 +1,19 @@
 import { createHash } from 'node:crypto';
-import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  gte,
+  ilike,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+} from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 import type { AuditWriter } from '@care/audit';
@@ -70,8 +84,16 @@ import type {
 type AuditContext = { ip?: string; userAgent?: string };
 type ClaimScope = {
   organizationId?: string;
+  facilityId?: string;
   clientId?: string;
+  payerId?: string;
+  q?: string;
+  submissionFrom?: string;
+  submissionUntil?: string;
+  group?: 'preparation' | 'ready_to_submit' | 'awaiting_response' | 'requires_action' | 'resolved';
   status?: string;
+  sort?: 'date' | 'amount' | 'status';
+  sortOrder?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
 };
@@ -477,29 +499,50 @@ export class BillingClaimsApplicationService {
     const page = boundedInteger(filters.page, 1, 1, 100_000);
     const pageSize = boundedInteger(filters.pageSize, 25, 1, 100);
     const scope = this.listScope(principal, 'claims.read');
-    const { countRows, rows } = await this.unitOfWork.transaction(
+    const { countRows, rows, summaryRows } = await this.unitOfWork.transaction(
       { tenantId: principal.tenantId },
       async (transaction) => {
-        const conditions = [eq(claims.tenantId, principal.tenantId), scope];
-        if (filters.organizationId)
-          conditions.push(eq(claims.organizationId, filters.organizationId));
-        if (filters.clientId) conditions.push(eq(claims.clientId, filters.clientId));
+        const baseConditions = this.claimListConditions(transaction, principal, filters, scope);
+        const conditions = [...baseConditions];
         if (filters.status)
           conditions.push(
             eq(claims.status, filters.status as (typeof claims.$inferSelect)['status']),
           );
+        if (filters.group)
+          conditions.push(inArray(claims.status, claimStatusesForGroup(filters.group)));
         const where = and(...conditions);
-        const [countRows, rows] = await Promise.all([
+        const sortOrder = filters.sortOrder === 'asc' ? asc : desc;
+        const order =
+          filters.sort === 'amount'
+            ? sortOrder(claims.amountCents)
+            : filters.sort === 'status'
+              ? sortOrder(claims.status)
+              : sortOrder(claims.createdAt);
+        const [countRows, rows, summaryRows] = await Promise.all([
           transaction.select({ total: count() }).from(claims).where(where),
           transaction
             .select()
             .from(claims)
             .where(where)
-            .orderBy(desc(claims.createdAt), desc(claims.id))
+            .orderBy(order, desc(claims.id))
             .limit(pageSize)
             .offset((page - 1) * pageSize),
+          transaction
+            .select({ status: claims.status, total: count() })
+            .from(claims)
+            .where(
+              and(
+                ...baseConditions,
+                sql`NOT EXISTS (
+                  SELECT 1 FROM billing.claims AS replacement
+                  WHERE replacement.tenant_id = ${principal.tenantId}
+                    AND replacement.supersedes_claim_id = ${claims.id}
+                )`,
+              ),
+            )
+            .groupBy(claims.status),
         ]);
-        return { countRows, rows };
+        return { countRows, rows, summaryRows };
       },
     );
     const pageRows = rows;
@@ -563,6 +606,7 @@ export class BillingClaimsApplicationService {
                 .select({
                   id: clientRecords.id,
                   firstName: clientRecords.firstName,
+                  preferredName: clientRecords.preferredName,
                   lastName: clientRecords.lastName,
                 })
                 .from(clientRecords)
@@ -588,7 +632,10 @@ export class BillingClaimsApplicationService {
           const paidByClaim = new Map<string, number>();
           const clientNameById = new Map<string, string>();
           for (const client of clients) {
-            clientNameById.set(client.id, client.firstName + ' ' + client.lastName);
+            clientNameById.set(
+              client.id,
+              (client.preferredName || client.firstName) + ' ' + client.lastName,
+            );
           }
           for (const row of allocations) {
             if (row.claimId && !row.reversalId) {
@@ -628,6 +675,9 @@ export class BillingClaimsApplicationService {
       total,
       totalPages: Math.ceil(total / pageSize),
       hasMore: page < Math.ceil(total / pageSize),
+      summary: summarizeCurrentClaims(
+        summaryRows.map((row) => ({ status: row.status, count: Number(row.total) })),
+      ),
     };
   }
 
@@ -2749,6 +2799,89 @@ export class BillingClaimsApplicationService {
     assertCan(principal, { action: permission, resource });
   }
 
+  private claimListConditions(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    filters: ClaimScope,
+    scope: SQL,
+  ): SQL[] {
+    const conditions: SQL[] = [eq(claims.tenantId, principal.tenantId), scope];
+    if (filters.organizationId) conditions.push(eq(claims.organizationId, filters.organizationId));
+    if (filters.facilityId) conditions.push(eq(claims.facilityId, filters.facilityId));
+    if (filters.clientId) conditions.push(eq(claims.clientId, filters.clientId));
+    if (filters.payerId) conditions.push(eq(claims.payerId, filters.payerId));
+
+    const search = filters.q?.trim();
+    if (search) {
+      const pattern = `%${escapeLike(search)}%`;
+      const readableClientMatch = and(
+        this.listScope(principal, 'client.read'),
+        exists(
+          transaction
+            .select({ id: clientRecords.id })
+            .from(clientRecords)
+            .where(
+              and(
+                eq(clientRecords.tenantId, principal.tenantId),
+                eq(clientRecords.id, claims.clientId),
+                ilike(
+                  sql`coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}) || ' ' || ${clientRecords.lastName}`,
+                  pattern,
+                ),
+              ),
+            ),
+        ),
+      );
+      conditions.push(
+        or(
+          ilike(sql`${claims.invoiceSnapshot}->>'invoiceNumber'`, pattern),
+          ilike(sql`${claims.payerSnapshot}->>'name'`, pattern),
+          ilike(sql`${claims.payerSnapshot}->>'payerIdentifier'`, pattern),
+          ilike(sql`'CLM-' || upper(right(replace(${claims.id}::text, '-', ''), 8))`, pattern),
+          readableClientMatch,
+          exists(
+            transaction
+              .select({ id: claimSubmissions.id })
+              .from(claimSubmissions)
+              .where(
+                and(
+                  eq(claimSubmissions.tenantId, principal.tenantId),
+                  eq(claimSubmissions.claimId, claims.id),
+                  ilike(claimSubmissions.externalReference, pattern),
+                ),
+              ),
+          ),
+        )!,
+      );
+    }
+
+    if (filters.submissionFrom || filters.submissionUntil) {
+      const submissionConditions: SQL[] = [
+        eq(claimSubmissions.tenantId, principal.tenantId),
+        eq(claimSubmissions.claimId, claims.id),
+      ];
+      if (filters.submissionFrom) {
+        submissionConditions.push(
+          gte(claimSubmissions.submittedAt, new Date(`${filters.submissionFrom}T00:00:00.000Z`)),
+        );
+      }
+      if (filters.submissionUntil) {
+        const until = new Date(`${filters.submissionUntil}T00:00:00.000Z`);
+        until.setUTCDate(until.getUTCDate() + 1);
+        submissionConditions.push(lt(claimSubmissions.submittedAt, until));
+      }
+      conditions.push(
+        exists(
+          transaction
+            .select({ id: claimSubmissions.id })
+            .from(claimSubmissions)
+            .where(and(...submissionConditions)),
+        ),
+      );
+    }
+    return conditions;
+  }
+
   private listScope(principal: AuthorizationPrincipal, permission: Permission): SQL {
     const conditions: SQL[] = [];
     for (const grant of principal.grants) {
@@ -3088,6 +3221,37 @@ function snapshotText(value: unknown, key: string): string {
 
 function optionalText(value: string | null | undefined): string | null {
   return value?.trim() || null;
+}
+
+function claimStatusesForGroup(
+  group: NonNullable<ClaimScope['group']>,
+): Array<(typeof claims.$inferSelect)['status']> {
+  switch (group) {
+    case 'preparation':
+      return ['draft'];
+    case 'ready_to_submit':
+      return ['ready'];
+    case 'awaiting_response':
+      return ['submitted', 'resubmitted'];
+    case 'requires_action':
+      return ['partially_accepted', 'rejected', 'clarification_required'];
+    case 'resolved':
+      return ['accepted'];
+  }
+}
+
+function summarizeCurrentClaims(
+  rows: Array<{ status: (typeof claims.$inferSelect)['status']; count: number }>,
+) {
+  const countFor = (...statuses: Array<(typeof claims.$inferSelect)['status']>) =>
+    rows.reduce((total, row) => total + (statuses.includes(row.status) ? row.count : 0), 0);
+  return {
+    needsPreparation: countFor('draft'),
+    readyToSubmit: countFor('ready'),
+    awaitingResponse: countFor('submitted', 'resubmitted'),
+    requiresAction: countFor('partially_accepted', 'rejected', 'clarification_required'),
+    resolved: countFor('accepted'),
+  };
 }
 
 function escapeLike(value: string): string {

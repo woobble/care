@@ -28,6 +28,7 @@ import { redirectToValidPage } from '@app/web/lib/pagination';
 
 type Status = components['schemas']['ServiceEvidenceWorklistItemDto']['status'];
 type SignatoryType = 'client' | 'representative' | 'other_authorized_person';
+type Sort = 'date' | 'client' | 'status' | 'acknowledgement';
 type SearchParams = Promise<{
   from?: string;
   until?: string;
@@ -37,6 +38,8 @@ type SearchParams = Promise<{
   employeeId?: string;
   status?: Status;
   signatoryType?: SignatoryType;
+  sort?: Sort;
+  sortOrder?: 'asc' | 'desc';
   page?: string;
   pageSize?: string;
   error?: string;
@@ -60,6 +63,8 @@ export default async function ServiceEvidenceWorklistPage({
   const pageSize = parsePageSize(query.pageSize);
   const status = validStatus(query.status) ? query.status : undefined;
   const signatoryType = validSignatoryType(query.signatoryType) ? query.signatoryType : undefined;
+  const sort = validSort(query.sort) ? query.sort : 'date';
+  const sortOrder = query.sortOrder === 'asc' ? 'asc' : 'desc';
   const organizationId = validUuid(query.organizationId) ? query.organizationId : undefined;
   const facilityId = validUuid(query.facilityId) ? query.facilityId : undefined;
   const employeeId = validUuid(query.employeeId) ? query.employeeId : undefined;
@@ -83,6 +88,8 @@ export default async function ServiceEvidenceWorklistPage({
           ...(employeeId ? { employeeId } : {}),
           ...(status ? { status } : {}),
           ...(signatoryType ? { signatoryType } : {}),
+          sort,
+          sortOrder,
         },
         header,
       },
@@ -123,6 +130,8 @@ export default async function ServiceEvidenceWorklistPage({
         employeeId,
         status,
         signatoryType,
+        sort,
+        sortOrder,
       },
       page,
       pageSize,
@@ -138,6 +147,8 @@ export default async function ServiceEvidenceWorklistPage({
     employeeId: employeeId ?? '',
     status: status ?? '',
     signatoryType: signatoryType ?? '',
+    sort,
+    sortOrder,
   };
 
   return (
@@ -276,6 +287,34 @@ export default async function ServiceEvidenceWorklistPage({
             </option>
           </NativeSelect>
         </label>
+        <label className="grid gap-1 text-sm">
+          <span>{t('ServiceEvidence.office.sortBy')}</span>
+          <NativeSelect
+            name="sort"
+            defaultValue={filterValues.sort}
+            selectClassName="min-h-11 rounded-md border bg-card px-3"
+            className="w-full"
+          >
+            <option value="date">{t('ServiceEvidence.office.sortOptions.date')}</option>
+            <option value="client">{t('ServiceEvidence.office.sortOptions.client')}</option>
+            <option value="status">{t('ServiceEvidence.office.sortOptions.status')}</option>
+            <option value="acknowledgement">
+              {t('ServiceEvidence.office.sortOptions.acknowledgement')}
+            </option>
+          </NativeSelect>
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span>{t('ServiceEvidence.office.sortDirection')}</span>
+          <NativeSelect
+            name="sortOrder"
+            defaultValue={filterValues.sortOrder}
+            selectClassName="min-h-11 rounded-md border bg-card px-3"
+            className="w-full"
+          >
+            <option value="desc">{t('ServiceEvidence.office.descending')}</option>
+            <option value="asc">{t('ServiceEvidence.office.ascending')}</option>
+          </NativeSelect>
+        </label>
         <div className="flex items-end gap-2 lg:col-span-4">
           <Button type="submit" className="min-h-11">
             {t('ServiceEvidence.office.filter')}
@@ -291,64 +330,119 @@ export default async function ServiceEvidenceWorklistPage({
           {t('ServiceEvidence.office.resultCount', { count: result?.total ?? 0 })}
         </p>
         {items.length ? (
-          <div className="overflow-x-auto rounded-lg border bg-card">
-            <ShadcnTable className="w-full min-w-[44rem] text-left text-sm">
-              <ShadcnTableHeader className="border-b bg-background text-muted-foreground">
-                <ShadcnTableRow>
-                  <ShadcnTableHead className="p-3 font-semibold">
-                    {t('ServiceEvidence.office.visit')}
-                  </ShadcnTableHead>
-                  <ShadcnTableHead className="p-3 font-semibold">
-                    {t('ServiceEvidence.office.client')}
-                  </ShadcnTableHead>
-                  <ShadcnTableHead className="p-3 font-semibold">
-                    {t('ServiceEvidence.office.status')}
-                  </ShadcnTableHead>
-                  <ShadcnTableHead className="p-3 font-semibold">
-                    {t('ServiceEvidence.office.signatory')}
-                  </ShadcnTableHead>
-                  <ShadcnTableHead className="p-3 font-semibold">
-                    {t('ServiceEvidence.office.version')}
-                  </ShadcnTableHead>
-                </ShadcnTableRow>
-              </ShadcnTableHeader>
-              <ShadcnTableBody>
-                {items.map((item) => (
-                  <ShadcnTableRow
-                    key={`${item.evidencePackageId ?? item.visitId}-${item.packageVersion ?? 'none'}`}
-                    className="border-b last:border-0"
-                  >
-                    <ShadcnTableCell className="p-3">
-                      {formatVisitDateTime(item.plannedStart, item.timezone, locale)}
-                    </ShadcnTableCell>
-                    <ShadcnTableCell className="p-3 font-medium">
-                      <Link
-                        href={
-                          item.evidencePackageId
-                            ? `/service-evidence/${item.evidencePackageId}`
-                            : `/visits/${item.visitId}`
-                        }
-                        className="text-primary underline"
-                      >
-                        {item.clientName}
-                      </Link>
-                    </ShadcnTableCell>
-                    <ShadcnTableCell className="p-3">
-                      {t(evidenceStatusKey(item.status))}
-                    </ShadcnTableCell>
-                    <ShadcnTableCell className="p-3">
-                      {item.signatoryName
-                        ? `${item.signatoryName} · ${item.capacity ? t(acknowledgementCapacityKey(item.capacity)) : ''}`
-                        : '–'}
-                    </ShadcnTableCell>
-                    <ShadcnTableCell className="p-3">
-                      {item.packageVersion ?? t('ServiceEvidence.office.notCreated')}
-                    </ShadcnTableCell>
+          <>
+            <div className="grid gap-3 xl:hidden">
+              {items.map((item) => (
+                <article
+                  key={`${item.evidencePackageId ?? item.visitId}-${item.packageVersion ?? 'none'}`}
+                  className="grid gap-2 rounded-lg border bg-card p-4 text-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <Link
+                      href={
+                        item.evidencePackageId
+                          ? `/service-evidence/${item.evidencePackageId}`
+                          : `/visits/${item.visitId}`
+                      }
+                      className="font-medium text-primary underline"
+                    >
+                      {item.clientName}
+                    </Link>
+                    <span className="text-right">{t(evidenceStatusKey(item.status))}</span>
+                  </div>
+                  <p className="text-muted-foreground">
+                    {formatVisitDateTime(item.plannedStart, item.timezone, locale)}
+                  </p>
+                  <p>
+                    {t('ServiceEvidence.office.services')}: {item.serviceSummary ?? '–'}
+                  </p>
+                  <p>
+                    {t('ServiceEvidence.office.caregiver')}: {item.caregiverSummary ?? '–'}
+                  </p>
+                  <p>
+                    {t('ServiceEvidence.office.signatory')}:{' '}
+                    {item.signatoryName
+                      ? `${item.signatoryName} · ${item.capacity ? t(acknowledgementCapacityKey(item.capacity)) : ''}`
+                      : '–'}
+                  </p>
+                  <p>
+                    {t('ServiceEvidence.office.version')}:{' '}
+                    {item.packageVersion ?? t('ServiceEvidence.office.notCreated')}
+                  </p>
+                </article>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto rounded-lg border bg-card xl:block">
+              <ShadcnTable className="w-full min-w-[58rem] table-fixed text-left text-sm">
+                <ShadcnTableHeader className="border-b bg-background text-muted-foreground">
+                  <ShadcnTableRow>
+                    <ShadcnTableHead className="w-[15%] p-3 font-semibold">
+                      {t('ServiceEvidence.office.visit')}
+                    </ShadcnTableHead>
+                    <ShadcnTableHead className="w-[15%] p-3 font-semibold">
+                      {t('ServiceEvidence.office.client')}
+                    </ShadcnTableHead>
+                    <ShadcnTableHead className="w-[15%] p-3 font-semibold">
+                      {t('ServiceEvidence.office.services')}
+                    </ShadcnTableHead>
+                    <ShadcnTableHead className="w-[13%] p-3 font-semibold">
+                      {t('ServiceEvidence.office.caregiver')}
+                    </ShadcnTableHead>
+                    <ShadcnTableHead className="w-[11%] p-3 font-semibold">
+                      {t('ServiceEvidence.office.status')}
+                    </ShadcnTableHead>
+                    <ShadcnTableHead className="w-[23%] p-3 font-semibold">
+                      {t('ServiceEvidence.office.signatory')}
+                    </ShadcnTableHead>
+                    <ShadcnTableHead className="w-[8%] p-3 font-semibold">
+                      {t('ServiceEvidence.office.version')}
+                    </ShadcnTableHead>
                   </ShadcnTableRow>
-                ))}
-              </ShadcnTableBody>
-            </ShadcnTable>
-          </div>
+                </ShadcnTableHeader>
+                <ShadcnTableBody>
+                  {items.map((item) => (
+                    <ShadcnTableRow
+                      key={`${item.evidencePackageId ?? item.visitId}-${item.packageVersion ?? 'none'}`}
+                      className="border-b last:border-0"
+                    >
+                      <ShadcnTableCell className="p-3">
+                        {formatVisitDateTime(item.plannedStart, item.timezone, locale)}
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-3 font-medium whitespace-normal break-words">
+                        <Link
+                          href={
+                            item.evidencePackageId
+                              ? `/service-evidence/${item.evidencePackageId}`
+                              : `/visits/${item.visitId}`
+                          }
+                          className="text-primary underline break-words"
+                        >
+                          {item.clientName}
+                        </Link>
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="max-w-64 whitespace-normal break-words p-3">
+                        {item.serviceSummary ?? '–'}
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="max-w-56 whitespace-normal break-words p-3">
+                        {item.caregiverSummary ?? '–'}
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="whitespace-normal break-words p-3">
+                        {t(evidenceStatusKey(item.status))}
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-3 whitespace-normal break-words">
+                        {item.signatoryName
+                          ? `${item.signatoryName} · ${item.capacity ? t(acknowledgementCapacityKey(item.capacity)) : ''}`
+                          : '–'}
+                      </ShadcnTableCell>
+                      <ShadcnTableCell className="p-3">
+                        {item.packageVersion ?? t('ServiceEvidence.office.notCreated')}
+                      </ShadcnTableCell>
+                    </ShadcnTableRow>
+                  ))}
+                </ShadcnTableBody>
+              </ShadcnTable>
+            </div>
+          </>
         ) : (
           <EmptyState title={t('ServiceEvidence.office.noResults')} />
         )}
@@ -401,4 +495,8 @@ function validStatus(value: string | undefined): value is Status {
 
 function validSignatoryType(value: string | undefined): value is SignatoryType {
   return ['client', 'representative', 'other_authorized_person'].includes(value ?? '');
+}
+
+function validSort(value: string | undefined): value is Sort {
+  return ['date', 'client', 'status', 'acknowledgement'].includes(value ?? '');
 }
