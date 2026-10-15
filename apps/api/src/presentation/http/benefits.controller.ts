@@ -89,10 +89,22 @@ const historyQuerySchema = z
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
   })
   .strict();
-const pageQuerySchema = z
+const worklistQuerySchema = z
   .object({
-    page: z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    page: z.coerce.number().int().min(1).optional(),
+    pageSize: z.coerce.number().int().min(1).max(100).optional(),
+    clientPage: z.coerce.number().int().min(1).optional(),
+    clientPageSize: z.coerce.number().int().min(1).max(100).optional(),
+    servicePage: z.coerce.number().int().min(1).optional(),
+    servicePageSize: z.coerce.number().int().min(1).max(100).optional(),
+    search: z.string().trim().max(120).optional(),
+    benefitType: z
+      .enum(['entlastungsbetrag_45b', 'umwandlungsanspruch_45a_4', 'private', 'other'])
+      .optional(),
+    period: z
+      .string()
+      .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+      .optional(),
   })
   .strict();
 const unallocatedQuerySchema = z
@@ -315,15 +327,30 @@ export class BenefitsController {
   })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({ name: 'clientPage', required: false, type: Number })
+  @ApiQuery({ name: 'clientPageSize', required: false, type: Number })
+  @ApiQuery({ name: 'servicePage', required: false, type: Number })
+  @ApiQuery({ name: 'servicePageSize', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String, maxLength: 120 })
+  @ApiQuery({
+    name: 'benefitType',
+    required: false,
+    enum: ['entlastungsbetrag_45b', 'umwandlungsanspruch_45a_4', 'private', 'other'],
+  })
+  @ApiQuery({ name: 'period', required: false, type: String, pattern: '^\\d{4}-(0[1-9]|1[0-2])$' })
   @ApiOkResponse({ type: BenefitWorklistResponseDto })
   async worklist(@Req() request: ApiRequest, @Query() query: Record<string, string | undefined>) {
-    const parsed = pageQuerySchema.safeParse(query);
+    const parsed = worklistQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException();
-    return this.benefits.getWorklist(
-      this.principal(request),
-      parsed.data.page,
-      parsed.data.pageSize,
-    );
+    return this.benefits.getWorklist(this.principal(request), {
+      clientPage: parsed.data.clientPage ?? parsed.data.page ?? 1,
+      clientPageSize: parsed.data.clientPageSize ?? parsed.data.pageSize ?? 20,
+      servicePage: parsed.data.servicePage ?? parsed.data.page ?? 1,
+      servicePageSize: parsed.data.servicePageSize ?? parsed.data.pageSize ?? 20,
+      ...(parsed.data.search ? { search: parsed.data.search } : {}),
+      ...(parsed.data.benefitType ? { benefitType: parsed.data.benefitType } : {}),
+      ...(parsed.data.period ? { period: parsed.data.period } : {}),
+    });
   }
 
   @Get('benefits/unallocated-services')

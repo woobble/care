@@ -308,6 +308,7 @@ export class BenefitLedgerEntryDto {
   @ApiProperty({ format: 'uuid' }) fundingSourceId!: string;
   @ApiProperty({ format: 'uuid', nullable: true }) allocationBucketId!: string | null;
   @ApiProperty({ format: 'uuid', nullable: true }) serviceAllocationId!: string | null;
+  @ApiProperty() allocationReversed!: boolean;
   @ApiProperty({ format: 'uuid', nullable: true }) performedServiceId!: string | null;
   @ApiProperty({ nullable: true }) performedServiceLabel!: string | null;
   @ApiProperty({

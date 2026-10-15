@@ -990,6 +990,8 @@ test('Authentik users can be invited and administered from the office UI', async
     if (!insuranceOption) throw new Error('The benefits form did not include the Pflegekasse');
     await fundingSourceForm.locator('#clientInsuranceId').selectOption(insuranceOption);
     await fundingSourceForm.locator('#funding-label').fill('E2E Pflegekasse');
+    await fundingSourceForm.scrollIntoViewIfNeeded();
+    await captureReviewScreenshot(page, 'benefits-funding-source-editor-desktop-1440.png');
     await fundingSourceForm.getByRole('button', { name: 'Add source' }).click();
     await expect(page).toHaveURL(/updated=funding_source/);
 
@@ -1008,6 +1010,61 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page).toHaveURL(/updated=entitlement/);
     await expect(page.getByRole('heading', { name: 'Entlastungsbetrag (§45b)' })).toBeVisible();
     await expect(page.getByText(/Pflegegrad on/)).toBeVisible();
+
+    await page.goto(`/clients/${agreementClientId}/benefits`);
+    const privateFundingSourceForm = page
+      .locator('form')
+      .filter({ has: page.locator('#sourceType') });
+    await privateFundingSourceForm.locator('#sourceType').selectOption('self_pay');
+    await privateFundingSourceForm.locator('#clientInsuranceId').selectOption('');
+    await privateFundingSourceForm.locator('#funding-label').fill('E2E Private payment');
+    await privateFundingSourceForm.getByRole('button', { name: 'Add source' }).click();
+    await expect(page).toHaveURL(/updated=funding_source/);
+
+    const privateEntitlementForm = page
+      .locator('form')
+      .filter({ has: page.locator('#benefitType') });
+    await privateEntitlementForm.locator('#benefitType').selectOption('private');
+    const privateEntitlementSourceOption = await privateEntitlementForm
+      .locator('#entitlement-source option')
+      .filter({ hasText: 'E2E Private payment' })
+      .getAttribute('value');
+    if (!privateEntitlementSourceOption)
+      throw new Error('The private payment source was not available for an entitlement');
+    await privateEntitlementForm
+      .locator('#entitlement-source')
+      .selectOption(privateEntitlementSourceOption);
+    await privateEntitlementForm.locator('#entitlement-validFrom').fill(serviceValidFrom);
+    await privateEntitlementForm.locator('#entitlement-source-info').selectOption('contract');
+    await privateEntitlementForm.getByRole('button', { name: 'Add entitlement' }).click();
+    await expect(page).toHaveURL(/updated=entitlement/);
+
+    const fundingPeriod = serviceValidFrom.slice(0, 7);
+    await page.goto(`/clients/${agreementClientId}/benefits?period=${fundingPeriod}`);
+    await expect(
+      page.getByRole('heading', { name: 'Recorded budget by entitlement' }),
+    ).toBeVisible();
+    await expect(page.getByLabel('Funding period')).toHaveValue(fundingPeriod);
+    await expect(page.getByRole('heading', { name: 'Entlastungsbetrag (§45b)' })).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await captureReviewScreenshot(page, 'benefits-client-funding-overview-desktop-1440.png');
+    await page.locator('section[aria-labelledby="summary-title"]').evaluate((section) => {
+      const top = section.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo(0, Math.max(0, top - 88));
+    });
+    await captureReviewScreenshot(page, 'benefits-funding-period-balances-desktop-1440.png');
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'benefits-client-funding-tablet-768.png');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await page.locator('section[aria-labelledby="summary-title"]').evaluate((section) => {
+      const top = section.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo(0, Math.max(0, top - 88));
+    });
+    await captureReviewScreenshot(page, 'benefits-client-funding-overview-mobile-390.png');
+    await page.setViewportSize({ width: 1440, height: 900 });
 
     await page.goto('/billing/claims/settings');
     await expect(page.getByRole('heading', { name: 'Claims settings' })).toBeVisible();
@@ -1164,7 +1221,7 @@ test('Authentik users can be invited and administered from the office UI', async
       .locator('summary')
       .click();
     await expect(page.getByText('Estimated service cost', { exact: true })).toBeVisible();
-    await expect(page.getByText('Eligible for this service date')).toBeVisible();
+    await expect(page.getByText('Eligible for this service date').first()).toBeVisible();
 
     await page.goto(`/clients/${agreementClientId}`);
     await page.getByRole('link', { name: 'Service planning', exact: true }).click();
@@ -2616,11 +2673,24 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(employeeExecutionRow).toContainText('Actual');
 
     await page.goto('/benefits');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Light' }).click();
+    await expect(page.locator('html')).not.toHaveClass(/dark/);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await captureReviewScreenshot(page, 'benefits-worklist-exceptions-desktop-light.png');
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await captureReviewScreenshot(page, 'benefits-worklist-exceptions-desktop-dark.png');
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Light' }).click();
     await expectVisibleTextToOmitIds(page, [agreementClientId, executionVisitId, serviceId]);
     const completedService = page
       .getByRole('heading', { name: `E2E Service ${runId} · Agreement E2E ${runId}` })
       .first()
       .locator('xpath=ancestor::li[1]');
+    await completedService.scrollIntoViewIfNeeded();
     await expect(
       completedService.getByRole('link', { name: `Agreement E2E ${runId}` }),
     ).toHaveAttribute('href', `/clients/${agreementClientId}`);
@@ -2631,22 +2701,89 @@ test('Authentik users can be invited and administered from the office UI', async
       .getAttribute('value');
     if (!allocationSourceOption)
       throw new Error('The service allocation form has no eligible §45b source');
+    const privateAllocationSourceOption = await allocationForm
+      .locator('select[name="allocation-0-selection"] option')
+      .filter({ hasText: 'E2E Private payment' })
+      .getAttribute('value');
+    if (!privateAllocationSourceOption)
+      throw new Error('The service allocation form has no eligible private payment source');
     await allocationForm
       .locator('select[name="allocation-0-selection"]')
       .selectOption(allocationSourceOption);
-    await allocationForm.locator('input[name="allocation-0-amount"]').fill('45');
+    await allocationForm.locator('input[name="allocation-0-amount"]').fill('30');
     await allocationForm.locator('select[name="allocation-0-status"]').selectOption('confirmed');
+    await allocationForm.getByRole('button', { name: 'Add funding source' }).click();
+    await allocationForm
+      .locator('select[name="allocation-1-selection"]')
+      .selectOption(privateAllocationSourceOption);
+    await allocationForm.locator('input[name="allocation-1-amount"]').fill('15');
+    await allocationForm.locator('select[name="allocation-1-status"]').selectOption('confirmed');
+    await expect(allocationForm.getByText('Unallocated after save')).toBeVisible();
+    await captureReviewScreenshot(page, 'benefits-split-allocation-editor-desktop-1440.png');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await allocationForm.evaluate((form) => form.scrollIntoView({ block: 'start' }));
+    await allocationForm.screenshot({
+      path: resolve(reviewDirectory, 'benefits-split-allocation-editor-mobile-390.png'),
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
     await allocationForm.getByRole('button', { name: 'Allocate funding' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Service funding was allocated.' }),
     ).toBeVisible({ timeout: 30_000 });
 
-    await page.goto(`/clients/${agreementClientId}/benefits`);
+    await page.goto(`/clients/${agreementClientId}/benefits?period=${fundingPeriod}`);
+    await expect(
+      page.getByRole('heading', { name: 'Recorded budget by entitlement' }),
+    ).toBeVisible();
     const budgetHistory = page.locator('section[aria-labelledby="history-title"]');
     await expect(budgetHistory.getByRole('heading', { name: 'Budget history' })).toBeVisible();
     await expect(
       budgetHistory.getByRole('table').getByText('Completed service allocation', { exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(2);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await captureReviewScreenshot(
+      page,
+      'benefits-client-funding-after-allocation-desktop-1440.png',
+    );
+    await page.locator('section[aria-labelledby="summary-title"]').evaluate((section) => {
+      const top = section.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo(0, Math.max(0, top - 88));
+    });
+    await captureReviewScreenshot(page, 'benefits-funding-period-balances-after-allocation.png');
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'benefits-funding-workspace-tablet-768.png');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await page.locator('section[aria-labelledby="summary-title"]').evaluate((section) => {
+      const top = section.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo(0, Math.max(0, top - 88));
+    });
+    await captureReviewScreenshot(page, 'benefits-client-funding-after-allocation-mobile-390.png');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await budgetHistory.scrollIntoViewIfNeeded();
+    const privateAllocationRow = budgetHistory
+      .getByRole('row')
+      .filter({ hasText: 'E2E Private payment' });
+    await privateAllocationRow.getByText('Reverse allocation').click();
+    await privateAllocationRow.getByLabel('Reason for correction').fill('E2E funding correction');
+    await page.once('dialog', (dialog) => dialog.accept());
+    await privateAllocationRow.getByRole('button', { name: 'Confirm reversal' }).click();
+    await expect(page).toHaveURL(/updated=reversal/);
+    const correctedHistory = page.locator('section[aria-labelledby="history-title"]');
+    const reversalRow = correctedHistory
+      .getByRole('row')
+      .filter({ hasText: 'Allocation reversal' });
+    await expect(reversalRow).toBeVisible();
+    await expect(reversalRow).toContainText('E2E funding correction');
+    await expect(
+      correctedHistory
+        .getByRole('row')
+        .filter({ hasText: 'Completed service allocation' })
+        .filter({ hasText: 'E2E Private payment' }),
+    ).toContainText('Reversed');
+    await captureReviewScreenshot(page, 'benefits-allocation-history-desktop-1440.png');
 
     if (process.env.CARE_E2E_STOP_BEFORE_BILLING === 'true') return;
 
@@ -4229,6 +4366,24 @@ async function expectMobileLayoutToFit(page: Page): Promise<void> {
         overflowCandidates: Array.from(document.body.querySelectorAll('*'))
           .map((element) => {
             const rect = element.getBoundingClientRect();
+            const ancestors: Array<Record<string, number | string>> = [];
+            let ancestor = element.parentElement;
+            while (ancestor && ancestors.length < 5) {
+              const ancestorRect = ancestor.getBoundingClientRect();
+              const ancestorStyle = getComputedStyle(ancestor);
+              ancestors.push({
+                tag: ancestor.tagName,
+                className: typeof ancestor.className === 'string' ? ancestor.className : '',
+                left: Math.round(ancestorRect.left),
+                right: Math.round(ancestorRect.right),
+                width: Math.round(ancestorRect.width),
+                scrollWidth: ancestor.scrollWidth,
+                clientWidth: ancestor.clientWidth,
+                overflowX: ancestorStyle.overflowX,
+                minWidth: ancestorStyle.minWidth,
+              });
+              ancestor = ancestor.parentElement;
+            }
             return {
               tag: element.tagName,
               id: element.id,
@@ -4239,9 +4394,16 @@ async function expectMobileLayoutToFit(page: Page): Promise<void> {
               width: Math.round(rect.width),
               scrollWidth: element.scrollWidth,
               clientWidth: element.clientWidth,
+              ancestors,
             };
           })
           .filter((element) => element.right > width + 1 || element.left < -1)
+          .filter(
+            (element) =>
+              !element.ancestors.some(
+                (ancestor) => ancestor.overflowX === 'auto' || ancestor.overflowX === 'scroll',
+              ),
+          )
           .sort((left, right) => right.right - left.right)
           .slice(0, 8),
       };

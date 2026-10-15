@@ -3,6 +3,40 @@ import en from '../../messages/en.json';
 import de from '../../messages/de.json';
 import { getClientMessages } from './client-messages';
 
+const benefitAllocationMessageKeys = [
+  'serviceAmount',
+  'allocationRows',
+  'addAllocationLine',
+  'allocationLine',
+  'fundingSource',
+  'selectFundingSource',
+  'allocationAmount',
+  'allocationStatus',
+  'provisionalAllocation',
+  'confirmedAllocation',
+  'removeAllocationLine',
+  'removeAllocationLineShort',
+  'allocationPreview',
+  'remainingToAllocate',
+  'unknownBalance',
+  'allocatedAfterSave',
+  'unallocatedAfterSave',
+  'allocationExceedsRemaining',
+  'enterServiceAmountForPreview',
+  'reverseAllocation',
+  'confirmAllocationReversal',
+  'allocationReversalFailed',
+  'correctionReason',
+  'allocationReversalNote',
+  'confirmReversal',
+] as const;
+
+function benefitAllocationMessages(messages: typeof en) {
+  return Object.fromEntries(
+    benefitAllocationMessageKeys.map((key) => [key, messages.Benefits[key]]),
+  ) as Pick<typeof en.Benefits, (typeof benefitAllocationMessageKeys)[number]>;
+}
+
 describe('client translation messages', () => {
   test('includes translations used by client components in both locales', () => {
     const english = getClientMessages(en);
@@ -77,6 +111,8 @@ describe('client translation messages', () => {
       note: de.ServiceAgreements.costEstimate.note,
       reason: de.ServiceAgreements.costEstimate.reason,
     });
+    expect(english.Benefits).toEqual(benefitAllocationMessages(en));
+    expect(german.Benefits).toEqual(benefitAllocationMessages(de));
     expect(german.Common.language).toBe(de.Common.language);
     expect(german.Caregiver.drafts).toEqual(de.Caregiver.drafts);
     expect(german.ServiceEvidence.care).toEqual(de.ServiceEvidence.care);

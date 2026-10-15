@@ -150,13 +150,13 @@ export async function recordBenefitAdjustmentAction(formData: FormData): Promise
   redirect(clientBenefitsPath(clientId, '', 'adjustment'));
 }
 
-export async function allocatePerformedServiceAction(formData: FormData): Promise<void> {
+export async function allocatePerformedServiceAction(formData: FormData): Promise<void | boolean> {
   const performedServiceId = readUuid(formData.get('performedServiceId'));
   const manualServiceAmountCents = parseOptionalEuroCents(
     readString(formData.get('manualServiceAmount')),
   );
   const allocations = [];
-  for (let index = 0; index < 3; index += 1) {
+  for (let index = 0; index < 8; index += 1) {
     const selection = readString(formData.get(`allocation-${index}-selection`));
     const amountInput = readString(formData.get(`allocation-${index}-amount`));
     if (!selection && !amountInput) continue;
@@ -170,7 +170,7 @@ export async function allocatePerformedServiceAction(formData: FormData): Promis
     ] as const);
     const idempotencyKey = readUuid(formData.get(`allocation-${index}-key`));
     if (!fundingSourceId || !entitlementId || amountCents === null || !status || !idempotencyKey) {
-      redirect('/benefits?error=INVALID_REQUEST');
+      return false;
     }
     allocations.push({
       fundingSourceId,
@@ -186,7 +186,7 @@ export async function allocatePerformedServiceAction(formData: FormData): Promis
     allocations.length === 0 ||
     (manualServiceAmountCents === null && readString(formData.get('manualServiceAmount')))
   ) {
-    redirect('/benefits?error=INVALID_REQUEST');
+    return false;
   }
   const api = await getApiClient();
   const { error } = await api.POST(
@@ -196,10 +196,27 @@ export async function allocatePerformedServiceAction(formData: FormData): Promis
       body: { allocations },
     },
   );
-  if (error) redirect(`/benefits?error=${encodeURIComponent(error.code)}`);
+  if (error) return false;
   revalidatePath('/benefits');
   revalidatePath('/planning');
   redirect('/benefits?updated=allocation');
+}
+
+export async function reverseBenefitAllocationAction(formData: FormData): Promise<void | boolean> {
+  const clientId = readUuid(formData.get('clientId'));
+  const allocationId = readUuid(formData.get('allocationId'));
+  const idempotencyKey = readUuid(formData.get('idempotencyKey'));
+  const reason = readString(formData.get('reason'));
+  if (!clientId || !allocationId || !idempotencyKey || !reason || reason.length > 500) return false;
+
+  const api = await getApiClient();
+  const { error } = await api.POST('/api/v1/funding-allocations/{allocationId}/reverse', {
+    params: { path: { allocationId }, header: await getTenantHeader() },
+    body: { reason, idempotencyKey },
+  });
+  if (error) return false;
+  refreshClientBenefits(clientId);
+  redirect(clientBenefitsPath(clientId, '', 'reversal') + '#history-title');
 }
 
 export async function createProviderRecognitionAction(formData: FormData): Promise<void> {
@@ -279,7 +296,8 @@ function readNullableText(value: FormDataEntryValue | null): string | null {
 
 function parseOptionalEuroCents(value: string): number | null {
   if (!value) return null;
-  return parseSignedEuroCents(value);
+  const cents = parseSignedEuroCents(value);
+  return cents !== null && cents > 0 ? cents : null;
 }
 
 function parseSignedEuroCents(value: string): number | null {

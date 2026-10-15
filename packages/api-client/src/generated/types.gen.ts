@@ -2009,6 +2009,7 @@ export type BenefitLedgerEntryDto = {
     fundingSourceId: string;
     allocationBucketId: string | null;
     serviceAllocationId: string | null;
+    allocationReversed: boolean;
     performedServiceId: string | null;
     performedServiceLabel: string | null;
     entryType: 'entitlement_allocated' | 'opening_balance_adjusted' | 'external_consumption_recorded' | 'service_consumption_allocated' | 'service_consumption_reversed' | 'manual_adjustment' | 'benefit_expired';
@@ -8966,6 +8967,13 @@ export type BenefitsControllerWorklistData = {
     };
     path?: never;
     query?: {
+        period?: string;
+        benefitType?: 'entlastungsbetrag_45b' | 'umwandlungsanspruch_45a_4' | 'private' | 'other';
+        search?: string;
+        servicePageSize?: number;
+        servicePage?: number;
+        clientPageSize?: number;
+        clientPage?: number;
         pageSize?: number;
         page?: number;
     };

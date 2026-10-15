@@ -4,14 +4,17 @@ import {
   count,
   desc,
   eq,
+  exists,
   gt,
   gte,
+  ilike,
   inArray,
   isNull,
   like,
   lte,
   ne,
   or,
+  sql,
 } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 import type { AuditWriter } from '@care/audit';
@@ -309,6 +312,28 @@ export class BenefitsApplicationService {
             eq(serviceAllocations.clientId, clientId),
           ),
         );
+      const historyEntries = entries.slice(0, 100);
+      const historyAllocationIds = [
+        ...new Set(
+          historyEntries.flatMap((entry) =>
+            entry.serviceAllocationId ? [entry.serviceAllocationId] : [],
+          ),
+        ),
+      ];
+      const reversedHistoryAllocations = historyAllocationIds.length
+        ? await transaction
+            .select({ allocationId: serviceAllocationReversals.allocationId })
+            .from(serviceAllocationReversals)
+            .where(
+              and(
+                eq(serviceAllocationReversals.tenantId, principal.tenantId),
+                inArray(serviceAllocationReversals.allocationId, historyAllocationIds),
+              ),
+            )
+        : [];
+      const reversedHistoryAllocationIds = new Set(
+        reversedHistoryAllocations.map((row) => row.allocationId),
+      );
       const facts = entries.map(toLedgerFact);
       const currentMonth = monthStart(asOf);
       const allocationById = new Map(allocations.map((allocation) => [allocation.id, allocation]));
@@ -412,12 +437,15 @@ export class BenefitsApplicationService {
         entitlementBudgets,
         plannedEligible45bCents,
         entitlements: entitlements.map(toEntitlementResponse),
-        history: entries.slice(0, 100).map((entry) => ({
+        history: historyEntries.map((entry) => ({
           id: entry.id,
           clientId: entry.clientId,
           fundingSourceId: entry.fundingSourceId,
           allocationBucketId: entry.allocationBucketId,
           serviceAllocationId: entry.serviceAllocationId,
+          allocationReversed: entry.serviceAllocationId
+            ? reversedHistoryAllocationIds.has(entry.serviceAllocationId)
+            : false,
           performedServiceId: entry.performedServiceId,
           entryType: entry.entryType,
           amountCents: entry.amountCents,
@@ -653,6 +681,23 @@ export class BenefitsApplicationService {
         .orderBy(desc(benefitLedgerEntries.effectiveDate), desc(benefitLedgerEntries.recordedAt))
         .limit(input.pageSize)
         .offset((input.page - 1) * input.pageSize);
+      const allocationIds = [
+        ...new Set(
+          items.flatMap((entry) => (entry.serviceAllocationId ? [entry.serviceAllocationId] : [])),
+        ),
+      ];
+      const reversedAllocations = allocationIds.length
+        ? await transaction
+            .select({ allocationId: serviceAllocationReversals.allocationId })
+            .from(serviceAllocationReversals)
+            .where(
+              and(
+                eq(serviceAllocationReversals.tenantId, principal.tenantId),
+                inArray(serviceAllocationReversals.allocationId, allocationIds),
+              ),
+            )
+        : [];
+      const reversedAllocationIds = new Set(reversedAllocations.map((row) => row.allocationId));
       const performedServiceIds = [
         ...new Set(
           items.flatMap((entry) => (entry.performedServiceId ? [entry.performedServiceId] : [])),
@@ -691,6 +736,9 @@ export class BenefitsApplicationService {
       return {
         items: items.map((entry) => ({
           ...entry,
+          allocationReversed: entry.serviceAllocationId
+            ? reversedAllocationIds.has(entry.serviceAllocationId)
+            : false,
           performedServiceLabel: entry.performedServiceId
             ? (serviceLabels.get(entry.performedServiceId) ?? null)
             : null,
@@ -704,19 +752,50 @@ export class BenefitsApplicationService {
 
   async getWorklist(
     principal: AuthorizationPrincipal,
-    page: number,
-    pageSize: number,
-    expiryLookaheadDays = 60,
+    query:
+      | number
+      | {
+          clientPage: number;
+          clientPageSize: number;
+          servicePage: number;
+          servicePageSize: number;
+          search?: string;
+          benefitType?: BenefitType;
+          period?: string;
+        },
+    legacyPageSize = 25,
+    legacyExpiryLookaheadDays = 60,
   ) {
+    const options =
+      typeof query === 'number'
+        ? {
+            clientPage: query,
+            clientPageSize: legacyPageSize,
+            servicePage: query,
+            servicePageSize: legacyPageSize,
+            search: undefined,
+            benefitType: undefined,
+            period: undefined,
+          }
+        : query;
+    const expiryLookaheadDays = typeof query === 'number' ? legacyExpiryLookaheadDays : 60;
+    const { clientPage, clientPageSize, servicePage, servicePageSize } = options;
     if (
-      !Number.isSafeInteger(page) ||
-      page < 1 ||
-      !Number.isSafeInteger(pageSize) ||
-      pageSize < 1 ||
-      pageSize > 100 ||
+      !Number.isSafeInteger(clientPage) ||
+      clientPage < 1 ||
+      !Number.isSafeInteger(clientPageSize) ||
+      clientPageSize < 1 ||
+      clientPageSize > 100 ||
+      !Number.isSafeInteger(servicePage) ||
+      servicePage < 1 ||
+      !Number.isSafeInteger(servicePageSize) ||
+      servicePageSize < 1 ||
+      servicePageSize > 100 ||
       !Number.isSafeInteger(expiryLookaheadDays) ||
       expiryLookaheadDays < 0 ||
-      expiryLookaheadDays > 365
+      expiryLookaheadDays > 365 ||
+      (options.search !== undefined && options.search.trim().length > 120) ||
+      (options.period !== undefined && !/^\d{4}-(0[1-9]|1[0-2])$/.test(options.period))
     )
       throw new InvalidBenefitAdjustmentError();
     this.requireAnyGrant(principal, 'benefits.review');
@@ -756,19 +835,124 @@ export class BenefitsApplicationService {
           eq(clientRecords.status, 'active'),
           ...(scopeFilter ? [scopeFilter] : []),
         ];
+        if (options.benefitType || options.period) {
+          const periodStart = options.period ? `${options.period}-01` : today();
+          const periodEnd = options.period
+            ? new Date(
+                Date.UTC(Number(options.period.slice(0, 4)), Number(options.period.slice(5, 7)), 0),
+              )
+                .toISOString()
+                .slice(0, 10)
+            : periodStart;
+          filters.push(
+            exists(
+              transaction
+                .select({ id: clientBenefitEntitlements.id })
+                .from(clientBenefitEntitlements)
+                .where(
+                  and(
+                    eq(clientBenefitEntitlements.tenantId, principal.tenantId),
+                    eq(clientBenefitEntitlements.clientId, clientRecords.id),
+                    inArray(clientBenefitEntitlements.status, ['confirmed', 'provisional']),
+                    ...(options.benefitType
+                      ? [eq(clientBenefitEntitlements.benefitType, options.benefitType)]
+                      : []),
+                    lte(clientBenefitEntitlements.validFrom, periodEnd),
+                    or(
+                      isNull(clientBenefitEntitlements.validUntil),
+                      gte(clientBenefitEntitlements.validUntil, periodStart),
+                    ),
+                  ),
+                ),
+            ),
+          );
+        }
+        const searchTerm = options.search?.trim();
+        if (searchTerm) {
+          const pattern = `%${searchTerm.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%`;
+          const nameMatches = or(
+            ilike(
+              sql<string>`${clientRecords.firstName} || ' ' || ${clientRecords.lastName}`,
+              pattern,
+            ),
+            ilike(
+              sql<string>`${clientRecords.preferredName} || ' ' || ${clientRecords.lastName}`,
+              pattern,
+            ),
+            ilike(clientRecords.firstName, pattern),
+            ilike(clientRecords.lastName, pattern),
+            ilike(clientRecords.preferredName, pattern),
+          )!;
+          const clientReadGrants = principal.grants.filter(
+            (grant) => grant.permission === 'client.read',
+          );
+          const canSearchIdentifiers = clientReadGrants.some(
+            (grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId,
+          );
+          const identifierOrganizationIds = [
+            ...new Set(
+              clientReadGrants
+                .filter((grant) => grant.scopeType === 'organization')
+                .map((grant) => grant.scopeId),
+            ),
+          ];
+          const identifierFacilityIds = [
+            ...new Set(
+              clientReadGrants
+                .filter((grant) => grant.scopeType === 'facility')
+                .map((grant) => grant.scopeId),
+            ),
+          ];
+          const identifierScope = canSearchIdentifiers
+            ? undefined
+            : or(
+                ...(identifierOrganizationIds.length
+                  ? [inArray(clientRecords.organizationId, identifierOrganizationIds)]
+                  : []),
+                ...(identifierFacilityIds.length
+                  ? [inArray(clientRecords.primaryFacilityId, identifierFacilityIds)]
+                  : []),
+              );
+          const identifierMatches =
+            canSearchIdentifiers || identifierScope
+              ? exists(
+                  transaction
+                    .select({ id: clientInsurances.id })
+                    .from(clientInsurances)
+                    .where(
+                      and(
+                        eq(clientInsurances.tenantId, principal.tenantId),
+                        eq(clientInsurances.clientId, clientRecords.id),
+                        or(
+                          ilike(clientInsurances.insuranceNumber, pattern),
+                          ilike(clientInsurances.memberNumber, pattern),
+                        ),
+                        ...(identifierScope ? [identifierScope] : []),
+                      ),
+                    ),
+                )
+              : undefined;
+          filters.push(identifierMatches ? or(nameMatches, identifierMatches)! : nameMatches);
+        }
         const clients = await transaction
           .select()
           .from(clientRecords)
           .where(and(...filters))
-          .orderBy(asc(clientRecords.lastName), asc(clientRecords.firstName))
-          .limit(pageSize)
-          .offset((page - 1) * pageSize);
+          .orderBy(asc(clientRecords.lastName), asc(clientRecords.firstName), asc(clientRecords.id))
+          .limit(clientPageSize)
+          .offset((clientPage - 1) * clientPageSize);
         const [total] = await transaction
           .select({ count: count() })
           .from(clientRecords)
           .where(and(...filters));
         const ids = clients.map((client) => client.id);
-        if (!ids.length) return { items: [], page, pageSize, total: total?.count ?? 0 };
+        if (!ids.length)
+          return {
+            items: [],
+            page: clientPage,
+            pageSize: clientPageSize,
+            total: total?.count ?? 0,
+          };
         const entitlements = await transaction
           .select()
           .from(clientBenefitEntitlements)
@@ -823,8 +1007,8 @@ export class BenefitsApplicationService {
         expiryLimit.setUTCDate(expiryLimit.getUTCDate() + expiryLookaheadDays);
         const until = expiryLimit.toISOString().slice(0, 10);
         return {
-          page,
-          pageSize,
+          page: clientPage,
+          pageSize: clientPageSize,
           total: total?.count ?? 0,
           items: clients.map((client) => {
             const clientEntitlements = entitlements.filter((item) => item.clientId === client.id);
@@ -900,8 +1084,8 @@ export class BenefitsApplicationService {
     const unallocatedServices = await this.listUnallocatedServices(
       principal,
       undefined,
-      page,
-      pageSize,
+      servicePage,
+      servicePageSize,
     );
     const allocationOptions = await this.worklistAllocationOptions(
       principal,
@@ -1706,13 +1890,44 @@ export class BenefitsApplicationService {
       throw new InvalidBenefitAdjustmentError();
     this.requireAnyGrant(principal, 'benefits.review');
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const rows = await transaction
+      const grants = principal.grants.filter((grant) => grant.permission === 'benefits.review');
+      const tenantWide = grants.some(
+        (grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId,
+      );
+      const organizationIds = [
+        ...new Set(
+          grants
+            .filter((grant) => grant.scopeType === 'organization')
+            .map((grant) => grant.scopeId),
+        ),
+      ];
+      const facilityIds = [
+        ...new Set(
+          grants.filter((grant) => grant.scopeType === 'facility').map((grant) => grant.scopeId),
+        ),
+      ];
+      if (!tenantWide && organizationIds.length === 0 && facilityIds.length === 0)
+        throw new AuthorizationDeniedError('benefits.review');
+      const scopeFilter = tenantWide
+        ? undefined
+        : or(
+            ...(organizationIds.length
+              ? [inArray(clientRecords.organizationId, organizationIds)]
+              : []),
+            ...(facilityIds.length ? [inArray(clientRecords.primaryFacilityId, facilityIds)] : []),
+          );
+      const activeAllocatedCents =
+        sql<number>`coalesce(sum(case when ${serviceAllocationReversals.id} is null then ${serviceAllocations.amountCents} else 0 end), 0)`.mapWith(
+          Number,
+        );
+      const serviceAmountSnapshotCents = sql<
+        number | null
+      >`max(${serviceAllocations.serviceAmountCents})`;
+      const candidateQuery = transaction
         .select({
-          performed: performedServices,
-          execution: visitExecutions,
-          visit: visits,
-          service: serviceDefinitions,
-          client: clientRecords,
+          performedServiceId: performedServices.id,
+          actualEnd: visitExecutions.actualEnd,
+          allocatedCents: activeAllocatedCents.as('allocated_cents'),
         })
         .from(performedServices)
         .innerJoin(
@@ -1730,15 +1945,22 @@ export class BenefitsApplicationService {
           ),
         )
         .innerJoin(
-          serviceDefinitions,
-          and(
-            eq(serviceDefinitions.tenantId, performedServices.tenantId),
-            eq(serviceDefinitions.id, performedServices.serviceDefinitionId),
-          ),
-        )
-        .innerJoin(
           clientRecords,
           and(eq(clientRecords.tenantId, visits.tenantId), eq(clientRecords.id, visits.clientId)),
+        )
+        .leftJoin(
+          serviceAllocations,
+          and(
+            eq(serviceAllocations.tenantId, performedServices.tenantId),
+            eq(serviceAllocations.performedServiceId, performedServices.id),
+          ),
+        )
+        .leftJoin(
+          serviceAllocationReversals,
+          and(
+            eq(serviceAllocationReversals.tenantId, serviceAllocations.tenantId),
+            eq(serviceAllocationReversals.allocationId, serviceAllocations.id),
+          ),
         )
         .where(
           and(
@@ -1746,51 +1968,80 @@ export class BenefitsApplicationService {
             eq(visitExecutions.status, 'completed'),
             ne(performedServices.status, 'not_performed'),
             ...(clientId ? [eq(visits.clientId, clientId)] : []),
+            ...(scopeFilter ? [scopeFilter] : []),
           ),
         )
-        .orderBy(desc(visitExecutions.actualEnd), asc(performedServices.id))
-        .limit(500);
-      const visible = rows.filter(({ client }) =>
-        can(principal, {
-          action: 'benefits.review',
-          resource: {
-            tenantId: principal.tenantId,
-            clientId: client.id,
-            ...(client.organizationId ? { organizationId: client.organizationId } : {}),
-            ...(client.primaryFacilityId ? { facilityId: client.primaryFacilityId } : {}),
-          },
-        }),
-      );
-      const selected = visible.slice((page - 1) * pageSize, page * pageSize);
-      const selectedIds = selected.map((row) => row.performed.id);
+        .groupBy(performedServices.id, visitExecutions.actualEnd)
+        .having(
+          or(
+            isNull(serviceAmountSnapshotCents),
+            gt(serviceAmountSnapshotCents, activeAllocatedCents),
+          ),
+        );
+      const candidates = candidateQuery.as('unallocated_service_candidates');
+      const [total] = await transaction.select({ count: count() }).from(candidates);
+      const candidatePage = await transaction
+        .select()
+        .from(candidates)
+        .orderBy(desc(candidates.actualEnd), asc(candidates.performedServiceId))
+        .limit(pageSize)
+        .offset((page - 1) * pageSize);
+      const selectedIds = candidatePage.map((row) => row.performedServiceId);
+      const selected = selectedIds.length
+        ? await transaction
+            .select({
+              performed: performedServices,
+              execution: visitExecutions,
+              visit: visits,
+              service: serviceDefinitions,
+              client: clientRecords,
+            })
+            .from(performedServices)
+            .innerJoin(
+              visitExecutions,
+              and(
+                eq(visitExecutions.tenantId, performedServices.tenantId),
+                eq(visitExecutions.id, performedServices.executionId),
+              ),
+            )
+            .innerJoin(
+              visits,
+              and(
+                eq(visits.tenantId, performedServices.tenantId),
+                eq(visits.id, performedServices.visitId),
+              ),
+            )
+            .innerJoin(
+              serviceDefinitions,
+              and(
+                eq(serviceDefinitions.tenantId, performedServices.tenantId),
+                eq(serviceDefinitions.id, performedServices.serviceDefinitionId),
+              ),
+            )
+            .innerJoin(
+              clientRecords,
+              and(
+                eq(clientRecords.tenantId, visits.tenantId),
+                eq(clientRecords.id, visits.clientId),
+              ),
+            )
+            .where(
+              and(
+                eq(performedServices.tenantId, principal.tenantId),
+                inArray(performedServices.id, selectedIds),
+              ),
+            )
+            .orderBy(desc(visitExecutions.actualEnd), asc(performedServices.id))
+        : [];
       const serviceDates = new Map(
         selected.map((row) => [
           row.performed.id,
           serviceDate(row.execution.actualEnd ?? row.visit.plannedStart, row.visit.timezone),
         ]),
       );
-      const allocationRows = selectedIds.length
-        ? await transaction
-            .select({
-              performedServiceId: serviceAllocations.performedServiceId,
-              amountCents: serviceAllocations.amountCents,
-            })
-            .from(serviceAllocations)
-            .leftJoin(
-              serviceAllocationReversals,
-              and(
-                eq(serviceAllocationReversals.tenantId, serviceAllocations.tenantId),
-                eq(serviceAllocationReversals.allocationId, serviceAllocations.id),
-              ),
-            )
-            .where(
-              and(
-                eq(serviceAllocations.tenantId, principal.tenantId),
-                inArray(serviceAllocations.performedServiceId, selectedIds),
-                isNull(serviceAllocationReversals.id),
-              ),
-            )
-        : [];
+      const allocatedByService = new Map(
+        candidatePage.map((candidate) => [candidate.performedServiceId, candidate.allocatedCents]),
+      );
       const priceContexts = selected.map((row) => {
         const date = serviceDates.get(row.performed.id)!;
         return and(
@@ -1812,16 +2063,6 @@ export class BenefitsApplicationService {
             .from(servicePrices)
             .where(and(eq(servicePrices.tenantId, principal.tenantId), or(...priceContexts)))
         : [];
-      const allocatedByService = new Map<string, number>();
-      for (const allocation of allocationRows) {
-        allocatedByService.set(
-          allocation.performedServiceId,
-          addCents(
-            allocatedByService.get(allocation.performedServiceId) ?? 0,
-            allocation.amountCents,
-          ),
-        );
-      }
       const items = [];
       for (const row of selected) {
         const date = serviceDates.get(row.performed.id)!;
@@ -1880,7 +2121,7 @@ export class BenefitsApplicationService {
             serviceAmountCents === null ? null : Math.max(0, serviceAmountCents - allocatedCents),
         });
       }
-      return { items, page, pageSize, total: visible.length };
+      return { items, page, pageSize, total: total?.count ?? 0 };
     });
   }
 
@@ -2369,6 +2610,9 @@ export class BenefitsApplicationService {
       throw new InvalidBenefitAdjustmentError();
     const now = new Date();
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      await transaction.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${principal.tenantId} || ':' || ${allocationId}, 0))`,
+      );
       const [allocation] = await transaction
         .select()
         .from(serviceAllocations)
@@ -2378,7 +2622,6 @@ export class BenefitsApplicationService {
             eq(serviceAllocations.id, allocationId),
           ),
         )
-        .for('update')
         .limit(1);
       if (!allocation) throw new BenefitAllocationNotFoundError();
       await this.requireClient(transaction, principal, allocation.clientId, 'benefits.allocate');

@@ -1,4 +1,5 @@
 import { ErrorNotice as Alert } from '@app/web/components/page-patterns';
+import { Suspense } from 'react';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -19,7 +20,8 @@ import { Input } from '@care/ui/components/input';
 import { Label } from '@care/ui/components/label';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
-import { formatCurrency, formatDate, formatDateTime } from '@app/web/i18n/format';
+import { formatCurrency, formatDate } from '@app/web/i18n/format';
+import { FundingHistorySection } from './funding-history';
 import {
   getApiClient,
   getPermissionGrants,
@@ -32,6 +34,24 @@ import {
   recordBenefitAdjustmentAction,
 } from '@app/web/app/(office)/benefits/actions';
 import { generateDocumentAction } from '@app/web/app/(office)/documents/actions';
+
+async function HistoryLoading() {
+  const t = await getTranslations('Benefits');
+  return (
+    <section
+      id="history-title"
+      aria-labelledby="history-loading-title"
+      aria-busy="true"
+      className="grid gap-3 rounded-lg border bg-card p-5"
+    >
+      <h2 id="history-loading-title" className="text-xl font-semibold">
+        {t('historyTitle')}
+      </h2>
+      <p className="text-sm text-muted-foreground">{t('historyLoading')}</p>
+      <div className="h-24 animate-pulse rounded-md bg-muted" />
+    </section>
+  );
+}
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const historyEntryTypes = [
@@ -59,11 +79,13 @@ const verificationStatuses = [
 type SearchParams = Promise<{
   error?: string;
   updated?: string;
+  period?: string;
   month?: string;
   fundingSourceId?: string;
   entryType?: string;
   reference?: string;
   page?: string;
+  pageSize?: string;
 }>;
 
 export default async function ClientBenefitsPage({
@@ -81,32 +103,26 @@ export default async function ClientBenefitsPage({
   const get = api.GET;
   const header = await getTenantHeader();
   const month = validMonth(query.month);
+  const period = validMonth(query.period);
   const fundingSourceId = validUuid(query.fundingSourceId);
   const entryType = historyEntryTypes.find((value) => value === query.entryType);
   const reference = query.reference?.trim().slice(0, 500) || undefined;
   const page = positivePage(query.page);
-  const monthRange = month ? monthDates(month) : null;
-  const [clientResult, budgetResult, insuranceResult, gradesResult, rulesResult, historyResult] =
+  const pageSize = positivePageSize(query.pageSize);
+  const periodRange = period ? monthDates(period) : null;
+  const [clientResult, budgetResult, insuranceResult, gradesResult, rulesResult] =
     await Promise.all([
       get('/api/v1/clients/{id}', { params: { path: { id }, header } }),
-      get('/api/v1/clients/{clientId}/budgets', { params: { path: { clientId: id }, header } }),
-      get('/api/v1/clients/{clientId}/insurances', { params: { path: { clientId: id }, header } }),
-      get('/api/v1/clients/{clientId}/pflegegrade', { params: { path: { clientId: id }, header } }),
-      get('/api/v1/benefit-rules', { params: { header } }),
-      get('/api/v1/clients/{clientId}/budget-history', {
+      get('/api/v1/clients/{clientId}/budgets', {
         params: {
           path: { clientId: id },
-          query: {
-            ...(monthRange ? { from: monthRange.from, until: monthRange.until } : {}),
-            ...(fundingSourceId ? { fundingSourceId } : {}),
-            ...(entryType ? { entryType } : {}),
-            ...(reference ? { reference } : {}),
-            page,
-            pageSize: 25,
-          },
+          query: periodRange ? { asOf: periodRange.until } : {},
           header,
         },
       }),
+      get('/api/v1/clients/{clientId}/insurances', { params: { path: { clientId: id }, header } }),
+      get('/api/v1/clients/{clientId}/pflegegrade', { params: { path: { clientId: id }, header } }),
+      get('/api/v1/benefit-rules', { params: { header } }),
     ]);
   if (clientResult.error?.code === 'CLIENT_NOT_FOUND') notFound();
   const client = clientResult.data;
@@ -114,7 +130,6 @@ export default async function ClientBenefitsPage({
   const insurances = insuranceResult.data ?? [];
   const grades = gradesResult.data ?? [];
   const rules = rulesResult.data?.items ?? [];
-  const history = historyResult.data;
   const permissions = await getPermissionGrants(api);
   const tenantId = header['X-Tenant-Id'];
   const canManage = client
@@ -130,6 +145,33 @@ export default async function ClientBenefitsPage({
     ? hasClientPermission(
         permissions,
         'benefits.adjust',
+        tenantId,
+        client.organizationId,
+        client.primaryFacilityId,
+      )
+    : false;
+  const canReadAgreements = client
+    ? hasClientPermission(
+        permissions,
+        'service_agreement.read',
+        tenantId,
+        client.organizationId,
+        client.primaryFacilityId,
+      )
+    : false;
+  const canReadBilling = client
+    ? hasClientPermission(
+        permissions,
+        'billing.read',
+        tenantId,
+        client.organizationId,
+        client.primaryFacilityId,
+      )
+    : false;
+  const canAllocate = client
+    ? hasClientPermission(
+        permissions,
+        'benefits.allocate',
         tenantId,
         client.organizationId,
         client.primaryFacilityId,
@@ -167,12 +209,13 @@ export default async function ClientBenefitsPage({
   const updated =
     query.updated === 'funding_source' ||
     query.updated === 'entitlement' ||
-    query.updated === 'adjustment'
+    query.updated === 'adjustment' ||
+    query.updated === 'reversal'
       ? query.updated
       : null;
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-6">
+    <div className="mx-auto grid w-full min-w-0 max-w-5xl grid-cols-1 gap-6">
       <PageHeader
         eyebrow={
           <Link href={client ? `/clients/${client.id}` : '/clients'}>{t('Clients.title')}</Link>
@@ -242,6 +285,27 @@ export default async function ClientBenefitsPage({
           {t('Benefits.saved')}
         </p>
       ) : null}
+      {client && budget && (canReadAgreements || canReadBilling) ? (
+        <nav
+          aria-label={t('Benefits.relatedResources')}
+          className="flex flex-wrap gap-2 rounded-lg border bg-card p-4"
+        >
+          {canReadAgreements ? (
+            <Button asChild variant="secondary">
+              <Link href={`/clients/${client.id}/service-agreements`}>
+                {t('Benefits.openAgreements')}
+              </Link>
+            </Button>
+          ) : null}
+          {canReadBilling ? (
+            <Button asChild variant="secondary">
+              <Link href={`/clients/${client.id}/invoices`}>
+                {t('Benefits.openInvoicesAndClaims')}
+              </Link>
+            </Button>
+          ) : null}
+        </nav>
+      ) : null}
       {!client || !budget ? (
         <Alert>{t('Benefits.loadFailed')}</Alert>
       ) : (
@@ -254,10 +318,34 @@ export default async function ClientBenefitsPage({
               <h2 id="summary-title" className="text-xl font-semibold">
                 {t('Benefits.budgetProjection')}
               </h2>
-              <p className="text-sm text-muted-foreground">
-                {t('Benefits.currentPeriod')}: {budget.currentPeriod.slice(0, 7)} ·{' '}
-                {formatDate(budget.asOf, locale)}
-              </p>
+              <div className="flex flex-wrap items-end gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {t('Benefits.currentPeriod')}: {budget.currentPeriod.slice(0, 7)} ·{' '}
+                  {formatDate(budget.asOf, locale)}
+                </p>
+                <form method="get" className="flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="page" value="1" />
+                  <input type="hidden" name="pageSize" value={pageSize} />
+                  {month ? <input type="hidden" name="month" value={month} /> : null}
+                  {fundingSourceId ? (
+                    <input type="hidden" name="fundingSourceId" value={fundingSourceId} />
+                  ) : null}
+                  {entryType ? <input type="hidden" name="entryType" value={entryType} /> : null}
+                  {reference ? <input type="hidden" name="reference" value={reference} /> : null}
+                  <label className="grid gap-1 text-sm font-medium" htmlFor="benefit-period">
+                    <span>{t('Benefits.fundingPeriod')}</span>
+                    <Input
+                      id="benefit-period"
+                      name="period"
+                      type="month"
+                      defaultValue={period ?? budget.currentPeriod.slice(0, 7)}
+                    />
+                  </label>
+                  <Button type="submit" variant="secondary">
+                    {t('Benefits.showPeriod')}
+                  </Button>
+                </form>
+              </div>
             </div>
             <p className="text-sm text-muted-foreground">
               {budget.careGrade === null
@@ -399,13 +487,13 @@ export default async function ClientBenefitsPage({
 
           <section
             aria-labelledby="entitlements-title"
-            className="grid gap-3 rounded-lg border bg-card p-5"
+            className="grid min-w-0 grid-cols-1 gap-3 rounded-lg border bg-card p-5"
           >
             <h2 id="entitlements-title" className="text-xl font-semibold">
               {t('Benefits.entitlements')}
             </h2>
             {budget.entitlements.length ? (
-              <div className="overflow-x-auto">
+              <div className="min-w-0 overflow-x-auto">
                 <ShadcnTable className="w-full min-w-[42rem] text-left text-sm">
                   <ShadcnTableHeader>
                     <ShadcnTableRow className="border-b text-muted-foreground">
@@ -476,14 +564,14 @@ export default async function ClientBenefitsPage({
           {rules.length ? (
             <section
               aria-labelledby="rules-title"
-              className="grid gap-3 rounded-lg border bg-card p-5"
+              className="grid min-w-0 gap-3 rounded-lg border bg-card p-5"
             >
               <h2 id="rules-title" className="text-xl font-semibold">
                 {t('Benefits.ruleTitle')}
               </h2>
-              <ul className="grid gap-2 text-sm">
+              <ul className="grid min-w-0 gap-2 text-sm">
                 {rules.map((rule) => (
-                  <li key={rule.id} className="rounded-md border p-3">
+                  <li key={rule.id} className="min-w-0 rounded-md border p-3">
                     <p className="font-medium">
                       {benefitTypeLabel(benefitT, rule.benefitType)} ·{' '}
                       {formatDate(rule.effectiveFrom, locale)}
@@ -494,7 +582,7 @@ export default async function ClientBenefitsPage({
                         ? t('Benefits.unknownBalance')
                         : `${money(rule.monthlyAmountCents, locale)} / ${t('Common.units.month')}`}
                     </p>
-                    <p className="text-muted-foreground">
+                    <p className="break-words text-muted-foreground">
                       {t('Benefits.ruleSource')}: {rule.sourceReference}
                     </p>
                   </li>
@@ -504,16 +592,19 @@ export default async function ClientBenefitsPage({
           ) : null}
 
           <section
-            aria-labelledby="history-title"
+            aria-labelledby="history-filters-title"
             className="grid gap-3 rounded-lg border bg-card p-5"
           >
-            <h2 id="history-title" className="text-xl font-semibold">
-              {t('Benefits.historyTitle')}
+            <h2 id="history-filters-title" className="text-xl font-semibold">
+              {t('Benefits.historyFilters')}
             </h2>
             <form
               method="get"
               className="grid gap-3 rounded-md border p-4 md:grid-cols-2 lg:grid-cols-4"
             >
+              {period ? <input type="hidden" name="period" value={period} /> : null}
+              <input type="hidden" name="page" value="1" />
+              <input type="hidden" name="pageSize" value={pageSize} />
               <Field
                 id="history-month"
                 name="month"
@@ -558,88 +649,33 @@ export default async function ClientBenefitsPage({
                   {t('Benefits.applyFilters')}
                 </Button>
                 <Button asChild variant="link">
-                  <Link href={`/clients/${client.id}/benefits#history-title`}>
+                  <Link
+                    href={
+                      period
+                        ? `/clients/${client.id}/benefits?period=${encodeURIComponent(period)}#history-title`
+                        : `/clients/${client.id}/benefits#history-title`
+                    }
+                  >
                     {t('Benefits.clearFilters')}
                   </Link>
                 </Button>
               </div>
             </form>
-            {history?.items.length ? (
-              <div className="overflow-x-auto">
-                <ShadcnTable className="w-full min-w-[48rem] text-left text-sm">
-                  <ShadcnTableHeader>
-                    <ShadcnTableRow className="border-b text-muted-foreground">
-                      <ShadcnTableHead className="p-2">{t('Benefits.serviceDate')}</ShadcnTableHead>
-                      <ShadcnTableHead className="p-2">{t('Benefits.historyType')}</ShadcnTableHead>
-                      <ShadcnTableHead className="p-2">
-                        {t('Benefits.fundingSource')}
-                      </ShadcnTableHead>
-                      <ShadcnTableHead className="p-2">{benefitT('amount')}</ShadcnTableHead>
-                      <ShadcnTableHead className="p-2">
-                        {t('Benefits.historyReference')}
-                      </ShadcnTableHead>
-                      <ShadcnTableHead className="p-2">
-                        {t('Benefits.verification')}
-                      </ShadcnTableHead>
-                    </ShadcnTableRow>
-                  </ShadcnTableHeader>
-                  <ShadcnTableBody>
-                    {history.items.map((entry) => (
-                      <ShadcnTableRow key={entry.id} className="border-b last:border-0">
-                        <ShadcnTableCell className="p-2">
-                          {formatDate(entry.effectiveDate, locale)}
-                          <span className="block text-xs text-muted-foreground">
-                            {formatDateTime(entry.recordedAt, locale)}
-                          </span>
-                        </ShadcnTableCell>
-                        <ShadcnTableCell className="p-2">
-                          {t(`Benefits.entryTypes.${entry.entryType}`)}
-                        </ShadcnTableCell>
-                        <ShadcnTableCell className="p-2">
-                          {sourceById.get(entry.fundingSourceId)?.label ??
-                            sourceTypeLabel(
-                              benefitT,
-                              sourceById.get(entry.fundingSourceId)?.sourceType ?? 'other',
-                            )}
-                        </ShadcnTableCell>
-                        <ShadcnTableCell className="p-2 font-medium">
-                          {money(entry.amountCents, locale, true)}
-                        </ShadcnTableCell>
-                        <ShadcnTableCell className="p-2">
-                          {entry.reference && !uuidPattern.test(entry.reference)
-                            ? entry.reference
-                            : (entry.performedServiceLabel ?? t('Resources.unavailableService'))}
-                        </ShadcnTableCell>
-                        <ShadcnTableCell className="p-2">
-                          {verificationLabel(benefitT, entry.verificationStatus)}
-                        </ShadcnTableCell>
-                      </ShadcnTableRow>
-                    ))}
-                  </ShadcnTableBody>
-                </ShadcnTable>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">{t('Benefits.noHistory')}</p>
-            )}
-            {history && history.total > history.pageSize ? (
-              <div className="flex justify-end gap-2">
-                {history.page > 1 ? (
-                  <Button asChild variant="secondary">
-                    <Link href={historyHref(client.id, query, history.page - 1)}>
-                      {t('Common.actions.previous')}
-                    </Link>
-                  </Button>
-                ) : null}
-                {history.page * history.pageSize < history.total ? (
-                  <Button asChild variant="secondary">
-                    <Link href={historyHref(client.id, query, history.page + 1)}>
-                      {t('Common.actions.next')}
-                    </Link>
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
           </section>
+          <Suspense fallback={<HistoryLoading />}>
+            <FundingHistorySection
+              clientId={client.id}
+              fundingSources={budget.fundingSources}
+              canAllocate={canAllocate}
+              period={period}
+              month={month}
+              fundingSourceId={fundingSourceId}
+              entryType={entryType}
+              reference={reference}
+              page={page}
+              pageSize={pageSize}
+            />
+          </Suspense>
 
           {canManage || canAdjust ? (
             <section
@@ -1047,6 +1083,11 @@ function positivePage(value: string | undefined): number {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
 }
 
+function positivePageSize(value: string | undefined): number {
+  const parsed = Number(value);
+  return [10, 20, 25, 50, 100].includes(parsed) ? parsed : 25;
+}
+
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -1066,14 +1107,4 @@ function benefitAllocationExportHref(
   });
   if (facilityId) params.set('facilityId', facilityId);
   return `/exports/benefit-allocations?${params.toString()}`;
-}
-
-function historyHref(clientId: string, query: Awaited<SearchParams>, page: number): string {
-  const search = new URLSearchParams();
-  if (query.month) search.set('month', query.month);
-  if (query.fundingSourceId) search.set('fundingSourceId', query.fundingSourceId);
-  if (query.entryType) search.set('entryType', query.entryType);
-  if (query.reference) search.set('reference', query.reference);
-  search.set('page', String(page));
-  return `/clients/${clientId}/benefits?${search.toString()}#history-title`;
 }

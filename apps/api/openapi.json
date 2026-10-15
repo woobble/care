@@ -13598,6 +13598,70 @@
             }
           },
           {
+            "name": "period",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "benefitType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "entlastungsbetrag_45b",
+                "umwandlungsanspruch_45a_4",
+                "private",
+                "other"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
+            "name": "servicePageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "servicePage",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "clientPageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "clientPage",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
             "name": "pageSize",
             "required": false,
             "in": "query",
@@ -30915,6 +30979,9 @@
             "format": "uuid",
             "nullable": true
           },
+          "allocationReversed": {
+            "type": "boolean"
+          },
           "performedServiceId": {
             "type": "string",
             "format": "uuid",
@@ -30965,6 +31032,7 @@
           "fundingSourceId",
           "allocationBucketId",
           "serviceAllocationId",
+          "allocationReversed",
           "performedServiceId",
           "performedServiceLabel",
           "entryType",

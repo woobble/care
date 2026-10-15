@@ -1,4 +1,3 @@
-import { NativeSelect } from '@care/ui/components/native-select';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
@@ -11,10 +10,12 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@care/ui/components/button';
 import { Input } from '@care/ui/components/input';
 import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
 import type { Locale } from '@app/web/i18n/config';
 import type { components } from '@care/api-client';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatCurrency, formatDate } from '@app/web/i18n/format';
+import { AllocationEditor } from './allocation-editor';
 import {
   getApiClient,
   getPermissionGrants,
@@ -27,6 +28,13 @@ import { createProviderRecognitionAction, allocatePerformedServiceAction } from 
 type SearchParams = Promise<{
   page?: string;
   pageSize?: string;
+  clientPage?: string;
+  clientPageSize?: string;
+  servicePage?: string;
+  servicePageSize?: string;
+  search?: string;
+  benefitType?: string;
+  period?: string;
   error?: string;
   updated?: string;
 }>;
@@ -35,9 +43,19 @@ export default async function BenefitsWorklistPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
-  const page = positivePage(query.page);
-  const requestedPageSize = Number(query.pageSize ?? '20');
-  const pageSize = [10, 20, 50, 100].includes(requestedPageSize) ? requestedPageSize : 20;
+  const benefitTypes = [
+    'entlastungsbetrag_45b',
+    'umwandlungsanspruch_45a_4',
+    'private',
+    'other',
+  ] as const;
+  const clientPage = positivePage(query.clientPage ?? query.page);
+  const servicePage = positivePage(query.servicePage ?? query.page);
+  const clientPageSize = positivePageSize(query.clientPageSize ?? query.pageSize);
+  const servicePageSize = positivePageSize(query.servicePageSize ?? query.pageSize);
+  const search = query.search?.trim().slice(0, 120) ?? '';
+  const benefitType = benefitTypes.find((value) => value === query.benefitType);
+  const period = validMonth(query.period);
   const [t, benefitT, locale] = await Promise.all([
     getTranslations(),
     getTranslations('Benefits'),
@@ -49,15 +67,42 @@ export default async function BenefitsWorklistPage({
   const permissions = await getPermissionGrants(api);
   const tenantId = header['X-Tenant-Id'];
   const worklistResult = await get('/api/v1/benefits/worklist', {
-    params: { query: { page, pageSize }, header },
+    params: {
+      query: {
+        clientPage,
+        clientPageSize,
+        servicePage,
+        servicePageSize,
+        ...(search ? { search } : {}),
+        ...(benefitType ? { benefitType } : {}),
+        ...(period ? { period } : {}),
+      },
+      header,
+    },
   });
   const worklist = worklistResult.data as unknown as
     | components['schemas']['BenefitWorklistResponseDto']
     | undefined;
   const worklistError = worklistResult.error as { code?: string } | undefined;
   if (worklist && !worklistError) {
-    const total = Math.max(worklist.clients.total, worklist.unallocatedServices.total);
-    redirectToValidPage('/benefits', query, page, pageSize, total);
+    redirectToValidPage(
+      '/benefits',
+      query,
+      clientPage,
+      clientPageSize,
+      worklist.clients.total,
+      'clientPage',
+      'clientPageSize',
+    );
+    redirectToValidPage(
+      '/benefits',
+      query,
+      servicePage,
+      servicePageSize,
+      worklist.unallocatedServices.total,
+      'servicePage',
+      'servicePageSize',
+    );
   }
   const serviceItems = worklist?.unallocatedServices.items ?? [];
   const allocationOptionsByService = new Map(
@@ -76,6 +121,25 @@ export default async function BenefitsWorklistPage({
         title={t('Benefits.worklistTitle')}
         description={t('Benefits.description')}
       />
+
+      {worklist ? (
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1 rounded-lg border bg-card p-4">
+            <dt className="text-sm text-muted-foreground">{t('Benefits.clientsInView')}</dt>
+            <dd className="text-2xl font-semibold">
+              {new Intl.NumberFormat(locale).format(worklist.clients.total)}
+            </dd>
+          </div>
+          <div className="grid gap-1 rounded-lg border bg-card p-4">
+            <dt className="text-sm text-muted-foreground">
+              {t('Benefits.servicesAwaitingAllocation')}
+            </dt>
+            <dd className="text-2xl font-semibold">
+              {new Intl.NumberFormat(locale).format(worklist.unallocatedServices.total)}
+            </dd>
+          </div>
+        </dl>
+      ) : null}
 
       {error ? (
         <p
@@ -98,10 +162,62 @@ export default async function BenefitsWorklistPage({
         </p>
       ) : null}
 
+      <form
+        method="get"
+        action="/benefits"
+        className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(12rem,0.8fr)_minmax(10rem,0.6fr)_auto_auto] lg:items-end"
+      >
+        <input type="hidden" name="clientPage" value="1" />
+        <input type="hidden" name="servicePage" value="1" />
+        <input type="hidden" name="clientPageSize" value={clientPageSize} />
+        <input type="hidden" name="servicePageSize" value={servicePageSize} />
+        <label className="grid gap-2">
+          <Label htmlFor="benefits-funding-type">{t('Benefits.filterFundingType')}</Label>
+          <NativeSelect
+            id="benefits-funding-type"
+            name="benefitType"
+            defaultValue={benefitType ?? ''}
+            selectClassName="min-h-10 rounded-md border bg-card px-3"
+          >
+            <option value="">{t('Benefits.allFundingTypes')}</option>
+            {benefitTypes.map((value) => (
+              <option key={value} value={value}>
+                {benefitTypeLabel(benefitT, value)}
+              </option>
+            ))}
+          </NativeSelect>
+        </label>
+        <label className="grid gap-2">
+          <Label htmlFor="benefits-period">{t('Benefits.fundingPeriod')}</Label>
+          <Input id="benefits-period" type="month" name="period" defaultValue={period ?? ''} />
+        </label>
+        <label className="grid gap-2">
+          <Label htmlFor="benefits-client-search">{t('Benefits.searchClients')}</Label>
+          <Input
+            id="benefits-client-search"
+            type="search"
+            name="search"
+            defaultValue={search}
+            placeholder={t('Benefits.searchClientsPlaceholder')}
+            autoComplete="off"
+          />
+        </label>
+        <Button type="submit">{t('Benefits.search')}</Button>
+        {search || benefitType || period ? (
+          <Button asChild variant="secondary">
+            <Link
+              href={`/benefits?clientPage=1&servicePage=1&clientPageSize=${clientPageSize}&servicePageSize=${servicePageSize}`}
+            >
+              {t('Benefits.clearFilters')}
+            </Link>
+          </Button>
+        ) : null}
+      </form>
+
       <section aria-labelledby="clients-title" className="grid gap-3 rounded-lg border bg-card p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="clients-title" className="text-xl font-semibold">
-            {t('Benefits.worklistTitle')}
+            {t('Benefits.clientWorklistTitle')}
           </h2>
           {worklist?.clients ? (
             <p className="text-sm text-muted-foreground">{worklist.clients.total}</p>
@@ -199,7 +315,15 @@ export default async function BenefitsWorklistPage({
             page={worklist.clients.page}
             pageSize={worklist.clients.pageSize}
             totalItems={worklist.clients.total}
-            filters={{}}
+            filters={{
+              search,
+              benefitType,
+              period,
+              servicePage,
+              servicePageSize,
+            }}
+            pageParam="clientPage"
+            pageSizeParam="clientPageSize"
             controlId="benefit-clients-page-size"
           />
         ) : null}
@@ -266,6 +390,7 @@ export default async function BenefitsWorklistPage({
                   {canAllocate && options.length ? (
                     <RHFActionForm
                       action={allocatePerformedServiceAction}
+                      errorMessage={t('Benefits.allocationSaveFailed')}
                       className="grid gap-3 rounded-md bg-background p-4"
                     >
                       <input
@@ -273,67 +398,22 @@ export default async function BenefitsWorklistPage({
                         name="performedServiceId"
                         value={service.performedServiceId}
                       />
-                      {service.serviceAmountCents === null ? (
-                        <Field
-                          id={`service-amount-${service.performedServiceId}`}
-                          name="manualServiceAmount"
-                          label={t('Benefits.serviceAmount')}
-                          defaultValue=""
-                          required
-                        />
-                      ) : null}
-                      <p className="text-sm font-medium">{t('Benefits.allocationRows')}</p>
-                      <div className="grid gap-3 lg:grid-cols-3">
-                        {[0, 1, 2].map((index) => (
-                          <div
-                            key={index}
-                            className="grid content-start gap-2 rounded border bg-card p-3"
-                          >
-                            <input
-                              type="hidden"
-                              name={`allocation-${index}-key`}
-                              value={randomUUID()}
-                            />
-                            <SelectField
-                              id={`allocation-${index}-selection-${service.performedServiceId}`}
-                              name={`allocation-${index}-selection`}
-                              label={t('Benefits.fundingSource')}
-                            >
-                              <option value="">{t('Benefits.selectFundingSource')}</option>
-                              {options.map((entitlement) => {
-                                const title =
-                                  entitlement.fundingSourceLabel ??
-                                  sourceLabel(benefitT, entitlement.fundingSourceType);
-                                return (
-                                  <option
-                                    key={entitlement.entitlementId}
-                                    value={`${entitlement.fundingSourceId}|${entitlement.entitlementId}`}
-                                  >
-                                    {title} · {benefitTypeLabel(benefitT, entitlement.benefitType)}
-                                  </option>
-                                );
-                              })}
-                            </SelectField>
-                            <Field
-                              id={`allocation-${index}-amount-${service.performedServiceId}`}
-                              name={`allocation-${index}-amount`}
-                              label={t('Benefits.allocationAmount')}
-                              inputMode="decimal"
-                            />
-                            <SelectField
-                              id={`allocation-${index}-status-${service.performedServiceId}`}
-                              name={`allocation-${index}-status`}
-                              label={t('Benefits.allocationStatus')}
-                              defaultValue="provisional"
-                            >
-                              <option value="provisional">
-                                {t('Benefits.provisionalAllocation')}
-                              </option>
-                              <option value="confirmed">{t('Benefits.confirmedAllocation')}</option>
-                            </SelectField>
-                          </div>
-                        ))}
-                      </div>
+                      <AllocationEditor
+                        performedServiceId={service.performedServiceId}
+                        amountCents={service.serviceAmountCents}
+                        previouslyAllocatedCents={service.allocatedCents}
+                        initialIdempotencyKey={randomUUID()}
+                        locale={locale}
+                        options={options.map((entitlement) => {
+                          const title =
+                            entitlement.fundingSourceLabel ??
+                            sourceLabel(benefitT, entitlement.fundingSourceType);
+                          return {
+                            value: `${entitlement.fundingSourceId}|${entitlement.entitlementId}`,
+                            label: `${title} · ${benefitTypeLabel(benefitT, entitlement.benefitType)}`,
+                          };
+                        })}
+                      />
                       <p className="text-sm text-muted-foreground">
                         {t('Benefits.allocationNote')}
                       </p>
@@ -369,7 +449,15 @@ export default async function BenefitsWorklistPage({
             page={worklist.unallocatedServices.page}
             pageSize={worklist.unallocatedServices.pageSize}
             totalItems={worklist.unallocatedServices.total}
-            filters={{}}
+            filters={{
+              search,
+              benefitType,
+              period,
+              clientPage,
+              clientPageSize,
+            }}
+            pageParam="servicePage"
+            pageSizeParam="servicePageSize"
             controlId="benefit-services-page-size"
           />
         ) : null}
@@ -468,38 +556,6 @@ function Field({
   );
 }
 
-function SelectField({
-  id,
-  name,
-  label,
-  defaultValue,
-  required,
-  children,
-}: Readonly<{
-  id: string;
-  name: string;
-  label: string;
-  defaultValue?: string;
-  required?: boolean;
-  children: React.ReactNode;
-}>) {
-  return (
-    <label className="grid gap-2">
-      <Label htmlFor={id}>{label}</Label>
-      <NativeSelect
-        id={id}
-        name={name}
-        defaultValue={defaultValue}
-        required={required}
-        selectClassName="min-h-10 rounded-md border bg-card px-3 py-2"
-        className="w-full"
-      >
-        {children}
-      </NativeSelect>
-    </label>
-  );
-}
-
 function money(cents: number, locale: Locale): string {
   return formatCurrency(cents / 100, locale);
 }
@@ -544,6 +600,15 @@ function categoryLabel(t: BenefitTranslator, category: string): string {
 function positivePage(value: string | undefined): number {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function positivePageSize(value: string | undefined): number {
+  const parsed = Number(value ?? '20');
+  return [10, 20, 50, 100].includes(parsed) ? parsed : 20;
+}
+
+function validMonth(value: string | undefined): string | undefined {
+  return value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value) ? value : undefined;
 }
 
 function today(): string {

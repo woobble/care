@@ -119,8 +119,8 @@ describe('benefits PostgreSQL integration', () => {
       );
       await owner.query(
         `INSERT INTO clients.client_insurances
-           (id, tenant_id, client_id, insurance_type, insurer_name, valid_from, is_primary, created_at, updated_at)
-         VALUES ($1, $2, $3, 'pflegeversicherung', 'Example Pflegekasse', $4, true, $5, $5)`,
+           (id, tenant_id, client_id, insurance_type, insurer_name, insurance_number, member_number, valid_from, is_primary, created_at, updated_at)
+         VALUES ($1, $2, $3, 'pflegeversicherung', 'Example Pflegekasse', 'INS-ADA-001', 'MEM-ADA-001', $4, true, $5, $5)`,
         [insuranceId, tenantId, clientId, previousServiceDate, now],
       );
       await owner.query(
@@ -493,7 +493,8 @@ describe('benefits PostgreSQL integration', () => {
       ]);
       await owner.query(
         `INSERT INTO identity.role_permissions (role_id, permission)
-         VALUES ($1, 'benefits.read'), ($1, 'benefits.allocate')`,
+         VALUES ($1, 'benefits.read'), ($1, 'benefits.allocate'),
+                ($1, 'benefits.review'), ($1, 'client.read')`,
         [roleId],
       );
       await owner.query(
@@ -551,6 +552,33 @@ describe('benefits PostgreSQL integration', () => {
       expect(apiBudget.status).toBe(200);
       expect(await apiBudget.json()).toMatchObject({ clientId });
 
+      const searchedWorklist = await fetch(
+        `${baseUrl}/api/v1/benefits/worklist?clientPage=1&clientPageSize=10&servicePage=1&servicePageSize=10&search=INS-ADA-001&benefitType=entlastungsbetrag_45b&period=${serviceDate.slice(0, 7)}`,
+        { headers },
+      );
+      expect(searchedWorklist.status).toBe(200);
+      const searchedWorklistResult = (await searchedWorklist.json()) as {
+        clients: {
+          page: number;
+          pageSize: number;
+          total: number;
+          items: Array<{ clientId: string; clientName: string }>;
+        };
+        unallocatedServices: { page: number; pageSize: number };
+      };
+      expect(searchedWorklistResult.clients).toMatchObject({
+        page: 1,
+        pageSize: 10,
+        total: 1,
+        items: [{ clientId, clientName: 'Ada Example' }],
+      });
+      expect(searchedWorklistResult.unallocatedServices).toMatchObject({ page: 1, pageSize: 10 });
+      const invalidWorklistPeriod = await fetch(
+        `${baseUrl}/api/v1/benefits/worklist?period=2026-13`,
+        { headers },
+      );
+      expect(invalidWorklistPeriod.status).toBe(400);
+
       const apiAllocation = await fetch(
         `${baseUrl}/api/v1/performed-services/${httpPerformedServiceId}/funding-allocations`,
         {
@@ -570,12 +598,16 @@ describe('benefits PostgreSQL integration', () => {
         },
       );
       expect(apiAllocation.status).toBe(201);
-      expect(await apiAllocation.json()).toMatchObject({
+      const httpAllocationResult = (await apiAllocation.json()) as {
+        allocations: Array<{ id: string }>;
+      };
+      expect(httpAllocationResult).toMatchObject({
         performedServiceId: httpPerformedServiceId,
         serviceAmountCents: 9000,
         allocatedCents: 4500,
         remainingCents: 4500,
       });
+      const allocationId = httpAllocationResult.allocations[0]!.id;
 
       const overAllocation = await fetch(
         `${baseUrl}/api/v1/performed-services/${httpPerformedServiceId}/funding-allocations`,
@@ -597,6 +629,90 @@ describe('benefits PostgreSQL integration', () => {
       );
       expect(overAllocation.status).toBe(409);
       expect(await overAllocation.json()).toMatchObject({ code: 'BENEFIT_ALLOCATION_CONFLICT' });
+
+      const reverseAllocation = await fetch(
+        `${baseUrl}/api/v1/funding-allocations/${allocationId}/reverse`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ reason: 'Corrected split', idempotencyKey: uuidv7() }),
+        },
+      );
+      const reverseAllocationBody = await reverseAllocation.text();
+      if (reverseAllocation.status !== 200) {
+        throw new Error(
+          `Allocation reversal returned ${reverseAllocation.status}: ${reverseAllocationBody}`,
+        );
+      }
+
+      const budgetHistory = await fetch(
+        `${baseUrl}/api/v1/clients/${clientId}/budget-history?page=1&pageSize=100`,
+        { headers },
+      );
+      expect(budgetHistory.status).toBe(200);
+      const historyResult = (await budgetHistory.json()) as {
+        items: Array<{
+          serviceAllocationId: string | null;
+          allocationReversed: boolean;
+          entryType: string;
+          reference: string | null;
+        }>;
+      };
+      expect(historyResult.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            serviceAllocationId: allocationId,
+            allocationReversed: true,
+            entryType: 'service_consumption_allocated',
+          }),
+          expect.objectContaining({
+            serviceAllocationId: allocationId,
+            allocationReversed: true,
+            entryType: 'service_consumption_reversed',
+            reference: 'Corrected split',
+          }),
+        ]),
+      );
+
+      const budgetAfterReversal = await fetch(
+        `${baseUrl}/api/v1/clients/${clientId}/budgets?asOf=${serviceDate}`,
+        { headers },
+      );
+      expect(budgetAfterReversal.status).toBe(200);
+      const budgetAfterReversalResult = (await budgetAfterReversal.json()) as {
+        history: Array<{
+          serviceAllocationId: string | null;
+          allocationReversed: boolean;
+          entryType: string;
+        }>;
+      };
+      expect(budgetAfterReversalResult.history).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            serviceAllocationId: allocationId,
+            allocationReversed: true,
+            entryType: 'service_consumption_allocated',
+          }),
+          expect.objectContaining({
+            serviceAllocationId: allocationId,
+            allocationReversed: true,
+            entryType: 'service_consumption_reversed',
+          }),
+        ]),
+      );
+
+      const repeatedReversal = await fetch(
+        `${baseUrl}/api/v1/funding-allocations/${allocationId}/reverse`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ reason: 'Second correction', idempotencyKey: uuidv7() }),
+        },
+      );
+      expect(repeatedReversal.status).toBe(409);
+      expect(await repeatedReversal.json()).toMatchObject({
+        code: 'BENEFIT_ALLOCATION_ALREADY_REVERSED',
+      });
 
       const crossTenantBudget = await fetch(
         `${baseUrl}/api/v1/clients/${otherClientId}/budgets?asOf=${serviceDate}`,
