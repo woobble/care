@@ -16,9 +16,9 @@
   },
   "dependencies": {
     "@care/database": "workspace:*",
-    "@testcontainers/postgresql": "^12.2.0",
+    "@testcontainers/postgresql": "^12.2.1",
     "pg": "^8.23.1",
-    "testcontainers": "^12.2.0"
+    "testcontainers": "^12.2.1"
   },
   "devDependencies": {
     "uuid": "^14.0.3"
