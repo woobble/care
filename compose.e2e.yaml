@@ -1,0 +1,22 @@
+services:
+  postgres:
+    ports: !override
+      - '${CARE_E2E_POSTGRES_PORT:-15433}:5432'
+
+  redis:
+    ports: !override
+      - '${CARE_E2E_REDIS_PORT:-16380}:6379'
+
+  authentik-server:
+    ports: !override
+      - '${CARE_E2E_AUTHENTIK_PORT:-19020}:9000'
+
+  seaweedfs:
+    ports: !override
+      - '${CARE_E2E_S3_PORT:-19022}:8333'
+      - '${CARE_E2E_FILER_PORT:-19024}:8888'
+
+  mailpit:
+    ports: !override
+      - '${CARE_E2E_SMTP_PORT:-11027}:1025'
+      - '${CARE_E2E_MAILPIT_PORT:-18026}:8025'

@@ -35,6 +35,8 @@ test('Office staff can invite users and administer tenant access', async ({ page
   let invitedMembershipId: string | undefined;
   let invitedContext: BrowserContext | undefined;
   let invitedEmail: string | undefined;
+  let concurrentAdminContext: BrowserContext | undefined;
+  let concurrentAdmin: Awaited<ReturnType<typeof createOfficeAdminSession>> | undefined;
   try {
     office = await createOfficeAdminSession(database, page, 'user-access');
     const { apiToken, authentikOrigin, issuer, platformUserId, tenantId, runId } = office;
@@ -115,17 +117,24 @@ test('Office staff can invite users and administer tenant access', async ({ page
     invitedMembershipId = pendingMembership.rows[0]?.id;
     expect(pendingMembership.rows[0]?.status).toBe('pending');
 
-    const roleAndScope = await database.query<{ office_role_id: string; facility_id: string }>(
-      `SELECT role.id AS office_role_id, facility.id AS facility_id
+    const roleAndScope = await database.query<{
+      office_role_id: string;
+      facility_id: string;
+      main_office_id: string;
+    }>(
+      `SELECT role.id AS office_role_id, facility.id AS facility_id, main_office.id AS main_office_id
        FROM identity.roles AS role
        CROSS JOIN organizations.facilities AS facility
+       CROSS JOIN organizations.facilities AS main_office
        WHERE role.tenant_id = $1 AND role.name = 'Office'
-         AND facility.tenant_id = $1 AND facility.name = 'Facility West'`,
+         AND facility.tenant_id = $1 AND facility.name = 'Facility West'
+         AND main_office.tenant_id = $1 AND main_office.name = 'Main Office'`,
       [tenantId],
     );
     const officeRoleId = roleAndScope.rows[0]?.office_role_id;
     const facilityWestId = roleAndScope.rows[0]?.facility_id;
-    if (!invitedMembershipId || !officeRoleId || !facilityWestId) {
+    const mainOfficeId = roleAndScope.rows[0]?.main_office_id;
+    if (!invitedMembershipId || !officeRoleId || !facilityWestId || !mainOfficeId) {
       throw new Error('Seeded member, Office role, or Facility West is missing');
     }
 
@@ -220,6 +229,60 @@ test('Office staff can invite users and administer tenant access', async ({ page
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
+    await expectMembershipScopes(database, invitedMembershipId, [
+      { scopeType: 'facility', scopeId: facilityWestId },
+    ]);
+    concurrentAdminContext = await browser.newContext();
+    const concurrentAdminPage = await concurrentAdminContext.newPage();
+    concurrentAdmin = await createOfficeAdminSession(
+      database,
+      concurrentAdminPage,
+      'membership-concurrency',
+    );
+    await concurrentAdminPage.goto(`/administration/users/${invitedMembershipId}`);
+    await expect(concurrentAdminPage.getByRole('heading', { name: invitedName })).toBeVisible();
+    await selectEntity(page, 'Facilities', 'Main Office', /Main Office/);
+    await concurrentAdminPage
+      .getByRole('group', { name: 'Facilities' })
+      .getByRole('button', { name: 'Clear selection' })
+      .click();
+    await Promise.all([
+      acceptDialogDuringAction(page, () =>
+        submitServerAction(page, page.getByRole('button', { name: 'Save scopes' })),
+      ),
+      acceptDialogDuringAction(concurrentAdminPage, () =>
+        submitServerAction(
+          concurrentAdminPage,
+          concurrentAdminPage.getByRole('button', { name: 'Save scopes' }),
+        ),
+      ),
+    ]);
+    const concurrentScopes = await database.query<{
+      scope_type: string;
+      scope_id: string;
+    }>(
+      `SELECT scope_type, scope_id FROM identity.membership_scopes
+       WHERE tenant_id = $1 AND membership_id = $2 ORDER BY scope_type, scope_id`,
+      [tenantId, invitedMembershipId],
+    );
+    const resultingScopeKeys = new Set(
+      concurrentScopes.rows.map((scope) => `${scope.scope_type}:${scope.scope_id}`),
+    );
+    const isOneSubmittedReplacement =
+      resultingScopeKeys.size === 0 ||
+      (resultingScopeKeys.size === 2 &&
+        resultingScopeKeys.has(`facility:${facilityWestId}`) &&
+        resultingScopeKeys.has(`facility:${mainOfficeId}`));
+    expect(isOneSubmittedReplacement).toBe(true);
+    await page.reload();
+    await page
+      .getByRole('group', { name: 'Facilities' })
+      .getByRole('button', { name: 'Clear selection' })
+      .click();
+    await selectEntity(page, 'Facilities', 'Facility West', /Facility West/);
+    await acceptDialogDuringAction(page, () =>
+      submitServerAction(page, page.getByRole('button', { name: 'Save scopes' })),
+    );
     await expectMembershipScopes(database, invitedMembershipId, [
       { scopeType: 'facility', scopeId: facilityWestId },
     ]);
@@ -324,9 +387,9 @@ test('Office staff can invite users and administer tenant access', async ({ page
       await expect(
         page.getByRole('heading', { name: 'Manual tasks', exact: true, level: 1 }),
       ).toBeVisible();
-      await expect(page.locator('section[aria-labelledby="task-list-title"] ul > li')).toHaveCount(
-        15,
-      );
+      await expect(
+        page.locator('section[aria-labelledby="task-list-title"] > ul > li'),
+      ).toHaveCount(15);
       const claimTaskTitle = '[SYNTHETIC PILOT] Review local claim exercise';
       await page.getByRole('link', { name: /Review local claim exercise/ }).click();
       await expect(page.getByRole('heading', { name: claimTaskTitle })).toBeVisible();
@@ -336,15 +399,53 @@ test('Office staff can invite users and administer tenant access', async ({ page
         .href;
       await claimSourceLink.click();
       await expect(page).toHaveURL(claimSourceUrl);
-      await expect(page.getByText('Accepted', { exact: true })).toBeVisible();
+      await expect(
+        page.locator('section[aria-labelledby="claim-summary"]').getByText('Accepted', {
+          exact: true,
+        }),
+      ).toBeVisible();
       await page.goto('/operations/deadlines', { waitUntil: 'domcontentloaded' });
       await expect(page.getByRole('heading', { name: 'Deadlines & Reminders' })).toBeVisible();
+
+      const pilotOrganization = await database.query<{ id: string }>(
+        "SELECT id FROM organizations.organizations WHERE tenant_id = $1 AND name = 'Muster Betreuungsdienst NRW'",
+        [pilotTenantId],
+      );
+      const pilotOrganizationId = pilotOrganization.rows[0]?.id;
+      if (!pilotOrganizationId) throw new Error('The synthetic pilot organization is missing');
+      const measuredRoutes = [
+        `/operations?organizationId=${pilotOrganizationId}`,
+        `/clients?q=Musterkunde&page=1&pageSize=20&organizationId=${pilotOrganizationId}`,
+        `/employees?q=Betreuungskraft&page=1&pageSize=20&organizationId=${pilotOrganizationId}`,
+        `/planning?date=2026-10-16&view=week&organizationId=${pilotOrganizationId}`,
+        `/benefits?period=2026-10&search=Musterkunde`,
+        `/billing?from=2026-10-12&until=2026-11-08&organizationId=${pilotOrganizationId}`,
+        `/billing/claims?organizationId=${pilotOrganizationId}&page=1&pageSize=20`,
+        `/operations/tasks?organizationId=${pilotOrganizationId}&search=%5BSYNTHETIC%20PILOT%5D&page=1&pageSize=20`,
+      ];
+      const performanceObservations: Array<{ route: string; elapsedMs: number }> = [];
+      await measuredRoutes.reduce<Promise<void>>(
+        (navigation, route) =>
+          navigation.then(async () => {
+            const startedAt = Date.now();
+            const response = await page.goto(route);
+            expect(response?.status(), `Expected ${route} to load successfully`).toBe(200);
+            await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+            performanceObservations.push({ route, elapsedMs: Date.now() - startedAt });
+          }),
+        Promise.resolve(),
+      );
+      console.log(`GOAL13_PILOT_PAGE_TIMINGS ${JSON.stringify(performanceObservations)}`);
     }
   } finally {
     try {
       await invitedContext?.close();
     } finally {
       try {
+        await concurrentAdminContext?.close();
+        if (concurrentAdmin) {
+          await cleanupOfficeAdminSession(database, concurrentAdmin);
+        }
         if (office) {
           await cleanupOfficeAdminSession(database, {
             ...office,

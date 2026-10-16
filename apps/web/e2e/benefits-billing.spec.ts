@@ -23,7 +23,26 @@ test('Office staff can allocate completed services, issue invoices, and record p
     office = await createOfficeAdminSession(database, page, 'benefits-billing');
     scenario = await seedLifecycleScenario(database, office, { visit: 'completed' });
     const serviceDate = dateInBerlin();
+    if (!scenario.performedServiceId) {
+      throw new Error('The completed pilot visit has no performed-service record');
+    }
+    const scenarioClientId = scenario.clientId;
+    const operationsFilters = new URLSearchParams({
+      sourceDomain: 'benefits',
+      clientId: scenarioClientId,
+      itemType: 'exceptions',
+      pageSize: '100',
+    });
+    const unallocatedServiceIssue = () =>
+      page.getByRole('link', { name: 'Completed service is not allocated', exact: true });
 
+    await page.goto('/benefits');
+    await page.goto(`/operations/worklist?${operationsFilters}`);
+    const operationsBeforeAllocation = unallocatedServiceIssue();
+    await expect(operationsBeforeAllocation).toBeVisible();
+    await expect(operationsBeforeAllocation.locator('xpath=ancestor::li[1]')).toContainText(
+      scenario.clientName,
+    );
     await page.goto('/benefits');
     const completedService = page
       .getByRole('heading', { name: `${scenario.serviceName} · ${scenario.clientName}` })
@@ -48,6 +67,8 @@ test('Office staff can allocate completed services, issue invoices, and record p
     await expect(
       page.getByRole('status').filter({ hasText: 'Service funding was allocated.' }),
     ).toBeVisible();
+    await page.goto(`/operations/worklist?${operationsFilters}`);
+    await expect(unallocatedServiceIssue()).toHaveCount(0);
 
     const billingFilters = new URLSearchParams({
       from: serviceDate,
@@ -67,8 +88,13 @@ test('Office staff can allocate completed services, issue invoices, and record p
     await expect(includeCandidate).toBeEnabled();
     await includeCandidate.check();
     billingRecordsMayExist = true;
-    await clientInvoiceGroup.getByRole('button', { name: 'Create draft invoice' }).click();
-    await expect(page).toHaveURL(/\/billing\/invoices\/[0-9a-f-]{36}\?updated=draft$/i);
+    await submitServerAction(
+      page,
+      clientInvoiceGroup.getByRole('button', { name: 'Create draft invoice' }),
+    );
+    await expect(page).toHaveURL(/\/billing\/invoices\/[0-9a-f-]{36}\?updated=draft$/i, {
+      timeout: 30_000,
+    });
     const invoiceId = new URL(page.url()).pathname.split('/').at(-1);
     if (!invoiceId) throw new Error('The billing worklist did not open the invoice draft');
     await expect(page.getByRole('heading', { name: 'Invoice lines' })).toBeVisible();

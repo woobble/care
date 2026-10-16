@@ -35,8 +35,10 @@ describe('benefits PostgreSQL integration', () => {
     const otherFacilityId = uuidv7();
     const clientId = uuidv7();
     const otherClientId = uuidv7();
+    const carryoverClientId = uuidv7();
     const employeeId = uuidv7();
     const insuranceId = uuidv7();
+    const carryoverInsuranceId = uuidv7();
     const categoryId = uuidv7();
     const serviceId = uuidv7();
     const clinicalServiceId = uuidv7();
@@ -101,7 +103,8 @@ describe('benefits PostgreSQL integration', () => {
            (id, tenant_id, organization_id, primary_facility_id, first_name, last_name, status, created_at, updated_at)
          VALUES
            ($1, $2, $3, $4, 'Ada', 'Example', 'active', $5, $5),
-           ($6, $7, $8, $9, 'Other', 'Client', 'active', $5, $5)`,
+           ($6, $7, $8, $9, 'Other', 'Client', 'active', $5, $5),
+           ($10, $2, $3, $4, 'Carryover', 'Example', 'active', $5, $5)`,
         [
           clientId,
           tenantId,
@@ -112,6 +115,7 @@ describe('benefits PostgreSQL integration', () => {
           otherTenantId,
           otherOrganizationId,
           otherFacilityId,
+          carryoverClientId,
         ],
       );
       await owner.query(
@@ -122,14 +126,26 @@ describe('benefits PostgreSQL integration', () => {
       await owner.query(
         `INSERT INTO clients.client_insurances
            (id, tenant_id, client_id, insurance_type, insurer_name, insurance_number, member_number, valid_from, is_primary, created_at, updated_at)
-         VALUES ($1, $2, $3, 'pflegeversicherung', 'Example Pflegekasse', 'INS-ADA-001', 'MEM-ADA-001', $4, true, $5, $5)`,
-        [insuranceId, tenantId, clientId, previousServiceDate, now],
+         VALUES
+           ($1, $2, $3, 'pflegeversicherung', 'Example Pflegekasse', 'INS-ADA-001', 'MEM-ADA-001', $4, true, $5, $5),
+           ($6, $2, $7, 'pflegeversicherung', 'Example Pflegekasse', 'INS-CARRY-001', 'MEM-CARRY-001', '2025-01-01', true, $5, $5)`,
+        [
+          insuranceId,
+          tenantId,
+          clientId,
+          previousServiceDate,
+          now,
+          carryoverInsuranceId,
+          carryoverClientId,
+        ],
       );
       await owner.query(
         `INSERT INTO clients.pflegegrad_records
            (id, tenant_id, client_id, grade, valid_from, status, created_at, updated_at)
-         VALUES ($1, $2, $3, 3, $4, 'confirmed', $5, $5)`,
-        [uuidv7(), tenantId, clientId, serviceDate, now],
+         VALUES
+           ($1, $2, $3, 3, $4, 'confirmed', $6, $6),
+           ($5, $2, $7, 2, '2025-01-01', 'confirmed', $6, $6)`,
+        [uuidv7(), tenantId, clientId, serviceDate, uuidv7(), now, carryoverClientId],
       );
       await owner.query(
         `INSERT INTO services.service_categories
@@ -265,12 +281,192 @@ describe('benefits PostgreSQL integration', () => {
           organizationId,
           recognizedOffering: 'Angebote zur Unterstützung im Alltag',
           jurisdiction: 'DE-NW',
-          validFrom: previousServiceDate,
+          validFrom: '2025-01-01',
           reference: 'Integration recognition record',
         },
         context,
         {},
       );
+
+      const carryoverSource = await benefits.createFundingSource(
+        principal,
+        carryoverClientId,
+        {
+          sourceType: 'statutory_long_term_care_insurance',
+          clientInsuranceId: carryoverInsuranceId,
+        },
+        context,
+        {},
+      );
+      const carryoverEntitlement = await benefits.createEntitlement(
+        principal,
+        carryoverClientId,
+        {
+          benefitType: 'entlastungsbetrag_45b',
+          fundingSourceId: carryoverSource.id,
+          validFrom: '2025-06-01',
+          validUntil: '2025-06-30',
+          status: 'confirmed',
+          calculationMode: 'rule_based',
+          source: 'payer_confirmed',
+        },
+        context,
+        {},
+      );
+      const budgetOnCarryoverExpiry = await benefits.getBudget(
+        principal,
+        carryoverClientId,
+        '2026-06-30',
+      );
+      expect(
+        budgetOnCarryoverExpiry.entitlementBudgets.find(
+          (line) => line.entitlementId === carryoverEntitlement.id,
+        ),
+      ).toMatchObject({
+        carryoverCents: 13_100,
+        estimatedRemainingCents: 13_100,
+        confirmedRemainingCents: 13_100,
+        nextExpiry: '2026-06-30',
+      });
+      const budgetAfterCarryoverExpiry = await benefits.getBudget(
+        principal,
+        carryoverClientId,
+        '2026-07-01',
+      );
+      expect(
+        budgetAfterCarryoverExpiry.entitlementBudgets.find(
+          (line) => line.entitlementId === carryoverEntitlement.id,
+        ),
+      ).toMatchObject({
+        carryoverCents: 0,
+        estimatedRemainingCents: 0,
+        confirmedRemainingCents: 0,
+        nextExpiry: null,
+      });
+      const currentCarryoverEntitlement = await benefits.createEntitlement(
+        principal,
+        carryoverClientId,
+        {
+          benefitType: 'entlastungsbetrag_45b',
+          fundingSourceId: carryoverSource.id,
+          validFrom: serviceDate,
+          status: 'provisional',
+          calculationMode: 'rule_based',
+          source: 'provider_reported',
+        },
+        context,
+        {},
+      );
+      const currentCarryoverServiceId = await insertCompletedService(owner, {
+        tenantId,
+        clientId: carryoverClientId,
+        organizationId,
+        facilityId,
+        employeeId,
+        serviceId,
+        serviceDate,
+        now,
+      });
+      await expect(
+        benefits.allocateService(
+          principal,
+          currentCarryoverServiceId,
+          [
+            {
+              fundingSourceId: carryoverSource.id,
+              entitlementId: carryoverEntitlement.id,
+              amountCents: 9_000,
+              status: 'confirmed',
+              idempotencyKey: uuidv7(),
+            },
+          ],
+          context,
+          {},
+        ),
+      ).rejects.toMatchObject({ code: 'BENEFIT_ENTITLEMENT_NOT_FOUND' });
+      const currentCarryoverAllocation = await benefits.allocateService(
+        principal,
+        currentCarryoverServiceId,
+        [
+          {
+            fundingSourceId: carryoverSource.id,
+            entitlementId: currentCarryoverEntitlement.id,
+            amountCents: 9_000,
+            status: 'provisional',
+            idempotencyKey: uuidv7(),
+          },
+        ],
+        context,
+        {},
+      );
+      expect(currentCarryoverAllocation).toMatchObject({
+        allocatedCents: 9_000,
+        remainingCents: 0,
+      });
+      const expiredCarryoverConsumption = await owner.query<{ count: string }>(
+        `SELECT count(*)::text AS count
+         FROM benefits.ledger_entries AS entry
+         JOIN benefits.allocation_buckets AS bucket
+           ON bucket.tenant_id = entry.tenant_id AND bucket.id = entry.allocation_bucket_id
+         WHERE entry.tenant_id = $1 AND bucket.entitlement_id = $2
+           AND entry.entry_type = 'service_consumption_allocated'`,
+        [tenantId, carryoverEntitlement.id],
+      );
+      expect(expiredCarryoverConsumption.rows[0]?.count).toBe('0');
+      await benefits.recordAdjustment(
+        principal,
+        carryoverClientId,
+        {
+          idempotencyKey: uuidv7(),
+          fundingSourceId: carryoverSource.id,
+          entitlementId: currentCarryoverEntitlement.id,
+          benefitType: 'entlastungsbetrag_45b',
+          amountCents: -4_100,
+          effectiveDate: serviceDate,
+          adjustmentType: 'external_consumption',
+          sourceType: 'synthetic_external_statement',
+          reference: 'Synthetic provider-reported external consumption for bucket exhaustion.',
+          verificationStatus: 'provider_reported',
+        },
+        context,
+        {},
+      );
+      const exhaustedBudget = await benefits.getBudget(principal, carryoverClientId, serviceDate);
+      expect(
+        exhaustedBudget.entitlementBudgets.find(
+          (line) => line.entitlementId === currentCarryoverEntitlement.id,
+        ),
+      ).toMatchObject({ estimatedRemainingCents: 0, confirmedRemainingCents: 0 });
+      const exhaustedBalanceServiceId = await insertCompletedService(owner, {
+        tenantId,
+        clientId: carryoverClientId,
+        organizationId,
+        facilityId,
+        employeeId,
+        serviceId,
+        serviceDate,
+        now,
+      });
+      await expect(
+        benefits.allocateService(
+          principal,
+          exhaustedBalanceServiceId,
+          [
+            {
+              fundingSourceId: carryoverSource.id,
+              entitlementId: currentCarryoverEntitlement.id,
+              amountCents: 9_000,
+              status: 'provisional',
+              idempotencyKey: uuidv7(),
+            },
+          ],
+          context,
+          {},
+        ),
+      ).rejects.toMatchObject({
+        code: 'BENEFIT_BUDGET_INSUFFICIENT',
+        missingAmountCents: 9_000,
+      });
       await expect(
         benefits.allocateService(
           principal,
@@ -296,14 +492,97 @@ describe('benefits PostgreSQL integration', () => {
         reasonCode: 'SERVICE_NOT_RECOGNIZED_SUPPORT',
       });
 
+      const conversionEntitlement = await benefits.createEntitlement(
+        principal,
+        clientId,
+        {
+          benefitType: 'umwandlungsanspruch_45a_4',
+          fundingSourceId: statutorySource.id,
+          validFrom: serviceDate,
+          status: 'provisional',
+          calculationMode: 'external_input',
+          source: 'provider_reported',
+        },
+        context,
+        {},
+      );
+      const conversionAllocation = {
+        fundingSourceId: statutorySource.id,
+        entitlementId: conversionEntitlement.id,
+        amountCents: 1_000,
+        status: 'provisional' as const,
+        idempotencyKey: uuidv7(),
+      };
+      await expect(
+        benefits.allocateService(
+          principal,
+          performedServiceId,
+          [conversionAllocation],
+          context,
+          {},
+        ),
+      ).rejects.toMatchObject({
+        code: 'BENEFIT_SERVICE_NOT_ELIGIBLE',
+        reasonCode: 'EXTERNAL_BENEFIT_INPUT_REQUIRED',
+      });
+      const estimateBeforeExternalInput = await benefits.estimate(principal, {
+        clientId,
+        serviceId,
+        serviceDate,
+        quantity: '2',
+      });
+      expect(
+        estimateBeforeExternalInput.benefitOptions.find(
+          (option) => option.entitlementId === conversionEntitlement.id,
+        ),
+      ).toMatchObject({ eligible: false, reason: 'EXTERNAL_BENEFIT_INPUT_REQUIRED' });
+
+      const externalConversionInput = await benefits.recordAdjustment(
+        principal,
+        clientId,
+        {
+          idempotencyKey: uuidv7(),
+          fundingSourceId: statutorySource.id,
+          entitlementId: conversionEntitlement.id,
+          benefitType: 'umwandlungsanspruch_45a_4',
+          amountCents: 2_500,
+          effectiveDate: serviceDate,
+          adjustmentType: 'external_input',
+          sourceType: 'synthetic_external_statement',
+          reference: 'Synthetic provider-reported external-benefit input; not payer-confirmed.',
+          verificationStatus: 'provider_reported',
+        },
+        context,
+        {},
+      );
+      expect(externalConversionInput).toMatchObject({
+        amountCents: 2_500,
+        verificationStatus: 'provider_reported',
+      });
+      const estimateWithExternalInput = await benefits.estimate(principal, {
+        clientId,
+        serviceId,
+        serviceDate,
+        quantity: '2',
+      });
+      expect(
+        estimateWithExternalInput.benefitOptions.find(
+          (option) => option.entitlementId === conversionEntitlement.id,
+        ),
+      ).toMatchObject({
+        eligible: true,
+        estimatedAvailableCents: 2_500,
+        confirmedAvailableCents: 0,
+      });
+
       const privateAllocation = {
         fundingSourceId: privateSource.id,
         entitlementId: privateEntitlement.id,
-        amountCents: 3000,
+        amountCents: 2_000,
         status: 'confirmed' as const,
         idempotencyKey: uuidv7(),
       };
-      const allocations = [statutoryAllocation, privateAllocation];
+      const allocations = [statutoryAllocation, conversionAllocation, privateAllocation];
       const allocationResult = await benefits.allocateService(
         principal,
         performedServiceId,
@@ -319,7 +598,7 @@ describe('benefits PostgreSQL integration', () => {
         remainingCents: 0,
       });
       expect(allocationResult.allocations.map((allocation) => allocation.amountCents)).toEqual([
-        6000, 3000,
+        6000, 1_000, 2_000,
       ]);
 
       const replay = await benefits.allocateService(
@@ -357,6 +636,14 @@ describe('benefits PostgreSQL integration', () => {
       ).toMatchObject({
         actualConsumptionCents: 6000,
         confirmedRemainingCents: expect.any(Number),
+      });
+      expect(
+        budget.entitlementBudgets.find((line) => line.entitlementId === conversionEntitlement.id),
+      ).toMatchObject({
+        actualConsumptionCents: 1_000,
+        estimatedRemainingCents: 1_500,
+        confirmedRemainingCents: 0,
+        verificationStatuses: ['provider_reported'],
       });
       const ruleBucket = await owner.query<{ rule_version_id: string; amount_cents: number }>(
         `SELECT rule_version_id, amount_cents FROM benefits.allocation_buckets
@@ -401,6 +688,7 @@ describe('benefits PostgreSQL integration', () => {
       expect(ledger.rows.map((entry) => entry.entry_type)).toEqual([
         'service_consumption_allocated',
         'service_consumption_allocated',
+        'service_consumption_allocated',
       ]);
       await expect(
         owner.query('UPDATE benefits.ledger_entries SET amount_cents = 1 WHERE id = $1', [
@@ -427,7 +715,11 @@ describe('benefits PostgreSQL integration', () => {
       const currentTenantSources = await appRole.query<{ tenant_id: string }>(
         'SELECT tenant_id FROM benefits.funding_sources ORDER BY tenant_id',
       );
-      expect(currentTenantSources.rows.map((row) => row.tenant_id)).toEqual([tenantId, tenantId]);
+      expect(currentTenantSources.rows.map((row) => row.tenant_id)).toEqual([
+        tenantId,
+        tenantId,
+        tenantId,
+      ]);
       await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [otherTenantId]);
       const otherTenantSources = await appRole.query<{ tenant_id: string }>(
         'SELECT tenant_id FROM benefits.funding_sources ORDER BY tenant_id',

@@ -63,6 +63,8 @@ const PILOT_CAREGIVER_MEMBERSHIP_ID = uuidv5(
   PILOT_NAMESPACE,
 );
 const PILOT_REFERENCE_DATE = process.env.PILOT_REFERENCE_DATE ?? '2026-10-12';
+const PILOT_DEDICATED_TEST_DATABASE = process.env.PILOT_DEDICATED_TEST_DATABASE === 'true';
+const PILOT_TEST_DATABASE_PORT = process.env.PILOT_TEST_DATABASE_PORT;
 const TIMEZONE = 'Europe/Berlin';
 const SYNTHETIC_USER_AGENT = 'synthetic-pilot-seed';
 const SYNTHETIC_PAYER_NAME = 'Fiktiver Kostenträger – nur lokaler Pilot';
@@ -77,15 +79,36 @@ if (process.env.NODE_ENV !== 'development') {
 if (!isIsoDate(PILOT_REFERENCE_DATE)) {
   throw new Error('PILOT_REFERENCE_DATE must be a valid YYYY-MM-DD date; no data was changed');
 }
+if (
+  PILOT_DEDICATED_TEST_DATABASE &&
+  (!PILOT_TEST_DATABASE_PORT ||
+    !/^\d+$/.test(PILOT_TEST_DATABASE_PORT) ||
+    Number(PILOT_TEST_DATABASE_PORT) < 1024 ||
+    Number(PILOT_TEST_DATABASE_PORT) > 65535 ||
+    PILOT_TEST_DATABASE_PORT === '5432')
+) {
+  throw new Error(
+    'A dedicated pilot test database requires PILOT_TEST_DATABASE_PORT to be a non-default local port; no data was changed',
+  );
+}
 
 const apiConfig = loadApiConfig();
 const migrationConfig = loadMigrationConfig();
 const storageConfig = loadStorageConfig();
-assertLocalDevelopmentDatabase(apiConfig.DATABASE_URL, 'DATABASE_URL', 'care_app');
+const dedicatedTestDatabasePort = PILOT_DEDICATED_TEST_DATABASE
+  ? PILOT_TEST_DATABASE_PORT
+  : undefined;
+assertLocalDevelopmentDatabase(
+  apiConfig.DATABASE_URL,
+  'DATABASE_URL',
+  'care_app',
+  dedicatedTestDatabasePort,
+);
 assertLocalDevelopmentDatabase(
   migrationConfig.MIGRATION_DATABASE_URL,
   'MIGRATION_DATABASE_URL',
   'care_owner',
+  dedicatedTestDatabasePort,
 );
 
 const audit = new DrizzleAuditWriter();
@@ -166,8 +189,9 @@ const operations = createOperationsApplicationService(unitOfWork, audit, outbox,
   claims: billingClaims,
 });
 
+type PilotFacility = Awaited<ReturnType<OrganizationApplicationService['createFacility']>>;
 type PilotTeam = Awaited<ReturnType<OrganizationApplicationService['createTeam']>>;
-type PilotEmployee = { id: string };
+type PilotEmployee = { id: string; facilityId: string };
 type PilotClient = Awaited<ReturnType<typeof clientService.create>>;
 type PilotVisit = Awaited<ReturnType<typeof scheduling.search>>['items'][number];
 
@@ -246,71 +270,176 @@ async function ensureOrganization() {
   );
 }
 
-async function ensureFacility(organizationId: string) {
-  const rows = await organizationService.listFacilities(principal, { organizationId });
-  const matches = rows.filter((item) => item.code === 'MB-NRW-01');
-  if (matches.length > 1) throw new Error('Multiple pilot facilities use code MB-NRW-01');
-  if (matches[0]) {
-    if (matches[0].name !== 'Betriebsstelle Musterstadt' || matches[0].status !== 'active') {
-      throw new Error('Pilot facility MB-NRW-01 differs from the expected active record');
-    }
-    return matches[0];
-  }
-  return organizationService.createFacility(
-    principal,
+async function ensureFacilities(organizationId: string): Promise<PilotFacility[]> {
+  const definitions = [
     {
-      organizationId,
-      name: 'Betriebsstelle Musterstadt',
       code: 'MB-NRW-01',
+      name: 'Betriebsstelle Musterstadt',
       address: 'Fiktivstraße 1, 00000 Musterstadt, Deutschland',
-      phone: '+49 000 0000000',
-      email: 'buero@muster-betreuungsdienst.invalid',
-      timezone: TIMEZONE,
     },
-    contextFor(organizationId),
-    auditContext,
-  );
-}
-
-async function ensureTeams(organizationId: string, facilityId: string) {
-  const definitions = ['Team Alltag', 'Team Entlastung'];
-  const rows = await organizationService.listTeams(principal, { organizationId, facilityId });
-  const output: PilotTeam[] = [];
-  for (const name of definitions) {
-    const matches = rows.filter((item) => item.name === name);
-    if (matches.length > 1) throw new Error(`Multiple pilot teams named ${name}`);
+    {
+      code: 'MB-NRW-02',
+      name: 'Betriebsstelle Fiktiv-West',
+      address: 'Musterweg 2, 00001 Musterstadt-West, Deutschland',
+    },
+  ];
+  const rows = await organizationService.listFacilities(principal, { organizationId });
+  const facilities: PilotFacility[] = [];
+  for (const definition of definitions) {
+    const matches = rows.filter((item) => item.code === definition.code);
+    if (matches.length > 1)
+      throw new Error(`Multiple pilot facilities use code ${definition.code}`);
     if (matches[0]) {
-      if (matches[0].status !== 'active') throw new Error(`Pilot team ${name} is archived`);
-      output.push(matches[0]);
+      if (matches[0].name !== definition.name || matches[0].status !== 'active') {
+        throw new Error(
+          `Pilot facility ${definition.code} differs from the expected active record`,
+        );
+      }
+      facilities.push(matches[0]);
       continue;
     }
-    output.push(
-      await organizationService.createTeam(
+    facilities.push(
+      await organizationService.createFacility(
         principal,
-        { organizationId, facilityId, name },
+        {
+          organizationId,
+          name: definition.name,
+          code: definition.code,
+          address: definition.address,
+          phone: '+49 000 0000000',
+          email: 'buero@muster-betreuungsdienst.invalid',
+          timezone: TIMEZONE,
+        },
         contextFor(organizationId),
         auditContext,
       ),
     );
   }
+  return facilities;
+}
+
+async function ensureTeams(organizationId: string, facilities: PilotFacility[]) {
+  const definitions = ['Team Alltag', 'Team Entlastung'];
+  const output = new Map<string, PilotTeam[]>();
+  for (const facility of facilities) {
+    const rows = await organizationService.listTeams(principal, {
+      organizationId,
+      facilityId: facility.id,
+    });
+    const facilityTeams: PilotTeam[] = [];
+    for (const name of definitions) {
+      const matches = rows.filter((item) => item.name === name);
+      if (matches.length > 1)
+        throw new Error(`Multiple pilot teams named ${name} at facility ${facility.code}`);
+      if (matches[0]) {
+        if (matches[0].status !== 'active') throw new Error(`Pilot team ${name} is archived`);
+        facilityTeams.push(matches[0]);
+        continue;
+      }
+      facilityTeams.push(
+        await organizationService.createTeam(
+          principal,
+          { organizationId, facilityId: facility.id, name },
+          contextFor(organizationId),
+          auditContext,
+        ),
+      );
+    }
+    output.set(facility.id, facilityTeams);
+  }
   return output;
 }
 
 const EMPLOYEE_DEFINITIONS = [
-  { kind: 'office', firstName: 'Fiktiv', lastName: 'Bürokoordination 01', hours: 38.5 },
-  { kind: 'office', firstName: 'Fiktiv', lastName: 'Disposition 02', hours: 30 },
-  { kind: 'caregiver', firstName: 'Fiktiv', lastName: 'Betreuungskraft 01', hours: 38.5 },
-  { kind: 'caregiver', firstName: 'Fiktiv', lastName: 'Betreuungskraft 02', hours: 30 },
-  { kind: 'caregiver', firstName: 'Fiktiv', lastName: 'Betreuungskraft 03', hours: 25 },
-  { kind: 'caregiver', firstName: 'Fiktiv', lastName: 'Betreuungskraft 04', hours: 20 },
-  { kind: 'caregiver', firstName: 'Fiktiv', lastName: 'Betreuungskraft 05', hours: 15 },
-  { kind: 'caregiver', firstName: 'Fiktiv', lastName: 'Betreuungskraft 06', hours: 20 },
+  {
+    kind: 'office',
+    firstName: 'Fiktiv',
+    lastName: 'Bürokoordination 01',
+    hours: 38.5,
+    facilityOrdinals: [0, 1],
+  },
+  {
+    kind: 'office',
+    firstName: 'Fiktiv',
+    lastName: 'Disposition 02',
+    hours: 30,
+    facilityOrdinals: [0],
+  },
+  {
+    kind: 'office',
+    firstName: 'Fiktiv',
+    lastName: 'Abrechnung 03',
+    hours: 28,
+    facilityOrdinals: [1],
+  },
+  {
+    kind: 'caregiver',
+    firstName: 'Fiktiv',
+    lastName: 'Betreuungskraft 01',
+    hours: 38.5,
+    facilityOrdinals: [0],
+    teamOrdinal: 0,
+  },
+  {
+    kind: 'caregiver',
+    firstName: 'Fiktiv',
+    lastName: 'Betreuungskraft 02',
+    hours: 30,
+    facilityOrdinals: [0],
+    teamOrdinal: 1,
+  },
+  {
+    kind: 'caregiver',
+    firstName: 'Fiktiv',
+    lastName: 'Betreuungskraft 03',
+    hours: 25,
+    facilityOrdinals: [0],
+    teamOrdinal: 0,
+  },
+  {
+    kind: 'caregiver',
+    firstName: 'Fiktiv',
+    lastName: 'Betreuungskraft 04',
+    hours: 20,
+    facilityOrdinals: [0],
+    teamOrdinal: 1,
+  },
+  {
+    kind: 'caregiver',
+    firstName: 'Fiktiv',
+    lastName: 'Betreuungskraft 05',
+    hours: 20,
+    facilityOrdinals: [1],
+    teamOrdinal: 0,
+  },
+  {
+    kind: 'caregiver',
+    firstName: 'Fiktiv',
+    lastName: 'Betreuungskraft 06',
+    hours: 15,
+    facilityOrdinals: [1],
+    teamOrdinal: 1,
+  },
+  {
+    kind: 'caregiver',
+    firstName: 'Fiktiv',
+    lastName: 'Betreuungskraft 07',
+    hours: 20,
+    facilityOrdinals: [1],
+    teamOrdinal: 0,
+  },
 ] as const;
 
-async function ensureEmployees(organizationId: string, facilityId: string, teams: PilotTeam[]) {
+async function ensureEmployees(
+  organizationId: string,
+  facilities: PilotFacility[],
+  teamsByFacility: Map<string, PilotTeam[]>,
+) {
   const caregivers: PilotEmployee[] = [];
-  for (const [index, definition] of EMPLOYEE_DEFINITIONS.entries()) {
-    const personnelNumber = `PILOT-${definition.kind === 'office' ? 'OFF' : 'BET'}-${String(index + 1).padStart(2, '0')}`;
+  const counters = { office: 0, caregiver: 0 };
+  for (const definition of EMPLOYEE_DEFINITIONS) {
+    counters[definition.kind] += 1;
+    const personnelNumber = `PILOT-${definition.kind === 'office' ? 'OFF' : 'BET'}-${String(counters[definition.kind]).padStart(2, '0')}`;
     const matches = await employeeService.search(principal, {
       text: personnelNumber,
       organizationId,
@@ -356,23 +485,30 @@ async function ensureEmployees(organizationId: string, facilityId: string, teams
         auditContext,
       );
     }
-    const detail = await employeeService.get(principal, employee.id);
-    if (
-      !detail.facilityAssignments.some(
-        (assignment) => assignment.facilityId === facilityId && assignment.status === 'active',
-      )
-    ) {
-      await employeeService.assignFacility(
-        principal,
-        employee.id,
-        facilityId,
-        { isPrimary: true },
-        contextFor(organizationId),
-        auditContext,
-      );
+    for (const [index, facilityOrdinal] of definition.facilityOrdinals.entries()) {
+      const facility = facilities[facilityOrdinal];
+      if (!facility) throw new Error(`Pilot employee ${personnelNumber} has an invalid facility`);
+      const detail = await employeeService.get(principal, employee.id);
+      if (
+        !detail.facilityAssignments.some(
+          (assignment) => assignment.facilityId === facility.id && assignment.status === 'active',
+        )
+      ) {
+        await employeeService.assignFacility(
+          principal,
+          employee.id,
+          facility.id,
+          { isPrimary: index === 0 },
+          contextFor(organizationId),
+          auditContext,
+        );
+      }
     }
     if (definition.kind === 'caregiver') {
-      const team = teams[(index - 2) % teams.length]!;
+      const facility = facilities[definition.facilityOrdinals[0]!];
+      if (!facility) throw new Error(`Pilot caregiver ${personnelNumber} has no facility`);
+      const team = teamsByFacility.get(facility.id)?.[definition.teamOrdinal];
+      if (!team) throw new Error(`Pilot caregiver ${personnelNumber} has no assigned team`);
       const refreshed = await employeeService.get(principal, employee.id);
       if (
         !refreshed.teamMemberships.some(
@@ -409,7 +545,7 @@ async function ensureEmployees(organizationId: string, facilityId: string, teams
           auditContext,
         );
       }
-      caregivers.push(employee);
+      caregivers.push({ id: employee.id, facilityId: facility.id });
     }
   }
   return caregivers;
@@ -454,7 +590,7 @@ const SERVICE_DEFINITIONS = [
   },
 ] as const;
 
-async function ensureServices(organizationId: string, facilityId: string) {
+async function ensureServices(organizationId: string, facilityIds: string[]) {
   const existingCategories = await serviceService.listCategories(principal, true);
   const categoryMatches = existingCategories.filter((item) => item.code === 'PILOT_BETREUUNG');
   if (categoryMatches.length > 1) throw new Error('Duplicate pilot service category code');
@@ -514,45 +650,49 @@ async function ensureServices(organizationId: string, facilityId: string) {
     const availability = await serviceService.setAvailability(
       principal,
       service.id,
-      [{ organizationId, facilityId, active: true }],
+      facilityIds.map((facilityId) => ({ organizationId, facilityId, active: true })),
       contextFor(organizationId),
       auditContext,
     );
-    if (
-      !availability.some(
-        (item) =>
-          item.active && item.organizationId === organizationId && item.facilityId === facilityId,
-      )
-    ) {
-      throw new Error(`Pilot service ${definition.code} is not available at its facility`);
-    }
+    for (const facilityId of facilityIds) {
+      if (
+        !availability.some(
+          (item) =>
+            item.active && item.organizationId === organizationId && item.facilityId === facilityId,
+        )
+      ) {
+        throw new Error(
+          `Pilot service ${definition.code} is not available at facility ${facilityId}`,
+        );
+      }
 
-    const effectivePrices = await servicePrices.list(principal, service.id, {
-      organizationId,
-      facilityId,
-      validAt: PILOT_REFERENCE_DATE,
-    });
-    if (effectivePrices.length === 0) {
-      await servicePrices.create(
-        principal,
-        {
-          serviceId: service.id,
-          organizationId,
-          facilityId,
-          priceCents: definition.priceCents,
-          pricingUnit: 'hour',
-          validFrom: '2026-01-01',
-        },
-        contextFor(organizationId),
-        auditContext,
-      );
-    } else if (
-      effectivePrices[0]!.priceCents !== definition.priceCents ||
-      effectivePrices[0]!.pricingUnit !== 'hour'
-    ) {
-      throw new Error(
-        `Existing price for ${definition.code} differs from the synthetic price; review it before reseeding`,
-      );
+      const effectivePrices = await servicePrices.list(principal, service.id, {
+        organizationId,
+        facilityId,
+        validAt: PILOT_REFERENCE_DATE,
+      });
+      if (effectivePrices.length === 0) {
+        await servicePrices.create(
+          principal,
+          {
+            serviceId: service.id,
+            organizationId,
+            facilityId,
+            priceCents: definition.priceCents,
+            pricingUnit: 'hour',
+            validFrom: '2026-01-01',
+          },
+          contextFor(organizationId),
+          auditContext,
+        );
+      } else if (
+        effectivePrices[0]!.priceCents !== definition.priceCents ||
+        effectivePrices[0]!.pricingUnit !== 'hour'
+      ) {
+        throw new Error(
+          `Existing price for ${definition.code} differs from the synthetic price at facility ${facilityId}; review it before reseeding`,
+        );
+      }
     }
     result.push({ ...service, ordinal: index });
   }
@@ -562,15 +702,16 @@ async function ensureServices(organizationId: string, facilityId: string) {
 const CLIENT_COUNT = 20;
 const ACTIVE_CLIENT_COUNT = 15;
 
-async function ensureClients(organizationId: string, facilityId: string) {
+async function ensureClients(organizationId: string, facilities: PilotFacility[]) {
   const result: Array<PilotClient & { ordinal: number }> = [];
   for (let index = 0; index < CLIENT_COUNT; index += 1) {
+    const facility = facilities[index < CLIENT_COUNT / 2 ? 0 : 1];
+    if (!facility) throw new Error(`Pilot client ${index + 1} has no assigned facility`);
     const suffix = String(index + 1).padStart(2, '0');
     const lastName = `Musterkunde ${suffix}`;
     const matches = await clientService.search(principal, {
       text: lastName,
       organizationId,
-      facilityId,
       pageSize: 100,
     });
     const existing = matches.items.filter((item) => item.client.lastName === lastName);
@@ -582,7 +723,7 @@ async function ensureClients(organizationId: string, facilityId: string) {
       client &&
       (client.firstName !== 'Fiktiv' ||
         client.organizationId !== organizationId ||
-        client.primaryFacilityId !== facilityId)
+        client.primaryFacilityId !== facility.id)
     ) {
       throw new Error(`Synthetic client identifier ${lastName} conflicts with an existing record`);
     }
@@ -599,13 +740,13 @@ async function ensureClients(organizationId: string, facilityId: string) {
           email: `kunde-${suffix}@muster-betreuungsdienst.invalid`,
           phone: '+49 000 0000000',
           organizationId,
-          primaryFacilityId: facilityId,
+          primaryFacilityId: facility.id,
           primaryAddress: {
             addressType: 'home',
-            street: 'Fiktivstraße',
+            street: index < CLIENT_COUNT / 2 ? 'Fiktivstraße' : 'Musterweg',
             houseNumber: String(index + 1),
-            postalCode: '00000',
-            city: 'Musterstadt',
+            postalCode: index < CLIENT_COUNT / 2 ? '00000' : '00001',
+            city: index < CLIENT_COUNT / 2 ? 'Musterstadt' : 'Musterstadt-West',
             countryCode: 'DE',
             isPrimary: true,
           },
@@ -794,11 +935,11 @@ async function ensureFundingSources(clients: Array<PilotClient & { ordinal: numb
       sourceType: 'self_pay' as const,
       label: 'Synthetische Selbstzahlung – keine Zahlung gebucht',
     },
-    {
-      client: clients[5]!,
+    ...clients.slice(5, 10).map((client) => ({
+      client,
       sourceType: 'other' as const,
       label: SYNTHETIC_EXTERNAL_SOURCE_LABEL,
-    },
+    })),
   ];
   for (const definition of definitions) {
     const insurance =
@@ -931,7 +1072,99 @@ async function ensureBenefitScenario(clients: Array<PilotClient & { ordinal: num
   ) {
     throw new Error('Synthetic benefit scenario failed its ledger consistency check');
   }
-  return 1;
+
+  const existingConversionEntitlements = await unitOfWork.transaction(
+    { tenantId: PILOT_TENANT_ID },
+    (transaction) =>
+      transaction
+        .select()
+        .from(clientBenefitEntitlements)
+        .where(
+          and(
+            eq(clientBenefitEntitlements.tenantId, PILOT_TENANT_ID),
+            eq(clientBenefitEntitlements.clientId, client.id),
+            eq(clientBenefitEntitlements.fundingSourceId, source.id),
+            eq(clientBenefitEntitlements.benefitType, 'umwandlungsanspruch_45a_4'),
+            eq(clientBenefitEntitlements.validFrom, PILOT_REFERENCE_DATE),
+          ),
+        )
+        .limit(2),
+  );
+  if (existingConversionEntitlements.length > 1) {
+    throw new Error('Duplicate synthetic §45a entitlement for pilot Client 01');
+  }
+  const existingConversionEntitlement = existingConversionEntitlements[0];
+  let conversionEntitlementId = existingConversionEntitlement?.id;
+  if (existingConversionEntitlement) {
+    if (
+      existingConversionEntitlement.status !== 'provisional' ||
+      existingConversionEntitlement.source !== 'provider_reported' ||
+      existingConversionEntitlement.calculationMode !== 'external_input'
+    ) {
+      throw new Error('Synthetic §45a entitlement differs from its unconfirmed scenario');
+    }
+  } else {
+    const created = await benefits.createEntitlement(
+      principal,
+      client.id,
+      {
+        benefitType: 'umwandlungsanspruch_45a_4',
+        fundingSourceId: source.id,
+        validFrom: PILOT_REFERENCE_DATE,
+        status: 'provisional',
+        calculationMode: 'external_input',
+        source: 'provider_reported',
+      },
+      contextFor(client.organizationId!),
+      auditContext,
+    );
+    conversionEntitlementId = created.id;
+  }
+  if (!conversionEntitlementId) {
+    throw new Error('Synthetic §45a entitlement could not be resolved');
+  }
+
+  const conversionInputReference =
+    'Synthetic external-benefit input; not calculated or confirmed by a payer.';
+  await benefits.recordAdjustment(
+    principal,
+    client.id,
+    {
+      idempotencyKey: uuidv5('pilot-client-01-45a-external-input', PILOT_NAMESPACE),
+      fundingSourceId: source.id,
+      entitlementId: conversionEntitlementId,
+      benefitType: 'umwandlungsanspruch_45a_4',
+      amountCents: 2_500,
+      effectiveDate: PILOT_REFERENCE_DATE,
+      adjustmentType: 'external_input',
+      sourceType: 'synthetic_external_statement',
+      reference: conversionInputReference,
+      verificationStatus: 'provider_reported',
+    },
+    contextFor(client.organizationId!),
+    auditContext,
+  );
+  const conversionBudget = await benefits.getBudget(principal, client.id, PILOT_REFERENCE_DATE);
+  const conversionLedgerInput = conversionBudget.history.find(
+    (entry) =>
+      entry.entryType === 'manual_adjustment' &&
+      entry.amountCents === 2_500 &&
+      entry.verificationStatus === 'provider_reported' &&
+      entry.reference === conversionInputReference,
+  );
+  const conversionEntitlementBudget = conversionBudget.entitlementBudgets.find(
+    (item) => item.entitlementId === conversionEntitlementId,
+  );
+  if (
+    !conversionLedgerInput ||
+    conversionEntitlementBudget?.entitlementStatus !== 'provisional' ||
+    conversionEntitlementBudget.estimatedRemainingCents !== 2_500 ||
+    conversionEntitlementBudget.confirmedRemainingCents !== 0
+  ) {
+    throw new Error('Synthetic §45a input failed its ledger consistency check');
+  }
+
+  return 2;
 }
 
 async function ensureVisits(
@@ -944,11 +1177,24 @@ async function ensureVisits(
   const until = addDays(from, 27);
   const totals = { generated: 0, alreadyExisting: 0, requiresManualPlacement: 0 };
   const clientById = new Map(clients.map((client) => [client.id, client]));
-  const caregiverForClient = new Map(
-    clients
-      .filter((client) => client.ordinal < 15)
-      .map((client) => [client.id, caregivers[client.ordinal % caregivers.length]!]),
-  );
+  const caregiversByFacility = new Map<string, PilotEmployee[]>();
+  for (const caregiver of caregivers) {
+    caregiversByFacility.set(caregiver.facilityId, [
+      ...(caregiversByFacility.get(caregiver.facilityId) ?? []),
+      caregiver,
+    ]);
+  }
+  const caregiverForClient = new Map<string, PilotEmployee>();
+  for (const client of clients.filter((item) => item.ordinal < ACTIVE_CLIENT_COUNT)) {
+    const facilityCaregivers = caregiversByFacility.get(client.primaryFacilityId ?? '') ?? [];
+    if (facilityCaregivers.length === 0) {
+      throw new Error(`No synthetic caregiver is assigned to client ${client.id}'s facility`);
+    }
+    caregiverForClient.set(
+      client.id,
+      facilityCaregivers[client.ordinal % facilityCaregivers.length]!,
+    );
+  }
   for (const agreement of agreements.filter((item) => item.status === 'active')) {
     const generated = await scheduling.generateAgreementVisits(
       principal,
@@ -1059,7 +1305,8 @@ async function ensureVisits(
   let publishedTours = 0;
   for (const [key, tourVisits] of byTour) {
     const [employeeId, localDate] = key.split(':');
-    const employee = caregivers.find((item) => item.id === employeeId)!;
+    const employee = caregivers.find((item) => item.id === employeeId);
+    if (!employee) throw new Error(`Pilot tour has unknown caregiver ${employeeId}`);
     const existingTours = await scheduling.listTours(
       principal,
       employeeId!,
@@ -1132,7 +1379,7 @@ async function ensureVisits(
     const expectedService = client.ordinal % services.length;
     if (
       visit.organizationId !== agreements[0]!.organizationId ||
-      visit.facilityId !== clients[0]!.primaryFacilityId ||
+      visit.facilityId !== client.primaryFacilityId ||
       visit.serviceAgreementId !== agreements[client.ordinal]!.id ||
       visit.services.length !== 1 ||
       visit.services[0]!.serviceDefinitionId !== services[expectedService]!.id
@@ -1142,7 +1389,10 @@ async function ensureVisits(
     const active = visit.assignments.filter((assignment) => assignment.status === 'active');
     if (
       active.length !== 1 ||
-      !caregivers.some((employee) => employee.id === active[0]!.employeeId)
+      !caregivers.some(
+        (employee) =>
+          employee.id === active[0]!.employeeId && employee.facilityId === visit.facilityId,
+      )
     ) {
       throw new Error(
         `Pilot visit ${visit.id} does not have exactly one active caregiver assignment`,
@@ -1170,12 +1420,59 @@ async function ensureVisits(
       `Expected ${ACTIVE_CLIENT_COUNT * 8} active recurring visits, found ${scenarioVisits.length}`,
     );
   }
-  const workflowVisit = scenarioVisits.find(
-    (visit) => visit.clientId === clients[5]!.id && localDateInBerlin(visit.plannedStart) === from,
-  );
+  const financeVisits = scenarioVisits.filter((visit) => {
+    const client = clientById.get(visit.clientId);
+    return client !== undefined && client.ordinal >= 5 && client.ordinal < 10;
+  });
+  let workflowVisit: PilotVisit | undefined;
+  for (const visit of financeVisits) {
+    const execution = await visitExecution.get(principal, visit.id);
+    if (
+      execution.execution.status === 'completed' &&
+      execution.services.some(
+        (service) =>
+          Boolean(service.visitServiceId) &&
+          service.id === uuidv5(`pilot-performed:${service.visitServiceId}`, PILOT_NAMESPACE),
+      )
+    ) {
+      workflowVisit = visit;
+      break;
+    }
+  }
+  if (!workflowVisit) {
+    const today = localDateInBerlin(new Date());
+    const now = new Date();
+    workflowVisit =
+      financeVisits.find(
+        (visit) => localDateInBerlin(visit.plannedStart) === today && visit.plannedEnd <= now,
+      ) ?? financeVisits.find((visit) => visit.plannedEnd <= now);
+  }
   if (!workflowVisit) {
     throw new Error(
-      `The persistent finance scenario needs a Client 06 recurring visit on ${from}; choose a matching weekday reference date`,
+      `The pilot schedule has no finance-eligible visit whose scheduled window has ended by today (${localDateInBerlin(new Date())})`,
+    );
+  }
+  const referenceStart = new Date(`${PILOT_REFERENCE_DATE}T12:00:00.000Z`).getTime();
+  const now = new Date();
+  const sameClientVisits = financeVisits.filter(
+    (visit) => visit.clientId === workflowVisit.clientId,
+  );
+  const timelineVisits: PilotVisit[] = [];
+  for (let week = 0; week < 4; week += 1) {
+    const candidates = sameClientVisits.filter((visit) => {
+      const visitDate = localDateInBerlin(visit.plannedStart);
+      const visitMidday = new Date(`${visitDate}T12:00:00.000Z`).getTime();
+      return Math.floor((visitMidday - referenceStart) / (7 * 24 * 60 * 60 * 1000)) === week;
+    });
+    const selected =
+      candidates.find((visit) => visit.id === workflowVisit.id && visit.plannedEnd <= now) ??
+      candidates.find((visit) => visit.plannedEnd <= now);
+    if (selected) timelineVisits.push(selected);
+  }
+  const fullTimelineEndsInPast = addDays(PILOT_REFERENCE_DATE, 27) < localDateInBerlin(now);
+  if (fullTimelineEndsInPast && timelineVisits.length !== 4) {
+    throw new Error(
+      `The four-week retrospective scenario needs one ended finance-eligible visit per week; found ${timelineVisits.length}`,
     );
   }
   return {
@@ -1183,7 +1480,10 @@ async function ensureVisits(
     ...coverage,
     visitCount: scenarioVisits.length,
     publishedTours,
+    timelineVisits,
     workflowVisitId: workflowVisit.id,
+    workflowClientId: workflowVisit.clientId,
+    workflowVisitDate: localDateInBerlin(workflowVisit.plannedStart),
   };
 }
 
@@ -1333,6 +1633,7 @@ async function ensurePilotCaregiverActor(
 
 async function ensureCompletedPilotVisit(
   visitId: string,
+  plannedVisitDate: string,
   caregiverEmployeeId: string,
   organizationId: string,
   tenantRoles: Awaited<ReturnType<typeof seedSystemRoles>>,
@@ -1341,9 +1642,9 @@ async function ensureCompletedPilotVisit(
   const request = contextForActor(PILOT_CAREGIVER_ACTOR_ID, organizationId);
   let detail = await visitExecution.get(caregiverPrincipal, visitId);
   if (detail.execution.status === 'not_started') {
-    if (localDateInBerlin(new Date()) !== PILOT_REFERENCE_DATE) {
+    if (plannedVisitDate > localDateInBerlin(new Date())) {
       throw new Error(
-        `A first completed pilot visit must use today's Berlin date; set PILOT_REFERENCE_DATE=${localDateInBerlin(new Date())} and rerun`,
+        `A synthetic pilot visit cannot be completed before its scheduled Berlin date (${plannedVisitDate})`,
       );
     }
     detail = await visitExecution.start(caregiverPrincipal, visitId, request, auditContext);
@@ -1383,8 +1684,40 @@ async function ensureCompletedPilotVisit(
       auditContext,
     );
   }
+  if (!detail.execution.id || !detail.execution.actualEnd) {
+    throw new Error('The completed pilot execution is missing its recorded timestamps');
+  }
+  const plannedStart = new Date(detail.visit.plannedStart);
+  const plannedEnd = new Date(detail.visit.plannedEnd);
+  if (
+    detail.execution.actualStart !== plannedStart.toISOString() ||
+    detail.execution.actualEnd !== plannedEnd.toISOString()
+  ) {
+    if (detail.execution.version !== detail.services.length + 2) {
+      throw new Error(
+        'The existing pilot execution has unexpected time changes; no timestamps were overwritten',
+      );
+    }
+    await visitExecution.correctTimes(
+      principal,
+      detail.execution.id,
+      {
+        expectedVersion: detail.execution.version,
+        actualStart: plannedStart,
+        actualEnd: plannedEnd,
+        reason: 'Synthetic pilot execution uses its planned visit window as the actual interval.',
+      },
+      request,
+      auditContext,
+    );
+  }
   detail = await visitExecution.get(caregiverPrincipal, visitId);
-  if (detail.execution.status !== 'completed' || detail.services.length === 0) {
+  if (
+    detail.execution.status !== 'completed' ||
+    detail.execution.actualStart !== detail.visit.plannedStart ||
+    detail.execution.actualEnd !== detail.visit.plannedEnd ||
+    detail.services.length === 0
+  ) {
     throw new Error('The pilot visit did not complete with performed services');
   }
 
@@ -1453,6 +1786,34 @@ async function ensureCompletedPilotVisit(
     throw new Error('The synthetic pilot evidence package is not current and ready');
   }
   return { detail, documentation, evidencePackage };
+}
+
+async function ensurePilotExecutionTimeline(input: {
+  visits: PilotVisit[];
+  caregivers: PilotEmployee[];
+  organizationId: string;
+  tenantRoles: Awaited<ReturnType<typeof seedSystemRoles>>;
+}) {
+  for (const visit of input.visits) {
+    const assigned = (await scheduling.listAssignments(principal, visit.id)).filter(
+      (assignment) => assignment.status === 'active',
+    );
+    const caregiver = input.caregivers.find((employee) => employee.id === assigned[0]?.employeeId);
+    if (assigned.length !== 1 || !caregiver) {
+      throw new Error(`Timeline visit ${visit.id} has no unique active synthetic caregiver`);
+    }
+    const completed = await ensureCompletedPilotVisit(
+      visit.id,
+      localDateInBerlin(visit.plannedStart),
+      caregiver.id,
+      input.organizationId,
+      input.tenantRoles,
+    );
+    if (completed.detail.execution.status !== 'completed') {
+      throw new Error(`Timeline visit ${visit.id} did not complete through the execution service`);
+    }
+  }
+  return input.visits.length;
 }
 
 function contextForActor(userId: string, organizationId?: string) {
@@ -1851,6 +2212,7 @@ async function ensurePilotClaimAndPayments(
   payerProfileId: string,
   organizationId: string,
   serviceDate: string,
+  clientOrdinal: number,
 ) {
   const payerInvoice = await billing.getInvoice(principal, payerInvoiceId);
   const existingClaims = await unitOfWork.transaction(
@@ -1963,7 +2325,7 @@ async function ensurePilotClaimAndPayments(
   const clientPayment = await ensurePilotPayment({
     reference: SYNTHETIC_CLIENT_PAYMENT_REFERENCE,
     organizationId,
-    payerName: 'Fiktiv Klient 06 (synthetisch)',
+    payerName: `Fiktiv Klient ${String(clientOrdinal + 1).padStart(2, '0')} (synthetisch)`,
     amountCents: clientPaidCents,
   });
   const clientPaymentAllocation = await ensurePilotPaymentAllocation({
@@ -2136,9 +2498,9 @@ async function ensurePilotTask(input: {
 
 async function ensurePilotOperationalTasks(input: {
   organizationId: string;
-  facilityId: string;
   clients: Array<PilotClient & { ordinal: number }>;
   agreements: Array<Awaited<ReturnType<typeof agreementService.create>> & { ordinal: number }>;
+  financialClient: PilotClient & { ordinal: number };
   externalEntitlementId: string;
   clientInvoiceId: string;
   claimId: string;
@@ -2149,7 +2511,7 @@ async function ensurePilotOperationalTasks(input: {
     created.push(
       await ensurePilotTask({
         organizationId: input.organizationId,
-        facilityId: input.facilityId,
+        facilityId: client.primaryFacilityId!,
         clientId: client.id,
         title: `[SYNTHETIC PILOT] Review draft agreement ${agreement.reference}`,
         description: 'Synthetic reminder: review the draft service agreement before admission.',
@@ -2161,7 +2523,7 @@ async function ensurePilotOperationalTasks(input: {
     created.push(
       await ensurePilotTask({
         organizationId: input.organizationId,
-        facilityId: input.facilityId,
+        facilityId: client.primaryFacilityId!,
         clientId: client.id,
         title: `[SYNTHETIC PILOT] Follow up onboarding for client ${String(client.ordinal + 1).padStart(2, '0')}`,
         description: 'Synthetic Office follow-up for the client onboarding case.',
@@ -2174,7 +2536,7 @@ async function ensurePilotOperationalTasks(input: {
     created.push(
       await ensurePilotTask({
         organizationId: input.organizationId,
-        facilityId: input.facilityId,
+        facilityId: client.primaryFacilityId!,
         clientId: client.id,
         title: `[SYNTHETIC PILOT] Verify contact authority for client ${String(client.ordinal + 1).padStart(2, '0')}`,
         description:
@@ -2188,7 +2550,7 @@ async function ensurePilotOperationalTasks(input: {
   created.push(
     await ensurePilotTask({
       organizationId: input.organizationId,
-      facilityId: input.facilityId,
+      facilityId: firstClient.primaryFacilityId!,
       clientId: firstClient.id,
       title: '[SYNTHETIC PILOT] Review provider-reported benefit entry',
       description: 'Synthetic follow-up: verify the external §45b statement before relying on it.',
@@ -2196,12 +2558,12 @@ async function ensurePilotOperationalTasks(input: {
       priority: 'high',
     }),
   );
-  const sixthClient = input.clients[5]!;
+  const financialClient = input.financialClient;
   created.push(
     await ensurePilotTask({
       organizationId: input.organizationId,
-      facilityId: input.facilityId,
-      clientId: sixthClient.id,
+      facilityId: financialClient.primaryFacilityId!,
+      clientId: financialClient.id,
       title: '[SYNTHETIC PILOT] Review private invoice remainder',
       description: 'Synthetic follow-up for the outstanding self-pay invoice balance.',
       source: { type: 'invoice', id: input.clientInvoiceId },
@@ -2210,8 +2572,8 @@ async function ensurePilotOperationalTasks(input: {
   created.push(
     await ensurePilotTask({
       organizationId: input.organizationId,
-      facilityId: input.facilityId,
-      clientId: sixthClient.id,
+      facilityId: financialClient.primaryFacilityId!,
+      clientId: financialClient.id,
       title: '[SYNTHETIC PILOT] Review local claim exercise',
       description:
         'Synthetic training item: the accepted claim and payment were not sent to or received from a payer.',
@@ -2227,23 +2589,32 @@ async function ensurePilotOperationalTasks(input: {
 
 async function ensurePilotFinancialScenario(input: {
   organizationId: string;
-  facilityId: string;
   clients: Array<PilotClient & { ordinal: number }>;
   caregivers: PilotEmployee[];
   agreements: Array<Awaited<ReturnType<typeof agreementService.create>> & { ordinal: number }>;
   tenantRoles: Awaited<ReturnType<typeof seedSystemRoles>>;
   visitId: string;
+  visitClientId: string;
+  plannedVisitDate: string;
 }) {
-  const client = input.clients[5]!;
+  const client = input.clients.find((item) => item.id === input.visitClientId);
+  if (!client || client.ordinal < 5 || client.ordinal >= 10) {
+    throw new Error('The selected financial visit must belong to one of pilot clients 06–10');
+  }
   const assigned = (await scheduling.listAssignments(principal, input.visitId)).filter(
     (assignment) => assignment.status === 'active',
   );
-  if (assigned.length !== 1 || assigned[0]!.employeeId !== input.caregivers[5]!.id) {
+  const caregiver = input.caregivers.find(
+    (employee) =>
+      employee.id === assigned[0]?.employeeId && employee.facilityId === client.primaryFacilityId,
+  );
+  if (assigned.length !== 1 || !caregiver) {
     throw new Error('The financial pilot visit has an unexpected caregiver assignment');
   }
   const completed = await ensureCompletedPilotVisit(
     input.visitId,
-    input.caregivers[5]!.id,
+    input.plannedVisitDate,
+    caregiver.id,
     input.organizationId,
     input.tenantRoles,
   );
@@ -2256,7 +2627,9 @@ async function ensurePilotFinancialScenario(input: {
     (source) => source.label === SYNTHETIC_EXTERNAL_SOURCE_LABEL,
   );
   if (externalSources.length !== 1 || externalSources[0]!.sourceType !== 'other') {
-    throw new Error('The synthetic external funding source for Client 06 is missing or ambiguous');
+    throw new Error(
+      `The synthetic external funding source for Client ${String(client.ordinal + 1).padStart(2, '0')} is missing or ambiguous`,
+    );
   }
   const entitlement = await ensurePilotOtherEntitlement(
     client.id,
@@ -2290,7 +2663,10 @@ async function ensurePilotFinancialScenario(input: {
         entitlementId: entitlement.id,
         amountCents: externalShareCents,
         status: 'confirmed',
-        idempotencyKey: uuidv5('pilot-client-06-other-allocation', PILOT_NAMESPACE),
+        idempotencyKey: uuidv5(
+          `pilot-client-${String(client.ordinal + 1).padStart(2, '0')}-other-allocation`,
+          PILOT_NAMESPACE,
+        ),
       },
     ],
     contextFor(input.organizationId),
@@ -2353,7 +2729,7 @@ async function ensurePilotFinancialScenario(input: {
   const payerInvoice = await ensurePilotInvoice(
     client.id,
     input.organizationId,
-    input.facilityId,
+    client.primaryFacilityId!,
     payerCandidate,
     'payer',
     payerArrangementId,
@@ -2378,7 +2754,7 @@ async function ensurePilotFinancialScenario(input: {
   const clientInvoice = await ensurePilotInvoice(
     client.id,
     input.organizationId,
-    input.facilityId,
+    client.primaryFacilityId!,
     currentClientCandidate,
     'client',
   );
@@ -2401,6 +2777,7 @@ async function ensurePilotFinancialScenario(input: {
     payerSetup.payerProfile.id,
     input.organizationId,
     serviceDate,
+    client.ordinal,
   );
   const externalEntitlements = await unitOfWork.transaction(
     { tenantId: PILOT_TENANT_ID },
@@ -2423,9 +2800,9 @@ async function ensurePilotFinancialScenario(input: {
   }
   const tasks = await ensurePilotOperationalTasks({
     organizationId: input.organizationId,
-    facilityId: input.facilityId,
     clients: input.clients,
     agreements: input.agreements,
+    financialClient: client,
     externalEntitlementId: externalEntitlements[0]!.id,
     clientInvoiceId: clientInvoice.id,
     claimId: benefitScenario.claimId,
@@ -2466,6 +2843,8 @@ async function ensurePilotFinancialScenario(input: {
   return {
     performedServiceId: performed.id,
     completedVisitId: input.visitId,
+    clientOrdinal: client.ordinal,
+    visitDate: input.plannedVisitDate,
     externalAllocationCents: externalShareCents,
     serviceAmountCents: unallocated.serviceAmountCents,
     invoiceCount: 2,
@@ -2557,6 +2936,8 @@ async function ensureAbsenceSubstitution(
 }
 
 function assertPilotConsistency(
+  facilityCount: number,
+  employeeCount: number,
   clientCount: number,
   agreementCount: number,
   serviceCount: number,
@@ -2571,11 +2952,13 @@ function assertPilotConsistency(
   },
 ): void {
   if (
+    facilityCount !== 2 ||
+    employeeCount !== EMPLOYEE_DEFINITIONS.length ||
     clientCount !== CLIENT_COUNT ||
     agreementCount !== CLIENT_COUNT ||
     serviceCount !== SERVICE_DEFINITIONS.length ||
-    fundingSourceCount !== 3 ||
-    benefitEntitlementCount !== 1 ||
+    fundingSourceCount !== 7 ||
+    benefitEntitlementCount !== 2 ||
     visitSummary.visitCount !== ACTIVE_CLIENT_COUNT * 8 ||
     visitSummary.publishedTours < 1 ||
     visitSummary.requiresManualPlacement !== 0 ||
@@ -2676,6 +3059,7 @@ function assertLocalDevelopmentDatabase(
   connectionString: string,
   name: string,
   username: string,
+  dedicatedPort?: string,
 ): void {
   let parsed: URL;
   try {
@@ -2684,16 +3068,19 @@ function assertLocalDevelopmentDatabase(
     throw new Error(`${name} must point to the local PostgreSQL development database`);
   }
   const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  const expectedLocalPort = dedicatedPort
+    ? parsed.port === dedicatedPort
+    : parsed.port === '' || parsed.port === '5432';
   if (
     !['postgres:', 'postgresql:'].includes(parsed.protocol) ||
     !['localhost', '127.0.0.1', '::1'].includes(hostname) ||
-    (parsed.port !== '' && parsed.port !== '5432') ||
+    !expectedLocalPort ||
     decodeURIComponent(parsed.username) !== username ||
     parsed.pathname !== '/care' ||
     /prod|stage|live/i.test(parsed.pathname + parsed.hostname)
   ) {
     throw new Error(
-      `${name} must use the local Compose PostgreSQL database care at localhost with user ${username}; no data was changed`,
+      `${name} must use the local Compose PostgreSQL database care at localhost with user ${username}${dedicatedPort ? ` and port ${dedicatedPort}` : ''}; no data was changed`,
     );
   }
 }
@@ -2707,16 +3094,21 @@ try {
   });
 
   const organization = await ensureOrganization();
-  const facility = await ensureFacility(organization.id);
-  const teams = await ensureTeams(organization.id, facility.id);
-  const employees = await ensureEmployees(organization.id, facility.id, teams);
-  const services = await ensureServices(organization.id, facility.id);
-  const clients = await ensureClients(organization.id, facility.id);
+  const facilities = await ensureFacilities(organization.id);
+  const teamsByFacility = await ensureTeams(organization.id, facilities);
+  const employees = await ensureEmployees(organization.id, facilities, teamsByFacility);
+  const services = await ensureServices(
+    organization.id,
+    facilities.map((facility) => facility.id),
+  );
+  const clients = await ensureClients(organization.id, facilities);
   const fundingSourceCount = await ensureFundingSources(clients);
   const benefitEntitlementCount = await ensureBenefitScenario(clients);
   const agreements = await ensureAgreements(clients, services);
   const generated = await ensureVisits(agreements, clients, services, employees);
   assertPilotConsistency(
+    facilities.length,
+    EMPLOYEE_DEFINITIONS.length,
     clients.length,
     agreements.length,
     services.length,
@@ -2726,24 +3118,32 @@ try {
   );
   const financialScenario = await ensurePilotFinancialScenario({
     organizationId: organization.id,
-    facilityId: facility.id,
     clients,
     caregivers: employees,
     agreements,
     tenantRoles,
     visitId: generated.workflowVisitId,
+    visitClientId: generated.workflowClientId,
+    plannedVisitDate: generated.workflowVisitDate,
+  });
+  const completedTimelineVisits = await ensurePilotExecutionTimeline({
+    visits: generated.timelineVisits,
+    caregivers: employees,
+    organizationId: organization.id,
+    tenantRoles,
   });
 
   process.stdout.write(
     [
       `Synthetic pilot ready: ${PILOT_NAME}`,
-      `tenant=${PILOT_TENANT_ID} organization=${organization.id} facility=${facility.id}`,
-      `employees=${EMPLOYEE_DEFINITIONS.length} (2 office, ${employees.length} Betreuungskräfte) clients=${clients.length} services=${services.length} agreements=${agreements.length}`,
+      `tenant=${PILOT_TENANT_ID} organization=${organization.id} facilities=${facilities.map((facility) => facility.id).join(',')}`,
+      `employees=${EMPLOYEE_DEFINITIONS.length} (3 office, ${employees.length} Betreuungskräfte) clients=${clients.length} services=${services.length} agreements=${agreements.length}`,
       `synthetic funding sources=${fundingSourceCount} (eligibility and balances unconfirmed)`,
-      `benefit scenario: provisional §45b entitlement=${benefitEntitlementCount}, synthetic external consumption=€25.00`,
+      `benefit scenario: provisional §45b and §45a entitlements=${benefitEntitlementCount}, synthetic provider-reported external use and conversion input=€25.00 each`,
       `scheduled visits=${generated.visitCount} generated=${generated.generated} already-existing=${generated.alreadyExisting} manual-placement=${generated.requiresManualPlacement} published-tours=${generated.publishedTours}`,
+      `weekly execution timeline=${completedTimelineVisits}/${generated.timelineVisits.length} available weeks (4-week schedule)`,
       `exceptional coverage: absence=${generated.absenceScenario ? 'recorded' : 'missing'} substitution=${generated.substitutionStatus}`,
-      `completed synthetic visit=${financialScenario.completedVisitId} service allocation=${formatEuro(financialScenario.externalAllocationCents)} / ${formatEuro(financialScenario.serviceAmountCents)}`,
+      `completed synthetic visit=${financialScenario.completedVisitId} (client ${String(financialScenario.clientOrdinal + 1).padStart(2, '0')}, ${financialScenario.visitDate}) service allocation=${formatEuro(financialScenario.externalAllocationCents)} / ${formatEuro(financialScenario.serviceAmountCents)}`,
       `issued invoices=${financialScenario.invoiceCount} (split payer/client); claim=${financialScenario.claimId} synthetic decision and payment recorded locally only`,
       `client self-pay invoice=${formatEuro(financialScenario.clientInvoice.grandTotalCents)} paid=${formatEuro(financialScenario.clientPaidCents)} outstanding=${formatEuro(financialScenario.clientInvoice.outstandingCents ?? 0)}`,
       `Office follow-up tasks=${financialScenario.operationsTaskCount}; seed-only caregiver actor has no sign-in mapping`,

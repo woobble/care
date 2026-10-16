@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { updateReminderPolicyAction } from '@app/web/app/(office)/operations/actions';
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { ClearableSuccessNotice, RHFActionForm } from '@app/web/components/rhf-action-form';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
@@ -101,12 +101,14 @@ export default async function ReminderSettingsPage({
         </p>
       ) : null}
       {query.updated ? (
-        <p
-          role="status"
-          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
-        >
-          {t('reminderSettingsSaved')}
-        </p>
+        <ClearableSuccessNotice>
+          <p
+            role="status"
+            className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
+          >
+            {t('reminderSettingsSaved')}
+          </p>
+        </ClearableSuccessNotice>
       ) : null}
       <form
         method="get"

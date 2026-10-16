@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { PageHeader } from '@app/web/components/page-patterns';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { ClearableSuccessNotice, RHFActionForm } from '@app/web/components/rhf-action-form';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
@@ -160,12 +160,16 @@ export default async function DocumentTemplatesPage({
         </p>
       ) : null}
       {query.notice ? (
-        <p
-          role="status"
-          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
-        >
-          {t(`Documents.templates.notices.${query.notice === 'saved' ? 'saved' : 'logoUploaded'}`)}
-        </p>
+        <ClearableSuccessNotice>
+          <p
+            role="status"
+            className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
+          >
+            {t(
+              `Documents.templates.notices.${query.notice === 'saved' ? 'saved' : 'logoUploaded'}`,
+            )}
+          </p>
+        </ClearableSuccessNotice>
       ) : null}
 
       <form method="get" className="grid gap-4 rounded-lg border bg-card p-5 sm:grid-cols-2">

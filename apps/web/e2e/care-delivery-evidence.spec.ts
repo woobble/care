@@ -111,6 +111,78 @@ test('Caregivers can complete visits, finalize documentation, and acknowledge ev
       caregiverPage.getByRole('status').filter({ hasText: 'Service outcome saved.' }),
     ).toBeVisible();
     await caregiverPage.getByRole('button', { name: 'Start documentation' }).tap();
+    await expect(caregiverPage).toHaveURL(/notice=documentation-created/);
+    const documentation = await database.query<{ id: string }>(
+      'SELECT id FROM care_documentation.documents WHERE tenant_id = $1 AND visit_id = $2',
+      [scenario.tenantId, scenario.visitId],
+    );
+    const documentationId = documentation.rows[0]?.id;
+    if (!documentationId) throw new Error('Starting documentation did not create a document');
+    const interruptedEntry = `Interrupted E2E draft ${scenario.runId}`;
+    const interruptedEntryForm = caregiverPage.locator('form').filter({
+      has: caregiverPage.locator('input[name="type"][value="care_note"]'),
+    });
+    await interruptedEntryForm.locator('textarea[name="content"]').fill(interruptedEntry);
+    await expect(interruptedEntryForm.getByRole('status')).toHaveText(
+      'Draft kept temporarily in this browser tab; it has not been sent to the server.',
+    );
+    const storedCareDraftCount = () =>
+      caregiverPage.evaluate(
+        () =>
+          Object.keys(window.sessionStorage).filter((key) => key.startsWith('care-draft:v1:'))
+            .length,
+      );
+    await expect.poll(storedCareDraftCount).toBeGreaterThan(0);
+    // Simulate an interrupted tab after local autosave and before the server action is submitted.
+    await caregiverPage.reload();
+    await expect.poll(storedCareDraftCount).toBeGreaterThan(0);
+    await expect(interruptedEntryForm.getByText(/An unsent draft from/)).toBeVisible();
+    await interruptedEntryForm.getByRole('button', { name: 'Restore draft' }).click();
+    await expect(interruptedEntryForm.locator('textarea[name="content"]')).toHaveValue(
+      interruptedEntry,
+    );
+    const draftState = await database.query<{ count: number }>(
+      `SELECT count(*)::int AS count
+       FROM care_documentation.entries
+       WHERE tenant_id = $1 AND documentation_id = $2 AND content = $3`,
+      [scenario.tenantId, documentationId, interruptedEntry],
+    );
+    expect(draftState.rows[0]?.count).toBe(0);
+
+    let interruptedActionRequests = 0;
+    const visitActionPath = new RegExp(`/care/visits/${scenario.visitId}(?:\\?.*)?$`);
+    await caregiverPage.route(visitActionPath, async (route) => {
+      const request = route.request();
+      if (request.method() === 'POST' && request.headers()['next-action']) {
+        interruptedActionRequests += 1;
+        await route.fulfill({ status: 503, body: 'Synthetic E2E action interruption' });
+        return;
+      }
+      await route.continue();
+    });
+    await interruptedEntryForm.getByRole('button', { name: 'Save changes', exact: true }).tap();
+    await expect.poll(() => interruptedActionRequests).toBe(1);
+    await expect.poll(storedCareDraftCount).toBeGreaterThan(0);
+    const afterInterruptedSubmit = await database.query<{ count: number }>(
+      `SELECT count(*)::int AS count
+       FROM care_documentation.entries
+       WHERE tenant_id = $1 AND documentation_id = $2 AND content = $3`,
+      [scenario.tenantId, documentationId, interruptedEntry],
+    );
+    expect(afterInterruptedSubmit.rows[0]?.count).toBe(0);
+    await expect(
+      interruptedEntryForm
+        .getByRole('status')
+        .filter({ hasText: 'The submission result is unclear.' }),
+    ).toBeVisible({ timeout: 20_000 });
+    await caregiverPage.unroute(visitActionPath);
+    await caregiverPage.reload();
+    await expect(interruptedEntryForm.getByText(/An unsent draft from/)).toBeVisible();
+    await interruptedEntryForm.getByRole('button', { name: 'Restore draft' }).click();
+    await expect(interruptedEntryForm.locator('textarea[name="content"]')).toHaveValue(
+      interruptedEntry,
+    );
+
     const observations = caregiverPage
       .getByRole('heading', { name: 'Observations', level: 3 })
       .locator('..');

@@ -2,8 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { errorMessageKey } from '@app/web/i18n/errors';
 
 import { lineAmountField } from './format';
 
@@ -40,6 +42,11 @@ const claimDecisions = [
   'rejected',
   'clarification_required',
 ] as const;
+
+async function actionErrorMessage(code: string): Promise<string> {
+  const translate = await getTranslations();
+  return translate(errorMessageKey(code));
+}
 
 export async function createDraftInvoiceAction(formData: FormData): Promise<void> {
   const organizationId = readUuid(formData.get('organizationId'));
@@ -166,7 +173,7 @@ export async function correctInvoiceAction(formData: FormData): Promise<void> {
   redirect(invoicePath(invoiceId, 'INVOICE_CORRECTED'));
 }
 
-export async function saveBillingProfileAction(formData: FormData): Promise<void> {
+export async function saveBillingProfileAction(formData: FormData): Promise<void | string> {
   const organizationId = readUuid(formData.get('organizationId'));
   const taxTreatment = readChoice(formData.get('taxTreatment'), taxTreatments);
   const requiredInvoiceFormat = readChoice(formData.get('requiredInvoiceFormat'), invoiceFormats);
@@ -183,7 +190,7 @@ export async function saveBillingProfileAction(formData: FormData): Promise<void
     taxRateBasisPoints === undefined ||
     expectedVersion === undefined
   ) {
-    redirect(billingSettingsPath('INVALID_BILLING_PROFILE'));
+    return actionErrorMessage('INVALID_BILLING_PROFILE');
   }
   const api = await getApiClient();
   const { error } = await api.PUT('/api/v1/billing/settings', {
@@ -209,7 +216,7 @@ export async function saveBillingProfileAction(formData: FormData): Promise<void
       ...(expectedVersion ? { expectedVersion } : {}),
     },
   });
-  if (error) redirect(billingSettingsPath(error.code));
+  if (error) return actionErrorMessage(error.code);
   revalidatePath('/billing');
   revalidatePath('/billing/settings');
   redirect(billingSettingsPath(undefined, 'saved'));
@@ -306,14 +313,14 @@ export async function updatePayerArrangementAction(formData: FormData): Promise<
   redirect(clientInvoicesPath(clientId, undefined, 'PAYER_ARRANGEMENT_SAVED'));
 }
 
-export async function createPayerDirectoryEntryAction(formData: FormData): Promise<void> {
+export async function createPayerDirectoryEntryAction(formData: FormData): Promise<void | string> {
   const organizationId = readUuid(formData.get('organizationId'));
   const payerType = readChoice(formData.get('payerType'), payerDirectoryTypes);
   const name = readString(formData.get('name'));
   const validFrom = readDate(formData.get('validFrom'));
   const validUntil = readOptionalDate(formData.get('validUntil'));
   if (!organizationId || !payerType || !name || !validFrom || validUntil === undefined) {
-    redirect(claimSettingsPath('INVALID_REQUEST', undefined, organizationId ?? undefined));
+    return actionErrorMessage('INVALID_REQUEST');
   }
   const api = await getApiClient();
   const { error } = await api.POST('/api/v1/billing/payers', {
@@ -333,13 +340,13 @@ export async function createPayerDirectoryEntryAction(formData: FormData): Promi
       validUntil,
     },
   });
-  if (error) redirect(claimSettingsPath(error.code, undefined, organizationId));
+  if (error) return actionErrorMessage(error.code);
   revalidatePath('/billing/claims');
   revalidatePath('/billing/claims/settings');
   redirect(claimSettingsPath(undefined, 'payer-saved', organizationId));
 }
 
-export async function updatePayerDirectoryEntryAction(formData: FormData): Promise<void> {
+export async function updatePayerDirectoryEntryAction(formData: FormData): Promise<void | string> {
   const payerId = readUuid(formData.get('payerId'));
   const organizationId = readUuid(formData.get('organizationId'));
   const expectedVersion = readPositiveInteger(formData.get('expectedVersion'));
@@ -358,7 +365,7 @@ export async function updatePayerDirectoryEntryAction(formData: FormData): Promi
     !validFrom ||
     validUntil === undefined
   ) {
-    redirect(claimSettingsPath('INVALID_REQUEST', undefined, organizationId ?? undefined));
+    return actionErrorMessage('INVALID_REQUEST');
   }
   const api = await getApiClient();
   const { error } = await api.PATCH('/api/v1/billing/payers/{id}', {
@@ -379,13 +386,13 @@ export async function updatePayerDirectoryEntryAction(formData: FormData): Promi
       ...(validUntil !== undefined ? { validUntil } : {}),
     },
   });
-  if (error) redirect(claimSettingsPath(error.code, undefined, organizationId));
+  if (error) return actionErrorMessage(error.code);
   revalidatePath('/billing/claims');
   revalidatePath('/billing/claims/settings');
   redirect(claimSettingsPath(undefined, 'payer-saved', organizationId));
 }
 
-export async function savePayerRequirementsAction(formData: FormData): Promise<void> {
+export async function savePayerRequirementsAction(formData: FormData): Promise<void | string> {
   const payerId = readUuid(formData.get('payerId'));
   const organizationId = readUuid(formData.get('organizationId'));
   const channel = readChoice(formData.get('channel'), claimChannels);
@@ -408,15 +415,14 @@ export async function savePayerRequirementsAction(formData: FormData): Promise<v
     !sourceEffectiveDate ||
     (sourceUrl !== null && !/^https:\/\/\S+$/i.test(sourceUrl))
   ) {
-    redirect(claimSettingsPath('INVALID_PAYER_PROFILE', undefined, organizationId ?? undefined));
+    return actionErrorMessage('INVALID_PAYER_PROFILE');
   }
   const api = await getApiClient();
   const headers = await getTenantHeader();
   const profileResult = await api.GET('/api/v1/billing/payers/{id}/profiles', {
     params: { path: { id: payerId }, header: headers },
   });
-  if (profileResult.error)
-    redirect(claimSettingsPath(profileResult.error.code, undefined, organizationId));
+  if (profileResult.error) return actionErrorMessage(profileResult.error.code);
   const profiles = (profileResult.data ?? []) as Array<{
     channel: string;
     fundingSourceType: string;
@@ -451,7 +457,7 @@ export async function savePayerRequirementsAction(formData: FormData): Promise<v
       expectedVersion,
     },
   });
-  if (error) redirect(claimSettingsPath(error.code, undefined, organizationId));
+  if (error) return actionErrorMessage(error.code);
   revalidatePath('/billing/claims');
   revalidatePath('/billing/claims/settings');
   redirect(claimSettingsPath(undefined, 'profile-saved', organizationId));

@@ -5,7 +5,7 @@ import { saveBillingProfileAction } from '@app/web/app/(office)/billing/actions'
 import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
 import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
 import { PageHeader } from '@app/web/components/page-patterns';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { ClearableSuccessNotice, RHFActionForm } from '@app/web/components/rhf-action-form';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
@@ -50,7 +50,11 @@ export default async function BillingSettingsPage({
       {(query.error ?? error?.code) ? (
         <Alert>{translate(errorMessageKey(query.error ?? error?.code ?? ''))}</Alert>
       ) : null}
-      {query.updated === 'saved' ? <Status>{t('billingProfileSaved')}</Status> : null}
+      {query.updated === 'saved' ? (
+        <ClearableSuccessNotice>
+          <Status>{t('billingProfileSaved')}</Status>
+        </ClearableSuccessNotice>
+      ) : null}
       <p className="rounded-md border border-primary/20 bg-accent p-3 text-sm text-primary">
         {t('organizationAddressNote')}{' '}
         <Link className="font-medium underline" href="/administration/organizations">

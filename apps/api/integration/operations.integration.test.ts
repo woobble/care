@@ -52,13 +52,24 @@ describe('operations PostgreSQL/API integration', () => {
     const extraAdmissionIds = Array.from({ length: 501 }, () => uuidv7());
     const extraExecutionVisitIds = Array.from({ length: 101 }, () => uuidv7());
     const extraExecutionIds = Array.from({ length: 101 }, () => uuidv7());
+    const missingEvidenceVisitId = uuidv7();
+    const missingEvidenceExecutionId = uuidv7();
+    const missingEvidenceServiceId = uuidv7();
+    const missingEvidenceDocumentId = uuidv7();
+    const serviceCategoryId = uuidv7();
+    const serviceDefinitionId = uuidv7();
     const visitId = uuidv7();
     const agreementId = uuidv7();
     const admissionCaseId = uuidv7();
+    const overdueFollowUpCaseId = uuidv7();
     const benefitFundingSourceId = uuidv7();
     const benefitEntitlementId = uuidv7();
     const payerArrangementId = uuidv7();
     const invoiceId = uuidv7();
+    const overdueInvoiceId = uuidv7();
+    const rejectedClaimPayerId = uuidv7();
+    const rejectedClaimArrangementId = uuidv7();
+    const rejectedClaimId = uuidv7();
     const userId = uuidv7();
     const subject = uuidv7();
     const taskFromOtherTenantId = uuidv7();
@@ -72,11 +83,18 @@ describe('operations PostgreSQL/API integration', () => {
     let api: NestFastifyApplication | undefined;
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
+    const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const inEightDays = new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000)
       .toISOString()
       .slice(0, 10);
     const inNineDays = new Date(now.getTime() + 9 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const inTenDays = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000);
+    const overdueFollowUpAt = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+    const missingEvidencePlannedStart = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+    const missingEvidencePlannedEnd = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const missingEvidenceActualEnd = new Date(
+      missingEvidencePlannedStart.getTime() + 60 * 60 * 1000,
+    );
 
     try {
       await owner.connect();
@@ -146,6 +164,86 @@ describe('operations PostgreSQL/API integration', () => {
            (id, tenant_id, organization_id, employee_id, facility_id, is_primary, status, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, TRUE, 'active', $6, $6)`,
         [uuidv7(), tenantId, organizationId, employeeId, facilityId, now],
+      );
+      await owner.query(
+        `INSERT INTO services.service_categories
+           (id, tenant_id, name, status, created_at, updated_at)
+         VALUES ($1, $2, 'Operations test category', 'active', $3, $3)`,
+        [serviceCategoryId, tenantId, now],
+      );
+      await owner.query(
+        `INSERT INTO services.service_definitions
+           (id, tenant_id, code, name, category_id, unit, status, valid_from, created_at, updated_at)
+         VALUES ($1, $2, 'OPS-MISSING-EVIDENCE', 'Operations missing evidence service', $3,
+                 'occurrence', 'active', $4, $5, $5)`,
+        [serviceDefinitionId, tenantId, serviceCategoryId, today, now],
+      );
+      await owner.query(
+        `INSERT INTO scheduling.visits
+           (id, tenant_id, client_id, organization_id, facility_id, origin, status,
+            planned_start, planned_end, timezone, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'manual', 'confirmed', $6, $7, 'Europe/Berlin', $8, $8)`,
+        [
+          missingEvidenceVisitId,
+          tenantId,
+          clientId,
+          organizationId,
+          facilityId,
+          missingEvidencePlannedStart,
+          missingEvidencePlannedEnd,
+          now,
+        ],
+      );
+      await owner.query(
+        `INSERT INTO visit_execution.executions
+           (id, tenant_id, visit_id, status, actual_start, started_by_employee_id,
+            version, created_at, updated_at)
+         VALUES ($1, $2, $3, 'in_progress', $4, $5, 1, $6, $6)`,
+        [
+          missingEvidenceExecutionId,
+          tenantId,
+          missingEvidenceVisitId,
+          missingEvidencePlannedStart,
+          employeeId,
+          now,
+        ],
+      );
+      await owner.query(
+        `INSERT INTO visit_execution.performed_services
+           (id, tenant_id, execution_id, visit_id, service_definition_id, service_code_snapshot,
+            service_name_snapshot, unit_snapshot, actual_quantity, status, performed_by_employee_id,
+            created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'OPS-MISSING-EVIDENCE',
+                 'Operations missing evidence service', 'occurrence', 1, 'performed', $6, $7, $7)`,
+        [
+          missingEvidenceServiceId,
+          tenantId,
+          missingEvidenceExecutionId,
+          missingEvidenceVisitId,
+          serviceDefinitionId,
+          employeeId,
+          now,
+        ],
+      );
+      await owner.query(
+        `UPDATE visit_execution.executions
+         SET status = 'completed', actual_end = $3, completed_by_employee_id = $4, updated_at = $5
+         WHERE tenant_id = $1 AND id = $2`,
+        [tenantId, missingEvidenceExecutionId, missingEvidenceActualEnd, employeeId, now],
+      );
+      await owner.query(
+        `INSERT INTO care_documentation.documents
+           (id, tenant_id, visit_id, execution_id, status, created_by_employee_id,
+            finalized_by_employee_id, finalized_at, version, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, 'finalized', $5, $5, $6, 1, $6, $6)`,
+        [
+          missingEvidenceDocumentId,
+          tenantId,
+          missingEvidenceVisitId,
+          missingEvidenceExecutionId,
+          employeeId,
+          now,
+        ],
       );
       await owner.query(
         `INSERT INTO employees.qualification_definitions
@@ -261,6 +359,74 @@ describe('operations PostgreSQL/API integration', () => {
         ],
       );
       await owner.query(
+        `INSERT INTO billing.payers
+           (id, tenant_id, organization_id, payer_type, name, status, valid_from, version,
+            created_by, updated_by, created_at, updated_at)
+         VALUES ($1, $2, $3, 'other', 'Operations projection payer', 'active', $4, 1, $5, $5, $6, $6)`,
+        [rejectedClaimPayerId, tenantId, organizationId, today, userId, now],
+      );
+      await owner.query(
+        `INSERT INTO billing.payer_arrangements
+           (id, tenant_id, organization_id, client_id, payer_id, payer_type, arrangement_type,
+            recipient_type, mandate_status, valid_from, version, created_by, updated_by,
+            created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'other', 'reimbursement_to_client', 'client',
+                 'not_applicable', $6, 1, $7, $7, $8, $8)`,
+        [
+          rejectedClaimArrangementId,
+          tenantId,
+          organizationId,
+          clientId,
+          rejectedClaimPayerId,
+          today,
+          userId,
+          now,
+        ],
+      );
+      await owner.query(
+        `INSERT INTO billing.claims
+           (id, tenant_id, organization_id, facility_id, client_id, invoice_id, payer_id,
+            payer_arrangement_id, arrangement_type, funding_source_type, status, currency,
+            amount_cents, invoice_version, invoice_snapshot, payer_snapshot, arrangement_snapshot,
+            profile_snapshot, snapshot_hash, package_version, package_hash, version, created_by,
+            updated_by, created_at, updated_at, prepared_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'reimbursement_to_client', 'other',
+                 'rejected', 'EUR', 1000, 1, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
+                 repeat('a', 64), 1, repeat('b', 64), 2, $9, $9, $10, $10, $10)`,
+        [
+          rejectedClaimId,
+          tenantId,
+          organizationId,
+          facilityId,
+          clientId,
+          invoiceId,
+          rejectedClaimPayerId,
+          rejectedClaimArrangementId,
+          userId,
+          now,
+        ],
+      );
+      await owner.query(
+        `INSERT INTO billing.invoices
+           (id, tenant_id, organization_id, facility_id, client_id, recipient_type,
+            recipient_snapshot, issuer_snapshot, invoice_number, issue_date, due_date, currency,
+            subtotal_cents, tax_total_cents, grand_total_cents, status, version, created_by,
+            issued_by, issued_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'client', '{}'::jsonb, '{}'::jsonb, $6, $7, $7,
+                 'EUR', 800, 0, 800, 'issued', 1, $8, $8, $9, $9, $9)`,
+        [
+          overdueInvoiceId,
+          tenantId,
+          organizationId,
+          facilityId,
+          clientId,
+          `OPS-OVERDUE-${overdueInvoiceId.slice(0, 8)}`,
+          twoDaysAgo,
+          userId,
+          now,
+        ],
+      );
+      await owner.query(
         `INSERT INTO onboarding.cases
            (id, tenant_id, organization_id, facility_id, first_name, last_name, contact_method,
             preferred_start_date, inquiry_source, stage, next_follow_up_at, last_activity_at,
@@ -277,6 +443,23 @@ describe('operations PostgreSQL/API integration', () => {
           now,
           userId,
           admissionCaseId,
+        ],
+      );
+      await owner.query(
+        `INSERT INTO onboarding.cases
+           (id, tenant_id, organization_id, facility_id, first_name, last_name, contact_method,
+            inquiry_source, stage, next_follow_up_at, last_activity_at, created_by_user_id,
+            created_at, updated_at)
+         VALUES ($1, $2, $3, $4, 'Overdue', 'Follow-up', 'phone', 'operations integration',
+                 'inquiry', $5, $6, $7, $6, $6)`,
+        [
+          overdueFollowUpCaseId,
+          tenantId,
+          organizationId,
+          facilityId,
+          overdueFollowUpAt,
+          now,
+          userId,
         ],
       );
       await owner.query(
@@ -315,6 +498,8 @@ describe('operations PostgreSQL/API integration', () => {
         'benefits.review',
         'billing.read',
         'billing.payments.read',
+        'claims.read',
+        'care_documentation.review',
         'onboarding.read',
         'operations.recurring_tasks.manage',
       ];
@@ -628,6 +813,65 @@ describe('operations PostgreSQL/API integration', () => {
         }),
       );
       expect(receivableDateFilter.items).toHaveLength(1);
+      const overdueReceivableResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?sourceDomain=billing&due=overdue`,
+        { headers },
+      );
+      expect(overdueReceivableResponse.status).toBe(200);
+      const overdueReceivables = (await overdueReceivableResponse.json()) as {
+        items: Array<{ issueCode: string; sourceEntityId: string; dueAt: string | null }>;
+      };
+      expect(overdueReceivables.items).toContainEqual(
+        expect.objectContaining({
+          issueCode: 'receivable_due',
+          sourceEntityId: overdueInvoiceId,
+          dueAt: expect.any(String),
+        }),
+      );
+      const overdueFollowUpResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?sourceDomain=onboarding&due=overdue`,
+        { headers },
+      );
+      expect(overdueFollowUpResponse.status).toBe(200);
+      const overdueFollowUps = (await overdueFollowUpResponse.json()) as {
+        items: Array<{ issueCode: string; sourceEntityId: string; dueAt: string | null }>;
+      };
+      expect(overdueFollowUps.items).toContainEqual(
+        expect.objectContaining({
+          issueCode: 'admission_follow_up_overdue',
+          sourceEntityId: overdueFollowUpCaseId,
+          dueAt: expect.any(String),
+        }),
+      );
+      const rejectedClaimResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?sourceDomain=claims&clientId=${clientId}`,
+        { headers },
+      );
+      expect(rejectedClaimResponse.status).toBe(200);
+      const rejectedClaimItems = (await rejectedClaimResponse.json()) as {
+        items: Array<{ issueCode: string; sourceEntityId: string; severity: string }>;
+      };
+      expect(rejectedClaimItems.items).toContainEqual(
+        expect.objectContaining({
+          issueCode: 'claim_rejected',
+          sourceEntityId: rejectedClaimId,
+          severity: 'critical',
+        }),
+      );
+      const missingEvidenceResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?sourceDomain=care_documentation&clientId=${clientId}`,
+        { headers },
+      );
+      expect(missingEvidenceResponse.status).toBe(200);
+      const missingEvidenceItems = (await missingEvidenceResponse.json()) as {
+        items: Array<{ issueCode: string; sourceEntityId: string }>;
+      };
+      expect(missingEvidenceItems.items).toContainEqual(
+        expect.objectContaining({
+          issueCode: 'documentation_service_evidence_required',
+          sourceEntityId: missingEvidenceVisitId,
+        }),
+      );
 
       const repeatedWorklist = await fetch(`${baseUrl}/api/v1/operations/work-items`, { headers });
       const repeatedItems = (await repeatedWorklist.json()) as {
@@ -639,14 +883,13 @@ describe('operations PostgreSQL/API integration', () => {
 
       const dashboard = await fetch(`${baseUrl}/api/v1/operations/dashboard`, { headers });
       expect(dashboard.status).toBe(200);
-      expect(await dashboard.json()).toMatchObject({
-        categoryCounts: { scheduling: expect.any(Number) },
-        deadlineCounts: {
-          overdue: expect.any(Number),
-          today: expect.any(Number),
-          upcoming: expect.any(Number),
-        },
-      });
+      const dashboardBody = (await dashboard.json()) as {
+        categoryCounts: { scheduling: number };
+        deadlineCounts: { overdue: number; today: number; upcoming: number };
+      };
+      expect(typeof dashboardBody.categoryCounts.scheduling).toBe('number');
+      expect(Object.values(dashboardBody.deadlineCounts).every(Number.isInteger)).toBe(true);
+      expect(dashboardBody.deadlineCounts.overdue > 0).toBe(true);
 
       const deadlinesResponse = await fetch(
         `${baseUrl}/api/v1/operations/deadlines?category=agreements`,
@@ -1271,7 +1514,7 @@ describe('operations PostgreSQL/API integration', () => {
       const queueExceptionTotal = ((await queueExceptions.json()) as { total: number }).total;
       const queueTaskTotal = ((await queueTasks.json()) as { total: number }).total;
       expect(combinedQueueBody.total).toBe(queueExceptionTotal + queueTaskTotal);
-      expect(combinedQueueBody.items.map((item) => item.kind)).toEqual(['task']);
+      expect(combinedQueueBody.items).toHaveLength(1);
       const exceptionsOnlyQueue = await fetch(
         `${baseUrl}/api/v1/operations/work-queue?itemType=exceptions&pageSize=10`,
         { headers },

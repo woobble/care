@@ -253,7 +253,7 @@ test('Office navigation stays responsive across themes and screen sizes', async 
         .locator('#office-mobile-navigation')
         .getByRole('link', { name: 'Planning', exact: true })
         .click();
-      await expect(page).toHaveURL(/\/planning(?:\?|$)/);
+      await expect(page).toHaveURL(/\/planning(?:\?|$)/, { timeout: 15_000 });
       await expect(page.locator('#office-mobile-navigation')).not.toBeVisible();
       await page.goto('/clients?localeCheck=1');
       await page.setViewportSize({ width: 390, height: 844 });

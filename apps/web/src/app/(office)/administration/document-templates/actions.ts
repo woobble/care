@@ -2,8 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 
 import { fetchCareApi, getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { errorMessageKey } from '@app/web/i18n/errors';
 import type { DocumentsControllerSaveTemplateData } from '@care/api-client';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -18,22 +20,27 @@ const documentTypes = [
 type DocumentType = (typeof documentTypes)[number];
 type TemplateInput = DocumentsControllerSaveTemplateData['body'];
 
-export async function saveDocumentTemplateAction(formData: FormData): Promise<void> {
+async function actionErrorMessage(code: string): Promise<string> {
+  const translate = await getTranslations();
+  return translate(errorMessageKey(code));
+}
+
+export async function saveDocumentTemplateAction(formData: FormData): Promise<void | string> {
   const organizationId = readUuid(formData.get('organizationId'));
   const type = readType(formData.get('documentType'));
   const expectedVersion = Number(formData.get('expectedVersion'));
   if (!organizationId || !type || !Number.isSafeInteger(expectedVersion) || expectedVersion < 0) {
-    redirect('/administration/document-templates?error=INVALID_REQUEST');
+    return actionErrorMessage('INVALID_REQUEST');
   }
 
   const logoAssetIdValue = formData.get('logoAssetId');
   const logoAssetId = logoAssetIdValue === '' ? null : readUuid(logoAssetIdValue);
   if (logoAssetIdValue !== '' && !logoAssetId) {
-    redirect(templatePath(organizationId, type, 'INVALID_REQUEST'));
+    return actionErrorMessage('INVALID_REQUEST');
   }
   const defaultLocale = formData.get('defaultLocale');
   if (defaultLocale !== 'de' && defaultLocale !== 'en') {
-    redirect(templatePath(organizationId, type, 'INVALID_REQUEST'));
+    return actionErrorMessage('INVALID_REQUEST');
   }
   const body = {
     expectedVersion,
@@ -53,7 +60,7 @@ export async function saveDocumentTemplateAction(formData: FormData): Promise<vo
     params: { path: { type }, query: { organizationId }, header: await getTenantHeader() },
     body,
   });
-  if (error) redirect(templatePath(organizationId, type, error.code));
+  if (error) return actionErrorMessage(error.code);
   revalidatePath('/administration/document-templates');
   redirect(templatePath(organizationId, type, 'saved'));
 }
@@ -70,7 +77,7 @@ export async function uploadDocumentLogoAction(formData: FormData): Promise<void
     file.size > 512 * 1024 ||
     (file.type !== 'image/png' && file.type !== 'image/jpeg')
   ) {
-    redirect(templatePath(organizationId, type, 'DOCUMENT_TEMPLATE_INVALID'));
+    redirect(templateErrorPath(organizationId, type, 'DOCUMENT_TEMPLATE_INVALID'));
   }
 
   const payload = new FormData();
@@ -86,11 +93,11 @@ export async function uploadDocumentLogoAction(formData: FormData): Promise<void
       body && typeof body === 'object' && 'code' in body && typeof body.code === 'string'
         ? body.code
         : 'DOCUMENT_TEMPLATE_INVALID';
-    redirect(templatePath(organizationId, type, code));
+    redirect(templateErrorPath(organizationId, type, code));
   }
   const logo = (await response.json().catch(() => null)) as { id?: unknown } | null;
   if (!logo || typeof logo.id !== 'string' || !uuidPattern.test(logo.id)) {
-    redirect(templatePath(organizationId, type, 'DOCUMENT_TEMPLATE_INVALID'));
+    redirect(templateErrorPath(organizationId, type, 'DOCUMENT_TEMPLATE_INVALID'));
   }
   revalidatePath('/administration/document-templates');
   const query = new URLSearchParams({
@@ -125,6 +132,17 @@ function templatePath(
   value: string,
 ): string {
   const query = new URLSearchParams({ notice: value });
+  if (organizationId) query.set('organizationId', organizationId);
+  if (type) query.set('type', type);
+  return `/administration/document-templates?${query.toString()}`;
+}
+
+function templateErrorPath(
+  organizationId: string | null,
+  type: DocumentType | null,
+  code: string,
+): string {
+  const query = new URLSearchParams({ error: code });
   if (organizationId) query.set('organizationId', organizationId);
   if (type) query.set('type', type);
   return `/administration/document-templates?${query.toString()}`;

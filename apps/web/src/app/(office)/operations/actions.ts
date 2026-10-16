@@ -2,9 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 import { visitDateTimeFromInput } from '@app/web/lib/care-date';
+import { errorMessageKey } from '@app/web/i18n/errors';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const priorities = ['low', 'normal', 'high', 'urgent'] as const;
@@ -18,6 +20,11 @@ const reminderCategories = [
   'billing',
   'onboarding',
 ] as const;
+
+async function actionErrorMessage(code: string): Promise<string> {
+  const translate = await getTranslations();
+  return translate(errorMessageKey(code));
+}
 
 export async function createDeadlineTaskAction(formData: FormData): Promise<void> {
   const issueId = text(formData.get('issueId'));
@@ -160,7 +167,7 @@ export async function updateRecurringTaskAction(formData: FormData): Promise<voi
   redirect('/operations/recurring-tasks?updated=saved');
 }
 
-export async function updateReminderPolicyAction(formData: FormData): Promise<void> {
+export async function updateReminderPolicyAction(formData: FormData): Promise<void | string> {
   const organizationId = uuid(formData.get('organizationId'));
   const category = choice(formData.get('category'), reminderCategories);
   const expectedVersion = nonnegativeInteger(formData.get('expectedVersion'));
@@ -178,7 +185,7 @@ export async function updateReminderPolicyAction(formData: FormData): Promise<vo
     offsetsDays.length > 8 ||
     offsetsDays.some((day) => day < 0 || day > 365)
   )
-    redirect('/operations/reminder-settings?error=OPERATIONS_INVALID_INPUT');
+    return actionErrorMessage('OPERATIONS_INVALID_INPUT');
   const api = await getApiClient();
   const { error } = await api.PUT('/api/v1/operations/reminder-settings', {
     params: { header: await getTenantHeader() },
@@ -192,10 +199,7 @@ export async function updateReminderPolicyAction(formData: FormData): Promise<vo
       ...(assignedEmployeeId ? { assignedEmployeeId } : {}),
     },
   });
-  if (error)
-    redirect(
-      `/operations/reminder-settings?organizationId=${organizationId}&error=${encodeURIComponent(error.code)}`,
-    );
+  if (error) return actionErrorMessage(error.code);
   revalidateOperations();
   redirect(`/operations/reminder-settings?organizationId=${organizationId}&updated=saved`);
 }

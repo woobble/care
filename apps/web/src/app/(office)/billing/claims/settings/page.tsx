@@ -12,7 +12,7 @@ import { DataPagination } from '@app/web/components/data-pagination';
 import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { EmptyState } from '@app/web/components/page-patterns';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { ClearableSuccessNotice, RHFActionForm } from '@app/web/components/rhf-action-form';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
@@ -160,8 +160,16 @@ export default async function ClaimsSettingsPage({
           {translate(errorMessageKey(query.error ?? organizationError?.code ?? 'INVALID_REQUEST'))}
         </Alert>
       ) : null}
-      {query.updated === 'payer-saved' ? <Status>{t('payerDirectorySaved')}</Status> : null}
-      {query.updated === 'profile-saved' ? <Status>{t('payerProfileSaved')}</Status> : null}
+      {query.updated === 'payer-saved' ? (
+        <ClearableSuccessNotice>
+          <Status>{t('payerDirectorySaved')}</Status>
+        </ClearableSuccessNotice>
+      ) : null}
+      {query.updated === 'profile-saved' ? (
+        <ClearableSuccessNotice>
+          <Status>{t('payerProfileSaved')}</Status>
+        </ClearableSuccessNotice>
+      ) : null}
       {!canRead ? <Alert>{t('noClaimsPermission')}</Alert> : null}
       {!canManage ? <Alert>{t('noClaimsSettingsPermission')}</Alert> : null}
       <form
@@ -231,7 +239,7 @@ export default async function ClaimsSettingsPage({
                   </p>
                 </div>
                 {canManage ? (
-                  <form
+                  <RHFActionForm
                     action={updatePayerDirectoryEntryAction}
                     className="grid gap-3 border-t pt-3 md:grid-cols-2"
                   >
@@ -242,7 +250,7 @@ export default async function ClaimsSettingsPage({
                     <Button type="submit" className="w-fit md:col-span-2">
                       {t('savePayer')}
                     </Button>
-                  </form>
+                  </RHFActionForm>
                 ) : null}
                 <div className="grid gap-2 border-t pt-3">
                   <h4 className="font-semibold">{t('payerRequirementProfiles')}</h4>
@@ -442,7 +450,7 @@ export default async function ClaimsSettingsPage({
             <p className="text-sm text-muted-foreground">{t('payersEmpty')}</p>
           ) : null}
           {canManage ? (
-            <form
+            <RHFActionForm
               action={createPayerDirectoryEntryAction}
               className="grid gap-3 border-t pt-4 md:grid-cols-2"
             >
@@ -452,7 +460,7 @@ export default async function ClaimsSettingsPage({
               <Button type="submit" className="w-fit md:col-span-2">
                 {t('createPayer')}
               </Button>
-            </form>
+            </RHFActionForm>
           ) : null}
         </section>
       ) : canRead && !query.organizationId ? (

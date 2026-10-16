@@ -674,10 +674,75 @@ describe('billing PostgreSQL integration', () => {
         amountCents: 1_000,
         supersedesClaimId: claim.claim.id,
       });
+      const rejectedPrepared = await claims.prepare(
+        principal,
+        resubmitted.claim.id,
+        resubmitted.claim.version,
+        request,
+        {},
+      );
+      const rejectedSubmitted = await claims.submit(
+        principal,
+        resubmitted.claim.id,
+        {
+          expectedVersion: rejectedPrepared.claim.version,
+          externalReference: 'EXTERNAL-CLAIM-REJECTED',
+        },
+        request,
+        {},
+      );
+      const rejectedLine = rejectedSubmitted.lines[0];
+      if (!rejectedLine) throw new Error('Resubmitted claim line was not persisted');
+      const rejected = await claims.recordDecision(
+        principal,
+        resubmitted.claim.id,
+        {
+          expectedVersion: rejectedSubmitted.claim.version,
+          decision: 'rejected',
+          decisionDate: serviceDate,
+          acceptedCents: 0,
+          rejectedCents: rejectedSubmitted.claim.amountCents,
+          reasonCode: 'FULL_REJECTION',
+          lines: [
+            {
+              claimLineId: rejectedLine.id,
+              acceptedCents: 0,
+              rejectedCents: rejectedLine.amountCents,
+            },
+          ],
+        },
+        request,
+        {},
+      );
+      expect(rejected.claim).toMatchObject({
+        status: 'rejected',
+        amountCents: rejectedPrepared.claim.amountCents,
+      });
+      expect(rejected.decisions.at(-1)).toMatchObject({
+        decision: 'rejected',
+        acceptedCents: 0,
+        rejectedCents: rejectedPrepared.claim.amountCents,
+      });
+      const correctedAfterRejection = await claims.resubmit(
+        principal,
+        rejected.claim.id,
+        rejected.claim.version,
+        request,
+        {},
+      );
+      expect(correctedAfterRejection.claim).toMatchObject({
+        status: 'draft',
+        amountCents: rejected.claim.amountCents,
+        supersedesClaimId: rejected.claim.id,
+      });
       expect(await claims.listClaims(principal, { group: 'preparation' })).toMatchObject({
         total: 1,
         summary: { needsPreparation: 1, requiresAction: 0 },
       });
+      const rejectedClaimHistory = await claims.history(principal, rejected.claim.id);
+      expect(rejectedClaimHistory.entries.map((entry) => entry.type)).toEqual(
+        expect.arrayContaining(['submitted', 'decision', 'resubmitted']),
+      );
       const claimHistory = await claims.history(principal, claim.claim.id);
       expect(claimHistory.entries.map((entry) => entry.type)).toEqual(
         expect.arrayContaining(['submitted', 'decision', 'resubmitted']),

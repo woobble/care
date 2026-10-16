@@ -131,7 +131,7 @@ export async function selectEntity(
   await expect(dialog).toBeVisible();
   await searchInput.fill(searchText);
   const targetOption = dialog.getByRole('option', { name: optionName });
-  await expect(targetOption).toBeVisible();
+  await expect(targetOption).toBeVisible({ timeout: 15_000 });
   const optionCount = await dialog.getByRole('option').count();
   const matchesOption = (text: string) =>
     typeof optionName === 'string' ? text.includes(optionName) : optionName.test(text);

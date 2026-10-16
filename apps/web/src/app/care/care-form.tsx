@@ -109,10 +109,9 @@ export function CareForm({
     [],
   );
 
-  function persist(form: HTMLFormElement) {
+  function persist(form: HTMLFormElement, data = new FormData(form)) {
     if (!prefix || !draft) return;
     try {
-      const data = new FormData(form);
       const values: Record<string, string> = {};
       for (const name of draft.fields) {
         const value = data.get(name);
@@ -168,7 +167,7 @@ export function CareForm({
     }
   }
 
-  function beforeSubmit(form: HTMLFormElement) {
+  function beforeSubmit(form: HTMLFormElement, data: FormData) {
     if (!navigator.onLine) {
       setFormState('offline');
       return false;
@@ -181,7 +180,7 @@ export function CareForm({
       button.disabled = true;
     }
     if (prefix && draftKey) {
-      persist(form);
+      persist(form, data);
       try {
         window.sessionStorage.setItem(submittedMarkerPrefix + prefix, '1');
       } catch {
@@ -197,6 +196,16 @@ export function CareForm({
       }
     }, 15_000);
     return true;
+  }
+
+  function handleActionError() {
+    if (submissionTimer.current) clearTimeout(submissionTimer.current);
+    setFormState('uncertain');
+    for (const button of pendingFormRef.current?.querySelectorAll<HTMLButtonElement>(
+      'button[type="submit"],input[type="submit"]',
+    ) ?? []) {
+      button.disabled = false;
+    }
   }
 
   const statusText =
@@ -219,6 +228,7 @@ export function CareForm({
       key={draft?.revision}
       action={action}
       className={className}
+      onActionError={handleActionError}
       onInput={(event) => persist(event.currentTarget)}
       onChange={(event) => persist(event.currentTarget)}
       beforeAction={beforeSubmit}

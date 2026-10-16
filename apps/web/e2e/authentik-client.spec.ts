@@ -837,7 +837,7 @@ test('Office staff can configure services, clients, benefits, and agreements', a
       page.getByRole('status').filter({ hasText: 'Payer arrangement saved.' }),
     ).toBeVisible();
 
-    await page.goto('/billing/settings');
+    await page.goto('/billing/settings', { waitUntil: 'domcontentloaded' });
     const billingProfileSection = page.getByRole('region', { name: e2eOrganizationName });
     await billingProfileSection
       .locator('input[name="bankAccountHolder"]')

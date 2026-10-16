@@ -3,6 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import {
   createElement,
   useEffect,
@@ -198,6 +199,7 @@ function collectErrorMessages(value: unknown): string[] {
 export function RHFActionForm({
   action,
   beforeAction,
+  onActionError,
   onChange,
   errorMessage,
   warnOnUnsavedChanges = false,
@@ -207,6 +209,7 @@ export function RHFActionForm({
 }: Omit<FormHTMLAttributes<HTMLFormElement>, 'action' | 'onSubmit' | 'onChange'> & {
   action: ServerAction;
   beforeAction?: (form: HTMLFormElement, data: FormData) => boolean | Promise<boolean>;
+  onActionError?: () => void;
   onChange?: FormHTMLAttributes<HTMLFormElement>['onChange'];
   errorMessage?: ReactNode;
   warnOnUnsavedChanges?: boolean;
@@ -336,11 +339,18 @@ export function RHFActionForm({
     const form = formRef.current;
     if (!form) return;
     if (beforeAction && !(await beforeAction(form, data))) return;
+    window.dispatchEvent(new Event('care:server-action-start'));
     startActionTransition(async () => {
       // Keep redirect signals inside the transition so Next can handle server-action navigation.
-      const result = await action(data);
-      setActionFailure(result === false || typeof result === 'string' ? result : null);
-      if (result !== false && refreshOnSuccess) router.refresh();
+      try {
+        const result = await action(data);
+        setActionFailure(result === false || typeof result === 'string' ? result : null);
+        if (result !== false && refreshOnSuccess) router.refresh();
+      } catch (error) {
+        if (isRedirectError(error)) throw error;
+        setActionFailure(onActionError ? null : t('actionFailed'));
+        onActionError?.();
+      }
     });
   }
 
@@ -424,7 +434,8 @@ export function RHFActionForm({
             role="alert"
             className="rounded-md border border-destructive/30 bg-destructive/10 p-3"
           >
-            {errorMessage ?? t('actionFailed')}
+            {errorMessage ??
+              (typeof actionFailure === 'string' ? actionFailure : t('actionFailed'))}
           </div>
         ) : null}
         {collectErrorMessages(methods.formState.errors).length ? (
@@ -442,6 +453,25 @@ export function RHFActionForm({
       </form>
     </FormProvider>
   );
+}
+
+export function ClearableSuccessNotice({ children }: Readonly<{ children: ReactNode }>) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const clearNotice = () => {
+      setVisible(false);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('updated');
+      url.searchParams.delete('notice');
+      window.history.replaceState(window.history.state, '', url);
+    };
+
+    window.addEventListener('care:server-action-start', clearNotice);
+    return () => window.removeEventListener('care:server-action-start', clearNotice);
+  }, []);
+
+  return visible ? children : null;
 }
 
 type RHFFieldProps = {

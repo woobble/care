@@ -58,16 +58,18 @@ export async function createUnlinkedCaregiverIdentity(
   database: Client,
   office: OfficeAdminSession,
   page: Page,
+  identitySuffix = '',
 ): Promise<CaregiverIdentity> {
   const issuer = required('OIDC_ISSUER');
   const authentikOrigin = new URL(issuer).origin;
   const apiToken = required('AUTHENTIK_E2E_API_TOKEN');
-  const username = `caregiver-e2e-${office.runId}`;
+  const identityLabel = identitySuffix ? ` ${identitySuffix}` : '';
+  const username = `caregiver-e2e-${office.runId}${identitySuffix ? `-${identitySuffix}` : ''}`;
   const email = `${username}@example.test`;
   const password = `Aa1!${uuidv7()}`;
   const authentikUser = await createAuthentikUser(authentikOrigin, apiToken, {
     username,
-    name: `Caregiver E2E ${office.runId}`,
+    name: `Caregiver E2E ${office.runId}${identityLabel}`,
     email,
     password,
     emailVerified: true,
@@ -139,9 +141,10 @@ export async function createUnlinkedCaregiverIdentity(
 export async function cleanupLifecycleScenario(
   database: Client,
   scenario: LifecycleScenario,
-  options: { preserveBillingHistory?: boolean } = {},
+  options: { preserveBillingHistory?: boolean; additionalEmployeeIds?: string[] } = {},
 ): Promise<void> {
   if (options.preserveBillingHistory) return;
+  const additionalEmployeeIds = options.additionalEmployeeIds ?? [];
   await database.query('BEGIN');
   try {
     await database.query("SELECT set_config('app.tenant_id', $1, true)", [scenario.tenantId]);
@@ -172,6 +175,7 @@ export async function cleanupLifecycleScenario(
       scenario.clientId,
       scenario.serviceId,
       scenario.agreementId,
+      ...additionalEmployeeIds,
       ...visitIds,
       ...executionIds,
       ...documentationIds,
@@ -249,6 +253,10 @@ export async function cleanupLifecycleScenario(
     }
     if (visitIds.length) {
       await database.query(
+        'DELETE FROM scheduling.visit_substitutions WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
+        [scenario.tenantId, visitIds],
+      );
+      await database.query(
         'DELETE FROM scheduling.visit_assignments WHERE tenant_id = $1 AND visit_id = ANY($2::uuid[])',
         [scenario.tenantId, visitIds],
       );
@@ -259,6 +267,28 @@ export async function cleanupLifecycleScenario(
       await database.query(
         'DELETE FROM scheduling.visits WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
         [scenario.tenantId, visitIds],
+      );
+    }
+    await database.query(
+      'DELETE FROM scheduling.employee_unavailability WHERE tenant_id = $1 AND employee_id = $2',
+      [scenario.tenantId, scenario.employeeId],
+    );
+    if (additionalEmployeeIds.length) {
+      await database.query(
+        'DELETE FROM scheduling.employee_unavailability WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[])',
+        [scenario.tenantId, additionalEmployeeIds],
+      );
+      await database.query(
+        'DELETE FROM employees.employee_team_memberships WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[])',
+        [scenario.tenantId, additionalEmployeeIds],
+      );
+      await database.query(
+        'DELETE FROM employees.employee_facility_assignments WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[])',
+        [scenario.tenantId, additionalEmployeeIds],
+      );
+      await database.query(
+        'DELETE FROM employees.employees WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+        [scenario.tenantId, additionalEmployeeIds],
       );
     }
     await database.query(
@@ -459,7 +489,7 @@ export async function cleanupAdmissionCase(
 export async function seedLifecycleScenario(
   database: Client,
   office: OfficeAdminSession,
-  options: { visit?: 'planned' | 'completed' } = {},
+  options: { visit?: 'planned' | 'completed'; visitDate?: string } = {},
 ): Promise<LifecycleScenario> {
   const runId = office.runId;
   const now = new Date();
@@ -483,6 +513,7 @@ export async function seedLifecycleScenario(
   const clientName = `Agreement E2E ${runId}`;
   const employeeName = `E2E ${runId}`;
   const serviceDate = dateInBerlin();
+  const scheduledVisitDate = options.visitDate ?? serviceDate;
 
   await database.query('BEGIN');
   try {
@@ -687,7 +718,7 @@ export async function seedLifecycleScenario(
                  ($6::date + time '09:00') AT TIME ZONE 'Europe/Berlin',
                  ($6::date + time '10:00') AT TIME ZONE 'Europe/Berlin',
                  'Europe/Berlin', $7, $7)`,
-        [visitId, office.tenantId, clientId, organizationId, facilityId, serviceDate, now],
+        [visitId, office.tenantId, clientId, organizationId, facilityId, scheduledVisitDate, now],
       );
       await database.query(
         `INSERT INTO scheduling.visit_services
@@ -710,7 +741,7 @@ export async function seedLifecycleScenario(
         evidencePackageId = uuidv7();
         const scheduledTime = await database.query<{ starts_at: Date }>(
           `SELECT ($1::date + time '09:00') AT TIME ZONE 'Europe/Berlin' AS starts_at`,
-          [serviceDate],
+          [scheduledVisitDate],
         );
         const executionStart = scheduledTime.rows[0]?.starts_at;
         if (!executionStart) throw new Error('The test visit did not receive a planned start time');
