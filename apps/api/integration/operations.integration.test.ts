@@ -319,6 +319,7 @@ describe('operations PostgreSQL/API integration', () => {
         'operations.recurring_tasks.manage',
       ];
       for (const permission of permissions) {
+        // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
         await owner.query(
           'INSERT INTO identity.role_permissions (role_id, permission) VALUES ($1, $2)',
           [roleId, permission],

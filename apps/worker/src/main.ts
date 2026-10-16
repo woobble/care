@@ -356,6 +356,7 @@ async function main(): Promise<void> {
           }
         }
         // oxlint-enable no-await-in-loop
+        // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
         const tenantsToProcess = await database.db
           .select({ id: tenants.id })
           .from(tenants)
@@ -426,6 +427,7 @@ async function main(): Promise<void> {
           health.lastScheduledSuccessAt = new Date();
           workerMetrics.recordSchedulerRun('success');
         }
+        // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
         await persistHealth();
       } catch (error) {
         health.schedulerStatus = 'degraded';
@@ -434,6 +436,7 @@ async function main(): Promise<void> {
         workerMetrics.recordOutboxFailure('poll');
         logger.error({ errorName: safeErrorName(error) }, 'Worker polling failed');
         try {
+          // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
           await persistHealth();
         } catch (healthError) {
           logger.error(

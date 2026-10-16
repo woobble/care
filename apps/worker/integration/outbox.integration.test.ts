@@ -85,6 +85,7 @@ test('worker dispatches an outbox event before marking it delivered', async () =
 
     let delivered = false;
     for (let attempt = 0; attempt < 100; attempt += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
       const result = await owner.query<{ id: string; status: string }>(
         'SELECT id, status FROM platform.outbox_messages WHERE id = ANY($1::uuid[])',
         [events.map((event) => event.id)],
@@ -94,9 +95,11 @@ test('worker dispatches an outbox event before marking it delivered', async () =
         result.rows.every((row) => row.status === 'delivered');
       if (delivered) break;
       if (worker.exitCode !== null) {
+        // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
         const stderr = await new Response(worker.stderr).text();
         throw new Error(`Outbox worker exited with ${worker.exitCode}: ${stderr}`);
       }
+      // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
     }
     expect(delivered).toBe(true);

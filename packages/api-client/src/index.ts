@@ -61,8 +61,11 @@ export function createCareApi(options: ApiClientOptions) {
   const sdk = Object.fromEntries(
     Object.entries(generatedSdk).map(([name, operation]) => [
       name,
-      (options: Record<string, unknown> = {}) =>
-        (operation as (options: Record<string, unknown>) => unknown)({ ...options, client }),
+      (operationOptions: Record<string, unknown> = {}) =>
+        (operation as (options: Record<string, unknown>) => unknown)({
+          ...operationOptions,
+          client,
+        }),
     ]),
   ) as unknown as {
     [K in keyof typeof generatedSdk]: (

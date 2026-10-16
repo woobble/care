@@ -448,6 +448,7 @@ export class OperationsRecurrenceApplicationService {
         let tasksCreated = 0;
         for (const definition of definitions) {
           if (tasksCreated >= MAX_TASKS_PER_RUN) break;
+          // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
           tasksCreated += await this.generateForDefinition(
             transaction,
             definition,
@@ -572,6 +573,7 @@ export class OperationsRecurrenceApplicationService {
       if (occurrence.dueAt < now && shouldSkipMissed(definition, occurrence.dueAt, now)) {
         cursor = occurrence.date;
       } else {
+        // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
         const [existing] = await transaction
           .select({ id: recurringTaskOccurrences.id })
           .from(recurringTaskOccurrences)
@@ -584,6 +586,7 @@ export class OperationsRecurrenceApplicationService {
           )
           .limit(1);
         if (!existing) {
+          // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
           generated += await this.createOccurrence(transaction, definition, occurrence);
         }
         cursor = occurrence.date;

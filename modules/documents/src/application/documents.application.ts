@@ -1060,6 +1060,7 @@ export class DocumentsApplicationService {
           documentType: documentArtifacts.documentType,
         });
       for (const previous of superseded) {
+        // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
         await this.outbox.enqueue(
           transaction,
           createDomainEvent({

@@ -441,7 +441,7 @@ describe('clients API', () => {
       });
       expect(
         ((await updatedAddresses.json()) as Array<{ street: string; isPrimary: boolean }>).filter(
-          (address) => address.isPrimary,
+          (clientAddress) => clientAddress.isPrimary,
         ),
       ).toHaveLength(1);
 
@@ -1925,6 +1925,7 @@ describe('clients API', () => {
       );
       expect(cancelledVisit.status).toBe(200);
       for (const visit of generatedVisitPage.items.slice(1)) {
+        // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
         const response = await fetch(`${baseUrl}/api/v1/visits/${visit.id}/cancel`, {
           method: 'POST',
           headers,
@@ -2438,7 +2439,7 @@ describe('clients API', () => {
         status: string;
       }>;
       const revokedAssignment = revokedAssignmentRows.find(
-        (assignment) => assignment.status === 'active',
+        (caregiverAssignment) => caregiverAssignment.status === 'active',
       );
       if (!revokedAssignment) throw new Error('Execution visit has no active caregiver assignment');
       const removeCaregiverAssignment = await fetch(
@@ -2618,8 +2619,10 @@ describe('clients API', () => {
         },
       ];
       for (const { response: archiveResponse, code } of executionArchiveChecks) {
+        // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
         const response = await archiveResponse;
         expect(response.status).toBe(409);
+        // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
         expect((await response.json()).code).toBe(code);
       }
 
@@ -3278,7 +3281,7 @@ describe('clients API', () => {
       };
       documentationVersion = plannedEvidenceDetail.documentation.version;
       const plannedEvidenceId = plannedEvidenceDetail.services.find(
-        (service) => service.performedServiceId === performedServiceId,
+        (evidenceService) => evidenceService.performedServiceId === performedServiceId,
       )!.evidence!.id;
       expect(plannedEvidenceId[14]).toBe('7');
       expect(plannedEvidenceDetail.services).toEqual(
@@ -3400,7 +3403,7 @@ describe('clients API', () => {
       };
       documentationVersion = completeDocumentationDetail.documentation.version;
       const unplannedEvidenceId = completeDocumentationDetail.services.find(
-        (service) => service.performedServiceId === unplannedPerformedServiceId,
+        (evidenceService) => evidenceService.performedServiceId === unplannedPerformedServiceId,
       )!.evidence!.id;
       expect(unplannedEvidenceId[14]).toBe('7');
       expect(completeDocumentationDetail).toMatchObject({
@@ -4254,6 +4257,7 @@ describe('clients API', () => {
       ).rejects.toMatchObject({ code: '42501' });
       await appRole.query('ROLLBACK TO SAVEPOINT before_documentation_cross_tenant_write');
       for (const [table, referenceColumn] of documentationRlsTables) {
+        // oxlint-disable no-await-in-loop -- Keep the table assertions ordered within the transaction.
         expect(
           (
             await appRole.query(
@@ -4263,6 +4267,7 @@ describe('clients API', () => {
             )
           ).rowCount,
         ).toBe(0);
+        // oxlint-enable no-await-in-loop
       }
       await appRole.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
       expect(
@@ -4273,6 +4278,7 @@ describe('clients API', () => {
         ).rowCount,
       ).toBe(1);
       for (const [table, referenceColumn] of documentationRlsTables) {
+        // oxlint-disable no-await-in-loop -- Keep the table assertions ordered within the transaction.
         expect(
           (
             await appRole.query(
@@ -4282,6 +4288,7 @@ describe('clients API', () => {
             )
           ).rowCount,
         ).toBeGreaterThan(0);
+        // oxlint-enable no-await-in-loop
       }
       await appRole.query('COMMIT');
 
@@ -4884,7 +4891,9 @@ describe('clients API', () => {
         facilityAssignments: Array<{ facilityId: string; isPrimary: boolean; status: string }>;
       };
       expect(
-        promotedFacility.facilityAssignments.filter((assignment) => assignment.status === 'active'),
+        promotedFacility.facilityAssignments.filter(
+          (facilityAssignment) => facilityAssignment.status === 'active',
+        ),
       ).toEqual([
         expect.objectContaining({
           facilityId: workforceFacilityB.id,

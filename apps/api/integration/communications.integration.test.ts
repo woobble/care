@@ -166,6 +166,7 @@ describe('communications and onboarding PostgreSQL/API integration', () => {
         'service_agreement.read',
       ];
       for (const permission of permissions) {
+        // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
         await owner.query(
           'INSERT INTO identity.role_permissions (role_id, permission) VALUES ($1, $2)',
           [roleId, permission],
@@ -199,6 +200,7 @@ describe('communications and onboarding PostgreSQL/API integration', () => {
         'Other tenant communications integration',
       ]);
       for (const permission of ['client.read', 'communications.read', 'communications.create']) {
+        // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
         await owner.query(
           'INSERT INTO identity.role_permissions (role_id, permission) VALUES ($1, $2)',
           [otherTenantRoleId, permission],
@@ -715,6 +717,7 @@ describe('communications and onboarding PostgreSQL/API integration', () => {
       expect(assessmentResponse.status).toBe(200);
       let activationCaseVersion = activationCase.version + 1;
       for (const toStage of ['assessment', 'preparation', 'ready_for_admission'] as const) {
+        // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
         const transitionResponse = await fetch(
           `${baseUrl}/api/v1/onboarding/cases/${activationCase.id}/transitions`,
           {

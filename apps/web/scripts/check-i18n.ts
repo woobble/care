@@ -65,12 +65,14 @@ async function scan(directory: string): Promise<void> {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {
+      // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
       await scan(path);
       continue;
     }
     if (!entry.name.endsWith('.tsx')) continue;
     if (pathFilter && !path.includes(pathFilter)) continue;
 
+    // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
     const source = await readFile(path, 'utf8');
     const report = (offset: number, value: string) => {
       if (!isUserText(value)) return;

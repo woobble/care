@@ -682,6 +682,7 @@ export class DocumentsController {
       const rows = grouped.get(item.serviceDate) ?? [];
       rows.push({ source: item.source, date: item.serviceDate });
       grouped.set(item.serviceDate, rows);
+      // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
       acknowledgements.push(...(await this.documentAcknowledgements(principal, item.source)));
       for (const service of item.source.snapshot.items) {
         if (service.actualQuantity === null) continue;

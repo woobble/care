@@ -521,7 +521,7 @@ export class BillingClaimsApplicationService {
             : filters.sort === 'status'
               ? sortOrder(claims.status)
               : sortOrder(claims.createdAt);
-        const [countRows, rows, summaryRows] = await Promise.all([
+        const [queryCountRows, queryRows, querySummaryRows] = await Promise.all([
           transaction.select({ total: count() }).from(claims).where(where),
           transaction
             .select()
@@ -545,7 +545,11 @@ export class BillingClaimsApplicationService {
             )
             .groupBy(claims.status),
         ]);
-        return { countRows, rows, summaryRows };
+        return {
+          countRows: queryCountRows,
+          rows: queryRows,
+          summaryRows: querySummaryRows,
+        };
       },
     );
     const pageRows = rows;
@@ -811,8 +815,10 @@ export class BillingClaimsApplicationService {
     for (const [evidencePackageId, lines] of evidenceByPackage) {
       const evidencePackage = lines[0]?.evidencePackage;
       if (!evidencePackage) throw new ClaimSourceInvalidError();
+      // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
       await this.evidence.getPackage(principal, evidencePackageId);
       const payload = evidenceDocumentPayload(facts, lines);
+      // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
       const artifact = await this.documents.generate(
         principal,
         {

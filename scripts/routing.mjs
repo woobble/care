@@ -132,12 +132,15 @@ async function acquireLock() {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     let file;
     try {
+      // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
       file = await open(LOCK_PATH, 'wx', 0o600);
     } catch (error) {
       if (error.code !== 'EEXIST') throw error;
+      // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
       const contents = await readFile(LOCK_PATH, 'utf8').catch(() => '');
       const ownerPid = Number(contents.trim());
       if (!Number.isInteger(ownerPid) || ownerPid < 1) {
+        // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
         await new Promise((resolve) => setTimeout(resolve, 50));
         continue;
       }
@@ -147,17 +150,21 @@ async function acquireLock() {
       } catch (probeError) {
         if (probeError.code !== 'ESRCH') throw probeError;
       }
+      // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
       await rm(LOCK_PATH, { force: true });
       continue;
     }
     try {
+      // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
       await file.writeFile(`${process.pid}\n`);
       return async () => {
         await file.close();
         await rm(LOCK_PATH, { force: true });
       };
     } catch (error) {
+      // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
       await file.close();
+      // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
       await rm(LOCK_PATH, { force: true });
       throw error;
     }
@@ -285,14 +292,14 @@ function pbfRegionPath(value) {
   }
 }
 
-async function runOsrm(datasetDirectory, ...args) {
+async function runOsrm(datasetDirectory, ...dockerArgs) {
   await run('docker', [
     'run',
     '--rm',
     '--volume',
     `${datasetDirectory}:/data`,
     OSRM_IMAGE,
-    ...args,
+    ...dockerArgs,
   ]);
 }
 
@@ -305,6 +312,7 @@ async function assertPreparedDataset(directory, name) {
     '.osrm.properties',
   ]) {
     const filename = path.join(directory, `${name}${suffix}`);
+    // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
     const info = await stat(filename).catch(() => null);
     if (!info?.isFile() || info.size === 0) {
       throw new Error(`OSRM preprocessing did not create ${path.basename(filename)}.`);
@@ -410,6 +418,7 @@ async function removeOldGenerations(activeDirectory) {
       /^generation-[a-f0-9-]{36}$/.test(entry.name) &&
       entry.name !== activeName
     ) {
+      // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
       await rm(path.join(GENERATIONS_ROOT, entry.name), { recursive: true, force: true });
     }
   }
@@ -491,23 +500,25 @@ async function waitForRoute(metadata, port) {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS;
   let lastResult;
   while (Date.now() < deadline) {
+    // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
     lastResult = await checkRoute(metadata, port);
     if (lastResult.ready) return;
     if (!lastResult.retry) {
       throw new Error(`The route probe failed (${lastResult.message}); check its coordinates.`);
     }
+    // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
   throw new Error(`Timed out waiting for OSRM (${lastResult?.message ?? 'no response'}).`);
 }
 
-async function compose(...args) {
-  await run('docker', ['compose', '--profile', 'routing', ...args]);
+async function compose(...composeArgs) {
+  await run('docker', ['compose', '--profile', 'routing', ...composeArgs]);
 }
 
-function run(name, args) {
+function run(name, commandArgs) {
   return new Promise((resolve, reject) => {
-    const child = spawn(name, args, { cwd: ROOT, stdio: 'inherit' });
+    const child = spawn(name, commandArgs, { cwd: ROOT, stdio: 'inherit' });
     child.once('error', (error) => {
       if (error.code === 'ENOENT') {
         reject(

@@ -461,9 +461,9 @@ export default async function ClaimDetailPage({
           <p className="text-sm text-success-foreground">{t('claimReady')}</p>
         ) : readiness?.blockers.length ? (
           <ul className="grid gap-2">
-            {readiness.blockers.map((blocker, index) => (
+            {readiness.blockers.map((blocker) => (
               <li
-                key={blocker.code + '-' + index}
+                key={JSON.stringify(blocker)}
                 className="rounded-md border border-warning/40 bg-warning-muted p-3 text-sm text-warning-foreground"
               >
                 <strong>{readinessFieldLabel(t, blocker.field)}</strong>: {blocker.detail}
@@ -958,8 +958,8 @@ export default async function ClaimDetailPage({
         </h2>
         {history?.entries.length ? (
           <ol className="grid gap-2">
-            {history.entries.map((entry, index) => (
-              <li key={entry.type + '-' + index} className="rounded-md border p-3 text-sm">
+            {history.entries.map((entry) => (
+              <li key={JSON.stringify(entry)} className="rounded-md border p-3 text-sm">
                 <strong>{historyLabel(t, entry.type)}</strong> ·{' '}
                 {formatDateTime(entry.at, locale as Locale) ?? entry.at}
                 {typeof entry.submissionNumber === 'number' ? ' · #' + entry.submissionNumber : ''}

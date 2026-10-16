@@ -331,6 +331,7 @@ async function waitForPlatformUser(
   subject: string,
 ): Promise<string> {
   for (let attempt = 0; attempt < 60; attempt += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
     const result = await database.query<{ id: string }>(
       `SELECT users.id
        FROM identity.external_identities
@@ -339,6 +340,7 @@ async function waitForPlatformUser(
       [issuer, subject],
     );
     if (result.rows[0]) return result.rows[0].id;
+    // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
     await new Promise((resolveWait) => setTimeout(resolveWait, 500));
   }
   throw new Error('Authentik login did not provision the platform identity');

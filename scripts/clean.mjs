@@ -12,6 +12,7 @@ for (const group of workspaceGroups) {
   let entries;
 
   try {
+    // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
     entries = await readdir(groupPath, { withFileTypes: true });
   } catch (error) {
     if (error.code === 'ENOENT') continue;
@@ -31,6 +32,7 @@ const failures = [];
 
 for (const target of targets) {
   try {
+    // oxlint-disable-next-line no-await-in-loop -- Preserve sequential file and process operations.
     await rm(target, { recursive: true, force: true });
   } catch (error) {
     if (error.code !== 'EACCES' && error.code !== 'EPERM') throw error;

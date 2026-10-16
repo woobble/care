@@ -51,6 +51,8 @@ test('Office staff can review documents and record linked communications with fo
   let tenantId: string | undefined;
   let platformUserId: string | undefined;
   let membershipId: string | undefined;
+  let cleanupFailed = false;
+  let cleanupError: unknown;
 
   await database.connect();
   try {
@@ -396,8 +398,9 @@ test('Office staff can review documents and record linked communications with fo
         ]);
         await database.query('COMMIT');
       } catch (error) {
-        await database.query('ROLLBACK');
-        throw error;
+        cleanupFailed = true;
+        cleanupError = error;
+        await database.query('ROLLBACK').catch(() => undefined);
       }
     }
     if (platformUserId) {
@@ -432,6 +435,7 @@ test('Office staff can review documents and record linked communications with fo
       method: 'DELETE',
     }).catch(() => undefined);
   }
+  if (cleanupFailed) throw cleanupError;
   expect(testInfo.status).toBe('passed');
 });
 
@@ -580,6 +584,7 @@ async function waitForPlatformUser(
   subject: string,
 ): Promise<{ id: string }> {
   for (let attempt = 0; attempt < 60; attempt += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
     const result = await database.query<{ id: string }>(
       `SELECT users.id FROM identity.external_identities
        JOIN identity.users ON users.id = external_identities.user_id
@@ -587,6 +592,7 @@ async function waitForPlatformUser(
       [issuer, subject],
     );
     if (result.rows[0]) return result.rows[0];
+    // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
     await new Promise((resolveWait) => setTimeout(resolveWait, 500));
   }
   throw new Error('Authentik login did not provision the platform identity');

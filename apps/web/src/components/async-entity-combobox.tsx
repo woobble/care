@@ -191,6 +191,8 @@ export function AsyncEntityCombobox({
     open,
     organizationId,
     query,
+    // Retry count intentionally restarts this effect after a failed search.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
     retryCount,
     validAt,
     validFrom,

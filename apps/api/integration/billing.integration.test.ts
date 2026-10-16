@@ -154,6 +154,7 @@ describe('billing PostgreSQL integration', () => {
       ]) {
         fixtures.push({
           key: item.key,
+          // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
           fixture: await insertBillableService(owner, {
             tenantId,
             organizationId,
@@ -173,6 +174,7 @@ describe('billing PostgreSQL integration', () => {
         fixtures.map((item) => [item.key, item.fixture]),
       ) as Record<'main' | 'small' | 'concurrent' | 'large', BillableFixture>;
       for (const { fixture } of fixtures) {
+        // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
         await evidence.prepare(principal, fixture.visitId, request, {});
       }
 

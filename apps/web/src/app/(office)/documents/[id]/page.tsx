@@ -223,6 +223,7 @@ export default async function DocumentDetailPage({
               <iframe
                 title={`${t('detail.preview')}: ${title}`}
                 src={`/documents/${artifact.id}/preview`}
+                sandbox=""
                 className="h-[65vh] min-h-[28rem] w-full rounded-md border bg-muted"
               />
               <p className="text-sm text-muted-foreground">

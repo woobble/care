@@ -906,13 +906,13 @@ export class BillingApplicationService {
         const organizations = billingReadGrants
           .filter((grant) => grant.scopeType === 'organization')
           .map((grant) => grant.scopeId);
-        const facilities = billingReadGrants
+        const facilityScopeIds = billingReadGrants
           .filter((grant) => grant.scopeType === 'facility')
           .map((grant) => grant.scopeId);
         where.push(
           or(
             ...(organizations.length ? [inArray(visits.organizationId, organizations)] : []),
-            ...(facilities.length ? [inArray(visits.facilityId, facilities)] : []),
+            ...(facilityScopeIds.length ? [inArray(visits.facilityId, facilityScopeIds)] : []),
           ) ?? sql`false`,
         );
       }
@@ -1036,6 +1036,7 @@ export class BillingApplicationService {
         if (!can(principal, { action: 'billing.read', resource })) continue;
         let profile = profiles.get(row.organizationId);
         if (profile === undefined) {
+          // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
           profile = await this.profileForOrganization(
             transaction,
             principal.tenantId,
@@ -1043,6 +1044,7 @@ export class BillingApplicationService {
           );
           profiles.set(row.organizationId, profile);
         }
+        // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
         output.push(...(await this.candidatesForService(transaction, principal, row, profile)));
       }
       const items = output.filter(
@@ -1380,6 +1382,7 @@ export class BillingApplicationService {
       ]);
       const result: BillingInvoiceView[] = [];
       for (const invoice of rows) {
+        // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
         result.push(await this.invoiceView(transaction, principal, invoice));
       }
       const total = Number(countRows[0]?.total ?? 0);
@@ -1408,21 +1411,21 @@ export class BillingApplicationService {
     principal: AuthorizationPrincipal,
     filters: BillingExportFilters,
   ): Promise<BillingInvoiceView[]> {
-    const invoices = await this.exportInvoiceViews(principal, filters, false);
+    const invoiceViews = await this.exportInvoiceViews(principal, filters, false);
     if (filters.fundingType) {
-      return invoices.filter((invoice) =>
+      return invoiceViews.filter((invoice) =>
         invoice.lines.some((line) => line.fundingLabelSnapshot === filters.fundingType),
       );
     }
-    return invoices;
+    return invoiceViews;
   }
 
   async exportInvoiceLines(
     principal: AuthorizationPrincipal,
     filters: BillingExportFilters,
   ): Promise<Array<{ invoice: BillingInvoiceView; line: typeof invoiceLines.$inferSelect }>> {
-    const invoices = await this.exportInvoiceViews(principal, filters, false);
-    const rows = invoices.flatMap((invoice) =>
+    const invoiceViews = await this.exportInvoiceViews(principal, filters, false);
+    const rows = invoiceViews.flatMap((invoice) =>
       invoice.lines
         .filter((line) => !filters.fundingType || line.fundingLabelSnapshot === filters.fundingType)
         .map((line) => ({ invoice, line })),
@@ -1545,6 +1548,7 @@ export class BillingApplicationService {
           })
         )
           continue;
+        // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
         const view = await this.invoiceView(transaction, principal, invoice);
         if (!outstandingOnly || (view.outstandingCents !== null && view.outstandingCents > 0)) {
           result.push(view);
@@ -2470,7 +2474,7 @@ export class BillingApplicationService {
           invoice.facilityId,
         );
         if (invoice.status !== 'issued') throw new InvoiceInvalidStateError();
-        const [document] = await transaction
+        const [invoiceDocument] = await transaction
           .select()
           .from(invoiceDocuments)
           .where(
@@ -2483,11 +2487,11 @@ export class BillingApplicationService {
           )
           .orderBy(desc(invoiceDocuments.documentVersion))
           .limit(1);
-        if (!document?.objectKey) throw new InvoicePdfNotReadyError();
+        if (!invoiceDocument?.objectKey) throw new InvoicePdfNotReadyError();
         return {
           fileName: `${safeFilePart(invoice.invoiceNumber ?? invoice.id)}.pdf`,
-          objectKey: document.objectKey,
-          sha256: document.sha256,
+          objectKey: invoiceDocument.objectKey,
+          sha256: invoiceDocument.sha256,
         };
       },
     );
@@ -2829,7 +2833,7 @@ export class BillingApplicationService {
           )
           .limit(1);
         if (!correction) throw new InvoiceNotFoundError();
-        const [document] = await transaction
+        const [invoiceDocument] = await transaction
           .select()
           .from(invoiceDocuments)
           .where(
@@ -2842,11 +2846,11 @@ export class BillingApplicationService {
           )
           .orderBy(desc(invoiceDocuments.documentVersion))
           .limit(1);
-        if (!document?.objectKey) throw new InvoicePdfNotReadyError();
+        if (!invoiceDocument?.objectKey) throw new InvoicePdfNotReadyError();
         return {
           fileName: `${safeFilePart(correction.correctionNumber)}.pdf`,
-          objectKey: document.objectKey,
-          sha256: document.sha256,
+          objectKey: invoiceDocument.objectKey,
+          sha256: invoiceDocument.sha256,
         };
       },
     );
@@ -2895,6 +2899,7 @@ export class BillingApplicationService {
       );
       let profile = profiles.get(row.organizationId);
       if (profile === undefined) {
+        // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
         profile = await this.profileForOrganization(
           transaction,
           principal.tenantId,
@@ -2902,6 +2907,7 @@ export class BillingApplicationService {
         );
         profiles.set(row.organizationId, profile);
       }
+      // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
       const choices = await this.candidatesForService(
         transaction,
         principal,
@@ -3304,6 +3310,7 @@ export class BillingApplicationService {
       );
       const visitIds = [...new Set(sourceRows.map((row) => row.visitId))];
       for (const visitId of visitIds) {
+        // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
         const readiness = await this.evidence.getBillingReadiness(
           transaction,
           invoice.tenantId,
@@ -3933,6 +3940,7 @@ export class BillingApplicationService {
 
       let arrangement: typeof payerArrangements.$inferSelect | null = null;
       if (slice.allocation) {
+        // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
         arrangement = await this.activeDirectArrangement(
           transaction,
           principal.tenantId,
@@ -4366,12 +4374,12 @@ function billingScopeConditions(
   const organizations = grants
     .filter((grant) => grant.scopeType === 'organization')
     .map((grant) => grant.scopeId);
-  const facilities = grants
+  const facilityScopeIds = grants
     .filter((grant) => grant.scopeType === 'facility')
     .map((grant) => grant.scopeId);
   const clauses: SQL[] = [];
   if (organizations.length) clauses.push(inArray(invoices.organizationId, organizations));
-  if (facilities.length) clauses.push(inArray(invoices.facilityId, facilities));
+  if (facilityScopeIds.length) clauses.push(inArray(invoices.facilityId, facilityScopeIds));
   return or(...clauses) ?? null;
 }
 

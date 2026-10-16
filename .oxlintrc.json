@@ -12,5 +12,17 @@
     "react/react-in-jsx-scope": "off",
     "typescript/no-extraneous-class": ["warn", { "allowWithDecorator": true }]
   },
+  "overrides": [
+    {
+      "files": ["apps/web/src/app/**/*.tsx"],
+      "rules": { "react/capitalized-calls": "off" }
+    },
+    {
+      "files": ["packages/ui/src/components/calendar.tsx"],
+      "rules": {
+        "react/no-unstable-nested-components": ["warn", { "allowAsProps": true }]
+      }
+    }
+  ],
   "ignorePatterns": ["**/dist/**", "**/.next/**", "**/src/generated/**"]
 }
