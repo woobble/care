@@ -1,3 +1,37 @@
+import { getLocale, getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+
+import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
+import {
+  archiveServiceAction,
+  recordServicePriceAction,
+  setServiceAvailabilityAction,
+  updateServiceAction,
+} from '@app/web/app/(office)/services/actions';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { formatCurrency, formatDate } from '@app/web/i18n/format';
+import { statusLabelKey, unitLabelKey } from '@app/web/i18n/status';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasPermission,
+  hasClientPermission,
+  hasTenantPermission,
+} from '@app/web/lib/api';
+import { todayDateKey } from '@app/web/lib/care-date';
+import { getFacilitiesByIds } from '@app/web/lib/facility-lookup';
+import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { StatusBadge } from '@care/ui/components/status-badge';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -8,39 +42,6 @@ import {
   TableCaption as ShadcnTableCaption,
 } from '@care/ui/components/table';
 import { Textarea } from '@care/ui/components/textarea';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { StatusBadge } from '@care/ui/components/status-badge';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { ResourceReference } from '@app/web/components/resource-reference';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import { formatCurrency, formatDate } from '@app/web/i18n/format';
-import { statusLabelKey, unitLabelKey } from '@app/web/i18n/status';
-import { todayDateKey } from '@app/web/lib/care-date';
-import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
-import {
-  archiveServiceAction,
-  recordServicePriceAction,
-  setServiceAvailabilityAction,
-  updateServiceAction,
-} from '@app/web/app/(office)/services/actions';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasPermission,
-  hasClientPermission,
-  hasTenantPermission,
-} from '@app/web/lib/api';
-import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
-import { getFacilitiesByIds } from '@app/web/lib/facility-lookup';
-import type { components } from '@care/api-client';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export default async function ServiceDetailPage({

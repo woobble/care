@@ -1,9 +1,5 @@
 'use client';
 
-import Link from 'next/link';
-import dynamic from 'next/dynamic';
-import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   BadgeEuro,
@@ -25,14 +21,19 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
-import { Button } from '@care/ui/components/button';
-import { Separator } from '@care/ui/components/separator';
-import { cn } from '@care/ui/lib/utils';
+import dynamic from 'next/dynamic';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import { AccountMenu } from '@app/web/components/account-menu';
-import type { Locale } from '@app/web/i18n/config';
 import { LanguageSwitcher } from '@app/web/components/language-switcher';
 import { NavigationProgress } from '@app/web/components/navigation-progress';
 import { ThemeSwitcher } from '@app/web/components/theme-switcher';
+import type { Locale } from '@app/web/i18n/config';
+import { Button } from '@care/ui/components/button';
+import { Separator } from '@care/ui/components/separator';
+import { cn } from '@care/ui/lib/utils';
 
 const OfficeMobileNavigation = dynamic(() => import('./office-mobile-navigation'), {
   ssr: false,
@@ -213,7 +214,7 @@ export function OfficeShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur md:h-[4.25rem] sm:px-5 lg:px-7">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur sm:px-5 md:h-[4.25rem] lg:px-7">
           <Button
             ref={mobileNavigationTriggerRef}
             variant="ghost"
@@ -350,7 +351,7 @@ function SidebarBrand({
     <Link
       href={href}
       className={cn(
-        'relative flex items-center overflow-hidden text-sidebar-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+        'relative flex items-center overflow-hidden text-sidebar-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
         mobileView ? 'min-h-16' : 'min-h-[4.25rem]',
         mobileView ? 'gap-3 px-2' : 'px-0',
       )}
@@ -375,7 +376,7 @@ function SidebarBrand({
       </span>
       <span
         className={cn(
-          'min-w-0 overflow-hidden truncate whitespace-nowrap font-semibold transition-[max-width,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+          'min-w-0 truncate overflow-hidden font-semibold whitespace-nowrap transition-[max-width,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
           mobileView ? 'text-sm' : 'text-lg',
           !mobileView && 'ml-[18px]',
           !mobileView && collapsed
@@ -409,11 +410,11 @@ function NavigationGroups({
         <div key={group.id} className="relative grid w-full min-w-0 gap-2 p-0">
           <div
             className={cn(
-              'block h-auto w-full overflow-hidden rounded-none p-0 text-sm font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground transition-[max-height,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+              'block h-auto w-full overflow-hidden rounded-none p-0 text-sm leading-tight font-semibold tracking-[0.12em] text-muted-foreground uppercase transition-[max-height,opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
               mobileView || !collapsed
                 ? mobileView
                   ? 'max-h-10 translate-y-0 px-3 pb-1 opacity-100'
-                  : 'max-h-10 translate-y-0 pb-1 pl-[calc(var(--sidebar-width-collapsed)+1.125rem)] pr-4 opacity-100'
+                  : 'max-h-10 translate-y-0 pr-4 pb-1 pl-[calc(var(--sidebar-width-collapsed)+1.125rem)] opacity-100'
                 : 'max-h-0 translate-y-1 p-0 opacity-0',
             )}
             aria-hidden={collapsed && !mobileView}
@@ -443,13 +444,13 @@ function NavigationGroups({
                     title={!mobileView && collapsed ? item.label : undefined}
                     onClick={closeMobile}
                     className={cn(
-                      'peer/menu-button group/menu-button flex h-12 w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding]',
-                      'relative isolate min-w-0 overflow-hidden rounded-2xl p-0 font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-transparent data-[active=true]:text-sidebar-accent-foreground',
+                      'peer/menu-button group/menu-button ring-sidebar-ring flex h-12 w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden transition-[width,height,padding]',
+                      'relative isolate min-w-0 overflow-hidden rounded-2xl p-0 font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none data-[active=true]:bg-transparent data-[active=true]:text-sidebar-accent-foreground',
                       mobileView
                         ? 'min-h-11 gap-3 px-3 text-base hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent'
                         : collapsed
                           ? 'mx-auto h-11 w-11 justify-center text-sm hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent'
-                          : 'min-h-11 w-full text-sm before:pointer-events-none before:absolute before:inset-y-1 before:left-3 before:right-3 before:z-0 before:rounded-xl before:bg-sidebar-accent before:shadow-sm before:opacity-0 before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100 data-[active=true]:before:opacity-100',
+                          : 'min-h-11 w-full text-sm before:pointer-events-none before:absolute before:inset-y-1 before:right-3 before:left-3 before:z-0 before:rounded-xl before:bg-sidebar-accent before:opacity-0 before:shadow-sm before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100 data-[active=true]:before:opacity-100',
                       isActive && 'text-sidebar-accent-foreground',
                     )}
                   >
@@ -475,7 +476,7 @@ function NavigationGroups({
                     ) : (
                       <span
                         className={cn(
-                          'absolute inset-y-0 z-10 flex min-w-0 items-center overflow-hidden truncate whitespace-nowrap transition-[opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
+                          'absolute inset-y-0 z-10 flex min-w-0 items-center truncate overflow-hidden whitespace-nowrap transition-[opacity,transform] duration-[var(--sidebar-transition-duration)] ease-[var(--sidebar-transition-easing)] motion-reduce:transition-none',
                           isActive && !collapsed ? 'right-12' : 'right-3',
                           collapsed
                             ? 'left-[var(--sidebar-width-collapsed)] text-sm'

@@ -1,12 +1,12 @@
-import { NativeSelect } from '@care/ui/components/native-select';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
+
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
-import { dateRange, shiftDate, todayDateKey } from '@app/web/lib/care-date';
-import { formatDateTime } from '@app/web/i18n/format';
 import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDateTime } from '@app/web/i18n/format';
 import {
   getApiClient,
   getPermissionGrants,
@@ -14,10 +14,11 @@ import {
   hasClientPermission,
   hasPermission,
 } from '@app/web/lib/api';
-import type { components } from '@care/api-client';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import { DataPagination } from '@app/web/components/data-pagination';
+import { dateRange, shiftDate, todayDateKey } from '@app/web/lib/care-date';
 import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { NativeSelect } from '@care/ui/components/native-select';
 
 type SearchParams = Promise<{
   from?: string;

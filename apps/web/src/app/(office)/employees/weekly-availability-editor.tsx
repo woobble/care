@@ -1,9 +1,10 @@
 'use client';
 
+import { useState } from 'react';
+
 import { Button } from '@care/ui/components/button';
 import { Input } from '@care/ui/components/input';
 import { Label } from '@care/ui/components/label';
-import { useState } from 'react';
 
 type Weekday = { weekday: number; label: string };
 type AvailabilityWindow = { weekday: number; startsAt: string; endsAt: string };

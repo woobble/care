@@ -1,12 +1,8 @@
 import { Module } from '@nestjs/common';
-import { EmployeeApplicationService, type EmployeeSchedulingGuard } from '@care/employees';
-import type { VisitExecutionGuards } from '@care/visit-execution';
-import type { AuditWriter } from '@care/audit';
-import type { UnitOfWork } from '@care/database';
-import type { OutboxWriter } from '@care/platform';
+
 import { DatabaseModule } from '@app/api/database/database.module';
-import { EmployeesController } from '@app/api/presentation/http/employees.controller';
 import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { EmployeesController } from '@app/api/presentation/http/employees.controller';
 import {
   AUDIT_WRITER,
   EMPLOYEE_APPLICATION,
@@ -15,10 +11,16 @@ import {
   VISIT_EXECUTION_GUARDS,
   UNIT_OF_WORK,
 } from '@app/api/tokens';
-import { ServiceAgreementProtectionModule } from './service-agreement-protection.module';
+import type { AuditWriter } from '@care/audit';
+import type { UnitOfWork } from '@care/database';
+import { EmployeeApplicationService, type EmployeeSchedulingGuard } from '@care/employees';
+import type { OutboxWriter } from '@care/platform';
+import type { VisitExecutionGuards } from '@care/visit-execution';
+
 import { AuditModule } from './audit.module';
 import { IdentityModule } from './identity.module';
 import { PlatformModule } from './platform.module';
+import { ServiceAgreementProtectionModule } from './service-agreement-protection.module';
 import { VisitExecutionModule } from './visit-execution.module';
 
 @Module({

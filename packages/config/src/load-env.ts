@@ -1,6 +1,7 @@
-import { config } from 'dotenv';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+
+import { config } from 'dotenv';
 
 let directory = process.cwd();
 for (let depth = 0; depth < 3; depth += 1) {

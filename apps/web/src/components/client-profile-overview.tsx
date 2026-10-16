@@ -1,21 +1,22 @@
-import { Suspense, type ReactNode } from 'react';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
-import { Skeleton } from '@care/ui/components/skeleton';
-import { StatusBadge } from '@care/ui/components/status-badge';
+import { Suspense, type ReactNode } from 'react';
+
 import { ErrorNotice } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
 import { formatDate, formatDateTime } from '@app/web/i18n/format';
-import { formatVisitDateTime } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
 } from '@app/web/lib/api';
-import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
+import { formatVisitDateTime } from '@app/web/lib/care-date';
 import { getFacilitiesByIds } from '@app/web/lib/facility-lookup';
-import { getLocale, getTranslations } from 'next-intl/server';
+import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
 import type { components } from '@care/api-client';
+import { Skeleton } from '@care/ui/components/skeleton';
+import { StatusBadge } from '@care/ui/components/status-badge';
 
 type Client = components['schemas']['ClientResponseDto'];
 type PermissionGrants = Awaited<ReturnType<typeof getPermissionGrants>>;
@@ -37,7 +38,7 @@ export function ClientProfileOverview({
     <section
       id="overview"
       aria-labelledby="client-overview-title"
-      className="grid gap-3 scroll-mt-6"
+      className="grid scroll-mt-6 gap-3"
     >
       <h2 id="client-overview-title" className="text-xl font-semibold">
         {title}
@@ -134,7 +135,7 @@ async function ClientContactOverview({
       <dl className="grid min-w-0 gap-x-4 gap-y-3 sm:grid-cols-2">
         <div className="grid min-w-0 gap-1">
           <dt className="text-sm text-muted-foreground">{t('Common.fields.organization')}</dt>
-          <dd className="break-words font-medium">
+          <dd className="font-medium break-words">
             <ResourceReference
               label={organizationName}
               href={
@@ -147,7 +148,7 @@ async function ClientContactOverview({
         </div>
         <div className="grid min-w-0 gap-1">
           <dt className="text-sm text-muted-foreground">{t('Common.fields.facility')}</dt>
-          <dd className="break-words font-medium">
+          <dd className="font-medium break-words">
             <ResourceReference
               label={facilityName}
               href={
@@ -162,7 +163,7 @@ async function ClientContactOverview({
         <OverviewContact label={t('Clients.detail.emergencyContact')} contact={emergencyContact} />
         <div className="grid min-w-0 gap-1 sm:col-span-2">
           <dt className="text-sm text-muted-foreground">{t('Clients.detail.primaryAddress')}</dt>
-          <dd className="break-words font-medium">
+          <dd className="font-medium break-words">
             {primaryAddress ? formatAddress(primaryAddress) : '—'}
           </dd>
         </div>
@@ -215,7 +216,7 @@ function OverviewContact({
             ) : null}
             {contact.email ? (
               <a
-                className="w-fit break-all text-sm text-primary underline"
+                className="w-fit text-sm break-all text-primary underline"
                 href={`mailto:${contact.email}`}
               >
                 {contact.email}
@@ -370,7 +371,7 @@ async function ClientWorkOverview({
             {agreement ? (
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <Link
-                  className="break-words font-semibold text-primary underline underline-offset-2"
+                  className="font-semibold break-words text-primary underline underline-offset-2"
                   href={`/clients/${client.id}/service-agreements`}
                 >
                   {agreement.description?.trim() ||
@@ -416,10 +417,10 @@ async function ClientWorkOverview({
                 <time className="font-medium" dateTime={visit.plannedStart}>
                   {formatVisitDateTime(visit.plannedStart, visit.timezone, locale)}
                 </time>
-                <span className="break-words text-sm">
+                <span className="text-sm break-words">
                   {visit.services.map((service) => service.serviceName).join(' · ')}
                 </span>
-                <span className="break-words text-sm text-muted-foreground">
+                <span className="text-sm break-words text-muted-foreground">
                   {visit.assignments.length
                     ? visit.assignments
                         .map((assignment) => assignment.employeeDisplayName)
@@ -539,7 +540,7 @@ async function ClientWorkOverview({
 function OverviewLink({ href, children }: Readonly<{ href: string; children: ReactNode }>) {
   return (
     <Link
-      className="inline-flex min-h-10 items-center rounded-md border px-3 text-sm font-medium hover:border-primary/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="inline-flex min-h-10 items-center rounded-md border px-3 text-sm font-medium hover:border-primary/40 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       href={href}
     >
       {children}

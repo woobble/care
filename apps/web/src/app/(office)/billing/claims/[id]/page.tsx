@@ -1,20 +1,22 @@
-import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
-import {
-  Table as ShadcnTable,
-  TableHeader as ShadcnTableHeader,
-  TableBody as ShadcnTableBody,
-  TableHead as ShadcnTableHead,
-  TableRow as ShadcnTableRow,
-  TableCell as ShadcnTableCell,
-} from '@care/ui/components/table';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
+
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import {
+  allocatePaymentAction,
+  cancelClaimAction,
+  prepareClaimAction,
+  recordClaimDecisionAction,
+  resubmitClaimAction,
+  submitClaimAction,
+} from '@app/web/app/(office)/billing/actions';
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { formatCents } from '@app/web/app/(office)/billing/format';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate, formatDateTime } from '@app/web/i18n/format';
@@ -24,19 +26,18 @@ import {
   getTenantHeader,
   hasClientPermission,
 } from '@app/web/lib/api';
-import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
-import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
-import { DataPagination } from '@app/web/components/data-pagination';
 import { redirectToValidPage } from '@app/web/lib/pagination';
-import { formatCents } from '@app/web/app/(office)/billing/format';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { NativeSelect } from '@care/ui/components/native-select';
 import {
-  allocatePaymentAction,
-  cancelClaimAction,
-  prepareClaimAction,
-  recordClaimDecisionAction,
-  resubmitClaimAction,
-  submitClaimAction,
-} from '@app/web/app/(office)/billing/actions';
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui/components/table';
 
 type ClaimStatus =
   | 'draft'
@@ -293,7 +294,7 @@ export default async function ClaimDetailPage({
   const profileConfigured = claim.profileSnapshot.configured === true;
 
   return (
-    <div className="mx-auto grid w-full min-w-0 max-w-6xl grid-cols-1 gap-6">
+    <div className="mx-auto grid w-full max-w-6xl min-w-0 grid-cols-1 gap-6">
       <PageHeader
         eyebrow={
           <span className="flex flex-wrap items-center gap-2">
@@ -610,7 +611,7 @@ export default async function ClaimDetailPage({
                 >
                   <div>
                     <p className="font-medium">{document.fileName}</p>
-                    <p className="break-all text-xs text-muted-foreground">
+                    <p className="text-xs break-all text-muted-foreground">
                       {t('claimDocumentMetadata', {
                         kind: document.documentKind,
                         version: document.packageVersion,
@@ -1235,7 +1236,7 @@ function Metric({
   return (
     <div className="grid min-w-0 gap-1">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className={`break-words font-medium ${valueClassName ?? ''}`}>{value}</dd>
+      <dd className={`font-medium break-words ${valueClassName ?? ''}`}>{value}</dd>
     </div>
   );
 }

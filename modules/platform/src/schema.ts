@@ -1,4 +1,5 @@
 import { index, integer, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+
 import type { DomainEvent } from '@care/events';
 
 const platform = pgSchema('platform');

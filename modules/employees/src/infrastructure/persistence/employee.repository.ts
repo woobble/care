@@ -1,17 +1,9 @@
 import { and, asc, count, desc, eq, exists, ilike, inArray, notExists, or, sql } from 'drizzle-orm';
+
 import type { DatabaseTransaction } from '@care/database';
-import type { AuthorizationPrincipal } from '@care/permissions';
 import { tenantMemberships, users } from '@care/identity';
 import { facilities, organizationsTable, teams } from '@care/organizations';
-import {
-  employeeFacilityAssignments,
-  employeeQualifications,
-  employeeRecords,
-  employeeSkills,
-  employeeTeamMemberships,
-  qualificationDefinitions,
-  skillDefinitions,
-} from '@module/employees/schema';
+import type { AuthorizationPrincipal } from '@care/permissions';
 import type {
   EmployeeChanges,
   EmployeeDetailSnapshot,
@@ -23,6 +15,16 @@ import type {
   SkillDefinitionSnapshot,
   TeamMembershipSnapshot,
 } from '@module/employees/domain/employee';
+import {
+  employeeFacilityAssignments,
+  employeeQualifications,
+  employeeRecords,
+  employeeSkills,
+  employeeTeamMemberships,
+  qualificationDefinitions,
+  skillDefinitions,
+} from '@module/employees/schema';
+
 import { employeeVisibilityPredicate } from './employee-visibility';
 
 export interface EmployeeSearch {

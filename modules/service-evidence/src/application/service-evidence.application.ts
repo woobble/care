@@ -1,12 +1,13 @@
-import { v7 as uuidv7 } from 'uuid';
 import { and, eq } from 'drizzle-orm';
+import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
+import { evaluateDocumentationCompleteness } from '@care/care-documentation';
+import type { ClientRepresentationType, ClientRelationshipType } from '@care/clients';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import type { DomainEvent, EventName } from '@care/events';
 import { createDomainEvent } from '@care/events';
-import { evaluateDocumentationCompleteness } from '@care/care-documentation';
-import type { ClientRepresentationType, ClientRelationshipType } from '@care/clients';
 import { assertCan } from '@care/permissions';
 import type { AuthorizationPrincipal, Permission, ResourceContext } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
@@ -29,12 +30,12 @@ import {
   type SignatoryCapacity,
   type SignatureStrokes,
 } from '@module/service-evidence/domain/service-evidence';
-import { acknowledgements, evidencePackages } from '@module/service-evidence/schema';
 import {
   ServiceEvidenceRepository,
   type EligibleContactRow,
   type EvidenceVisitContext,
 } from '@module/service-evidence/infrastructure/service-evidence.repository';
+import { acknowledgements, evidencePackages } from '@module/service-evidence/schema';
 
 type AuditContext = { ip?: string; userAgent?: string };
 type SelectedSignatory =

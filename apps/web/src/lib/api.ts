@@ -1,13 +1,15 @@
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
+
+import { auth } from '@app/web/auth';
+import { getPermissionGrantsForTenant } from '@app/web/lib/permission-cache';
 import { createCareApi } from '@care/api-client';
 import type { CareApi } from '@care/api-client';
 import type { ApiClientOptions } from '@care/api-client';
 import type { PermissionGrantDto } from '@care/api-client';
 import { loadWebConfig } from '@care/config';
-import { auth } from '@app/web/auth';
-import { getPermissionGrantsForTenant } from '@app/web/lib/permission-cache';
+
 import { buildCareApiUrl } from './api-routes';
 import type { CareApiRequest } from './api-routes';
 

@@ -1,12 +1,9 @@
 import { Module } from '@nestjs/common';
-import { IdentityService, TenantAccessService } from '@care/identity';
-import type { AuditWriter } from '@care/audit';
-import type { UnitOfWork } from '@care/database';
-import type { OutboxWriter } from '@care/platform';
-import { AuditModule } from './audit.module';
-import { PlatformModule } from './platform.module';
-import { TenantAccessController } from '@app/api/presentation/http/tenant-access.controller';
+
+import { DatabaseModule } from '@app/api/database/database.module';
+import type { AppDatabase } from '@app/api/database/database.module';
 import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { TenantAccessController } from '@app/api/presentation/http/tenant-access.controller';
 import {
   AUDIT_WRITER,
   DATABASE,
@@ -15,8 +12,13 @@ import {
   TENANT_ACCESS_SERVICE,
   UNIT_OF_WORK,
 } from '@app/api/tokens';
-import { DatabaseModule } from '@app/api/database/database.module';
-import type { AppDatabase } from '@app/api/database/database.module';
+import type { AuditWriter } from '@care/audit';
+import type { UnitOfWork } from '@care/database';
+import { IdentityService, TenantAccessService } from '@care/identity';
+import type { OutboxWriter } from '@care/platform';
+
+import { AuditModule } from './audit.module';
+import { PlatformModule } from './platform.module';
 
 @Module({
   imports: [DatabaseModule, AuditModule, PlatformModule],

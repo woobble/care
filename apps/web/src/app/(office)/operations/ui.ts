@@ -1,9 +1,39 @@
 import type { components } from '@care/api-client';
+
 import type en from '../../../../messages/en.json';
 
 export type OperationsWorkItem = components['schemas']['OperationsWorkItemResponseDto'];
 export type OperationsTask = components['schemas']['OperationsTaskResponseDto'];
 export type OperationsIssueTitle = keyof (typeof en)['Operations']['issueTitles'];
+type OperationsSourceLabel = `sourceDomains.${keyof (typeof en)['Operations']['sourceDomains']}`;
+
+export function taskSourceTranslationKey(
+  sourceType: unknown,
+): OperationsSourceLabel | 'client' | 'sourceDomain' {
+  if (typeof sourceType !== 'string') return 'sourceDomain';
+  switch (sourceType) {
+    case 'client':
+      return 'client';
+    case 'visit':
+      return 'sourceDomains.scheduling';
+    case 'service_agreement':
+      return 'sourceDomains.serviceAgreements';
+    case 'service_evidence':
+      return 'sourceDomains.serviceEvidence';
+    case 'invoice':
+      return 'sourceDomains.billing';
+    case 'claim':
+      return 'sourceDomains.claims';
+    case 'benefit_entitlement':
+      return 'sourceDomains.benefits';
+    case 'document':
+      return 'sourceDomains.documents';
+    case 'communication':
+      return 'sourceDomains.communications';
+    default:
+      return 'sourceDomain';
+  }
+}
 
 const issueTitles: readonly OperationsIssueTitle[] = [
   'missing_assignment',

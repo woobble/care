@@ -17,19 +17,20 @@ import {
   sql,
 } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
+import { clientInsurances, clientRecords, pflegegradRecords } from '@care/clients';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
+import { ExportFilterInvalidError, ExportRowLimitExceededError } from '@care/documents';
 import { createDomainEvent } from '@care/events';
-import { clientInsurances, clientRecords, pflegegradRecords } from '@care/clients';
 import { organizationsTable } from '@care/organizations';
 import { AuthorizationDeniedError, can } from '@care/permissions';
 import type { AuthorizationPrincipal, Permission } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { ExportFilterInvalidError, ExportRowLimitExceededError } from '@care/documents';
+import { visitServices, visits } from '@care/scheduling';
 import { calculateServicePriceCents, servicePrices } from '@care/services';
 import { serviceDefinitions } from '@care/services';
-import { visitServices, visits } from '@care/scheduling';
 import { performedServices, visitExecutions } from '@care/visit-execution';
 import {
   addCents,
@@ -762,6 +763,10 @@ export class BenefitsApplicationService {
           search?: string;
           benefitType?: BenefitType;
           period?: string;
+          organizationId?: string;
+          facilityId?: string;
+          clientId?: string;
+          expiryLookaheadDays?: number;
         },
     legacyPageSize = 25,
     legacyExpiryLookaheadDays = 60,
@@ -776,9 +781,13 @@ export class BenefitsApplicationService {
             search: undefined,
             benefitType: undefined,
             period: undefined,
+            organizationId: undefined,
+            facilityId: undefined,
+            clientId: undefined,
+            expiryLookaheadDays: legacyExpiryLookaheadDays,
           }
         : query;
-    const expiryLookaheadDays = typeof query === 'number' ? legacyExpiryLookaheadDays : 60;
+    const expiryLookaheadDays = options.expiryLookaheadDays ?? 60;
     const { clientPage, clientPageSize, servicePage, servicePageSize } = options;
     if (
       !Number.isSafeInteger(clientPage) ||
@@ -834,6 +843,11 @@ export class BenefitsApplicationService {
           eq(clientRecords.tenantId, principal.tenantId),
           eq(clientRecords.status, 'active'),
           ...(scopeFilter ? [scopeFilter] : []),
+          ...(options.organizationId
+            ? [eq(clientRecords.organizationId, options.organizationId)]
+            : []),
+          ...(options.facilityId ? [eq(clientRecords.primaryFacilityId, options.facilityId)] : []),
+          ...(options.clientId ? [eq(clientRecords.id, options.clientId)] : []),
         ];
         if (options.benefitType || options.period) {
           const periodStart = options.period ? `${options.period}-01` : today();
@@ -1083,9 +1097,13 @@ export class BenefitsApplicationService {
     );
     const unallocatedServices = await this.listUnallocatedServices(
       principal,
-      undefined,
+      options.clientId,
       servicePage,
       servicePageSize,
+      {
+        ...(options.organizationId ? { organizationId: options.organizationId } : {}),
+        ...(options.facilityId ? { facilityId: options.facilityId } : {}),
+      },
     );
     const allocationOptions = await this.worklistAllocationOptions(
       principal,
@@ -1879,6 +1897,7 @@ export class BenefitsApplicationService {
     clientId?: string,
     page = 1,
     pageSize = 25,
+    scope: { organizationId?: string; facilityId?: string } = {},
   ) {
     if (
       !Number.isSafeInteger(page) ||
@@ -1968,6 +1987,8 @@ export class BenefitsApplicationService {
             eq(visitExecutions.status, 'completed'),
             ne(performedServices.status, 'not_performed'),
             ...(clientId ? [eq(visits.clientId, clientId)] : []),
+            ...(scope.organizationId ? [eq(visits.organizationId, scope.organizationId)] : []),
+            ...(scope.facilityId ? [eq(visits.facilityId, scope.facilityId)] : []),
             ...(scopeFilter ? [scopeFilter] : []),
           ),
         )

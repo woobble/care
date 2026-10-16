@@ -1,14 +1,16 @@
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { HeartHandshake, ShieldCheck } from 'lucide-react';
 import { getLocale, getTranslations } from 'next-intl/server';
+
+import { LanguageSwitcher } from '@app/web/components/language-switcher';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { SignOutForm } from '@app/web/components/sign-out-form';
 import { getApiClient, getAuthSession } from '@app/web/lib/api';
 import { Alert, AlertDescription } from '@care/ui/components/alert';
 import { Button } from '@care/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader } from '@care/ui/components/card';
 import { Label } from '@care/ui/components/label';
-import { HeartHandshake, ShieldCheck } from 'lucide-react';
-import { LanguageSwitcher } from '@app/web/components/language-switcher';
-import { SignOutForm } from '@app/web/components/sign-out-form';
+import { NativeSelect } from '@care/ui/components/native-select';
+
 import { signOutAction } from './actions/auth';
 import { selectTenantAction } from './actions/tenant';
 import { SignInButton } from './sign-in-button';
@@ -28,10 +30,10 @@ export default async function TenantSelectionPage({
     return (
       <main className="relative grid min-h-dvh place-items-center overflow-hidden bg-background px-4 py-16">
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute left-1/2 top-[-22rem] size-[42rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute bottom-[-20rem] right-[-13rem] size-[34rem] rounded-full bg-chart-2/10 blur-3xl" />
+          <div className="absolute top-[-22rem] left-1/2 size-[42rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
+          <div className="absolute right-[-13rem] bottom-[-20rem] size-[34rem] rounded-full bg-chart-2/10 blur-3xl" />
         </div>
-        <div className="absolute right-4 top-4 z-10 sm:right-6 sm:top-6">
+        <div className="absolute top-4 right-4 z-10 sm:top-6 sm:right-6">
           <LanguageSwitcher locale={locale} />
         </div>
         <section className="relative w-full max-w-md">
@@ -100,7 +102,7 @@ export default async function TenantSelectionPage({
         <LanguageSwitcher locale={locale} />
       </div>
       <div className="grid gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-primary">Care Platform</p>
+        <p className="text-sm font-semibold tracking-wide text-primary uppercase">Care Platform</p>
         <h1 className="text-3xl font-semibold">{tenantT('selectTitle')}</h1>
         <p className="text-muted-foreground">{tenantT('selectDescription')}</p>
       </div>

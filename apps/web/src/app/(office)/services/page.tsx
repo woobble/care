@@ -1,3 +1,24 @@
+import { getLocale, getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+
+import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { formatDate, formatNumber } from '@app/web/i18n/format';
+import { statusLabelKey, unitLabelKey } from '@app/web/i18n/status';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasTenantPermission,
+} from '@app/web/lib/api';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { StatusBadge } from '@care/ui/components/status-badge';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -7,31 +28,12 @@ import {
   TableCell as ShadcnTableCell,
   TableCaption as ShadcnTableCaption,
 } from '@care/ui/components/table';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import Link from 'next/link';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { StatusBadge } from '@care/ui/components/status-badge';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
-import { formatDate, formatNumber } from '@app/web/i18n/format';
-import { statusLabelKey, unitLabelKey } from '@app/web/i18n/status';
-import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
+
 import {
   archiveServiceCategoryAction,
   createServiceCategoryAction,
   updateServiceCategoryAction,
 } from './actions';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasTenantPermission,
-} from '@app/web/lib/api';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import type { components } from '@care/api-client';
 
 type SearchParams = Promise<{
   q?: string;

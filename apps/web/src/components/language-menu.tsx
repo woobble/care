@@ -3,6 +3,9 @@
 import { Languages } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useTransition } from 'react';
+
+import { setLocaleAction } from '@app/web/app/actions/locale';
+import { isLocale, type Locale } from '@app/web/i18n/config';
 import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -10,8 +13,6 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@care/ui/components/dropdown-menu';
-import { setLocaleAction } from '@app/web/app/actions/locale';
-import { isLocale, type Locale } from '@app/web/i18n/config';
 
 export function LanguageMenu({ locale }: Readonly<{ locale: Locale }>) {
   const t = useTranslations('Common');
@@ -22,7 +23,7 @@ export function LanguageMenu({ locale }: Readonly<{ locale: Locale }>) {
       <DropdownMenuSubTrigger disabled={pending}>
         <Languages className="size-4 text-muted-foreground" aria-hidden="true" />
         <span>{t('language')}</span>
-        <span className="ml-auto pr-2 text-xs uppercase text-muted-foreground">{locale}</span>
+        <span className="ml-auto pr-2 text-xs text-muted-foreground uppercase">{locale}</span>
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent>
         <DropdownMenuRadioGroup

@@ -1,9 +1,12 @@
 'use client';
 
-import Link from 'next/link';
-import type { ReactNode } from 'react';
 import { ChevronDown, UserRound } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
+import type { ReactNode } from 'react';
+
+import { LanguageMenu } from '@app/web/components/language-menu';
+import type { Locale } from '@app/web/i18n/config';
 import { Button } from '@care/ui/components/button';
 import {
   DropdownMenu,
@@ -12,8 +15,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@care/ui/components/dropdown-menu';
-import type { Locale } from '@app/web/i18n/config';
-import { LanguageMenu } from '@app/web/components/language-menu';
 
 export function AccountMenu({
   profileName,
@@ -73,7 +74,7 @@ export function AccountMenu({
         </div>
         {tenantName ? (
           <div className="grid gap-0.5 px-2.5 pb-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
               {t('currentOrganization')}
             </p>
             <p className="truncate text-sm">{tenantName}</p>

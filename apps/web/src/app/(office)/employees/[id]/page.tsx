@@ -1,35 +1,10 @@
-import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
-import { Textarea } from '@care/ui/components/textarea';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { Suspense } from 'react';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { StatusBadge } from '@care/ui/components/status-badge';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { ResourceCardLink, ResourceReference } from '@app/web/components/resource-reference';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import { statusLabelKey } from '@app/web/i18n/status';
-import { errorMessageKey } from '@app/web/i18n/errors';
-import { formatDate } from '@app/web/i18n/format';
-import type { Locale } from '@app/web/i18n/config';
-import { formatVisitDateTime } from '@app/web/lib/care-date';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasPermission,
-  hasClientPermission,
-  type CurrentPermissionGrant,
-} from '@app/web/lib/api';
+import { Suspense } from 'react';
+
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
-import { EmployeeVisitSection } from '@app/web/app/(office)/employees/employee-visit-section';
-import { WeeklyAvailabilityEditor } from '@app/web/app/(office)/employees/weekly-availability-editor';
 import {
   assignFacilityAction,
   cancelEmployeeAbsenceAction,
@@ -50,6 +25,32 @@ import {
   unlinkEmployeeUserAction,
   updateEmployeeAction,
 } from '@app/web/app/(office)/employees/actions';
+import { EmployeeVisitSection } from '@app/web/app/(office)/employees/employee-visit-section';
+import { WeeklyAvailabilityEditor } from '@app/web/app/(office)/employees/weekly-availability-editor';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceCardLink, ResourceReference } from '@app/web/components/resource-reference';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import type { Locale } from '@app/web/i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate } from '@app/web/i18n/format';
+import { statusLabelKey } from '@app/web/i18n/status';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasPermission,
+  hasClientPermission,
+  type CurrentPermissionGrant,
+} from '@app/web/lib/api';
+import { formatVisitDateTime } from '@app/web/lib/care-date';
+import { Button } from '@care/ui/components/button';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { StatusBadge } from '@care/ui/components/status-badge';
+import { Textarea } from '@care/ui/components/textarea';
 
 type Params = Promise<{ id: string }>;
 type SearchParams = Promise<{ error?: string; updated?: string }>;

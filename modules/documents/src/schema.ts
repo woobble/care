@@ -10,8 +10,10 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+
 import { clientRecords } from '@care/clients';
 import { facilities, organizationsTable } from '@care/organizations';
+
 import type { DocumentArtifactStatus, DocumentLocale, DocumentType } from './domain/documents';
 
 const documents = pgSchema('documents');

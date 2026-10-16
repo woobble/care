@@ -1,22 +1,18 @@
-import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
-import {
-  Table as ShadcnTable,
-  TableHeader as ShadcnTableHeader,
-  TableBody as ShadcnTableBody,
-  TableHead as ShadcnTableHead,
-  TableRow as ShadcnTableRow,
-  TableCell as ShadcnTableCell,
-} from '@care/ui/components/table';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import type { components } from '@care/api-client';
+
+import {
+  createPayerArrangementAction,
+  updatePayerArrangementAction,
+} from '@app/web/app/(office)/billing/actions';
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { formatCents } from '@app/web/app/(office)/billing/format';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate, formatDateTime } from '@app/web/i18n/format';
@@ -26,15 +22,20 @@ import {
   getTenantHeader,
   hasClientPermission,
 } from '@app/web/lib/api';
-import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { redirectToValidPage } from '@app/web/lib/pagination';
-import { formatCents } from '@app/web/app/(office)/billing/format';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
 import {
-  createPayerArrangementAction,
-  updatePayerArrangementAction,
-} from '@app/web/app/(office)/billing/actions';
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui/components/table';
 
 type SearchParams = Promise<{
   error?: string;
@@ -443,7 +444,7 @@ export default async function ClientInvoicesPage({
                     </p>
                   ) : null}
                   {arrangement.recipientAddress ? (
-                    <p className="whitespace-pre-line text-sm text-muted-foreground">
+                    <p className="text-sm whitespace-pre-line text-muted-foreground">
                       {arrangement.recipientAddress}
                     </p>
                   ) : null}

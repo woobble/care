@@ -1,8 +1,8 @@
-import { Suspense } from 'react';
-import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Button } from '@care/ui/components/button';
+import { Suspense } from 'react';
+
 import { DataPagination } from '@app/web/components/data-pagination';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
@@ -14,6 +14,8 @@ import {
   hasClientPermission,
 } from '@app/web/lib/api';
 import { redirectToValidPage } from '@app/web/lib/pagination';
+import { Button } from '@care/ui/components/button';
+
 import type { DocumentType } from '../document-types';
 import { RefreshStatusButton } from './refresh-status-button';
 
@@ -312,7 +314,7 @@ async function DocumentHistory({
               </p>
               {version.status === 'ready' || version.status === 'superseded' ? (
                 <Link
-                  className="min-h-10 inline-flex items-center text-sm text-primary underline"
+                  className="inline-flex min-h-10 items-center text-sm text-primary underline"
                   href={`/documents/${version.id}/pdf`}
                 >
                   {t('download')}
@@ -359,7 +361,7 @@ function Metadata({ label, children }: Readonly<{ label: string; children: React
   return (
     <div className="grid gap-1">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="break-words text-sm font-medium">{children}</dd>
+      <dd className="text-sm font-medium break-words">{children}</dd>
     </div>
   );
 }

@@ -1,13 +1,15 @@
-import { ErrorNotice as Alert } from '@app/web/components/page-patterns';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Input } from '@care/ui/components/input';
+
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { createClaimAction } from '@app/web/app/(office)/billing/actions';
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { formatCents } from '@app/web/app/(office)/billing/format';
+import { ErrorNotice as Alert } from '@app/web/components/page-patterns';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import type { Locale } from '@app/web/i18n/config';
-import type { components } from '@care/api-client';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate } from '@app/web/i18n/format';
 import {
@@ -16,10 +18,9 @@ import {
   getTenantHeader,
   hasClientPermission,
 } from '@app/web/lib/api';
-import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
-import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
-import { formatCents } from '@app/web/app/(office)/billing/format';
-import { createClaimAction } from '@app/web/app/(office)/billing/actions';
+import type { components } from '@care/api-client';
+import { Input } from '@care/ui/components/input';
+import { NativeSelect } from '@care/ui/components/native-select';
 
 type Arrangement = {
   id: string;

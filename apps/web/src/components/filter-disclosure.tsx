@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+
 import { Button } from '@care/ui/components/button';
 import {
   Collapsible,

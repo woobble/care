@@ -1,8 +1,8 @@
-import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '../lib/utils';
 import { Slot } from 'radix-ui';
+import * as React from 'react';
 
+import { cn } from '../lib/utils';
 import { Button } from './button';
 
 const attachmentVariants = cva(
@@ -94,7 +94,7 @@ function AttachmentTitle({ className, ...props }: React.ComponentProps<'span'>) 
     <span
       data-slot="attachment-title"
       className={cn(
-        'block max-w-full min-w-0 truncate font-medium group-data-[state=processing]/attachment:shimmer group-data-[state=uploading]/attachment:shimmer',
+        'group-data-[state=processing]/attachment:shimmer group-data-[state=uploading]/attachment:shimmer block max-w-full min-w-0 truncate font-medium',
         className,
       )}
       {...props}
@@ -171,7 +171,7 @@ function AttachmentGroup({ className, ...props }: React.ComponentProps<'div'>) {
     <div
       data-slot="attachment-group"
       className={cn(
-        'flex min-w-0 scroll-fade-x snap-x snap-mandatory scroll-px-1 scrollbar-none gap-3 overflow-x-auto overscroll-x-contain py-1 *:data-[slot=attachment]:flex-none *:data-[slot=attachment]:snap-start',
+        'scroll-fade-x flex min-w-0 snap-x snap-mandatory scroll-px-1 scrollbar-none gap-3 overflow-x-auto overscroll-x-contain py-1 *:data-[slot=attachment]:flex-none *:data-[slot=attachment]:snap-start',
         className,
       )}
       {...props}

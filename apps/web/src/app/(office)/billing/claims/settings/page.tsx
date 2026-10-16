@@ -1,12 +1,18 @@
-import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
-import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
-import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
+import Link from 'next/link';
+
+import {
+  createPayerDirectoryEntryAction,
+  savePayerRequirementsAction,
+  updatePayerDirectoryEntryAction,
+} from '@app/web/app/(office)/billing/actions';
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { EmptyState } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
@@ -14,16 +20,11 @@ import {
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
-import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import { EmptyState } from '@app/web/components/page-patterns';
-import { DataPagination } from '@app/web/components/data-pagination';
 import { redirectToValidPage } from '@app/web/lib/pagination';
-import {
-  createPayerDirectoryEntryAction,
-  savePayerRequirementsAction,
-  updatePayerDirectoryEntryAction,
-} from '@app/web/app/(office)/billing/actions';
+import { Button } from '@care/ui/components/button';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { Input } from '@care/ui/components/input';
+import { NativeSelect } from '@care/ui/components/native-select';
 
 type Organization = { id: string; name: string };
 type Payer = {
@@ -225,7 +226,7 @@ export default async function ClaimsSettingsPage({
                   <p className="text-sm text-muted-foreground">
                     {t('payerIdentifier')}: {payer.payerIdentifier ?? t('identifierNotConfigured')}
                   </p>
-                  <p className="whitespace-pre-line text-sm text-muted-foreground">
+                  <p className="text-sm whitespace-pre-line text-muted-foreground">
                     {payer.addressText ?? '—'}
                   </p>
                 </div>

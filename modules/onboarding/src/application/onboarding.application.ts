@@ -14,6 +14,9 @@ import {
   sql,
 } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
+
+import type { AuditWriter } from '@care/audit';
+import { benefitFundingSources, clientBenefitEntitlements } from '@care/benefits';
 import {
   clientContactRoles,
   clientContacts,
@@ -21,13 +24,15 @@ import {
   clientRecords,
   pflegegradRecords,
 } from '@care/clients';
-import { tenantMemberships, users } from '@care/identity';
+import type { ClientApplicationService, CreateClientInput } from '@care/clients';
 import { contactAuthorizationFor, interactions, prospectInteractions } from '@care/communications';
 import type { CommunicationsApplicationService, CommunicationInput } from '@care/communications';
 import type { RequestContext } from '@care/contracts';
+import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { documentArtifacts } from '@care/documents';
 import { employeeRecords } from '@care/employees';
 import { createDomainEvent } from '@care/events';
+import { tenantMemberships, users } from '@care/identity';
 import { tasks } from '@care/operations';
 import { facilities, organizationsTable } from '@care/organizations';
 import {
@@ -36,16 +41,13 @@ import {
   can,
   type AuthorizationPrincipal,
 } from '@care/permissions';
-import type { AuditWriter } from '@care/audit';
-import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
-import { benefitFundingSources, clientBenefitEntitlements } from '@care/benefits';
-import { agreementServices, agreements } from '@care/service-agreements';
 import { visits } from '@care/scheduling';
-import type { ClientApplicationService, CreateClientInput } from '@care/clients';
-import { selectEffectiveServicePrice } from '@module/services/domain/service-price';
-import type { ServiceApplicationService } from '@module/services/application/service.application';
+import { agreementServices, agreements } from '@care/service-agreements';
 import type { ServicePriceApplicationService } from '@module/services/application/service-price.application';
+import type { ServiceApplicationService } from '@module/services/application/service.application';
+import { selectEffectiveServicePrice } from '@module/services/domain/service-price';
+
 import {
   DEFAULT_CHECKLIST_ITEMS,
   canTransition,
@@ -260,6 +262,7 @@ export class OnboardingApplicationService {
         let total = 0;
         let scanned = 0;
         const batchSize = 100;
+        // oxlint-disable no-await-in-loop
         while (true) {
           const candidates: Array<typeof admissionCases.$inferSelect> = await transaction
             .select()
@@ -284,6 +287,7 @@ export class OnboardingApplicationService {
           }
           if (candidates.length < batchSize) break;
         }
+        // oxlint-enable no-await-in-loop
         const items = matchingItems.map(({ admission, readiness }) => ({
           ...redactCaseLinks(principal, admission),
           readinessSummary: readinessSummary(readiness),
@@ -1193,138 +1197,125 @@ export class OnboardingApplicationService {
 
   async operationsReadinessWorklist(
     principal: AuthorizationPrincipal,
-    deadlineWindow: { fromDate: string; untilDate: string },
+    deadlineWindow: {
+      fromDate: string;
+      untilDate: string;
+      organizationId?: string;
+      facilityId?: string;
+      clientId?: string;
+    },
+    onPage?: (items: AdmissionOperationsCase[]) => Promise<void>,
   ): Promise<{ items: AdmissionOperationsCase[]; complete: boolean }> {
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const filters = this.visibleCases(principal);
-      filters.push(
-        inArray(admissionCases.stage, [
-          'inquiry',
-          'assessment',
-          'preparation',
-          'ready_for_admission',
-        ]),
-      );
-      const batchSize = 100;
-      const scanLimit = 500;
-      const now = new Date();
-      const scannedCases: Array<{
-        admission: typeof admissionCases.$inferSelect;
-        blockerCount: number;
-      }> = [];
-      let cursor: typeof admissionCases.$inferSelect | null = null;
-      let scanned = 0;
-      while (scanned < scanLimit) {
-        const batchFilters: typeof filters = cursor
-          ? [
-              ...filters,
-              or(
-                lt(admissionCases.lastActivityAt, cursor.lastActivityAt),
-                and(
-                  eq(admissionCases.lastActivityAt, cursor.lastActivityAt),
-                  lt(admissionCases.id, cursor.id),
-                ),
-              )!,
-            ]
-          : filters;
-        const limit = Math.min(batchSize, scanLimit - scanned);
-        const candidates: Array<typeof admissionCases.$inferSelect> = await transaction
-          .select()
-          .from(admissionCases)
-          .where(and(...batchFilters))
-          .orderBy(desc(admissionCases.lastActivityAt), desc(admissionCases.id))
-          .limit(limit);
-        if (!candidates.length) break;
-        scanned += candidates.length;
-        const readinessByCase = await this.evaluateReadinessBatch(
-          transaction,
-          principal,
-          candidates,
-        );
-        for (const admission of candidates) {
-          const readiness = readinessByCase.get(admission.id)!;
-          scannedCases.push({ admission, blockerCount: readiness.blockers.length });
-        }
-        cursor = candidates[candidates.length - 1]!;
-        if (candidates.length < limit) break;
-      }
-      let complete = scanned < scanLimit;
-      if (!complete && cursor) {
-        const [remaining] = await transaction
-          .select({ id: admissionCases.id })
-          .from(admissionCases)
-          .where(
-            and(
-              ...filters,
-              or(
-                lt(admissionCases.lastActivityAt, cursor.lastActivityAt),
-                and(
-                  eq(admissionCases.lastActivityAt, cursor.lastActivityAt),
-                  lt(admissionCases.id, cursor.id),
-                ),
+    const filters = this.visibleCases(principal);
+    if (deadlineWindow.organizationId)
+      filters.push(eq(admissionCases.organizationId, deadlineWindow.organizationId));
+    if (deadlineWindow.facilityId)
+      filters.push(eq(admissionCases.facilityId, deadlineWindow.facilityId));
+    if (deadlineWindow.clientId) filters.push(eq(admissionCases.clientId, deadlineWindow.clientId));
+    filters.push(
+      inArray(admissionCases.stage, [
+        'inquiry',
+        'assessment',
+        'preparation',
+        'ready_for_admission',
+      ]),
+    );
+    const batchSize = 100;
+    const now = new Date();
+    const until = new Date(`${deadlineWindow.untilDate}T23:59:59.999Z`);
+    const items: AdmissionOperationsCase[] = [];
+    let cursor: typeof admissionCases.$inferSelect | null = null;
+    // oxlint-disable no-await-in-loop
+    while (true) {
+      const batchFilters: typeof filters = cursor
+        ? [
+            ...filters,
+            or(
+              lt(admissionCases.lastActivityAt, cursor.lastActivityAt),
+              and(
+                eq(admissionCases.lastActivityAt, cursor.lastActivityAt),
+                lt(admissionCases.id, cursor.id),
               ),
-            ),
-          )
-          .limit(1);
-        complete = !remaining;
-      }
-      const assessmentRows = scannedCases.length
-        ? await transaction
+            )!,
+          ]
+        : filters;
+      const batch = await this.unitOfWork.transaction(
+        { tenantId: principal.tenantId },
+        async (transaction) => {
+          const candidates: Array<typeof admissionCases.$inferSelect> = await transaction
+            .select()
+            .from(admissionCases)
+            .where(and(...batchFilters))
+            .orderBy(desc(admissionCases.lastActivityAt), desc(admissionCases.id))
+            .limit(batchSize);
+          if (!candidates.length) return { candidates, items: [] as AdmissionOperationsCase[] };
+          const readinessByCase = await this.evaluateReadinessBatch(
+            transaction,
+            principal,
+            candidates,
+          );
+          const candidateIds = candidates.map(({ id }) => id);
+          const assessmentRows = await transaction
             .select({ caseId: admissionAssessments.caseId, data: admissionAssessments.data })
             .from(admissionAssessments)
             .where(
               and(
                 eq(admissionAssessments.tenantId, principal.tenantId),
-                inArray(
-                  admissionAssessments.caseId,
-                  scannedCases.map(({ admission }) => admission.id),
-                ),
+                inArray(admissionAssessments.caseId, candidateIds),
               ),
-            )
-        : [];
-      const preferredStartDateByCase = new Map(
-        assessmentRows.map((row) => [row.caseId, row.data.preferredStartDate]),
+            );
+          const preferredStartDateByCase = new Map(
+            assessmentRows.map((row) => [row.caseId, row.data.preferredStartDate]),
+          );
+          const page = candidates.flatMap((admission) => {
+            const blockerCount = readinessByCase.get(admission.id)!.blockers.length;
+            const overdue = Boolean(admission.nextFollowUpAt && admission.nextFollowUpAt < now);
+            const upcomingFollowUp = Boolean(
+              admission.nextFollowUpAt &&
+              admission.nextFollowUpAt > now &&
+              admission.nextFollowUpAt <= until,
+            );
+            const requestedStartDate =
+              preferredStartDateByCase.get(admission.id) ?? admission.preferredStartDate;
+            const startDateInWindow = Boolean(
+              requestedStartDate &&
+              isISODate(requestedStartDate) &&
+              requestedStartDate >= deadlineWindow.fromDate &&
+              requestedStartDate <= deadlineWindow.untilDate,
+            );
+            if (!blockerCount && !overdue && !upcomingFollowUp && !startDateInWindow) return [];
+            return [
+              {
+                id: admission.id,
+                firstName: admission.firstName,
+                lastName: admission.lastName,
+                organizationId: admission.organizationId,
+                facilityId: admission.facilityId,
+                clientId:
+                  admission.clientId &&
+                  can(principal, { action: 'client.read', resource: clientResource(admission) })
+                    ? admission.clientId
+                    : null,
+                stage: admission.stage,
+                createdAt: admission.createdAt,
+                nextFollowUpAt: admission.nextFollowUpAt,
+                preferredStartDate:
+                  requestedStartDate && isISODate(requestedStartDate) ? requestedStartDate : null,
+                blockerCount,
+              },
+            ];
+          });
+          return { candidates, items: page };
+        },
       );
-      const until = new Date(`${deadlineWindow.untilDate}T23:59:59.999Z`);
-      const items = scannedCases.flatMap(({ admission, blockerCount }) => {
-        const overdue = Boolean(admission.nextFollowUpAt && admission.nextFollowUpAt < now);
-        const upcomingFollowUp = Boolean(
-          admission.nextFollowUpAt &&
-          admission.nextFollowUpAt > now &&
-          admission.nextFollowUpAt <= until,
-        );
-        const requestedStartDate =
-          preferredStartDateByCase.get(admission.id) ?? admission.preferredStartDate;
-        const startDateInWindow = Boolean(
-          requestedStartDate &&
-          isISODate(requestedStartDate) &&
-          requestedStartDate >= deadlineWindow.fromDate &&
-          requestedStartDate <= deadlineWindow.untilDate,
-        );
-        if (!blockerCount && !overdue && !upcomingFollowUp && !startDateInWindow) return [];
-        return [
-          {
-            id: admission.id,
-            firstName: admission.firstName,
-            lastName: admission.lastName,
-            organizationId: admission.organizationId,
-            facilityId: admission.facilityId,
-            clientId:
-              admission.clientId &&
-              can(principal, { action: 'client.read', resource: clientResource(admission) })
-                ? admission.clientId
-                : null,
-            stage: admission.stage,
-            createdAt: admission.createdAt,
-            nextFollowUpAt: admission.nextFollowUpAt,
-            preferredStartDate:
-              requestedStartDate && isISODate(requestedStartDate) ? requestedStartDate : null,
-            blockerCount,
-          },
-        ];
-      });
-      return { items, complete };
-    });
+      if (!batch.candidates.length) break;
+      if (onPage) await onPage(batch.items);
+      else items.push(...batch.items);
+      cursor = batch.candidates[batch.candidates.length - 1]!;
+      if (batch.candidates.length < batchSize) break;
+    }
+    // oxlint-enable no-await-in-loop
+    return { items, complete: true };
   }
 
   async operationsIssueState(principal: AuthorizationPrincipal, id: string) {

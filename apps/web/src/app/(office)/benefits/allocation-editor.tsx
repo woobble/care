@@ -1,13 +1,14 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useState } from 'react';
+
+import type { Locale } from '@app/web/i18n/config';
+import { formatCurrency } from '@app/web/i18n/format';
 import { Button } from '@care/ui/components/button';
 import { Input } from '@care/ui/components/input';
 import { Label } from '@care/ui/components/label';
 import { NativeSelect } from '@care/ui/components/native-select';
-import { formatCurrency } from '@app/web/i18n/format';
-import type { Locale } from '@app/web/i18n/config';
-import { useTranslations } from 'next-intl';
-import { useState } from 'react';
 
 const maximumLines = 8;
 

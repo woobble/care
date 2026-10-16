@@ -1,16 +1,7 @@
-import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import Link from 'next/link';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { StatusBadge } from '@care/ui/components/status-badge';
-import { permissionLabelKeys, roleLabelKey } from '@app/web/i18n/access';
-import { errorMessageKey } from '@app/web/i18n/errors';
-import { statusLabelKey } from '@app/web/i18n/status';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
-import type { components } from '@care/api-client';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+
 import {
   activateMemberAction,
   deactivateMemberAction,
@@ -20,6 +11,16 @@ import {
 } from '@app/web/app/(office)/administration/actions';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { permissionLabelKeys, roleLabelKey } from '@app/web/i18n/access';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { statusLabelKey } from '@app/web/i18n/status';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { StatusBadge } from '@care/ui/components/status-badge';
 
 type Params = Promise<{ id: string }>;
 type SearchParams = Promise<{ error?: string; updated?: string }>;

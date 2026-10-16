@@ -1,11 +1,10 @@
-import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import Link from 'next/link';
+
+import { updateReminderPolicyAction } from '@app/web/app/(office)/operations/actions';
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
@@ -13,9 +12,11 @@ import {
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
-import { updateReminderPolicyAction } from '@app/web/app/(office)/operations/actions';
-import type { components } from '@care/api-client';
 import { getEmployeesByIds } from '@app/web/lib/employee-lookup';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { Input } from '@care/ui/components/input';
 
 type SearchParams = Promise<{ organizationId?: string; error?: string; updated?: string }>;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

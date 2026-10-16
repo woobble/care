@@ -1,12 +1,13 @@
 import { and, asc, desc, eq, exists, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
-import type { DatabaseTransaction } from '@care/database';
-import type { ClientRepresentationType } from '@care/clients';
-import { clientContactRoles, clientContacts, clientRecords } from '@care/clients';
+
 import {
   careDocuments,
   documentationAmendments,
   serviceEvidence as documentationEvidence,
 } from '@care/care-documentation';
+import type { ClientRepresentationType } from '@care/clients';
+import { clientContactRoles, clientContacts, clientRecords } from '@care/clients';
+import type { DatabaseTransaction } from '@care/database';
 import { employeeRecords, employeeTeamMemberships } from '@care/employees';
 import type { AuthorizationPrincipal } from '@care/permissions';
 import { visitAssignments, visits } from '@care/scheduling';

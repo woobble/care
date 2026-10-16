@@ -11,8 +11,9 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { clientContacts, clientRecords } from '@care/clients';
+
 import { careDocuments } from '@care/care-documentation';
+import { clientContacts, clientRecords } from '@care/clients';
 import { employeeRecords } from '@care/employees';
 
 const serviceEvidenceDb = pgSchema('service_evidence');

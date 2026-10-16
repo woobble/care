@@ -1,10 +1,12 @@
 import { and, count, desc, eq, gt, inArray, lte, or, sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
 import type { DomainEvent } from '@care/events';
+import { facilities, organizationsTable, teams } from '@care/organizations';
 import {
   can,
   canGrantPermissions,
@@ -14,7 +16,6 @@ import {
   type ScopeType,
 } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { facilities, organizationsTable, teams } from '@care/organizations';
 import {
   activateMembership,
   deactivateMembership,
@@ -31,6 +32,7 @@ import {
   tenantMemberships,
   users,
 } from '@module/identity/schema';
+
 import { loadTenantAuthorizationPrincipal } from './authorization-principal';
 import { InvalidAuthorizationConfigurationError } from './identity.service';
 

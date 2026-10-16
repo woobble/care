@@ -1,13 +1,12 @@
-import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
-import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import type { components } from '@care/api-client';
+import Link from 'next/link';
+
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { FilterDisclosure } from '@app/web/components/filter-disclosure';
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate } from '@app/web/i18n/format';
 import {
@@ -16,14 +15,17 @@ import {
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+
 import { createDraftInvoiceAction } from './actions';
 import { BillingNavigation } from './billing-nav';
 import { euroInput, formatCents, lineAmountField } from './format';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { FilterDisclosure } from '@app/web/components/filter-disclosure';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
 
 type Candidate = components['schemas']['BillingCandidateResponseDto'];
 type CandidateGroup = {
@@ -165,7 +167,7 @@ export default async function BillingWorklistPage({
     clientError?.code;
 
   return (
-    <div className="mx-auto grid w-full min-w-0 max-w-6xl grid-cols-[minmax(0,1fr)] gap-6">
+    <div className="mx-auto grid w-full max-w-6xl min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
       <PageHeader eyebrow={t('section')} title={t('title')} description={t('description')} />
       <BillingNavigation permissions={permissions} />
       {error ? <Alert>{translate(errorMessageKey(error))}</Alert> : null}
@@ -356,8 +358,8 @@ export default async function BillingWorklistPage({
                 className="grid min-w-0 gap-3 rounded-lg border bg-card p-5"
               >
                 <header className="grid min-w-0 gap-1">
-                  <h3 className="break-words text-lg font-semibold">{group.clientName}</h3>
-                  <p className="break-words text-sm text-muted-foreground">
+                  <h3 className="text-lg font-semibold break-words">{group.clientName}</h3>
+                  <p className="text-sm break-words text-muted-foreground">
                     {group.organizationName} · {group.facilityName} ·{' '}
                     {t(group.recipientType === 'payer' ? 'payerInvoice' : 'clientInvoice')}
                     {group.recipientName ? ` · ${group.recipientName}` : ''}
@@ -383,14 +385,14 @@ export default async function BillingWorklistPage({
                           className="grid min-w-0 gap-3 rounded-md border p-4 md:grid-cols-[minmax(0,1fr)_auto]"
                         >
                           <div className="grid min-w-0 gap-1">
-                            <p className="break-words font-medium">
+                            <p className="font-medium break-words">
                               {candidate.serviceName} · {formatDate(candidate.serviceDate, locale)}
                             </p>
-                            <p className="break-words text-sm text-muted-foreground">
+                            <p className="text-sm break-words text-muted-foreground">
                               {candidate.quantity} {t(`unit.${candidate.unit}`)} ·{' '}
                               {candidate.fundingLabel ?? t('selfPay')} · {candidate.evidenceStatus}
                             </p>
-                            <p className="break-words text-sm text-muted-foreground">
+                            <p className="text-sm break-words text-muted-foreground">
                               {t('unitPrice')}: {formatCents(candidate.unitPriceCents, locale)} ·{' '}
                               {t('remainingBillable')}:{' '}
                               {formatCents(candidate.remainingBillableAmountCents, locale)}

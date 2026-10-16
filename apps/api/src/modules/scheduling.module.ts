@@ -1,32 +1,6 @@
 import { Module } from '@nestjs/common';
-import { loadApiConfig } from '@care/config';
-import {
-  createSchedulingApplicationService,
-  type SchedulingApplicationService,
-} from '@care/scheduling';
-import { OsrmRouteProvider, UnavailableRouteProvider } from '@care/scheduling';
-import type { AuditWriter } from '@care/audit';
-import type { ClientApplicationService } from '@care/clients';
-import type { UnitOfWork } from '@care/database';
-import type { EmployeeApplicationService } from '@care/employees';
-import type { OrganizationApplicationService } from '@care/organizations';
-import type { OutboxWriter } from '@care/platform';
-import type { ServiceAgreementApplicationService } from '@care/service-agreements';
-import type { ServiceApplicationService } from '@care/services';
-import type { VisitExecutionGuards } from '@care/visit-execution';
+
 import { DatabaseModule } from '@app/api/database/database.module';
-import {
-  AUDIT_WRITER,
-  CLIENT_APPLICATION,
-  EMPLOYEE_APPLICATION,
-  ORGANIZATION_APPLICATION,
-  OUTBOX_WRITER,
-  SCHEDULING_APPLICATION,
-  VISIT_EXECUTION_GUARDS,
-  SERVICE_AGREEMENT_APPLICATION,
-  SERVICE_APPLICATION,
-  UNIT_OF_WORK,
-} from '@app/api/tokens';
 import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import {
   AgreementVisitGenerationController,
@@ -41,6 +15,34 @@ import {
   EmployeeUnavailabilityController,
   VisitsController,
 } from '@app/api/presentation/http/scheduling.controller';
+import {
+  AUDIT_WRITER,
+  CLIENT_APPLICATION,
+  EMPLOYEE_APPLICATION,
+  ORGANIZATION_APPLICATION,
+  OUTBOX_WRITER,
+  SCHEDULING_APPLICATION,
+  VISIT_EXECUTION_GUARDS,
+  SERVICE_AGREEMENT_APPLICATION,
+  SERVICE_APPLICATION,
+  UNIT_OF_WORK,
+} from '@app/api/tokens';
+import type { AuditWriter } from '@care/audit';
+import type { ClientApplicationService } from '@care/clients';
+import { loadApiConfig } from '@care/config';
+import type { UnitOfWork } from '@care/database';
+import type { EmployeeApplicationService } from '@care/employees';
+import type { OrganizationApplicationService } from '@care/organizations';
+import type { OutboxWriter } from '@care/platform';
+import {
+  createSchedulingApplicationService,
+  type SchedulingApplicationService,
+} from '@care/scheduling';
+import { OsrmRouteProvider, UnavailableRouteProvider } from '@care/scheduling';
+import type { ServiceAgreementApplicationService } from '@care/service-agreements';
+import type { ServiceApplicationService } from '@care/services';
+import type { VisitExecutionGuards } from '@care/visit-execution';
+
 import { AuditModule } from './audit.module';
 import { ClientsModule } from './clients.module';
 import { EmployeesModule } from './employees.module';

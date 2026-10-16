@@ -3,6 +3,9 @@
 import { Languages } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useTransition } from 'react';
+
+import { setLocaleAction } from '@app/web/app/actions/locale';
+import { isLocale, type Locale } from '@app/web/i18n/config';
 import { Button } from '@care/ui/components/button';
 import {
   DropdownMenu,
@@ -11,8 +14,6 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@care/ui/components/dropdown-menu';
-import { setLocaleAction } from '@app/web/app/actions/locale';
-import { isLocale, type Locale } from '@app/web/i18n/config';
 
 export function LanguageSwitcher({ locale }: Readonly<{ locale: Locale }>) {
   const t = useTranslations('Common');
@@ -30,7 +31,7 @@ export function LanguageSwitcher({ locale }: Readonly<{ locale: Locale }>) {
           className="h-10 min-h-10 shrink-0 gap-1.5 rounded-full px-2 sm:px-2.5"
         >
           <Languages className="size-4 text-muted-foreground" aria-hidden="true" />
-          <span className="text-xs font-medium uppercase text-muted-foreground">{locale}</span>
+          <span className="text-xs font-medium text-muted-foreground uppercase">{locale}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-36">

@@ -1,8 +1,9 @@
 import { AuthorizationDeniedError, can } from '@care/permissions';
 import type { AuthorizationPrincipal, Permission } from '@care/permissions';
 import type { ClientSnapshot } from '@module/clients/domain/client';
-import { ClientNotFoundError } from './errors';
 import type { ClientScopeFilter } from '@module/clients/infrastructure/persistence/client.repository';
+
+import { ClientNotFoundError } from './errors';
 
 export function clientScopeFilter(
   principal: AuthorizationPrincipal,

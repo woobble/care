@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 import { visitDateTimeFromInput } from '@app/web/lib/care-date';
 
@@ -321,6 +322,11 @@ export async function transitionTaskAction(formData: FormData): Promise<void> {
   const taskId = uuid(formData.get('taskId'));
   const expectedVersion = positiveInteger(formData.get('expectedVersion'));
   const action = choice(formData.get('action'), transitionActions);
+  const returnTo = choice(formData.get('returnTo'), [
+    '/operations',
+    '/operations/worklist',
+    '/operations/tasks',
+  ] as const);
   if (!taskId || !expectedVersion || !action)
     redirect(taskPath(taskId, 'OPERATIONS_INVALID_INPUT'));
 
@@ -337,7 +343,11 @@ export async function transitionTaskAction(formData: FormData): Promise<void> {
           : await api.POST('/api/v1/operations/tasks/{id}/cancel', { params, body });
   if (result.error) redirect(taskPath(taskId, result.error.code));
   revalidateOperations(taskId);
-  redirect(`/operations/tasks/${taskId}?updated=saved`);
+  redirect(
+    returnTo
+      ? `${returnTo}?updated=${action === 'complete' ? 'completed' : 'saved'}`
+      : `/operations/tasks/${taskId}?updated=saved`,
+  );
 }
 
 export async function addTaskCommentAction(formData: FormData): Promise<void> {

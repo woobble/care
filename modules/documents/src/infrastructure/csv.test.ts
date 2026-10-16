@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { csvNumber, encodeCsv } from './csv';
 
 describe('CSV encoding', () => {

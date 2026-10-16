@@ -1,5 +1,6 @@
 import { and, asc, eq, gt, isNull, lt, lte, or } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
@@ -8,7 +9,6 @@ import { facilities } from '@care/organizations';
 import { assertCan, AuthorizationDeniedError, can } from '@care/permissions';
 import type { AuthorizationPrincipal } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { serviceDefinitions, servicePrices } from '@module/services/schema';
 import {
   InvalidServicePriceError,
   ServicePriceConflictError,
@@ -19,6 +19,7 @@ import {
   type ServicePriceInput,
   type ServicePriceSnapshot,
 } from '@module/services/domain/service-price';
+import { serviceDefinitions, servicePrices } from '@module/services/schema';
 
 type AuditContext = { ip?: string; userAgent?: string };
 

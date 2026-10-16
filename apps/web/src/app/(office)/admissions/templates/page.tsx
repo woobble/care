@@ -1,9 +1,10 @@
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
-import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
+import Link from 'next/link';
+
+import { updateAdmissionTemplateAction } from '@app/web/app/(office)/admissions/actions';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
@@ -11,8 +12,8 @@ import {
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
-import { updateAdmissionTemplateAction } from '@app/web/app/(office)/admissions/actions';
-import { ResourceReference } from '@app/web/components/resource-reference';
+import { Button } from '@care/ui/components/button';
+import { NativeSelect } from '@care/ui/components/native-select';
 
 type TemplateItem = {
   code: string;

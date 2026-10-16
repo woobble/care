@@ -1,4 +1,5 @@
 import { cache } from 'react';
+
 import type { CareApi, PermissionGrantDto } from '@care/api-client';
 
 export const getPermissionGrantsForTenant = cache(

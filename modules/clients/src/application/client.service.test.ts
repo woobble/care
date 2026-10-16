@@ -1,14 +1,16 @@
 import { expect, test } from 'bun:test';
-import type { AuthorizationPrincipal, PermissionGrant } from '@care/permissions';
+
+import type { AuditWriter } from '@care/audit';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import type { OrganizationRepository } from '@care/organizations';
-import type { AuditWriter } from '@care/audit';
+import type { AuthorizationPrincipal, PermissionGrant } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
 import type { ClientMasterDataRepository } from '@module/clients/infrastructure/persistence/client-master-data.repository';
 import {
   ClientRepository,
   type ClientSearchFilter,
 } from '@module/clients/infrastructure/persistence/client.repository';
+
 import { ClientApplicationService } from './client.service';
 
 const tenantId = '435806c8-4d80-45f5-8c12-3197cc5989a8';

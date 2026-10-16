@@ -14,10 +14,11 @@ import {
   sql,
 } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
+
 import type { DatabaseTransaction } from '@care/database';
 import { facilities, organizationsTable } from '@care/organizations';
-import { clientInsurances, clientRecords, pflegegradRecords } from '@module/clients/schema';
 import type { ClientSnapshot, ClientStatus } from '@module/clients/domain/client';
+import { clientInsurances, clientRecords, pflegegradRecords } from '@module/clients/schema';
 
 export interface ClientScopeFilter {
   tenantWide: boolean;

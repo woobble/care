@@ -1,7 +1,8 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
+
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@care/ui/components/sheet';
 
 export function VisitDetailSheet({ children }: Readonly<{ children: React.ReactNode }>) {

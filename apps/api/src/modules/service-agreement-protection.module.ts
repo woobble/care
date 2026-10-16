@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
-import { createServiceAgreementGuards } from '@care/service-agreements';
-import { createSchedulingGuards } from '@care/scheduling';
+
 import { SCHEDULING_GUARDS, SERVICE_AGREEMENT_GUARDS } from '@app/api/tokens';
+import { createSchedulingGuards } from '@care/scheduling';
+import { createServiceAgreementGuards } from '@care/service-agreements';
 
 @Module({
   providers: [

@@ -29,17 +29,17 @@ import {
 } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
+
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
+import { BILLING_CLAIMS_APPLICATION } from '@app/api/tokens';
 import type {
   BillingClaimsApplicationService,
   CreateClaimInput,
   PayerBillingProfileInput,
   PayerInput,
 } from '@care/billing';
-import { BILLING_CLAIMS_APPLICATION } from '@app/api/tokens';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import { requestContext, type ApiRequest } from '@app/api/http/request';
-import { ProblemDetailsDto } from './dto';
-import { withoutUndefined } from './validation';
+
 import {
   ClaimCreateDto,
   PayerInputDto,
@@ -59,6 +59,8 @@ import {
   payersListQuerySchema,
   payerUpdateSchema,
 } from './claims.dto';
+import { ProblemDetailsDto } from './dto';
+import { withoutUndefined } from './validation';
 
 type PayerDirectoryRecord = Awaited<ReturnType<BillingClaimsApplicationService['getPayer']>>;
 type PayerProfileRecord = Awaited<

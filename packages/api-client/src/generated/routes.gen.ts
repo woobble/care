@@ -575,6 +575,9 @@ export const routeOperations = {
   "/api/v1/operations/work-items/{id}/snooze": {
     post: "operationsControllerSnooze",
   },
+  "/api/v1/operations/work-queue": {
+    get: "operationsControllerWorkQueue",
+  },
   "/api/v1/organizations": {
     get: "organizationsControllerListOrganizations",
     post: "organizationsControllerCreateOrganization",

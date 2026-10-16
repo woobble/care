@@ -1,29 +1,10 @@
-import { Textarea } from '@care/ui/components/textarea';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { ResourceReference } from '@app/web/components/resource-reference';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import type { components } from '@care/api-client';
-import Link from 'next/link';
-import { Suspense } from 'react';
-import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 import type { ReactNode } from 'react';
-import { Button } from '@care/ui/components/button';
-import { Badge } from '@care/ui/components/badge';
+
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
-import type { Locale } from '@app/web/i18n/config';
-import { errorMessageKey } from '@app/web/i18n/errors';
-import { formatCurrency, formatDate, formatDateTime } from '@app/web/i18n/format';
-import { todayDateKey, visitDateTimeInputValue } from '@app/web/lib/care-date';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasClientPermission,
-  hasPermission,
-} from '@app/web/lib/api';
 import {
   admitCaseAction,
   linkAdmissionClientAction,
@@ -35,6 +16,26 @@ import {
   transitionAdmissionAction,
   updateAdmissionCaseAction,
 } from '@app/web/app/(office)/admissions/actions';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import type { Locale } from '@app/web/i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatCurrency, formatDate, formatDateTime } from '@app/web/i18n/format';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+  hasPermission,
+} from '@app/web/lib/api';
+import { todayDateKey, visitDateTimeInputValue } from '@app/web/lib/care-date';
+import type { components } from '@care/api-client';
+import { Badge } from '@care/ui/components/badge';
+import { Button } from '@care/ui/components/button';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { Textarea } from '@care/ui/components/textarea';
 
 type Finding = {
   code: string;
@@ -265,7 +266,7 @@ export default async function AdmissionCasePage({
 
       <nav
         aria-label={t('workspaceNavigation')}
-        className="flex w-full min-w-0 max-w-full gap-1 overflow-x-auto rounded-lg border bg-card p-1 text-sm"
+        className="flex w-full max-w-full min-w-0 gap-1 overflow-x-auto rounded-lg border bg-card p-1 text-sm"
       >
         {[
           ['overview', '#overview'],
@@ -300,7 +301,7 @@ export default async function AdmissionCasePage({
       <section
         id="overview"
         aria-labelledby="overview-title"
-        className="grid min-w-0 gap-4 rounded-lg border bg-card p-5 scroll-mt-4"
+        className="grid min-w-0 scroll-mt-4 gap-4 rounded-lg border bg-card p-5"
       >
         <div className="grid min-w-0 gap-1">
           <h2 id="overview-title" className="text-xl font-semibold">
@@ -1033,7 +1034,7 @@ async function AdmissionCaseWorkspaceContent({
             </Button>
           </RHFActionForm>
         ) : admission.assessment ? (
-          <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+          <p className="text-sm whitespace-pre-wrap text-muted-foreground">
             {assessmentSummary(admission.assessment)}
           </p>
         ) : (

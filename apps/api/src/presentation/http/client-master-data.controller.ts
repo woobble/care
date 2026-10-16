@@ -28,11 +28,12 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { z } from 'zod';
-import { ClientMasterDataApplicationService } from '@care/clients';
-import { CLIENT_MASTER_DATA_APPLICATION } from '@app/api/tokens';
+
 import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import { requestContext, type ApiRequest } from '@app/api/http/request';
-import { ProblemDetailsDto } from './dto';
+import { CLIENT_MASTER_DATA_APPLICATION } from '@app/api/tokens';
+import { ClientMasterDataApplicationService } from '@care/clients';
+
 import {
   ClientAddressResponseDto,
   ClientContactInputDto,
@@ -64,6 +65,7 @@ import {
   clientTimelineResponse,
   pflegegradResponse,
 } from './clients.mapper';
+import { ProblemDetailsDto } from './dto';
 import { withoutUndefined } from './validation';
 
 @ApiTags('clients')

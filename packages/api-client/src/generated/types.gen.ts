@@ -2786,26 +2786,13 @@ export type OperationsDashboardResponseDto = {
     highPriorityExceptions: Array<OperationsWorkItemResponseDto>;
 };
 
-export type OperationsWorklistResponseDto = {
-    items: Array<OperationsWorkItemResponseDto>;
-    page: number;
-    pageSize: number;
-    total: number;
-    truncated: boolean;
-};
-
-export type DeadlineTaskRequestDto = {
-    title: string;
-    description?: string | null;
-    priority?: 'low' | 'normal' | 'high' | 'urgent';
-    assignedEmployeeId?: string | null;
-};
-
 export type OperationsTaskResponseDto = {
     id: string;
     organizationId: string;
     facilityId: string | null;
     clientId: string | null;
+    clientName?: string | null;
+    assignedEmployeeName?: string | null;
     title: string;
     description: string | null;
     status: 'open' | 'in_progress' | 'completed' | 'cancelled';
@@ -2822,6 +2809,35 @@ export type OperationsTaskResponseDto = {
     version: number;
     createdAt: string;
     updatedAt: string;
+};
+
+export type OperationsWorkQueueItemResponseDto = {
+    kind: 'task' | 'exception';
+    task?: OperationsTaskResponseDto;
+    exception?: OperationsWorkItemResponseDto;
+};
+
+export type OperationsWorkQueueResponseDto = {
+    items: Array<OperationsWorkQueueItemResponseDto>;
+    page: number;
+    pageSize: number;
+    total: number;
+    truncated: boolean;
+};
+
+export type OperationsWorklistResponseDto = {
+    items: Array<OperationsWorkItemResponseDto>;
+    page: number;
+    pageSize: number;
+    total: number;
+    truncated: boolean;
+};
+
+export type DeadlineTaskRequestDto = {
+    title: string;
+    description?: string | null;
+    priority?: 'low' | 'normal' | 'high' | 'urgent';
+    assignedEmployeeId?: string | null;
 };
 
 export type ReminderPolicySettingResponseDto = {
@@ -11007,6 +11023,54 @@ export type OperationsControllerDashboardResponses = {
 
 export type OperationsControllerDashboardResponse = OperationsControllerDashboardResponses[keyof OperationsControllerDashboardResponses];
 
+export type OperationsControllerWorkQueueData = {
+    body?: never;
+    headers: {
+        /**
+         * Tenant selected for this request
+         */
+        'X-Tenant-Id': string;
+    };
+    path?: never;
+    query?: {
+        pageSize?: number;
+        page?: number;
+        sort?: 'priority' | 'due';
+        search?: unknown;
+        untilDate?: string;
+        fromDate?: string;
+        due?: 'overdue' | 'today' | 'upcoming';
+        assignedToMe?: 'true' | 'false';
+        assignedEmployeeId?: unknown;
+        priority?: 'low' | 'normal' | 'high' | 'urgent';
+        taskStatus?: 'open' | 'in_progress' | 'completed' | 'cancelled';
+        exceptionStatus?: 'open' | 'acknowledged' | 'snoozed';
+        severity?: 'info' | 'warning' | 'critical';
+        sourceDomain?: unknown;
+        category?: unknown;
+        clientId?: unknown;
+        facilityId?: unknown;
+        organizationId?: unknown;
+        itemType?: 'all' | 'tasks' | 'exceptions';
+    };
+    url: '/api/v1/operations/work-queue';
+};
+
+export type OperationsControllerWorkQueueErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type OperationsControllerWorkQueueError = OperationsControllerWorkQueueErrors[keyof OperationsControllerWorkQueueErrors];
+
+export type OperationsControllerWorkQueueResponses = {
+    200: OperationsWorkQueueResponseDto;
+};
+
+export type OperationsControllerWorkQueueResponse = OperationsControllerWorkQueueResponses[keyof OperationsControllerWorkQueueResponses];
+
 export type OperationsControllerWorkItemsData = {
     body?: never;
     headers: {
@@ -11303,6 +11367,8 @@ export type OperationsControllerTasksData = {
         page?: number;
         order?: 'due' | 'created';
         search?: unknown;
+        untilDate?: string;
+        fromDate?: string;
         due?: 'overdue' | 'today' | 'upcoming';
         assignedToMe?: 'true' | 'false';
         assignedEmployeeId?: unknown;
@@ -11385,6 +11451,8 @@ export type OperationsControllerMyTasksData = {
         page?: number;
         order?: 'due' | 'created';
         search?: unknown;
+        untilDate?: string;
+        fromDate?: string;
         due?: 'overdue' | 'today' | 'upcoming';
         priority?: 'low' | 'normal' | 'high' | 'urgent';
         status?: 'open' | 'in_progress' | 'completed' | 'cancelled';

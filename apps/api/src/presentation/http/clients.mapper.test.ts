@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test';
+
 import type { ClientSearchItem } from '@care/clients';
+
 import { clientListItemResponse } from './clients.mapper';
 
 test('client list responses include only fields used by the list', () => {

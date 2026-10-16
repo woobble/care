@@ -1,31 +1,34 @@
 // oxlint-disable-next-line import/no-unassigned-import -- load dotenv before reading worker configuration
 import '@care/config/load-env';
-import { hostname } from 'node:os';
-import { count, eq } from 'drizzle-orm';
 import { createServer } from 'node:http';
-import { EventDispatcher } from '@care/events';
+import { hostname } from 'node:os';
+
+import { count, eq } from 'drizzle-orm';
+
+import { DrizzleAuditWriter } from '@care/audit';
+import { benefitsSchema, createBenefitsApplicationService } from '@care/benefits';
+import { billingSchema } from '@care/billing';
+import { clientsSchema } from '@care/clients';
 import { loadWorkerConfig } from '@care/config';
 import { createDatabase, createUnitOfWork } from '@care/database';
+import { employeesSchema } from '@care/employees';
+import { EventDispatcher } from '@care/events';
 import { createLogger } from '@care/logging';
 import { startMetricsServer, startTelemetry, stopMetricsServer } from '@care/observability';
-import {
-  DrizzleOutboxRepository,
-  outboxMessages,
-  platformSchema,
-  workerHealth,
-} from '@care/platform';
-import { DrizzleAuditWriter } from '@care/audit';
-import { billingSchema } from '@care/billing';
-import { benefitsSchema, createBenefitsApplicationService } from '@care/benefits';
-import { clientsSchema } from '@care/clients';
-import { employeesSchema } from '@care/employees';
-import { organizationsSchema, tenants } from '@care/organizations';
 import { onboardingSchema, readOperationsDeadlineCases } from '@care/onboarding';
 import {
   OperationsDeadlineTaskScheduler,
   OperationsRecurrenceApplicationService,
   operationsSchema,
 } from '@care/operations';
+import { organizationsSchema, tenants } from '@care/organizations';
+import {
+  DrizzleOutboxRepository,
+  outboxMessages,
+  platformSchema,
+  workerHealth,
+} from '@care/platform';
+
 import { workerMetrics } from './operational-metrics';
 
 const batchSize = 50;

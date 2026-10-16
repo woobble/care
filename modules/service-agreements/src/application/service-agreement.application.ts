@@ -1,4 +1,5 @@
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
 import {
   ClientArchivedError,
@@ -8,10 +9,10 @@ import {
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
+import type { OrganizationApplicationService } from '@care/organizations';
 import { AuthorizationDeniedError, assertCan, can } from '@care/permissions';
 import type { AuthorizationPrincipal, Permission } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import type { OrganizationApplicationService } from '@care/organizations';
 import type { ServiceApplicationService } from '@care/services';
 import {
   AgreementService,
@@ -34,13 +35,13 @@ import {
   type AgreementServiceScheduleRule,
   type ServiceAgreementSnapshot,
 } from '@module/service-agreements/domain/service-agreement';
+import type { ServiceAgreementGuards } from '@module/service-agreements/infrastructure/service-agreement-guard';
 import {
   ServiceAgreementRepository,
   type AgreementReadScope,
   type ServiceAgreementListRow,
   type ServiceAgreementSearchFilter,
 } from '@module/service-agreements/infrastructure/service-agreement.repository';
-import type { ServiceAgreementGuards } from '@module/service-agreements/infrastructure/service-agreement-guard';
 
 type AuditContext = { ip?: string; userAgent?: string };
 

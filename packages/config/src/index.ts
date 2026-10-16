@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
+
 import { z } from 'zod';
 
 const nodeEnvironment = z.enum(['development', 'test', 'production']).default('development');

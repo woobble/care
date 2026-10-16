@@ -14,12 +14,13 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+
+import { benefitFundingSources, serviceAllocations } from '@care/benefits';
 import { clientInsurances, clientRecords } from '@care/clients';
 import { organizationsTable, facilities } from '@care/organizations';
-import { servicePrices } from '@care/services';
-import { benefitFundingSources, serviceAllocations } from '@care/benefits';
-import { performedServices } from '@care/visit-execution';
 import { evidencePackages } from '@care/service-evidence';
+import { servicePrices } from '@care/services';
+import { performedServices } from '@care/visit-execution';
 
 const billing = pgSchema('billing');
 

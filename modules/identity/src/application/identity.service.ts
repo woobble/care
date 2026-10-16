@@ -2,10 +2,12 @@ import { and, eq } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { v7 as uuidv7 } from 'uuid';
+
 import type { VerifiedIdentity } from '@care/auth';
+import { tenants } from '@care/organizations';
 import type { AuthorizationPrincipal } from '@care/permissions';
 import { externalIdentities, tenantMemberships, users } from '@module/identity/schema';
-import { tenants } from '@care/organizations';
+
 import { loadTenantAuthorizationPrincipal } from './authorization-principal';
 
 export interface TenantSummary {

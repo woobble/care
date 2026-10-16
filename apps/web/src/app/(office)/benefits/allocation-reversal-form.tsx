@@ -1,10 +1,12 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { Button } from '@care/ui/components/button';
 import { Label } from '@care/ui/components/label';
 import { Textarea } from '@care/ui/components/textarea';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { useTranslations } from 'next-intl';
+
 import { reverseBenefitAllocationAction } from './actions';
 
 export function AllocationReversalForm({

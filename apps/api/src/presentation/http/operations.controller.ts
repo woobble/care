@@ -29,12 +29,16 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { z } from 'zod';
-import type { AuthorizationPrincipal } from '@care/permissions';
+
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
+import { OPERATIONS_APPLICATION, OPERATIONS_RECURRENCE_APPLICATION } from '@app/api/tokens';
 import {
   type OperationsApplicationService,
   type OperationsQuery,
   type OperationsTaskInput,
   type OperationsTaskListQuery,
+  type OperationsWorkQueueQuery,
   type OperationsTaskPatch,
   type OperationsReminderPolicyInput,
   type OperationsRecurrenceApplicationService,
@@ -42,9 +46,8 @@ import {
   type RecurringTaskPatch,
   type RecurringTaskQuery,
 } from '@care/operations';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import { requestContext, type ApiRequest } from '@app/api/http/request';
-import { OPERATIONS_APPLICATION, OPERATIONS_RECURRENCE_APPLICATION } from '@app/api/tokens';
+import type { AuthorizationPrincipal } from '@care/permissions';
+
 import { ProblemDetailsDto } from './dto';
 import { withoutUndefined } from './validation';
 
@@ -89,23 +92,82 @@ const exceptionHistoryQuerySchema = z.object({
   page: pageSchema,
   pageSize: pageSizeSchema,
 });
-const taskQuerySchema = z.object({
-  organizationId: uuid.optional(),
-  facilityId: uuid.optional(),
-  clientId: uuid.optional(),
-  status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
-  priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
-  assignedEmployeeId: uuid.optional(),
-  assignedToMe: z
-    .enum(['true', 'false'])
-    .optional()
-    .transform((value) => value === 'true'),
-  due: z.enum(['overdue', 'today', 'upcoming']).optional(),
-  search: z.string().trim().min(1).max(120).optional(),
-  order: z.enum(['due', 'created']).optional(),
-  page: pageSchema,
-  pageSize: z.coerce.number().int().min(1).max(100).default(25),
-});
+const taskQuerySchema = z
+  .object({
+    organizationId: uuid.optional(),
+    facilityId: uuid.optional(),
+    clientId: uuid.optional(),
+    status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
+    priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+    assignedEmployeeId: uuid.optional(),
+    assignedToMe: z
+      .enum(['true', 'false'])
+      .optional()
+      .transform((value) => value === 'true'),
+    due: z.enum(['overdue', 'today', 'upcoming']).optional(),
+    fromDate: z.iso.date().optional(),
+    untilDate: z.iso.date().optional(),
+    search: z.string().trim().min(1).max(120).optional(),
+    order: z.enum(['due', 'created']).optional(),
+    page: pageSchema,
+    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .refine(({ fromDate, untilDate }) => !fromDate || !untilDate || fromDate <= untilDate, {
+    path: ['untilDate'],
+  });
+const workQueueQuerySchema = z
+  .object({
+    itemType: z.enum(['all', 'tasks', 'exceptions']).optional(),
+    organizationId: uuid.optional(),
+    facilityId: uuid.optional(),
+    clientId: uuid.optional(),
+    category: z
+      .enum([
+        'scheduling',
+        'visits',
+        'documentation',
+        'benefits',
+        'billing',
+        'claims',
+        'onboarding',
+        'agreements',
+        'employees',
+      ])
+      .optional(),
+    sourceDomain: z
+      .enum([
+        'scheduling',
+        'visit_execution',
+        'care_documentation',
+        'service_evidence',
+        'benefits',
+        'billing',
+        'claims',
+        'onboarding',
+        'service_agreements',
+        'employee_qualifications',
+      ])
+      .optional(),
+    severity: z.enum(['info', 'warning', 'critical']).optional(),
+    exceptionStatus: z.enum(['open', 'acknowledged', 'snoozed']).optional(),
+    taskStatus: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
+    priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+    assignedEmployeeId: uuid.optional(),
+    assignedToMe: z
+      .enum(['true', 'false'])
+      .optional()
+      .transform((value) => value === 'true'),
+    due: z.enum(['overdue', 'today', 'upcoming']).optional(),
+    fromDate: z.iso.date().optional(),
+    untilDate: z.iso.date().optional(),
+    search: z.string().trim().min(1).max(120).optional(),
+    sort: z.enum(['priority', 'due']).optional(),
+    page: pageSchema,
+    pageSize: pageSizeSchema,
+  })
+  .refine(({ fromDate, untilDate }) => !fromDate || !untilDate || fromDate <= untilDate, {
+    path: ['untilDate'],
+  });
 const sourceSchema = z.object({
   type: z.enum([
     'client',
@@ -480,6 +542,10 @@ export class OperationsTaskResponseDto {
   facilityId!: string | null;
   @ApiProperty({ type: String, format: 'uuid', nullable: true })
   clientId!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true })
+  clientName?: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true })
+  assignedEmployeeName?: string | null;
   @ApiProperty()
   title!: string;
   @ApiProperty({ type: String, nullable: true })
@@ -519,6 +585,28 @@ export class OperationsTaskListResponseDto {
   pageSize!: number;
   @ApiProperty()
   total!: number;
+}
+
+export class OperationsWorkQueueItemResponseDto {
+  @ApiProperty({ enum: ['task', 'exception'] })
+  kind!: 'task' | 'exception';
+  @ApiPropertyOptional({ type: OperationsTaskResponseDto })
+  task?: OperationsTaskResponseDto;
+  @ApiPropertyOptional({ type: OperationsWorkItemResponseDto })
+  exception?: OperationsWorkItemResponseDto;
+}
+
+export class OperationsWorkQueueResponseDto {
+  @ApiProperty({ type: [OperationsWorkQueueItemResponseDto] })
+  items!: OperationsWorkQueueItemResponseDto[];
+  @ApiProperty()
+  page!: number;
+  @ApiProperty()
+  pageSize!: number;
+  @ApiProperty()
+  total!: number;
+  @ApiProperty()
+  truncated!: boolean;
 }
 
 export class OperationsTaskActivityResponseDto {
@@ -638,6 +726,41 @@ export class OperationsController {
     const parsed = dashboardQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException();
     return this.operations.dashboard(principal(request), withoutUndefined(parsed.data));
+  }
+
+  @Get('work-queue')
+  @ApiOperation({ summary: 'List tasks and derived exceptions in one paginated Operations queue' })
+  @ApiQuery({ name: 'itemType', required: false, enum: ['all', 'tasks', 'exceptions'] })
+  @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'clientId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'category', required: false })
+  @ApiQuery({ name: 'sourceDomain', required: false })
+  @ApiQuery({ name: 'severity', required: false, enum: ['info', 'warning', 'critical'] })
+  @ApiQuery({ name: 'exceptionStatus', required: false, enum: ['open', 'acknowledged', 'snoozed'] })
+  @ApiQuery({
+    name: 'taskStatus',
+    required: false,
+    enum: ['open', 'in_progress', 'completed', 'cancelled'],
+  })
+  @ApiQuery({ name: 'priority', required: false, enum: ['low', 'normal', 'high', 'urgent'] })
+  @ApiQuery({ name: 'assignedEmployeeId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'assignedToMe', required: false, enum: ['true', 'false'] })
+  @ApiQuery({ name: 'due', required: false, enum: ['overdue', 'today', 'upcoming'] })
+  @ApiQuery({ name: 'fromDate', required: false, type: String, format: 'date' })
+  @ApiQuery({ name: 'untilDate', required: false, type: String, format: 'date' })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'sort', required: false, enum: ['priority', 'due'] })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiOkResponse({ type: OperationsWorkQueueResponseDto })
+  workQueue(@Req() request: ApiRequest, @Query() query: Record<string, string | undefined>) {
+    const parsed = workQueueQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BadRequestException();
+    return this.operations.listWorkQueue(
+      principal(request),
+      withoutUndefined(parsed.data) as OperationsWorkQueueQuery,
+    );
   }
 
   @Get('work-items')
@@ -829,6 +952,8 @@ export class OperationsController {
   @ApiQuery({ name: 'assignedEmployeeId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'assignedToMe', required: false, enum: ['true', 'false'] })
   @ApiQuery({ name: 'due', required: false, enum: ['overdue', 'today', 'upcoming'] })
+  @ApiQuery({ name: 'fromDate', required: false, type: String, format: 'date' })
+  @ApiQuery({ name: 'untilDate', required: false, type: String, format: 'date' })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'order', required: false, enum: ['due', 'created'] })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -852,6 +977,8 @@ export class OperationsController {
   })
   @ApiQuery({ name: 'priority', required: false, enum: ['low', 'normal', 'high', 'urgent'] })
   @ApiQuery({ name: 'due', required: false, enum: ['overdue', 'today', 'upcoming'] })
+  @ApiQuery({ name: 'fromDate', required: false, type: String, format: 'date' })
+  @ApiQuery({ name: 'untilDate', required: false, type: String, format: 'date' })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'order', required: false, enum: ['due', 'created'] })
   @ApiQuery({ name: 'page', required: false, type: Number })

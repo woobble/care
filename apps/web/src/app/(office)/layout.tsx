@@ -1,12 +1,13 @@
+import { getLocale, getTranslations } from 'next-intl/server';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
 import { Suspense } from 'react';
-import { SignOutMenuItem } from '@app/web/components/sign-out-menu-item';
-import { getApiClient, getAuthSession, getPermissionGrants, hasPermission } from '@app/web/lib/api';
+
 import { signOutAction } from '@app/web/app/actions/auth';
 import { OfficeShell, type OfficeNavigationGroup } from '@app/web/components/office-shell';
 import { PageLoadingSkeleton } from '@app/web/components/page-loading-skeleton';
+import { SignOutMenuItem } from '@app/web/components/sign-out-menu-item';
+import { getApiClient, getAuthSession, getPermissionGrants, hasPermission } from '@app/web/lib/api';
 
 export default function OfficeLayout({
   children,

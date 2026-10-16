@@ -1,12 +1,8 @@
 import { Module } from '@nestjs/common';
-import { createOnboardingApplicationService } from '@care/onboarding';
-import type { AuditWriter } from '@care/audit';
-import type { ClientApplicationService } from '@care/clients';
-import type { CommunicationsApplicationService } from '@care/communications';
-import type { ServiceApplicationService, ServicePriceApplicationService } from '@care/services';
-import type { UnitOfWork } from '@care/database';
-import type { OutboxWriter } from '@care/platform';
+
 import { DatabaseModule } from '@app/api/database/database.module';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { OnboardingController } from '@app/api/presentation/http/onboarding.controller';
 import {
   AUDIT_WRITER,
   ONBOARDING_APPLICATION,
@@ -17,13 +13,19 @@ import {
   SERVICE_APPLICATION,
   SERVICE_PRICE_APPLICATION,
 } from '@app/api/tokens';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import { OnboardingController } from '@app/api/presentation/http/onboarding.controller';
+import type { AuditWriter } from '@care/audit';
+import type { ClientApplicationService } from '@care/clients';
+import type { CommunicationsApplicationService } from '@care/communications';
+import type { UnitOfWork } from '@care/database';
+import { createOnboardingApplicationService } from '@care/onboarding';
+import type { OutboxWriter } from '@care/platform';
+import type { ServiceApplicationService, ServicePriceApplicationService } from '@care/services';
+
 import { AuditModule } from './audit.module';
-import { IdentityModule } from './identity.module';
-import { PlatformModule } from './platform.module';
 import { ClientsModule } from './clients.module';
 import { CommunicationsModule } from './communications.module';
+import { IdentityModule } from './identity.module';
+import { PlatformModule } from './platform.module';
 import { ServicesModule } from './services.module';
 
 @Module({

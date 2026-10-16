@@ -1,11 +1,22 @@
 import { and, asc, count, desc, eq, gt, gte, ilike, inArray, lt, not, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
-import type { DatabaseTransaction } from '@care/database';
 import { v7 as uuidv7 } from 'uuid';
+
+import { auditEntries } from '@care/audit';
 import { clientRecords } from '@care/clients';
+import type { DatabaseTransaction } from '@care/database';
 import { employeeRecords } from '@care/employees';
 import { facilities, organizationsTable } from '@care/organizations';
-import { auditEntries } from '@care/audit';
+import type {
+  AvailabilityException,
+  AvailabilityWindow,
+  EmployeeAvailability,
+} from '@module/scheduling/domain/availability';
+import type {
+  VisitAssignmentSnapshot,
+  VisitData,
+  VisitServiceData,
+} from '@module/scheduling/domain/visit';
 import {
   employeeAvailability,
   employeeAvailabilityExceptions,
@@ -23,16 +34,6 @@ import {
   visitServices,
   visits,
 } from '@module/scheduling/schema';
-import type {
-  VisitAssignmentSnapshot,
-  VisitData,
-  VisitServiceData,
-} from '@module/scheduling/domain/visit';
-import type {
-  AvailabilityException,
-  AvailabilityWindow,
-  EmployeeAvailability,
-} from '@module/scheduling/domain/availability';
 
 // Preserve transaction connection order while rotating unique stop sequences and writing route estimates.
 // oxlint-disable no-await-in-loop

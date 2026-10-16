@@ -1,8 +1,14 @@
+import { describe, expect, test } from 'bun:test';
+
+import type { FastifyReply } from 'fastify';
 import { Client } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
-import { describe, expect, test } from 'bun:test';
-import { asUUID } from '@care/contracts';
+
+import { databaseSchema } from '@app/api/database/schema';
+import type { ApiRequest } from '@app/api/http/request';
+import { DocumentsController } from '@app/api/presentation/http/documents.controller';
 import { DrizzleAuditWriter } from '@care/audit';
+import { asUUID } from '@care/contracts';
 import { createDatabase, createUnitOfWork } from '@care/database';
 import {
   createDocumentsApplicationService,
@@ -13,14 +19,10 @@ import {
   DocumentLogoInvalidError,
   DocumentTemplateVersionConflictError,
 } from '@care/documents';
-import { DrizzleOutboxRepository } from '@care/platform';
 import type { AuthorizationPrincipal } from '@care/permissions';
+import { DrizzleOutboxRepository } from '@care/platform';
 import type { ObjectStorage } from '@care/storage';
 import { startCareTestDatabase } from '@care/testing';
-import { databaseSchema } from '@app/api/database/schema';
-import { DocumentsController } from '@app/api/presentation/http/documents.controller';
-import type { ApiRequest } from '@app/api/http/request';
-import type { FastifyReply } from 'fastify';
 
 describe('documents PostgreSQL integration', () => {
   test('versions templates and stores, scopes, and verifies immutable document artifacts', async () => {

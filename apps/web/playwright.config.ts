@@ -1,9 +1,10 @@
-import { defineConfig, devices } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { loadEnvFile } from 'node:process';
 import { dirname, resolve } from 'node:path';
+import { loadEnvFile } from 'node:process';
 import { fileURLToPath } from 'node:url';
+
+import { defineConfig, devices } from '@playwright/test';
 
 const configDirectory = dirname(fileURLToPath(import.meta.url));
 const envFile = resolve(configDirectory, '../../.env');

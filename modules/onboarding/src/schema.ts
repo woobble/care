@@ -14,6 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+
 import { clientRecords } from '@care/clients';
 import { interactions } from '@care/communications';
 import { documentArtifacts } from '@care/documents';

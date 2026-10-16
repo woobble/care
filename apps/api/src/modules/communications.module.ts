@@ -1,17 +1,19 @@
 import { Module } from '@nestjs/common';
-import { createCommunicationsApplicationService } from '@care/communications';
-import type { AuditWriter } from '@care/audit';
-import type { UnitOfWork } from '@care/database';
-import type { OutboxWriter } from '@care/platform';
+
 import { DatabaseModule } from '@app/api/database/database.module';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { CommunicationsController } from '@app/api/presentation/http/communications.controller';
 import {
   AUDIT_WRITER,
   COMMUNICATIONS_APPLICATION,
   OUTBOX_WRITER,
   UNIT_OF_WORK,
 } from '@app/api/tokens';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import { CommunicationsController } from '@app/api/presentation/http/communications.controller';
+import type { AuditWriter } from '@care/audit';
+import { createCommunicationsApplicationService } from '@care/communications';
+import type { UnitOfWork } from '@care/database';
+import type { OutboxWriter } from '@care/platform';
+
 import { AuditModule } from './audit.module';
 import { IdentityModule } from './identity.module';
 import { PlatformModule } from './platform.module';

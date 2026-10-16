@@ -26,6 +26,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { z } from 'zod';
+
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
+import { ORGANIZATION_APPLICATION } from '@app/api/tokens';
 import { OrganizationApplicationService } from '@care/organizations';
 import type {
   FacilitySnapshot,
@@ -33,9 +37,7 @@ import type {
   StructureStatus,
   TeamSnapshot,
 } from '@care/organizations';
-import { ORGANIZATION_APPLICATION } from '@app/api/tokens';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import { requestContext, type ApiRequest } from '@app/api/http/request';
+
 import { ProblemDetailsDto } from './dto';
 import {
   CreateFacilityDto,

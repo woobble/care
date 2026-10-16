@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { routingHealthStatus } from './health.controller';
 
 describe('routing health status', () => {

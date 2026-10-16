@@ -1,5 +1,6 @@
-import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+
 import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
 
 export default async function AdministrationLayout({

@@ -1,22 +1,14 @@
+import { describe, expect, test } from 'bun:test';
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+
 import { NestFactory } from '@nestjs/core';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { Client } from 'pg';
-import { describe, expect, test } from 'bun:test';
-import { v7 as uuidv7 } from 'uuid';
 import { SignJWT, exportJWK, generateKeyPair } from 'jose';
-import type { AuditWriter } from '@care/audit';
-import type { BenefitsApplicationService } from '@care/benefits';
-import type { UnitOfWork } from '@care/database';
-import {
-  OperationsDeadlineTaskScheduler,
-  type OperationsRecurrenceApplicationService,
-} from '@care/operations';
-import { readOperationsDeadlineCases } from '@care/onboarding';
-import type { OutboxWriter } from '@care/platform';
-import { startCareTestDatabase } from '@care/testing';
+import { Client } from 'pg';
+import { v7 as uuidv7 } from 'uuid';
+
 import { AppModule } from '@app/api/app.module';
 import { configureApiHttp, createApiFastifyAdapter } from '@app/api/http/fastify';
 import {
@@ -26,6 +18,16 @@ import {
   OUTBOX_WRITER,
   UNIT_OF_WORK,
 } from '@app/api/tokens';
+import type { AuditWriter } from '@care/audit';
+import type { BenefitsApplicationService } from '@care/benefits';
+import type { UnitOfWork } from '@care/database';
+import { readOperationsDeadlineCases } from '@care/onboarding';
+import {
+  OperationsDeadlineTaskScheduler,
+  type OperationsRecurrenceApplicationService,
+} from '@care/operations';
+import type { OutboxWriter } from '@care/platform';
+import { startCareTestDatabase } from '@care/testing';
 
 describe('operations PostgreSQL/API integration', () => {
   test('projects a current scheduling exception, records task history, and enforces tenant and source scope', async () => {
@@ -43,6 +45,13 @@ describe('operations PostgreSQL/API integration', () => {
     const otherTenantClientId = uuidv7();
     const employeeId = uuidv7();
     const otherEmployeeId = uuidv7();
+    const qualificationId = uuidv7();
+    const employeeQualificationId = uuidv7();
+    const extraQualificationIds = Array.from({ length: 101 }, () => uuidv7());
+    const extraEmployeeQualificationIds = Array.from({ length: 101 }, () => uuidv7());
+    const extraAdmissionIds = Array.from({ length: 501 }, () => uuidv7());
+    const extraExecutionVisitIds = Array.from({ length: 101 }, () => uuidv7());
+    const extraExecutionIds = Array.from({ length: 101 }, () => uuidv7());
     const visitId = uuidv7();
     const agreementId = uuidv7();
     const admissionCaseId = uuidv7();
@@ -139,6 +148,25 @@ describe('operations PostgreSQL/API integration', () => {
         [uuidv7(), tenantId, organizationId, employeeId, facilityId, now],
       );
       await owner.query(
+        `INSERT INTO employees.qualification_definitions
+           (id, tenant_id, name, status, created_at, updated_at)
+         VALUES ($1, $2, 'Operations qualification', 'active', $3, $3)`,
+        [qualificationId, tenantId, now],
+      );
+      await owner.query(
+        `INSERT INTO employees.qualification_definitions
+           (id, tenant_id, name, status, created_at, updated_at)
+         SELECT definition_id, $1, 'Operations qualification ' || ordinality, 'active', $2, $2
+         FROM unnest($3::uuid[]) WITH ORDINALITY AS qualifications(definition_id, ordinality)`,
+        [tenantId, now, extraQualificationIds],
+      );
+      await owner.query(
+        `INSERT INTO employees.employee_qualifications
+           (id, tenant_id, employee_id, qualification_id, valid_from, valid_until, status, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, $7)`,
+        [employeeQualificationId, tenantId, employeeId, qualificationId, today, inEightDays, now],
+      );
+      await owner.query(
         `INSERT INTO scheduling.visits
            (id, tenant_id, client_id, organization_id, facility_id, origin, status, planned_start, planned_end, timezone, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, 'manual', 'confirmed', $6, $7, 'Europe/Berlin', $8, $8)`,
@@ -151,6 +179,21 @@ describe('operations PostgreSQL/API integration', () => {
           new Date(now.getTime() + 3 * 60 * 60 * 1000),
           new Date(now.getTime() + 4 * 60 * 60 * 1000),
           now,
+        ],
+      );
+      await owner.query(
+        `INSERT INTO employees.employee_qualifications
+           (id, tenant_id, employee_id, qualification_id, valid_from, valid_until, status, created_at, updated_at)
+         SELECT employee_qualification_id, $1, $2, qualification_id, $3, $4, 'active', $5, $5
+         FROM unnest($6::uuid[], $7::uuid[]) AS qualifications(employee_qualification_id, qualification_id)`,
+        [
+          tenantId,
+          employeeId,
+          today,
+          inEightDays,
+          now,
+          extraEmployeeQualificationIds,
+          extraQualificationIds,
         ],
       );
       await owner.query(
@@ -222,7 +265,7 @@ describe('operations PostgreSQL/API integration', () => {
            (id, tenant_id, organization_id, facility_id, first_name, last_name, contact_method,
             preferred_start_date, inquiry_source, stage, next_follow_up_at, last_activity_at,
             created_by_user_id, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, 'New', 'Admission', 'phone', $5, 'operations integration',
+         VALUES ($1, $2, $3, $4, 'New', $9, 'phone', $5, 'operations integration',
                  'inquiry', $6, $7, $8, $7, $7)`,
         [
           admissionCaseId,
@@ -233,6 +276,7 @@ describe('operations PostgreSQL/API integration', () => {
           inTenDays,
           now,
           userId,
+          admissionCaseId,
         ],
       );
       await owner.query(
@@ -261,6 +305,9 @@ describe('operations PostgreSQL/API integration', () => {
         'operations.exceptions.manage',
         'operations.reminder_settings.manage',
         'schedule.read',
+        'schedule.assign',
+        'schedule.update',
+        'visit_execution.read',
         'client.read',
         'employee.read',
         'organization.read',
@@ -461,6 +508,126 @@ describe('operations PostgreSQL/API integration', () => {
       expect(snoozableIssue).toBeDefined();
       expect(typeof missingAssignment!.firstDetectedAt).toBe('string');
 
+      const searchableIssueResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?search=client%20preference`,
+        { headers },
+      );
+      expect(searchableIssueResponse.status).toBe(200);
+      const searchableIssues = (await searchableIssueResponse.json()) as {
+        items: Array<{ id: string }>;
+      };
+      expect(searchableIssues.items.some((item) => item.id === snoozableIssue!.id)).toBe(true);
+      const clientSearchResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?search=Ada%20Operations`,
+        { headers },
+      );
+      const clientSearchItems = (await clientSearchResponse.json()) as {
+        items: Array<{ id: string }>;
+      };
+      expect(clientSearchItems.items.some((item) => item.id === snoozableIssue!.id)).toBe(true);
+      const sourceFilteredResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?sourceDomain=scheduling`,
+        { headers },
+      );
+      const sourceFilteredItems = (await sourceFilteredResponse.json()) as {
+        items: Array<{ sourceDomain: string }>;
+      };
+      expect(sourceFilteredItems.items.length).toBeGreaterThan(0);
+      expect(sourceFilteredItems.items.every((item) => item.sourceDomain === 'scheduling')).toBe(
+        true,
+      );
+      const categoryFilteredResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?category=scheduling`,
+        { headers },
+      );
+      expect(categoryFilteredResponse.status).toBe(200);
+      const categoryFilteredItems = (await categoryFilteredResponse.json()) as {
+        items: Array<{ category: string }>;
+      };
+      expect(categoryFilteredItems.items.length).toBeGreaterThan(0);
+      expect(categoryFilteredItems.items.every((item) => item.category === 'scheduling')).toBe(
+        true,
+      );
+      const undatedCategoryFilterResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?category=documentation&due=today`,
+        { headers },
+      );
+      expect(undatedCategoryFilterResponse.status).toBe(200);
+      const undatedCategoryFilter = (await undatedCategoryFilterResponse.json()) as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      expect(undatedCategoryFilter).toMatchObject({ items: [], truncated: false });
+      const employeeDeadlineFilterResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?sourceDomain=employee_qualifications&employeeId=${employeeId}&fromDate=${inEightDays}&untilDate=${inEightDays}&search=${employeeQualificationId}`,
+        { headers },
+      );
+      expect(employeeDeadlineFilterResponse.status).toBe(200);
+      const employeeDeadlineFilter = (await employeeDeadlineFilterResponse.json()) as {
+        items: Array<{ employeeId: string | null; sourceEntityId: string; dueAt: string | null }>;
+        total: number;
+        truncated: boolean;
+      };
+      expect(employeeDeadlineFilter.items).toContainEqual(
+        expect.objectContaining({
+          employeeId,
+          sourceEntityId: employeeQualificationId,
+          dueAt: expect.any(String),
+        }),
+      );
+      expect(employeeDeadlineFilter).toMatchObject({ total: 1, truncated: false });
+      expect(employeeDeadlineFilter.items).toHaveLength(1);
+      const paginatedQualificationResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?sourceDomain=employee_qualifications&page=1&pageSize=10`,
+        { headers },
+      );
+      expect(paginatedQualificationResponse.status).toBe(200);
+      const paginatedQualifications = (await paginatedQualificationResponse.json()) as {
+        items: unknown[];
+        total: number;
+        truncated: boolean;
+      };
+      expect(paginatedQualifications).toMatchObject({ total: 102, truncated: false });
+      expect(paginatedQualifications.items).toHaveLength(10);
+      const lastQualificationPageResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?sourceDomain=employee_qualifications&page=11&pageSize=10`,
+        { headers },
+      );
+      const lastQualificationPage = (await lastQualificationPageResponse.json()) as {
+        items: unknown[];
+        total: number;
+      };
+      expect(lastQualificationPage).toMatchObject({ total: 102 });
+      expect(lastQualificationPage.items).toHaveLength(2);
+      const employeeFilteredResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?employeeId=${employeeId}`,
+        { headers },
+      );
+      expect(employeeFilteredResponse.status).toBe(200);
+      const employeeFilteredItems = (await employeeFilteredResponse.json()) as {
+        items: Array<{ employeeId: string | null; sourceDomain: string }>;
+      };
+      expect(employeeFilteredItems.items.length).toBeGreaterThan(0);
+      expect(employeeFilteredItems.items.every((item) => item.employeeId === employeeId)).toBe(
+        true,
+      );
+      const receivableDateFilterResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?sourceDomain=billing&fromDate=${inEightDays}&untilDate=${inEightDays}`,
+        { headers },
+      );
+      expect(receivableDateFilterResponse.status).toBe(200);
+      const receivableDateFilter = (await receivableDateFilterResponse.json()) as {
+        items: Array<{ issueCode: string; sourceEntityId: string; dueAt: string | null }>;
+      };
+      expect(receivableDateFilter.items).toContainEqual(
+        expect.objectContaining({
+          issueCode: 'receivable_due',
+          sourceEntityId: invoiceId,
+          dueAt: expect.any(String),
+        }),
+      );
+      expect(receivableDateFilter.items).toHaveLength(1);
+
       const repeatedWorklist = await fetch(`${baseUrl}/api/v1/operations/work-items`, { headers });
       const repeatedItems = (await repeatedWorklist.json()) as {
         items: Array<{ id: string; issueCode: string }>;
@@ -565,6 +732,7 @@ describe('operations PostgreSQL/API integration', () => {
           issueCode: string;
           sourceEntityId: string;
           dueAt: string | null;
+          clientName: string | null;
         }>;
       };
       const onboardingFollowUpDeadline = onboardingDeadlines.items.find(
@@ -577,6 +745,7 @@ describe('operations PostgreSQL/API integration', () => {
       );
       expect(onboardingFollowUpDeadline?.dueAt).toBeDefined();
       expect(onboardingStartDateDeadline?.dueAt).toBeDefined();
+      expect(onboardingFollowUpDeadline?.clientName).toBeNull();
 
       const followUpResponse = await fetch(
         `${baseUrl}/api/v1/operations/deadlines/${agreementDeadline!.id}/tasks`,
@@ -887,30 +1056,63 @@ describe('operations PostgreSQL/API integration', () => {
         expect.objectContaining({ id: snoozableIssue!.id, status: 'snoozed' }),
       );
 
-      await owner.query(
-        `INSERT INTO scheduling.visit_assignments
-           (id, tenant_id, visit_id, employee_id, status, assigned_at, assigned_by)
-         VALUES ($1, $2, $3, $4, 'active', $5, $6)`,
-        [uuidv7(), tenantId, visitId, employeeId, now, userId],
+      const visitAssignmentResponse = await fetch(
+        `${baseUrl}/api/v1/visits/${visitId}/assignments`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ employeeId }),
+        },
       );
-      await owner.query(
-        `UPDATE scheduling.client_scheduling_preferences
-         SET preferred_employee_id = NULL, updated_at = $2
-         WHERE tenant_id = $1 AND client_id = $3`,
-        [tenantId, now, clientId],
+      expect(visitAssignmentResponse.status).toBe(201);
+      const visitAssignment = (await visitAssignmentResponse.json()) as { id: string };
+      const clearedClientPreference = await fetch(
+        `${baseUrl}/api/v1/clients/${clientId}/scheduling-preferences`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            preferredWeekdays: [],
+            preferredTimeWindows: [],
+            preferredEmployeeId: null,
+            avoidedEmployeeIds: [],
+          }),
+        },
       );
+      expect(clearedClientPreference.status).toBe(200);
       const resolvedWorklist = await fetch(`${baseUrl}/api/v1/operations/work-items`, { headers });
       const resolvedItems = (await resolvedWorklist.json()) as { items: Array<{ id: string }> };
       expect(resolvedItems.items.some((item) => item.id === missingAssignment!.id)).toBe(false);
       expect(resolvedItems.items.some((item) => item.id === snoozableIssue!.id)).toBe(false);
-
-      await owner.query('DELETE FROM scheduling.visit_assignments WHERE visit_id = $1', [visitId]);
-      await owner.query(
-        `UPDATE scheduling.client_scheduling_preferences
-         SET preferred_employee_id = $2, updated_at = $3
-         WHERE tenant_id = $1 AND client_id = $4`,
-        [tenantId, employeeId, now, clientId],
+      const resolvedAssignmentHistory = await fetch(
+        `${baseUrl}/api/v1/operations/work-items/${missingAssignment!.id}/history`,
+        { headers },
       );
+      const resolvedAssignmentOccurrence = (await resolvedAssignmentHistory.json()) as {
+        occurrences: Array<{ resolvedAt: string | null }>;
+      };
+      expect(resolvedAssignmentOccurrence.occurrences).toHaveLength(1);
+      expect(resolvedAssignmentOccurrence.occurrences[0]?.resolvedAt).toBeString();
+
+      const unassignedVisitResponse = await fetch(
+        `${baseUrl}/api/v1/visits/${visitId}/assignments/${visitAssignment.id}`,
+        { method: 'DELETE', headers },
+      );
+      expect(unassignedVisitResponse.status).toBe(204);
+      const restoredClientPreference = await fetch(
+        `${baseUrl}/api/v1/clients/${clientId}/scheduling-preferences`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            preferredWeekdays: [],
+            preferredTimeWindows: [],
+            preferredEmployeeId: employeeId,
+            avoidedEmployeeIds: [],
+          }),
+        },
+      );
+      expect(restoredClientPreference.status).toBe(200);
       const recurringWorklist = await fetch(`${baseUrl}/api/v1/operations/work-items`, {
         headers,
       });
@@ -1018,6 +1220,7 @@ describe('operations PostgreSQL/API integration', () => {
         reconciledHistoryBody.occurrences.filter((row) => row.resolvedAt === null),
       ).toHaveLength(0);
 
+      const taskDueAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
       const createTask = await fetch(`${baseUrl}/api/v1/operations/tasks`, {
         method: 'POST',
         headers,
@@ -1025,7 +1228,7 @@ describe('operations PostgreSQL/API integration', () => {
           organizationId,
           title: 'Call the client about next week',
           assignedEmployeeId: employeeId,
-          dueAt: new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString(),
+          dueAt: taskDueAt.toISOString(),
         }),
       });
       expect(createTask.status).toBe(201);
@@ -1041,15 +1244,201 @@ describe('operations PostgreSQL/API integration', () => {
         assignedEmployeeId: employeeId,
       });
 
+      const combinedQueue = await fetch(
+        `${baseUrl}/api/v1/operations/work-queue?page=1&pageSize=1`,
+        { headers },
+      );
+      expect(combinedQueue.status).toBe(200);
+      const combinedQueueBody = (await combinedQueue.json()) as {
+        page: number;
+        pageSize: number;
+        total: number;
+        items: Array<{
+          kind: 'task' | 'exception';
+          task?: { id: string };
+          exception?: { id: string };
+        }>;
+      };
+      expect(combinedQueueBody).toMatchObject({ page: 1, pageSize: 1 });
+      const queueExceptions = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?page=1&pageSize=100`,
+        { headers },
+      );
+      const queueTasks = await fetch(`${baseUrl}/api/v1/operations/tasks?page=1&pageSize=1`, {
+        headers,
+      });
+      const queueExceptionTotal = ((await queueExceptions.json()) as { total: number }).total;
+      const queueTaskTotal = ((await queueTasks.json()) as { total: number }).total;
+      expect(combinedQueueBody.total).toBe(queueExceptionTotal + queueTaskTotal);
+      expect(combinedQueueBody.items.map((item) => item.kind)).toEqual(['task']);
+      const exceptionsOnlyQueue = await fetch(
+        `${baseUrl}/api/v1/operations/work-queue?itemType=exceptions&pageSize=10`,
+        { headers },
+      );
+      const exceptionsOnlyQueueBody = (await exceptionsOnlyQueue.json()) as {
+        total: number;
+        items: Array<{ kind: 'task' | 'exception' }>;
+      };
+      expect(exceptionsOnlyQueue.status).toBe(200);
+      expect(exceptionsOnlyQueueBody.total).toBe(queueExceptionTotal);
+      expect(exceptionsOnlyQueueBody.items.every((item) => item.kind === 'exception')).toBe(true);
+      const scopedExceptionQueue = await fetch(
+        `${baseUrl}/api/v1/operations/work-queue?itemType=exceptions&organizationId=${organizationId}&facilityId=${facilityId}&clientId=${clientId}&pageSize=100`,
+        { headers },
+      );
+      expect(scopedExceptionQueue.status).toBe(200);
+      const scopedExceptionQueueBody = (await scopedExceptionQueue.json()) as {
+        total: number;
+        items: Array<{
+          kind: 'task' | 'exception';
+          exception?: {
+            organizationId: string | null;
+            facilityId: string | null;
+            clientId: string | null;
+          };
+        }>;
+      };
+      expect(scopedExceptionQueueBody.items.length).toBe(scopedExceptionQueueBody.total);
+      expect(
+        scopedExceptionQueueBody.items.every(
+          (item) =>
+            item.kind === 'exception' &&
+            item.exception?.organizationId === organizationId &&
+            item.exception.facilityId === facilityId &&
+            item.exception.clientId === clientId,
+        ),
+      ).toBe(true);
+      const combinedQueueSecondPage = await fetch(
+        `${baseUrl}/api/v1/operations/work-queue?page=2&pageSize=1`,
+        { headers },
+      );
+      expect(combinedQueueSecondPage.status).toBe(200);
+      const secondPageBody = (await combinedQueueSecondPage.json()) as {
+        items: Array<{
+          kind: 'task' | 'exception';
+          task?: { id: string };
+          exception?: { id: string };
+        }>;
+      };
+      expect(secondPageBody.items).toHaveLength(1);
+      expect(secondPageBody.items[0]?.task?.id ?? secondPageBody.items[0]?.exception?.id).not.toBe(
+        combinedQueueBody.items[0]?.task?.id ?? combinedQueueBody.items[0]?.exception?.id,
+      );
+      const sortedCombinedQueue = await fetch(
+        `${baseUrl}/api/v1/operations/work-queue?sort=priority&pageSize=100`,
+        { headers },
+      );
+      expect(sortedCombinedQueue.status).toBe(200);
+      const sortedCombinedQueueBody = (await sortedCombinedQueue.json()) as {
+        items: Array<{
+          kind: 'task' | 'exception';
+          task?: {
+            id: string;
+            priority: 'urgent' | 'high' | 'normal' | 'low';
+            dueAt: string | null;
+          };
+          exception?: {
+            id: string;
+            severity: 'critical' | 'warning' | 'info';
+            dueAt: string | null;
+          };
+        }>;
+      };
+      const queueItemKey = (item: { task?: { id: string }; exception?: { id: string } }) =>
+        item.task?.id ?? item.exception?.id ?? '';
+      expect(queueItemKey(combinedQueueBody.items[0] ?? {})).toBe(
+        queueItemKey(sortedCombinedQueueBody.items[0] ?? {}),
+      );
+      expect(queueItemKey(secondPageBody.items[0] ?? {})).toBe(
+        queueItemKey(sortedCombinedQueueBody.items[1] ?? {}),
+      );
+      const queuePriority = (item: (typeof sortedCombinedQueueBody.items)[number]) => {
+        if (item.kind === 'task') {
+          const priority = item.task?.priority;
+          return priority === 'urgent'
+            ? 4
+            : priority === 'high'
+              ? 3
+              : priority === 'normal'
+                ? 2
+                : 1;
+        }
+        const severity = item.exception?.severity;
+        return severity === 'critical' ? 3 : severity === 'warning' ? 2 : 1;
+      };
+      const queueDue = (item: (typeof sortedCombinedQueueBody.items)[number]) =>
+        item.kind === 'task' ? (item.task?.dueAt ?? null) : (item.exception?.dueAt ?? null);
+      const queueId = (item: (typeof sortedCombinedQueueBody.items)[number]) =>
+        item.kind === 'task' ? (item.task?.id ?? '') : (item.exception?.id ?? '');
+      const expectedQueueOrder = [...sortedCombinedQueueBody.items].sort((left, right) => {
+        const byPriority = queuePriority(right) - queuePriority(left);
+        if (byPriority) return byPriority;
+        const byDue =
+          (queueDue(left) ? Date.parse(queueDue(left)!) : Number.POSITIVE_INFINITY) -
+          (queueDue(right) ? Date.parse(queueDue(right)!) : Number.POSITIVE_INFINITY);
+        if (byDue) return byDue;
+        if (left.kind !== right.kind) return left.kind === 'task' ? -1 : 1;
+        return queueId(right).localeCompare(queueId(left));
+      });
+      expect(sortedCombinedQueueBody.items).toEqual(expectedQueueOrder);
+      const taskSearchQueue = await fetch(
+        `${baseUrl}/api/v1/operations/work-queue?itemType=tasks&search=${encodeURIComponent('Call the client about next week')}`,
+        { headers },
+      );
+      expect(taskSearchQueue.status).toBe(200);
+      const taskSearchQueueBody = (await taskSearchQueue.json()) as {
+        total: number;
+        items: Array<{ kind: 'task' | 'exception'; task?: { id: string } }>;
+      };
+      expect(taskSearchQueueBody.total).toBe(1);
+      expect(taskSearchQueueBody.items).toEqual([
+        { kind: 'task', task: expect.objectContaining({ id: createdTask.id }) },
+      ]);
+      const taskDueDate = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Europe/Berlin',
+      }).format(taskDueAt);
+      const dueRangeQueue = await fetch(
+        `${baseUrl}/api/v1/operations/work-queue?itemType=tasks&fromDate=${taskDueDate}&untilDate=${taskDueDate}&search=${encodeURIComponent('Call the client about next week')}`,
+        { headers },
+      );
+      expect(dueRangeQueue.status).toBe(200);
+      const dueRangeQueueBody = (await dueRangeQueue.json()) as {
+        total: number;
+        items: Array<{ kind: 'task' | 'exception'; task?: { id: string } }>;
+      };
+      expect(dueRangeQueueBody.total).toBe(1);
+      expect(dueRangeQueueBody.items).toEqual([
+        { kind: 'task', task: expect.objectContaining({ id: createdTask.id }) },
+      ]);
+      const outsideDueRange = await fetch(
+        `${baseUrl}/api/v1/operations/tasks?fromDate=2000-01-01&untilDate=2000-01-02&search=${encodeURIComponent('Call the client about next week')}`,
+        { headers },
+      );
+      expect(outsideDueRange.status).toBe(200);
+      expect(await outsideDueRange.json()).toMatchObject({ items: [], total: 0 });
+      const reversedDueRange = await fetch(
+        `${baseUrl}/api/v1/operations/work-queue?fromDate=2026-10-20&untilDate=2026-10-19`,
+        { headers },
+      );
+      expect(reversedDueRange.status).toBe(400);
+
       const upcomingTasks = await fetch(`${baseUrl}/api/v1/operations/tasks?due=upcoming`, {
         headers,
       });
       expect(upcomingTasks.status).toBe(200);
-      expect(
-        ((await upcomingTasks.json()) as { items: Array<{ id: string }> }).items.some(
-          (task) => task.id === createdTask.id,
-        ),
-      ).toBe(true);
+      const upcomingTaskItems = (
+        (await upcomingTasks.json()) as {
+          items: Array<{
+            id: string;
+            clientName?: string | null;
+            assignedEmployeeName?: string | null;
+          }>;
+        }
+      ).items;
+      expect(upcomingTaskItems.find((task) => task.id === createdTask.id)).toMatchObject({
+        id: createdTask.id,
+        assignedEmployeeName: 'Office Assignee',
+      });
       const taskDashboard = await fetch(`${baseUrl}/api/v1/operations/dashboard`, { headers });
       expect(taskDashboard.status).toBe(200);
       expect(await taskDashboard.json()).toMatchObject({ tasks: { assignedToMe: 3 } });
@@ -1145,6 +1534,30 @@ describe('operations PostgreSQL/API integration', () => {
       });
       expect(clientTaskResponse.status).toBe(201);
       const clientTask = (await clientTaskResponse.json()) as { id: string };
+      const clientNamedTasksResponse = await fetch(
+        `${baseUrl}/api/v1/operations/tasks?pageSize=100`,
+        { headers },
+      );
+      const clientNamedTasks = (await clientNamedTasksResponse.json()) as {
+        items: Array<{
+          id: string;
+          clientName?: string | null;
+          assignedEmployeeName?: string | null;
+        }>;
+      };
+      expect(clientNamedTasks.items.find((task) => task.id === clientTask.id)).toMatchObject({
+        clientName: 'Ada Operations',
+        assignedEmployeeName: 'Office Assignee',
+      });
+      const clientNameSearchResponse = await fetch(
+        `${baseUrl}/api/v1/operations/tasks?search=Ada%20Operations`,
+        { headers },
+      );
+      expect(clientNameSearchResponse.status).toBe(200);
+      const clientNameSearch = (await clientNameSearchResponse.json()) as {
+        items: Array<{ id: string }>;
+      };
+      expect(clientNameSearch.items.some((task) => task.id === clientTask.id)).toBe(true);
       const mismatchedTaskSource = await fetch(`${baseUrl}/api/v1/operations/tasks`, {
         method: 'POST',
         headers,
@@ -1163,6 +1576,52 @@ describe('operations PostgreSQL/API integration', () => {
       expect(await clientScopedDashboard.json()).toMatchObject({
         tasks: { assignedToMe: 4, urgent: 1 },
       });
+
+      const executionPlannedStart = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+      const executionPlannedEnd = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      await owner.query(
+        `INSERT INTO scheduling.visits
+           (id, tenant_id, client_id, organization_id, facility_id, origin, status,
+            planned_start, planned_end, timezone, created_at, updated_at)
+         SELECT visit_id, $1, $2, $3, $4, 'manual', 'confirmed', $5, $6, 'Europe/Berlin', $7, $7
+         FROM unnest($8::uuid[]) AS visits(visit_id)`,
+        [
+          tenantId,
+          clientId,
+          organizationId,
+          facilityId,
+          executionPlannedStart,
+          executionPlannedEnd,
+          now,
+          extraExecutionVisitIds,
+        ],
+      );
+      await owner.query(
+        `INSERT INTO visit_execution.executions
+           (id, tenant_id, visit_id, status, actual_start, started_by_employee_id, created_at, updated_at)
+         SELECT execution_id, $1, visit_id, 'in_progress', $4, $5, $6, $6
+         FROM unnest($2::uuid[], $3::uuid[]) AS executions(execution_id, visit_id)`,
+        [
+          tenantId,
+          extraExecutionIds,
+          extraExecutionVisitIds,
+          executionPlannedStart,
+          employeeId,
+          now,
+        ],
+      );
+      const paginatedExecutionResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?sourceDomain=visit_execution&page=1&pageSize=10`,
+        { headers },
+      );
+      expect(paginatedExecutionResponse.status).toBe(200);
+      const paginatedExecutions = (await paginatedExecutionResponse.json()) as {
+        items: unknown[];
+        total: number;
+        truncated: boolean;
+      };
+      expect(paginatedExecutions).toMatchObject({ total: 101, truncated: false });
+      expect(paginatedExecutions.items).toHaveLength(10);
 
       await owner.query(
         "DELETE FROM identity.role_permissions WHERE role_id = $1 AND permission = 'client.read'",
@@ -1358,6 +1817,29 @@ describe('operations PostgreSQL/API integration', () => {
         [otherTenantId],
       );
       expect(pagedAgreementOccurrences.rows[0]?.count).toBe('501');
+      await owner.query(
+        `INSERT INTO onboarding.cases
+           (id, tenant_id, organization_id, facility_id, first_name, last_name, contact_method,
+            inquiry_source, stage, next_follow_up_at, last_activity_at, created_by_user_id,
+            created_at, updated_at)
+         SELECT case_id, $1, $2, $3, 'Bulk', 'Admission', 'phone', 'operations pagination',
+                'inquiry', $4, $5, $6, $5, $5
+         FROM unnest($7::uuid[]) AS cases(case_id)`,
+        [tenantId, organizationId, facilityId, inEightDays, now, userId, extraAdmissionIds],
+      );
+      const paginatedOnboardingResponse = await fetch(
+        `${baseUrl}/api/v1/operations/work-items?sourceDomain=onboarding&page=1&pageSize=10`,
+        { headers },
+      );
+      expect(paginatedOnboardingResponse.status).toBe(200);
+      const paginatedOnboarding = (await paginatedOnboardingResponse.json()) as {
+        items: unknown[];
+        total: number;
+        truncated: boolean;
+      };
+      expect(paginatedOnboarding.total).toBeGreaterThan(500);
+      expect(paginatedOnboarding.truncated).toBe(false);
+      expect(paginatedOnboarding.items).toHaveLength(10);
     } finally {
       await api?.close().catch(() => undefined);
       await closeServer(oidc.server).catch(() => undefined);

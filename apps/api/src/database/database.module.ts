@@ -1,9 +1,11 @@
 import { Global, Inject, Injectable, Module, type OnApplicationShutdown } from '@nestjs/common';
+
+import { API_CONFIG, DATABASE, UNIT_OF_WORK } from '@app/api/tokens';
 import { loadApiConfig } from '@care/config';
 import { createDatabase, createUnitOfWork } from '@care/database';
 import { createLogger } from '@care/logging';
+
 import { databaseSchema } from './schema';
-import { API_CONFIG, DATABASE, UNIT_OF_WORK } from '@app/api/tokens';
 
 export type AppDatabase = ReturnType<typeof createDatabase<typeof databaseSchema>>;
 

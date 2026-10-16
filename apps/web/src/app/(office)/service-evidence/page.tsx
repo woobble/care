@@ -1,3 +1,23 @@
+import { getLocale, getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { acknowledgementCapacityKey, evidenceStatusKey } from '@app/web/i18n/evidence';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasPermission,
+} from '@app/web/lib/api';
+import { dateRange, shiftDate, todayDateKey, formatVisitDateTime } from '@app/web/lib/care-date';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { NativeSelect } from '@care/ui/components/native-select';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -6,25 +26,6 @@ import {
   TableRow as ShadcnTableRow,
   TableCell as ShadcnTableCell,
 } from '@care/ui/components/table';
-import { NativeSelect } from '@care/ui/components/native-select';
-import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import type { components } from '@care/api-client';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
-import { acknowledgementCapacityKey, evidenceStatusKey } from '@app/web/i18n/evidence';
-import { errorMessageKey } from '@app/web/i18n/errors';
-import { dateRange, shiftDate, todayDateKey, formatVisitDateTime } from '@app/web/lib/care-date';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasPermission,
-} from '@app/web/lib/api';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
 
 type Status = components['schemas']['ServiceEvidenceWorklistItemDto']['status'];
 type SignatoryType = 'client' | 'representative' | 'other_authorized_person';
@@ -408,28 +409,28 @@ export default async function ServiceEvidenceWorklistPage({
                       <ShadcnTableCell className="p-3">
                         {formatVisitDateTime(item.plannedStart, item.timezone, locale)}
                       </ShadcnTableCell>
-                      <ShadcnTableCell className="p-3 font-medium whitespace-normal break-words">
+                      <ShadcnTableCell className="p-3 font-medium break-words whitespace-normal">
                         <Link
                           href={
                             item.evidencePackageId
                               ? `/service-evidence/${item.evidencePackageId}`
                               : `/visits/${item.visitId}`
                           }
-                          className="text-primary underline break-words"
+                          className="break-words text-primary underline"
                         >
                           {item.clientName}
                         </Link>
                       </ShadcnTableCell>
-                      <ShadcnTableCell className="max-w-64 whitespace-normal break-words p-3">
+                      <ShadcnTableCell className="max-w-64 p-3 break-words whitespace-normal">
                         {item.serviceSummary ?? '–'}
                       </ShadcnTableCell>
-                      <ShadcnTableCell className="max-w-56 whitespace-normal break-words p-3">
+                      <ShadcnTableCell className="max-w-56 p-3 break-words whitespace-normal">
                         {item.caregiverSummary ?? '–'}
                       </ShadcnTableCell>
-                      <ShadcnTableCell className="whitespace-normal break-words p-3">
+                      <ShadcnTableCell className="p-3 break-words whitespace-normal">
                         {t(evidenceStatusKey(item.status))}
                       </ShadcnTableCell>
-                      <ShadcnTableCell className="p-3 whitespace-normal break-words">
+                      <ShadcnTableCell className="p-3 break-words whitespace-normal">
                         {item.signatoryName
                           ? `${item.signatoryName} · ${item.capacity ? t(acknowledgementCapacityKey(item.capacity)) : ''}`
                           : '–'}

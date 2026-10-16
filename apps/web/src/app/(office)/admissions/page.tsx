@@ -1,25 +1,12 @@
-import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
-import {
-  Table as ShadcnTable,
-  TableHeader as ShadcnTableHeader,
-  TableBody as ShadcnTableBody,
-  TableHead as ShadcnTableHead,
-  TableRow as ShadcnTableRow,
-  TableCell as ShadcnTableCell,
-} from '@care/ui/components/table';
-import { NativeSelect } from '@care/ui/components/native-select';
-import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Badge } from '@care/ui/components/badge';
-import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
-import { FilterDisclosure } from '@app/web/components/filter-disclosure';
+import Link from 'next/link';
+
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
+import { FilterDisclosure } from '@app/web/components/filter-disclosure';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
 import type { Locale } from '@app/web/i18n/config';
-import type { components } from '@care/api-client';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate, formatDateTime } from '@app/web/i18n/format';
 import {
@@ -28,6 +15,20 @@ import {
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
+import { Badge } from '@care/ui/components/badge';
+import { Button } from '@care/ui/components/button';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { NativeSelect } from '@care/ui/components/native-select';
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui/components/table';
 
 type SearchParams = Promise<Record<string, string | undefined>>;
 type AdmissionRow = {
@@ -301,7 +302,7 @@ export default async function AdmissionsPage({
                   <div className="flex min-w-0 items-start justify-between gap-3">
                     <div className="min-w-0">
                       <Link
-                        className="inline-flex min-h-11 items-center break-words font-semibold text-primary underline-offset-4 hover:underline"
+                        className="inline-flex min-h-11 items-center font-semibold break-words text-primary underline-offset-4 hover:underline"
                         href={`/admissions/${row.id}`}
                       >
                         {row.firstName} {row.lastName}

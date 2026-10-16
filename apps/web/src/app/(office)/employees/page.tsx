@@ -1,3 +1,22 @@
+import { getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
+import { statusLabelKey } from '@app/web/i18n/status';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+} from '@app/web/lib/api';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { StatusBadge } from '@care/ui/components/status-badge';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -7,24 +26,6 @@ import {
   TableCell as ShadcnTableCell,
   TableCaption as ShadcnTableCaption,
 } from '@care/ui/components/table';
-import { NativeSelect } from '@care/ui/components/native-select';
-import Link from 'next/link';
-import { getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { StatusBadge } from '@care/ui/components/status-badge';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { ResourceReference } from '@app/web/components/resource-reference';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasClientPermission,
-} from '@app/web/lib/api';
-import { statusLabelKey } from '@app/web/i18n/status';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import type { components } from '@care/api-client';
 
 type SearchParams = Promise<{
   q?: string;
@@ -239,12 +240,12 @@ export default async function EmployeesPage({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <Link
-                        className="break-words font-semibold text-primary underline-offset-4 hover:underline"
+                        className="font-semibold break-words text-primary underline-offset-4 hover:underline"
                         href={`/employees/${employee.id}`}
                       >
                         {employee.preferredName || employee.firstName} {employee.lastName}
                       </Link>
-                      <p className="break-all text-sm text-muted-foreground">
+                      <p className="text-sm break-all text-muted-foreground">
                         {employee.email ??
                           employee.personnelNumber ??
                           t('Employees.noContactDetails')}

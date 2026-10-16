@@ -1,9 +1,10 @@
 'use client';
 
-import * as React from 'react';
-import { cn } from '../lib/utils';
-import { Accordion as AccordionPrimitive } from 'radix-ui';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
+import { Accordion as AccordionPrimitive } from 'radix-ui';
+import * as React from 'react';
+
+import { cn } from '../lib/utils';
 
 function Accordion({ className, ...props }: React.ComponentProps<typeof AccordionPrimitive.Root>) {
   return (
@@ -65,7 +66,7 @@ function AccordionContent({
   return (
     <AccordionPrimitive.Content
       data-slot="accordion-content"
-      className="overflow-hidden text-sm data-open:animate-accordion-down data-closed:animate-accordion-up"
+      className="data-open:animate-accordion-down data-closed:animate-accordion-up overflow-hidden text-sm"
       {...props}
     >
       <div

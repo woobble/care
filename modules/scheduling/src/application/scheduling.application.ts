@@ -1,11 +1,14 @@
 import { sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
 import type { ClientApplicationService, ClientSnapshot } from '@care/clients';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
+import type { EmployeeApplicationService } from '@care/employees';
 import { createDomainEvent } from '@care/events';
 import type { DomainEvent } from '@care/events';
+import { isSupportedTimeZone, type OrganizationApplicationService } from '@care/organizations';
 import {
   assertCan,
   AuthorizationDeniedError,
@@ -14,8 +17,6 @@ import {
   type ResourceContext,
 } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { isSupportedTimeZone, type OrganizationApplicationService } from '@care/organizations';
-import type { EmployeeApplicationService } from '@care/employees';
 import type {
   AgreementServiceSnapshot,
   ServiceAgreementApplicationService,
@@ -43,20 +44,6 @@ import type {
   AvailabilityWindow,
   EmployeeAvailability,
 } from '@module/scheduling/domain/availability';
-import type {
-  VisitAssignmentSnapshot,
-  VisitData,
-  VisitServiceData,
-  VisitSnapshot,
-  VisitStatus,
-} from '@module/scheduling/domain/visit';
-import { SchedulingRepository } from '@module/scheduling/infrastructure/scheduling.repository';
-import type {
-  VisitCalendarRow,
-  VisitReadScope,
-  VisitSearchFilter,
-} from '@module/scheduling/infrastructure/scheduling.repository';
-import type { SchedulingExecutionGuard } from '@module/scheduling/infrastructure/scheduling-guards';
 import { UnavailableRouteProvider } from '@module/scheduling/domain/route-provider';
 import type {
   RouteEstimate,
@@ -71,6 +58,20 @@ import {
   tourFeasibilityConflicts,
   type SchedulingConflict,
 } from '@module/scheduling/domain/tour';
+import type {
+  VisitAssignmentSnapshot,
+  VisitData,
+  VisitServiceData,
+  VisitSnapshot,
+  VisitStatus,
+} from '@module/scheduling/domain/visit';
+import type { SchedulingExecutionGuard } from '@module/scheduling/infrastructure/scheduling-guards';
+import { SchedulingRepository } from '@module/scheduling/infrastructure/scheduling.repository';
+import type {
+  VisitCalendarRow,
+  VisitReadScope,
+  VisitSearchFilter,
+} from '@module/scheduling/infrastructure/scheduling.repository';
 import {
   clientSchedulingPreferences,
   employeeSchedulingPreferences,

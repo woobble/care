@@ -1,11 +1,14 @@
+import type { IncomingMessage } from 'node:http';
+import type { Http2ServerRequest } from 'node:http2';
+
 import helmet from '@fastify/helmet';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { FastifyRequest } from 'fastify';
-import type { IncomingMessage } from 'node:http';
-import type { Http2ServerRequest } from 'node:http2';
 import { v7 as uuidv7 } from 'uuid';
-import { createLogger } from '@care/logging';
+
 import { apiMetrics } from '@app/api/operational-metrics';
+import { createLogger } from '@care/logging';
+
 import type { ApiRequest } from './request';
 
 const VALID_REQUEST_ID = /^[\w.-]{1,128}$/;

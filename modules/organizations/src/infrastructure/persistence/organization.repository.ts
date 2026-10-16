@@ -1,6 +1,6 @@
 import { and, asc, count, eq, ilike, inArray, or } from 'drizzle-orm';
+
 import type { DatabaseTransaction } from '@care/database';
-import { facilities, organizationsTable, teams } from '@module/organizations/schema';
 import type {
   FacilityData,
   FacilitySnapshot,
@@ -10,6 +10,8 @@ import type {
   TeamData,
   TeamSnapshot,
 } from '@module/organizations/domain/organization';
+import { facilities, organizationsTable, teams } from '@module/organizations/schema';
+
 import {
   structureVisibilityPredicate,
   type StructureVisibilityGrant,

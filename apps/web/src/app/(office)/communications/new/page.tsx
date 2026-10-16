@@ -1,6 +1,9 @@
-import { Button } from '@care/ui/components/button';
-import { PageHeader } from '@app/web/components/page-patterns';
+import { getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { PageHeader } from '@app/web/components/page-patterns';
 import {
   getApiClient,
   getPermissionGrants,
@@ -8,9 +11,7 @@ import {
   hasClientPermission,
   hasPermission,
 } from '@app/web/lib/api';
-import { getTranslations } from 'next-intl/server';
-import Link from 'next/link';
-import { redirect } from 'next/navigation';
+import { Button } from '@care/ui/components/button';
 
 export default async function NewCommunicationPage({
   searchParams,

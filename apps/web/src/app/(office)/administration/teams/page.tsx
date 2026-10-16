@@ -1,3 +1,28 @@
+import { getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+
+import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
+import { createTeamAction } from '@app/web/app/(office)/administration/actions';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { statusLabelKey } from '@app/web/i18n/status';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+  hasPermission,
+} from '@app/web/lib/api';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import { searchStructurePage } from '@app/web/lib/structure-search';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { StatusBadge } from '@care/ui/components/status-badge';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -7,30 +32,6 @@ import {
   TableCell as ShadcnTableCell,
   TableCaption as ShadcnTableCaption,
 } from '@care/ui/components/table';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import { redirectToValidPage } from '@app/web/lib/pagination';
-import { searchStructurePage } from '@app/web/lib/structure-search';
-import type { components } from '@care/api-client';
-import { ResourceReference } from '@app/web/components/resource-reference';
-import Link from 'next/link';
-import { getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { StatusBadge } from '@care/ui/components/status-badge';
-import { statusLabelKey } from '@app/web/i18n/status';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasClientPermission,
-  hasPermission,
-} from '@app/web/lib/api';
-import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
-import { createTeamAction } from '@app/web/app/(office)/administration/actions';
 
 type SearchParams = Promise<{
   error?: string;

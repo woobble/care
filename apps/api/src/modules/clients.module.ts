@@ -1,15 +1,9 @@
 import { Module } from '@nestjs/common';
-import {
-  createClientApplicationService,
-  createClientMasterDataApplicationService,
-  type ClientSchedulingGuard,
-} from '@care/clients';
-import type { AuditWriter } from '@care/audit';
-import type { UnitOfWork } from '@care/database';
-import type { OutboxWriter } from '@care/platform';
-import type { ServiceAgreementGuards } from '@care/service-agreements';
-import type { VisitExecutionGuards } from '@care/visit-execution';
+
 import { DatabaseModule } from '@app/api/database/database.module';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { ClientMasterDataController } from '@app/api/presentation/http/client-master-data.controller';
+import { ClientsController } from '@app/api/presentation/http/clients.controller';
 import {
   AUDIT_WRITER,
   CLIENT_APPLICATION,
@@ -20,12 +14,20 @@ import {
   VISIT_EXECUTION_GUARDS,
   UNIT_OF_WORK,
 } from '@app/api/tokens';
+import type { AuditWriter } from '@care/audit';
+import {
+  createClientApplicationService,
+  createClientMasterDataApplicationService,
+  type ClientSchedulingGuard,
+} from '@care/clients';
+import type { UnitOfWork } from '@care/database';
+import type { OutboxWriter } from '@care/platform';
+import type { ServiceAgreementGuards } from '@care/service-agreements';
+import type { VisitExecutionGuards } from '@care/visit-execution';
+
 import { AuditModule } from './audit.module';
-import { PlatformModule } from './platform.module';
 import { IdentityModule } from './identity.module';
-import { ClientsController } from '@app/api/presentation/http/clients.controller';
-import { ClientMasterDataController } from '@app/api/presentation/http/client-master-data.controller';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { PlatformModule } from './platform.module';
 import { ServiceAgreementProtectionModule } from './service-agreement-protection.module';
 import { VisitExecutionModule } from './visit-execution.module';
 

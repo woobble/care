@@ -1,7 +1,7 @@
 import { createClient } from './generated/client/index';
 import type { Client, RequestOptions } from './generated/client/index';
-import * as generatedSdk from './generated/sdk.gen';
 import type { routeOperations } from './generated/routes.gen';
+import * as generatedSdk from './generated/sdk.gen';
 
 type ApiMethod = keyof Pick<Client, 'get' | 'post' | 'put' | 'patch' | 'delete'>;
 type ApiRoutePath<Method extends ApiMethod> = {

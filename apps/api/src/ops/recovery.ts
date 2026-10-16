@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import {
@@ -14,9 +15,8 @@ import {
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { Readable, Transform } from 'node:stream';
-import { spawn } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
-import { Client } from 'pg';
+
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -26,6 +26,8 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { Client } from 'pg';
+
 import { loadMigrationConfig, loadStorageConfig, resolveSecretFiles } from '@care/config';
 
 // oxlint-disable no-await-in-loop -- backup I/O stays sequential to bound memory and preserve the quiesced object set

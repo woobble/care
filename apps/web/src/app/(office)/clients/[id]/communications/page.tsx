@@ -1,16 +1,12 @@
-import { Textarea } from '@care/ui/components/textarea';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import type { components } from '@care/api-client';
+
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { formatDateTime } from '@app/web/i18n/format';
-import { visitDateTimeInputValue } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
@@ -18,15 +14,21 @@ import {
   hasClientPermission,
   hasPermission,
 } from '@app/web/lib/api';
+import { visitDateTimeInputValue } from '@app/web/lib/care-date';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { Textarea } from '@care/ui/components/textarea';
+
 import {
   amendCommunicationAction,
   createCommunicationAction,
   createCommunicationFollowUpAction,
   saveCommunicationPreferencesAction,
 } from './actions';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
 
 type Interaction = components['schemas']['CommunicationInteractionResponseDto'];
 type Preferences = components['schemas']['CommunicationPreferencesResponseDto'];
@@ -725,7 +727,7 @@ export default async function ClientCommunicationsPage({
                           : ''}
                       </p>
                       {amendment.summary ? (
-                        <p className="mt-2 whitespace-pre-wrap text-sm">
+                        <p className="mt-2 text-sm whitespace-pre-wrap">
                           {String(amendment.summary)}
                         </p>
                       ) : null}
@@ -835,7 +837,7 @@ export default async function ClientCommunicationsPage({
                       </span>
                     </div>
                     {interaction.summary ? (
-                      <p className="whitespace-pre-wrap text-sm">{interaction.summary}</p>
+                      <p className="text-sm whitespace-pre-wrap">{interaction.summary}</p>
                     ) : null}
                     <dl className="grid gap-1 text-sm sm:grid-cols-2">
                       <div>

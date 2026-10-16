@@ -1,7 +1,9 @@
-import { v7 as uuidv7 } from 'uuid';
-import { resolve } from 'node:path';
-import { Client } from 'pg';
 import { expect, test } from 'bun:test';
+import { resolve } from 'node:path';
+
+import { Client } from 'pg';
+import { v7 as uuidv7 } from 'uuid';
+
 import { createDomainEvent } from '@care/events';
 import { startCareTestDatabase } from '@care/testing';
 

@@ -6,11 +6,13 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type { CanActivate, ExecutionContext } from '@nestjs/common';
+
+import { IDENTITY_SERVICE, TENANT_ACCESS_SERVICE } from '@app/api/tokens';
 import { createAccessTokenVerifier, type VerifiedIdentity } from '@care/auth';
 import { loadApiConfig } from '@care/config';
-import { DisabledUserError, IdentityService, TenantAccessService } from '@care/identity';
 import { asUUID } from '@care/contracts';
-import { IDENTITY_SERVICE, TENANT_ACCESS_SERVICE } from '@app/api/tokens';
+import { DisabledUserError, IdentityService, TenantAccessService } from '@care/identity';
+
 import type { ApiRequest } from './request';
 import { requestContext } from './request';
 

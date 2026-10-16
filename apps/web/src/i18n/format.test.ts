@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+
 import { formatCurrency, formatDate, formatNumber, formatTime } from './format';
 
 describe('locale formatting', () => {

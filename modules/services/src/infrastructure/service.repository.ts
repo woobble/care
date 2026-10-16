@@ -14,19 +14,20 @@ import {
   or,
 } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
+
 import type { DatabaseTransaction } from '@care/database';
 import { facilities } from '@care/organizations';
-import {
-  serviceAvailability,
-  serviceCategories,
-  serviceDefinitions,
-} from '@module/services/schema';
 import type {
   ServiceAvailabilitySnapshot,
   ServiceCategoryData,
   ServiceCategorySnapshot,
   ServiceDefinitionSnapshot,
 } from '@module/services/domain/service';
+import {
+  serviceAvailability,
+  serviceCategories,
+  serviceDefinitions,
+} from '@module/services/schema';
 
 export interface ServiceReadScope {
   tenantWide: boolean;

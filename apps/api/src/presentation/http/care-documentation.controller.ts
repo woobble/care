@@ -26,6 +26,12 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import { z } from 'zod';
+
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import type { ApiRequest } from '@app/api/http/request';
+import { requestContext } from '@app/api/http/request';
+import { CARE_DOCUMENTATION_APPLICATION } from '@app/api/tokens';
 import {
   CareDocumentationApplicationService,
   AmendmentReasonRequiredError,
@@ -37,11 +43,7 @@ import {
   type RecordServiceEvidenceInput,
   type UpdateDocumentationEntryInput,
 } from '@care/care-documentation';
-import { CARE_DOCUMENTATION_APPLICATION } from '@app/api/tokens';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import type { ApiRequest } from '@app/api/http/request';
-import { requestContext } from '@app/api/http/request';
-import { ProblemDetailsDto } from './dto';
+
 import {
   addDocumentationAmendmentSchema,
   addDocumentationEntrySchema,
@@ -57,7 +59,7 @@ import {
   updateDocumentationEntrySchema,
   UpdateDocumentationEntryRequestDto,
 } from './care-documentation.dto';
-import { z } from 'zod';
+import { ProblemDetailsDto } from './dto';
 
 const removeEntrySchema = z.object({ expectedVersion: z.number().int().positive() });
 

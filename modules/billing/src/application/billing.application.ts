@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   and,
   asc,
@@ -16,27 +18,30 @@ import {
   sql,
 } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
-import { createHash } from 'node:crypto';
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
-import type { RequestContext } from '@care/contracts';
-import { createLogger } from '@care/logging';
 import type { BenefitBillingAllocation, BenefitsApplicationService } from '@care/benefits';
-import type { DatabaseTransaction, UnitOfWork } from '@care/database';
-import { createDomainEvent } from '@care/events';
 import { clientAddresses, clientInsurances, clientRecords } from '@care/clients';
+import type { RequestContext } from '@care/contracts';
+import type { DatabaseTransaction, UnitOfWork } from '@care/database';
+import type { DocumentsApplicationService } from '@care/documents';
+import { ExportFilterInvalidError, ExportRowLimitExceededError } from '@care/documents';
+import { createDomainEvent } from '@care/events';
+import { createLogger } from '@care/logging';
 import { facilities, organizationsTable } from '@care/organizations';
 import { assertCan, can } from '@care/permissions';
 import type { AuthorizationPrincipal, Permission } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import type { ObjectStorage } from '@care/storage';
-import type { DocumentsApplicationService } from '@care/documents';
-import { ExportFilterInvalidError, ExportRowLimitExceededError } from '@care/documents';
 import { visits } from '@care/scheduling';
 import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
+import { ServicePriceApplicationService } from '@care/services';
+import type { ServicePricingUnit } from '@care/services';
+import type { ObjectStorage } from '@care/storage';
+import { performedServices, visitExecutions } from '@care/visit-execution';
+import { ClaimPaymentAmountExceededError } from '@module/billing/claims/domain';
 import { payers } from '@module/billing/claims/payer-schema';
 import { claims, claimDecisions } from '@module/billing/claims/schema';
-import { ClaimPaymentAmountExceededError } from '@module/billing/claims/domain';
 import {
   calculateInvoiceAmounts,
   calculateServiceAmountCents,
@@ -73,6 +78,11 @@ import {
   type TaxTreatment,
 } from '@module/billing/domain/billing';
 import {
+  BillingPdfRenderer,
+  type CorrectionPdfData,
+  type InvoicePdfData,
+} from '@module/billing/infrastructure/invoice-pdf';
+import {
   billingProfiles,
   invoiceCorrectionLines,
   invoiceCorrections,
@@ -86,14 +96,6 @@ import {
   paymentReversals,
   payments,
 } from '@module/billing/schema';
-import { performedServices, visitExecutions } from '@care/visit-execution';
-import { ServicePriceApplicationService } from '@care/services';
-import type { ServicePricingUnit } from '@care/services';
-import {
-  BillingPdfRenderer,
-  type CorrectionPdfData,
-  type InvoicePdfData,
-} from '@module/billing/infrastructure/invoice-pdf';
 
 const billingLogger = createLogger('care-billing');
 

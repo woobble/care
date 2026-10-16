@@ -1,5 +1,32 @@
-import { ErrorNotice as Alert } from '@app/web/components/page-patterns';
+import { randomUUID } from 'node:crypto';
+
+import { getLocale, getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
+
+import {
+  createEntitlementAction,
+  createFundingSourceAction,
+  recordBenefitAdjustmentAction,
+} from '@app/web/app/(office)/benefits/actions';
+import { generateDocumentAction } from '@app/web/app/(office)/documents/actions';
+import { ErrorNotice as Alert } from '@app/web/components/page-patterns';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import type { Locale } from '@app/web/i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatCurrency, formatDate } from '@app/web/i18n/format';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+} from '@app/web/lib/api';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -8,32 +35,8 @@ import {
   TableRow as ShadcnTableRow,
   TableCell as ShadcnTableCell,
 } from '@care/ui/components/table';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { randomUUID } from 'node:crypto';
-import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import type { Locale } from '@app/web/i18n/config';
-import { errorMessageKey } from '@app/web/i18n/errors';
-import { formatCurrency, formatDate } from '@app/web/i18n/format';
+
 import { FundingHistorySection } from './funding-history';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasClientPermission,
-} from '@app/web/lib/api';
-import {
-  createEntitlementAction,
-  createFundingSourceAction,
-  recordBenefitAdjustmentAction,
-} from '@app/web/app/(office)/benefits/actions';
-import { generateDocumentAction } from '@app/web/app/(office)/documents/actions';
 
 async function HistoryLoading() {
   const t = await getTranslations('Benefits');
@@ -215,7 +218,7 @@ export default async function ClientBenefitsPage({
       : null;
 
   return (
-    <div className="mx-auto grid w-full min-w-0 max-w-5xl grid-cols-1 gap-6">
+    <div className="mx-auto grid w-full max-w-5xl min-w-0 grid-cols-1 gap-6">
       <PageHeader
         eyebrow={
           <Link href={client ? `/clients/${client.id}` : '/clients'}>{t('Clients.title')}</Link>

@@ -3,9 +3,11 @@ import '@care/config/load-env';
 // oxlint-disable-next-line import/no-unassigned-import -- required by NestJS decorator metadata
 import 'reflect-metadata';
 import { writeFile } from 'node:fs/promises';
+
 import { NestFactory } from '@nestjs/core';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+
 import { AppModule } from './app.module';
 import { createApiFastifyAdapter } from './http/fastify';
 

@@ -1,6 +1,7 @@
+import { ArrowUpRight, Inbox } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { ArrowUpRight, Inbox } from 'lucide-react';
+
 import { Card } from '@care/ui/components/card';
 
 export function PageHeader({
@@ -20,16 +21,16 @@ export function PageHeader({
     <header className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
       <div className="grid min-w-0 gap-1.5">
         {eyebrow ? (
-          <p className="text-xs font-semibold uppercase tracking-[0.13em] text-primary">
+          <p className="text-xs font-semibold tracking-[0.13em] text-primary uppercase">
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="break-words text-[1.75rem] font-semibold leading-tight tracking-[-0.025em] sm:text-3xl">
+        <h1 className="text-[1.75rem] leading-tight font-semibold tracking-[-0.025em] break-words sm:text-3xl">
           {title}
         </h1>
         {meta ? <div>{meta}</div> : null}
         {description ? (
-          <p className="max-w-3xl break-words text-sm leading-6 text-muted-foreground sm:text-base">
+          <p className="max-w-3xl text-sm leading-6 break-words text-muted-foreground sm:text-base">
             {description}
           </p>
         ) : null}
@@ -77,7 +78,7 @@ export function StatCard({
         <div className="flex min-h-24 items-start justify-between gap-3 p-4 sm:p-5">
           <div className="grid min-w-0 gap-2">
             <span className="text-sm leading-5 text-muted-foreground">{label}</span>
-            <strong className="text-2xl font-semibold tabular-nums tracking-tight">{value}</strong>
+            <strong className="text-2xl font-semibold tracking-tight tabular-nums">{value}</strong>
           </div>
           <ArrowUpRight
             className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary"

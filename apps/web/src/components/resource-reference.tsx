@@ -21,7 +21,7 @@ export function ResourceReference({
 }) {
   const content = (
     <>
-      <span className="flex min-w-0 max-w-full items-center gap-1.5">
+      <span className="flex max-w-full min-w-0 items-center gap-1.5">
         {icon ? (
           <span aria-hidden="true" className="shrink-0">
             {icon}
@@ -40,7 +40,7 @@ export function ResourceReference({
     <Link
       href={href}
       title={label}
-      className={`${classes} text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
+      className={`${classes} text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none`}
     >
       {content}
     </Link>

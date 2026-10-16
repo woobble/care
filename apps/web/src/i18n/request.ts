@@ -1,8 +1,9 @@
-import { cookies } from 'next/headers';
 import { getRequestConfig } from 'next-intl/server';
-import { localeCookieName, resolveLocale } from './config';
-import en from '../../messages/en.json';
+import { cookies } from 'next/headers';
+
 import de from '../../messages/de.json';
+import en from '../../messages/en.json';
+import { localeCookieName, resolveLocale } from './config';
 
 const messages = { en, de };
 

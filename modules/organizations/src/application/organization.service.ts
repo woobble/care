@@ -1,4 +1,5 @@
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
@@ -20,8 +21,8 @@ import type {
   TeamData,
   TeamSnapshot,
 } from '@module/organizations/domain/organization';
-import { OrganizationRepository } from '@module/organizations/infrastructure/persistence/organization.repository';
 import { isSupportedTimeZone } from '@module/organizations/domain/timezone';
+import { OrganizationRepository } from '@module/organizations/infrastructure/persistence/organization.repository';
 
 export interface OrganizationServiceAgreementGuard {
   hasActiveForOrganization(

@@ -1,4 +1,5 @@
 import { isSupportedTimeZone } from '@care/organizations';
+
 import { localDateTimeToInstant } from './zoned-time';
 
 export type AvailabilityExceptionKind = 'working_hours' | 'closed' | 'unavailable';

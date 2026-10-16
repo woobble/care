@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'bun:test';
+
 import {
   Body,
   Controller,
@@ -9,11 +11,11 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { FileInterceptor } from '@nestjs/platform-fastify/multipart';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { describe, expect, test } from 'bun:test';
-import type { ApiRequest } from './request';
+import { FileInterceptor } from '@nestjs/platform-fastify/multipart';
+
 import { configureApiHttp, createApiFastifyAdapter } from './fastify';
+import type { ApiRequest } from './request';
 
 @Controller()
 class FastifyProbeController {

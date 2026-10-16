@@ -7,6 +7,7 @@ import {
   type PDFPage,
   type RGB,
 } from 'pdf-lib';
+
 import type { DocumentPayload } from '@module/documents/domain/documents';
 
 export interface PdfBranding {

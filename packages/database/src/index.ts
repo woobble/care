@@ -1,7 +1,7 @@
+import { sql } from 'drizzle-orm';
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import type { PoolClient } from 'pg';
-import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { sql } from 'drizzle-orm';
 
 // The transaction type erases a composed schema at module ports. Table ownership stays in modules.
 export type DatabaseTransaction = Parameters<

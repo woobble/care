@@ -1,7 +1,9 @@
-import type { DatabaseTransaction } from '@care/database';
 import { and, asc, eq, lte, or } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+
+import type { DatabaseTransaction } from '@care/database';
 import type { DomainEvent } from '@care/events';
+
 import { outboxMessages } from './schema';
 
 export interface OutboxWriter {

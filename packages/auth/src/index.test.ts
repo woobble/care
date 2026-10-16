@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { asUUID } from '@care/contracts';
 
 describe('identity keys', () => {

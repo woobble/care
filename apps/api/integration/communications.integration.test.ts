@@ -1,15 +1,17 @@
+import { describe, expect, test } from 'bun:test';
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+
 import { NestFactory } from '@nestjs/core';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { Client } from 'pg';
-import { describe, expect, test } from 'bun:test';
-import { v7 as uuidv7 } from 'uuid';
 import { SignJWT, exportJWK, generateKeyPair } from 'jose';
-import { startCareTestDatabase } from '@care/testing';
+import { Client } from 'pg';
+import { v7 as uuidv7 } from 'uuid';
+
 import { AppModule } from '@app/api/app.module';
 import { configureApiHttp, createApiFastifyAdapter } from '@app/api/http/fastify';
+import { startCareTestDatabase } from '@care/testing';
 
 describe('communications and onboarding PostgreSQL/API integration', () => {
   test('links intake communications, registers prospects, admits clients, and schedules first visits', async () => {

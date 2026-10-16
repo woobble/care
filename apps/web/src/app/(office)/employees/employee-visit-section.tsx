@@ -1,15 +1,16 @@
-import { Button } from '@care/ui/components/button';
+import { getLocale, getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+
 import { ResourceCardLink } from '@app/web/components/resource-reference';
-import { formatVisitDateTime } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getTenantHeader,
   hasClientPermission,
   type CurrentPermissionGrant,
 } from '@app/web/lib/api';
+import { formatVisitDateTime } from '@app/web/lib/care-date';
 import type { components } from '@care/api-client';
-import Link from 'next/link';
-import { getLocale, getTranslations } from 'next-intl/server';
+import { Button } from '@care/ui/components/button';
 
 export async function EmployeeVisitSection({
   employeeId,

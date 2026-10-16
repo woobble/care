@@ -1,6 +1,7 @@
 // oxlint-disable-next-line import/no-unassigned-import -- load dotenv before reading migration configuration
 import '@care/config/load-env';
 import { Client } from 'pg';
+
 import { loadMigrationConfig } from '@care/config';
 import { applyMigrations } from '@care/database/migrations';
 

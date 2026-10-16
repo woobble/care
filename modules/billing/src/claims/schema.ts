@@ -12,15 +12,17 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+
 import { clientRecords } from '@care/clients';
-import { facilities, organizationsTable } from '@care/organizations';
 import { documentArtifacts } from '@care/documents';
+import { facilities, organizationsTable } from '@care/organizations';
 import {
   invoiceDocuments,
   invoiceLines,
   invoices,
   payerArrangements,
 } from '@module/billing/schema';
+
 import { payerBillingProfiles, payers } from './payer-schema';
 
 const billing = pgSchema('billing');

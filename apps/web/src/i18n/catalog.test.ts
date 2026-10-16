@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+
 import de from '../../messages/de.json';
 import en from '../../messages/en.json';
 

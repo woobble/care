@@ -4,6 +4,7 @@ import type {
   ServiceDefinitionSnapshot,
   ServiceSearchItem,
 } from '@care/services';
+
 import type {
   ServiceAvailabilityResponseDto,
   ServiceCategoryResponseDto,

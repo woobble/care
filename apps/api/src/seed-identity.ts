@@ -2,13 +2,14 @@
 import '@care/config/load-env';
 import { and, eq, sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
-import { loadApiConfig, loadMigrationConfig } from '@care/config';
-import { createDatabase } from '@care/database';
-import { identitySchema } from '@care/identity';
-import { tenants } from '@care/organizations';
+
 import { auditSchema } from '@care/audit';
 import { clientsSchema } from '@care/clients';
+import { loadApiConfig, loadMigrationConfig } from '@care/config';
+import { createDatabase } from '@care/database';
 import { employeesSchema } from '@care/employees';
+import { identitySchema } from '@care/identity';
+import { tenants } from '@care/organizations';
 import { organizationsSchema } from '@care/organizations';
 import { platformSchema } from '@care/platform';
 import { servicesSchema } from '@care/services';

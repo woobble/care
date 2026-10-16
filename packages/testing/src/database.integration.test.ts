@@ -1,8 +1,10 @@
+import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { v7 as uuidv7 } from 'uuid';
+
 import { Client } from 'pg';
-import { describe, expect, test } from 'bun:test';
+import { v7 as uuidv7 } from 'uuid';
+
 import { startCareTestDatabase } from './index';
 
 describe('PostgreSQL tenant boundaries', () => {

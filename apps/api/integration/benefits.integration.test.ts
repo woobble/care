@@ -1,22 +1,24 @@
-import { v7 as uuidv7 } from 'uuid';
+import { describe, expect, test } from 'bun:test';
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+
 import { NestFactory } from '@nestjs/core';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { Client } from 'pg';
-import { describe, expect, test } from 'bun:test';
 import { SignJWT, exportJWK, generateKeyPair } from 'jose';
-import { asUUID } from '@care/contracts';
-import { DrizzleAuditWriter } from '@care/audit';
-import { createDatabase, createUnitOfWork } from '@care/database';
-import { createBenefitsApplicationService } from '@care/benefits';
-import { DrizzleOutboxRepository } from '@care/platform';
-import type { AuthorizationPrincipal } from '@care/permissions';
-import { startCareTestDatabase } from '@care/testing';
-import { databaseSchema } from '@app/api/database/schema';
+import { Client } from 'pg';
+import { v7 as uuidv7 } from 'uuid';
+
 import { AppModule } from '@app/api/app.module';
+import { databaseSchema } from '@app/api/database/schema';
 import { configureApiHttp, createApiFastifyAdapter } from '@app/api/http/fastify';
+import { DrizzleAuditWriter } from '@care/audit';
+import { createBenefitsApplicationService } from '@care/benefits';
+import { asUUID } from '@care/contracts';
+import { createDatabase, createUnitOfWork } from '@care/database';
+import type { AuthorizationPrincipal } from '@care/permissions';
+import { DrizzleOutboxRepository } from '@care/platform';
+import { startCareTestDatabase } from '@care/testing';
 
 describe('benefits PostgreSQL integration', () => {
   test('enforces eligibility and tenant scope while recording split allocations as immutable history', async () => {

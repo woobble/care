@@ -1,8 +1,9 @@
 // oxlint-disable-next-line import/no-unassigned-import -- load dotenv before reading Next.js configuration
 import '@care/config/load-env';
-import { loadWebConfig } from '@care/config';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
+
+import { loadWebConfig } from '@care/config';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 

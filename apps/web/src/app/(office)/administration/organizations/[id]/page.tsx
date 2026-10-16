@@ -1,19 +1,7 @@
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
+import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { StatusBadge } from '@care/ui/components/status-badge';
-import { statusLabelKey } from '@app/web/i18n/status';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasClientPermission,
-} from '@app/web/lib/api';
+
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import {
   createFacilityAction,
@@ -22,9 +10,22 @@ import {
 } from '@app/web/app/(office)/administration/actions';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { errorMessageKey } from '@app/web/i18n/errors';
+import { statusLabelKey } from '@app/web/i18n/status';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+} from '@app/web/lib/api';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { StatusBadge } from '@care/ui/components/status-badge';
 
 type Params = Promise<{ id: string }>;
 type SearchParams = Promise<{

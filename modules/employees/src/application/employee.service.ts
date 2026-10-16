@@ -1,12 +1,13 @@
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
 import type { DomainEvent } from '@care/events';
+import { OrganizationArchivedError, OrganizationNotFoundError } from '@care/organizations';
 import { assertCan, can, type AuthorizationPrincipal, type Permission } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { OrganizationArchivedError, OrganizationNotFoundError } from '@care/organizations';
 import type {
   EmployeeChanges,
   EmployeeData,

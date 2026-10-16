@@ -1,17 +1,9 @@
 import { Module } from '@nestjs/common';
-import {
-  createBillingApplicationService,
-  createBillingClaimsApplicationService,
-} from '@care/billing';
-import type { AuditWriter } from '@care/audit';
-import type { BenefitsApplicationService } from '@care/benefits';
-import type { UnitOfWork } from '@care/database';
-import type { OutboxWriter } from '@care/platform';
-import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
-import type { ObjectStorage } from '@care/storage';
-import type { DocumentsApplicationService } from '@care/documents';
-import { ServicePriceApplicationService } from '@care/services';
+
 import { DatabaseModule } from '@app/api/database/database.module';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { BillingController } from '@app/api/presentation/http/billing.controller';
+import { ClaimsController } from '@app/api/presentation/http/claims.controller';
 import {
   AUDIT_WRITER,
   BENEFITS_APPLICATION,
@@ -24,15 +16,25 @@ import {
   SERVICE_PRICE_APPLICATION,
   UNIT_OF_WORK,
 } from '@app/api/tokens';
-import { BillingController } from '@app/api/presentation/http/billing.controller';
-import { ClaimsController } from '@app/api/presentation/http/claims.controller';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import type { AuditWriter } from '@care/audit';
+import type { BenefitsApplicationService } from '@care/benefits';
+import {
+  createBillingApplicationService,
+  createBillingClaimsApplicationService,
+} from '@care/billing';
+import type { UnitOfWork } from '@care/database';
+import type { DocumentsApplicationService } from '@care/documents';
+import type { OutboxWriter } from '@care/platform';
+import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
+import { ServicePriceApplicationService } from '@care/services';
+import type { ObjectStorage } from '@care/storage';
+
 import { AuditModule } from './audit.module';
 import { BenefitsModule } from './benefits.module';
+import { DocumentsModule } from './documents.module';
 import { IdentityModule } from './identity.module';
 import { PlatformModule } from './platform.module';
 import { ServiceEvidenceModule } from './service-evidence.module';
-import { DocumentsModule } from './documents.module';
 import { ServicesModule } from './services.module';
 
 @Module({

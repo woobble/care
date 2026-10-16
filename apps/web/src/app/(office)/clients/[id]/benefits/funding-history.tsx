@@ -1,8 +1,15 @@
 import { randomUUID } from 'node:crypto';
+
 import { getLocale, getTranslations } from 'next-intl/server';
+
 import { AllocationReversalForm } from '@app/web/app/(office)/benefits/allocation-reversal-form';
 import { DataPagination } from '@app/web/components/data-pagination';
 import { ErrorNotice } from '@app/web/components/page-patterns';
+import type { Locale } from '@app/web/i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatCurrency, formatDate, formatDateTime } from '@app/web/i18n/format';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -11,11 +18,6 @@ import {
   TableRow as ShadcnTableRow,
   TableCell as ShadcnTableCell,
 } from '@care/ui/components/table';
-import type { Locale } from '@app/web/i18n/config';
-import { errorMessageKey } from '@app/web/i18n/errors';
-import { formatCurrency, formatDate, formatDateTime } from '@app/web/i18n/format';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
-import { redirectToValidPage } from '@app/web/lib/pagination';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const historyEntryTypes = [

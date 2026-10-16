@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
 import { getTranslations } from 'next-intl/server';
+import { NextResponse } from 'next/server';
+
+import type { EntityOption, SearchableEntity } from '@app/web/components/async-entity-combobox';
 import { fetchCareApi } from '@app/web/lib/api';
 import type { CareApiRequest } from '@app/web/lib/api-routes';
-import type { EntityOption, SearchableEntity } from '@app/web/components/async-entity-combobox';
 
 type EntityRecord = {
   id: string;

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import type { AuditRecord, AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
@@ -20,8 +21,9 @@ import {
   QualificationArchivedError,
   UserAlreadyLinkedError,
 } from '@module/employees/domain/employee';
-import { EmployeeApplicationService } from './employee.service';
 import type { EmployeeRepository } from '@module/employees/infrastructure/persistence/employee.repository';
+
+import { EmployeeApplicationService } from './employee.service';
 
 const tenantId = '91ce6a63-434f-7423-a7dc-3eaf36766378';
 const organizationId = '193df432-2718-76ba-8a42-6b4242c3f121';

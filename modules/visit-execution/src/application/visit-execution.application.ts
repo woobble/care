@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
@@ -12,7 +13,6 @@ import {
   type ResourceContext,
 } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { performedServices, visitExecutions } from '@module/visit-execution/schema';
 import {
   validateServiceDecision,
   type ExecutionReasonCode,
@@ -25,6 +25,7 @@ import {
   type PlannedVisitService,
   type VisitExecutionVisit,
 } from '@module/visit-execution/infrastructure/visit-execution.repository';
+import { performedServices, visitExecutions } from '@module/visit-execution/schema';
 
 type AuditContext = { ip?: string; userAgent?: string };
 type ReasonCode = ExecutionReasonCode;
@@ -208,60 +209,82 @@ export class VisitExecutionApplicationService {
     principal: AuthorizationPrincipal,
     from: Date,
     until: Date,
+    scope: { organizationId?: string; facilityId?: string; clientId?: string } = {},
+    onPage?: (items: VisitExecutionOperationsSummary[]) => Promise<void>,
   ): Promise<VisitExecutionOperationsSummaryResult> {
     if (!validInstant(from) || !validInstant(until) || until <= from) {
       throw new InvalidVisitExecutionQueryError();
     }
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const rows = await this.repository.operationalExecutions(
-        transaction,
-        principal.tenantId,
-        from,
-        until,
-      );
-      const employee = principal.roles?.includes('Caregiver')
-        ? await this.requireEmployee(transaction, principal)
-        : null;
-      const allowed = [] as typeof rows;
-      // oxlint-disable no-await-in-loop
-      for (const row of rows) {
-        if (
-          !can(principal, {
-            action: 'visit_execution.read',
-            resource: await this.visitResourceContext(transaction, principal.tenantId, row.visit),
-          })
-        ) {
-          continue;
-        }
-        if (
-          employee &&
-          !(await this.repository.hasActiveAssignment(
+    const employee = principal.roles?.includes('Caregiver')
+      ? await this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+          this.requireEmployee(transaction, principal),
+        )
+      : null;
+    const items: VisitExecutionOperationsSummary[] = [];
+    let offset = 0;
+    // oxlint-disable no-await-in-loop
+    while (true) {
+      const page = await this.unitOfWork.transaction(
+        { tenantId: principal.tenantId },
+        async (transaction) => {
+          const rows = await this.repository.operationalExecutions(
             transaction,
             principal.tenantId,
-            row.visit.id,
-            employee.id,
-          ))
-        ) {
-          continue;
-        }
-        allowed.push(row);
-      }
-      // oxlint-enable no-await-in-loop
-      return {
-        items: allowed
-          .slice(0, 100)
-          .map(({ visit, execution, preferredName, firstName, lastName }) => ({
-            visitId: visit.id,
-            clientId: visit.clientId,
-            clientDisplayName: `${preferredName || firstName} ${lastName}`,
-            organizationId: visit.organizationId,
-            facilityId: visit.facilityId,
-            plannedEnd: visit.plannedEnd.toISOString(),
-            actualStart: execution.actualStart.toISOString(),
-          })),
-        complete: rows.length <= 100,
-      };
-    });
+            from,
+            until,
+            scope,
+            offset,
+            100,
+          );
+          const allowed = [] as typeof rows;
+          for (const row of rows) {
+            if (
+              !can(principal, {
+                action: 'visit_execution.read',
+                resource: await this.visitResourceContext(
+                  transaction,
+                  principal.tenantId,
+                  row.visit,
+                ),
+              })
+            ) {
+              continue;
+            }
+            if (
+              employee &&
+              !(await this.repository.hasActiveAssignment(
+                transaction,
+                principal.tenantId,
+                row.visit.id,
+                employee.id,
+              ))
+            ) {
+              continue;
+            }
+            allowed.push(row);
+          }
+          return {
+            rowCount: rows.length,
+            items: allowed.map(({ visit, execution, preferredName, firstName, lastName }) => ({
+              visitId: visit.id,
+              clientId: visit.clientId,
+              clientDisplayName: `${preferredName || firstName} ${lastName}`,
+              organizationId: visit.organizationId,
+              facilityId: visit.facilityId,
+              plannedEnd: visit.plannedEnd.toISOString(),
+              actualStart: execution.actualStart.toISOString(),
+            })),
+          };
+        },
+      );
+      if (!page.rowCount) break;
+      if (onPage) await onPage(page.items);
+      else items.push(...page.items);
+      offset += page.rowCount;
+      if (page.rowCount < 100) break;
+    }
+    // oxlint-enable no-await-in-loop
+    return { items, complete: true };
   }
 
   async operationsIssueState(

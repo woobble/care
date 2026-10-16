@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { visitQuerySchema } from './scheduling.dto';
 
 describe('visit search query', () => {

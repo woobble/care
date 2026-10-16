@@ -1,31 +1,32 @@
-import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
-import { Textarea } from '@care/ui/components/textarea';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
-import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
+import Link from 'next/link';
+
+import {
+  createRecurringTaskAction,
+  transitionRecurringTaskAction,
+  updateRecurringTaskAction,
+} from '@app/web/app/(office)/operations/actions';
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDateTime } from '@app/web/i18n/format';
-import { todayDateKey } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
+import { todayDateKey } from '@app/web/lib/care-date';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import type { components } from '@care/api-client';
-import {
-  createRecurringTaskAction,
-  transitionRecurringTaskAction,
-  updateRecurringTaskAction,
-} from '@app/web/app/(office)/operations/actions';
+import { Button } from '@care/ui/components/button';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { Textarea } from '@care/ui/components/textarea';
 
 type SearchParams = Promise<Record<string, string | undefined>>;
 const weekdayNumbers = [1, 2, 3, 4, 5, 6, 7] as const;
@@ -220,7 +221,10 @@ export default async function RecurringTasksPage({
               <legend className="text-sm font-medium">{t('weekdays')}</legend>
               <div className="flex flex-wrap gap-3">
                 {weekdayNumbers.map((day) => (
-                  <label key={day} className="flex items-center gap-2 text-sm">
+                  <label
+                    key={day}
+                    className="flex min-h-10 items-center gap-2 rounded-md border px-2 text-sm"
+                  >
                     <ShadcnCheckbox name="weekdays" value={day} defaultChecked={day <= 5} />
                     {t(`weekdayNames.${day}`)}
                   </label>
@@ -266,7 +270,7 @@ export default async function RecurringTasksPage({
               <Label htmlFor="timeOfDay">{t('timeOfDay')}</Label>
               <Input id="timeOfDay" name="timeOfDay" type="time" defaultValue="09:00" required />
             </div>
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="generationPolicy">{t('generationPolicy')}</Label>
               <NativeSelect
                 id="generationPolicy"
@@ -278,6 +282,7 @@ export default async function RecurringTasksPage({
                 <option value="generate_missed">{t('generateMissed')}</option>
                 <option value="skip_missed">{t('skipMissed')}</option>
               </NativeSelect>
+              <p className="text-xs text-muted-foreground">{t('generateMissedHelp')}</p>
             </div>
             <div className="md:col-span-2">
               <Button type="submit">{t('newRecurringTask')}</Button>

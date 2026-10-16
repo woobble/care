@@ -1,12 +1,14 @@
-import { v7 as uuidv7 } from 'uuid';
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Client } from 'pg';
-import { PDFDocument } from 'pdf-lib';
+
 import { devices, expect, test } from '@playwright/test';
 import type { BrowserContext, Dialog, Locator, Page } from '@playwright/test';
+import { PDFDocument } from 'pdf-lib';
+import { Client } from 'pg';
+import { v7 as uuidv7 } from 'uuid';
+
 import { loadStorageConfig } from '@care/config';
 import { createS3ObjectStorage } from '@care/storage';
 
@@ -88,6 +90,8 @@ test('Authentik users can be invited and administered from the office UI', async
   let claimId: string | undefined;
   let billingRecordsMayExist = false;
   let representativeContactId: string | undefined;
+  let operationsTaskId: string | undefined;
+  let operationsRecurrenceId: string | undefined;
   const serviceCategoryName = `E2E Category ${runId}`;
   const codeSuffix = runId.slice(-24);
   const serviceCategoryCode = `E2E-CAT-${codeSuffix}`;
@@ -222,8 +226,304 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible();
 
+    await test.step('operations dashboard and worklists respond across screen sizes', async () => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/operations', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('heading', { name: 'Operations dashboard' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: "Today's schedule" })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Urgent tasks' })).toBeVisible();
+      await captureReviewScreenshot(page, 'operations-dashboard-desktop-1440.png', true);
+      await expectMobileLayoutToFit(page);
+
+      await page.getByRole('button', { name: 'Appearance' }).click();
+      await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+      await expect(page.locator('html')).toHaveClass(/dark/);
+      await captureReviewScreenshot(page, 'operations-dashboard-desktop-dark-1440.png', true);
+      await page.getByRole('button', { name: 'Appearance' }).click();
+      await page.getByRole('menuitemradio', { name: 'Light' }).click();
+
+      await page.setViewportSize({ width: 768, height: 1024 });
+      await captureReviewScreenshot(page, 'operations-dashboard-tablet-768.png', true);
+      await expectMobileLayoutToFit(page);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await captureReviewScreenshot(page, 'operations-dashboard-mobile-390.png', true);
+      await expectMobileLayoutToFit(page);
+
+      await page.getByRole('link', { name: /Visit issues:/ }).click();
+      await expect(page).toHaveURL(/\/operations\/worklist\?category=visits$/);
+      await expect(page.getByRole('heading', { name: 'Action queue' })).toBeVisible();
+
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/operations/worklist', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('heading', { name: /worklist/i, level: 1 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Action queue' })).toBeVisible();
+      await expect(page.getByRole('navigation', { name: 'Pagination' })).toHaveCount(1);
+      await captureReviewScreenshot(page, 'operations-worklist-desktop-1440.png', true);
+      await page.setViewportSize({ width: 390, height: 844 });
+      const mobileWorklistFilters = page.getByRole('button', { name: 'Filters', exact: true });
+      await expect(mobileWorklistFilters).toBeVisible();
+      await expect(page.getByLabel('Item type')).toBeHidden();
+      await expect(page.getByRole('heading', { name: 'Action queue' })).toBeVisible();
+      await captureReviewScreenshot(page, 'operations-worklist-mobile-390.png', true);
+      await expectMobileLayoutToFit(page);
+      await mobileWorklistFilters.click();
+      await expect(page.getByLabel('Item type')).toBeVisible();
+      await mobileWorklistFilters.click();
+      await expect(page.getByLabel('Item type')).toBeHidden();
+
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.getByLabel('Item type').selectOption('tasks');
+      await page.getByRole('button', { name: 'Filter', exact: true }).click();
+      await expect(page).toHaveURL(/itemType=tasks/);
+      await expect(page.getByRole('navigation', { name: 'Pagination' })).toHaveCount(1);
+
+      await page.goto('/operations/tasks', { waitUntil: 'domcontentloaded' });
+      await expect(
+        page.getByRole('heading', { name: 'Manual tasks', exact: true, level: 1 }),
+      ).toBeVisible();
+      await captureReviewScreenshot(page, 'operations-tasks-desktop-1440.png', true);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await captureReviewScreenshot(page, 'operations-tasks-mobile-390.png', true);
+      await expectMobileLayoutToFit(page);
+
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/operations/deadlines', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('heading', { name: 'Deadlines & Reminders' })).toBeVisible();
+      await captureReviewScreenshot(page, 'operations-deadlines-desktop-1440.png', true);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(page.getByRole('button', { name: 'Filters', exact: true })).toBeVisible();
+      await captureReviewScreenshot(page, 'operations-deadlines-mobile-390.png', true);
+      await expectMobileLayoutToFit(page);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/operations/recurring-tasks', { waitUntil: 'commit' });
+      await expect(page.getByRole('heading', { name: /recurring/i, level: 1 })).toBeVisible({
+        timeout: 60_000,
+      });
+      await captureReviewScreenshot(page, 'operations-recurring-tasks-desktop-1440.png', true);
+      await page.goto('/clients?localeCheck=1');
+    });
+
+    await test.step('operations tasks and recurrence can be managed from the office UI', async () => {
+      const employeeResult = await database.query<{
+        displayName: string;
+        organizationName: string;
+      }>(
+        `SELECT
+           concat_ws(' ', coalesce(nullif(employee.preferred_name, ''), employee.first_name), employee.last_name) AS "displayName",
+           organization.name AS "organizationName"
+         FROM employees.employees AS employee
+         INNER JOIN organizations.organizations AS organization
+           ON organization.tenant_id = employee.tenant_id
+          AND organization.id = employee.organization_id
+         WHERE employee.tenant_id = $1
+           AND employee.status = 'active'
+           AND organization.name !~* '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+           AND concat_ws(
+             ' ',
+             coalesce(nullif(employee.preferred_name, ''), employee.first_name),
+             employee.last_name
+           ) !~* '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+         ORDER BY employee.id
+         LIMIT 1`,
+        [tenantId],
+      );
+      const organizationName = employeeResult.rows[0]?.organizationName;
+      const assignedEmployeeName = employeeResult.rows[0]?.displayName;
+      if (!organizationName || !assignedEmployeeName)
+        throw new Error('Demo Care has no active employee with readable references to assign');
+      const assignedEmployeeOption = new RegExp(`^${assignedEmployeeName}$`);
+
+      const taskTitle = `E2E Operations task ${runId}`;
+      const taskDescription = `Assigned and tracked in the office UI ${runId}`;
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/operations/tasks', { waitUntil: 'domcontentloaded' });
+      const createTaskForm = page.locator('section[aria-labelledby="create-task-title"]');
+      await createTaskForm.locator('#task-title').fill(taskTitle);
+      await createTaskForm.locator('#task-description').fill(taskDescription);
+      await selectEntity(page, 'Organization', organizationName, organizationName, createTaskForm);
+      await selectEntity(
+        page,
+        'Assigned employee',
+        assignedEmployeeName,
+        assignedEmployeeOption,
+        createTaskForm,
+      );
+      const taskDueDate = addDaysToDate(dateInBerlin(), 3);
+      await createTaskForm.locator('input[name="dueAt"]').fill(`${taskDueDate}T10:00`);
+      await submitServerAction(page, createTaskForm.getByRole('button', { name: 'Create task' }));
+      await expect(page).toHaveURL(/\/operations\/tasks\/[0-9a-f-]{36}\?updated=created$/i);
+      operationsTaskId = new URL(page.url()).pathname.split('/').at(-1);
+      await expect(page.getByRole('heading', { name: taskTitle, exact: true })).toBeVisible();
+      const taskDetails = page.locator('section[aria-labelledby="task-edit-heading"]');
+      await expect(taskDetails.getByText(organizationName, { exact: true })).toBeVisible();
+      await expect(taskDetails.getByText(assignedEmployeeName, { exact: true })).toHaveCount(2);
+      await expect(page.getByRole('region', { name: 'Activity' })).toContainText(displayName);
+      await page.getByLabel('Comment').fill(`E2E task note ${runId}`);
+      await submitServerAction(page, page.getByRole('button', { name: 'Add comment' }));
+      await expect(page.getByRole('region', { name: 'Activity' })).toContainText(
+        `E2E task note ${runId}`,
+      );
+      const editedTaskDescription = `${taskDescription} after an edit`;
+      const taskEditor = page.locator('section[aria-labelledby="task-edit-heading"] form');
+      await taskEditor.locator('textarea[name="description"]').fill(editedTaskDescription);
+      await taskEditor.locator('select[name="priority"]').selectOption('high');
+      await submitServerAction(page, taskEditor.getByRole('button', { name: 'Save' }));
+      await expect(page).toHaveURL(/updated=saved$/);
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(
+        page.locator('section[aria-labelledby="task-edit-heading"] > p.whitespace-pre-wrap'),
+      ).toHaveText(editedTaskDescription);
+      await expect(page.getByRole('heading', { name: taskTitle, exact: true })).toBeVisible();
+      expect(await page.locator('body').innerText()).not.toMatch(
+        /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i,
+      );
+      await captureReviewScreenshot(page, 'operations-task-detail-desktop-1440.png', true);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await captureReviewScreenshot(page, 'operations-task-detail-mobile-390.png', true);
+      await expectMobileLayoutToFit(page);
+      await page.setViewportSize({ width: 1440, height: 900 });
+
+      await submitServerAction(page, page.getByRole('button', { name: 'Start work' }));
+      await expect(page).toHaveURL(/updated=saved$/);
+      await expect(page.getByText('In progress', { exact: true })).toBeVisible();
+      await submitServerAction(page, page.getByRole('button', { name: 'Complete' }));
+      await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+      await submitServerAction(page, page.getByRole('button', { name: 'Reopen' }));
+      await expect(page.getByText('Open', { exact: true })).toBeVisible();
+
+      await page.goto('/operations/worklist', { waitUntil: 'domcontentloaded' });
+      const worklistFilters = page.locator('form[method="get"]').first();
+      await worklistFilters.locator('select[name="itemType"]').selectOption('tasks');
+      await worklistFilters.locator('input[name="search"]').fill(taskTitle);
+      await worklistFilters.getByRole('button', { name: 'Filter', exact: true }).click();
+      await expect.poll(() => new URL(page.url()).searchParams.get('itemType')).toBe('tasks');
+      await expect.poll(() => new URL(page.url()).searchParams.get('search')).toBe(taskTitle);
+      await expect(page.getByRole('link', { name: taskTitle, exact: true })).toBeVisible();
+
+      await page.goto('/operations/worklist?itemType=exceptions&sourceDomain=onboarding', {
+        waitUntil: 'domcontentloaded',
+      });
+      const exceptionWithHistory = page
+        .locator('li')
+        .filter({ has: page.getByRole('link', { name: 'Exception history', exact: true }) })
+        .first();
+      await expect(exceptionWithHistory).toBeVisible();
+      const sourceRecordLink = exceptionWithHistory.getByRole('link', {
+        name: 'Open source record',
+        exact: true,
+      });
+      await expect(sourceRecordLink).toHaveAttribute('href', /^\/admissions\/[0-9a-f-]{36}$/i);
+      await sourceRecordLink.click();
+      await expect(page).toHaveURL(/\/admissions\/[0-9a-f-]{36}$/i, { timeout: 30_000 });
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await page.goBack({ waitUntil: 'domcontentloaded' });
+      await expect(exceptionWithHistory).toBeVisible();
+      await exceptionWithHistory
+        .getByRole('link', { name: 'Exception history', exact: true })
+        .click();
+      await expect(page).toHaveURL(/\/operations\/work-items\/[a-f0-9]{64}\/history$/i);
+      await expect(
+        page.getByRole('heading', { name: 'Exception history', exact: true }),
+      ).toBeVisible();
+      await captureReviewScreenshot(page, 'operations-exception-history-desktop-1440.png', true);
+
+      await page.goto(
+        `/operations/worklist?itemType=exceptions&sourceDomain=onboarding&search=${encodeURIComponent(`no-match-${runId}`)}`,
+        { waitUntil: 'domcontentloaded' },
+      );
+      await expect(
+        page.getByText('No tasks or operational exceptions match these filters.', { exact: true }),
+      ).toBeVisible();
+      await captureReviewScreenshot(page, 'operations-worklist-empty-desktop-1440.png', true);
+
+      await page.goto('/operations/worklist?error=UNKNOWN_ERROR', {
+        waitUntil: 'domcontentloaded',
+      });
+      await expect(page.locator('p[role="alert"]')).toContainText(
+        'Something went wrong. Please try again.',
+      );
+      await captureReviewScreenshot(page, 'operations-worklist-error-desktop-1440.png', true);
+
+      const recurringTitle = `E2E Recurring task ${runId}`;
+      const updatedRecurringTitle = `${recurringTitle} updated`;
+      await page.goto('/operations/recurring-tasks', { waitUntil: 'domcontentloaded' });
+      const createRecurrenceForm = page.locator(
+        'section[aria-labelledby="recurring-create-title"] form',
+      );
+      await createRecurrenceForm.locator('#recurring-title').fill(recurringTitle);
+      await selectEntity(
+        page,
+        'Organization',
+        organizationName,
+        organizationName,
+        createRecurrenceForm,
+      );
+      await selectEntity(
+        page,
+        'Assigned employee',
+        assignedEmployeeName,
+        assignedEmployeeOption,
+        createRecurrenceForm,
+      );
+      const recurrenceStart = addDaysToDate(dateInBerlin(), 1);
+      await createRecurrenceForm.locator('select[name="frequency"]').selectOption('daily');
+      await createRecurrenceForm.locator('input[name="startDate"]').fill(recurrenceStart);
+      await createRecurrenceForm
+        .locator('input[name="endDate"]')
+        .fill(addDaysToDate(recurrenceStart, 3));
+      await submitServerAction(
+        page,
+        createRecurrenceForm.getByRole('button', { name: 'Create recurring task' }),
+      );
+      await expect(page).toHaveURL(/\/operations\/recurring-tasks\?updated=created$/);
+      const recurrenceRow = page.locator('li').filter({ hasText: recurringTitle });
+      await expect(recurrenceRow).toBeVisible();
+      await recurrenceRow.locator('input[name="title"]').fill(updatedRecurringTitle);
+      await submitServerAction(page, recurrenceRow.getByRole('button', { name: 'Save' }));
+      await expect(page).toHaveURL(/updated=saved$/);
+      const updatedRecurrenceRow = page.locator('li').filter({ hasText: updatedRecurringTitle });
+      await expect(updatedRecurrenceRow).toBeVisible();
+      await submitServerAction(
+        page,
+        updatedRecurrenceRow.getByRole('button', { name: 'Pause recurrence' }),
+      );
+      await expect(updatedRecurrenceRow).toContainText('Paused');
+      await submitServerAction(
+        page,
+        updatedRecurrenceRow.getByRole('button', { name: 'Resume recurrence' }),
+      );
+      await expect(updatedRecurrenceRow).toContainText('Active');
+      await captureReviewScreenshot(page, 'operations-recurring-tasks-desktop-1440.png', true);
+      await page.setViewportSize({ width: 768, height: 1024 });
+      await expect(page.getByLabel('Missed occurrence policy')).toHaveValue('generate_missed');
+      await expect(
+        page.getByText('Generate missed occurrences for up to 30 days.', { exact: true }),
+      ).toBeVisible();
+      await captureReviewScreenshot(page, 'operations-recurring-tasks-tablet-768.png', true);
+      await expectMobileLayoutToFit(page);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await captureReviewScreenshot(page, 'operations-recurring-tasks-mobile-390.png', true);
+      await expectMobileLayoutToFit(page);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await updatedRecurrenceRow
+        .getByRole('link', { name: updatedRecurringTitle, exact: true })
+        .click();
+      await expect(
+        page.getByRole('heading', { name: updatedRecurringTitle, exact: true }),
+      ).toBeVisible();
+      operationsRecurrenceId = new URL(page.url()).pathname.split('/').at(-1);
+      await captureReviewScreenshot(
+        page,
+        'operations-recurring-task-detail-desktop-1440.png',
+        true,
+      );
+    });
+
+    if (process.env.CARE_E2E_OPERATIONS_ONLY === 'true') return;
+
     const sidebar = page.locator('#office-sidebar');
     await test.step('office sidebar and responsive navigation', async () => {
+      await page.goto('/clients?localeCheck=1');
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.emulateMedia({ reducedMotion: 'no-preference' });
       const expandSidebar = page.getByRole('button', { name: 'Expand sidebar' });
@@ -368,8 +668,13 @@ test('Authentik users can be invited and administered from the office UI', async
         path: testInfo.outputPath('office-1440-expanded-benefits-active-dark.png'),
         fullPage: true,
       });
-      await sidebar.getByRole('link', { name: 'Clients' }).click();
-      await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible();
+      await Promise.all([
+        page.waitForURL((url) => url.pathname === '/clients', { timeout: 30_000 }),
+        sidebar.getByRole('link', { name: 'Clients' }).click(),
+      ]);
+      await expect(page.getByRole('heading', { name: 'Clients', exact: true })).toBeVisible({
+        timeout: 30_000,
+      });
       await page.getByRole('button', { name: 'Collapse sidebar' }).click();
       await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
       await page.screenshot({
@@ -464,7 +769,7 @@ test('Authentik users can be invited and administered from the office UI', async
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.getByRole('button', { name: 'Expand sidebar' }).click();
     await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
-    await page.goto('/operations');
+    await page.goto('/operations', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Operations dashboard' })).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('operations-1440-light.png'),
@@ -531,11 +836,11 @@ test('Authentik users can be invited and administered from the office UI', async
     await captureReviewScreenshot(page, 'office-dashboard-mobile-390.png', true);
     await expectMobileLayoutToFit(page);
     await page.setViewportSize({ width: 1440, height: 900 });
-    const scheduledVisits = page.getByRole('link', { name: /Today's scheduled visits:/ });
+    const scheduledVisits = page.getByRole('link', { name: 'Open planning' });
     await expect(scheduledVisits).toBeVisible();
     await scheduledVisits.click();
     await expect(page).toHaveURL(/\/planning(?:\?|$)/);
-    await page.goto('/operations');
+    await page.goto('/operations', { waitUntil: 'domcontentloaded' });
     const visitIssues = page.getByRole('link', { name: /Visit issues:/ });
     await expect(visitIssues).toBeVisible();
     await visitIssues.click();
@@ -3377,26 +3682,28 @@ test('Authentik users can be invited and administered from the office UI', async
     await expect(page.getByRole('heading', { name: invitedName })).toBeVisible({ timeout: 30_000 });
     const officeRole = page.locator(`button[role="checkbox"][value="${officeRoleId}"]`);
     await officeRole.click();
-    await page.getByRole('button', { name: 'Save roles' }).click();
+    await submitServerAction(page, page.getByRole('button', { name: 'Save roles' }));
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
     await officeRole.click();
-    await page.getByRole('button', { name: 'Save roles' }).click();
+    await submitServerAction(page, page.getByRole('button', { name: 'Save roles' }));
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
     await expect(officeRole).not.toBeChecked();
     await officeRole.click();
-    await page.getByRole('button', { name: 'Save roles' }).click();
+    await submitServerAction(page, page.getByRole('button', { name: 'Save roles' }));
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
+    await expect(officeRole).toBeChecked();
 
     await page.locator('input[name="scopeMode"][value="scoped"]').check();
+    await expect(page.locator('input[name="scopeMode"][value="scoped"]')).toBeChecked();
     const facilityScope = page.locator(`input[name="scope"][value="facility:${facilityWestId}"]`);
     await selectEntity(page, 'Facilities', 'Facility West', /Facility West/);
-    await page.getByRole('button', { name: 'Save scopes' }).click();
+    await submitServerAction(page, page.getByRole('button', { name: 'Save scopes' }));
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
@@ -3408,14 +3715,14 @@ test('Authentik users can be invited and administered from the office UI', async
       .getByRole('group', { name: 'Facilities' })
       .getByRole('button', { name: 'Clear selection' })
       .click();
-    await page.getByRole('button', { name: 'Save scopes' }).click();
+    await submitServerAction(page, page.getByRole('button', { name: 'Save scopes' }));
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
     await expectMembershipScopes(database, invitedMembershipId, []);
     await expect(facilityScope).toHaveCount(0);
     await selectEntity(page, 'Facilities', 'Facility West', /Facility West/);
-    await page.getByRole('button', { name: 'Save scopes' }).click();
+    await submitServerAction(page, page.getByRole('button', { name: 'Save scopes' }));
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
@@ -3493,7 +3800,9 @@ test('Authentik users can be invited and administered from the office UI', async
       await page.locator('select[name="tenantId"]').selectOption(pilotTenantId);
       await page.getByRole('button', { name: 'Continue' }).click();
       await expect(page).toHaveURL(/\/clients$/);
-      await page.goto('/operations/tasks?q=%5BSYNTHETIC%20PILOT%5D');
+      await page.goto('/operations/tasks?q=%5BSYNTHETIC%20PILOT%5D', {
+        waitUntil: 'domcontentloaded',
+      });
       await expect(
         page.getByRole('heading', { name: 'Manual tasks', exact: true, level: 1 }),
       ).toBeVisible();
@@ -3510,7 +3819,7 @@ test('Authentik users can be invited and administered from the office UI', async
       await claimSourceLink.click();
       await expect(page).toHaveURL(claimSourceUrl);
       await expect(page.getByText('Accepted', { exact: true })).toBeVisible();
-      await page.goto('/operations/deadlines');
+      await page.goto('/operations/deadlines', { waitUntil: 'domcontentloaded' });
       await expect(page.getByRole('heading', { name: 'Deadlines & Reminders' })).toBeVisible();
     }
   } finally {
@@ -3522,6 +3831,44 @@ test('Authentik users can be invited and administered from the office UI', async
       );
       if (pilotTenantId && pilotMembershipId) {
         await cleanupPilotMembership(database, pilotTenantId, pilotMembershipId);
+      }
+      if (tenantId && (operationsTaskId || operationsRecurrenceId)) {
+        const recurrenceOccurrences = operationsRecurrenceId
+          ? await database.query<{ taskId: string }>(
+              `SELECT task_id AS "taskId"
+               FROM operations.recurring_task_occurrences
+               WHERE tenant_id = $1 AND recurrence_definition_id = $2`,
+              [tenantId, operationsRecurrenceId],
+            )
+          : { rows: [] };
+        const operationsTaskIds = [
+          operationsTaskId,
+          ...recurrenceOccurrences.rows.map((row) => row.taskId),
+        ].filter((id): id is string => id !== undefined);
+        if (operationsTaskIds.length) {
+          await database.query(
+            'DELETE FROM operations.task_activity WHERE tenant_id = $1 AND task_id = ANY($2::uuid[])',
+            [tenantId, operationsTaskIds],
+          );
+        }
+        if (operationsRecurrenceId) {
+          await database.query(
+            'DELETE FROM operations.recurring_task_occurrences WHERE tenant_id = $1 AND recurrence_definition_id = $2',
+            [tenantId, operationsRecurrenceId],
+          );
+        }
+        if (operationsTaskIds.length) {
+          await database.query(
+            'DELETE FROM operations.tasks WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+            [tenantId, operationsTaskIds],
+          );
+        }
+        if (operationsRecurrenceId) {
+          await database.query(
+            'DELETE FROM operations.recurring_task_definitions WHERE tenant_id = $1 AND id = $2',
+            [tenantId, operationsRecurrenceId],
+          );
+        }
       }
       // Payer profiles and their actor references are retained with financial history in this
       // disposable Compose database, which is removed after the browser run.
@@ -4313,19 +4660,6 @@ async function signInWithAuthentik(page: Page, username: string, password: strin
   ]);
 }
 
-async function reauthenticateOffice(
-  page: Page,
-  username: string,
-  password: string,
-  tenantId: string,
-): Promise<void> {
-  await page.context().clearCookies();
-  await signInWithAuthentik(page, username, password);
-  await page.locator('select[name="tenantId"]').selectOption(tenantId);
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page).toHaveURL(/\/clients$/);
-}
-
 async function authentikRequest<T = unknown>(
   origin: string,
   token: string,
@@ -4786,9 +5120,10 @@ async function selectEntity(
 ): Promise<void> {
   const trigger = root.getByRole('combobox', { name: controlLabel });
   if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
-  const search = page.getByRole('combobox', { name: 'Search by name' });
-  await search.fill(searchText);
-  const dialog = page.getByRole('dialog');
+  const searchInput = page.getByRole('combobox', { name: 'Search by name' });
+  const dialog = page.getByRole('dialog').filter({ has: searchInput });
+  await expect(dialog).toBeVisible();
+  await searchInput.fill(searchText);
   const targetOption = dialog.getByRole('option', { name: optionName });
   await expect(targetOption).toBeVisible();
   const optionCount = await dialog.getByRole('option').count();
@@ -4799,12 +5134,23 @@ async function selectEntity(
     const activeOption = dialog.locator('[role="option"][aria-selected="true"]').first();
     const activeText = (await activeOption.textContent()) ?? '';
     if (matchesOption(activeText)) {
-      await search.press('Enter');
+      await searchInput.press('Enter');
       return;
     }
-    await search.press('ArrowDown');
+    await searchInput.press('ArrowDown');
   }
   throw new Error(`Could not navigate to the ${String(optionName)} option`);
+}
+
+async function submitServerAction(page: Page, submitButton: Locator): Promise<void> {
+  const responsePromise = page.waitForResponse((response) => {
+    const request = response.request();
+    return request.method() === 'POST' && 'next-action' in request.headers();
+  });
+  await submitButton.click();
+  const response = await responsePromise;
+  expect(response.ok()).toBeTruthy();
+  await page.waitForLoadState('networkidle');
 }
 
 async function moveEmployeeUserLink(
@@ -4839,6 +5185,7 @@ async function captureReviewScreenshot(
   filename: string,
   fullPage = false,
 ): Promise<void> {
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: resolve(reviewDirectory, filename), fullPage });
 }
 

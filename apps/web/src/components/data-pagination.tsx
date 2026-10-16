@@ -1,3 +1,6 @@
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { getLocale, getTranslations } from 'next-intl/server';
+
 import { Button } from '@care/ui/components/button';
 import { NativeSelect } from '@care/ui/components/native-select';
 import {
@@ -9,8 +12,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@care/ui/components/pagination';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
-import { getLocale, getTranslations } from 'next-intl/server';
 
 export type PaginationQuery = Record<string, string | number | undefined>;
 
@@ -26,6 +27,7 @@ type DataPaginationBaseProps = Readonly<{
   pageSizeParam?: string;
   controlId?: string;
   stacked?: boolean;
+  totalIsLowerBound?: boolean;
 }>;
 
 type DataPaginationProps = DataPaginationBaseProps &
@@ -47,6 +49,7 @@ export async function DataPagination({
   pageSizeParam = 'pageSize',
   controlId = 'page-size',
   stacked = false,
+  totalIsLowerBound = false,
 }: DataPaginationProps) {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const safePageSize = Math.max(1, Math.min(100, pageSize));
@@ -80,7 +83,7 @@ export async function DataPagination({
         </p>
       ) : (
         <p className="text-sm text-muted-foreground" aria-live="polite">
-          {t('Common.resultsRange', {
+          {t(totalIsLowerBound ? 'Common.resultsRangeAtLeast' : 'Common.resultsRange', {
             start: number.format(start),
             end: number.format(end),
             total: number.format(totalItems),
@@ -102,7 +105,7 @@ export async function DataPagination({
             ),
           )}
           <input type="hidden" name={pageParam} value="1" />
-          <label className="whitespace-nowrap text-sm text-muted-foreground" htmlFor={controlId}>
+          <label className="text-sm whitespace-nowrap text-muted-foreground" htmlFor={controlId}>
             {t('Common.fields.pageSize')}
           </label>
           <NativeSelect

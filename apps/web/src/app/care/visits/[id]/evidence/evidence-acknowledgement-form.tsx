@@ -1,11 +1,12 @@
 'use client';
 
-import { Textarea } from '@care/ui/components/textarea';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import type { components } from '@care/api-client';
+import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from 'react';
+
 import { acknowledgeEvidenceAction, declineEvidenceAction } from '@app/web/app/care/actions';
+import type { components } from '@care/api-client';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { Textarea } from '@care/ui/components/textarea';
 
 type EligibleSignatory = components['schemas']['EligibleSignatoryDto'];
 type SignaturePoint = { x: number; y: number };

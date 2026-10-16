@@ -20,19 +20,31 @@ import {
 } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
-import type { BillingApplicationService, BillingClaimsApplicationService } from '@care/billing';
 import type { BenefitsApplicationService } from '@care/benefits';
+import { benefitFundingSources, clientBenefitEntitlements } from '@care/benefits';
+import type { BillingApplicationService, BillingClaimsApplicationService } from '@care/billing';
+import { invoices, claims, payerArrangements } from '@care/billing';
 import {
   CareDocumentationNotFoundError,
   CareDocumentationVisitRelationshipRequiredError,
   type CareDocumentationApplicationService,
 } from '@care/care-documentation';
+import { careDocuments } from '@care/care-documentation';
+import { clientRecords } from '@care/clients';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
+import { documentArtifacts } from '@care/documents';
+import {
+  employeeFacilityAssignments,
+  employeeQualifications,
+  employeeRecords,
+  qualificationDefinitions,
+} from '@care/employees';
 import { createDomainEvent } from '@care/events';
 import { tenantMemberships, users } from '@care/identity';
-import type { OutboxWriter } from '@care/platform';
+import { facilities, organizationsTable } from '@care/organizations';
 import {
   assertCan,
   AuthorizationDeniedError,
@@ -41,33 +53,27 @@ import {
   type Permission,
   type ResourceContext,
 } from '@care/permissions';
+import type { OutboxWriter } from '@care/platform';
 import {
   VisitNotFoundError,
   VisitOutsideProviderContextError,
   localDateTimeToInstant,
   type SchedulingApplicationService,
 } from '@care/scheduling';
+import { visits } from '@care/scheduling';
+import { agreements } from '@care/service-agreements';
 import {
   EvidencePackageNotFoundError,
   ServiceEvidenceVisitRelationshipRequiredError,
   type ServiceEvidenceApplicationService,
 } from '@care/service-evidence';
-import type { VisitExecutionApplicationService } from '@care/visit-execution';
-import { clientRecords } from '@care/clients';
-import {
-  employeeFacilityAssignments,
-  employeeQualifications,
-  employeeRecords,
-  qualificationDefinitions,
-} from '@care/employees';
-import { facilities, organizationsTable } from '@care/organizations';
-import { agreements } from '@care/service-agreements';
-import { visits } from '@care/scheduling';
-import { careDocuments } from '@care/care-documentation';
 import { evidencePackages } from '@care/service-evidence';
-import { invoices, claims, payerArrangements } from '@care/billing';
-import { benefitFundingSources, clientBenefitEntitlements } from '@care/benefits';
-import { documentArtifacts } from '@care/documents';
+import type { VisitExecutionApplicationService } from '@care/visit-execution';
+import {
+  evidenceIssueCode,
+  evidencePackageIssueCode,
+  stableIssueId,
+} from '@module/operations/domain/operations';
 import {
   exceptionInteractions,
   exceptionOccurrences,
@@ -76,17 +82,14 @@ import {
   taskActivity,
   tasks,
 } from '@module/operations/schema';
-import {
-  evidenceIssueCode,
-  evidencePackageIssueCode,
-  stableIssueId,
-} from '@module/operations/domain/operations';
+
 import { validateOperationsAssignee } from './operations-guards';
 
 type AuditContext = { ip?: string; userAgent?: string };
 type SourceType = NonNullable<(typeof tasks.$inferSelect)['sourceType']>;
 type TaskStatus = (typeof tasks.$inferSelect)['status'];
 type TaskPriority = (typeof tasks.$inferSelect)['priority'];
+type ClaimReadiness = Awaited<ReturnType<BillingClaimsApplicationService['readiness']>>;
 const projectionSourceAt = Symbol('projectionSourceAt');
 type ProjectedOperationsWorkItem = OperationsWorkItem & {
   [projectionSourceAt]: Date | null;
@@ -94,7 +97,6 @@ type ProjectedOperationsWorkItem = OperationsWorkItem & {
 type ReconciliationWindow = {
   from: Date | null;
   until: Date | null;
-  sourceEntityKeys?: Set<string>;
 };
 type OnboardingReadinessCase = {
   id: string;
@@ -136,12 +138,19 @@ export interface OperationsSourceServices {
   documentation: Pick<CareDocumentationApplicationService, 'worklist' | 'getForVisit'>;
   evidence: Pick<ServiceEvidenceApplicationService, 'worklist' | 'getPackage'>;
   benefits: Pick<BenefitsApplicationService, 'getWorklist' | 'listUnallocatedServices'>;
-  billing: Pick<BillingApplicationService, 'listInvoices' | 'receivables'>;
+  billing: Pick<BillingApplicationService, 'listInvoicesPage' | 'receivablesPage'>;
   claims: Pick<BillingClaimsApplicationService, 'listClaims' | 'readiness' | 'readinessForClaims'>;
   onboarding?: {
     operationsReadinessWorklist(
       principal: AuthorizationPrincipal,
-      deadlineWindow: { fromDate: string; untilDate: string },
+      deadlineWindow: {
+        fromDate: string;
+        untilDate: string;
+        organizationId?: string;
+        facilityId?: string;
+        clientId?: string;
+      },
+      onPage?: (items: OnboardingReadinessCase[]) => Promise<void>,
     ): Promise<{ items: OnboardingReadinessCase[]; complete: boolean }>;
     operationsIssueState(
       principal: AuthorizationPrincipal,
@@ -199,6 +208,29 @@ export interface OperationsQuery {
   sort?: 'relevance' | 'due';
   page?: number;
   pageSize?: number;
+  offset?: number;
+}
+
+export interface OperationsWorkQueueQuery {
+  itemType?: 'all' | 'tasks' | 'exceptions';
+  organizationId?: string;
+  facilityId?: string;
+  clientId?: string;
+  category?: OperationsWorkItem['category'];
+  sourceDomain?: string;
+  severity?: OperationsWorkItem['severity'];
+  exceptionStatus?: OperationsWorkItem['status'];
+  taskStatus?: TaskStatus;
+  priority?: TaskPriority;
+  assignedEmployeeId?: string;
+  assignedToMe?: boolean;
+  due?: 'overdue' | 'today' | 'upcoming';
+  fromDate?: string;
+  untilDate?: string;
+  search?: string;
+  sort?: 'priority' | 'due';
+  page?: number;
+  pageSize?: number;
 }
 
 export interface OperationsWorkItem {
@@ -240,6 +272,24 @@ export interface OperationsWorkItem {
   } | null;
 }
 
+const categorySourceDomains: Record<OperationsWorkItem['category'], ReadonlySet<string>> = {
+  scheduling: new Set(['scheduling']),
+  visits: new Set(['visit_execution']),
+  documentation: new Set(['care_documentation', 'service_evidence']),
+  benefits: new Set(['benefits']),
+  billing: new Set(['billing']),
+  claims: new Set(['claims']),
+  onboarding: new Set(['onboarding']),
+  agreements: new Set(['service_agreements']),
+  employees: new Set(['employee_qualifications']),
+};
+const undatedSourceDomains = new Set(['care_documentation', 'service_evidence', 'claims']);
+const employeeScopedSourceDomains = new Set([
+  'scheduling',
+  'care_documentation',
+  'employee_qualifications',
+]);
+
 export class OperationsApplicationService {
   constructor(
     private readonly unitOfWork: UnitOfWork,
@@ -252,8 +302,10 @@ export class OperationsApplicationService {
     principal: AuthorizationPrincipal,
     query: Pick<OperationsQuery, 'organizationId' | 'facilityId'> = {},
   ) {
-    const worklist = await this.listWorkItems(principal, { ...query, page: 1, pageSize: 1000 });
-    const tasksSummary = await this.taskSummary(principal, query);
+    const [worklist, tasksSummary] = await Promise.all([
+      this.listWorkItems(principal, { ...query, page: 1, pageSize: 1000 }),
+      this.taskSummary(principal, query),
+    ]);
     const deadlineItems = worklist.items.filter(
       (item) => deadlinePolicyCategory(item) !== null && item.dueAt !== null,
     );
@@ -531,6 +583,36 @@ export class OperationsApplicationService {
     const documentationFrom = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000 + 1);
     const sourceUntil = new Date(now.getTime() + 1);
     const canRead = (permission: Permission) => hasGrant(principal, permission);
+    const sourceEnabled = (sourceDomain: string) =>
+      (query.sourceDomain === undefined || query.sourceDomain === sourceDomain) &&
+      (query.category === undefined || categorySourceDomains[query.category].has(sourceDomain)) &&
+      (!query.employeeId || employeeScopedSourceDomains.has(sourceDomain)) &&
+      (!(query.due || query.fromDate || query.untilDate) ||
+        !undatedSourceDomains.has(sourceDomain));
+    const sourceRequested = {
+      scheduling: canRead('schedule.read') && sourceEnabled('scheduling'),
+      execution: canRead('visit_execution.read') && sourceEnabled('visit_execution'),
+      documentation: canRead('care_documentation.review') && sourceEnabled('care_documentation'),
+      evidence: canRead('service_evidence.read') && sourceEnabled('service_evidence'),
+      benefits: canRead('benefits.review') && sourceEnabled('benefits'),
+      invoiceDocuments:
+        canRead('billing.read') &&
+        sourceEnabled('billing') &&
+        !query.due &&
+        !query.fromDate &&
+        !query.untilDate,
+      receivables: canRead('billing.payments.read') && sourceEnabled('billing'),
+      claims: canRead('claims.read') && sourceEnabled('claims'),
+      onboarding:
+        canRead('onboarding.read') &&
+        sourceEnabled('onboarding') &&
+        Boolean(this.sources.onboarding),
+      agreements: canRead('service_agreement.read') && sourceEnabled('service_agreements'),
+      qualifications:
+        canRead('employee.read') && sourceEnabled('employee_qualifications') && !query.clientId,
+      benefitDeadlines: canRead('benefits.review') && sourceEnabled('benefits'),
+      payerArrangements: canRead('billing.read') && sourceEnabled('billing'),
+    };
     const agreementScope = permissionScope(principal, 'service_agreement.read');
     const employeeScope = permissionScope(principal, 'employee.read');
     const benefitScope = permissionScope(principal, 'benefits.review');
@@ -558,922 +640,1110 @@ export class OperationsApplicationService {
     const todayUtc = now.toISOString().slice(0, 10);
     const deadlineFrom = addDaysToDate(todayUtc, -365);
     const deadlineUntil = addDaysToDate(todayUtc, lookaheadDays);
-    const [
-      schedule,
-      execution,
-      documentation,
-      evidence,
-      benefitData,
-      invoicesForDocuments,
-      receivables,
-      claimsPage,
-      onboardingReadiness,
-      agreementDeadlines,
-      qualificationDeadlines,
-      benefitEntitlementDeadlines,
-      payerArrangementDeadlines,
-    ] = await isolateOperationsSources(
-      [
-        canRead('schedule.read')
-          ? this.sources.scheduling.getWorklist(principal, {
-              from: now,
-              until,
-              page: 1,
-              pageSize: 100,
-            })
-          : null,
-        canRead('visit_execution.read')
-          ? this.sources.execution.operationsSummaries(principal, from, sourceUntil)
-          : null,
-        canRead('care_documentation.review')
-          ? this.sources.documentation.worklist(principal, {
-              from: documentationFrom,
-              until: sourceUntil,
-              incomplete: true,
-              page: 1,
-              pageSize: 100,
-            })
-          : null,
-        canRead('service_evidence.read')
-          ? this.sources.evidence.worklist(principal, {
-              from,
-              until: sourceUntil,
-              page: 1,
-              pageSize: 100,
-            })
-          : null,
-        canRead('benefits.review')
-          ? this.sources.benefits.getWorklist(principal, 1, 100, lookaheadDays)
-          : null,
-        canRead('billing.read')
-          ? this.sources.billing.listInvoices(principal, { page: 1, pageSize: 100 })
-          : null,
-        canRead('billing.payments.read')
-          ? this.sources.billing.receivables(principal, { page: 1, pageSize: 100 })
-          : null,
-        canRead('claims.read')
-          ? this.sources.claims.listClaims(principal, { page: 1, pageSize: 100 })
-          : null,
-        canRead('onboarding.read') && this.sources.onboarding
-          ? this.sources.onboarding.operationsReadinessWorklist(principal, {
-              fromDate: deadlineFrom,
-              untilDate: deadlineUntil,
-            })
-          : null,
-        canRead('service_agreement.read')
-          ? this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
-              transaction
-                .select({
-                  id: agreements.id,
-                  clientId: agreements.clientId,
-                  clientName: sql<string>`coalesce(nullif(concat_ws(' ', ${clientRecords.preferredName}, ${clientRecords.lastName}), ''), concat_ws(' ', ${clientRecords.firstName}, ${clientRecords.lastName}))`,
-                  organizationId: agreements.organizationId,
-                  facilityId: agreements.facilityId,
-                  validUntil: agreements.validUntil,
-                })
-                .from(agreements)
-                .innerJoin(
-                  clientRecords,
-                  and(
-                    eq(clientRecords.tenantId, agreements.tenantId),
-                    eq(clientRecords.id, agreements.clientId),
-                  ),
-                )
-                .where(
-                  and(
-                    eq(agreements.tenantId, principal.tenantId),
-                    inArray(agreements.status, ['active', 'suspended']),
-                    scopedTo(agreementScope, agreements.organizationId, agreements.facilityId),
-                    isNotNull(agreements.validUntil),
-                    gte(agreements.validUntil, deadlineFrom),
-                    lte(agreements.validUntil, deadlineUntil),
-                  ),
-                )
-                .orderBy(asc(agreements.validUntil), asc(agreements.id))
-                .limit(101),
-            )
-          : null,
-        canRead('employee.read')
-          ? this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
-              transaction
-                .select({
-                  id: employeeQualifications.id,
-                  employeeId: employeeRecords.id,
-                  employeeName: sql<string>`coalesce(nullif(concat_ws(' ', ${employeeRecords.preferredName}, ${employeeRecords.lastName}), ''), concat_ws(' ', ${employeeRecords.firstName}, ${employeeRecords.lastName}))`,
-                  qualificationName: qualificationDefinitions.name,
-                  organizationId: employeeRecords.organizationId,
-                  facilityId: employeeFacilityAssignments.facilityId,
-                  validUntil: employeeQualifications.validUntil,
-                })
-                .from(employeeQualifications)
-                .innerJoin(
-                  employeeRecords,
-                  and(
-                    eq(employeeRecords.tenantId, employeeQualifications.tenantId),
-                    eq(employeeRecords.id, employeeQualifications.employeeId),
-                  ),
-                )
-                .innerJoin(
-                  qualificationDefinitions,
-                  and(
-                    eq(qualificationDefinitions.tenantId, employeeQualifications.tenantId),
-                    eq(qualificationDefinitions.id, employeeQualifications.qualificationId),
-                  ),
-                )
-                .leftJoin(
-                  employeeFacilityAssignments,
-                  and(
-                    eq(employeeFacilityAssignments.tenantId, employeeRecords.tenantId),
-                    eq(employeeFacilityAssignments.employeeId, employeeRecords.id),
-                    eq(employeeFacilityAssignments.organizationId, employeeRecords.organizationId),
-                    eq(employeeFacilityAssignments.isPrimary, true),
-                    eq(employeeFacilityAssignments.status, 'active'),
-                  ),
-                )
-                .where(
-                  and(
-                    eq(employeeQualifications.tenantId, principal.tenantId),
-                    eq(employeeQualifications.status, 'active'),
-                    eq(employeeRecords.status, 'active'),
-                    scopedTo(
-                      employeeScope,
-                      employeeRecords.organizationId,
-                      employeeFacilityAssignments.facilityId,
-                    ),
-                    isNotNull(employeeQualifications.validUntil),
-                    gte(employeeQualifications.validUntil, deadlineFrom),
-                    lte(employeeQualifications.validUntil, deadlineUntil),
-                  ),
-                )
-                .orderBy(asc(employeeQualifications.validUntil), asc(employeeQualifications.id))
-                .limit(101),
-            )
-          : null,
-        canRead('benefits.review')
-          ? this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
-              transaction
-                .select({
-                  id: clientBenefitEntitlements.id,
-                  clientId: clientRecords.id,
-                  clientName: sql<string>`coalesce(nullif(concat_ws(' ', ${clientRecords.preferredName}, ${clientRecords.lastName}), ''), concat_ws(' ', ${clientRecords.firstName}, ${clientRecords.lastName}))`,
-                  organizationId: clientRecords.organizationId,
-                  facilityId: clientRecords.primaryFacilityId,
-                  validUntil: clientBenefitEntitlements.validUntil,
-                })
-                .from(clientBenefitEntitlements)
-                .innerJoin(
-                  benefitFundingSources,
-                  and(
-                    eq(benefitFundingSources.tenantId, clientBenefitEntitlements.tenantId),
-                    eq(benefitFundingSources.clientId, clientBenefitEntitlements.clientId),
-                    eq(benefitFundingSources.id, clientBenefitEntitlements.fundingSourceId),
-                    eq(benefitFundingSources.status, 'active'),
-                  ),
-                )
-                .innerJoin(
-                  clientRecords,
-                  and(
-                    eq(clientRecords.tenantId, clientBenefitEntitlements.tenantId),
-                    eq(clientRecords.id, clientBenefitEntitlements.clientId),
-                  ),
-                )
-                .where(
-                  and(
-                    eq(clientBenefitEntitlements.tenantId, principal.tenantId),
-                    inArray(clientBenefitEntitlements.status, ['confirmed', 'provisional']),
-                    isNotNull(clientBenefitEntitlements.validUntil),
-                    gte(clientBenefitEntitlements.validUntil, deadlineFrom),
-                    lte(clientBenefitEntitlements.validUntil, deadlineUntil),
-                    scopedTo(
-                      benefitScope,
-                      clientRecords.organizationId,
-                      clientRecords.primaryFacilityId,
-                    ),
-                  ),
-                )
-                .orderBy(
-                  asc(clientBenefitEntitlements.validUntil),
-                  asc(clientBenefitEntitlements.id),
-                )
-                .limit(101),
-            )
-          : null,
-        canRead('billing.read')
-          ? this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
-              transaction
-                .select({
-                  id: payerArrangements.id,
-                  clientId: clientRecords.id,
-                  clientName: sql<string>`coalesce(nullif(concat_ws(' ', ${clientRecords.preferredName}, ${clientRecords.lastName}), ''), concat_ws(' ', ${clientRecords.firstName}, ${clientRecords.lastName}))`,
-                  organizationId: payerArrangements.organizationId,
-                  facilityId: clientRecords.primaryFacilityId,
-                  validUntil: payerArrangements.validUntil,
-                })
-                .from(payerArrangements)
-                .innerJoin(
-                  clientRecords,
-                  and(
-                    eq(clientRecords.tenantId, payerArrangements.tenantId),
-                    eq(clientRecords.id, payerArrangements.clientId),
-                  ),
-                )
-                .where(
-                  and(
-                    eq(payerArrangements.tenantId, principal.tenantId),
-                    eq(payerArrangements.mandateStatus, 'authorized'),
-                    lte(payerArrangements.validFrom, todayUtc),
-                    isNotNull(payerArrangements.validUntil),
-                    gte(payerArrangements.validUntil, deadlineFrom),
-                    lte(payerArrangements.validUntil, deadlineUntil),
-                    scopedTo(
-                      billingScope,
-                      payerArrangements.organizationId,
-                      clientRecords.primaryFacilityId,
-                    ),
-                  ),
-                )
-                .orderBy(asc(payerArrangements.validUntil), asc(payerArrangements.id))
-                .limit(101),
-            )
-          : null,
-      ],
-      [
-        'scheduling',
-        'visit_execution',
-        'care_documentation',
-        'service_evidence',
-        'benefits',
-        'billing',
-        'billing',
-        'claims',
-        'onboarding',
-        'service_agreements',
-        'employee_qualifications',
-        'benefits',
-        'billing',
-      ],
+    const responsePage = bounded(query.page, 1, 1, 100_000);
+    const responsePageSize = bounded(query.pageSize, 50, 1, 1000);
+    const resultOffset = bounded(
+      query.offset,
+      (responsePage - 1) * responsePageSize,
+      0,
+      10_000_000,
     );
-    let claimsReadinessComplete = true;
-    const completeDomains = new Map<string, ReconciliationWindow>();
-    if (schedule && schedule.total <= schedule.items.length) {
-      completeDomains.set('scheduling', {
-        from: now,
-        until,
-        sourceEntityKeys: new Set(
-          schedule.items.map((row) => sourceEntityKey('visit', row.visit.id)),
-        ),
-      });
-    }
-    if (execution?.complete) {
-      completeDomains.set('visit_execution', { from, until: sourceUntil });
-    }
-    if (documentation && documentation.total <= documentation.items.length) {
-      completeDomains.set('care_documentation', { from: documentationFrom, until: sourceUntil });
-    }
-    if (evidence && evidence.total <= evidence.items.length) {
-      completeDomains.set('service_evidence', {
-        from,
-        until: sourceUntil,
-        sourceEntityKeys: new Set(
-          evidence.items.map((row) =>
-            sourceEntityKey(
-              row.evidencePackageId ? 'evidence_package' : 'documentation',
-              row.evidencePackageId ?? row.documentationId,
-            ),
-          ),
-        ),
-      });
-    }
-    if (
-      benefitData &&
-      benefitEntitlementDeadlines &&
-      benefitData.clients.total <= benefitData.clients.items.length &&
-      benefitData.unallocatedServices.items.length < 100 &&
-      benefitEntitlementDeadlines.length <= 100
-    ) {
-      completeDomains.set('benefits', { from: null, until: null });
-    }
-    if (
-      invoicesForDocuments &&
-      receivables &&
-      payerArrangementDeadlines &&
-      invoicesForDocuments.length < 100 &&
-      receivables.length < 100 &&
-      payerArrangementDeadlines.length <= 100
-    ) {
-      completeDomains.set('billing', { from: null, until: null });
-    }
-    if (claimsPage && !claimsPage.hasMore && claimsReadinessComplete) {
-      completeDomains.set('claims', { from: null, until: null });
-    }
-    if (onboardingReadiness?.complete) {
-      completeDomains.set('onboarding', { from: null, until: null });
-    }
-    if (agreementDeadlines && agreementDeadlines.length <= 100) {
-      completeDomains.set('service_agreements', { from: null, until: null });
-    }
-    if (qualificationDeadlines && qualificationDeadlines.length <= 100) {
-      completeDomains.set('employee_qualifications', { from: null, until: null });
-    }
-
-    const evidenceResources = evidence
-      ? await this.clientResources(
-          principal.tenantId,
-          evidence.items.map((row) => row.clientId),
-        )
-      : new Map<string, { organizationId: string | null; facilityId: string | null }>();
-    const organizationIds = [
-      ...(schedule?.items.map((row) => row.visit.organizationId) ?? []),
-      ...(execution?.items.map((row) => row.organizationId) ?? []),
-      ...(documentation?.items.map((row) => row.organizationId) ?? []),
-      ...[...evidenceResources.values()].flatMap((resource) =>
-        resource.organizationId ? [resource.organizationId] : [],
-      ),
-      ...(benefitData?.clients.items.map((row) => row.organizationId) ?? []),
-      ...(benefitData?.unallocatedServices.items.map((row) => row.organizationId) ?? []),
-      ...(benefitEntitlementDeadlines?.map((row) => row.organizationId) ?? []),
-      ...(invoicesForDocuments?.map((row) => row.organizationId) ?? []),
-      ...(receivables?.map((row) => row.organizationId) ?? []),
-      ...(payerArrangementDeadlines?.map((row) => row.organizationId) ?? []),
-      ...(claimsPage?.items.map((row) => row.organizationId) ?? []),
-      ...(agreementDeadlines?.map((row) => row.organizationId) ?? []),
-      ...(qualificationDeadlines?.flatMap((row) =>
-        row.organizationId ? [row.organizationId] : [],
-      ) ?? []),
-    ];
-    const timezoneByOrganization = await this.organizationTimezones(
-      principal.tenantId,
-      organizationIds.filter((id): id is string => id !== null),
-    );
-
-    const items: ProjectedOperationsWorkItem[] = [];
+    const retainCount = resultOffset + responsePageSize;
+    const retained: ProjectedOperationsWorkItem[] = [];
+    const searchTerm = query.search ? normalizeOperationsSearchText(query.search) : null;
+    let total = 0;
     let truncated = false;
-    if (schedule) {
-      truncated ||= schedule.total > schedule.items.length;
-      for (const row of schedule.items) {
-        const visit = row.visit;
-        for (const conflict of row.conflicts) {
-          items.push(
-            this.workItem({
-              sourceDomain: 'scheduling',
-              entityType: 'visit',
-              entityId: visit.id,
-              issueCode: conflict.code,
-              category: 'scheduling',
-              severity: conflict.severity === 'blocking' ? 'critical' : 'warning',
-              organizationId: visit.organizationId,
-              facilityId: visit.facilityId,
-              clientId: visit.clientId,
-              clientName: visit.clientDisplayName,
-              dueAt: visit.plannedStart.toISOString(),
-              sourceAt: visit.plannedStart,
-              descriptionCode: `operations.issues.scheduling.${conflict.code}`,
-            }),
-          );
-        }
-      }
-    }
-    if (execution) {
-      truncated ||= !execution.complete;
-      for (const summary of execution.items) {
-        items.push(
-          this.workItem({
-            sourceDomain: 'visit_execution',
-            entityType: 'visit',
-            entityId: summary.visitId,
-            issueCode: 'visit_execution_overdue',
-            category: 'visits',
-            severity: 'warning',
-            organizationId: summary.organizationId,
-            facilityId: summary.facilityId,
-            clientId: summary.clientId,
-            clientName: summary.clientDisplayName,
-            dueAt: summary.plannedEnd,
-            sourceAt: new Date(summary.actualStart),
-            descriptionCode: 'operations.issues.visit_execution.overdue',
-          }),
-        );
-      }
-    }
-    if (documentation) {
-      truncated ||= documentation.total > documentation.items.length;
-      for (const row of documentation.items) {
-        for (const missing of row.missing) {
-          const issueCode = `documentation_${missing.code.toLowerCase()}`;
-          items.push(
-            this.workItem({
-              sourceDomain: 'care_documentation',
-              entityType: 'visit',
-              entityId: row.visitId,
-              issueCode,
-              category: 'documentation',
-              severity: 'warning',
-              organizationId: row.organizationId,
-              facilityId: row.facilityId,
-              clientId: row.clientId,
-              clientName: row.clientDisplayName,
-              dueAt: null,
-              sourceAt: new Date(row.plannedStart),
-              descriptionCode: `operations.issues.documentation.${missing.code.toLowerCase()}`,
-            }),
-          );
-        }
-      }
-    }
-    if (evidence) {
-      truncated ||= evidence.total > evidence.items.length;
-      for (const row of evidence.items) {
-        const issueCode = evidenceIssueCode(row);
-        if (!issueCode) continue;
-        const resource = evidenceResources.get(row.clientId);
-        items.push(
-          this.workItem({
-            sourceDomain: 'service_evidence',
-            entityType: row.evidencePackageId ? 'evidence_package' : 'documentation',
-            entityId: row.evidencePackageId ?? row.documentationId,
-            issueCode,
-            category: 'documentation',
-            severity:
-              row.status === 'declined' || row.status === 'revoked' ? 'critical' : 'warning',
-            organizationId: resource?.organizationId ?? null,
-            facilityId: resource?.facilityId ?? null,
-            clientId: row.clientId,
-            clientName: row.clientName,
-            dueAt: null,
-            sourceAt: new Date(row.plannedStart),
-            descriptionCode: `operations.issues.evidence.${issueCode}`,
-          }),
-        );
-      }
-    }
-    if (benefitData) {
-      const clientRows = benefitData.clients.items;
-      truncated ||= benefitData.clients.total > clientRows.length;
-      for (const row of clientRows) {
-        const problems: Array<{ code: string; severity: OperationsWorkItem['severity'] }> = [];
-        if (row.missingEntitlement)
-          problems.push({ code: 'missing_entitlement', severity: 'warning' });
-        if (row.unverifiedOpeningBalance)
-          problems.push({ code: 'unverified_balance', severity: 'warning' });
-        if (row.expiringCarryoverCents > 0)
-          problems.push({ code: 'carryover_expiring', severity: 'warning' });
-        for (const problem of problems) {
-          items.push(
-            this.workItem({
-              sourceDomain: 'benefits',
-              entityType: 'client',
-              entityId: row.clientId,
-              issueCode: problem.code,
-              category: 'benefits',
-              severity: problem.severity,
-              organizationId: row.organizationId,
-              facilityId: row.facilityId,
-              clientId: row.clientId,
-              clientName: row.clientName,
-              dueAt:
-                problem.code === 'carryover_expiring' && row.expiringCarryoverDueDate
-                  ? endOfLocalDay(
-                      row.expiringCarryoverDueDate,
-                      timezoneByOrganization.get(row.organizationId ?? '') ?? 'Europe/Berlin',
-                    )
-                  : null,
-              sourceAt:
-                problem.code === 'carryover_expiring' && row.expiringCarryoverDueDate
-                  ? new Date(`${row.expiringCarryoverDueDate}T12:00:00.000Z`)
-                  : null,
-              descriptionCode: `operations.issues.benefits.${problem.code}`,
-            }),
-          );
-        }
-      }
-      for (const row of benefitData.unallocatedServices.items) {
-        items.push(
-          this.workItem({
-            sourceDomain: 'benefits',
-            entityType: 'performed_service',
-            entityId: row.performedServiceId,
-            issueCode: 'service_unallocated',
-            category: 'benefits',
-            severity: 'warning',
-            organizationId: row.organizationId,
-            facilityId: row.facilityId,
-            clientId: row.clientId,
-            clientName: row.clientName,
-            dueAt: null,
-            descriptionCode: 'operations.issues.benefits.service_unallocated',
-          }),
-        );
-      }
-      truncated ||= benefitData.unallocatedServices.items.length === 100;
-    }
-    if (benefitEntitlementDeadlines) {
-      truncated ||= benefitEntitlementDeadlines.length > 100;
-      for (const entitlement of benefitEntitlementDeadlines.slice(0, 100)) {
-        if (!entitlement.validUntil || !entitlement.organizationId) continue;
-        const timezone = timezoneByOrganization.get(entitlement.organizationId) ?? 'Europe/Berlin';
-        const dueAt = endOfLocalDay(entitlement.validUntil, timezone);
-        if (!dueAt) continue;
-        items.push(
-          this.workItem({
-            sourceDomain: 'benefits',
-            entityType: 'benefit_entitlement',
-            entityId: entitlement.id,
-            issueCode: 'benefit_entitlement_expiry',
-            category: 'benefits',
-            severity: new Date(dueAt) < observedAt ? 'critical' : 'warning',
-            organizationId: entitlement.organizationId,
-            facilityId: entitlement.facilityId,
-            clientId: entitlement.clientId,
-            clientName: entitlement.clientName,
-            dueAt,
-            sourceAt: new Date(`${entitlement.validUntil}T12:00:00.000Z`),
-            descriptionCode: 'operations.issues.benefits.entitlement_expiry',
-          }),
-        );
-      }
-    }
-    if (invoicesForDocuments) {
-      truncated ||= invoicesForDocuments.length === 100;
-      for (const invoice of invoicesForDocuments) {
-        if (invoice.pdfStatus !== 'failed') continue;
-        items.push(
-          this.workItem({
-            sourceDomain: 'billing',
-            entityType: 'invoice',
-            entityId: invoice.id,
-            issueCode: 'invoice_document_failed',
-            category: 'billing',
-            severity: 'critical',
-            organizationId: invoice.organizationId,
-            facilityId: invoice.facilityId,
-            clientId: invoice.clientId,
-            clientName: invoice.clientName,
-            dueAt: null,
-            descriptionCode: 'operations.issues.billing.invoice_document_failed',
-          }),
-        );
-      }
-    }
-    if (receivables) {
-      truncated ||= receivables.length === 100;
-      for (const invoice of receivables) {
-        if (!invoice.dueDate) continue;
-        items.push(
-          this.workItem({
-            sourceDomain: 'billing',
-            entityType: 'invoice',
-            entityId: invoice.id,
-            issueCode: 'receivable_due',
-            category: 'billing',
-            severity:
-              invoice.dueDate <
-              localDateKey(
-                now,
-                timezoneByOrganization.get(invoice.organizationId) ?? 'Europe/Berlin',
-              )
-                ? 'critical'
-                : 'warning',
-            organizationId: invoice.organizationId,
-            facilityId: invoice.facilityId,
-            clientId: invoice.clientId,
-            clientName: invoice.clientName,
-            dueAt: endOfLocalDay(
-              invoice.dueDate,
-              timezoneByOrganization.get(invoice.organizationId) ?? 'Europe/Berlin',
-            ),
-            sourceAt: new Date(`${invoice.dueDate}T12:00:00.000Z`),
-            descriptionCode: 'operations.issues.billing.receivable_due',
-          }),
-        );
-      }
-    }
-    if (payerArrangementDeadlines) {
-      truncated ||= payerArrangementDeadlines.length > 100;
-      for (const arrangement of payerArrangementDeadlines.slice(0, 100)) {
-        if (!arrangement.validUntil) continue;
-        const timezone = timezoneByOrganization.get(arrangement.organizationId) ?? 'Europe/Berlin';
-        const dueAt = endOfLocalDay(arrangement.validUntil, timezone);
-        if (!dueAt) continue;
-        items.push(
-          this.workItem({
-            sourceDomain: 'billing',
-            entityType: 'payer_arrangement',
-            entityId: arrangement.id,
-            issueCode: 'payer_authorization_expiry',
-            category: 'billing',
-            severity: new Date(dueAt) < observedAt ? 'critical' : 'warning',
-            organizationId: arrangement.organizationId,
-            facilityId: arrangement.facilityId,
-            clientId: arrangement.clientId,
-            clientName: arrangement.clientName,
-            dueAt,
-            sourceAt: new Date(`${arrangement.validUntil}T12:00:00.000Z`),
-            descriptionCode: 'operations.issues.billing.payer_authorization_expiry',
-          }),
-        );
-      }
-    }
-    if (claimsPage) {
-      truncated ||= claimsPage.hasMore;
-      const draftClaims = claimsPage.items.filter((claim) => claim.status === 'draft');
-      const batchedReadiness = await isolateOperationsSource('claims', () =>
-        this.sources.claims.readinessForClaims(
-          principal,
-          draftClaims.map((claim) => claim.id),
-        ),
-      );
-      const readinessResults = batchedReadiness
-        ? draftClaims.map((claim) => ({
-            claimId: claim.id,
-            readiness: batchedReadiness.get(claim.id) ?? null,
-          }))
-        : await Promise.all(
-            draftClaims.map(async (claim) => ({
-              claimId: claim.id,
-              readiness: await isolateOperationsSource('claims', () =>
-                this.sources.claims.readiness(principal, claim.id),
-              ),
-            })),
-          );
-      claimsReadinessComplete = readinessResults.every((result) => result.readiness !== null);
-      if (!claimsReadinessComplete) completeDomains.delete('claims');
-      const claimReadiness = new Map(
-        readinessResults.flatMap((result) =>
-          result.readiness ? [[result.claimId, result.readiness] as const] : [],
-        ),
-      );
-      for (const claim of claimsPage.items) {
-        let issueCode: string | null = null;
-        if (claim.status === 'rejected') issueCode = 'claim_rejected';
-        else if (claim.status === 'clarification_required') issueCode = 'claim_clarification';
-        else if (claim.status === 'ready') issueCode = 'claim_ready_to_submit';
-        else if (claim.status === 'draft') {
-          const readiness = claimReadiness.get(claim.id);
-          if (readiness?.blockers.length) issueCode = 'claim_readiness_blocked';
-        } else if (claim.status === 'accepted' || claim.status === 'partially_accepted') {
-          const accepted = claim.acceptedCents ?? claim.amountCents;
-          if (claim.paidCents < accepted) issueCode = 'claim_payment_outstanding';
-        }
-        if (!issueCode) continue;
-        items.push(
-          this.workItem({
-            sourceDomain: 'claims',
-            entityType: 'claim',
-            entityId: claim.id,
-            issueCode,
-            category: 'claims',
-            severity: issueCode === 'claim_rejected' ? 'critical' : 'warning',
-            organizationId: claim.organizationId,
-            facilityId: claim.facilityId,
-            clientId: claim.clientId,
-            clientName: claim.clientName,
-            dueAt: null,
-            descriptionCode: `operations.issues.claims.${issueCode}`,
-          }),
-        );
-      }
-    }
-    if (agreementDeadlines) {
-      truncated ||= agreementDeadlines.length > 100;
-      for (const agreement of agreementDeadlines.slice(0, 100)) {
-        if (!agreement.validUntil) continue;
-        const timezone = timezoneByOrganization.get(agreement.organizationId) ?? 'Europe/Berlin';
-        const dueAt = endOfLocalDay(agreement.validUntil, timezone);
-        if (!dueAt) continue;
-        const expired = new Date(dueAt) < observedAt;
-        items.push(
-          this.workItem({
-            sourceDomain: 'service_agreements',
-            entityType: 'agreement',
-            entityId: agreement.id,
-            issueCode: 'agreement_expiry',
-            category: 'agreements',
-            severity: expired ? 'critical' : 'warning',
-            organizationId: agreement.organizationId,
-            facilityId: agreement.facilityId,
-            clientId: agreement.clientId,
-            clientName: agreement.clientName,
-            dueAt,
-            sourceAt: new Date(`${agreement.validUntil}T12:00:00.000Z`),
-            descriptionCode: 'operations.issues.agreements.expiry',
-          }),
-        );
-      }
-    }
-    if (qualificationDeadlines) {
-      truncated ||= qualificationDeadlines.length > 100;
-      for (const qualification of qualificationDeadlines.slice(0, 100)) {
-        if (!qualification.validUntil || !qualification.organizationId) continue;
-        const timezone =
-          timezoneByOrganization.get(qualification.organizationId) ?? 'Europe/Berlin';
-        const dueAt = endOfLocalDay(qualification.validUntil, timezone);
-        if (!dueAt) continue;
-        items.push(
-          this.workItem({
-            sourceDomain: 'employee_qualifications',
-            entityType: 'employee_qualification',
-            entityId: qualification.id,
-            issueCode: 'qualification_expiry',
-            category: 'employees',
-            severity: new Date(dueAt) < observedAt ? 'critical' : 'warning',
-            organizationId: qualification.organizationId,
-            facilityId: qualification.facilityId,
-            clientId: null,
-            clientName: null,
-            employeeId: qualification.employeeId,
-            employeeName: qualification.employeeName,
-            dueAt,
-            sourceAt: new Date(`${qualification.validUntil}T12:00:00.000Z`),
-            descriptionCode: 'operations.issues.employees.qualification_expiry',
-          }),
-        );
-      }
-    }
-    if (onboardingReadiness) {
-      truncated ||= !onboardingReadiness.complete;
-      for (const admission of onboardingReadiness.items) {
-        const isOverdue = Boolean(
-          admission.nextFollowUpAt && admission.nextFollowUpAt < observedAt,
-        );
-        if (admission.nextFollowUpAt) {
-          items.push(
-            this.workItem({
-              sourceDomain: 'onboarding',
-              entityType: 'admission_case',
-              entityId: admission.id,
-              issueCode: isOverdue ? 'admission_follow_up_overdue' : 'admission_follow_up_due',
-              category: 'onboarding',
-              severity: isOverdue ? 'critical' : 'warning',
-              organizationId: admission.organizationId,
-              facilityId: admission.facilityId,
-              clientId: admission.clientId,
-              clientName: `${admission.firstName} ${admission.lastName}`,
-              dueAt: admission.nextFollowUpAt.toISOString(),
-              sourceAt: admission.nextFollowUpAt,
-              descriptionCode: `operations.issues.onboarding.${isOverdue ? 'follow_up_overdue' : 'follow_up_due'}`,
-            }),
-          );
-        }
-        if (admission.blockerCount > 0) {
-          items.push(
-            this.workItem({
-              sourceDomain: 'onboarding',
-              entityType: 'admission_case',
-              entityId: admission.id,
-              issueCode: 'admission_readiness_blocked',
-              category: 'onboarding',
-              severity: isOverdue ? 'critical' : 'warning',
-              organizationId: admission.organizationId,
-              facilityId: admission.facilityId,
-              clientId: admission.clientId,
-              clientName: `${admission.firstName} ${admission.lastName}`,
-              dueAt: admission.nextFollowUpAt?.toISOString() ?? null,
-              sourceAt: admission.createdAt,
-              descriptionCode: 'operations.issues.onboarding.readiness_blocked',
-            }),
-          );
-        }
-        if (admission.preferredStartDate) {
-          const timezone = timezoneByOrganization.get(admission.organizationId) ?? 'Europe/Berlin';
-          const dueAt = endOfLocalDay(admission.preferredStartDate, timezone);
-          if (dueAt) {
-            const startDatePassed = new Date(dueAt) < observedAt;
-            items.push(
-              this.workItem({
-                sourceDomain: 'onboarding',
-                entityType: 'admission_case',
-                entityId: admission.id,
-                issueCode: 'admission_start_date',
-                category: 'onboarding',
-                severity: startDatePassed ? 'critical' : 'warning',
-                organizationId: admission.organizationId,
-                facilityId: admission.facilityId,
-                clientId: admission.clientId,
-                clientName: `${admission.firstName} ${admission.lastName}`,
-                dueAt,
-                sourceAt: new Date(`${admission.preferredStartDate}T12:00:00.000Z`),
-                descriptionCode: 'operations.issues.onboarding.start_date',
-              }),
-            );
-          }
-        }
-      }
-    }
-
-    let visible = deduplicateWorkItems(items)
-      .filter((item) => {
-        const policyCategory = deadlinePolicyCategory(item);
-        if (!policyCategory || !item.dueAt || !item.organizationId) return true;
-        const policy = policyByOrganization.get(`${item.organizationId}:${policyCategory}`);
-        const timezone = timezoneByOrganization.get(item.organizationId) ?? 'Europe/Berlin';
-        const remainingDays = dateDifferenceDays(
-          localDateKey(new Date(item.dueAt), timezone),
-          localDateKey(now, timezone),
-        );
-        if (remainingDays < 0 || item.severity === 'critical') return true;
-        if (policy?.enabled === false) return false;
-        const offsets = policy?.offsetsDays ?? [30, 7, 0];
-        return remainingDays <= Math.max(0, ...offsets);
-      })
-      .filter((item) => {
-        const resource = workItemResource(principal, item);
-        const readPermission = exceptionReadPermission(item.sourceDomain, item.issueCode);
-        return (
-          can(principal, { action: 'operations.read', resource }) &&
-          readPermission !== null &&
-          can(principal, { action: readPermission, resource })
-        );
-      });
-    await this.syncExceptionOccurrences(principal, visible, completeDomains, observedAt);
-    await this.reconcileStaleExceptionOccurrences(principal, visible, observedAt);
-    visible = await this.attachInteractions(principal, visible);
-    let assignedDeadlineKeys: Set<string> | null = null;
-    if (query.assignedEmployeeId) {
-      this.requireAnyGrant(principal, 'operations.tasks.assign');
-      const deadlineKeys = visible
-        .filter(
-          (item) =>
-            deadlinePolicyCategory(item) &&
-            can(principal, {
-              action: 'operations.tasks.assign',
-              resource: workItemResource(principal, item),
-            }),
-        )
-        .map((item) => item.id);
-      const assignedTasks = deadlineKeys.length
-        ? await this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
-            transaction
-              .select({ sourceDeadlineKey: tasks.sourceDeadlineKey })
-              .from(tasks)
-              .where(
-                and(
-                  eq(tasks.tenantId, principal.tenantId),
-                  eq(tasks.assignedEmployeeId, query.assignedEmployeeId!),
-                  inArray(tasks.sourceDeadlineKey, deadlineKeys),
-                ),
-              ),
-          )
-        : [];
-      assignedDeadlineKeys = new Set(
-        assignedTasks.flatMap((task) => (task.sourceDeadlineKey ? [task.sourceDeadlineKey] : [])),
-      );
-    }
-    visible = visible.filter((item) => {
-      if (assignedDeadlineKeys && !assignedDeadlineKeys.has(item.id)) return false;
-      if (query.category && item.category !== query.category) return false;
-      if (query.status && item.status !== query.status) return false;
-      if (query.severity && item.severity !== query.severity) return false;
-      if (query.organizationId && item.organizationId !== query.organizationId) return false;
-      if (query.facilityId && item.facilityId !== query.facilityId) return false;
-      if (query.clientId && item.clientId !== query.clientId) return false;
-      if (query.employeeId && item.employeeId !== query.employeeId) return false;
-      if (query.sourceDomain && item.sourceDomain !== query.sourceDomain) return false;
-      if (query.deadlinesOnly && (!item.dueAt || !deadlinePolicyCategory(item))) return false;
-      const localDueDate = item.dueAt
-        ? localDateKey(
-            new Date(item.dueAt),
-            timezoneByOrganization.get(item.organizationId ?? '') ?? 'Europe/Berlin',
-          )
-        : null;
-      if (query.fromDate && (!localDueDate || localDueDate < query.fromDate)) return false;
-      if (query.untilDate && (!localDueDate || localDueDate > query.untilDate)) return false;
-      if (
-        query.due &&
-        !matchesDueFilter(
-          item.dueAt,
-          query.due,
-          now,
-          timezoneByOrganization.get(item.organizationId ?? '') ?? 'Europe/Berlin',
-        )
-      )
-        return false;
-      if (query.search) {
-        const term = query.search.trim().toLowerCase();
-        if (
-          !`${item.issueCode} ${item.clientName ?? ''} ${item.sourceEntityId}`
-            .toLowerCase()
-            .includes(term)
-        ) {
-          return false;
-        }
-      }
-      return true;
-    });
-    visible.sort((left, right) => {
+    if (query.assignedEmployeeId) this.requireAnyGrant(principal, 'operations.tasks.assign');
+    const compareWorkItems = (left: OperationsWorkItem, right: OperationsWorkItem) => {
       const byDue =
         (left.dueAt ?? '9999').localeCompare(right.dueAt ?? '9999') ||
-        left.id.localeCompare(right.id);
+        right.id.localeCompare(left.id);
       if (query.sort === 'due') return byDue;
       const severity = severityWeight(right.severity) - severityWeight(left.severity);
       return severity || byDue;
-    });
-    const page = bounded(query.page, 1, 1, 100_000);
-    const pageSize = bounded(query.pageSize, 50, 1, 1000);
+    };
+    const collectProjectedItems = async (projectedItems: ProjectedOperationsWorkItem[]) => {
+      // oxlint-disable no-await-in-loop
+      const uniqueProjectedItems = deduplicateWorkItems(projectedItems);
+      for (let batchStart = 0; batchStart < uniqueProjectedItems.length; batchStart += 100) {
+        const batch = uniqueProjectedItems.slice(batchStart, batchStart + 100);
+        if (!batch.length) continue;
+        const organizationIds = batch.flatMap((item) =>
+          item.organizationId ? [item.organizationId] : [],
+        );
+        const timezones = await this.organizationTimezones(principal.tenantId, organizationIds);
+        const policyVisible = batch.filter((item) => {
+          const policyCategory = deadlinePolicyCategory(item);
+          if (!policyCategory || !item.dueAt || !item.organizationId) return true;
+          const policy = policyByOrganization.get(`${item.organizationId}:${policyCategory}`);
+          const timezone = timezones.get(item.organizationId) ?? 'Europe/Berlin';
+          const remainingDays = dateDifferenceDays(
+            localDateKey(new Date(item.dueAt), timezone),
+            localDateKey(now, timezone),
+          );
+          if (remainingDays < 0 || item.severity === 'critical') return true;
+          if (policy?.enabled === false) return false;
+          return remainingDays <= Math.max(0, ...(policy?.offsetsDays ?? [30, 7, 0]));
+        });
+        const authorized = policyVisible.filter((item) => {
+          const resource = workItemResource(principal, item);
+          const readPermission = exceptionReadPermission(item.sourceDomain, item.issueCode);
+          return (
+            can(principal, { action: 'operations.read', resource }) &&
+            readPermission !== null &&
+            can(principal, { action: readPermission, resource })
+          );
+        });
+        const attached: ProjectedOperationsWorkItem[] = [];
+        for (let start = 0; start < authorized.length; start += 100) {
+          const authorizedBatch = authorized.slice(start, start + 100);
+          await this.syncExceptionOccurrences(principal, authorizedBatch, new Map(), observedAt);
+          attached.push(...(await this.attachInteractions(principal, authorizedBatch)));
+        }
+        let assignedDeadlineKeys: Set<string> | null = null;
+        if (query.assignedEmployeeId) {
+          const deadlineKeys = attached
+            .filter(
+              (item) =>
+                deadlinePolicyCategory(item) &&
+                can(principal, {
+                  action: 'operations.tasks.assign',
+                  resource: workItemResource(principal, item),
+                }),
+            )
+            .map((item) => item.id);
+          const assignedTasks = deadlineKeys.length
+            ? await this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+                transaction
+                  .select({ sourceDeadlineKey: tasks.sourceDeadlineKey })
+                  .from(tasks)
+                  .where(
+                    and(
+                      eq(tasks.tenantId, principal.tenantId),
+                      eq(tasks.assignedEmployeeId, query.assignedEmployeeId!),
+                      inArray(tasks.sourceDeadlineKey, deadlineKeys),
+                    ),
+                  ),
+              )
+            : [];
+          assignedDeadlineKeys = new Set(
+            assignedTasks.flatMap((task) =>
+              task.sourceDeadlineKey ? [task.sourceDeadlineKey] : [],
+            ),
+          );
+        }
+        for (const item of attached) {
+          if (assignedDeadlineKeys && !assignedDeadlineKeys.has(item.id)) continue;
+          if (query.category && item.category !== query.category) continue;
+          if (query.status && item.status !== query.status) continue;
+          if (query.severity && item.severity !== query.severity) continue;
+          if (query.organizationId && item.organizationId !== query.organizationId) continue;
+          if (query.facilityId && item.facilityId !== query.facilityId) continue;
+          if (query.clientId && item.clientId !== query.clientId) continue;
+          if (query.employeeId && item.employeeId !== query.employeeId) continue;
+          if (query.sourceDomain && item.sourceDomain !== query.sourceDomain) continue;
+          if (query.deadlinesOnly && (!item.dueAt || !deadlinePolicyCategory(item))) continue;
+          const timezone = timezones.get(item.organizationId ?? '') ?? 'Europe/Berlin';
+          const localDueDate = item.dueAt ? localDateKey(new Date(item.dueAt), timezone) : null;
+          if (query.fromDate && (!localDueDate || localDueDate < query.fromDate)) continue;
+          if (query.untilDate && (!localDueDate || localDueDate > query.untilDate)) continue;
+          if (query.due && !matchesDueFilter(item.dueAt, query.due, now, timezone)) continue;
+          if (
+            searchTerm &&
+            !normalizeOperationsSearchText(
+              [
+                item.issueCode,
+                item.sourceDomain,
+                item.category,
+                item.clientName ?? '',
+                item.employeeName ?? '',
+                item.sourceEntityId,
+              ].join(' '),
+            ).includes(searchTerm)
+          ) {
+            continue;
+          }
+          total += 1;
+          retainSortedPrefix(retained, item, retainCount, compareWorkItems);
+        }
+      }
+      // oxlint-enable no-await-in-loop
+    };
+    const readSource = async (
+      sourceDomain: string,
+      enabled: boolean,
+      read: () => Promise<boolean>,
+    ): Promise<boolean> => {
+      if (!enabled) return false;
+      try {
+        const complete = await read();
+        truncated ||= !complete;
+        return complete;
+      } catch (error) {
+        logOperationsSourceFailure(sourceDomain, error);
+        truncated = true;
+        return false;
+      }
+    };
+    const streamDatabasePages = async <T>(
+      sourceDomain: string,
+      enabled: boolean,
+      readPage: (transaction: DatabaseTransaction, offset: number) => Promise<readonly T[]>,
+      visitPage: (rows: readonly T[]) => Promise<void>,
+    ) =>
+      readSource(sourceDomain, enabled, async () => {
+        await forEachOffsetPage(
+          100,
+          (offset) =>
+            this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
+              readPage(transaction, offset),
+            ),
+          visitPage,
+        );
+        return true;
+      });
+    const [
+      scheduleComplete,
+      executionComplete,
+      documentationComplete,
+      evidenceComplete,
+      benefitsComplete,
+      invoiceDocumentsComplete,
+      receivablesComplete,
+      claimsComplete,
+      onboardingComplete,
+      agreementsComplete,
+      qualificationsComplete,
+      benefitEntitlementsComplete,
+      payerArrangementsComplete,
+    ] = await Promise.all([
+      readSource('scheduling', sourceRequested.scheduling, async () => {
+        const result = await forEachResultPage(
+          100,
+          (page, pageSize) =>
+            this.sources.scheduling.getWorklist(principal, {
+              from: now,
+              until,
+              ...(query.organizationId ? { organizationId: query.organizationId } : {}),
+              ...(query.facilityId ? { facilityId: query.facilityId } : {}),
+              ...(query.clientId ? { clientId: query.clientId } : {}),
+              ...(query.employeeId ? { employeeId: query.employeeId } : {}),
+              page,
+              pageSize,
+            }),
+          async (rows) => {
+            const projected: ProjectedOperationsWorkItem[] = [];
+            for (const row of rows) {
+              const visit = row.visit;
+              for (const conflict of row.conflicts) {
+                if (query.employeeId && conflict.employeeId !== query.employeeId) continue;
+                projected.push(
+                  this.workItem({
+                    sourceDomain: 'scheduling',
+                    entityType: 'visit',
+                    entityId: visit.id,
+                    issueCode: conflict.code,
+                    category: 'scheduling',
+                    severity: conflict.severity === 'blocking' ? 'critical' : 'warning',
+                    organizationId: visit.organizationId,
+                    facilityId: visit.facilityId,
+                    clientId: visit.clientId,
+                    clientName: visit.clientDisplayName,
+                    employeeId: conflict.employeeId ?? null,
+                    dueAt: visit.plannedStart.toISOString(),
+                    sourceAt: visit.plannedStart,
+                    descriptionCode: `operations.issues.scheduling.${conflict.code}`,
+                  }),
+                );
+              }
+            }
+            await collectProjectedItems(projected);
+          },
+        );
+        return result.complete;
+      }),
+      readSource('visit_execution', sourceRequested.execution, async () => {
+        const result = await this.sources.execution.operationsSummaries(
+          principal,
+          from,
+          sourceUntil,
+          {
+            ...(query.organizationId ? { organizationId: query.organizationId } : {}),
+            ...(query.facilityId ? { facilityId: query.facilityId } : {}),
+            ...(query.clientId ? { clientId: query.clientId } : {}),
+          },
+          async (summaries) =>
+            collectProjectedItems(
+              summaries.map((summary) =>
+                this.workItem({
+                  sourceDomain: 'visit_execution',
+                  entityType: 'visit',
+                  entityId: summary.visitId,
+                  issueCode: 'visit_execution_overdue',
+                  category: 'visits',
+                  severity: 'warning',
+                  organizationId: summary.organizationId,
+                  facilityId: summary.facilityId,
+                  clientId: summary.clientId,
+                  clientName: summary.clientDisplayName,
+                  dueAt: summary.plannedEnd,
+                  sourceAt: new Date(summary.actualStart),
+                  descriptionCode: 'operations.issues.visit_execution.overdue',
+                }),
+              ),
+            ),
+        );
+        return result.complete;
+      }),
+      readSource('care_documentation', sourceRequested.documentation, async () => {
+        const result = await forEachResultPage(
+          100,
+          (page, pageSize) =>
+            this.sources.documentation.worklist(principal, {
+              from: documentationFrom,
+              until: sourceUntil,
+              ...(query.organizationId ? { organizationId: query.organizationId } : {}),
+              ...(query.facilityId ? { facilityId: query.facilityId } : {}),
+              ...(query.clientId ? { clientId: query.clientId } : {}),
+              ...(query.employeeId ? { employeeId: query.employeeId } : {}),
+              incomplete: true,
+              page,
+              pageSize,
+            }),
+          async (rows) => {
+            const projected = rows.flatMap((row) =>
+              row.missing.map((missing) => {
+                const issueCode = `documentation_${missing.code.toLowerCase()}`;
+                return this.workItem({
+                  sourceDomain: 'care_documentation',
+                  entityType: 'visit',
+                  entityId: row.visitId,
+                  issueCode,
+                  category: 'documentation',
+                  severity: 'warning',
+                  organizationId: row.organizationId,
+                  facilityId: row.facilityId,
+                  clientId: row.clientId,
+                  clientName: row.clientDisplayName,
+                  employeeId: row.employeeId,
+                  employeeName: row.employeeName,
+                  dueAt: null,
+                  sourceAt: new Date(row.plannedStart),
+                  descriptionCode: `operations.issues.documentation.${missing.code.toLowerCase()}`,
+                });
+              }),
+            );
+            await collectProjectedItems(projected);
+          },
+        );
+        return result.complete;
+      }),
+      readSource('service_evidence', sourceRequested.evidence, async () => {
+        const result = await forEachResultPage(
+          100,
+          (page, pageSize) =>
+            this.sources.evidence.worklist(principal, {
+              from,
+              until: sourceUntil,
+              ...(query.organizationId ? { organizationId: query.organizationId } : {}),
+              ...(query.facilityId ? { facilityId: query.facilityId } : {}),
+              ...(query.clientId ? { clientId: query.clientId } : {}),
+              page,
+              pageSize,
+            }),
+          async (rows) => {
+            const resources = await this.clientResources(
+              principal.tenantId,
+              rows.map((row) => row.clientId),
+            );
+            const projected: ProjectedOperationsWorkItem[] = [];
+            for (const row of rows) {
+              const issueCode = evidenceIssueCode(row);
+              if (!issueCode) continue;
+              const resource = resources.get(row.clientId);
+              projected.push(
+                this.workItem({
+                  sourceDomain: 'service_evidence',
+                  entityType: row.evidencePackageId ? 'evidence_package' : 'documentation',
+                  entityId: row.evidencePackageId ?? row.documentationId,
+                  issueCode,
+                  category: 'documentation',
+                  severity:
+                    row.status === 'declined' || row.status === 'revoked' ? 'critical' : 'warning',
+                  organizationId: resource?.organizationId ?? null,
+                  facilityId: resource?.facilityId ?? null,
+                  clientId: row.clientId,
+                  clientName: row.clientName,
+                  dueAt: null,
+                  sourceAt: new Date(row.plannedStart),
+                  descriptionCode: `operations.issues.evidence.${issueCode}`,
+                }),
+              );
+            }
+            await collectProjectedItems(projected);
+          },
+        );
+        return result.complete;
+      }),
+      readSource('benefits', sourceRequested.benefits, async () => {
+        const readClientPage = (page: number, pageSize: number) =>
+          this.sources.benefits.getWorklist(
+            principal,
+            {
+              clientPage: page,
+              clientPageSize: pageSize,
+              servicePage: 1,
+              servicePageSize: 1,
+              expiryLookaheadDays: lookaheadDays,
+              ...(query.organizationId ? { organizationId: query.organizationId } : {}),
+              ...(query.facilityId ? { facilityId: query.facilityId } : {}),
+              ...(query.clientId ? { clientId: query.clientId } : {}),
+            },
+            25,
+            lookaheadDays,
+          );
+        const clients = await forEachResultPage(
+          100,
+          async (page, pageSize) => (await readClientPage(page, pageSize)).clients,
+          async (rows) => {
+            const timezones = await this.organizationTimezones(
+              principal.tenantId,
+              rows.map((row) => row.organizationId).filter((id): id is string => Boolean(id)),
+            );
+            const projected: ProjectedOperationsWorkItem[] = [];
+            for (const row of rows) {
+              const problems: Array<{
+                code: string;
+                severity: OperationsWorkItem['severity'];
+              }> = [];
+              if (row.missingEntitlement)
+                problems.push({ code: 'missing_entitlement', severity: 'warning' });
+              if (row.unverifiedOpeningBalance)
+                problems.push({ code: 'unverified_balance', severity: 'warning' });
+              if (row.expiringCarryoverCents > 0)
+                problems.push({ code: 'carryover_expiring', severity: 'warning' });
+              for (const problem of problems) {
+                projected.push(
+                  this.workItem({
+                    sourceDomain: 'benefits',
+                    entityType: 'client',
+                    entityId: row.clientId,
+                    issueCode: problem.code,
+                    category: 'benefits',
+                    severity: problem.severity,
+                    organizationId: row.organizationId,
+                    facilityId: row.facilityId,
+                    clientId: row.clientId,
+                    clientName: row.clientName,
+                    dueAt:
+                      problem.code === 'carryover_expiring' && row.expiringCarryoverDueDate
+                        ? endOfLocalDay(
+                            row.expiringCarryoverDueDate,
+                            timezones.get(row.organizationId ?? '') ?? 'Europe/Berlin',
+                          )
+                        : null,
+                    sourceAt:
+                      problem.code === 'carryover_expiring' && row.expiringCarryoverDueDate
+                        ? new Date(`${row.expiringCarryoverDueDate}T12:00:00.000Z`)
+                        : null,
+                    descriptionCode: `operations.issues.benefits.${problem.code}`,
+                  }),
+                );
+              }
+            }
+            await collectProjectedItems(projected);
+          },
+        );
+        const unallocatedServices = await forEachResultPage(
+          100,
+          (page, pageSize) =>
+            this.sources.benefits.listUnallocatedServices(
+              principal,
+              query.clientId,
+              page,
+              pageSize,
+              {
+                ...(query.organizationId ? { organizationId: query.organizationId } : {}),
+                ...(query.facilityId ? { facilityId: query.facilityId } : {}),
+              },
+            ),
+          async (rows) =>
+            collectProjectedItems(
+              rows.map((row) =>
+                this.workItem({
+                  sourceDomain: 'benefits',
+                  entityType: 'performed_service',
+                  entityId: row.performedServiceId,
+                  issueCode: 'service_unallocated',
+                  category: 'benefits',
+                  severity: 'warning',
+                  organizationId: row.organizationId,
+                  facilityId: row.facilityId,
+                  clientId: row.clientId,
+                  clientName: row.clientName,
+                  dueAt: null,
+                  descriptionCode: 'operations.issues.benefits.service_unallocated',
+                }),
+              ),
+            ),
+        );
+        return clients.complete && unallocatedServices.complete;
+      }),
+      readSource('billing', sourceRequested.invoiceDocuments, async () => {
+        const result = await forEachResultPage(
+          100,
+          (page, pageSize) =>
+            this.sources.billing.listInvoicesPage(principal, {
+              ...(query.organizationId ? { organizationId: query.organizationId } : {}),
+              ...(query.facilityId ? { facilityId: query.facilityId } : {}),
+              ...(query.clientId ? { clientId: query.clientId } : {}),
+              page,
+              pageSize,
+            }),
+          async (rows) =>
+            collectProjectedItems(
+              rows
+                .filter((invoice) => invoice.pdfStatus === 'failed')
+                .map((invoice) =>
+                  this.workItem({
+                    sourceDomain: 'billing',
+                    entityType: 'invoice',
+                    entityId: invoice.id,
+                    issueCode: 'invoice_document_failed',
+                    category: 'billing',
+                    severity: 'critical',
+                    organizationId: invoice.organizationId,
+                    facilityId: invoice.facilityId,
+                    clientId: invoice.clientId,
+                    clientName: invoice.clientName,
+                    dueAt: null,
+                    descriptionCode: 'operations.issues.billing.invoice_document_failed',
+                  }),
+                ),
+            ),
+        );
+        return result.complete;
+      }),
+      readSource('billing', sourceRequested.receivables, async () => {
+        const result = await forEachResultPage(
+          100,
+          (page, pageSize) =>
+            this.sources.billing.receivablesPage(principal, {
+              ...(query.organizationId ? { organizationId: query.organizationId } : {}),
+              ...(query.facilityId ? { facilityId: query.facilityId } : {}),
+              ...(query.clientId ? { clientId: query.clientId } : {}),
+              ...(query.fromDate ? { from: query.fromDate } : {}),
+              ...(query.untilDate ? { until: query.untilDate } : {}),
+              page,
+              pageSize,
+            }),
+          async (rows) => {
+            const timezones = await this.organizationTimezones(
+              principal.tenantId,
+              rows.map((row) => row.organizationId),
+            );
+            const projected = rows.flatMap((invoice) => {
+              if (!invoice.dueDate) return [];
+              const timezone = timezones.get(invoice.organizationId) ?? 'Europe/Berlin';
+              return [
+                this.workItem({
+                  sourceDomain: 'billing',
+                  entityType: 'invoice',
+                  entityId: invoice.id,
+                  issueCode: 'receivable_due',
+                  category: 'billing',
+                  severity: invoice.dueDate < localDateKey(now, timezone) ? 'critical' : 'warning',
+                  organizationId: invoice.organizationId,
+                  facilityId: invoice.facilityId,
+                  clientId: invoice.clientId,
+                  clientName: invoice.clientName,
+                  dueAt: endOfLocalDay(invoice.dueDate, timezone),
+                  sourceAt: new Date(`${invoice.dueDate}T12:00:00.000Z`),
+                  descriptionCode: 'operations.issues.billing.receivable_due',
+                }),
+              ];
+            });
+            await collectProjectedItems(projected);
+          },
+        );
+        return result.complete;
+      }),
+      readSource('claims', sourceRequested.claims, async () => {
+        let readinessComplete = true;
+        const result = await forEachResultPage(
+          100,
+          (page, pageSize) =>
+            this.sources.claims.listClaims(principal, {
+              ...(query.organizationId ? { organizationId: query.organizationId } : {}),
+              ...(query.facilityId ? { facilityId: query.facilityId } : {}),
+              ...(query.clientId ? { clientId: query.clientId } : {}),
+              page,
+              pageSize,
+            }),
+          async (claimsPage) => {
+            const draftClaims = claimsPage.filter((claim) => claim.status === 'draft');
+            const batchedReadiness = draftClaims.length
+              ? await isolateOperationsSource('claims', () =>
+                  this.sources.claims.readinessForClaims(
+                    principal,
+                    draftClaims.map((claim) => claim.id),
+                  ),
+                )
+              : new Map<string, ClaimReadiness>();
+            const readinessResults: Array<{
+              claimId: string;
+              readiness: ClaimReadiness | null;
+            }> = [];
+            if (batchedReadiness) {
+              readinessResults.push(
+                ...draftClaims.map((claim) => ({
+                  claimId: claim.id,
+                  readiness: batchedReadiness.get(claim.id) ?? null,
+                })),
+              );
+            } else {
+              // oxlint-disable no-await-in-loop
+              for (let start = 0; start < draftClaims.length; start += 20) {
+                readinessResults.push(
+                  ...(await Promise.all(
+                    draftClaims.slice(start, start + 20).map(async (claim) => ({
+                      claimId: claim.id,
+                      readiness: await isolateOperationsSource('claims', () =>
+                        this.sources.claims.readiness(principal, claim.id),
+                      ),
+                    })),
+                  )),
+                );
+              }
+              // oxlint-enable no-await-in-loop
+            }
+            readinessComplete &&= readinessResults.every((entry) => entry.readiness !== null);
+            if (!readinessComplete) truncated = true;
+            const readinessByClaim = new Map(
+              readinessResults.flatMap((entry) =>
+                entry.readiness ? [[entry.claimId, entry.readiness] as const] : [],
+              ),
+            );
+            const projected: ProjectedOperationsWorkItem[] = [];
+            for (const claim of claimsPage) {
+              let issueCode: string | null = null;
+              if (claim.status === 'rejected') issueCode = 'claim_rejected';
+              else if (claim.status === 'clarification_required') issueCode = 'claim_clarification';
+              else if (claim.status === 'ready') issueCode = 'claim_ready_to_submit';
+              else if (claim.status === 'draft') {
+                if (readinessByClaim.get(claim.id)?.blockers.length)
+                  issueCode = 'claim_readiness_blocked';
+              } else if (claim.status === 'accepted' || claim.status === 'partially_accepted') {
+                const accepted = claim.acceptedCents ?? claim.amountCents;
+                if (claim.paidCents < accepted) issueCode = 'claim_payment_outstanding';
+              }
+              if (!issueCode) continue;
+              projected.push(
+                this.workItem({
+                  sourceDomain: 'claims',
+                  entityType: 'claim',
+                  entityId: claim.id,
+                  issueCode,
+                  category: 'claims',
+                  severity: issueCode === 'claim_rejected' ? 'critical' : 'warning',
+                  organizationId: claim.organizationId,
+                  facilityId: claim.facilityId,
+                  clientId: claim.clientId,
+                  clientName: claim.clientName,
+                  dueAt: null,
+                  descriptionCode: `operations.issues.claims.${issueCode}`,
+                }),
+              );
+            }
+            await collectProjectedItems(projected);
+          },
+        );
+        return result.complete && readinessComplete;
+      }),
+      readSource('onboarding', sourceRequested.onboarding, async () => {
+        if (!this.sources.onboarding) return false;
+        const result = await this.sources.onboarding.operationsReadinessWorklist(
+          principal,
+          {
+            fromDate: deadlineFrom,
+            untilDate: deadlineUntil,
+            ...(query.organizationId ? { organizationId: query.organizationId } : {}),
+            ...(query.facilityId ? { facilityId: query.facilityId } : {}),
+            ...(query.clientId ? { clientId: query.clientId } : {}),
+          },
+          async (admissions) => {
+            const timezones = await this.organizationTimezones(
+              principal.tenantId,
+              admissions.map((admission) => admission.organizationId),
+            );
+            const projected: ProjectedOperationsWorkItem[] = [];
+            for (const admission of admissions) {
+              const isOverdue = Boolean(
+                admission.nextFollowUpAt && admission.nextFollowUpAt < observedAt,
+              );
+              if (admission.nextFollowUpAt) {
+                projected.push(
+                  this.workItem({
+                    sourceDomain: 'onboarding',
+                    entityType: 'admission_case',
+                    entityId: admission.id,
+                    issueCode: isOverdue
+                      ? 'admission_follow_up_overdue'
+                      : 'admission_follow_up_due',
+                    category: 'onboarding',
+                    severity: isOverdue ? 'critical' : 'warning',
+                    organizationId: admission.organizationId,
+                    facilityId: admission.facilityId,
+                    clientId: admission.clientId,
+                    clientName: `${admission.firstName} ${admission.lastName}`,
+                    dueAt: admission.nextFollowUpAt.toISOString(),
+                    sourceAt: admission.nextFollowUpAt,
+                    descriptionCode: `operations.issues.onboarding.${isOverdue ? 'follow_up_overdue' : 'follow_up_due'}`,
+                  }),
+                );
+              }
+              if (admission.blockerCount > 0) {
+                projected.push(
+                  this.workItem({
+                    sourceDomain: 'onboarding',
+                    entityType: 'admission_case',
+                    entityId: admission.id,
+                    issueCode: 'admission_readiness_blocked',
+                    category: 'onboarding',
+                    severity: isOverdue ? 'critical' : 'warning',
+                    organizationId: admission.organizationId,
+                    facilityId: admission.facilityId,
+                    clientId: admission.clientId,
+                    clientName: `${admission.firstName} ${admission.lastName}`,
+                    dueAt: admission.nextFollowUpAt?.toISOString() ?? null,
+                    sourceAt: admission.createdAt,
+                    descriptionCode: 'operations.issues.onboarding.readiness_blocked',
+                  }),
+                );
+              }
+              if (admission.preferredStartDate) {
+                const dueAt = endOfLocalDay(
+                  admission.preferredStartDate,
+                  timezones.get(admission.organizationId) ?? 'Europe/Berlin',
+                );
+                if (dueAt) {
+                  const startDatePassed = new Date(dueAt) < observedAt;
+                  projected.push(
+                    this.workItem({
+                      sourceDomain: 'onboarding',
+                      entityType: 'admission_case',
+                      entityId: admission.id,
+                      issueCode: 'admission_start_date',
+                      category: 'onboarding',
+                      severity: startDatePassed ? 'critical' : 'warning',
+                      organizationId: admission.organizationId,
+                      facilityId: admission.facilityId,
+                      clientId: admission.clientId,
+                      clientName: `${admission.firstName} ${admission.lastName}`,
+                      dueAt,
+                      sourceAt: new Date(`${admission.preferredStartDate}T12:00:00.000Z`),
+                      descriptionCode: 'operations.issues.onboarding.start_date',
+                    }),
+                  );
+                }
+              }
+            }
+            await collectProjectedItems(projected);
+          },
+        );
+        return result.complete;
+      }),
+      streamDatabasePages(
+        'service_agreements',
+        sourceRequested.agreements,
+        (transaction, offset) =>
+          transaction
+            .select({
+              id: agreements.id,
+              clientId: agreements.clientId,
+              clientName: sql<string>`concat_ws(' ', coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}), ${clientRecords.lastName})`,
+              organizationId: agreements.organizationId,
+              facilityId: agreements.facilityId,
+              validUntil: agreements.validUntil,
+            })
+            .from(agreements)
+            .innerJoin(
+              clientRecords,
+              and(
+                eq(clientRecords.tenantId, agreements.tenantId),
+                eq(clientRecords.id, agreements.clientId),
+              ),
+            )
+            .where(
+              and(
+                eq(agreements.tenantId, principal.tenantId),
+                inArray(agreements.status, ['active', 'suspended']),
+                scopedTo(agreementScope, agreements.organizationId, agreements.facilityId),
+                ...(query.organizationId
+                  ? [eq(agreements.organizationId, query.organizationId)]
+                  : []),
+                ...(query.facilityId ? [eq(agreements.facilityId, query.facilityId)] : []),
+                ...(query.clientId ? [eq(agreements.clientId, query.clientId)] : []),
+                isNotNull(agreements.validUntil),
+                gte(agreements.validUntil, deadlineFrom),
+                lte(agreements.validUntil, deadlineUntil),
+                ...(query.fromDate ? [gte(agreements.validUntil, query.fromDate)] : []),
+                ...(query.untilDate ? [lte(agreements.validUntil, query.untilDate)] : []),
+              ),
+            )
+            .orderBy(asc(agreements.validUntil), asc(agreements.id))
+            .limit(100)
+            .offset(offset),
+        async (rows) => {
+          const timezones = await this.organizationTimezones(
+            principal.tenantId,
+            rows.map((row) => row.organizationId).filter((id): id is string => Boolean(id)),
+          );
+          await collectProjectedItems(
+            rows.flatMap((agreement) => {
+              if (!agreement.validUntil) return [];
+              const dueAt = endOfLocalDay(
+                agreement.validUntil,
+                timezones.get(agreement.organizationId) ?? 'Europe/Berlin',
+              );
+              if (!dueAt) return [];
+              return [
+                this.workItem({
+                  sourceDomain: 'service_agreements',
+                  entityType: 'agreement',
+                  entityId: agreement.id,
+                  issueCode: 'agreement_expiry',
+                  category: 'agreements',
+                  severity: new Date(dueAt) < observedAt ? 'critical' : 'warning',
+                  organizationId: agreement.organizationId,
+                  facilityId: agreement.facilityId,
+                  clientId: agreement.clientId,
+                  clientName: agreement.clientName,
+                  dueAt,
+                  sourceAt: new Date(`${agreement.validUntil}T12:00:00.000Z`),
+                  descriptionCode: 'operations.issues.agreements.expiry',
+                }),
+              ];
+            }),
+          );
+        },
+      ),
+      streamDatabasePages(
+        'employee_qualifications',
+        sourceRequested.qualifications,
+        (transaction, offset) =>
+          transaction
+            .select({
+              id: employeeQualifications.id,
+              employeeId: employeeRecords.id,
+              employeeName: sql<string>`concat_ws(' ', coalesce(nullif(${employeeRecords.preferredName}, ''), ${employeeRecords.firstName}), ${employeeRecords.lastName})`,
+              qualificationName: qualificationDefinitions.name,
+              organizationId: employeeRecords.organizationId,
+              facilityId: employeeFacilityAssignments.facilityId,
+              validUntil: employeeQualifications.validUntil,
+            })
+            .from(employeeQualifications)
+            .innerJoin(
+              employeeRecords,
+              and(
+                eq(employeeRecords.tenantId, employeeQualifications.tenantId),
+                eq(employeeRecords.id, employeeQualifications.employeeId),
+              ),
+            )
+            .innerJoin(
+              qualificationDefinitions,
+              and(
+                eq(qualificationDefinitions.tenantId, employeeQualifications.tenantId),
+                eq(qualificationDefinitions.id, employeeQualifications.qualificationId),
+              ),
+            )
+            .leftJoin(
+              employeeFacilityAssignments,
+              and(
+                eq(employeeFacilityAssignments.tenantId, employeeRecords.tenantId),
+                eq(employeeFacilityAssignments.employeeId, employeeRecords.id),
+                eq(employeeFacilityAssignments.organizationId, employeeRecords.organizationId),
+                eq(employeeFacilityAssignments.isPrimary, true),
+                eq(employeeFacilityAssignments.status, 'active'),
+              ),
+            )
+            .where(
+              and(
+                eq(employeeQualifications.tenantId, principal.tenantId),
+                eq(employeeQualifications.status, 'active'),
+                eq(employeeRecords.status, 'active'),
+                scopedTo(
+                  employeeScope,
+                  employeeRecords.organizationId,
+                  employeeFacilityAssignments.facilityId,
+                ),
+                ...(query.organizationId
+                  ? [eq(employeeRecords.organizationId, query.organizationId)]
+                  : []),
+                ...(query.facilityId
+                  ? [eq(employeeFacilityAssignments.facilityId, query.facilityId)]
+                  : []),
+                ...(query.employeeId ? [eq(employeeRecords.id, query.employeeId)] : []),
+                isNotNull(employeeQualifications.validUntil),
+                gte(employeeQualifications.validUntil, deadlineFrom),
+                lte(employeeQualifications.validUntil, deadlineUntil),
+                ...(query.fromDate ? [gte(employeeQualifications.validUntil, query.fromDate)] : []),
+                ...(query.untilDate
+                  ? [lte(employeeQualifications.validUntil, query.untilDate)]
+                  : []),
+              ),
+            )
+            .orderBy(asc(employeeQualifications.validUntil), asc(employeeQualifications.id))
+            .limit(100)
+            .offset(offset),
+        async (rows) => {
+          const timezones = await this.organizationTimezones(
+            principal.tenantId,
+            rows.map((row) => row.organizationId).filter((id): id is string => Boolean(id)),
+          );
+          await collectProjectedItems(
+            rows.flatMap((qualification) => {
+              if (!qualification.validUntil || !qualification.organizationId) return [];
+              const dueAt = endOfLocalDay(
+                qualification.validUntil,
+                timezones.get(qualification.organizationId) ?? 'Europe/Berlin',
+              );
+              if (!dueAt) return [];
+              return [
+                this.workItem({
+                  sourceDomain: 'employee_qualifications',
+                  entityType: 'employee_qualification',
+                  entityId: qualification.id,
+                  issueCode: 'qualification_expiry',
+                  category: 'employees',
+                  severity: new Date(dueAt) < observedAt ? 'critical' : 'warning',
+                  organizationId: qualification.organizationId,
+                  facilityId: qualification.facilityId,
+                  clientId: null,
+                  clientName: null,
+                  employeeId: qualification.employeeId,
+                  employeeName: qualification.employeeName,
+                  dueAt,
+                  sourceAt: new Date(`${qualification.validUntil}T12:00:00.000Z`),
+                  descriptionCode: 'operations.issues.employees.qualification_expiry',
+                }),
+              ];
+            }),
+          );
+        },
+      ),
+      streamDatabasePages(
+        'benefits',
+        sourceRequested.benefitDeadlines,
+        (transaction, offset) =>
+          transaction
+            .select({
+              id: clientBenefitEntitlements.id,
+              clientId: clientRecords.id,
+              clientName: sql<string>`concat_ws(' ', coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}), ${clientRecords.lastName})`,
+              organizationId: clientRecords.organizationId,
+              facilityId: clientRecords.primaryFacilityId,
+              validUntil: clientBenefitEntitlements.validUntil,
+            })
+            .from(clientBenefitEntitlements)
+            .innerJoin(
+              benefitFundingSources,
+              and(
+                eq(benefitFundingSources.tenantId, clientBenefitEntitlements.tenantId),
+                eq(benefitFundingSources.clientId, clientBenefitEntitlements.clientId),
+                eq(benefitFundingSources.id, clientBenefitEntitlements.fundingSourceId),
+                eq(benefitFundingSources.status, 'active'),
+              ),
+            )
+            .innerJoin(
+              clientRecords,
+              and(
+                eq(clientRecords.tenantId, clientBenefitEntitlements.tenantId),
+                eq(clientRecords.id, clientBenefitEntitlements.clientId),
+              ),
+            )
+            .where(
+              and(
+                eq(clientBenefitEntitlements.tenantId, principal.tenantId),
+                inArray(clientBenefitEntitlements.status, ['confirmed', 'provisional']),
+                isNotNull(clientBenefitEntitlements.validUntil),
+                gte(clientBenefitEntitlements.validUntil, deadlineFrom),
+                lte(clientBenefitEntitlements.validUntil, deadlineUntil),
+                scopedTo(
+                  benefitScope,
+                  clientRecords.organizationId,
+                  clientRecords.primaryFacilityId,
+                ),
+                ...(query.organizationId
+                  ? [eq(clientRecords.organizationId, query.organizationId)]
+                  : []),
+                ...(query.facilityId
+                  ? [eq(clientRecords.primaryFacilityId, query.facilityId)]
+                  : []),
+                ...(query.clientId ? [eq(clientRecords.id, query.clientId)] : []),
+                ...(query.fromDate
+                  ? [gte(clientBenefitEntitlements.validUntil, query.fromDate)]
+                  : []),
+                ...(query.untilDate
+                  ? [lte(clientBenefitEntitlements.validUntil, query.untilDate)]
+                  : []),
+              ),
+            )
+            .orderBy(asc(clientBenefitEntitlements.validUntil), asc(clientBenefitEntitlements.id))
+            .limit(100)
+            .offset(offset),
+        async (rows) => {
+          const timezones = await this.organizationTimezones(
+            principal.tenantId,
+            rows.map((row) => row.organizationId).filter((id): id is string => Boolean(id)),
+          );
+          await collectProjectedItems(
+            rows.flatMap((entitlement) => {
+              if (!entitlement.validUntil || !entitlement.organizationId) return [];
+              const dueAt = endOfLocalDay(
+                entitlement.validUntil,
+                timezones.get(entitlement.organizationId) ?? 'Europe/Berlin',
+              );
+              if (!dueAt) return [];
+              return [
+                this.workItem({
+                  sourceDomain: 'benefits',
+                  entityType: 'benefit_entitlement',
+                  entityId: entitlement.id,
+                  issueCode: 'benefit_entitlement_expiry',
+                  category: 'benefits',
+                  severity: new Date(dueAt) < observedAt ? 'critical' : 'warning',
+                  organizationId: entitlement.organizationId,
+                  facilityId: entitlement.facilityId,
+                  clientId: entitlement.clientId,
+                  clientName: entitlement.clientName,
+                  dueAt,
+                  sourceAt: new Date(`${entitlement.validUntil}T12:00:00.000Z`),
+                  descriptionCode: 'operations.issues.benefits.entitlement_expiry',
+                }),
+              ];
+            }),
+          );
+        },
+      ),
+      streamDatabasePages(
+        'billing',
+        sourceRequested.payerArrangements,
+        (transaction, offset) =>
+          transaction
+            .select({
+              id: payerArrangements.id,
+              clientId: clientRecords.id,
+              clientName: sql<string>`concat_ws(' ', coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}), ${clientRecords.lastName})`,
+              organizationId: payerArrangements.organizationId,
+              facilityId: clientRecords.primaryFacilityId,
+              validUntil: payerArrangements.validUntil,
+            })
+            .from(payerArrangements)
+            .innerJoin(
+              clientRecords,
+              and(
+                eq(clientRecords.tenantId, payerArrangements.tenantId),
+                eq(clientRecords.id, payerArrangements.clientId),
+              ),
+            )
+            .where(
+              and(
+                eq(payerArrangements.tenantId, principal.tenantId),
+                eq(payerArrangements.mandateStatus, 'authorized'),
+                lte(payerArrangements.validFrom, todayUtc),
+                isNotNull(payerArrangements.validUntil),
+                gte(payerArrangements.validUntil, deadlineFrom),
+                lte(payerArrangements.validUntil, deadlineUntil),
+                scopedTo(
+                  billingScope,
+                  payerArrangements.organizationId,
+                  clientRecords.primaryFacilityId,
+                ),
+                ...(query.organizationId
+                  ? [eq(payerArrangements.organizationId, query.organizationId)]
+                  : []),
+                ...(query.facilityId
+                  ? [eq(clientRecords.primaryFacilityId, query.facilityId)]
+                  : []),
+                ...(query.clientId ? [eq(clientRecords.id, query.clientId)] : []),
+                ...(query.fromDate ? [gte(payerArrangements.validUntil, query.fromDate)] : []),
+                ...(query.untilDate ? [lte(payerArrangements.validUntil, query.untilDate)] : []),
+              ),
+            )
+            .orderBy(asc(payerArrangements.validUntil), asc(payerArrangements.id))
+            .limit(100)
+            .offset(offset),
+        async (rows) => {
+          const timezones = await this.organizationTimezones(
+            principal.tenantId,
+            rows.map((row) => row.organizationId),
+          );
+          await collectProjectedItems(
+            rows.flatMap((arrangement) => {
+              if (!arrangement.validUntil) return [];
+              const timezone = timezones.get(arrangement.organizationId) ?? 'Europe/Berlin';
+              const dueAt = endOfLocalDay(arrangement.validUntil, timezone);
+              if (!dueAt) return [];
+              return [
+                this.workItem({
+                  sourceDomain: 'billing',
+                  entityType: 'payer_arrangement',
+                  entityId: arrangement.id,
+                  issueCode: 'payer_authorization_expiry',
+                  category: 'billing',
+                  severity: new Date(dueAt) < observedAt ? 'critical' : 'warning',
+                  organizationId: arrangement.organizationId,
+                  facilityId: arrangement.facilityId,
+                  clientId: arrangement.clientId,
+                  clientName: arrangement.clientName,
+                  dueAt,
+                  sourceAt: new Date(`${arrangement.validUntil}T12:00:00.000Z`),
+                  descriptionCode: 'operations.issues.billing.payer_authorization_expiry',
+                }),
+              ];
+            }),
+          );
+        },
+      ),
+    ]);
+    const completeDomains = new Map<string, ReconciliationWindow>();
+    if (scheduleComplete) completeDomains.set('scheduling', { from: now, until });
+    if (executionComplete) completeDomains.set('visit_execution', { from, until: sourceUntil });
+    if (documentationComplete)
+      completeDomains.set('care_documentation', { from: documentationFrom, until: sourceUntil });
+    if (evidenceComplete) completeDomains.set('service_evidence', { from, until: sourceUntil });
+    if (benefitsComplete && benefitEntitlementsComplete)
+      completeDomains.set('benefits', { from: null, until: null });
+    if (invoiceDocumentsComplete && receivablesComplete && payerArrangementsComplete)
+      completeDomains.set('billing', { from: null, until: null });
+    if (claimsComplete) completeDomains.set('claims', { from: null, until: null });
+    if (onboardingComplete) completeDomains.set('onboarding', { from: null, until: null });
+    if (agreementsComplete) completeDomains.set('service_agreements', { from: null, until: null });
+    if (qualificationsComplete)
+      completeDomains.set('employee_qualifications', { from: null, until: null });
+
+    const hasNarrowedResourceScope = Boolean(
+      query.organizationId ||
+      query.facilityId ||
+      query.clientId ||
+      query.employeeId ||
+      query.fromDate ||
+      query.untilDate,
+    );
+    await this.syncExceptionOccurrences(
+      principal,
+      [],
+      hasNarrowedResourceScope ? new Map() : completeDomains,
+      observedAt,
+    );
+    await this.reconcileStaleExceptionOccurrences(principal, [], observedAt);
+    retained.sort(compareWorkItems);
     return {
-      items: visible.slice((page - 1) * pageSize, page * pageSize),
-      page,
-      pageSize,
-      total: visible.length,
+      items: retained.slice(resultOffset, resultOffset + responsePageSize),
+      page: responsePage,
+      pageSize: responsePageSize,
+      total,
       truncated,
     };
   }
@@ -1727,12 +1997,7 @@ export class OperationsApplicationService {
     request: RequestContext,
     auditContext: AuditContext,
   ) {
-    const worklist = await this.listWorkItems(principal, {
-      deadlinesOnly: true,
-      page: 1,
-      pageSize: 1000,
-    });
-    const deadline = worklist.items.find((item) => item.id === issueId);
+    const deadline = await this.findCurrentWorkItem(principal, issueId, { deadlinesOnly: true });
     if (
       !deadline ||
       deadline.sourceDomain !== 'service_agreements' ||
@@ -1773,6 +2038,10 @@ export class OperationsApplicationService {
     if (query.organizationId) conditions.push(eq(tasks.organizationId, query.organizationId));
     if (query.facilityId) conditions.push(eq(tasks.facilityId, query.facilityId));
     if (query.clientId) conditions.push(eq(tasks.clientId, query.clientId));
+    if (query.sourceTypes) {
+      if (!query.sourceTypes.length) return { items: [], page, pageSize, total: 0 };
+      conditions.push(inArray(tasks.sourceType, query.sourceTypes));
+    }
     if (query.status) conditions.push(eq(tasks.status, query.status));
     if (query.priority) conditions.push(eq(tasks.priority, query.priority));
     if (query.assignedEmployeeId)
@@ -1784,7 +2053,22 @@ export class OperationsApplicationService {
     }
     if (query.search?.trim()) {
       const pattern = `%${escapeLike(query.search.trim())}%`;
-      conditions.push(or(ilike(tasks.title, pattern), ilike(tasks.description, pattern))!);
+      const matchingClientName = sql`
+        EXISTS (
+        SELECT 1
+        FROM ${clientRecords}
+        WHERE ${clientRecords.tenantId} = ${tasks.tenantId}
+          AND ${clientRecords.id} = ${tasks.clientId}
+          AND concat_ws(
+            ' ',
+            coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}),
+            ${clientRecords.lastName}
+          ) ILIKE ${pattern}
+        )
+      `;
+      conditions.push(
+        or(ilike(tasks.title, pattern), ilike(tasks.description, pattern), matchingClientName)!,
+      );
     }
     const now = new Date();
     const { dueDate: localDueDate, today: localToday } = taskDueLocalDates();
@@ -1797,6 +2081,12 @@ export class OperationsApplicationService {
       conditions.push(sql`${tasks.dueAt} IS NOT NULL AND ${localDueDate} > ${localToday}`);
       conditions.push(inArray(tasks.status, ['open', 'in_progress']));
     }
+    if (query.fromDate) {
+      conditions.push(sql`${localDueDate} >= ${query.fromDate}::date`);
+    }
+    if (query.untilDate) {
+      conditions.push(sql`${localDueDate} <= ${query.untilDate}::date`);
+    }
     if (query.order === 'created') {
       // Listing is stable by newest creation when explicitly requested.
     }
@@ -1804,22 +2094,223 @@ export class OperationsApplicationService {
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const [totalRow] = await transaction.select({ count: count() }).from(tasks).where(where);
       const rows = await transaction
-        .select()
+        .select({
+          task: tasks,
+          clientName: sql<
+            string | null
+          >`nullif(concat_ws(' ', coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}), ${clientRecords.lastName}), '')`,
+          assignedEmployeeName: sql<
+            string | null
+          >`nullif(concat_ws(' ', coalesce(nullif(${employeeRecords.preferredName}, ''), ${employeeRecords.firstName}), ${employeeRecords.lastName}), '')`,
+        })
         .from(tasks)
+        .leftJoin(
+          clientRecords,
+          and(eq(clientRecords.tenantId, tasks.tenantId), eq(clientRecords.id, tasks.clientId)),
+        )
+        .leftJoin(
+          employeeRecords,
+          and(
+            eq(employeeRecords.tenantId, tasks.tenantId),
+            eq(employeeRecords.id, tasks.assignedEmployeeId),
+          ),
+        )
         .where(where)
         .orderBy(
-          query.order === 'created' ? desc(tasks.createdAt) : sql`${tasks.dueAt} asc nulls last`,
+          query.order === 'created'
+            ? desc(tasks.createdAt)
+            : query.order === 'priority'
+              ? sql`CASE ${tasks.priority} WHEN 'urgent' THEN 4 WHEN 'high' THEN 3 WHEN 'normal' THEN 2 ELSE 1 END DESC, ${tasks.dueAt} ASC NULLS LAST`
+              : sql`${tasks.dueAt} asc nulls last`,
           desc(tasks.id),
         )
         .limit(pageSize)
-        .offset((page - 1) * pageSize);
+        .offset(bounded(query.offset, (page - 1) * pageSize, 0, 10_000_000));
       const items = [];
       for (const row of rows) {
-        if (!can(principal, { action: 'operations.read', resource: taskResource(row) })) continue;
-        items.push(this.taskView(principal, row));
+        const task = row.task;
+        const resource = taskResource(task);
+        if (!can(principal, { action: 'operations.read', resource })) continue;
+        items.push({
+          ...this.taskView(principal, task),
+          clientName:
+            task.clientId && can(principal, { action: 'client.read', resource })
+              ? displayNameWithoutIdentifiers(row.clientName)
+              : null,
+          assignedEmployeeName:
+            task.assignedEmployeeId && can(principal, { action: 'employee.read', resource })
+              ? displayNameWithoutIdentifiers(row.assignedEmployeeName)
+              : null,
+        });
       }
       return { items, page, pageSize, total: totalRow?.count ?? 0 };
     });
+  }
+
+  async listWorkQueue(principal: AuthorizationPrincipal, query: OperationsWorkQueueQuery = {}) {
+    this.requireAnyGrant(principal, 'operations.read');
+    const itemType = query.itemType ?? 'all';
+    const page = bounded(query.page, 1, 1, 100_000);
+    const pageSize = bounded(query.pageSize, 50, 1, 100);
+    const includeTasks = itemType !== 'exceptions';
+    const includeExceptions = itemType !== 'tasks';
+    const taskSourceTypes = query.sourceDomain
+      ? taskSourceTypesForDomain(query.sourceDomain)
+      : null;
+    const exceptionAssigneeId =
+      query.assignedEmployeeId ??
+      (query.assignedToMe
+        ? await this.employeeForUser(principal.tenantId, principal.userId)
+        : undefined);
+    const taskQuery: OperationsTaskListQuery = {
+      ...(query.organizationId ? { organizationId: query.organizationId } : {}),
+      ...(query.facilityId ? { facilityId: query.facilityId } : {}),
+      ...(query.clientId ? { clientId: query.clientId } : {}),
+      ...(query.taskStatus ? { status: query.taskStatus } : {}),
+      ...(query.priority ? { priority: query.priority } : {}),
+      ...(query.assignedEmployeeId ? { assignedEmployeeId: query.assignedEmployeeId } : {}),
+      ...(query.assignedToMe ? { assignedToMe: true } : {}),
+      ...(query.due ? { due: query.due } : {}),
+      ...(query.fromDate ? { fromDate: query.fromDate } : {}),
+      ...(query.untilDate ? { untilDate: query.untilDate } : {}),
+      ...(query.search ? { search: query.search } : {}),
+      order: query.sort !== 'due' ? 'priority' : 'due',
+      ...(taskSourceTypes ? { sourceTypes: taskSourceTypes } : {}),
+    };
+    const exceptionQuery: OperationsQuery = {
+      ...(query.organizationId ? { organizationId: query.organizationId } : {}),
+      ...(query.facilityId ? { facilityId: query.facilityId } : {}),
+      ...(query.clientId ? { clientId: query.clientId } : {}),
+      ...(query.category ? { category: query.category } : {}),
+      ...(query.sourceDomain ? { sourceDomain: query.sourceDomain } : {}),
+      ...(query.severity ? { severity: query.severity } : {}),
+      ...(query.exceptionStatus ? { status: query.exceptionStatus } : {}),
+      ...(exceptionAssigneeId ? { assignedEmployeeId: exceptionAssigneeId } : {}),
+      ...(query.due ? { due: query.due } : {}),
+      ...(query.fromDate ? { fromDate: query.fromDate } : {}),
+      ...(query.untilDate ? { untilDate: query.untilDate } : {}),
+      ...(query.search ? { search: query.search } : {}),
+      sort: query.sort === 'due' ? 'due' : 'relevance',
+    };
+    const [firstTaskPage, firstExceptionPage] = await Promise.all([
+      includeTasks
+        ? this.listTasks(principal, { ...taskQuery, page: 1, pageSize: 100, offset: 0 })
+        : Promise.resolve({ items: [], page: 1, pageSize: 100, total: 0 }),
+      includeExceptions && (!query.assignedToMe || exceptionAssigneeId)
+        ? this.listWorkItems(principal, { ...exceptionQuery, page: 1, pageSize: 1000, offset: 0 })
+        : Promise.resolve({ items: [], page: 1, pageSize: 1000, total: 0, truncated: false }),
+    ]);
+    const taskTotal = firstTaskPage.total;
+    const exceptionTotal = firstExceptionPage.total;
+    const total = taskTotal + exceptionTotal;
+    const start = (page - 1) * pageSize;
+    const end = Math.min(start + pageSize, total);
+    let taskItems = firstTaskPage.items;
+    let taskItemIndex = 0;
+    let taskOffset = taskItems.length;
+    let exceptionItems = firstExceptionPage.items;
+    let exceptionItemIndex = 0;
+    let exceptionOffset = exceptionItems.length;
+    let truncated =
+      firstExceptionPage.truncated ||
+      taskItems.length !== Math.min(100, taskTotal) ||
+      exceptionItems.length !== Math.min(1000, exceptionTotal);
+    const nextTask = async () => {
+      if (taskItemIndex >= taskItems.length && taskOffset < taskTotal) {
+        const result = await this.listTasks(principal, {
+          ...taskQuery,
+          page: 1,
+          pageSize: 100,
+          offset: taskOffset,
+        });
+        truncated ||=
+          result.total !== taskTotal ||
+          result.items.length !== Math.min(100, taskTotal - taskOffset);
+        taskItems = result.items;
+        taskItemIndex = 0;
+        taskOffset += taskItems.length;
+      }
+      return taskItems[taskItemIndex++] ?? null;
+    };
+    const nextException = async () => {
+      if (exceptionItemIndex >= exceptionItems.length && exceptionOffset < exceptionTotal) {
+        const result = await this.listWorkItems(principal, {
+          ...exceptionQuery,
+          page: 1,
+          pageSize: 1000,
+          offset: exceptionOffset,
+        });
+        truncated ||=
+          result.total !== exceptionTotal ||
+          result.items.length !== Math.min(1000, exceptionTotal - exceptionOffset);
+        exceptionItems = result.items;
+        exceptionItemIndex = 0;
+        exceptionOffset += exceptionItems.length;
+        truncated ||= result.truncated;
+      }
+      return exceptionItems[exceptionItemIndex++] ?? null;
+    };
+    const dueTime = (value: Date | string | null) =>
+      value ? new Date(value).getTime() : Number.POSITIVE_INFINITY;
+    const priority = (
+      item: Awaited<ReturnType<typeof nextTask>> | Awaited<ReturnType<typeof nextException>>,
+    ) => {
+      if (!item) return Number.NEGATIVE_INFINITY;
+      if ('priority' in item) {
+        return item.priority === 'urgent'
+          ? 4
+          : item.priority === 'high'
+            ? 3
+            : item.priority === 'normal'
+              ? 2
+              : 1;
+      }
+      return severityWeight(item.severity);
+    };
+    const compareItems = (
+      left:
+        | NonNullable<Awaited<ReturnType<typeof nextTask>>>
+        | NonNullable<Awaited<ReturnType<typeof nextException>>>,
+      right:
+        | NonNullable<Awaited<ReturnType<typeof nextTask>>>
+        | NonNullable<Awaited<ReturnType<typeof nextException>>>,
+    ) => {
+      const byPriority = query.sort === 'due' ? 0 : priority(right) - priority(left);
+      return (
+        byPriority ||
+        dueTime(left.dueAt) - dueTime(right.dueAt) ||
+        ('priority' in left ? -1 : 1) - ('priority' in right ? -1 : 1) ||
+        right.id.localeCompare(left.id)
+      );
+    };
+    let taskHead = await nextTask();
+    let exceptionHead = await nextException();
+    let globalIndex = 0;
+    const items: Array<
+      | { kind: 'task'; task: NonNullable<typeof taskHead> }
+      | { kind: 'exception'; exception: NonNullable<typeof exceptionHead> }
+    > = [];
+    // oxlint-disable no-await-in-loop
+    while (globalIndex < end && (taskHead || exceptionHead)) {
+      const takeTask =
+        !exceptionHead || (taskHead !== null && compareItems(taskHead, exceptionHead) <= 0);
+      if (takeTask && taskHead) {
+        if (globalIndex >= start) items.push({ kind: 'task', task: taskHead });
+        taskHead = await nextTask();
+      } else if (exceptionHead) {
+        if (globalIndex >= start) items.push({ kind: 'exception', exception: exceptionHead });
+        exceptionHead = await nextException();
+      }
+      globalIndex += 1;
+    }
+    // oxlint-enable no-await-in-loop
+    return {
+      items,
+      page,
+      pageSize,
+      total,
+      truncated,
+    };
   }
 
   async getTask(principal: AuthorizationPrincipal, taskId: string) {
@@ -2784,8 +3275,9 @@ export class OperationsApplicationService {
     const id = stableIssueId(input.sourceDomain, entityType, entityId, input.issueCode);
     return {
       ...workItem,
+      clientName: displayNameWithoutIdentifiers(workItem.clientName),
       employeeId: input.employeeId ?? null,
-      employeeName: input.employeeName ?? null,
+      employeeName: displayNameWithoutIdentifiers(input.employeeName ?? null),
       [projectionSourceAt]: sourceAt ?? (input.dueAt ? new Date(input.dueAt) : null),
       id,
       kind: 'exception',
@@ -3109,62 +3601,32 @@ export class OperationsApplicationService {
       }
 
       if (!completeDomains.size) return;
-      const activeRows = await transaction
-        .select()
-        .from(exceptionOccurrences)
-        .where(
-          and(
-            eq(exceptionOccurrences.tenantId, principal.tenantId),
-            inArray(exceptionOccurrences.sourceDomain, [...completeDomains.keys()]),
-            isNull(exceptionOccurrences.resolvedAt),
-            lt(exceptionOccurrences.lastObservedAt, observedAt),
-          ),
+      // oxlint-disable no-await-in-loop
+      for (const [sourceDomain, window] of completeDomains) {
+        const sourceWindowScope = completeSourceEntityScope(
+          transaction,
+          principal,
+          sourceDomain,
+          window,
         );
-      const currentKeySet = new Set(issueKeys);
-      const resolvedIds = activeRows
-        .filter((row) => {
-          if (currentKeySet.has(row.issueKey)) return false;
-          const window = completeDomains.get(row.sourceDomain);
-          if (!window) return false;
-          if (
-            window.sourceEntityKeys &&
-            !window.sourceEntityKeys.has(sourceEntityKey(row.sourceEntityType, row.sourceEntityId))
-          ) {
-            return false;
-          }
-          if (
-            (window.from && (!row.sourceAt || row.sourceAt < window.from)) ||
-            (window.until && (!row.sourceAt || row.sourceAt >= window.until))
-          ) {
-            return false;
-          }
-          const resource: ResourceContext = {
-            tenantId: row.tenantId,
-            ...(row.organizationId ? { organizationId: row.organizationId } : {}),
-            ...(row.facilityId ? { facilityId: row.facilityId } : {}),
-            ...(row.clientId ? { clientId: row.clientId } : {}),
-          };
-          const readPermission = exceptionReadPermission(row.sourceDomain, row.issueCode);
-          return (
-            readPermission !== null &&
-            can(principal, { action: 'operations.read', resource }) &&
-            can(principal, { action: readPermission, resource })
-          );
-        })
-        .map((row) => row.id);
-      if (resolvedIds.length) {
+        const conditions = [
+          eq(exceptionOccurrences.tenantId, principal.tenantId),
+          eq(exceptionOccurrences.sourceDomain, sourceDomain),
+          isNull(exceptionOccurrences.resolvedAt),
+          lt(exceptionOccurrences.lastObservedAt, observedAt),
+          exceptionPermissionScope(principal, 'operations.read'),
+          exceptionClientReadScope(principal),
+          exceptionSourceReadScope(principal),
+          ...(window.from ? [gte(exceptionOccurrences.sourceAt, window.from)] : []),
+          ...(window.until ? [lt(exceptionOccurrences.sourceAt, window.until)] : []),
+          ...(sourceWindowScope ? [sourceWindowScope] : []),
+        ];
         await transaction
           .update(exceptionOccurrences)
           .set({ resolvedAt: observedAt, version: sql`${exceptionOccurrences.version} + 1` })
-          .where(
-            and(
-              eq(exceptionOccurrences.tenantId, principal.tenantId),
-              inArray(exceptionOccurrences.id, resolvedIds),
-              isNull(exceptionOccurrences.resolvedAt),
-              lt(exceptionOccurrences.lastObservedAt, observedAt),
-            ),
-          );
+          .where(and(...conditions));
       }
+      // oxlint-enable no-await-in-loop
     });
   }
 
@@ -3279,17 +3741,23 @@ export class OperationsApplicationService {
     return occurrence ?? null;
   }
 
-  private async findCurrentWorkItem(principal: AuthorizationPrincipal, id: string) {
+  private async findCurrentWorkItem(
+    principal: AuthorizationPrincipal,
+    id: string,
+    query: OperationsQuery = {},
+  ) {
     if (!/^[a-f0-9]{64}$/.test(id)) throw new OperationsWorkItemNotFoundError();
-    const first = await this.listWorkItems(principal, { page: 1, pageSize: 1000 });
-    const pages = Math.min(10, Math.ceil(first.total / 1000));
+    const first = await this.listWorkItems(principal, { ...query, page: 1, pageSize: 1000 });
+    const pages = Math.ceil(first.total / 1000);
     if (first.items.some((item) => item.id === id))
       return first.items.find((item) => item.id === id)!;
+    // oxlint-disable no-await-in-loop
     for (let page = 2; page <= pages; page++) {
-      const result = await this.listWorkItems(principal, { page, pageSize: 1000 });
+      const result = await this.listWorkItems(principal, { ...query, page, pageSize: 1000 });
       const found = result.items.find((item) => item.id === id);
       if (found) return found;
     }
+    // oxlint-enable no-await-in-loop
     throw new OperationsWorkItemNotFoundError();
   }
 
@@ -3445,11 +3913,15 @@ export interface OperationsTaskListQuery {
   priority?: TaskPriority;
   assignedEmployeeId?: string;
   assignedToMe?: boolean;
+  sourceTypes?: SourceType[];
   due?: 'overdue' | 'today' | 'upcoming';
+  fromDate?: string;
+  untilDate?: string;
   search?: string;
-  order?: 'due' | 'created';
+  order?: 'due' | 'created' | 'priority';
   page?: number;
   pageSize?: number;
+  offset?: number;
 }
 
 export function createOperationsApplicationService(
@@ -3481,6 +3953,80 @@ function bounded(
   if (!Number.isSafeInteger(result) || result < min || result > maximum)
     throw new InvalidOperationsInputError();
   return result;
+}
+
+async function forEachResultPage<R extends { items: readonly unknown[]; total: number }>(
+  pageSize: number,
+  readPage: (page: number, pageSize: number) => Promise<R>,
+  visitPage: (items: readonly R['items'][number][]) => Promise<void>,
+): Promise<{ total: number; complete: boolean }> {
+  const firstPage = await readPage(1, pageSize);
+  let itemsRead = firstPage.items.length;
+  let totalUnchanged = true;
+  await visitPage(firstPage.items);
+  const pageCount = Math.ceil(firstPage.total / pageSize);
+  // oxlint-disable no-await-in-loop
+  for (let page = 2; page <= pageCount; page += 1) {
+    const result = await readPage(page, pageSize);
+    itemsRead += result.items.length;
+    totalUnchanged &&= result.total === firstPage.total;
+    await visitPage(result.items);
+  }
+  // oxlint-enable no-await-in-loop
+  return {
+    total: firstPage.total,
+    complete: totalUnchanged && itemsRead === firstPage.total,
+  };
+}
+
+async function forEachOffsetPage<T>(
+  pageSize: number,
+  readPage: (offset: number) => Promise<readonly T[]>,
+  visitPage: (items: readonly T[]) => Promise<void>,
+): Promise<void> {
+  let offset = 0;
+  // oxlint-disable no-await-in-loop
+  while (true) {
+    const page = await readPage(offset);
+    if (!page.length) return;
+    await visitPage(page);
+    if (page.length < pageSize) return;
+    offset += pageSize;
+  }
+  // oxlint-enable no-await-in-loop
+}
+
+function retainSortedPrefix<T>(
+  heap: T[],
+  item: T,
+  limit: number,
+  compare: (left: T, right: T) => number,
+): void {
+  if (limit === 0) return;
+  if (heap.length < limit) {
+    heap.push(item);
+    let index = heap.length - 1;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (compare(heap[parent]!, heap[index]!) >= 0) break;
+      [heap[parent], heap[index]] = [heap[index]!, heap[parent]!];
+      index = parent;
+    }
+    return;
+  }
+  if (compare(item, heap[0]!) >= 0) return;
+  heap[0] = item;
+  let index = 0;
+  while (true) {
+    const left = index * 2 + 1;
+    const right = left + 1;
+    let latest = index;
+    if (left < heap.length && compare(heap[left]!, heap[latest]!) > 0) latest = left;
+    if (right < heap.length && compare(heap[right]!, heap[latest]!) > 0) latest = right;
+    if (latest === index) return;
+    [heap[index], heap[latest]] = [heap[latest]!, heap[index]!];
+    index = latest;
+  }
 }
 
 function validTaskInput(input: OperationsTaskInput): boolean {
@@ -3535,12 +4081,26 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function displayNameWithoutIdentifiers(value: string | null): string | null {
+  const normalized = value?.trim();
+  if (
+    !normalized ||
+    /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i.test(normalized)
+  )
+    return null;
+  return normalized;
+}
+
 function normalizeOptional(value: string | null | undefined): string | null {
   return value?.trim() || null;
 }
 
 function escapeLike(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+}
+
+function normalizeOperationsSearchText(value: string): string {
+  return value.toLocaleLowerCase().replaceAll('_', ' ').replace(/\s+/g, ' ').trim();
 }
 
 function taskResource(
@@ -3574,6 +4134,32 @@ function sourcePermission(type: SourceType): Permission {
       return 'documents.read';
     case 'communication':
       return 'communications.read';
+  }
+}
+
+function taskSourceTypesForDomain(sourceDomain: string): SourceType[] {
+  switch (sourceDomain) {
+    case 'scheduling':
+    case 'visit_execution':
+      return ['visit'];
+    case 'care_documentation':
+      return ['document'];
+    case 'service_evidence':
+      return ['service_evidence'];
+    case 'benefits':
+      return ['benefit_entitlement'];
+    case 'billing':
+      return ['invoice'];
+    case 'claims':
+      return ['claim'];
+    case 'onboarding':
+      return ['client'];
+    case 'service_agreements':
+      return ['service_agreement'];
+    case 'employee_qualifications':
+      return [];
+    default:
+      return [];
   }
 }
 
@@ -3614,10 +4200,6 @@ function sourceIdFromRow(task: typeof tasks.$inferSelect): string | null {
     default:
       return null;
   }
-}
-
-function sourceEntityKey(entityType: string, entityId: string): string {
-  return `${entityType}:${entityId}`;
 }
 
 function deduplicateWorkItems<T extends OperationsWorkItem>(items: T[]): T[] {
@@ -3823,6 +4405,85 @@ function scopedTo(
   return allowed.length ? or(...allowed)! : sql`false`;
 }
 
+function completeSourceEntityScope(
+  transaction: DatabaseTransaction,
+  principal: AuthorizationPrincipal,
+  sourceDomain: string,
+  window: ReconciliationWindow,
+): SQL | null {
+  if (sourceDomain === 'scheduling') {
+    return exists(
+      transaction
+        .select({ id: visits.id })
+        .from(visits)
+        .where(
+          and(
+            eq(visits.tenantId, principal.tenantId),
+            eq(visits.id, exceptionOccurrences.sourceEntityId),
+            ne(visits.status, 'cancelled'),
+            ...(window.from ? [gte(visits.plannedStart, window.from)] : []),
+            ...(window.until ? [lt(visits.plannedStart, window.until)] : []),
+            scopedTo(
+              permissionScope(principal, 'schedule.read'),
+              visits.organizationId,
+              visits.facilityId,
+            ),
+            scopedTo(
+              permissionScope(principal, 'client.read'),
+              visits.organizationId,
+              visits.facilityId,
+            ),
+          ),
+        ),
+    );
+  }
+  if (sourceDomain === 'service_evidence') {
+    const evidenceScope = permissionScope(principal, 'service_evidence.read');
+    const clientScope = permissionScope(principal, 'client.read');
+    const sourceFilters = [
+      eq(careDocuments.tenantId, principal.tenantId),
+      eq(careDocuments.status, 'finalized'),
+      eq(visits.tenantId, principal.tenantId),
+      ...(window.from ? [gte(visits.plannedStart, window.from)] : []),
+      ...(window.until ? [lt(visits.plannedStart, window.until)] : []),
+      scopedTo(evidenceScope, visits.organizationId, visits.facilityId),
+      scopedTo(clientScope, visits.organizationId, visits.facilityId),
+    ];
+    const packageMatch = exists(
+      transaction
+        .select({ id: evidencePackages.id })
+        .from(evidencePackages)
+        .innerJoin(
+          careDocuments,
+          and(
+            eq(careDocuments.tenantId, evidencePackages.tenantId),
+            eq(careDocuments.id, evidencePackages.documentationId),
+          ),
+        )
+        .innerJoin(
+          visits,
+          and(eq(visits.tenantId, careDocuments.tenantId), eq(visits.id, careDocuments.visitId)),
+        )
+        .where(and(eq(evidencePackages.id, exceptionOccurrences.sourceEntityId), ...sourceFilters)),
+    );
+    const documentationMatch = exists(
+      transaction
+        .select({ id: careDocuments.id })
+        .from(careDocuments)
+        .innerJoin(
+          visits,
+          and(eq(visits.tenantId, careDocuments.tenantId), eq(visits.id, careDocuments.visitId)),
+        )
+        .where(and(eq(careDocuments.id, exceptionOccurrences.sourceEntityId), ...sourceFilters)),
+    );
+    return or(
+      and(eq(exceptionOccurrences.sourceEntityType, 'evidence_package'), packageMatch),
+      and(eq(exceptionOccurrences.sourceEntityType, 'documentation'), documentationMatch),
+    )!;
+  }
+  return null;
+}
+
 function endOfLocalDay(date: string, timezone: string): string | null {
   try {
     const lastMinute = localDateTimeToInstant(date, '23:59', timezone, 'later');
@@ -3830,18 +4491,6 @@ function endOfLocalDay(date: string, timezone: string): string | null {
   } catch {
     return null;
   }
-}
-
-async function isolateOperationsSources<T extends readonly unknown[]>(
-  reads: T,
-  sourceDomains: readonly string[],
-): Promise<{ [K in keyof T]: Awaited<T[K]> | null }> {
-  const results = await Promise.allSettled(reads);
-  return results.map((result, index) => {
-    if (result.status === 'fulfilled') return result.value;
-    logOperationsSourceFailure(sourceDomains[index] ?? 'unknown', result.reason);
-    return null;
-  }) as { [K in keyof T]: Awaited<T[K]> | null };
 }
 
 async function isolateOperationsSource<T>(

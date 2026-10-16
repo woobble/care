@@ -14,10 +14,16 @@ import {
   sql,
 } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
+import { claims, invoices } from '@care/billing';
+import { clientContactRoles, clientContacts, clientRecords } from '@care/clients';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
+import { documentArtifacts } from '@care/documents';
 import { createDomainEvent } from '@care/events';
+import { users } from '@care/identity';
+import { tasks } from '@care/operations';
 import {
   assertCan,
   can,
@@ -26,11 +32,6 @@ import {
   type ResourceContext,
 } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { clientContactRoles, clientContacts, clientRecords } from '@care/clients';
-import { claims, invoices } from '@care/billing';
-import { documentArtifacts } from '@care/documents';
-import { users } from '@care/identity';
-import { tasks } from '@care/operations';
 import { visits } from '@care/scheduling';
 import { agreements } from '@care/service-agreements';
 import { contactAuthorizationFor } from '@module/communications/domain/contact-authorization';

@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+
 import { Button } from '@care/ui/components/button';
 
 export function RefreshStatusButton({ label }: Readonly<{ label: string }>) {

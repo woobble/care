@@ -1,6 +1,7 @@
 import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, or } from 'drizzle-orm';
-import type { DatabaseTransaction } from '@care/database';
+
 import { clientAddresses, clientRecords } from '@care/clients';
+import type { DatabaseTransaction } from '@care/database';
 import { employeeRecords, employeeTeamMemberships } from '@care/employees';
 import {
   clientSchedulingPreferences,
@@ -44,6 +45,9 @@ export class VisitExecutionRepository {
     tenantId: string,
     from: Date,
     until: Date,
+    scope: { organizationId?: string; facilityId?: string; clientId?: string } = {},
+    offset = 0,
+    pageSize = 100,
   ) {
     return transaction
       .select({
@@ -68,10 +72,14 @@ export class VisitExecutionRepository {
           eq(visitExecutions.status, 'in_progress'),
           gte(visits.plannedEnd, from),
           lt(visits.plannedEnd, until),
+          ...(scope.organizationId ? [eq(visits.organizationId, scope.organizationId)] : []),
+          ...(scope.facilityId ? [eq(visits.facilityId, scope.facilityId)] : []),
+          ...(scope.clientId ? [eq(visits.clientId, scope.clientId)] : []),
         ),
       )
       .orderBy(asc(visits.plannedEnd), asc(visits.id))
-      .limit(101);
+      .limit(pageSize)
+      .offset(offset);
   }
 
   async getVisit(

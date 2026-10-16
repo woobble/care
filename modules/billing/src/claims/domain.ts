@@ -1,5 +1,5 @@
-import type { ClaimStatus } from './schema';
 import type { ClaimFundingSourceType, PayerSubmissionChannel, PayerType } from './payer-schema';
+import type { ClaimStatus } from './schema';
 
 export interface PayerInput {
   organizationId: string;

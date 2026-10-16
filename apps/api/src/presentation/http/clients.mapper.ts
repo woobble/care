@@ -7,6 +7,8 @@ import type {
   ClientTimelineEntry,
   PflegegradSnapshot,
 } from '@care/clients';
+import { can, type AuthorizationPrincipal } from '@care/permissions';
+
 import type {
   ClientAddressResponseDto,
   ClientContactResponseDto,
@@ -16,7 +18,6 @@ import type {
   ClientTimelineEntryDto,
   PflegegradResponseDto,
 } from './clients.dto';
-import { can, type AuthorizationPrincipal } from '@care/permissions';
 
 export function clientResponse(client: ClientSnapshot): ClientResponseDto {
   return {

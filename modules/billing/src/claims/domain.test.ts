@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { assertClaimDecision, isAllowedClaimTransition } from './domain';
 
 describe('payer claim lifecycle', () => {

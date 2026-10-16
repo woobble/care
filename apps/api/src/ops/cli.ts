@@ -1,14 +1,15 @@
 // oxlint-disable-next-line import/no-unassigned-import -- operator commands read the protected deployment env file
 import '@care/config/load-env';
 import { resolveSecretFiles } from '@care/config';
+
 import { bootstrapInitialAdmin } from './bootstrap';
+import { runProductionPreflight } from './preflight';
 import {
   createRecoverySet,
   pruneRecoverySets,
   restoreRecoverySet,
   verifyRecoverySet,
 } from './recovery';
-import { runProductionPreflight } from './preflight';
 
 process.umask(0o077);
 

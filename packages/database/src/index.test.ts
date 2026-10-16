@@ -1,6 +1,8 @@
-import { EventEmitter } from 'node:events';
 import { expect, test } from 'bun:test';
+import { EventEmitter } from 'node:events';
+
 import type { Pool, PoolClient } from 'pg';
+
 import { instrumentPoolQueries } from './index';
 
 test('logs slow PostgreSQL statements without query parameters', async () => {

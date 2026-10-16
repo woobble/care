@@ -1,5 +1,6 @@
 import { eq, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
+
 import type { PermissionGrant } from '@care/permissions';
 import { facilities, organizationsTable, teams } from '@module/organizations/schema';
 

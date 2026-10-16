@@ -2,10 +2,11 @@
 import '@care/config/load-env';
 import { and, eq } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
-import { loadMigrationConfig } from '@care/config';
-import { createDatabase } from '@care/database';
+
 import { auditSchema } from '@care/audit';
 import { clientsSchema } from '@care/clients';
+import { loadMigrationConfig } from '@care/config';
+import { createDatabase } from '@care/database';
 import { employeesSchema, qualificationDefinitions } from '@care/employees';
 import { identitySchema, seedSystemRoles } from '@care/identity';
 import {

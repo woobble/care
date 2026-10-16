@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { transitionStructureStatus } from './organization';
 
 describe('organization structure lifecycle', () => {

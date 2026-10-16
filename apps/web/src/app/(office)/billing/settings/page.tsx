@@ -1,13 +1,11 @@
-import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
-import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
-import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
+import Link from 'next/link';
+
+import { saveBillingProfileAction } from '@app/web/app/(office)/billing/actions';
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
@@ -15,8 +13,11 @@ import {
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
-import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
-import { saveBillingProfileAction } from '@app/web/app/(office)/billing/actions';
+import { Button } from '@care/ui/components/button';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
 
 type SearchParams = Promise<{ error?: string; updated?: string }>;
 

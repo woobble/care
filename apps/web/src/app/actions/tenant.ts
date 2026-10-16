@@ -2,8 +2,9 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { loadWebConfig } from '@care/config';
+
 import { getApiClient } from '@app/web/lib/api';
+import { loadWebConfig } from '@care/config';
 
 export async function selectTenantAction(formData: FormData): Promise<void> {
   const tenantId = formData.get('tenantId');

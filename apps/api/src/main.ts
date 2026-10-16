@@ -5,9 +5,11 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+
 import { loadApiConfig } from '@care/config';
 import { createLogger } from '@care/logging';
 import { startMetricsServer, startTelemetry, stopMetricsServer } from '@care/observability';
+
 import { AppModule } from './app.module';
 import { configureApiHttp, createApiFastifyAdapter } from './http/fastify';
 import { apiMetrics } from './operational-metrics';

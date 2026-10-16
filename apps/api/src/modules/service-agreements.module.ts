@@ -1,16 +1,11 @@
 import { Module } from '@nestjs/common';
-import {
-  createServiceAgreementApplicationService,
-  type ServiceAgreementGuards,
-  type ServiceAgreementApplicationService,
-} from '@care/service-agreements';
-import type { ClientApplicationService } from '@care/clients';
-import type { OrganizationApplicationService } from '@care/organizations';
-import type { ServiceApplicationService } from '@care/services';
-import type { AuditWriter } from '@care/audit';
-import type { UnitOfWork } from '@care/database';
-import type { OutboxWriter } from '@care/platform';
+
 import { DatabaseModule } from '@app/api/database/database.module';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import {
+  ClientServiceAgreementsController,
+  ServiceAgreementsController,
+} from '@app/api/presentation/http/service-agreements.controller';
 import {
   AUDIT_WRITER,
   CLIENT_APPLICATION,
@@ -21,18 +16,25 @@ import {
   SERVICE_APPLICATION,
   UNIT_OF_WORK,
 } from '@app/api/tokens';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import type { AuditWriter } from '@care/audit';
+import type { ClientApplicationService } from '@care/clients';
+import type { UnitOfWork } from '@care/database';
+import type { OrganizationApplicationService } from '@care/organizations';
+import type { OutboxWriter } from '@care/platform';
+import {
+  createServiceAgreementApplicationService,
+  type ServiceAgreementGuards,
+  type ServiceAgreementApplicationService,
+} from '@care/service-agreements';
+import type { ServiceApplicationService } from '@care/services';
+
 import { AuditModule } from './audit.module';
 import { ClientsModule } from './clients.module';
 import { IdentityModule } from './identity.module';
 import { OrganizationsModule } from './organizations.module';
 import { PlatformModule } from './platform.module';
-import { ServicesModule } from './services.module';
 import { ServiceAgreementProtectionModule } from './service-agreement-protection.module';
-import {
-  ClientServiceAgreementsController,
-  ServiceAgreementsController,
-} from '@app/api/presentation/http/service-agreements.controller';
+import { ServicesModule } from './services.module';
 
 @Module({
   imports: [

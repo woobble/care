@@ -1,14 +1,22 @@
-import { Textarea } from '@care/ui/components/textarea';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { PageHeader } from '@app/web/components/page-patterns';
+
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { amendDocumentationAction } from '@app/web/app/(office)/documentation/actions';
+import {
+  assignVisitAction,
+  cancelSubstitutionAction,
+  changeVisitStatusAction,
+  confirmSubstitutionAction,
+  correctVisitExecutionTimesAction,
+  proposeSubstitutionAction,
+  unassignVisitAction,
+  updateVisitAction,
+} from '@app/web/app/(office)/planning/actions';
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { auditActionKey } from '@app/web/i18n/audit';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
@@ -33,19 +41,12 @@ import {
   hasPermission,
 } from '@app/web/lib/api';
 import { safePlanningReturnTo } from '@app/web/lib/planning-return-to';
-import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 import type { components } from '@care/api-client';
-import { amendDocumentationAction } from '@app/web/app/(office)/documentation/actions';
-import {
-  assignVisitAction,
-  cancelSubstitutionAction,
-  changeVisitStatusAction,
-  confirmSubstitutionAction,
-  correctVisitExecutionTimesAction,
-  proposeSubstitutionAction,
-  unassignVisitAction,
-  updateVisitAction,
-} from '@app/web/app/(office)/planning/actions';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { Textarea } from '@care/ui/components/textarea';
 
 type SearchParams = Promise<{
   error?: string;
@@ -150,12 +151,12 @@ export default async function VisitDetailContent({ params, searchParams }: Visit
     t(quantityUnitKey(unit), { count: Number(value) });
 
   return (
-    <div className="mx-auto grid w-full min-w-0 max-w-4xl grid-cols-[minmax(0,1fr)] gap-6">
+    <div className="mx-auto grid w-full max-w-4xl min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
       <PageHeader
         eyebrow={<Link href={returnTo}>{t('Visits.planning')}</Link>}
         title={visit.clientDisplayName}
         meta={
-          <p className="break-words text-sm text-muted-foreground">
+          <p className="text-sm break-words text-muted-foreground">
             {visit.facilityName} · {visit.organizationName}
           </p>
         }
@@ -257,7 +258,7 @@ export default async function VisitDetailContent({ params, searchParams }: Visit
           <h3 className="font-semibold">{t('Visits.plannedServices')}</h3>
           <ul className="mt-2 grid min-w-0 gap-2">
             {visit.services.map((service) => (
-              <li key={service.id} className="min-w-0 break-words rounded-md bg-background p-3">
+              <li key={service.id} className="min-w-0 rounded-md bg-background p-3 break-words">
                 {service.serviceCode} · {service.serviceName} ·{' '}
                 {quantity(service.plannedQuantity, service.unit)}
                 {service.plannedDurationMinutes
@@ -528,7 +529,7 @@ export default async function VisitDetailContent({ params, searchParams }: Visit
                           </span>
                         ) : null}
                         {service.evidence?.note ? (
-                          <p className="whitespace-pre-wrap text-sm">{service.evidence.note}</p>
+                          <p className="text-sm whitespace-pre-wrap">{service.evidence.note}</p>
                         ) : null}
                       </li>
                     ))}

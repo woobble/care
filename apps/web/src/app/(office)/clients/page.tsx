@@ -1,9 +1,25 @@
-import { NativeSelect } from '@care/ui/components/native-select';
-import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { FilterDisclosure } from '@app/web/components/filter-disclosure';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
+import { formatDate } from '@app/web/i18n/format';
+import { statusLabelKey } from '@app/web/i18n/status';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasPermission,
+} from '@app/web/lib/api';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
 import { Button } from '@care/ui/components/button';
 import { Card } from '@care/ui/components/card';
 import { Input } from '@care/ui/components/input';
+import { NativeSelect } from '@care/ui/components/native-select';
 import { StatusBadge } from '@care/ui/components/status-badge';
 import {
   Table,
@@ -14,21 +30,6 @@ import {
   TableHeader,
   TableRow,
 } from '@care/ui/components/table';
-import { formatDate } from '@app/web/i18n/format';
-import { statusLabelKey } from '@app/web/i18n/status';
-import { ResourceReference } from '@app/web/components/resource-reference';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasPermission,
-} from '@app/web/lib/api';
-import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
-import { FilterDisclosure } from '@app/web/components/filter-disclosure';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import type { components } from '@care/api-client';
 
 type SearchParams = Promise<{
   q?: string;
@@ -240,7 +241,7 @@ export default async function ClientsPage({
               >
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <Link
-                    className="inline-flex min-h-11 min-w-0 items-center break-words font-semibold text-primary underline-offset-4 hover:underline"
+                    className="inline-flex min-h-11 min-w-0 items-center font-semibold break-words text-primary underline-offset-4 hover:underline"
                     href={`/clients/${client.id}`}
                   >
                     {client.preferredName || client.firstName} {client.lastName}
@@ -340,7 +341,7 @@ export default async function ClientsPage({
           />
         </section>
       ) : !clientsResult.error ? (
-        <div className="grid gap-3 justify-items-center">
+        <div className="grid justify-items-center gap-3">
           <EmptyState title={t('Clients.notFound')} />
           <Button asChild variant="secondary">
             <Link href="/clients">{t('Common.actions.reset')}</Link>

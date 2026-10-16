@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { OsrmRouteProvider } from './route-provider';
 
 describe('OSRM route provider', () => {

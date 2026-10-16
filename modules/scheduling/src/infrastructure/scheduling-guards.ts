@@ -1,4 +1,5 @@
 import { and, eq, gt, inArray, sql } from 'drizzle-orm';
+
 import type { DatabaseTransaction } from '@care/database';
 import { visitAssignments, visitServices, visits } from '@module/scheduling/schema';
 

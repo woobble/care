@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+
 import type { DatabaseTransaction } from '@care/database';
 import { employeeFacilityAssignments, employeeRecords } from '@care/employees';
 

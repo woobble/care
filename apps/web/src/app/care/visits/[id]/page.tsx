@@ -1,22 +1,9 @@
-import { Textarea } from '@care/ui/components/textarea';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { Suspense } from 'react';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 import { v7 as uuidv7 } from 'uuid';
-import type { components } from '@care/api-client';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { CaregiverRetryButton } from '@app/web/components/caregiver-retry-button';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { errorMessageKey } from '@app/web/i18n/errors';
-import { formatNumber } from '@app/web/i18n/format';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
-import { formatVisitDateTime, formatVisitTime } from '@app/web/lib/care-date';
-import type { Locale } from '@app/web/i18n/config';
-import { CareForm } from '@app/web/app/care/care-form';
+
 import {
   addDocumentationEntryAction,
   completeVisitAction,
@@ -27,6 +14,20 @@ import {
   startVisitAction,
   updateDocumentationEntryAction,
 } from '@app/web/app/care/actions';
+import { CareForm } from '@app/web/app/care/care-form';
+import { CaregiverRetryButton } from '@app/web/components/caregiver-retry-button';
+import { PageHeader } from '@app/web/components/page-patterns';
+import type { Locale } from '@app/web/i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatNumber } from '@app/web/i18n/format';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { formatVisitDateTime, formatVisitTime } from '@app/web/lib/care-date';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { Textarea } from '@care/ui/components/textarea';
 
 type SearchParams = Promise<{ error?: string; notice?: string }>;
 
@@ -69,8 +70,8 @@ export default async function CareVisitPage({
   const startAllowed = execution.status === 'not_started' && visit.status !== 'cancelled';
 
   return (
-    <div className="mx-auto grid grid-cols-1 max-w-3xl gap-5 min-w-0">
-      <header className="grid gap-3 min-w-0">
+    <div className="mx-auto grid max-w-3xl min-w-0 grid-cols-1 gap-5">
+      <header className="grid min-w-0 gap-3">
         <PageHeader
           eyebrow={t('VisitExecution.section')}
           title={visit.clientDisplayName}
@@ -97,7 +98,7 @@ export default async function CareVisitPage({
         {visit.note ? (
           <section className="grid gap-1 rounded-md border bg-card p-3">
             <h2 className="font-semibold">{t('VisitExecution.visitNote')}</h2>
-            <p className="whitespace-pre-wrap text-muted-foreground wrap-anywhere">{visit.note}</p>
+            <p className="wrap-anywhere whitespace-pre-wrap text-muted-foreground">{visit.note}</p>
           </section>
         ) : null}
         {visit.schedulingPreferences &&
@@ -801,7 +802,7 @@ async function DocumentationSection({
                       </span>
                     </div>
                     {service.evidence?.note ? (
-                      <p className="whitespace-pre-wrap text-sm">{service.evidence.note}</p>
+                      <p className="text-sm whitespace-pre-wrap">{service.evidence.note}</p>
                     ) : null}
                     {service.evidence?.documentedByEmployeeName ? (
                       <p className="text-xs text-muted-foreground">

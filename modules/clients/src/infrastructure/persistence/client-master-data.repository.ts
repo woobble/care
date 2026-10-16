@@ -1,13 +1,7 @@
 import { and, asc, desc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
-import type { DatabaseTransaction } from '@care/database';
+
 import { auditEntries } from '@care/audit';
-import {
-  clientAddresses,
-  clientContactRoles,
-  clientContacts,
-  clientInsurances,
-  pflegegradRecords,
-} from '@module/clients/schema';
+import type { DatabaseTransaction } from '@care/database';
 import type {
   ClientAddressSnapshot,
   ClientContactRole,
@@ -15,6 +9,13 @@ import type {
   ClientInsuranceSnapshot,
   PflegegradSnapshot,
 } from '@module/clients/domain/client-master-data';
+import {
+  clientAddresses,
+  clientContactRoles,
+  clientContacts,
+  clientInsurances,
+  pflegegradRecords,
+} from '@module/clients/schema';
 
 export interface ClientTimelineRecord {
   id: string;

@@ -24,16 +24,18 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
+import { SERVICE_EVIDENCE_APPLICATION } from '@app/api/tokens';
+import type { AuthorizationPrincipal } from '@care/permissions';
 import {
   ServiceEvidenceApplicationService,
   type AcknowledgeEvidenceInput,
   type DeclineEvidenceInput,
   type ServiceEvidenceWorklistQuery,
 } from '@care/service-evidence';
-import type { AuthorizationPrincipal } from '@care/permissions';
-import { SERVICE_EVIDENCE_APPLICATION } from '@app/api/tokens';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import { requestContext, type ApiRequest } from '@app/api/http/request';
+
 import { ProblemDetailsDto } from './dto';
 import {
   acknowledgeEvidenceSchema,

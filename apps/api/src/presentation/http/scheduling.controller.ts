@@ -29,6 +29,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { z } from 'zod';
+
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
+import { SCHEDULING_APPLICATION } from '@app/api/tokens';
 import {
   SchedulingApplicationService,
   type EmployeeAvailabilityInput,
@@ -38,9 +42,7 @@ import {
   type CreateTourInput,
   type UpdateTourStopsInput,
 } from '@care/scheduling';
-import { SCHEDULING_APPLICATION } from '@app/api/tokens';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import { requestContext, type ApiRequest } from '@app/api/http/request';
+
 import { ProblemDetailsDto } from './dto';
 import {
   createVisitSchema,

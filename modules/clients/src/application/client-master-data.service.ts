@@ -1,4 +1,5 @@
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
@@ -20,9 +21,6 @@ import {
   type PflegegradData,
   type PflegegradSnapshot,
 } from '@module/clients/domain/client-master-data';
-import { authorizeClientResource } from './client-access';
-import { appendClientChange } from './client-change';
-import { ClientNotFoundError, PflegegradRecordImmutableError } from './errors';
 import {
   ClientAddressNotFoundError,
   ClientContactNotFoundError,
@@ -32,6 +30,10 @@ import {
 } from '@module/clients/domain/client-master-data';
 import { ClientMasterDataRepository } from '@module/clients/infrastructure/persistence/client-master-data.repository';
 import { ClientRepository } from '@module/clients/infrastructure/persistence/client.repository';
+
+import { authorizeClientResource } from './client-access';
+import { appendClientChange } from './client-change';
+import { ClientNotFoundError, PflegegradRecordImmutableError } from './errors';
 
 type AuditContext = { ip?: string; userAgent?: string };
 

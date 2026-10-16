@@ -1,13 +1,14 @@
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { Suspense, type ReactNode } from 'react';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Badge } from '@care/ui/components/badge';
-import { Button } from '@care/ui/components/button';
-import { PageHeader } from '@app/web/components/page-patterns';
+
 import { CaregiverRetryButton } from '@app/web/components/caregiver-retry-button';
+import { PageHeader } from '@app/web/components/page-patterns';
 import { formatLongDate } from '@app/web/i18n/format';
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 import { formatVisitDateTime, formatVisitTime, todayRange } from '@app/web/lib/care-date';
+import { Badge } from '@care/ui/components/badge';
+import { Button } from '@care/ui/components/button';
 
 const RECENT_CHANGE_MS = 24 * 60 * 60 * 1000;
 
@@ -135,10 +136,10 @@ export default async function CareTodayPage() {
                   }
                 >
                   <div className="grid gap-1">
-                    <span className="text-xl font-semibold tabular-nums text-foreground">
+                    <span className="text-xl font-semibold text-foreground tabular-nums">
                       {formatVisitTime(visit.plannedStart, visit.timezone, locale)}
                     </span>
-                    <span className="text-sm tabular-nums text-muted-foreground">
+                    <span className="text-sm text-muted-foreground tabular-nums">
                       {formatVisitTime(visit.plannedEnd, visit.timezone, locale)}
                     </span>
                   </div>
@@ -162,7 +163,7 @@ export default async function CareTodayPage() {
                       {visit.services.map((service) => service.name).join(' · ') ||
                         t('Caregiver.noPlannedServices')}
                     </p>
-                    <p className="break-words text-sm text-muted-foreground">
+                    <p className="text-sm break-words text-muted-foreground">
                       {visit.address ?? t('Caregiver.addressUnavailable')}
                     </p>
                     {!visitLoadFailed ? (

@@ -20,6 +20,7 @@ export {
   OperationsTaskStateError,
   type OperationsQuery,
   type OperationsTaskListQuery,
+  type OperationsWorkQueueQuery,
   type OperationsTaskInput,
   type OperationsTaskPatch,
   type OperationsWorkItem,

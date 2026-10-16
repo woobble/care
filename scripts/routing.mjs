@@ -1,5 +1,5 @@
-import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import {
   mkdir,
   mkdtemp,
@@ -143,7 +143,7 @@ async function acquireLock() {
       }
       try {
         process.kill(ownerPid, 0);
-        throw new Error(`Another routing command is running (PID ${ownerPid}).`);
+        throw new Error(`Another routing command is running (PID ${ownerPid}).`, { cause: error });
       } catch (probeError) {
         if (probeError.code !== 'ESRCH') throw probeError;
       }
@@ -236,7 +236,9 @@ async function installDataset(settings) {
       await rollback(previous, generationDirectory, settings.port);
       currentChanged = false;
       generationDirectory = undefined;
-      throw new Error(`The new dataset was not ready and has been rolled back: ${error.message}`);
+      throw new Error(`The new dataset was not ready and has been rolled back: ${error.message}`, {
+        cause: error,
+      });
     }
 
     try {
@@ -316,7 +318,7 @@ async function readCurrentTarget() {
     target = await readlink(CURRENT_LINK);
   } catch (error) {
     if (error.code === 'ENOENT') return null;
-    throw new Error(`Cannot read active dataset link: ${error.message}`);
+    throw new Error(`Cannot read active dataset link: ${error.message}`, { cause: error });
   }
   if (!/^generations\/generation-[a-f0-9-]{36}$/.test(target)) {
     throw new Error('The active dataset link points outside managed generations.');

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+
 import {
   and,
   asc,
@@ -16,26 +17,27 @@ import {
 } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
-import type { RequestContext } from '@care/contracts';
-import type { DatabaseTransaction, UnitOfWork } from '@care/database';
-import type { DocumentsApplicationService, DocumentPayload } from '@care/documents';
-import type { ObjectStorage } from '@care/storage';
-import { createDomainEvent } from '@care/events';
-import type { EventName, EventPayloadMap } from '@care/events';
-import { clientInsurances, clientRecords } from '@care/clients';
-import { organizationsTable } from '@care/organizations';
-import { assertCan, can } from '@care/permissions';
-import type { AuthorizationPrincipal, Permission, ResourceContext } from '@care/permissions';
-import type { OutboxWriter } from '@care/platform';
-import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
-import { acknowledgements, evidencePackages } from '@care/service-evidence';
 import {
   benefitFundingSources,
   providerRecognitions,
   serviceAllocations,
   serviceAllocationReversals,
 } from '@care/benefits';
+import { clientInsurances, clientRecords } from '@care/clients';
+import type { RequestContext } from '@care/contracts';
+import type { DatabaseTransaction, UnitOfWork } from '@care/database';
+import type { DocumentsApplicationService, DocumentPayload } from '@care/documents';
+import { createDomainEvent } from '@care/events';
+import type { EventName, EventPayloadMap } from '@care/events';
+import { organizationsTable } from '@care/organizations';
+import { assertCan, can } from '@care/permissions';
+import type { AuthorizationPrincipal, Permission, ResourceContext } from '@care/permissions';
+import type { OutboxWriter } from '@care/platform';
+import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
+import { acknowledgements, evidencePackages } from '@care/service-evidence';
+import type { ObjectStorage } from '@care/storage';
 import {
   invoiceCorrections,
   invoiceDocuments,
@@ -46,15 +48,7 @@ import {
   payments,
   paymentReversals,
 } from '@module/billing/schema';
-import {
-  claimDecisionLines,
-  claimDecisions,
-  claimLines,
-  claimPackageDocuments,
-  claimSubmissions,
-  claims,
-} from './schema';
-import { payerBillingProfiles, payers } from './payer-schema';
+
 import {
   assertClaimDecision,
   ClaimAmountReservedError,
@@ -80,6 +74,15 @@ import type {
   PayerBillingProfileInput,
   PayerInput,
 } from './domain';
+import { payerBillingProfiles, payers } from './payer-schema';
+import {
+  claimDecisionLines,
+  claimDecisions,
+  claimLines,
+  claimPackageDocuments,
+  claimSubmissions,
+  claims,
+} from './schema';
 
 type AuditContext = { ip?: string; userAgent?: string };
 type ClaimScope = {

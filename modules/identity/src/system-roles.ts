@@ -1,7 +1,9 @@
 import { inArray, sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
+
 import type { DatabaseTransaction } from '@care/database';
 import { PERMISSIONS, type Permission } from '@care/permissions';
+
 import { identitySchema } from './schema';
 
 const definitions = {

@@ -1,20 +1,6 @@
-import { NativeSelect } from '@care/ui/components/native-select';
-import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
-import { errorMessageKey } from '@app/web/i18n/errors';
-import { formatDateTime } from '@app/web/i18n/format';
-import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasPermission,
-} from '@app/web/lib/api';
+import Link from 'next/link';
+
 import {
   acknowledgeExceptionAction,
   createDeadlineTaskAction,
@@ -25,7 +11,23 @@ import {
   issueTitleKey,
   workItemSourceHref,
 } from '@app/web/app/(office)/operations/ui';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { FilterDisclosure } from '@app/web/components/filter-disclosure';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDateTime } from '@app/web/i18n/format';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasPermission,
+} from '@app/web/lib/api';
+import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { NativeSelect } from '@care/ui/components/native-select';
 
 type SearchParams = Promise<Record<string, string | undefined>>;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -202,177 +204,181 @@ export default async function OperationsDeadlinesPage({
         </p>
       ) : null}
 
-      <form
-        method="get"
-        className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4"
-      >
-        <input type="hidden" name="pageSize" value={pageSize} />
-        {hasPermission(permissions, 'organization.read') ? (
-          <AsyncEntityCombobox
-            name="organizationId"
-            label={t('organization')}
-            entity="organizations"
-            placeholder={t('all')}
-            {...(selectedOrganization
-              ? { initialOption: { id: selectedOrganization.id, label: selectedOrganization.name } }
-              : {})}
-          />
-        ) : null}
-        {hasPermission(permissions, 'facility.read') ? (
-          <AsyncEntityCombobox
-            name="facilityId"
-            label={t('facility')}
-            entity="facilities"
-            {...(organizationId ? { organizationId } : {})}
-            placeholder={t('all')}
-            {...(selectedFacility
-              ? {
-                  initialOption: {
-                    id: selectedFacility.id,
-                    label: `${selectedFacility.organizationName} · ${selectedFacility.name}`,
-                  },
-                }
-              : {})}
-          />
-        ) : null}
-        <label className="grid gap-1 text-sm">
-          <span>{t('category')}</span>
-          <NativeSelect
-            selectClassName="h-10 rounded-md border px-3"
-            name="category"
-            defaultValue={category ?? ''}
-            className="w-full"
-          >
-            <option value="">{t('all')}</option>
-            {categories.map((value) => (
-              <option key={value} value={value}>
-                {t(categoryTranslationKey(value))}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span>{t('sourceDomain')}</span>
-          <NativeSelect
-            selectClassName="h-10 rounded-md border px-3"
-            name="sourceDomain"
-            defaultValue={sourceDomain ?? ''}
-            className="w-full"
-          >
-            <option value="">{t('all')}</option>
-            {sources.map((value) => (
-              <option key={value} value={value}>
-                {t(`deadlineSources.${value}`)}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span>{t('status')}</span>
-          <NativeSelect
-            selectClassName="h-10 rounded-md border px-3"
-            name="status"
-            defaultValue={status ?? ''}
-            className="w-full"
-          >
-            <option value="">{t('all')}</option>
-            {states.map((value) => (
-              <option key={value} value={value}>
-                {t(value === 'open' ? 'taskOpen' : value)}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span>{t('dueDate')}</span>
-          <NativeSelect
-            selectClassName="h-10 rounded-md border px-3"
-            name="due"
-            defaultValue={due ?? ''}
-            className="w-full"
-          >
-            <option value="">{t('all')}</option>
-            {dueFilters.map((value) => (
-              <option key={value} value={value}>
-                {t(value === 'today' ? 'dueToday' : value)}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
-        {hasPermission(permissions, 'client.read') ? (
-          <AsyncEntityCombobox
-            name="clientId"
-            label={t('client')}
-            entity="clients"
-            placeholder={t('all')}
-            {...(selectedClient
-              ? {
-                  initialOption: {
-                    id: selectedClient.id,
-                    label: `${selectedClient.preferredName || selectedClient.firstName} ${selectedClient.lastName}`,
-                  },
-                }
-              : {})}
-          />
-        ) : null}
-        {hasPermission(permissions, 'employee.read') ? (
-          <AsyncEntityCombobox
-            name="employeeId"
-            label={t('employee')}
-            entity="employees"
-            placeholder={t('all')}
-            {...(selectedEmployee
-              ? {
-                  initialOption: {
-                    id: selectedEmployee.id,
-                    label: `${selectedEmployee.preferredName || selectedEmployee.firstName} ${selectedEmployee.lastName}`,
-                  },
-                }
-              : {})}
-          />
-        ) : null}
-        {canFilterByAssignee ? (
-          <AsyncEntityCombobox
-            name="assignedEmployeeId"
-            label={t('assignedEmployeeFilter')}
-            entity="employees"
-            placeholder={t('all')}
-            {...(organizationId ? { organizationId } : {})}
-            {...(selectedAssignedEmployee
-              ? {
-                  initialOption: {
-                    id: selectedAssignedEmployee.id,
-                    label: `${selectedAssignedEmployee.preferredName || selectedAssignedEmployee.firstName} ${selectedAssignedEmployee.lastName}`,
-                  },
-                }
-              : {})}
-          />
-        ) : null}
-        <label className="grid gap-1 text-sm">
-          <span>{t('fromDate')}</span>
-          <input
-            className="h-10 rounded-md border px-3"
-            type="date"
-            name="fromDate"
-            defaultValue={fromDate ?? ''}
-          />
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span>{t('untilDate')}</span>
-          <input
-            className="h-10 rounded-md border px-3"
-            type="date"
-            name="untilDate"
-            defaultValue={untilDate ?? ''}
-          />
-        </label>
-        <div className="flex items-end gap-2">
-          <Button type="submit">{t('filter')}</Button>
-          <Button asChild variant="secondary">
-            <Link href="/operations/deadlines">{t('clearFilters')}</Link>
-          </Button>
-        </div>
-      </form>
+      <FilterDisclosure title={t('filters')}>
+        <form method="get" className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <input type="hidden" name="pageSize" value={pageSize} />
+          {hasPermission(permissions, 'organization.read') ? (
+            <AsyncEntityCombobox
+              name="organizationId"
+              label={t('organization')}
+              entity="organizations"
+              placeholder={t('all')}
+              {...(selectedOrganization
+                ? {
+                    initialOption: {
+                      id: selectedOrganization.id,
+                      label: selectedOrganization.name,
+                    },
+                  }
+                : {})}
+            />
+          ) : null}
+          {hasPermission(permissions, 'facility.read') ? (
+            <AsyncEntityCombobox
+              name="facilityId"
+              label={t('facility')}
+              entity="facilities"
+              {...(organizationId ? { organizationId } : {})}
+              placeholder={t('all')}
+              {...(selectedFacility
+                ? {
+                    initialOption: {
+                      id: selectedFacility.id,
+                      label: `${selectedFacility.organizationName} · ${selectedFacility.name}`,
+                    },
+                  }
+                : {})}
+            />
+          ) : null}
+          <label className="grid gap-1 text-sm">
+            <span>{t('category')}</span>
+            <NativeSelect
+              selectClassName="h-10 rounded-md border px-3"
+              name="category"
+              defaultValue={category ?? ''}
+              className="w-full"
+            >
+              <option value="">{t('all')}</option>
+              {categories.map((value) => (
+                <option key={value} value={value}>
+                  {t(categoryTranslationKey(value))}
+                </option>
+              ))}
+            </NativeSelect>
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span>{t('sourceDomain')}</span>
+            <NativeSelect
+              selectClassName="h-10 rounded-md border px-3"
+              name="sourceDomain"
+              defaultValue={sourceDomain ?? ''}
+              className="w-full"
+            >
+              <option value="">{t('all')}</option>
+              {sources.map((value) => (
+                <option key={value} value={value}>
+                  {t(`deadlineSources.${value}`)}
+                </option>
+              ))}
+            </NativeSelect>
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span>{t('status')}</span>
+            <NativeSelect
+              selectClassName="h-10 rounded-md border px-3"
+              name="status"
+              defaultValue={status ?? ''}
+              className="w-full"
+            >
+              <option value="">{t('all')}</option>
+              {states.map((value) => (
+                <option key={value} value={value}>
+                  {t(value === 'open' ? 'taskOpen' : value)}
+                </option>
+              ))}
+            </NativeSelect>
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span>{t('dueDate')}</span>
+            <NativeSelect
+              selectClassName="h-10 rounded-md border px-3"
+              name="due"
+              defaultValue={due ?? ''}
+              className="w-full"
+            >
+              <option value="">{t('all')}</option>
+              {dueFilters.map((value) => (
+                <option key={value} value={value}>
+                  {t(value === 'today' ? 'dueToday' : value)}
+                </option>
+              ))}
+            </NativeSelect>
+          </label>
+          {hasPermission(permissions, 'client.read') ? (
+            <AsyncEntityCombobox
+              name="clientId"
+              label={t('client')}
+              entity="clients"
+              placeholder={t('all')}
+              {...(selectedClient
+                ? {
+                    initialOption: {
+                      id: selectedClient.id,
+                      label: `${selectedClient.preferredName || selectedClient.firstName} ${selectedClient.lastName}`,
+                    },
+                  }
+                : {})}
+            />
+          ) : null}
+          {hasPermission(permissions, 'employee.read') ? (
+            <AsyncEntityCombobox
+              name="employeeId"
+              label={t('employee')}
+              entity="employees"
+              placeholder={t('all')}
+              {...(selectedEmployee
+                ? {
+                    initialOption: {
+                      id: selectedEmployee.id,
+                      label: `${selectedEmployee.preferredName || selectedEmployee.firstName} ${selectedEmployee.lastName}`,
+                    },
+                  }
+                : {})}
+            />
+          ) : null}
+          {canFilterByAssignee ? (
+            <AsyncEntityCombobox
+              name="assignedEmployeeId"
+              label={t('assignedEmployeeFilter')}
+              entity="employees"
+              placeholder={t('all')}
+              {...(organizationId ? { organizationId } : {})}
+              {...(selectedAssignedEmployee
+                ? {
+                    initialOption: {
+                      id: selectedAssignedEmployee.id,
+                      label: `${selectedAssignedEmployee.preferredName || selectedAssignedEmployee.firstName} ${selectedAssignedEmployee.lastName}`,
+                    },
+                  }
+                : {})}
+            />
+          ) : null}
+          <label className="grid gap-1 text-sm">
+            <span>{t('fromDate')}</span>
+            <input
+              className="h-10 rounded-md border px-3"
+              type="date"
+              name="fromDate"
+              defaultValue={fromDate ?? ''}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span>{t('untilDate')}</span>
+            <input
+              className="h-10 rounded-md border px-3"
+              type="date"
+              name="untilDate"
+              defaultValue={untilDate ?? ''}
+            />
+          </label>
+          <div className="flex items-end gap-2">
+            <Button type="submit">{t('filter')}</Button>
+            <Button asChild variant="secondary">
+              <Link href="/operations/deadlines">{t('clearFilters')}</Link>
+            </Button>
+          </div>
+        </form>
+      </FilterDisclosure>
 
       {items.length ? (
         <ul className="grid gap-3">
@@ -394,7 +400,7 @@ export default async function OperationsDeadlinesPage({
                     <span className="text-sm text-muted-foreground">
                       {subjectName}
                       {item.dueAt
-                        ? ` · ${formatDateTime(item.dueAt, locale as 'en' | 'de', timezone)}`
+                        ? ` · ${formatDateTime(item.dueAt, locale as 'en' | 'de', timezone)} · ${deadlineDayState(item.dueAt, timezone, t)}`
                         : ''}
                     </span>
                     <span className="text-xs text-muted-foreground">
@@ -473,4 +479,29 @@ function choice<const T extends readonly string[]>(
   values: T,
 ): T[number] | undefined {
   return values.includes(value as T[number]) ? (value as T[number]) : undefined;
+}
+
+function deadlineDayState(
+  dueAt: string,
+  timezone: string,
+  t: Awaited<ReturnType<typeof getTranslations<'Operations'>>>,
+): string {
+  const days = localDayNumber(dueAt, timezone) - localDayNumber(new Date().toISOString(), timezone);
+  if (days === 0) return t('deadlineDayStates.today');
+  if (days > 0) return t('deadlineDayStates.remaining', { count: days });
+  return t('deadlineDayStates.overdue', { count: Math.abs(days) });
+}
+
+function localDayNumber(value: string, timezone: string): number {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(value));
+  const part = (type: 'year' | 'month' | 'day') => parts.find((item) => item.type === type)?.value;
+  const year = Number(part('year'));
+  const month = Number(part('month'));
+  const day = Number(part('day'));
+  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
 }

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { evidenceIssueCode, evidencePackageIssueCode, stableIssueId } from './operations';
 
 describe('operations issue projections', () => {

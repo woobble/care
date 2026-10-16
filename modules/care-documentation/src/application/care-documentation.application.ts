@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
@@ -24,6 +25,7 @@ import {
   type IncidentSeverity,
   type MissingDocumentationRequirement,
 } from '@module/care-documentation/domain/care-documentation';
+import { CareDocumentationRepository } from '@module/care-documentation/infrastructure/care-documentation.repository';
 import {
   careDocuments,
   documentationAmendments,
@@ -31,7 +33,6 @@ import {
   documentationHistory,
   serviceEvidence,
 } from '@module/care-documentation/schema';
-import { CareDocumentationRepository } from '@module/care-documentation/infrastructure/care-documentation.repository';
 
 type AuditContext = { ip?: string; userAgent?: string };
 
@@ -66,7 +67,9 @@ export interface DocumentationWorklistQuery {
   from: Date;
   until: Date;
   clientQuery?: string;
+  organizationId?: string;
   facilityId?: string;
+  clientId?: string;
   employeeId?: string;
   status?: 'draft' | 'finalized' | 'missing';
   incomplete?: boolean;

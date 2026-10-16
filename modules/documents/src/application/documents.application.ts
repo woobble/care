@@ -1,14 +1,16 @@
 import { createHash } from 'node:crypto';
+
 import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { SQL, SQLWrapper } from 'drizzle-orm';
+import { PDFDocument } from 'pdf-lib';
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
+import { clientRecords, displayClientName } from '@care/clients';
 import type { RequestContext } from '@care/contracts';
 import type { UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
-import { PDFDocument } from 'pdf-lib';
 import { assertCan, can } from '@care/permissions';
-import { clientRecords, displayClientName } from '@care/clients';
 import type { AuthorizationPrincipal, Permission, ResourceContext } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
 import type { ObjectStorage } from '@care/storage';
@@ -33,9 +35,9 @@ import type {
   DocumentTemplateInput,
   DocumentType,
 } from '@module/documents/domain/documents';
-import { documentArtifacts, documentTemplates, logoAssets } from '@module/documents/schema';
 import { renderDocumentPdf } from '@module/documents/infrastructure/pdf-renderer';
 import type { PdfBranding } from '@module/documents/infrastructure/pdf-renderer';
+import { documentArtifacts, documentTemplates, logoAssets } from '@module/documents/schema';
 
 export interface DocumentAuditContext {
   ip?: string;

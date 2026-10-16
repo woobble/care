@@ -1,8 +1,9 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { loadWebConfig } from '@care/config';
+
 import { localeCookieName, resolveLocale } from '@app/web/i18n/config';
+import { loadWebConfig } from '@care/config';
 
 export async function setLocaleAction(value: string): Promise<void> {
   const config = loadWebConfig();

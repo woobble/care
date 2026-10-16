@@ -1,10 +1,11 @@
+import { describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
+
 import { Client } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
-import { describe, expect, test } from 'bun:test';
-import { asUUID } from '@care/contracts';
+
+import { databaseSchema } from '@app/api/database/schema';
 import { DrizzleAuditWriter } from '@care/audit';
-import { createDatabase, createUnitOfWork } from '@care/database';
 import { createBenefitsApplicationService } from '@care/benefits';
 import {
   ClaimAmountReservedError,
@@ -15,14 +16,15 @@ import {
   InvoiceIssuerIncompleteError,
   InvoiceRecipientInvalidError,
 } from '@care/billing';
+import { asUUID } from '@care/contracts';
+import { createDatabase, createUnitOfWork } from '@care/database';
 import { createDocumentsApplicationService } from '@care/documents';
-import { DrizzleOutboxRepository } from '@care/platform';
 import { AuthorizationDeniedError, type AuthorizationPrincipal } from '@care/permissions';
-import type { ObjectStorage } from '@care/storage';
+import { DrizzleOutboxRepository } from '@care/platform';
 import { createServiceEvidenceApplicationService } from '@care/service-evidence';
 import { ServicePriceApplicationService } from '@care/services';
+import type { ObjectStorage } from '@care/storage';
 import { startCareTestDatabase } from '@care/testing';
-import { databaseSchema } from '@app/api/database/schema';
 
 describe('billing PostgreSQL integration', () => {
   test('protects billing scope and preserves reservations, funding, issuance, documents, and payment history', async () => {

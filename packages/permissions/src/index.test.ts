@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { can, canGrantPermissions, type AuthorizationPrincipal } from './index';
 
 describe('can', () => {

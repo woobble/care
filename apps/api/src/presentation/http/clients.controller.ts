@@ -27,15 +27,16 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { z } from 'zod';
+
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
+import { CLIENT_APPLICATION } from '@app/api/tokens';
 import {
   ClientApplicationService,
   type ClientSearchQuery,
   type CreateClientInput,
 } from '@care/clients';
-import { CLIENT_APPLICATION } from '@app/api/tokens';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import { requestContext, type ApiRequest } from '@app/api/http/request';
-import { ProblemDetailsDto } from './dto';
+
 import {
   ClientListResponseDto,
   ClientResponseDto,
@@ -47,6 +48,7 @@ import {
   updateClientSchema,
 } from './clients.dto';
 import { clientListItemResponse, clientResponse } from './clients.mapper';
+import { ProblemDetailsDto } from './dto';
 import { withoutUndefined } from './validation';
 
 const searchSchema = z

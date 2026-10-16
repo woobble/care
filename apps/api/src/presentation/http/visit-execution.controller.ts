@@ -24,13 +24,15 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
+import { VISIT_EXECUTION_APPLICATION } from '@app/api/tokens';
 import {
   VisitExecutionApplicationService,
   type RecordPerformedServiceInput,
 } from '@care/visit-execution';
-import { VISIT_EXECUTION_APPLICATION } from '@app/api/tokens';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import { requestContext, type ApiRequest } from '@app/api/http/request';
+
 import { ProblemDetailsDto } from './dto';
 import {
   CaregiverVisitResponseDto,

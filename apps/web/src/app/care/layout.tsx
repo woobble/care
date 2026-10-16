@@ -1,16 +1,18 @@
+import { HeartHandshake } from 'lucide-react';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { cookies } from 'next/headers';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
 import { Suspense } from 'react';
+
+import { signOutAction } from '@app/web/app/actions/auth';
 import { AccountMenu } from '@app/web/components/account-menu';
+import { PageLoadingSkeleton } from '@app/web/components/page-loading-skeleton';
 import { SignOutMenuItem } from '@app/web/components/sign-out-menu-item';
 import { ThemeSwitcher } from '@app/web/components/theme-switcher';
 import { getApiClient, getAuthSession, getPermissionGrants, hasPermission } from '@app/web/lib/api';
-import { signOutAction } from '@app/web/app/actions/auth';
+
 import { CareDraftScope } from './draft-scope';
-import { HeartHandshake } from 'lucide-react';
-import { PageLoadingSkeleton } from '@app/web/components/page-loading-skeleton';
 
 export default function CareLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (

@@ -1,7 +1,7 @@
 import { renderDocumentPdf } from '@care/documents';
 import type { DocumentPayload } from '@care/documents';
-import type { TaxTreatment } from '@module/billing/domain/billing';
 import type { PdfBranding } from '@care/documents';
+import type { TaxTreatment } from '@module/billing/domain/billing';
 
 export interface InvoicePdfLine {
   serviceCode: string;

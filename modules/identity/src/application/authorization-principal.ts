@@ -1,12 +1,13 @@
 import { and, eq, exists, sql } from 'drizzle-orm';
+
 import type { DatabaseTransaction } from '@care/database';
+import { tenants } from '@care/organizations';
 import {
   PERMISSIONS,
   type AuthorizationPrincipal,
   type Permission,
   type ScopeType,
 } from '@care/permissions';
-import { tenants } from '@care/organizations';
 import {
   membershipRoles,
   membershipScopes,
@@ -14,6 +15,7 @@ import {
   roles,
   tenantMemberships,
 } from '@module/identity/schema';
+
 import {
   InvalidAuthorizationConfigurationError,
   TenantAccessDeniedError,

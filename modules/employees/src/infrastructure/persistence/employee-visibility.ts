@@ -1,8 +1,9 @@
 import { and, eq, exists, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
+
 import type { DatabaseTransaction } from '@care/database';
-import type { PermissionGrant } from '@care/permissions';
 import { facilities, teams } from '@care/organizations';
+import type { PermissionGrant } from '@care/permissions';
 import {
   employeeFacilityAssignments,
   employeeRecords,

@@ -1,13 +1,10 @@
-import { Textarea } from '@care/ui/components/textarea';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
+
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   getApiClient,
@@ -15,8 +12,13 @@ import {
   getTenantHeader,
   hasClientPermission,
 } from '@app/web/lib/api';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { Textarea } from '@care/ui/components/textarea';
+
 import { saveDocumentTemplateAction, uploadDocumentLogoAction } from './actions';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 
 const documentTypes = [
   'service_evidence',
@@ -345,7 +347,7 @@ export default async function DocumentTemplatesPage({
           style={{ borderColor: template.primaryColor }}
         >
           <p
-            className="text-sm font-semibold uppercase tracking-wide"
+            className="text-sm font-semibold tracking-wide uppercase"
             style={{ color: template.primaryColor }}
           >
             {template.headerText || selectedOrganization.name}

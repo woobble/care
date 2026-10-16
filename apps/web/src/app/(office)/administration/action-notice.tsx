@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { Alert, AlertDescription } from '@care/ui/components/alert';
 

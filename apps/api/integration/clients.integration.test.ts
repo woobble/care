@@ -1,18 +1,20 @@
+import { describe, expect, test } from 'bun:test';
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { v7 as uuidv7 } from 'uuid';
+
 import { NestFactory } from '@nestjs/core';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { describe, expect, test } from 'bun:test';
 import { SignJWT, exportJWK, generateKeyPair } from 'jose';
 import { Client } from 'pg';
-import { startCareTestDatabase } from '@care/testing';
-import { createDatabase } from '@care/database';
-import { DrizzleOutboxRepository, platformSchema } from '@care/platform';
-import { PERMISSIONS } from '@care/permissions';
+import { v7 as uuidv7 } from 'uuid';
+
 import { AppModule } from '@app/api/app.module';
 import { configureApiHttp, createApiFastifyAdapter } from '@app/api/http/fastify';
+import { createDatabase } from '@care/database';
+import { PERMISSIONS } from '@care/permissions';
+import { DrizzleOutboxRepository, platformSchema } from '@care/platform';
+import { startCareTestDatabase } from '@care/testing';
 
 const UUID_V4_COMPATIBILITY_ID = '00000000-0000-4000-8000-000000000001';
 

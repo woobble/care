@@ -1,9 +1,10 @@
 'use client';
 
-import type { FormHTMLAttributes } from 'react';
 import { LogOut } from 'lucide-react';
-import { DropdownMenuItem } from '@care/ui/components/dropdown-menu';
+import type { FormHTMLAttributes } from 'react';
+
 import { SignOutForm } from '@app/web/components/sign-out-form';
+import { DropdownMenuItem } from '@care/ui/components/dropdown-menu';
 
 type ServerAction = NonNullable<FormHTMLAttributes<HTMLFormElement>['action']>;
 

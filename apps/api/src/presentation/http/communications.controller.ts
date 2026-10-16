@@ -27,6 +27,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { z } from 'zod';
+
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
+import { COMMUNICATIONS_APPLICATION } from '@app/api/tokens';
 import type {
   CommunicationAmendmentInput,
   CommunicationInput,
@@ -35,9 +39,7 @@ import type {
   CommunicationsApplicationService,
 } from '@care/communications';
 import type { AuthorizationPrincipal } from '@care/permissions';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import { requestContext, type ApiRequest } from '@app/api/http/request';
-import { COMMUNICATIONS_APPLICATION } from '@app/api/tokens';
+
 import { ProblemDetailsDto } from './dto';
 
 const uuid = z.uuid();

@@ -1,28 +1,30 @@
-import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
-import { Textarea } from '@care/ui/components/textarea';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
+import Link from 'next/link';
+
+import { createTaskAction, transitionTaskAction } from '@app/web/app/(office)/operations/actions';
+import { taskSourceTranslationKey } from '@app/web/app/(office)/operations/ui';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDateTime } from '@app/web/i18n/format';
-import { visitDateTimeInputValue } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
-import { createTaskAction } from '@app/web/app/(office)/operations/actions';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { visitDateTimeInputValue } from '@app/web/lib/care-date';
 import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { Textarea } from '@care/ui/components/textarea';
 
 type SearchParams = Promise<{
   page?: string;
@@ -30,6 +32,8 @@ type SearchParams = Promise<{
   status?: string;
   priority?: string;
   due?: string;
+  fromDate?: string;
+  untilDate?: string;
   assignedEmployeeId?: string;
   assignedToMe?: string;
   order?: string;
@@ -77,6 +81,7 @@ export default async function OperationsTasksPage({
   }
 
   const canCreate = hasPermission(permissions, 'operations.tasks.create');
+  const canManageTasks = hasPermission(permissions, 'operations.tasks.manage');
   const canAssign = hasPermission(permissions, 'operations.tasks.assign');
   const canReadClients = hasPermission(permissions, 'client.read');
   const canReadEmployees = hasPermission(permissions, 'employee.read');
@@ -91,6 +96,8 @@ export default async function OperationsTasksPage({
   const status = taskStatus(query.status);
   const priority = taskPriority(query.priority);
   const due = dueFilter(query.due);
+  const fromDate = validDate(query.fromDate);
+  const untilDate = validDate(query.untilDate);
   const order = query.order === 'created' ? 'created' : 'due';
   const search = query.q?.trim().slice(0, 120) || undefined;
   const page = validPage(query.page);
@@ -111,6 +118,8 @@ export default async function OperationsTasksPage({
           ...(assignedEmployeeId ? { assignedEmployeeId } : {}),
           ...(query.assignedToMe === 'true' ? { assignedToMe: 'true' } : {}),
           ...(due ? { due } : {}),
+          ...(fromDate ? { fromDate } : {}),
+          ...(untilDate ? { untilDate } : {}),
           ...(search ? { search } : {}),
         },
         header,
@@ -230,6 +239,14 @@ export default async function OperationsTasksPage({
           className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
         >
           {t('taskCreated')}
+        </p>
+      ) : null}
+      {query.updated === 'completed' ? (
+        <p
+          role="status"
+          className="rounded-md border border-success/40 bg-success-muted p-3 text-success-foreground"
+        >
+          {t('taskQuickCompleted')}
         </p>
       ) : null}
       {taskResult.error ||
@@ -483,6 +500,14 @@ export default async function OperationsTasksPage({
             <option value="today">{t('dueToday')}</option>
             <option value="upcoming">{t('upcoming')}</option>
           </SelectField>
+          <label className="grid gap-1 text-sm">
+            <span>{t('fromDate')}</span>
+            <Input type="date" name="fromDate" defaultValue={fromDate ?? ''} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span>{t('untilDate')}</span>
+            <Input type="date" name="untilDate" defaultValue={untilDate ?? ''} />
+          </label>
           <SelectField id="filter-order" name="order" label={t('sortBy')} defaultValue={order}>
             <option value="due">{t('sortDue')}</option>
             <option value="created">{t('sortCreated')}</option>
@@ -519,36 +544,59 @@ export default async function OperationsTasksPage({
         {taskResult.error ? null : tasks.length ? (
           <ul className="grid gap-3">
             {tasks.map((task) => (
-              <li key={task.id}>
-                <Link
-                  href={`/operations/tasks/${task.id}`}
-                  className="grid gap-3 rounded-lg border bg-card p-4 hover:border-primary/40 sm:grid-cols-[1fr_auto] sm:items-center"
-                >
-                  <span className="grid gap-1">
-                    <span className="font-semibold">{task.title}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {t('manualTask')} ·{' '}
-                      {task.priority === 'urgent'
-                        ? t('urgent')
-                        : task.priority === 'high'
-                          ? t('high')
-                          : task.priority === 'low'
-                            ? t('low')
-                            : t('normal')}{' '}
-                      ·{' '}
-                      {task.dueAt
-                        ? formatDateTime(
-                            task.dueAt,
-                            locale,
-                            timezoneByOrganization.get(task.organizationId) ?? 'Europe/Berlin',
-                          )
-                        : t('noDueDate')}
-                    </span>
+              <li
+                key={task.id}
+                className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+              >
+                <Link href={`/operations/tasks/${task.id}`} className="grid min-w-0 gap-1">
+                  <span className="truncate font-semibold text-primary underline">
+                    {task.title}
                   </span>
+                  <span className="text-sm text-muted-foreground">
+                    {task.source ? t(taskSourceTranslationKey(task.source.type)) : t('manualTask')}{' '}
+                    ·{' '}
+                    {task.priority === 'urgent'
+                      ? t('urgent')
+                      : task.priority === 'high'
+                        ? t('high')
+                        : task.priority === 'low'
+                          ? t('low')
+                          : t('normal')}{' '}
+                    ·{' '}
+                    {task.dueAt
+                      ? formatDateTime(
+                          task.dueAt,
+                          locale,
+                          timezoneByOrganization.get(task.organizationId) ?? 'Europe/Berlin',
+                        )
+                      : t('noDueDate')}
+                  </span>
+                  {task.clientName || task.assignedEmployeeName ? (
+                    <span className="text-sm text-muted-foreground">
+                      {task.clientName ? `${t('client')}: ${task.clientName}` : ''}
+                      {task.clientName && task.assignedEmployeeName ? ' · ' : ''}
+                      {task.assignedEmployeeName
+                        ? `${t('assigned')}: ${task.assignedEmployeeName}`
+                        : ''}
+                    </span>
+                  ) : null}
+                </Link>
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="w-fit rounded-full bg-muted px-3 py-1 text-sm">
                     {taskStatusLabel(t, task.status)}
                   </span>
-                </Link>
+                  {canManageTasks && (task.status === 'open' || task.status === 'in_progress') ? (
+                    <form action={transitionTaskAction}>
+                      <input type="hidden" name="taskId" value={task.id} />
+                      <input type="hidden" name="expectedVersion" value={task.version} />
+                      <input type="hidden" name="action" value="complete" />
+                      <input type="hidden" name="returnTo" value="/operations/tasks" />
+                      <Button type="submit" size="sm" variant="secondary">
+                        {t('markComplete')}
+                      </Button>
+                    </form>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>
@@ -569,6 +617,8 @@ export default async function OperationsTasksPage({
               status,
               priority,
               due,
+              fromDate,
+              untilDate,
               assignedEmployeeId,
               assignedToMe: query.assignedToMe === 'true' ? 'true' : undefined,
               order,
@@ -649,6 +699,14 @@ function taskPriority(value: string | undefined): 'low' | 'normal' | 'high' | 'u
 function dueFilter(value: string | undefined): 'overdue' | 'today' | 'upcoming' | undefined {
   return ['overdue', 'today', 'upcoming'].includes(value ?? '')
     ? (value as 'overdue' | 'today' | 'upcoming')
+    : undefined;
+}
+
+function validDate(value: string | undefined): string | undefined {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const timestamp = Date.parse(`${value}T00:00:00.000Z`);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value
+    ? value
     : undefined;
 }
 

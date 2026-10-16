@@ -1,4 +1,5 @@
 import type { DatabaseTransaction } from '@care/database';
+
 import { auditEntries } from './schema';
 
 export interface AuditRecord {

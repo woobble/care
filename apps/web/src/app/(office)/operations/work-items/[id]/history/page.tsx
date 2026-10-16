@@ -1,22 +1,23 @@
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
+
+import {
+  categoryTranslationKey,
+  type OperationsWorkItem,
+} from '@app/web/app/(office)/operations/ui';
+import { DataPagination } from '@app/web/components/data-pagination';
 import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
 import { formatDateTime } from '@app/web/i18n/format';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
-import {
-  categoryTranslationKey,
-  type OperationsWorkItem,
-} from '@app/web/app/(office)/operations/ui';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
 
 type SearchParams = Promise<{ page?: string; pageSize?: string }>;
 const issueIdPattern = /^[a-f0-9]{64}$/i;
@@ -73,11 +74,11 @@ export default async function OperationsDeadlineHistoryPage({
   return (
     <div className="grid gap-6">
       <PageHeader
-        eyebrow={t('deadlinesTitle')}
-        title={t('deadlineHistoryTitle')}
+        eyebrow={t('title')}
+        title={t('exceptionHistoryTitle')}
         actions={
           <Button asChild variant="secondary">
-            <Link href="/operations/deadlines">{t('deadlinesTitle')}</Link>
+            <Link href="/operations/worklist">{t('worklistTitle')}</Link>
           </Button>
         }
       />

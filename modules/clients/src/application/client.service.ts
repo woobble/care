@@ -1,11 +1,12 @@
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
+import { OrganizationRepository } from '@care/organizations';
 import { assertCan, type AuthorizationPrincipal } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { OrganizationRepository } from '@care/organizations';
 import {
   Client,
   type ClientPersonalData,
@@ -19,6 +20,9 @@ import {
   type ClientAddressData,
   type ClientAddressSnapshot,
 } from '@module/clients/domain/client-master-data';
+import { ClientMasterDataRepository } from '@module/clients/infrastructure/persistence/client-master-data.repository';
+import { ClientRepository } from '@module/clients/infrastructure/persistence/client.repository';
+
 import { clientScopeFilter, authorizeClientResource } from './client-access';
 import { appendClientChange } from './client-change';
 import {
@@ -26,8 +30,6 @@ import {
   FacilityNotInOrganizationError,
   InvalidPaginationError,
 } from './errors';
-import { ClientMasterDataRepository } from '@module/clients/infrastructure/persistence/client-master-data.repository';
-import { ClientRepository } from '@module/clients/infrastructure/persistence/client.repository';
 
 export interface CreateClientInput extends ClientPersonalData, ClientProviderContext {
   primaryAddress?: ClientAddressData | null;

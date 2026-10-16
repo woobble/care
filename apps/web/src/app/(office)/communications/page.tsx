@@ -1,15 +1,10 @@
-import { NativeSelect } from '@care/ui/components/native-select';
-import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
-import { ResourceReference } from '@app/web/components/resource-reference';
-import type { components } from '@care/api-client';
+import Link from 'next/link';
+
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import { formatDateTime } from '@app/web/i18n/format';
 import {
   getApiClient,
@@ -17,6 +12,12 @@ import {
   getTenantHeader,
   hasPermission,
 } from '@app/web/lib/api';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
 
 type Interaction = components['schemas']['CommunicationInteractionResponseDto'];
 type FollowUpStatus = 'needs_task' | 'open' | 'overdue' | 'completed';
@@ -394,7 +395,7 @@ export default async function CommunicationsPage({
             <div className="hidden overflow-x-auto rounded-md border xl:block">
               <table className="w-full text-left text-sm">
                 <caption className="sr-only">{t('globalTitle')}</caption>
-                <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+                <thead className="bg-muted/60 text-xs tracking-wide text-muted-foreground uppercase">
                   <tr>
                     <th scope="col" className="px-4 py-3">
                       {t('tableColumns.date')}
@@ -416,7 +417,7 @@ export default async function CommunicationsPage({
                 <tbody className="divide-y">
                   {interactions.map((interaction) => (
                     <tr key={interaction.id} className="align-top">
-                      <td className="whitespace-nowrap px-4 py-3">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         {formatDateTime(interaction.occurredAt, locale)}
                       </td>
                       <td className="min-w-64 px-4 py-3">

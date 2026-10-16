@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+
 import { clientInsurances, clientRecords } from '@care/clients';
 import { organizationsTable } from '@care/organizations';
 import { servicePrices } from '@care/services';

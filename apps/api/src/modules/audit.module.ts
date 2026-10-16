@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
+
+import { AUDIT_READER, AUDIT_WRITER, UNIT_OF_WORK } from '@app/api/tokens';
 import { DrizzleAuditReader, DrizzleAuditWriter } from '@care/audit';
 import type { UnitOfWork } from '@care/database';
-import { AUDIT_READER, AUDIT_WRITER, UNIT_OF_WORK } from '@app/api/tokens';
 
 @Module({
   providers: [

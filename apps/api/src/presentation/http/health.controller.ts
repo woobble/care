@@ -2,13 +2,14 @@ import { Controller, Get, Inject, Res } from '@nestjs/common';
 import { ApiOkResponse, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
 import { desc, gte, sql } from 'drizzle-orm';
 import type { FastifyReply } from 'fastify';
-import { loadApiConfig } from '@care/config';
-import type { ObjectStorage } from '@care/storage';
-import { OsrmRouteProvider } from '@care/scheduling';
-import { workerHealth } from '@care/platform';
-import { apiMetrics } from '@app/api/operational-metrics';
+
 import type { AppDatabase } from '@app/api/database/database.module';
+import { apiMetrics } from '@app/api/operational-metrics';
 import { DATABASE, OBJECT_STORAGE } from '@app/api/tokens';
+import { loadApiConfig } from '@care/config';
+import { workerHealth } from '@care/platform';
+import { OsrmRouteProvider } from '@care/scheduling';
+import type { ObjectStorage } from '@care/storage';
 
 type ApiConfig = ReturnType<typeof loadApiConfig>;
 type RoutingHealthStatus = 'not_configured' | 'unverified' | 'ready' | 'unavailable';

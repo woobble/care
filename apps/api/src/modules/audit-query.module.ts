@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
+
+import { AuditController } from '@app/api/presentation/http/audit.controller';
+
 import { AuditModule } from './audit.module';
 import { IdentityModule } from './identity.module';
-import { AuditController } from '@app/api/presentation/http/audit.controller';
 
 @Module({
   imports: [AuditModule, IdentityModule],

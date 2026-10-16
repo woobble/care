@@ -1,17 +1,16 @@
-import { Textarea } from '@care/ui/components/textarea';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { errorMessageKey } from '@app/web/i18n/errors';
+import Link from 'next/link';
+
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { FilterDisclosure } from '@app/web/components/filter-disclosure';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
-import { FilterDisclosure } from '@app/web/components/filter-disclosure';
-import { formatCurrency, formatLongDate, formatTime } from '@app/web/i18n/format';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { TourStopOrderForm } from '@app/web/components/tour-stop-order-form';
 import type { Locale } from '@app/web/i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatCurrency, formatLongDate, formatTime } from '@app/web/i18n/format';
 import { visitStatusKey } from '@app/web/i18n/status';
 import {
   getApiClient,
@@ -20,6 +19,14 @@ import {
   hasClientPermission,
   hasPermission,
 } from '@app/web/lib/api';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { Textarea } from '@care/ui/components/textarea';
+
 import {
   applySuggestedTourOrderAction,
   createTourAction,
@@ -28,11 +35,6 @@ import {
   publishTourAction,
   suggestTourOrderAction,
 } from './actions';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
-import { TourStopOrderForm } from '@app/web/components/tour-stop-order-form';
-import type { components } from '@care/api-client';
 
 type SearchParams = Promise<{
   date?: string;
@@ -890,7 +892,7 @@ export default async function PlanningPage({
                           {t('Planning.dateTime')}
                         </span>
                         <Link
-                          className="font-medium tabular-nums text-primary underline"
+                          className="font-medium text-primary tabular-nums underline"
                           href={visitHref(visit.id)}
                         >
                           {formatDay(dateAtZone(visit.plannedStart, visit.timezone), locale)}

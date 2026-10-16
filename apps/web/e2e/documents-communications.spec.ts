@@ -1,11 +1,12 @@
-import { v7 as uuidv7 } from 'uuid';
 import { mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Client } from 'pg';
-import { PDFDocument } from 'pdf-lib';
+
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { PDFDocument } from 'pdf-lib';
+import { Client } from 'pg';
+import { v7 as uuidv7 } from 'uuid';
 
 const reviewDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),

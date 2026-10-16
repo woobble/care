@@ -1,13 +1,14 @@
 // oxlint-disable-next-line import/no-unassigned-import -- load dotenv before creating the auth provider
 import '@care/config/load-env';
-import { loadWebConfig } from '@care/config';
-import { createDatabase } from '@care/database';
-import { betterAuthSchema } from '@care/identity';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
 import { genericOAuth } from 'better-auth/plugins/generic-oauth';
 import { v7 as uuidv7 } from 'uuid';
+
+import { loadWebConfig } from '@care/config';
+import { createDatabase } from '@care/database';
+import { betterAuthSchema } from '@care/identity';
 
 const buildSecret = 'build-only-secret-value-that-is-never-used-at-runtime';
 const isBuild = process.env.NEXT_PHASE === 'phase-production-build';

@@ -1,15 +1,16 @@
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
+import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
+
+import { createClientAction } from '@app/web/app/(office)/clients/actions';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
 import { Button } from '@care/ui/components/button';
 import { Input } from '@care/ui/components/input';
 import { Label } from '@care/ui/components/label';
-import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
-import { createClientAction } from '@app/web/app/(office)/clients/actions';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { NativeSelect } from '@care/ui/components/native-select';
 
 export default async function NewClientPage({
   searchParams,

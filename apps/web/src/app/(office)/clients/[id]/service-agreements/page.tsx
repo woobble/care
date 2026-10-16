@@ -1,39 +1,44 @@
-import { Textarea } from '@care/ui/components/textarea';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
-import { Badge } from '@care/ui/components/badge';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { ResourceReference } from '@app/web/components/resource-reference';
-import { AgreementServiceFields } from '@app/web/components/agreement-service-fields';
+
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { generateDocumentAction } from '@app/web/app/(office)/documents/actions';
+import { generateAgreementVisitsAction } from '@app/web/app/(office)/planning/actions';
 import {
   AgreementCostSummary,
   AgreementCostSummaryPanel,
   AgreementPeriodEndField,
   AgreementPeriodStartField,
 } from '@app/web/components/agreement-cost-summary';
-import { errorMessageKey } from '@app/web/i18n/errors';
+import { AgreementServiceFields } from '@app/web/components/agreement-service-fields';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import { auditActionKey } from '@app/web/i18n/audit';
-import { formatDate, formatDateTime, formatNumber } from '@app/web/i18n/format';
 import type { Locale } from '@app/web/i18n/config';
-import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
-import { getFacilitiesByIds } from '@app/web/lib/facility-lookup';
-import type { components } from '@care/api-client';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate, formatDateTime, formatNumber } from '@app/web/i18n/format';
 import { quantityUnitKey, serviceAgreementStatusKey, unitLabelKey } from '@app/web/i18n/status';
-import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 import {
   getApiClient,
   getPermissionGrants,
   getTenantHeader,
   hasClientPermission,
 } from '@app/web/lib/api';
+import { getFacilitiesByIds } from '@app/web/lib/facility-lookup';
+import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
+import { Badge } from '@care/ui/components/badge';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { Textarea } from '@care/ui/components/textarea';
+
 import {
   addAgreementServiceAction,
   changeServiceAgreementStatusAction,
@@ -42,9 +47,6 @@ import {
   updateAgreementServiceAction,
   updateServiceAgreementAction,
 } from './actions';
-import { generateAgreementVisitsAction } from '@app/web/app/(office)/planning/actions';
-import { generateDocumentAction } from '@app/web/app/(office)/documents/actions';
-import { redirectToValidPage } from '@app/web/lib/pagination';
 
 type SearchParams = Promise<{
   error?: string;
@@ -291,7 +293,7 @@ export default async function ClientServiceAgreementsPage({
         </Link>
       </nav>
 
-      <section id="overview" aria-labelledby="overview-title" className="grid gap-3 scroll-mt-6">
+      <section id="overview" aria-labelledby="overview-title" className="grid scroll-mt-6 gap-3">
         <h2 id="overview-title" className="text-xl font-semibold">
           {t('ServiceAgreements.providerContext')}
         </h2>
@@ -367,7 +369,7 @@ export default async function ClientServiceAgreementsPage({
       <section
         id="agreements"
         aria-labelledby="agreements-title"
-        className="grid gap-4 scroll-mt-6"
+        className="grid scroll-mt-6 gap-4"
       >
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="agreements-title" className="text-xl font-semibold">
@@ -981,7 +983,7 @@ export default async function ClientServiceAgreementsPage({
         ) : null}
       </section>
 
-      <section id="history" aria-labelledby="history-title" className="grid gap-3 scroll-mt-6">
+      <section id="history" aria-labelledby="history-title" className="grid scroll-mt-6 gap-3">
         <h2 id="history-title" className="text-xl font-semibold">
           {t('ServiceAgreements.history')}
         </h2>
@@ -1138,7 +1140,7 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="grid gap-1">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="break-words font-medium">{value || '—'}</dd>
+      <dd className="font-medium break-words">{value || '—'}</dd>
     </div>
   );
 }

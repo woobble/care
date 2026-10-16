@@ -1,19 +1,20 @@
-import { v7 as uuidv7 } from 'uuid';
 import { and, asc, count, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
+import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
+import { clientRecords } from '@care/clients';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
-import type { OutboxWriter } from '@care/platform';
+import { facilities, organizationsTable } from '@care/organizations';
 import {
   assertCan,
   can,
   type AuthorizationPrincipal,
   type ResourceContext,
 } from '@care/permissions';
-import { clientRecords } from '@care/clients';
-import { facilities, organizationsTable } from '@care/organizations';
+import type { OutboxWriter } from '@care/platform';
 import {
   recurringTaskDefinitions,
   recurringTaskOccurrences,
@@ -21,6 +22,7 @@ import {
   taskActivity,
   tasks,
 } from '@module/operations/schema';
+
 import {
   isValidRecurrenceSchedule,
   nextRecurrenceOccurrence,

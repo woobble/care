@@ -1,3 +1,13 @@
+import { getLocale, getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+
+import { DataPagination } from '@app/web/components/data-pagination';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { auditActionKey } from '@app/web/i18n/audit';
+import { formatDateTime } from '@app/web/i18n/format';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -7,15 +17,6 @@ import {
   TableCell as ShadcnTableCell,
   TableCaption as ShadcnTableCaption,
 } from '@care/ui/components/table';
-import Link from 'next/link';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
-import { auditActionKey } from '@app/web/i18n/audit';
-import { formatDateTime } from '@app/web/i18n/format';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
-import type { components } from '@care/api-client';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
 
 type SearchParams = Promise<{ page?: string; pageSize?: string }>;
 
@@ -70,7 +71,7 @@ export default async function AuditPage({
             <ShadcnTableBody>
               {data.items.map((entry) => (
                 <ShadcnTableRow key={entry.id} className="border-b last:border-0">
-                  <ShadcnTableCell className="whitespace-nowrap px-4 py-3">
+                  <ShadcnTableCell className="px-4 py-3 whitespace-nowrap">
                     {formatDateTime(entry.timestamp, locale) ?? '—'}
                   </ShadcnTableCell>
                   <ShadcnTableCell className="px-4 py-3">

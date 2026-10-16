@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { contactAuthorizationFor } from './contact-authorization';
 
 describe('contact authorization snapshot', () => {

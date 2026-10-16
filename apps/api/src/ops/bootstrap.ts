@@ -1,8 +1,9 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
+
+import { auditSchema, DrizzleAuditWriter } from '@care/audit';
 import { loadApiConfig, loadMigrationConfig } from '@care/config';
 import { createDatabase } from '@care/database';
-import { auditSchema, DrizzleAuditWriter } from '@care/audit';
 import { identitySchema, seedSystemRoles } from '@care/identity';
 import { organizationsSchema, tenants } from '@care/organizations';
 

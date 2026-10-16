@@ -1,18 +1,20 @@
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { v7 as uuidv7 } from 'uuid';
-import { getLocale, getTranslations } from 'next-intl/server';
-import type { components } from '@care/api-client';
-import { Button } from '@care/ui/components/button';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
-import { formatVisitDateTime } from '@app/web/lib/care-date';
-import { formatNumber } from '@app/web/i18n/format';
-import { errorMessageKey } from '@app/web/i18n/errors';
-import { quantityUnitKey } from '@app/web/i18n/status';
+
 import { prepareEvidencePackageAction } from '@app/web/app/care/actions';
 import { CareForm } from '@app/web/app/care/care-form';
-import { EvidenceAcknowledgementForm } from './evidence-acknowledgement-form';
-import { PageHeader } from '@app/web/components/page-patterns';
 import { CaregiverRetryButton } from '@app/web/components/caregiver-retry-button';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatNumber } from '@app/web/i18n/format';
+import { quantityUnitKey } from '@app/web/i18n/status';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { formatVisitDateTime } from '@app/web/lib/care-date';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+
+import { EvidenceAcknowledgementForm } from './evidence-acknowledgement-form';
 
 type EvidencePackage = components['schemas']['EvidencePackageResponseDto'];
 
@@ -271,7 +273,7 @@ async function EvidenceSnapshot({ packageData }: { packageData: EvidencePackage 
       )}
       <p className="min-w-0 text-xs text-muted-foreground">
         {t('ServiceEvidence.care.checksum')}:{' '}
-        <code className="break-all font-mono">{packageData.snapshotHash}</code>
+        <code className="font-mono break-all">{packageData.snapshotHash}</code>
       </p>
     </section>
   );

@@ -1,13 +1,6 @@
 import { Module } from '@nestjs/common';
-import { OrganizationApplicationService } from '@care/organizations';
-import type { AuditWriter } from '@care/audit';
-import type { UnitOfWork } from '@care/database';
-import type { OutboxWriter } from '@care/platform';
-import type { ServiceAgreementGuards } from '@care/service-agreements';
-import type { OrganizationSchedulingGuard } from '@care/organizations';
-import type { VisitExecutionGuards } from '@care/visit-execution';
+
 import { DatabaseModule } from '@app/api/database/database.module';
-import { IdentityModule } from './identity.module';
 import { OrganizationsController } from '@app/api/presentation/http/organizations.controller';
 import {
   AUDIT_WRITER,
@@ -18,7 +11,16 @@ import {
   UNIT_OF_WORK,
   VISIT_EXECUTION_GUARDS,
 } from '@app/api/tokens';
+import type { AuditWriter } from '@care/audit';
+import type { UnitOfWork } from '@care/database';
+import { OrganizationApplicationService } from '@care/organizations';
+import type { OrganizationSchedulingGuard } from '@care/organizations';
+import type { OutboxWriter } from '@care/platform';
+import type { ServiceAgreementGuards } from '@care/service-agreements';
+import type { VisitExecutionGuards } from '@care/visit-execution';
+
 import { AuditModule } from './audit.module';
+import { IdentityModule } from './identity.module';
 import { PlatformModule } from './platform.module';
 import { ServiceAgreementProtectionModule } from './service-agreement-protection.module';
 import { VisitExecutionModule } from './visit-execution.module';

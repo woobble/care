@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { compareTourStops, sameTourDate, tourFeasibilityConflicts } from './tour';
 import type { VisitData } from './visit';
 

@@ -1,18 +1,19 @@
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
-import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+
+import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
+import { createOrganizationAction } from '@app/web/app/(office)/administration/actions';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { statusLabelKey } from '@app/web/i18n/status';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import { searchStructurePage } from '@app/web/lib/structure-search';
+import type { components } from '@care/api-client';
 import { Button } from '@care/ui/components/button';
 import { Input } from '@care/ui/components/input';
 import { Label } from '@care/ui/components/label';
 import { StatusBadge } from '@care/ui/components/status-badge';
-import { statusLabelKey } from '@app/web/i18n/status';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
-import { searchStructurePage } from '@app/web/lib/structure-search';
-import type { components } from '@care/api-client';
-import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
-import { createOrganizationAction } from '@app/web/app/(office)/administration/actions';
 
 type SearchParams = Promise<{
   error?: string;

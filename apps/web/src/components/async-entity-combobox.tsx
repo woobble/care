@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
 import { Check, ChevronDown, LoaderCircle, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { useEffect, useId, useRef, useState } from 'react';
+
 import { Button } from '@care/ui/components/button';
 import {
   Command,
@@ -177,8 +178,7 @@ export function AsyncEntityCombobox({
     return () => {
       window.clearTimeout(timer);
       controller.abort();
-      activeController.current?.abort();
-      activeController.current = null;
+      if (activeController.current === controller) activeController.current = null;
     };
   }, [
     browseOnEmpty,
@@ -375,7 +375,7 @@ export function AsyncEntityCombobox({
               aria-expanded={open}
               aria-required={required}
               aria-label={label}
-              className={`min-w-0 w-full h-10 justify-between font-normal ${className ?? ''}`}
+              className={`h-10 w-full min-w-0 justify-between font-normal ${className ?? ''}`}
             >
               <span className={`truncate ${selectedOptions.length > 0 ? 'mr-8' : ''}`}>
                 {(multiple && selectedOptions.length

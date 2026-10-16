@@ -1,3 +1,25 @@
+import { getLocale, getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+
+import {
+  inviteUserAction,
+  revokeInvitationAction,
+} from '@app/web/app/(office)/administration/actions';
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { roleLabelKey, scopeTypeLabelKey } from '@app/web/i18n/access';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate } from '@app/web/i18n/format';
+import { statusLabelKey } from '@app/web/i18n/status';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { StatusBadge } from '@care/ui/components/status-badge';
 import {
   Table as ShadcnTable,
   TableHeader as ShadcnTableHeader,
@@ -7,27 +29,6 @@ import {
   TableCell as ShadcnTableCell,
   TableCaption as ShadcnTableCaption,
 } from '@care/ui/components/table';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
-import Link from 'next/link';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Label } from '@care/ui/components/label';
-import { StatusBadge } from '@care/ui/components/status-badge';
-import { roleLabelKey, scopeTypeLabelKey } from '@app/web/i18n/access';
-import { errorMessageKey } from '@app/web/i18n/errors';
-import { formatDate } from '@app/web/i18n/format';
-import { statusLabelKey } from '@app/web/i18n/status';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
-import {
-  inviteUserAction,
-  revokeInvitationAction,
-} from '@app/web/app/(office)/administration/actions';
-import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
-import type { components } from '@care/api-client';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
 
 type SearchParams = Promise<{
   status?: string;

@@ -1,12 +1,5 @@
 import { Module } from '@nestjs/common';
-import {
-  createDocumentsApplicationService,
-  type DocumentsApplicationService,
-} from '@care/documents';
-import type { AuditWriter } from '@care/audit';
-import type { UnitOfWork } from '@care/database';
-import type { OutboxWriter } from '@care/platform';
-import type { ObjectStorage } from '@care/storage';
+
 import { DatabaseModule } from '@app/api/database/database.module';
 import {
   AUDIT_WRITER,
@@ -15,6 +8,15 @@ import {
   OUTBOX_WRITER,
   UNIT_OF_WORK,
 } from '@app/api/tokens';
+import type { AuditWriter } from '@care/audit';
+import type { UnitOfWork } from '@care/database';
+import {
+  createDocumentsApplicationService,
+  type DocumentsApplicationService,
+} from '@care/documents';
+import type { OutboxWriter } from '@care/platform';
+import type { ObjectStorage } from '@care/storage';
+
 import { AuditModule } from './audit.module';
 import { PlatformModule } from './platform.module';
 import { ServiceEvidenceModule } from './service-evidence.module';

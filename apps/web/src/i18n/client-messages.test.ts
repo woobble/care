@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import en from '../../messages/en.json';
+
 import de from '../../messages/de.json';
+import en from '../../messages/en.json';
 import { getClientMessages } from './client-messages';
 
 const benefitAllocationMessageKeys = [

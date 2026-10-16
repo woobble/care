@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
-import { createServiceApplicationService, ServicePriceApplicationService } from '@care/services';
-import type { AuditWriter } from '@care/audit';
-import type { UnitOfWork } from '@care/database';
-import type { OutboxWriter } from '@care/platform';
-import type { ServiceAgreementGuards } from '@care/service-agreements';
+
 import { DatabaseModule } from '@app/api/database/database.module';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { ServicePricesController } from '@app/api/presentation/http/service-prices.controller';
+import {
+  ServiceCategoriesController,
+  ServicesController,
+} from '@app/api/presentation/http/services.controller';
 import {
   AUDIT_WRITER,
   OUTBOX_WRITER,
@@ -13,16 +15,16 @@ import {
   SERVICE_PRICE_APPLICATION,
   UNIT_OF_WORK,
 } from '@app/api/tokens';
+import type { AuditWriter } from '@care/audit';
+import type { UnitOfWork } from '@care/database';
+import type { OutboxWriter } from '@care/platform';
+import type { ServiceAgreementGuards } from '@care/service-agreements';
+import { createServiceApplicationService, ServicePriceApplicationService } from '@care/services';
+
 import { AuditModule } from './audit.module';
 import { IdentityModule } from './identity.module';
 import { PlatformModule } from './platform.module';
 import { ServiceAgreementProtectionModule } from './service-agreement-protection.module';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import {
-  ServiceCategoriesController,
-  ServicesController,
-} from '@app/api/presentation/http/services.controller';
-import { ServicePricesController } from '@app/api/presentation/http/service-prices.controller';
 
 @Module({
   imports: [

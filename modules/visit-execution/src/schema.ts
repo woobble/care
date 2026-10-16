@@ -11,9 +11,10 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+
 import { employeeRecords } from '@care/employees';
-import { agreementServices } from '@care/service-agreements';
 import { visits, visitServices } from '@care/scheduling';
+import { agreementServices } from '@care/service-agreements';
 import { serviceDefinitions } from '@care/services';
 
 const visitExecution = pgSchema('visit_execution');

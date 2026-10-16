@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { Client, InvalidClientTransitionError } from './client';
 
 const makeClient = () =>

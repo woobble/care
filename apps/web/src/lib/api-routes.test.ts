@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+
 import { buildCareApiUrl, type CareApiRequest } from './api-routes';
 
 const baseUrl = 'http://care-api.internal:3001';

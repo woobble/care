@@ -1,30 +1,7 @@
-import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
-import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
-import {
-  Table as ShadcnTable,
-  TableHeader as ShadcnTableHeader,
-  TableBody as ShadcnTableBody,
-  TableHead as ShadcnTableHead,
-  TableRow as ShadcnTableRow,
-  TableCell as ShadcnTableCell,
-} from '@care/ui/components/table';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import type { Locale } from '@app/web/i18n/config';
-import { errorMessageKey } from '@app/web/i18n/errors';
-import { formatDate, formatDateTime } from '@app/web/i18n/format';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasClientPermission,
-} from '@app/web/lib/api';
+
 import {
   cancelDraftInvoiceAction,
   correctInvoiceAction,
@@ -34,6 +11,30 @@ import {
 } from '@app/web/app/(office)/billing/actions';
 import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
 import { euroInput, formatCents, lineAmountField } from '@app/web/app/(office)/billing/format';
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import type { Locale } from '@app/web/i18n/config';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate, formatDateTime } from '@app/web/i18n/format';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+} from '@app/web/lib/api';
+import { Button } from '@care/ui/components/button';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui/components/table';
 
 type SearchParams = Promise<{ error?: string; updated?: string }>;
 

@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test';
+
 import type { CareApi } from '@care/api-client';
+
 import { getPermissionGrantsForTenant } from './permission-cache';
 
 test('keeps permission lookups scoped to the selected tenant', async () => {

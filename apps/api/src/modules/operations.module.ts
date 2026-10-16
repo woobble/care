@@ -1,19 +1,8 @@
 import { Module } from '@nestjs/common';
-import {
-  createOperationsApplicationService,
-  OperationsRecurrenceApplicationService,
-} from '@care/operations';
-import type { AuditWriter } from '@care/audit';
-import type { BenefitsApplicationService } from '@care/benefits';
-import type { BillingApplicationService, BillingClaimsApplicationService } from '@care/billing';
-import type { CareDocumentationApplicationService } from '@care/care-documentation';
-import type { UnitOfWork } from '@care/database';
-import type { OutboxWriter } from '@care/platform';
-import type { OnboardingApplicationService } from '@care/onboarding';
-import type { SchedulingApplicationService } from '@care/scheduling';
-import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
-import type { VisitExecutionApplicationService } from '@care/visit-execution';
+
 import { DatabaseModule } from '@app/api/database/database.module';
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { OperationsController } from '@app/api/presentation/http/operations.controller';
 import {
   AUDIT_WRITER,
   BENEFITS_APPLICATION,
@@ -29,17 +18,30 @@ import {
   UNIT_OF_WORK,
   VISIT_EXECUTION_APPLICATION,
 } from '@app/api/tokens';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import { OperationsController } from '@app/api/presentation/http/operations.controller';
+import type { AuditWriter } from '@care/audit';
+import type { BenefitsApplicationService } from '@care/benefits';
+import type { BillingApplicationService, BillingClaimsApplicationService } from '@care/billing';
+import type { CareDocumentationApplicationService } from '@care/care-documentation';
+import type { UnitOfWork } from '@care/database';
+import type { OnboardingApplicationService } from '@care/onboarding';
+import {
+  createOperationsApplicationService,
+  OperationsRecurrenceApplicationService,
+} from '@care/operations';
+import type { OutboxWriter } from '@care/platform';
+import type { SchedulingApplicationService } from '@care/scheduling';
+import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
+import type { VisitExecutionApplicationService } from '@care/visit-execution';
+
 import { AuditModule } from './audit.module';
 import { BenefitsModule } from './benefits.module';
 import { BillingModule } from './billing.module';
 import { CareDocumentationModule } from './care-documentation.module';
 import { IdentityModule } from './identity.module';
+import { OnboardingModule } from './onboarding.module';
 import { PlatformModule } from './platform.module';
 import { SchedulingModule } from './scheduling.module';
 import { ServiceEvidenceModule } from './service-evidence.module';
-import { OnboardingModule } from './onboarding.module';
 import { VisitExecutionModule } from './visit-execution.module';
 
 @Module({

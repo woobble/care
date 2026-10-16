@@ -10,8 +10,9 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { clientContacts, clientRecords } from '@care/clients';
+
 import { claims, invoices } from '@care/billing';
+import { clientContacts, clientRecords } from '@care/clients';
 import { documentArtifacts } from '@care/documents';
 import { users } from '@care/identity';
 import { tasks } from '@care/operations';

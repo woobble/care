@@ -1,21 +1,16 @@
+import { getLocale, getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { formatCents } from '@app/web/app/(office)/billing/format';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
 import {
   EmptyState,
   ErrorNotice as Alert,
   SuccessNotice as Status,
 } from '@app/web/components/page-patterns';
-import {
-  Table as ShadcnTable,
-  TableHeader as ShadcnTableHeader,
-  TableBody as ShadcnTableBody,
-  TableHead as ShadcnTableHead,
-  TableRow as ShadcnTableRow,
-  TableCell as ShadcnTableCell,
-} from '@care/ui/components/table';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { Input } from '@care/ui/components/input';
-import Link from 'next/link';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
+import { PageHeader } from '@app/web/components/page-patterns';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDate } from '@app/web/i18n/format';
@@ -26,13 +21,19 @@ import {
   hasClientPermission,
   hasPermission,
 } from '@app/web/lib/api';
-import type { components } from '@care/api-client';
-import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
-import { formatCents } from '@app/web/app/(office)/billing/format';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { DataPagination } from '@app/web/components/data-pagination';
 import { redirectToValidPage } from '@app/web/lib/pagination';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { NativeSelect } from '@care/ui/components/native-select';
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui/components/table';
 
 type SearchParams = Promise<{
   page?: string;

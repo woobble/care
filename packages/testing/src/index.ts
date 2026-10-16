@@ -1,5 +1,6 @@
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { Client } from 'pg';
+
 import { applyMigrations } from '@care/database/migrations';
 
 export async function startCareTestDatabase() {

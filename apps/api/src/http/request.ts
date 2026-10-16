@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+
 import type { RequestContext, UUID } from '@care/contracts';
 import type { AuthorizationPrincipal } from '@care/permissions';
 

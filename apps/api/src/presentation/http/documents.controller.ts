@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   BadRequestException,
   Body,
@@ -29,34 +31,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
-import { createHash } from 'node:crypto';
-import {
-  DocumentAccessDeniedError,
-  DocumentArtifactNotFoundError,
-  DocumentGenerationFailedError,
-  DocumentSourceNotFoundError,
-  DocumentSourceNotReadyError,
-  DocumentsApplicationService,
-  type DocumentAcknowledgement,
-  type DocumentArtifactView,
-  type DocumentLocale,
-  type DocumentPayload,
-  type DocumentType,
-} from '@care/documents';
-import {
-  displayClientName,
-  ClientApplicationService,
-  ClientMasterDataApplicationService,
-} from '@care/clients';
-import type { BillingClaimsApplicationService } from '@care/billing';
-import { AuthorizationDeniedError, type AuthorizationPrincipal } from '@care/permissions';
-import { ServiceAgreementApplicationService } from '@care/service-agreements';
-import { ServiceEvidenceApplicationService } from '@care/service-evidence';
-import { BenefitsApplicationService } from '@care/benefits';
-import { BillingApplicationService } from '@care/billing';
-import { OrganizationApplicationService } from '@care/organizations';
-import { SchedulingApplicationService } from '@care/scheduling';
-import { csvNumber, DOCUMENT_EXPORT_SCHEMAS, encodeCsv } from '@care/documents';
+
+import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
+import { requestContext, type ApiRequest } from '@app/api/http/request';
 import { apiMetrics } from '@app/api/operational-metrics';
 import {
   BENEFITS_APPLICATION,
@@ -70,9 +47,34 @@ import {
   SERVICE_AGREEMENT_APPLICATION,
   SERVICE_EVIDENCE_APPLICATION,
 } from '@app/api/tokens';
-import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
-import { requestContext, type ApiRequest } from '@app/api/http/request';
-import { ProblemDetailsDto } from './dto';
+import { BenefitsApplicationService } from '@care/benefits';
+import type { BillingClaimsApplicationService } from '@care/billing';
+import { BillingApplicationService } from '@care/billing';
+import {
+  displayClientName,
+  ClientApplicationService,
+  ClientMasterDataApplicationService,
+} from '@care/clients';
+import {
+  DocumentAccessDeniedError,
+  DocumentArtifactNotFoundError,
+  DocumentGenerationFailedError,
+  DocumentSourceNotFoundError,
+  DocumentSourceNotReadyError,
+  DocumentsApplicationService,
+  type DocumentAcknowledgement,
+  type DocumentArtifactView,
+  type DocumentLocale,
+  type DocumentPayload,
+  type DocumentType,
+} from '@care/documents';
+import { csvNumber, DOCUMENT_EXPORT_SCHEMAS, encodeCsv } from '@care/documents';
+import { OrganizationApplicationService } from '@care/organizations';
+import { AuthorizationDeniedError, type AuthorizationPrincipal } from '@care/permissions';
+import { SchedulingApplicationService } from '@care/scheduling';
+import { ServiceAgreementApplicationService } from '@care/service-agreements';
+import { ServiceEvidenceApplicationService } from '@care/service-evidence';
+
 import {
   documentGenerationCommandSchema,
   benefitAllocationExportQuerySchema,
@@ -84,6 +86,7 @@ import {
   documentTemplateTypeSchema,
   type DocumentGenerationCommand,
 } from './documents.dto';
+import { ProblemDetailsDto } from './dto';
 import { withoutUndefined } from './validation';
 
 @ApiTags('documents')

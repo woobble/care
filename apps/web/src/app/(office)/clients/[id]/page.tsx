@@ -1,30 +1,9 @@
-import { Suspense } from 'react';
-import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { StatusBadge } from '@care/ui/components/status-badge';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { DataPagination } from '@app/web/components/data-pagination';
-import { ResourceCardLink, ResourceReference } from '@app/web/components/resource-reference';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import { auditActionKey } from '@app/web/i18n/audit';
-import { statusLabelKey } from '@app/web/i18n/status';
-import { errorMessageKey } from '@app/web/i18n/errors';
-import { formatDate, formatDateTime } from '@app/web/i18n/format';
-import { formatVisitDateTime } from '@app/web/lib/care-date';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasClientPermission,
-  hasPermission,
-} from '@app/web/lib/api';
+import { Suspense } from 'react';
+
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 import {
   activateClientAction,
   addClientAddressAction,
@@ -43,15 +22,37 @@ import {
   updateClientInsuranceAction,
   updateFuturePflegegradAction,
 } from '@app/web/app/(office)/clients/actions';
-import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
-import { getFacilitiesByIds } from '@app/web/lib/facility-lookup';
-import { getEmployeesByIds } from '@app/web/lib/employee-lookup';
-import { PageLoadingSkeleton } from '@app/web/components/page-loading-skeleton';
-import { redirectToValidPage } from '@app/web/lib/pagination';
-import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { ClientProfileOverview } from '@app/web/components/client-profile-overview';
-import { Skeleton } from '@care/ui/components/skeleton';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { PageLoadingSkeleton } from '@app/web/components/page-loading-skeleton';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceCardLink, ResourceReference } from '@app/web/components/resource-reference';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { auditActionKey } from '@app/web/i18n/audit';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate, formatDateTime } from '@app/web/i18n/format';
+import { statusLabelKey } from '@app/web/i18n/status';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasClientPermission,
+  hasPermission,
+} from '@app/web/lib/api';
+import { formatVisitDateTime } from '@app/web/lib/care-date';
+import { getEmployeesByIds } from '@app/web/lib/employee-lookup';
+import { getFacilitiesByIds } from '@app/web/lib/facility-lookup';
+import { getOrganizationsByIds } from '@app/web/lib/organization-lookup';
+import { redirectToValidPage } from '@app/web/lib/pagination';
 import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { Skeleton } from '@care/ui/components/skeleton';
+import { StatusBadge } from '@care/ui/components/status-badge';
 
 const contactRoleKeys = {
   primary_contact: 'Clients.detail.contactRoles.primaryContact',
@@ -221,7 +222,7 @@ export default async function ClientDetailPage({
       />
       <nav
         aria-label={t('Clients.detail.navigationLabel')}
-        className="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-border py-1 text-sm [scrollbar-width:thin]"
+        className="flex min-w-0 [scrollbar-width:thin] items-center gap-1 overflow-x-auto border-b border-border py-1 text-sm"
       >
         <SectionLink href="#overview">{t('Clients.detail.overviewTab')}</SectionLink>
         <SectionLink href="#personal-information">{t('Clients.form.personalData')}</SectionLink>
@@ -494,7 +495,7 @@ async function ClientDetailContent({
           <section
             id="personal-information"
             aria-labelledby="personal-information-title"
-            className="grid gap-4 scroll-mt-6"
+            className="grid scroll-mt-6 gap-4"
           >
             <h2 id="personal-information-title" className="text-xl font-semibold">
               {t('Clients.form.personalData')}
@@ -502,7 +503,7 @@ async function ClientDetailContent({
             <dl className="grid gap-4 rounded-lg border bg-card p-5 sm:grid-cols-2 lg:grid-cols-3">
               <div className="grid gap-1">
                 <dt className="text-sm text-muted-foreground">{t('Common.fields.organization')}</dt>
-                <dd className="break-words font-medium">
+                <dd className="font-medium break-words">
                   <ResourceReference
                     label={
                       client.organizationId
@@ -532,7 +533,7 @@ async function ClientDetailContent({
               {client.primaryFacilityId ? (
                 <div className="grid gap-1">
                   <dt className="text-sm text-muted-foreground">{t('Common.fields.facility')}</dt>
-                  <dd className="break-words font-medium">
+                  <dd className="font-medium break-words">
                     <ResourceReference
                       label={facilityName(
                         facilities,
@@ -823,7 +824,7 @@ async function ClientDetailContent({
           <section
             id="contacts"
             aria-labelledby="contacts-title"
-            className="grid gap-4 scroll-mt-6"
+            className="grid scroll-mt-6 gap-4"
           >
             <h2 id="contacts-title" className="text-xl font-semibold">
               {t('Clients.detail.addressesAndContacts')}
@@ -852,7 +853,7 @@ async function ClientDetailContent({
                             </ConfirmSubmitButton>
                           </form>
                           <details>
-                            <summary className="flex min-h-10 cursor-pointer list-none items-center rounded-md border px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            <summary className="flex min-h-10 cursor-pointer list-none items-center rounded-md border px-3 text-sm font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                               {t('Common.actions.edit')}
                             </summary>
                             <RHFActionForm
@@ -1005,7 +1006,7 @@ async function ClientDetailContent({
                             </ConfirmSubmitButton>
                           </form>
                           <details className="min-w-0">
-                            <summary className="flex min-h-10 cursor-pointer list-none items-center rounded-md border px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            <summary className="flex min-h-10 cursor-pointer list-none items-center rounded-md border px-3 text-sm font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                               {t('Common.actions.edit')}
                             </summary>
                             <RHFActionForm
@@ -1274,7 +1275,7 @@ async function ClientDetailContent({
           <section
             id="insurance"
             aria-labelledby="insurance-title"
-            className="grid gap-4 scroll-mt-6"
+            className="grid scroll-mt-6 gap-4"
           >
             <h2 id="insurance-title" className="text-xl font-semibold">
               {t('Clients.detail.insuranceAndCareLevel')}
@@ -1297,7 +1298,7 @@ async function ClientDetailContent({
                     </p>
                     {canUpdateClient ? (
                       <details className="mt-3">
-                        <summary className="flex min-h-10 w-fit cursor-pointer list-none items-center rounded-md border px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <summary className="flex min-h-10 w-fit cursor-pointer list-none items-center rounded-md border px-3 text-sm font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                           {t('Common.actions.edit')}
                         </summary>
                         <RHFActionForm
@@ -1586,7 +1587,7 @@ async function ClientDetailContent({
             <section
               id="scheduling"
               aria-labelledby="scheduling-title"
-              className="grid gap-4 rounded-lg border bg-card p-5 scroll-mt-6"
+              className="grid scroll-mt-6 gap-4 rounded-lg border bg-card p-5"
             >
               <div>
                 <h2 id="scheduling-title" className="text-xl font-semibold">
@@ -1848,7 +1849,7 @@ async function ClientDocumentsSection({
     <section
       id="documents"
       aria-labelledby="documents-title"
-      className="grid gap-3 rounded-lg border bg-card p-5 scroll-mt-6"
+      className="grid scroll-mt-6 gap-3 rounded-lg border bg-card p-5"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="documents-title" className="text-xl font-semibold">
@@ -2038,7 +2039,7 @@ async function ClientVisitsSection({
       : null;
 
   return (
-    <section id="visits" aria-labelledby="visits-title" className="grid gap-4 scroll-mt-6">
+    <section id="visits" aria-labelledby="visits-title" className="grid scroll-mt-6 gap-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="visits-title" className="text-xl font-semibold">
           {t('Clients.detail.upcomingVisits')}
@@ -2248,7 +2249,7 @@ async function ClientAdmissionHistorySection({
   );
 
   return (
-    <section id="admissions" aria-labelledby="admissions-title" className="grid gap-3 scroll-mt-6">
+    <section id="admissions" aria-labelledby="admissions-title" className="grid scroll-mt-6 gap-3">
       <h2 id="admissions-title" className="text-xl font-semibold">
         {t('Onboarding.title')}
       </h2>
@@ -2394,7 +2395,7 @@ async function ClientTimelineSection({ clientId }: Readonly<{ clientId: string }
   });
   const timeline = result.data ?? [];
   return (
-    <section id="timeline" aria-labelledby="timeline-title" className="grid gap-4 scroll-mt-6">
+    <section id="timeline" aria-labelledby="timeline-title" className="grid scroll-mt-6 gap-4">
       <h2 id="timeline-title" className="text-xl font-semibold">
         {t('Clients.detail.timeline')}
       </h2>
@@ -2647,7 +2648,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="grid gap-1">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="break-words font-medium">{value ?? '—'}</dd>
+      <dd className="font-medium break-words">{value ?? '—'}</dd>
     </div>
   );
 }
@@ -2705,7 +2706,7 @@ function ContactMethods({
 function SectionLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <Link
-      className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex min-h-10 shrink-0 items-center rounded-lg px-3 text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
       href={href}
     >
       {children}

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+
 import type { ClientRepresentationType } from '@care/clients';
 
 export const EVIDENCE_SNAPSHOT_VERSION = 1 as const;

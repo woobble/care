@@ -1,11 +1,13 @@
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import type { components } from '@care/api-client';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
+
+import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
+import { generateDocumentAction } from '@app/web/app/(office)/documents/actions';
+import { revokeAcknowledgementAction } from '@app/web/app/(office)/service-evidence/actions';
 import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { errorMessageKey } from '@app/web/i18n/errors';
 import {
   acknowledgementCapacityKey,
   acknowledgementMethodKey,
@@ -13,7 +15,6 @@ import {
   evidenceOutcomeKey,
   evidenceStatusKey,
 } from '@app/web/i18n/evidence';
-import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatNumber } from '@app/web/i18n/format';
 import { quantityUnitKey } from '@app/web/i18n/status';
 import {
@@ -24,9 +25,9 @@ import {
   hasPermission,
 } from '@app/web/lib/api';
 import { formatVisitDateTime } from '@app/web/lib/care-date';
-import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
-import { revokeAcknowledgementAction } from '@app/web/app/(office)/service-evidence/actions';
-import { generateDocumentAction } from '@app/web/app/(office)/documents/actions';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { NativeSelect } from '@care/ui/components/native-select';
 
 type EvidencePackage = components['schemas']['EvidencePackageResponseDto'];
 type Signature = components['schemas']['SignatureResponseDto'];
@@ -262,7 +263,7 @@ export default async function ServiceEvidenceDetailPage({
         <dl className="grid gap-2 border-t pt-3 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-muted-foreground">{t('ServiceEvidence.office.detail.checksum')}</dt>
-            <dd className="break-all font-mono">{packageData.snapshotHash}</dd>
+            <dd className="font-mono break-all">{packageData.snapshotHash}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">{t('ServiceEvidence.office.detail.created')}</dt>
@@ -335,7 +336,7 @@ export default async function ServiceEvidenceDetailPage({
                     ) : null}
                   </dl>
                   {acknowledgement.signatureSha256 ? (
-                    <p className="break-all text-xs text-muted-foreground">
+                    <p className="text-xs break-all text-muted-foreground">
                       {t('ServiceEvidence.office.detail.signatureChecksum')}{' '}
                       {acknowledgement.signatureSha256}
                     </p>

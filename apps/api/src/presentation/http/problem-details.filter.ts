@@ -2,8 +2,8 @@ import { Catch, HttpException, Injectable } from '@nestjs/common';
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
-import type { ProblemDetails } from '@care/contracts';
-import { AuthorizationDeniedError } from '@care/permissions';
+
+import type { ApiRequest } from '@app/api/http/request';
 import {
   BenefitAdjustmentConflictError,
   BenefitAllocationAlreadyReversedError,
@@ -28,21 +28,23 @@ import {
 } from '@care/benefits';
 import { BillingDomainError } from '@care/billing';
 import {
-  CommunicationNotFoundError,
-  CommunicationSourceNotFoundError,
-  CommunicationVersionConflictError,
-  InvalidCommunicationInputError,
-} from '@care/communications';
-import { DocumentDomainError } from '@care/documents';
-import {
-  InvalidOperationsInputError,
-  OperationsAssigneeInvalidError,
-  OperationsSourceNotFoundError,
-  OperationsTaskNotFoundError,
-  OperationsTaskStateError,
-  OperationsTaskVersionConflictError,
-  OperationsWorkItemNotFoundError,
-} from '@care/operations';
+  AmendmentReasonRequiredError,
+  CareDocumentationAlreadyFinalizedError,
+  CareDocumentationEmployeeLinkRequiredError,
+  CareDocumentationIncompleteError,
+  CareDocumentationInvalidStateError,
+  CareDocumentationNotFinalizedError,
+  CareDocumentationNotFoundError,
+  CareDocumentationVersionConflictError,
+  CareDocumentationVisitRelationshipRequiredError,
+  DocumentationEntryNotFoundError,
+  InvalidDocumentationWorklistQueryError,
+  InvalidDocumentationEntryError,
+  InvalidServiceEvidenceError,
+  ServiceEvidenceNotFoundError,
+  VisitExecutionNotCompletedError,
+  VisitExecutionRequiredError,
+} from '@care/care-documentation';
 import {
   ClientArchivedError,
   ClientAddressNotFoundError,
@@ -65,6 +67,14 @@ import {
   PflegegradNotFoundError,
   PflegegradRecordImmutableError,
 } from '@care/clients';
+import {
+  CommunicationNotFoundError,
+  CommunicationSourceNotFoundError,
+  CommunicationVersionConflictError,
+  InvalidCommunicationInputError,
+} from '@care/communications';
+import type { ProblemDetails } from '@care/contracts';
+import { DocumentDomainError } from '@care/documents';
 import {
   CrossTenantReferenceError,
   EmployeeAlreadyLinkedError,
@@ -97,6 +107,15 @@ import {
   TenantAccessError,
 } from '@care/identity';
 import {
+  InvalidOperationsInputError,
+  OperationsAssigneeInvalidError,
+  OperationsSourceNotFoundError,
+  OperationsTaskNotFoundError,
+  OperationsTaskStateError,
+  OperationsTaskVersionConflictError,
+  OperationsWorkItemNotFoundError,
+} from '@care/operations';
+import {
   FacilityArchivedError,
   FacilityHasActiveTeamsError,
   FacilityNotFoundError,
@@ -114,29 +133,7 @@ import {
   InvalidSchedulingTimezoneError,
   FacilityExecutionInProgressError,
 } from '@care/organizations';
-import {
-  InvalidServiceAvailabilityError,
-  InvalidServiceCategoryError,
-  InvalidServiceDefinitionError,
-  InvalidServicePaginationError,
-  ServiceCategoryArchivedError,
-  ServiceCategoryNotFoundError,
-  ServiceDefinitionArchivedError,
-  ServiceNotFoundError,
-  ServiceNotAvailableForProviderError,
-  ServiceNotValidForPeriodError,
-  ServiceDefinitionHasActiveServiceAgreementsError,
-  InvalidServicePriceError,
-  InvalidServicePriceQuantityError,
-  ServicePriceConflictError,
-  ServicePriceNotFoundError,
-  ServicePriceScopeDeniedError,
-  ServicePricingUnitMismatchError,
-} from '@care/services';
-import {
-  ServiceAgreementError,
-  ServiceAgreementHasFutureVisitsError,
-} from '@care/service-agreements';
+import { AuthorizationDeniedError } from '@care/permissions';
 import {
   DuplicateVisitAssignmentError,
   InvalidEmployeeUnavailabilityError,
@@ -172,40 +169,9 @@ import {
   TourVersionConflictError,
 } from '@care/scheduling';
 import {
-  EmployeeLinkRequiredError,
-  ExecutionCorrectionReasonRequiredError,
-  InvalidPerformedServiceQuantityError,
-  InvalidPerformedServiceStatusError,
-  InvalidVisitExecutionQueryError,
-  PerformedServiceNotFoundError,
-  PerformedServiceRequiredError,
-  PerformedServiceServiceInvalidError,
-  VisitExecutionAlreadyCompletedError,
-  VisitExecutionNotFoundError,
-  VisitExecutionNotStartedError,
-  VisitExecutionTimeInvalidError,
-  VisitExecutionVersionConflictError,
-  VisitExecutionVisitCancelledError,
-  VisitNotAssignedToEmployeeError,
-} from '@care/visit-execution';
-import {
-  AmendmentReasonRequiredError,
-  CareDocumentationAlreadyFinalizedError,
-  CareDocumentationEmployeeLinkRequiredError,
-  CareDocumentationIncompleteError,
-  CareDocumentationInvalidStateError,
-  CareDocumentationNotFinalizedError,
-  CareDocumentationNotFoundError,
-  CareDocumentationVersionConflictError,
-  CareDocumentationVisitRelationshipRequiredError,
-  DocumentationEntryNotFoundError,
-  InvalidDocumentationWorklistQueryError,
-  InvalidDocumentationEntryError,
-  InvalidServiceEvidenceError,
-  ServiceEvidenceNotFoundError,
-  VisitExecutionNotCompletedError,
-  VisitExecutionRequiredError,
-} from '@care/care-documentation';
+  ServiceAgreementError,
+  ServiceAgreementHasFutureVisitsError,
+} from '@care/service-agreements';
 import {
   AcknowledgementAlreadyExistsError,
   AcknowledgementConfirmationNameMismatchError,
@@ -233,7 +199,42 @@ import {
   ServiceEvidenceVisitRelationshipRequiredError,
   SignatureTooLargeError,
 } from '@care/service-evidence';
-import type { ApiRequest } from '@app/api/http/request';
+import {
+  InvalidServiceAvailabilityError,
+  InvalidServiceCategoryError,
+  InvalidServiceDefinitionError,
+  InvalidServicePaginationError,
+  ServiceCategoryArchivedError,
+  ServiceCategoryNotFoundError,
+  ServiceDefinitionArchivedError,
+  ServiceNotFoundError,
+  ServiceNotAvailableForProviderError,
+  ServiceNotValidForPeriodError,
+  ServiceDefinitionHasActiveServiceAgreementsError,
+  InvalidServicePriceError,
+  InvalidServicePriceQuantityError,
+  ServicePriceConflictError,
+  ServicePriceNotFoundError,
+  ServicePriceScopeDeniedError,
+  ServicePricingUnitMismatchError,
+} from '@care/services';
+import {
+  EmployeeLinkRequiredError,
+  ExecutionCorrectionReasonRequiredError,
+  InvalidPerformedServiceQuantityError,
+  InvalidPerformedServiceStatusError,
+  InvalidVisitExecutionQueryError,
+  PerformedServiceNotFoundError,
+  PerformedServiceRequiredError,
+  PerformedServiceServiceInvalidError,
+  VisitExecutionAlreadyCompletedError,
+  VisitExecutionNotFoundError,
+  VisitExecutionNotStartedError,
+  VisitExecutionTimeInvalidError,
+  VisitExecutionVersionConflictError,
+  VisitExecutionVisitCancelledError,
+  VisitNotAssignedToEmployeeError,
+} from '@care/visit-execution';
 
 @Injectable()
 @Catch()

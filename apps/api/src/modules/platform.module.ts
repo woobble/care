@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
-import { DrizzleOutboxRepository } from '@care/platform';
-import { DATABASE, OUTBOX_WRITER } from '@app/api/tokens';
+
 import { DatabaseModule } from '@app/api/database/database.module';
 import type { AppDatabase } from '@app/api/database/database.module';
+import { DATABASE, OUTBOX_WRITER } from '@app/api/tokens';
+import { DrizzleOutboxRepository } from '@care/platform';
 
 @Module({
   imports: [DatabaseModule],

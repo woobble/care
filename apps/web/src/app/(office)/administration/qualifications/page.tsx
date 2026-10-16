@@ -1,13 +1,6 @@
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
-import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { StatusBadge } from '@care/ui/components/status-badge';
-import { statusLabelKey } from '@app/web/i18n/status';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import Link from 'next/link';
+
 import { ActionNotice } from '@app/web/app/(office)/administration/action-notice';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
 import {
@@ -18,6 +11,14 @@ import {
   updateQualificationAction,
   updateSkillAction,
 } from '@app/web/app/(office)/employees/actions';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { statusLabelKey } from '@app/web/i18n/status';
+import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { StatusBadge } from '@care/ui/components/status-badge';
 
 type SearchParams = Promise<{ error?: string; updated?: string }>;
 type Definition = {

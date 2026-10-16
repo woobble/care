@@ -1,4 +1,5 @@
 import type { AgreementServiceSnapshot, ServiceAgreementSnapshot } from '@care/service-agreements';
+
 import type { ServiceAgreementListItemDto } from './service-agreements.dto';
 
 export function serviceAgreementResponse(agreement: ServiceAgreementSnapshot) {

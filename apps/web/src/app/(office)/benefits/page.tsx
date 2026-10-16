@@ -1,21 +1,16 @@
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
-import { ResourceReference } from '@app/web/components/resource-reference';
+import { randomUUID } from 'node:crypto';
+
+import { getLocale, getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { DataPagination } from '@app/web/components/data-pagination';
-import { redirectToValidPage } from '@app/web/lib/pagination';
-import { randomUUID } from 'node:crypto';
-import Link from 'next/link';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { NativeSelect } from '@care/ui/components/native-select';
+import { EmptyState, PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
 import type { Locale } from '@app/web/i18n/config';
-import type { components } from '@care/api-client';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatCurrency, formatDate } from '@app/web/i18n/format';
-import { AllocationEditor } from './allocation-editor';
 import {
   getApiClient,
   getPermissionGrants,
@@ -23,7 +18,15 @@ import {
   hasClientPermission,
   hasPermission,
 } from '@app/web/lib/api';
+import { redirectToValidPage } from '@app/web/lib/pagination';
+import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+
 import { createProviderRecognitionAction, allocatePerformedServiceAction } from './actions';
+import { AllocationEditor } from './allocation-editor';
 
 type SearchParams = Promise<{
   page?: string;

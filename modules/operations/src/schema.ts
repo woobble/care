@@ -14,16 +14,18 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { clientRecords } from '@care/clients';
-import { employeeRecords } from '@care/employees';
-import { facilities, organizationsTable } from '@care/organizations';
-import { agreements } from '@care/service-agreements';
-import { visits } from '@care/scheduling';
-import { evidencePackages } from '@care/service-evidence';
+
+import { clientBenefitEntitlements } from '@care/benefits';
 import { invoices } from '@care/billing';
 import { claims } from '@care/billing';
-import { clientBenefitEntitlements } from '@care/benefits';
+import { clientRecords } from '@care/clients';
 import { documentArtifacts } from '@care/documents';
+import { employeeRecords } from '@care/employees';
+import { facilities, organizationsTable } from '@care/organizations';
+import { visits } from '@care/scheduling';
+import { agreements } from '@care/service-agreements';
+import { evidencePackages } from '@care/service-evidence';
+
 import type { RecurrenceRule } from './domain/recurrence';
 
 const operations = pgSchema('operations');

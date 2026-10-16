@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+
 import { organizationsTable } from '@care/organizations';
 
 const billing = pgSchema('billing');

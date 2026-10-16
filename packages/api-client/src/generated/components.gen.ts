@@ -161,6 +161,8 @@ import type {
   OperationsTaskListResponseDto,
   OperationsTaskResponseDto,
   OperationsWorkItemResponseDto,
+  OperationsWorkQueueItemResponseDto,
+  OperationsWorkQueueResponseDto,
   OperationsWorklistResponseDto,
   OrganizationResponseDto,
   PaginatedFacilitiesResponseDto,
@@ -439,6 +441,8 @@ export type components = {
     OperationsTaskListResponseDto: OperationsTaskListResponseDto;
     OperationsTaskResponseDto: OperationsTaskResponseDto;
     OperationsWorkItemResponseDto: OperationsWorkItemResponseDto;
+    OperationsWorkQueueItemResponseDto: OperationsWorkQueueItemResponseDto;
+    OperationsWorkQueueResponseDto: OperationsWorkQueueResponseDto;
     OperationsWorklistResponseDto: OperationsWorklistResponseDto;
     OrganizationResponseDto: OrganizationResponseDto;
     PaginatedFacilitiesResponseDto: PaginatedFacilitiesResponseDto;

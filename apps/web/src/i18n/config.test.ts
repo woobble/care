@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+
 import { defaultLocale, isLocale, localeCookieName, locales, resolveLocale } from './config';
 
 describe('locale configuration', () => {

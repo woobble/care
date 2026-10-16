@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, exists, gte, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm';
-import type { DatabaseTransaction } from '@care/database';
+
 import { clientRecords } from '@care/clients';
+import type { DatabaseTransaction } from '@care/database';
 import { employeeRecords, employeeTeamMemberships } from '@care/employees';
 import { visitAssignments, visits } from '@care/scheduling';
 import { performedServices, visitExecutions } from '@care/visit-execution';
@@ -364,7 +365,9 @@ export class CareDocumentationRepository {
       from: Date;
       until: Date;
       clientQuery?: string;
+      organizationId?: string;
       facilityId?: string;
+      clientId?: string;
       employeeId?: string;
       status?: 'draft' | 'finalized' | 'missing';
     },
@@ -389,6 +392,8 @@ export class CareDocumentationRepository {
       );
     }
     if (input.facilityId) conditions.push(eq(visits.facilityId, input.facilityId));
+    if (input.organizationId) conditions.push(eq(visits.organizationId, input.organizationId));
+    if (input.clientId) conditions.push(eq(visits.clientId, input.clientId));
     if (input.employeeId) {
       conditions.push(
         or(

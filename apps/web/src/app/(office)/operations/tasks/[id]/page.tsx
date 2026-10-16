@@ -1,35 +1,43 @@
-import { Textarea } from '@care/ui/components/textarea';
-import { NativeSelect } from '@care/ui/components/native-select';
-import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { PageHeader } from '@app/web/components/page-patterns';
-import { ResourceReference } from '@app/web/components/resource-reference';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { errorMessageKey } from '@app/web/i18n/errors';
-import { formatDateTime } from '@app/web/i18n/format';
-import { visitDateTimeInputValue } from '@app/web/lib/care-date';
-import {
-  getApiClient,
-  getPermissionGrants,
-  getTenantHeader,
-  hasPermission,
-} from '@app/web/lib/api';
+
 import {
   addTaskCommentAction,
   transitionTaskAction,
   updateTaskAction,
 } from '@app/web/app/(office)/operations/actions';
 import { taskSourceHref, taskStatusTranslation } from '@app/web/app/(office)/operations/ui';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { PageHeader } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
+import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDateTime } from '@app/web/i18n/format';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasPermission,
+} from '@app/web/lib/api';
+import { visitDateTimeInputValue } from '@app/web/lib/care-date';
 import type { components } from '@care/api-client';
+import { Button } from '@care/ui/components/button';
+import { Input } from '@care/ui/components/input';
+import { Label } from '@care/ui/components/label';
+import { NativeSelect } from '@care/ui/components/native-select';
+import { Textarea } from '@care/ui/components/textarea';
 
 type Params = Promise<{ id: string }>;
 type SearchParams = Promise<{ error?: string; updated?: string }>;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const uuidInDisplayNamePattern =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
+
+function displayNameWithoutIdentifiers(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized && !uuidInDisplayNamePattern.test(normalized) ? normalized : null;
+}
 
 export default async function OperationsTaskDetailPage({
   params,
@@ -107,13 +115,22 @@ export default async function OperationsTaskDetailPage({
   const assignedEmployee = employeeResult.data as
     | components['schemas']['EmployeeDetailResponseDto']
     | undefined;
-  const assignedEmployeeOption =
-    task.assignedEmployeeId && assignedEmployee
-      ? {
-          id: task.assignedEmployeeId,
-          label: `${assignedEmployee.preferredName || assignedEmployee.firstName} ${assignedEmployee.lastName}`,
-        }
-      : undefined;
+  const assignedEmployeeName = assignedEmployee
+    ? displayNameWithoutIdentifiers(
+        `${assignedEmployee.preferredName || assignedEmployee.firstName} ${assignedEmployee.lastName}`,
+      )
+    : null;
+  const clientName = client
+    ? displayNameWithoutIdentifiers(
+        `${client.preferredName || client.firstName} ${client.lastName}`,
+      )
+    : null;
+  const assignedEmployeeOption = task.assignedEmployeeId
+    ? {
+        id: task.assignedEmployeeId,
+        label: assignedEmployeeName ?? translate('Resources.unavailableEmployee'),
+      }
+    : undefined;
   const sourceHref = taskSourceHref(task);
   const terminal = task.status === 'completed' || task.status === 'cancelled';
 
@@ -186,7 +203,10 @@ export default async function OperationsTaskDetailPage({
               <dt className="text-muted-foreground">{t('organization')}</dt>
               <dd>
                 <ResourceReference
-                  label={organization?.name ?? translate('Resources.unavailableOrganization')}
+                  label={
+                    displayNameWithoutIdentifiers(organization?.name) ??
+                    translate('Resources.unavailableOrganization')
+                  }
                   href={
                     organization ? `/administration/organizations/${task.organizationId}` : null
                   }
@@ -198,7 +218,10 @@ export default async function OperationsTaskDetailPage({
               <dd>
                 {task.facilityId ? (
                   <ResourceReference
-                    label={facility?.name ?? translate('Resources.unavailableFacility')}
+                    label={
+                      displayNameWithoutIdentifiers(facility?.name) ??
+                      translate('Resources.unavailableFacility')
+                    }
                     href={facility ? `/administration/facilities/${task.facilityId}` : null}
                   />
                 ) : (
@@ -209,10 +232,12 @@ export default async function OperationsTaskDetailPage({
             <div>
               <dt className="text-muted-foreground">{t('client')}</dt>
               <dd>
-                {client ? (
+                {client && clientName ? (
                   <Link className="text-primary underline" href={`/clients/${client.id}`}>
-                    {client.preferredName || client.firstName} {client.lastName}
+                    {clientName}
                   </Link>
+                ) : client ? (
+                  translate('Resources.unavailableClient')
                 ) : task.clientId ? (
                   t('restrictedClient')
                 ) : (

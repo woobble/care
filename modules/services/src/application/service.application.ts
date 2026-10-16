@@ -1,12 +1,13 @@
 import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
+import { OrganizationRepository } from '@care/organizations';
 import { AuthorizationDeniedError, assertCan, can } from '@care/permissions';
 import type { AuthorizationPrincipal, Permission } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
-import { OrganizationRepository } from '@care/organizations';
 import {
   ServiceDefinition,
   InvalidServiceAvailabilityError,

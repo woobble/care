@@ -18129,6 +18129,241 @@
         ]
       }
     },
+    "/api/v1/operations/work-queue": {
+      "get": {
+        "operationId": "OperationsController_workQueue",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "priority",
+                "due"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          },
+          {
+            "name": "untilDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "due",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "overdue",
+                "today",
+                "upcoming"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "assignedToMe",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "assignedEmployeeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "priority",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "low",
+                "normal",
+                "high",
+                "urgent"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskStatus",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "open",
+                "in_progress",
+                "completed",
+                "cancelled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "exceptionStatus",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "open",
+                "acknowledged",
+                "snoozed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "severity",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "info",
+                "warning",
+                "critical"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "sourceDomain",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          },
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "itemType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "all",
+                "tasks",
+                "exceptions"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationsWorkQueueResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List tasks and derived exceptions in one paginated Operations queue",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
     "/api/v1/operations/work-items": {
       "get": {
         "operationId": "OperationsController_workItems",
@@ -18945,6 +19180,24 @@
             "schema": {}
           },
           {
+            "name": "untilDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
             "name": "due",
             "required": false,
             "in": "query",
@@ -19237,6 +19490,24 @@
             "required": false,
             "in": "query",
             "schema": {}
+          },
+          {
+            "name": "untilDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
           },
           {
             "name": "due",
@@ -34827,65 +35098,6 @@
           "highPriorityExceptions"
         ]
       },
-      "OperationsWorklistResponseDto": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OperationsWorkItemResponseDto"
-            }
-          },
-          "page": {
-            "type": "number"
-          },
-          "pageSize": {
-            "type": "number"
-          },
-          "total": {
-            "type": "number"
-          },
-          "truncated": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "items",
-          "page",
-          "pageSize",
-          "total",
-          "truncated"
-        ]
-      },
-      "DeadlineTaskRequestDto": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string",
-            "nullable": true
-          },
-          "priority": {
-            "type": "string",
-            "enum": [
-              "low",
-              "normal",
-              "high",
-              "urgent"
-            ]
-          },
-          "assignedEmployeeId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          }
-        },
-        "required": [
-          "title"
-        ]
-      },
       "OperationsTaskResponseDto": {
         "type": "object",
         "properties": {
@@ -34905,6 +35117,14 @@
           "clientId": {
             "type": "string",
             "format": "uuid",
+            "nullable": true
+          },
+          "clientName": {
+            "type": "string",
+            "nullable": true
+          },
+          "assignedEmployeeName": {
+            "type": "string",
             "nullable": true
           },
           "title": {
@@ -34999,6 +35219,116 @@
           "version",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "OperationsWorkQueueItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "task",
+              "exception"
+            ]
+          },
+          "task": {
+            "$ref": "#/components/schemas/OperationsTaskResponseDto"
+          },
+          "exception": {
+            "$ref": "#/components/schemas/OperationsWorkItemResponseDto"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "OperationsWorkQueueResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationsWorkQueueItemResponseDto"
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total",
+          "truncated"
+        ]
+      },
+      "OperationsWorklistResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationsWorkItemResponseDto"
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total",
+          "truncated"
+        ]
+      },
+      "DeadlineTaskRequestDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "normal",
+              "high",
+              "urgent"
+            ]
+          },
+          "assignedEmployeeId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "required": [
+          "title"
         ]
       },
       "ReminderPolicySettingResponseDto": {

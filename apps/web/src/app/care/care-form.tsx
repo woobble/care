@@ -1,9 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { Button } from '@care/ui/components/button';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import { Button } from '@care/ui/components/button';
+
+import { useCareDraftScope } from './draft-scope';
 import {
   careDraftPrefix,
   clearCareDrafts,
@@ -11,7 +14,6 @@ import {
   saveCareDraft,
   type CareDraftRecord,
 } from './drafts';
-import { useCareDraftScope } from './draft-scope';
 
 type ServerAction = (formData: FormData) => void | Promise<void>;
 type DraftOptions = {

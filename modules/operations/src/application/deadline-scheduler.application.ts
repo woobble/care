@@ -1,23 +1,24 @@
-import { v7 as uuidv7 } from 'uuid';
 import { and, asc, eq, gte, gt, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm';
+import { v7 as uuidv7 } from 'uuid';
+
 import type { AuditWriter } from '@care/audit';
-import type { DatabaseTransaction, UnitOfWork } from '@care/database';
-import { createDomainEvent } from '@care/events';
-import type { OutboxWriter } from '@care/platform';
-import { clientRecords } from '@care/clients';
 import { benefitFundingSources, clientBenefitEntitlements } from '@care/benefits';
+import { payerArrangements } from '@care/billing';
+import { readOperationsReceivableDeadlines } from '@care/billing';
+import { clientRecords } from '@care/clients';
+import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import {
   employeeFacilityAssignments,
   employeeQualifications,
   employeeRecords,
 } from '@care/employees';
-import { payerArrangements } from '@care/billing';
-import { agreements } from '@care/service-agreements';
-import { localDateTimeToInstant } from '@care/scheduling';
+import { createDomainEvent } from '@care/events';
 import { organizationsTable } from '@care/organizations';
-import { readOperationsReceivableDeadlines } from '@care/billing';
+import type { OutboxWriter } from '@care/platform';
+import { localDateTimeToInstant } from '@care/scheduling';
+import { agreements } from '@care/service-agreements';
+
 import { stableIssueId } from '../domain/operations';
-import { OperationsAssigneeInvalidError, validateOperationsAssignee } from './operations-guards';
 import {
   exceptionOccurrences,
   reminderPolicies,
@@ -25,6 +26,7 @@ import {
   taskActivity,
   tasks,
 } from '../schema';
+import { OperationsAssigneeInvalidError, validateOperationsAssignee } from './operations-guards';
 
 const MAX_AGREEMENTS_PER_RUN = 500;
 const RUN_LEASE_MS = 5 * 60 * 1000;

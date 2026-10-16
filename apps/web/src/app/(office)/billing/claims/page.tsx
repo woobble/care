@@ -1,16 +1,14 @@
-import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
-import {
-  Table as ShadcnTable,
-  TableHeader as ShadcnTableHeader,
-  TableBody as ShadcnTableBody,
-  TableHead as ShadcnTableHead,
-  TableRow as ShadcnTableRow,
-  TableCell as ShadcnTableCell,
-} from '@care/ui/components/table';
-import { NativeSelect } from '@care/ui/components/native-select';
-import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Button } from '@care/ui/components/button';
+import Link from 'next/link';
+import type { ReactNode } from 'react';
+
+import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
+import { formatCents } from '@app/web/app/(office)/billing/format';
+import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { DataPagination } from '@app/web/components/data-pagination';
+import { ErrorNotice as Alert, SuccessNotice as Status } from '@app/web/components/page-patterns';
+import { PageHeader, EmptyState } from '@app/web/components/page-patterns';
+import { ResourceReference } from '@app/web/components/resource-reference';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDateTime } from '@app/web/i18n/format';
@@ -21,14 +19,17 @@ import {
   hasClientPermission,
   hasPermission,
 } from '@app/web/lib/api';
-import { BillingNavigation } from '@app/web/app/(office)/billing/billing-nav';
-import { formatCents } from '@app/web/app/(office)/billing/format';
-import { PageHeader, EmptyState } from '@app/web/components/page-patterns';
-import { ResourceReference } from '@app/web/components/resource-reference';
-import { DataPagination } from '@app/web/components/data-pagination';
 import { redirectToValidPage } from '@app/web/lib/pagination';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import type { ReactNode } from 'react';
+import { Button } from '@care/ui/components/button';
+import { NativeSelect } from '@care/ui/components/native-select';
+import {
+  Table as ShadcnTable,
+  TableHeader as ShadcnTableHeader,
+  TableBody as ShadcnTableBody,
+  TableHead as ShadcnTableHead,
+  TableRow as ShadcnTableRow,
+  TableCell as ShadcnTableCell,
+} from '@care/ui/components/table';
 
 type ClaimStatus =
   | 'draft'
@@ -679,7 +680,7 @@ function MobileMetric({ label, value }: Readonly<{ label: string; value: ReactNo
   return (
     <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-2">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="break-words font-medium">{value}</dd>
+      <dd className="font-medium break-words">{value}</dd>
     </div>
   );
 }
