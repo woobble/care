@@ -181,9 +181,18 @@ export async function captureReviewScreenshot(
   page: Page,
   filename: string,
   fullPage = false,
+  scrollToTop = true,
 ): Promise<void> {
-  await page.evaluate(() => window.scrollTo(0, 0));
+  if (scrollToTop) await page.evaluate(() => window.scrollTo(0, 0));
+  await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
   await page.screenshot({ path: resolve(reviewDirectory, filename), fullPage });
+}
+
+export async function captureReviewElementScreenshot(
+  locator: Locator,
+  filename: string,
+): Promise<void> {
+  await locator.screenshot({ path: resolve(reviewDirectory, filename) });
 }
 
 export async function expectVisibleTextToOmitIds(

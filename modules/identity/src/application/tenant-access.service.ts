@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, inArray, lte, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, exists, gt, ilike, inArray, lte, or, sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 
 import type { AuditWriter } from '@care/audit';
@@ -49,6 +49,11 @@ export interface TenantMemberView {
   displayName: string | null;
   email: string | null;
   status: 'pending' | 'active' | 'inactive' | 'revoked';
+  invitation: {
+    status: 'pending' | 'accepted' | 'expired' | 'revoked';
+    expiresAt: Date;
+    createdAt: Date;
+  } | null;
   roles: Array<{ id: string; name: string; permissions: Permission[] }>;
   scopes: Array<{ scopeType: ScopeType; scopeId: string; name: string | null }>;
   permissions: Permission[];
@@ -75,7 +80,16 @@ export class TenantAccessService {
 
   async listMembers(
     principal: AuthorizationPrincipal,
-    input: { page?: number; pageSize?: number; status?: TenantMemberView['status'] } = {},
+    input: {
+      page?: number;
+      pageSize?: number;
+      status?: TenantMemberView['status'];
+      q?: string;
+      roleId?: string;
+      scopeType?: TenantAdminScopeType;
+      organizationId?: string;
+      facilityId?: string;
+    } = {},
   ): Promise<{ items: TenantMemberView[]; page: number; pageSize: number; total: number }> {
     const page = input.page ?? 1;
     const pageSize = input.pageSize ?? 50;
@@ -94,6 +108,77 @@ export class TenantAccessService {
       await this.setActor(transaction, principal.userId);
       const filters = [eq(tenantMemberships.tenantId, principal.tenantId)];
       if (input.status) filters.push(eq(tenantMemberships.status, input.status));
+      const search = input.q?.trim().slice(0, 120);
+      if (search) {
+        const pattern = `%${escapeLikePattern(search)}%`;
+        filters.push(or(ilike(users.displayName, pattern), ilike(users.email, pattern))!);
+      }
+      if (input.roleId) {
+        filters.push(
+          exists(
+            transaction
+              .select({ membershipId: membershipRoles.membershipId })
+              .from(membershipRoles)
+              .where(
+                and(
+                  eq(membershipRoles.tenantId, principal.tenantId),
+                  eq(membershipRoles.membershipId, tenantMemberships.id),
+                  eq(membershipRoles.roleId, input.roleId),
+                ),
+              ),
+          ),
+        );
+      }
+      if (input.scopeType) {
+        filters.push(
+          exists(
+            transaction
+              .select({ membershipId: membershipScopes.membershipId })
+              .from(membershipScopes)
+              .where(
+                and(
+                  eq(membershipScopes.tenantId, principal.tenantId),
+                  eq(membershipScopes.membershipId, tenantMemberships.id),
+                  eq(membershipScopes.scopeType, input.scopeType),
+                ),
+              ),
+          ),
+        );
+      }
+      if (input.organizationId) {
+        filters.push(
+          exists(
+            transaction
+              .select({ membershipId: membershipScopes.membershipId })
+              .from(membershipScopes)
+              .where(
+                and(
+                  eq(membershipScopes.tenantId, principal.tenantId),
+                  eq(membershipScopes.membershipId, tenantMemberships.id),
+                  eq(membershipScopes.scopeType, 'organization'),
+                  eq(membershipScopes.scopeId, input.organizationId),
+                ),
+              ),
+          ),
+        );
+      }
+      if (input.facilityId) {
+        filters.push(
+          exists(
+            transaction
+              .select({ membershipId: membershipScopes.membershipId })
+              .from(membershipScopes)
+              .where(
+                and(
+                  eq(membershipScopes.tenantId, principal.tenantId),
+                  eq(membershipScopes.membershipId, tenantMemberships.id),
+                  eq(membershipScopes.scopeType, 'facility'),
+                  eq(membershipScopes.scopeId, input.facilityId),
+                ),
+              ),
+          ),
+        );
+      }
       const where = and(...filters);
       const rows = await transaction
         .select({
@@ -114,6 +199,7 @@ export class TenantAccessService {
       const totals = await transaction
         .select({ total: count() })
         .from(tenantMemberships)
+        .innerJoin(users, eq(tenantMemberships.userId, users.id))
         .where(where);
       return {
         items: await this.memberViews(transaction, principal.tenantId, rows),
@@ -193,7 +279,11 @@ export class TenantAccessService {
 
   async listInvitationsPage(
     principal: AuthorizationPrincipal,
-    input: { page?: number; pageSize?: number } = {},
+    input: {
+      page?: number;
+      pageSize?: number;
+      status?: TenantInvitationView['status'];
+    } = {},
   ): Promise<{ items: TenantInvitationView[]; page: number; pageSize: number; total: number }> {
     const page = input.page ?? 1;
     const pageSize = input.pageSize ?? 20;
@@ -209,7 +299,10 @@ export class TenantAccessService {
     this.requirePermission(principal, 'tenant.members.read', tenantResource(principal.tenantId));
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       await this.setActor(transaction, principal.userId);
-      const where = eq(tenantInvitations.tenantId, principal.tenantId);
+      const where = and(
+        eq(tenantInvitations.tenantId, principal.tenantId),
+        ...(input.status ? [eq(tenantInvitations.status, input.status)] : []),
+      );
       const [rows, totals] = await Promise.all([
         transaction
           .select()
@@ -1108,6 +1201,22 @@ export class TenantAccessService {
       .where(
         and(inArray(membershipScopes.membershipId, ids), eq(membershipScopes.tenantId, tenantId)),
       );
+    const emails = [...new Set(members.flatMap((member) => (member.email ? [member.email] : [])))];
+    const invitationRows = emails.length
+      ? await transaction
+          .select({
+            email: tenantInvitations.email,
+            status: tenantInvitations.status,
+            expiresAt: tenantInvitations.expiresAt,
+            createdAt: tenantInvitations.createdAt,
+            id: tenantInvitations.id,
+          })
+          .from(tenantInvitations)
+          .where(
+            and(eq(tenantInvitations.tenantId, tenantId), inArray(tenantInvitations.email, emails)),
+          )
+          .orderBy(desc(tenantInvitations.createdAt), desc(tenantInvitations.id))
+      : [];
 
     const roleMap = new Map<
       string,
@@ -1141,6 +1250,15 @@ export class TenantAccessService {
       });
       scopesMap.set(row.membershipId, list);
     }
+    const invitationMap = new Map<string, NonNullable<TenantMemberView['invitation']>>();
+    for (const row of invitationRows) {
+      if (invitationMap.has(row.email)) continue;
+      invitationMap.set(row.email, {
+        status: row.status === 'pending' && row.expiresAt <= new Date() ? 'expired' : row.status,
+        expiresAt: row.expiresAt,
+        createdAt: row.createdAt,
+      });
+    }
 
     return members.map((member) => {
       const rolesForMember = [...(roleMap.get(member.id)?.values() ?? [])].map((role) => ({
@@ -1150,6 +1268,7 @@ export class TenantAccessService {
       const effectivePermissions = [...new Set(rolesForMember.flatMap((role) => role.permissions))];
       return {
         ...member,
+        invitation: member.email ? (invitationMap.get(member.email) ?? null) : null,
         roles: rolesForMember,
         scopes: scopesMap.get(member.id) ?? [],
         permissions: effectivePermissions.sort(),
@@ -1396,6 +1515,10 @@ function deduplicateScopes(input: readonly TenantScopeInput[]): TenantScopeInput
 
 function scopeKey(scope: { scopeType: string; scopeId: string }): string {
   return `${scope.scopeType}:${scope.scopeId}`;
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
 }
 
 function isPermission(value: string): value is Permission {

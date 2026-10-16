@@ -243,6 +243,7 @@ import type {
   TenantInvitationDto,
   TenantInvitationListDto,
   TenantMemberDto,
+  TenantMemberInvitationSummaryDto,
   TenantMemberListDto,
   TenantRoleDto,
   TenantScopeDto,
@@ -523,6 +524,7 @@ export type components = {
     TenantInvitationDto: TenantInvitationDto;
     TenantInvitationListDto: TenantInvitationListDto;
     TenantMemberDto: TenantMemberDto;
+    TenantMemberInvitationSummaryDto: TenantMemberInvitationSummaryDto;
     TenantMemberListDto: TenantMemberListDto;
     TenantRoleDto: TenantRoleDto;
     TenantScopeDto: TenantScopeDto;

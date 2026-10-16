@@ -64,6 +64,17 @@ describe('client translation messages', () => {
       redirecting: en.Auth.redirecting,
       signInFailed: en.Auth.signInFailed,
     });
+    expect(english.Errors).toEqual({
+      generic: en.Errors.generic,
+      invalidRequest: en.Errors.invalidRequest,
+      insufficientPermission: en.Errors.insufficientPermission,
+      invitationAlreadyExists: en.Errors.invitationAlreadyExists,
+      invitationEmailAmbiguous: en.Errors.invitationEmailAmbiguous,
+      membershipRevoked: en.Errors.membershipRevoked,
+      notFound: en.Errors.notFound,
+      userAlreadyMember: en.Errors.userAlreadyMember,
+      userDisabled: en.Errors.userDisabled,
+    });
     expect(english.Caregiver.drafts).toEqual(en.Caregiver.drafts);
     expect(english.ServiceEvidence.care).toEqual(en.ServiceEvidence.care);
     expect(english.Visits).toEqual({
@@ -116,6 +127,17 @@ describe('client translation messages', () => {
     expect(german.Benefits).toEqual(benefitAllocationMessages(de));
     expect(german.Common.language).toBe(de.Common.language);
     expect(german.Caregiver.drafts).toEqual(de.Caregiver.drafts);
+    expect(german.Errors).toEqual({
+      generic: de.Errors.generic,
+      invalidRequest: de.Errors.invalidRequest,
+      insufficientPermission: de.Errors.insufficientPermission,
+      invitationAlreadyExists: de.Errors.invitationAlreadyExists,
+      invitationEmailAmbiguous: de.Errors.invitationEmailAmbiguous,
+      membershipRevoked: de.Errors.membershipRevoked,
+      notFound: de.Errors.notFound,
+      userAlreadyMember: de.Errors.userAlreadyMember,
+      userDisabled: de.Errors.userDisabled,
+    });
     expect(german.ServiceEvidence.care).toEqual(de.ServiceEvidence.care);
     expect(german.Visits).toEqual({
       detailsSheetTitle: de.Visits.detailsSheetTitle,

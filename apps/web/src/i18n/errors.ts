@@ -1,5 +1,10 @@
 const errorKeys = {
   INVALID_REQUEST: 'Errors.invalidRequest',
+  INVITATION_ALREADY_EXISTS: 'Errors.invitationAlreadyExists',
+  INVITATION_EMAIL_AMBIGUOUS: 'Errors.invitationEmailAmbiguous',
+  USER_ALREADY_MEMBER: 'Errors.userAlreadyMember',
+  USER_DISABLED: 'Errors.userDisabled',
+  MEMBERSHIP_REVOKED: 'Errors.membershipRevoked',
   ORGANIZATION_NOT_FOUND: 'Errors.organizationNotFound',
   ORGANIZATION_ARCHIVED: 'Errors.organizationArchived',
   ORGANIZATION_HAS_ACTIVE_CHILDREN: 'Errors.organizationHasActiveChildren',

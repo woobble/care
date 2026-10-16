@@ -14,6 +14,24 @@ export function roleLabelKey(
   return normalized in keys ? keys[normalized as keyof typeof keys] : 'Users.rolesLabels.unknown';
 }
 
+export function roleDescriptionKey(
+  name: string,
+):
+  | 'Users.roleDescriptions.administrator'
+  | 'Users.roleDescriptions.office'
+  | 'Users.roleDescriptions.caregiver'
+  | 'Users.roleDescriptions.unknown' {
+  const keys = {
+    administrator: 'Users.roleDescriptions.administrator',
+    office: 'Users.roleDescriptions.office',
+    caregiver: 'Users.roleDescriptions.caregiver',
+  } as const;
+  const normalized = name.toLowerCase();
+  return normalized in keys
+    ? keys[normalized as keyof typeof keys]
+    : 'Users.roleDescriptions.unknown';
+}
+
 export function scopeTypeLabelKey(
   scopeType: string,
 ):
@@ -35,18 +53,36 @@ const permissionResources = {
   'tenant.members': 'Users.permissionResources.members',
   'tenant.roles': 'Users.permissionResources.roles',
   client: 'Users.permissionResources.clients',
+  communications: 'Users.permissionResources.communications',
+  'communications.preferences': 'Users.permissionResources.communicationPreferences',
   service: 'Users.permissionResources.services',
   service_agreement: 'Users.permissionResources.serviceAgreements',
   schedule: 'Users.permissionResources.schedule',
   visit_execution: 'Users.permissionResources.visits',
   care_documentation: 'Users.permissionResources.documentation',
+  benefits: 'Users.permissionResources.benefits',
   service_evidence: 'Users.permissionResources.serviceEvidence',
+  billing: 'Users.permissionResources.billing',
+  'billing.payments': 'Users.permissionResources.billingPayments',
+  'billing.settings': 'Users.permissionResources.billingSettings',
+  claims: 'Users.permissionResources.claims',
+  'claims.settings': 'Users.permissionResources.claimsSettings',
+  documents: 'Users.permissionResources.documents',
+  'documents.templates': 'Users.permissionResources.documentTemplates',
+  'documents.exports': 'Users.permissionResources.documentExports',
   acknowledgement: 'Users.permissionResources.acknowledgements',
   employee: 'Users.permissionResources.employees',
   organization: 'Users.permissionResources.organizations',
   facility: 'Users.permissionResources.facilities',
   team: 'Users.permissionResources.teams',
   audit: 'Users.permissionResources.audit',
+  operations: 'Users.permissionResources.operations',
+  'operations.tasks': 'Users.permissionResources.operationTasks',
+  'operations.exceptions': 'Users.permissionResources.operationExceptions',
+  'operations.recurring_tasks': 'Users.permissionResources.recurringOperations',
+  'operations.reminder_settings': 'Users.permissionResources.reminderSettings',
+  onboarding: 'Users.permissionResources.admissions',
+  'onboarding.templates': 'Users.permissionResources.admissionTemplates',
 } as const;
 
 const permissionActions = {
@@ -58,6 +94,7 @@ const permissionActions = {
   archive: 'Users.permissionActions.archive',
   manage_categories: 'Users.permissionActions.manageCategories',
   manage_availability: 'Users.permissionActions.manageAvailability',
+  manage_pricing: 'Users.permissionActions.managePricing',
   activate: 'Users.permissionActions.activate',
   suspend: 'Users.permissionActions.suspend',
   end: 'Users.permissionActions.end',
@@ -72,6 +109,12 @@ const permissionActions = {
   finalize: 'Users.permissionActions.finalize',
   amend: 'Users.permissionActions.amend',
   review: 'Users.permissionActions.review',
+  adjust: 'Users.permissionActions.adjust',
+  allocate: 'Users.permissionActions.allocate',
+  issue: 'Users.permissionActions.issue',
+  submit: 'Users.permissionActions.submit',
+  record_decision: 'Users.permissionActions.recordDecision',
+  reconcile: 'Users.permissionActions.reconcile',
   prepare: 'Users.permissionActions.prepare',
   capture: 'Users.permissionActions.capture',
   revoke: 'Users.permissionActions.revoke',

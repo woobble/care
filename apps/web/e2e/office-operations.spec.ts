@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
+import { v7 as uuidv7 } from 'uuid';
 
 import {
   cleanupOfficeAdminSession,
@@ -22,6 +23,7 @@ test('Operations dashboards and worklists work across screen sizes', async ({ pa
   test.setTimeout(360_000);
   await mkdir(reviewDirectory, { recursive: true });
   page.setDefaultTimeout(15_000);
+  page.setDefaultNavigationTimeout(60_000);
   const database = new Client({ connectionString: required('MIGRATION_DATABASE_URL') });
   await database.connect();
   let office: Awaited<ReturnType<typeof createOfficeAdminSession>> | undefined;
@@ -116,22 +118,26 @@ test('Office staff can manage operational tasks and recurrence', async ({ page }
   test.setTimeout(360_000);
   await mkdir(reviewDirectory, { recursive: true });
   page.setDefaultTimeout(15_000);
+  page.setDefaultNavigationTimeout(60_000);
   const database = new Client({ connectionString: required('MIGRATION_DATABASE_URL') });
   await database.connect();
   let office: Awaited<ReturnType<typeof createOfficeAdminSession>> | undefined;
   let operationsTaskId: string | undefined;
   let operationsRecurrenceId: string | undefined;
+  let onboardingCaseId: string | undefined;
   try {
     office = await createOfficeAdminSession(database, page, 'operations-tasks');
-    const { tenantId, displayName, runId } = office;
+    const { tenantId, displayName, platformUserId, runId } = office;
     await test.step('operations tasks and recurrence can be managed from the office UI', async () => {
       const employeeResult = await database.query<{
         displayName: string;
         organizationName: string;
+        organizationId: string;
       }>(
         `SELECT
            concat_ws(' ', coalesce(nullif(employee.preferred_name, ''), employee.first_name), employee.last_name) AS "displayName",
-           organization.name AS "organizationName"
+           organization.name AS "organizationName",
+           organization.id AS "organizationId"
          FROM employees.employees AS employee
          INNER JOIN organizations.organizations AS organization
            ON organization.tenant_id = employee.tenant_id
@@ -150,9 +156,22 @@ test('Office staff can manage operational tasks and recurrence', async ({ page }
       );
       const organizationName = employeeResult.rows[0]?.organizationName;
       const assignedEmployeeName = employeeResult.rows[0]?.displayName;
-      if (!organizationName || !assignedEmployeeName)
+      const organizationId = employeeResult.rows[0]?.organizationId;
+      if (!organizationName || !assignedEmployeeName || !organizationId)
         throw new Error('Demo Care has no active employee with readable references to assign');
       const assignedEmployeeOption = new RegExp(`^${assignedEmployeeName}$`);
+
+      onboardingCaseId = uuidv7();
+      await database.query(
+        `INSERT INTO onboarding.cases (
+           id, tenant_id, organization_id, first_name, last_name, contact_method,
+           inquiry_source, stage, next_follow_up_at, last_activity_at, created_by_user_id,
+           created_at, updated_at
+         ) VALUES ($1, $2, $3, 'E2E', 'Operations History', 'other',
+           'Operations worklist E2E fixture', 'inquiry', now() - interval '1 minute', now(), $4,
+           now(), now())`,
+        [onboardingCaseId, tenantId, organizationId, platformUserId],
+      );
 
       const taskTitle = `E2E Operations task ${runId}`;
       const taskDescription = `Assigned and tracked in the office UI ${runId}`;
@@ -348,7 +367,32 @@ test('Office staff can manage operational tasks and recurrence', async ({ page }
             operationsRecurrenceId,
           });
         } finally {
-          await cleanupOfficeAdminSession(database, office);
+          try {
+            if (onboardingCaseId) {
+              const occurrences = await database.query<{ id: string }>(
+                `SELECT id FROM operations.exception_occurrences
+                 WHERE tenant_id = $1 AND source_domain = 'onboarding' AND source_entity_id = $2`,
+                [office.tenantId, onboardingCaseId],
+              );
+              const occurrenceIds = occurrences.rows.map((row) => row.id);
+              if (occurrenceIds.length) {
+                await database.query(
+                  'DELETE FROM operations.exception_interactions WHERE tenant_id = $1 AND occurrence_id = ANY($2::uuid[])',
+                  [office.tenantId, occurrenceIds],
+                );
+                await database.query(
+                  'DELETE FROM operations.exception_occurrences WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+                  [office.tenantId, occurrenceIds],
+                );
+              }
+              await database.query(
+                'DELETE FROM onboarding.cases WHERE tenant_id = $1 AND id = $2',
+                [office.tenantId, onboardingCaseId],
+              );
+            }
+          } finally {
+            await cleanupOfficeAdminSession(database, office);
+          }
         }
       }
     } finally {

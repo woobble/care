@@ -11,19 +11,28 @@ function readUuid(value: FormDataEntryValue | null): string | null {
   return typeof value === 'string' && uuidPattern.test(value) ? value : null;
 }
 
-export async function inviteUserAction(formData: FormData): Promise<void> {
+export type InviteUserActionState =
+  | { status: 'idle'; successCount: number }
+  | { status: 'error'; code: string; successCount: number }
+  | { status: 'success'; successCount: number };
+
+export async function inviteUserAction(
+  _previousState: InviteUserActionState,
+  formData: FormData,
+): Promise<InviteUserActionState> {
   const email = formData.get('email');
   if (typeof email !== 'string' || !email.trim().includes('@') || email.trim().length > 254) {
-    redirect('/administration/users?error=INVALID_REQUEST');
+    return { status: 'error', code: 'INVALID_REQUEST', successCount: _previousState.successCount };
   }
   const api = await getApiClient();
   const { error } = await api.POST('/api/v1/admin/invitations', {
     params: { header: await getTenantHeader() },
     body: { email: email.trim() },
   });
-  if (error) redirect(`/administration/users?error=${encodeURIComponent(error.code)}`);
+  if (error)
+    return { status: 'error', code: error.code, successCount: _previousState.successCount };
   revalidatePath('/administration/users');
-  redirect('/administration/users?invited=1');
+  return { status: 'success', successCount: _previousState.successCount + 1 };
 }
 
 export async function revokeInvitationAction(formData: FormData): Promise<void> {
@@ -89,15 +98,17 @@ export async function replaceMemberRolesAction(formData: FormData): Promise<void
   redirect(`/administration/users/${id}?updated=roles`);
 }
 
-export async function replaceMemberScopesAction(formData: FormData): Promise<void> {
+export async function replaceMemberScopesAction(
+  formData: FormData,
+): Promise<{ ok: true } | { ok: false; code: string }> {
   const id = readUuid(formData.get('membershipId'));
   const scopeMode = formData.get('scopeMode');
   if (!id || (scopeMode !== 'tenant' && scopeMode !== 'scoped')) {
-    redirect('/administration/users?error=INVALID_REQUEST');
+    return { ok: false, code: 'INVALID_REQUEST' };
   }
   const tenantHeader = await getTenantHeader();
   const tenantId = tenantHeader['X-Tenant-Id'];
-  if (!uuidPattern.test(tenantId)) redirect('/?error=tenant');
+  if (!uuidPattern.test(tenantId)) return { ok: false, code: 'INVALID_REQUEST' };
 
   const selectedScopes = formData.getAll('scope').map((item) => {
     if (typeof item !== 'string') return null;
@@ -113,7 +124,10 @@ export async function replaceMemberScopesAction(formData: FormData): Promise<voi
     return { scopeType: scopeType as 'organization' | 'facility' | 'team', scopeId };
   });
   if (selectedScopes.some((scope) => scope === null)) {
-    redirect(`/administration/users/${id}?error=INVALID_REQUEST`);
+    return { ok: false, code: 'INVALID_REQUEST' };
+  }
+  if (scopeMode === 'tenant' && selectedScopes.length > 0) {
+    return { ok: false, code: 'SCOPE_CONFLICT' };
   }
   const scopes =
     scopeMode === 'tenant'
@@ -121,14 +135,14 @@ export async function replaceMemberScopesAction(formData: FormData): Promise<voi
       : selectedScopes.filter((scope) => scope !== null);
 
   const api = await getApiClient();
-  const { error } = await api.PUT('/api/v1/admin/members/{id}/scopes', {
+  const { data, error } = await api.PUT('/api/v1/admin/members/{id}/scopes', {
     params: { path: { id }, header: tenantHeader },
     body: { scopes },
   });
-  if (error) redirect(`/administration/users/${id}?error=${encodeURIComponent(error.code)}`);
+  if (error) return { ok: false, code: error.code };
+  if (!data) return { ok: false, code: 'UPDATE_FAILED' };
   revalidatePath('/administration/users');
-  revalidatePath(`/administration/users/${id}`);
-  redirect(`/administration/users/${id}?updated=scopes`);
+  return { ok: true };
 }
 
 export async function createOrganizationAction(formData: FormData): Promise<void> {

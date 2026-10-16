@@ -314,6 +314,19 @@ export async function cleanupLifecycleScenario(
       [scenario.tenantId, scenario.clientId],
     );
     await database.query(
+      `DELETE FROM operations.exception_interactions
+       WHERE tenant_id = $1
+         AND occurrence_id IN (
+           SELECT id FROM operations.exception_occurrences
+           WHERE tenant_id = $1 AND client_id = $2
+         )`,
+      [scenario.tenantId, scenario.clientId],
+    );
+    await database.query(
+      'DELETE FROM operations.exception_occurrences WHERE tenant_id = $1 AND client_id = $2',
+      [scenario.tenantId, scenario.clientId],
+    );
+    await database.query(
       'DELETE FROM clients.client_contacts WHERE tenant_id = $1 AND client_id = $2',
       [scenario.tenantId, scenario.clientId],
     );

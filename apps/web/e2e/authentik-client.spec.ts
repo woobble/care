@@ -345,7 +345,14 @@ test('Office staff can configure services, clients, benefits, and agreements', a
     await expect(page.getByRole('heading', { name: 'All facilities' })).toBeVisible();
     await page.goto(`/administration/organizations/${e2eOrganizationId}`);
     await page.locator('#facility-name').fill(e2eFacilityName);
-    await page.getByRole('button', { name: 'Create facility' }).click();
+    const facilityCreateNavigation = page.waitForURL(
+      (url) => url.pathname.startsWith('/administration/facilities/'),
+      { timeout: 30_000 },
+    );
+    await Promise.all([
+      page.getByRole('button', { name: 'Create facility' }).click(),
+      facilityCreateNavigation,
+    ]);
     await expect(page.getByRole('heading', { name: e2eFacilityName })).toBeVisible();
     const e2eFacilityRow = await database.query<{ id: string }>(
       'SELECT id FROM organizations.facilities WHERE tenant_id = $1 AND organization_id = $2 AND name = $3',

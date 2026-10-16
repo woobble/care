@@ -77,10 +77,16 @@ const membershipQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
   status: z.enum(['pending', 'active', 'inactive', 'revoked']).optional(),
+  q: z.string().trim().max(120).optional(),
+  roleId: z.string().uuid().optional(),
+  scopeType: z.enum(['tenant', 'organization', 'facility', 'team']).optional(),
+  organizationId: z.string().uuid().optional(),
+  facilityId: z.string().uuid().optional(),
 });
 const invitationListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.enum(['pending', 'accepted', 'expired', 'revoked']).optional(),
 });
 
 @ApiTags('tenant administration')
@@ -104,19 +110,47 @@ export class TenantAccessController {
     default: 50,
   })
   @ApiQuery({ name: 'status', required: false, enum: ['pending', 'active', 'inactive', 'revoked'] })
+  @ApiQuery({ name: 'q', required: false, maxLength: 120 })
+  @ApiQuery({ name: 'roleId', required: false, format: 'uuid' })
+  @ApiQuery({
+    name: 'scopeType',
+    required: false,
+    enum: ['tenant', 'organization', 'facility', 'team'],
+  })
+  @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'facilityId', required: false, format: 'uuid' })
   @ApiOkResponse({ type: TenantMemberListDto })
   async listMembers(
     @Req() request: ApiRequest,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('status') status?: string,
+    @Query('q') q?: string,
+    @Query('roleId') roleId?: string,
+    @Query('scopeType') scopeType?: string,
+    @Query('organizationId') organizationId?: string,
+    @Query('facilityId') facilityId?: string,
   ): Promise<TenantMemberListDto> {
-    const parsed = membershipQuerySchema.safeParse({ page, pageSize, status });
+    const parsed = membershipQuerySchema.safeParse({
+      page,
+      pageSize,
+      status,
+      q,
+      roleId,
+      scopeType,
+      organizationId,
+      facilityId,
+    });
     if (!parsed.success) throw invalidRequest();
     const result = await this.tenantAccess.listMembers(this.principal(request), {
       page: parsed.data.page,
       pageSize: parsed.data.pageSize,
       ...(parsed.data.status ? { status: parsed.data.status } : {}),
+      ...(parsed.data.q ? { q: parsed.data.q } : {}),
+      ...(parsed.data.roleId ? { roleId: parsed.data.roleId } : {}),
+      ...(parsed.data.scopeType ? { scopeType: parsed.data.scopeType } : {}),
+      ...(parsed.data.organizationId ? { organizationId: parsed.data.organizationId } : {}),
+      ...(parsed.data.facilityId ? { facilityId: parsed.data.facilityId } : {}),
     });
     return { ...result, items: result.items.map(toMemberDto) };
   }
@@ -162,18 +196,25 @@ export class TenantAccessController {
     maximum: 100,
     default: 20,
   })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['pending', 'accepted', 'expired', 'revoked'],
+  })
   @ApiOkResponse({ type: TenantInvitationListDto })
   async listInvitations(
     @Req() request: ApiRequest,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
+    @Query('status') status?: string,
   ): Promise<TenantInvitationListDto> {
-    const parsed = invitationListQuerySchema.safeParse({ page, pageSize });
+    const parsed = invitationListQuerySchema.safeParse({ page, pageSize, status });
     if (!parsed.success) throw invalidRequest();
-    const result = await this.tenantAccess.listInvitationsPage(
-      this.principal(request),
-      parsed.data,
-    );
+    const result = await this.tenantAccess.listInvitationsPage(this.principal(request), {
+      page: parsed.data.page,
+      pageSize: parsed.data.pageSize,
+      ...(parsed.data.status ? { status: parsed.data.status } : {}),
+    });
     return { ...result, items: result.items.map(toInvitationDto) };
   }
 
@@ -339,6 +380,13 @@ function toInvitationDto(invitation: TenantInvitationView): TenantInvitationDto 
 function toMemberDto(member: TenantMemberView): TenantMemberDto {
   return {
     ...member,
+    invitation: member.invitation
+      ? {
+          status: member.invitation.status,
+          expiresAt: member.invitation.expiresAt.toISOString(),
+          createdAt: member.invitation.createdAt.toISOString(),
+        }
+      : null,
     createdAt: member.createdAt.toISOString(),
     updatedAt: member.updatedAt.toISOString(),
   };

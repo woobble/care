@@ -74,6 +74,17 @@ export class TenantScopeDto {
   name!: string | null;
 }
 
+export class TenantMemberInvitationSummaryDto {
+  @ApiProperty({ enum: ['pending', 'accepted', 'expired', 'revoked'] })
+  status!: 'pending' | 'accepted' | 'expired' | 'revoked';
+
+  @ApiProperty({ format: 'date-time' })
+  expiresAt!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt!: string;
+}
+
 export class TenantMemberDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -89,6 +100,9 @@ export class TenantMemberDto {
 
   @ApiProperty({ enum: ['pending', 'active', 'inactive', 'revoked'] })
   status!: 'pending' | 'active' | 'inactive' | 'revoked';
+
+  @ApiPropertyOptional({ type: TenantMemberInvitationSummaryDto, nullable: true })
+  invitation!: TenantMemberInvitationSummaryDto | null;
 
   @ApiProperty({ type: [TenantRoleDto] })
   roles!: TenantRoleDto[];

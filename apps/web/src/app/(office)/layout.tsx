@@ -135,10 +135,6 @@ async function OfficeWorkspaceLayout({
   const canReadAdministration = administrationLinks.some(({ permission }) =>
     permissions.some((grant) => grant.permission === permission),
   );
-  const administrationHref =
-    administrationLinks.find(({ permission }) =>
-      permissions.some((grant) => grant.permission === permission),
-    )?.href ?? '/administration/users';
   const groups: OfficeNavigationGroup[] = definitions
     .map((group) => ({
       id: group.id,
@@ -152,7 +148,7 @@ async function OfficeWorkspaceLayout({
         .map((item) => ({
           id: item.id,
           label: navigationLabels[item.key],
-          href: item.id === 'administration' ? administrationHref : item.href,
+          href: item.id === 'administration' ? '/administration' : item.href,
         })),
     }))
     .filter((group) => group.items.length > 0);

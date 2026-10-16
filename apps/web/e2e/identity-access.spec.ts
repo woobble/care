@@ -14,7 +14,10 @@ import {
 } from './support/office-admin';
 import {
   acceptDialogDuringAction,
+  captureReviewElementScreenshot,
+  captureReviewScreenshot,
   expectMembershipScopes,
+  expectMobileLayoutToFit,
   expectVisibleTextToOmitIds,
   selectEntity,
   submitServerAction,
@@ -42,11 +45,44 @@ test('Office staff can invite users and administer tenant access', async ({ page
     let invitationId: string | undefined;
     let pilotTenantId: string | undefined;
     let pilotMembershipId: string | undefined;
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/administration');
+    await expect(page.getByRole('heading', { name: 'Administration', level: 1 })).toBeVisible();
+    await expect(page.getByText('Current tenant', { exact: true })).toBeVisible();
+    await captureReviewScreenshot(page, 'administration-overview-desktop-1440.png', true);
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await captureReviewScreenshot(page, 'administration-overview-desktop-dark-1440.png', true);
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Light' }).click();
     await page.goto('/administration/users');
     await expect(page.getByRole('heading', { name: 'Users & Access' })).toBeVisible();
+    await captureReviewScreenshot(page, 'administration-members-desktop-1440.png', true);
+    const invitationForm = page.locator('section[aria-labelledby="invite-title"]');
+    await captureReviewElementScreenshot(
+      invitationForm,
+      'administration-invitation-desktop-1440.png',
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewScreenshot(page, 'administration-members-mobile-390.png', true);
+    await captureReviewElementScreenshot(
+      invitationForm,
+      'administration-invitation-mobile-390.png',
+    );
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.getByLabel('Email').fill(invitedEmail);
     await page.getByRole('button', { name: 'Create invitation' }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Invitation created.' })).toBeVisible();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Invitation recorded.' }),
+    ).toBeVisible();
+    await page.getByLabel('Email').fill(invitedEmail);
+    await page.getByRole('button', { name: 'Create invitation' }).click();
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'A pending invitation already exists' }),
+    ).toBeVisible();
+    await expect(page.getByLabel('Email')).toHaveValue(invitedEmail);
     const pendingInvitation = await database.query<{ id: string }>(
       "SELECT id FROM identity.tenant_invitations WHERE tenant_id = $1 AND email = $2 AND status = 'pending'",
       [tenantId, invitedEmail],
@@ -102,30 +138,21 @@ test('Office staff can invite users and administer tenant access', async ({ page
       },
     );
     await expect(page.getByRole('heading', { name: invitedName })).toBeVisible({ timeout: 30_000 });
-    const officeRole = page.locator(`button[role="checkbox"][value="${officeRoleId}"]`);
-    await officeRole.click();
-    await submitServerAction(page, page.getByRole('button', { name: 'Save roles' }));
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Access record updated.' }),
-    ).toBeVisible();
-    await officeRole.click();
-    await submitServerAction(page, page.getByRole('button', { name: 'Save roles' }));
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Access record updated.' }),
-    ).toBeVisible();
-    await expect(officeRole).not.toBeChecked();
-    await officeRole.click();
-    await submitServerAction(page, page.getByRole('button', { name: 'Save roles' }));
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Access record updated.' }),
-    ).toBeVisible();
-    await expect(officeRole).toBeChecked();
-
+    await captureReviewElementScreenshot(
+      page.locator('section[aria-labelledby="identity-title"]'),
+      'administration-linked-employee-status-desktop-1440.png',
+    );
+    await captureReviewElementScreenshot(
+      page.locator('section[aria-labelledby="roles-title"]'),
+      'administration-role-permissions-desktop-1440.png',
+    );
     await page.locator('input[name="scopeMode"][value="scoped"]').check();
     await expect(page.locator('input[name="scopeMode"][value="scoped"]')).toBeChecked();
     const facilityScope = page.locator(`input[name="scope"][value="facility:${facilityWestId}"]`);
     await selectEntity(page, 'Facilities', 'Facility West', /Facility West/);
-    await submitServerAction(page, page.getByRole('button', { name: 'Save scopes' }));
+    await acceptDialogDuringAction(page, () =>
+      submitServerAction(page, page.getByRole('button', { name: 'Save scopes' })),
+    );
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
@@ -137,20 +164,89 @@ test('Office staff can invite users and administer tenant access', async ({ page
       .getByRole('group', { name: 'Facilities' })
       .getByRole('button', { name: 'Clear selection' })
       .click();
-    await submitServerAction(page, page.getByRole('button', { name: 'Save scopes' }));
+    await acceptDialogDuringAction(page, () =>
+      submitServerAction(page, page.getByRole('button', { name: 'Save scopes' })),
+    );
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
     await expectMembershipScopes(database, invitedMembershipId, []);
     await expect(facilityScope).toHaveCount(0);
-    await selectEntity(page, 'Facilities', 'Facility West', /Facility West/);
-    await submitServerAction(page, page.getByRole('button', { name: 'Save scopes' }));
+    await page.getByRole('combobox', { name: 'Facilities' }).click();
+    const facilitySearch = page.getByRole('combobox', { name: 'Search by name' });
+    await facilitySearch.fill('Facility West');
+    const facilityResult = page.getByRole('option', { name: /Facility West/ });
+    await expect(facilityResult).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole('combobox', { name: 'Facilities' }).scrollIntoViewIfNeeded();
+    await captureReviewScreenshot(
+      page,
+      'administration-member-scopes-search-desktop-1440.png',
+      false,
+      false,
+    );
+    await facilitySearch.press('ArrowDown');
+    await facilitySearch.press('Enter');
+    await expect(facilityScope).toHaveCount(1);
+    await page.getByRole('combobox', { name: 'Facilities' }).click();
+    await expect(page.getByRole('combobox', { name: 'Facilities' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    await page.getByRole('heading', { name: 'Access scopes' }).scrollIntoViewIfNeeded();
+    await captureReviewScreenshot(
+      page,
+      'administration-member-scopes-reselected-desktop-1440.png',
+      false,
+      false,
+    );
+    const scopeSection = page.locator('section[aria-labelledby="scopes-title"]');
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewElementScreenshot(
+      scopeSection,
+      'administration-member-scopes-reselected-tablet-768.png',
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectMobileLayoutToFit(page);
+    await captureReviewElementScreenshot(
+      scopeSection,
+      'administration-member-scopes-reselected-mobile-390.png',
+    );
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await acceptDialogDuringAction(page, () =>
+      submitServerAction(page, page.getByRole('button', { name: 'Save scopes' })),
+    );
     await expect(
       page.getByRole('status').filter({ hasText: 'Access record updated.' }),
     ).toBeVisible();
     await expectMembershipScopes(database, invitedMembershipId, [
       { scopeType: 'facility', scopeId: facilityWestId },
     ]);
+    const officeRole = page.locator(`button[role="checkbox"][value="${officeRoleId}"]`);
+    await officeRole.click();
+    await acceptDialogDuringAction(page, () =>
+      submitServerAction(page, page.getByRole('button', { name: 'Save roles' })),
+    );
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Access record updated.' }),
+    ).toBeVisible();
+    await officeRole.click();
+    await acceptDialogDuringAction(page, () =>
+      submitServerAction(page, page.getByRole('button', { name: 'Save roles' })),
+    );
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Access record updated.' }),
+    ).toBeVisible();
+    await expect(officeRole).not.toBeChecked();
+    await officeRole.click();
+    await acceptDialogDuringAction(page, () =>
+      submitServerAction(page, page.getByRole('button', { name: 'Save roles' })),
+    );
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Access record updated.' }),
+    ).toBeVisible();
+    await expect(officeRole).toBeChecked();
     await page.getByRole('button', { name: 'Activate membership' }).click();
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
     await expect(page.getByText('Office', { exact: true })).toBeVisible();

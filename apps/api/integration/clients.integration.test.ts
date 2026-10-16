@@ -5141,6 +5141,14 @@ describe('clients API', () => {
       expect(invitationPage.items).toContainEqual(
         expect.objectContaining({ id: invitation.invitation.id }),
       );
+      const pendingInvitations = await fetch(
+        `${baseUrl}/api/v1/admin/invitations?status=pending&page=1&pageSize=20`,
+        { headers },
+      );
+      expect(pendingInvitations.status).toBe(200);
+      expect(
+        ((await pendingInvitations.json()) as { items: Array<{ id: string }> }).items,
+      ).toContainEqual(expect.objectContaining({ id: invitation.invitation.id }));
       const duplicateInvitation = await fetch(`${baseUrl}/api/v1/admin/invitations`, {
         method: 'POST',
         headers,
@@ -5337,6 +5345,28 @@ describe('clients API', () => {
         },
       );
       expect(assignFacilityScope.status).toBe(200);
+      const filteredMembers = await fetch(
+        `${baseUrl}/api/v1/admin/members?q=${encodeURIComponent('Invited Integration User')}&roleId=${officeRoleId}&scopeType=facility&facilityId=${facilityId}`,
+        { headers },
+      );
+      expect(filteredMembers.status).toBe(200);
+      const filteredMemberItems = (await filteredMembers.json()) as {
+        items: Array<{ id: string; displayName: string | null }>;
+        total: number;
+      };
+      expect(filteredMemberItems.items).toEqual([
+        expect.objectContaining({
+          id: invitedMembershipId,
+          displayName: 'Invited Integration User',
+        }),
+      ]);
+      expect(filteredMemberItems.total).toBe(1);
+      const crossTenantScopeFilter = await fetch(
+        `${baseUrl}/api/v1/admin/members?q=${encodeURIComponent('Invited Integration User')}&facilityId=${otherFacilityId}`,
+        { headers },
+      );
+      expect(crossTenantScopeFilter.status).toBe(200);
+      expect(((await crossTenantScopeFilter.json()) as { items: unknown[] }).items).toEqual([]);
       const activateMember = await fetch(
         `${baseUrl}/api/v1/admin/members/${invitedMembershipId}/activate`,
         { method: 'POST', headers },

@@ -1,4 +1,4 @@
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -6,17 +6,22 @@ import {
   activateMemberAction,
   deactivateMemberAction,
   replaceMemberRolesAction,
-  replaceMemberScopesAction,
   revokeMemberAction,
 } from '@app/web/app/(office)/administration/actions';
 import { ConfirmSubmitButton } from '@app/web/app/(office)/administration/confirm-submit-button';
-import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { MemberScopesForm } from '@app/web/app/(office)/administration/member-scopes-form';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
-import { permissionLabelKeys, roleLabelKey } from '@app/web/i18n/access';
+import { permissionLabelKeys, roleDescriptionKey, roleLabelKey } from '@app/web/i18n/access';
 import { errorMessageKey } from '@app/web/i18n/errors';
+import { formatDate } from '@app/web/i18n/format';
 import { statusLabelKey } from '@app/web/i18n/status';
-import { getApiClient, getTenantHeader } from '@app/web/lib/api';
+import {
+  getApiClient,
+  getPermissionGrants,
+  getTenantHeader,
+  hasPermission,
+} from '@app/web/lib/api';
 import type { components } from '@care/api-client';
 import { Button } from '@care/ui/components/button';
 import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
@@ -31,7 +36,7 @@ export default async function MemberDetailPage({
 }: Readonly<{ params: Params; searchParams: SearchParams }>) {
   const { id } = await params;
   const query = await searchParams;
-  const t = await getTranslations();
+  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const api = await getApiClient();
   const header = await getTenantHeader();
   const [memberResult, rolesResult] = await Promise.all([
@@ -51,6 +56,14 @@ export default async function MemberDetailPage({
   }
   const member = memberResult.data as components['schemas']['TenantMemberDto'];
   const roles = (rolesResult.data ?? []) as components['schemas']['TenantRoleDto'][];
+  const permissions = await getPermissionGrants(api);
+  const canReadEmployees = hasPermission(permissions, 'employee.read');
+  const employeeResult = canReadEmployees
+    ? await api.GET('/api/v1/employees', {
+        params: { query: { userId: member.userId, page: 1, pageSize: 1 }, header },
+      })
+    : undefined;
+  const linkedEmployee = employeeResult?.data?.items[0];
   const scopesOfType = (scopeType: 'organization' | 'facility' | 'team') =>
     member.scopes
       .filter((scope) => scope.scopeType === scopeType)
@@ -69,6 +82,38 @@ export default async function MemberDetailPage({
         description={member.email || t('Users.noVerifiedEmail')}
         meta={<StatusBadge status={member.status} label={t(statusLabelKey(member.status))} />}
       />
+
+      <section
+        aria-labelledby="identity-title"
+        className="grid gap-3 rounded-lg border bg-card p-5"
+      >
+        <h2 id="identity-title" className="text-xl font-semibold">
+          {t('Users.identityAndEmployee')}
+        </h2>
+        <p className="text-sm text-muted-foreground">{t('Users.identityBoundary')}</p>
+        <p className="text-sm">
+          {t('Users.invitationStatus')}:{' '}
+          {member.invitation
+            ? `${t(statusLabelKey(member.invitation.status))} · ${t('Users.expires')} ${formatDate(member.invitation.expiresAt, locale)}`
+            : t('Users.noInvitationRecord')}
+        </p>
+        {canReadEmployees ? (
+          employeeResult?.error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {t('Users.employeeLinkUnavailable')}
+            </p>
+          ) : linkedEmployee ? (
+            <p className="text-sm">
+              {t('Users.linkedEmployee')}:{' '}
+              <Link className="text-primary underline" href={`/employees/${linkedEmployee.id}`}>
+                {`${linkedEmployee.firstName} ${linkedEmployee.lastName}`.trim()}
+              </Link>
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t('Users.noLinkedEmployee')}</p>
+          )
+        ) : null}
+      </section>
 
       {query.error ? (
         <p
@@ -141,34 +186,63 @@ export default async function MemberDetailPage({
           <input type="hidden" name="membershipId" value={member.id} />
           <fieldset className="grid gap-4">
             <legend className="sr-only">{t('Users.availableRoles')}</legend>
-            {roles.map((role) => (
-              <label key={role.id} className="grid gap-1 rounded-md border p-3">
-                <span className="flex items-center gap-2 font-medium">
-                  <ShadcnCheckbox
-                    name="roleId"
-                    value={role.id}
-                    defaultChecked={assignedRoleIds.has(role.id)}
-                  />
-                  {t(roleLabelKey(role.name))}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {t('Users.permissions')}:{' '}
-                  {role.permissions
-                    .map((permission) => {
-                      const keys = permissionLabelKeys(permission);
-                      return t('Users.permissionLabel', {
-                        resource: t(keys.resource),
-                        action: t(keys.action),
-                      });
-                    })
-                    .join(', ') || t('Users.noPermissions')}
-                </span>
-              </label>
-            ))}
+            {roles.map((role) => {
+              const permissionGroups = new Map<string, Set<string>>();
+              for (const permission of role.permissions) {
+                const keys = permissionLabelKeys(permission);
+                const resource = t(keys.resource);
+                const action = t(keys.action);
+                const actions = permissionGroups.get(resource) ?? new Set<string>();
+                actions.add(action);
+                permissionGroups.set(resource, actions);
+              }
+              const roleInputId = `member-role-${role.id}`;
+
+              return (
+                <div key={role.id} className="grid gap-2 rounded-md border p-3">
+                  <label
+                    htmlFor={roleInputId}
+                    className="flex min-h-8 items-center gap-2 font-medium"
+                  >
+                    <ShadcnCheckbox
+                      id={roleInputId}
+                      name="roleId"
+                      value={role.id}
+                      defaultChecked={assignedRoleIds.has(role.id)}
+                    />
+                    {t(roleLabelKey(role.name))}
+                  </label>
+                  <p className="text-sm text-muted-foreground">
+                    {t(roleDescriptionKey(role.name))}
+                  </p>
+                  {permissionGroups.size ? (
+                    <details className="rounded-md border px-3 py-2">
+                      <summary className="cursor-pointer text-sm font-medium">
+                        {t('Users.permissions')} ({role.permissions.length})
+                      </summary>
+                      <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+                        {Array.from(permissionGroups, ([resource, actions]) => (
+                          <li key={resource} className="text-sm text-muted-foreground">
+                            <span className="font-medium text-foreground">{resource}:</span>{' '}
+                            {Array.from(actions).join(', ')}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">{t('Users.noPermissions')}</p>
+                  )}
+                </div>
+              );
+            })}
           </fieldset>
-          <Button type="submit" disabled={member.status === 'revoked'}>
+          <ConfirmSubmitButton
+            confirmation={t('Users.roleChangeConfirmation')}
+            variant="default"
+            disabled={member.status === 'revoked'}
+          >
             {t('Users.saveRoles')}
-          </Button>
+          </ConfirmSubmitButton>
         </RHFActionForm>
       </section>
 
@@ -179,59 +253,31 @@ export default async function MemberDetailPage({
           </h2>
           <p className="text-sm text-muted-foreground">{t('Users.scopeHelp')}</p>
         </div>
-        <form action={replaceMemberScopesAction} className="grid gap-4">
-          <input type="hidden" name="membershipId" value={member.id} />
-          <fieldset className="grid gap-3">
-            <legend className="font-medium">{t('Users.scope')}</legend>
-            <label className="flex items-center gap-2">
-              <input type="radio" name="scopeMode" value="tenant" defaultChecked={tenantScope} />
-              {t('Users.entireTenant')}
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="radio" name="scopeMode" value="scoped" defaultChecked={!tenantScope} />
-              {t('Users.selectedScopes')}
-            </label>
-          </fieldset>
-          <fieldset className="grid gap-3">
-            <legend className="sr-only">{t('Teams.title')}</legend>
-            <AsyncEntityCombobox
-              name="scope"
-              entity="teams"
-              label={t('Teams.title')}
-              multiple
-              valuePrefix="team:"
-              initialOptions={scopesOfType('team')}
-              placeholder={t('Users.noVisibleTeams')}
-            />
-          </fieldset>
-          <fieldset className="grid gap-3">
-            <legend className="sr-only">{t('Organizations.title')}</legend>
-            <AsyncEntityCombobox
-              name="scope"
-              entity="organizations"
-              label={t('Organizations.title')}
-              multiple
-              valuePrefix="organization:"
-              initialOptions={scopesOfType('organization')}
-              placeholder={t('Users.noVisibleOrganizations')}
-            />
-          </fieldset>
-          <fieldset className="grid gap-3">
-            <legend className="sr-only">{t('Facilities.title')}</legend>
-            <AsyncEntityCombobox
-              name="scope"
-              entity="facilities"
-              label={t('Facilities.title')}
-              multiple
-              valuePrefix="facility:"
-              initialOptions={scopesOfType('facility')}
-              placeholder={t('Users.noVisibleFacilities')}
-            />
-          </fieldset>
-          <Button type="submit" disabled={member.status === 'revoked'}>
-            {t('Users.saveScopes')}
-          </Button>
-        </form>
+        <MemberScopesForm
+          membershipId={member.id}
+          tenantScope={tenantScope}
+          teams={scopesOfType('team')}
+          organizations={scopesOfType('organization')}
+          facilities={scopesOfType('facility')}
+          disabled={member.status === 'revoked'}
+          labels={{
+            scope: t('Users.scope'),
+            entireTenant: t('Users.entireTenant'),
+            selectedScopes: t('Users.selectedScopes'),
+            teams: t('Teams.title'),
+            organizations: t('Organizations.title'),
+            facilities: t('Facilities.title'),
+            noVisibleTeams: t('Users.noVisibleTeams'),
+            noVisibleOrganizations: t('Users.noVisibleOrganizations'),
+            noVisibleFacilities: t('Users.noVisibleFacilities'),
+            saving: t('Common.formValidation.saving'),
+            accessUpdated: t('Users.accessUpdated'),
+            scopeConflict: t('Users.scopeConflict'),
+            requestFailed: t('Users.requestFailed'),
+            saveScopes: t('Users.saveScopes'),
+            scopeChangeConfirmation: t('Users.scopeChangeConfirmation'),
+          }}
+        />
       </section>
 
       <section
@@ -241,6 +287,7 @@ export default async function MemberDetailPage({
         <h2 id="effective-title" className="text-xl font-semibold">
           {t('Users.effectivePermissions')}
         </h2>
+        <p className="text-sm text-muted-foreground">{t('Users.assignedPermissionsHelp')}</p>
         <p className="text-sm text-muted-foreground">
           {member.permissions.length
             ? member.permissions

@@ -27,6 +27,17 @@ export function getClientMessages(messages: MessageCatalog) {
       redirecting: messages.Auth.redirecting,
       signInFailed: messages.Auth.signInFailed,
     },
+    Errors: {
+      generic: messages.Errors.generic,
+      invalidRequest: messages.Errors.invalidRequest,
+      insufficientPermission: messages.Errors.insufficientPermission,
+      invitationAlreadyExists: messages.Errors.invitationAlreadyExists,
+      invitationEmailAmbiguous: messages.Errors.invitationEmailAmbiguous,
+      membershipRevoked: messages.Errors.membershipRevoked,
+      notFound: messages.Errors.notFound,
+      userAlreadyMember: messages.Errors.userAlreadyMember,
+      userDisabled: messages.Errors.userDisabled,
+    },
     Caregiver: {
       drafts: messages.Caregiver.drafts,
     },

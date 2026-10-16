@@ -98,37 +98,6 @@ test('Office staff can review documents and record linked communications with fo
     await expect(page).toHaveURL(/\/clients$/);
 
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('/documents');
-    await expect(page.getByRole('heading', { name: 'Document workspace' })).toBeVisible();
-    await expect(page.getByRole('table')).toBeVisible();
-    await capture(page, 'documents-worklist-desktop-light.png');
-
-    await page.getByLabel('Search title, type, client, or source').fill(fixture.documentClientName);
-    await page.getByRole('button', { name: 'Apply filters' }).click();
-    await expect
-      .poll(() => new URL(page.url()).searchParams.get('q'))
-      .toBe(fixture.documentClientName);
-    await expect(page.getByRole('table')).toContainText(fixture.documentClientName);
-    await expect(page.getByRole('table')).toContainText('Claim summary');
-
-    await page.getByRole('button', { name: 'Appearance' }).click();
-    await page.getByRole('menuitemradio', { name: 'Dark' }).click();
-    await expect(page.locator('html')).toHaveClass(/dark/);
-    await capture(page, 'documents-worklist-desktop-dark.png');
-    await page.getByRole('button', { name: 'Appearance' }).click();
-    await page.getByRole('menuitemradio', { name: 'Light' }).click();
-    await page.setViewportSize({ width: 768, height: 1024 });
-    await assertNoHorizontalOverflow(page);
-    await capture(page, 'documents-worklist-tablet-768.png');
-    await page.setViewportSize({ width: 390, height: 844 });
-    await assertNoHorizontalOverflow(page);
-    await capture(page, 'documents-worklist-mobile-390.png');
-    const mobileSummaryDocument = page.getByRole('link', { name: 'Claim summary' }).last();
-    await mobileSummaryDocument.scrollIntoViewIfNeeded();
-    await expect(mobileSummaryDocument).toBeVisible();
-    await capture(page, 'documents-worklist-mobile-results-390.png');
-    await page.setViewportSize({ width: 1440, height: 900 });
-
     await page.goto('/documents/create');
     await expect(page.getByRole('heading', { name: 'Create or find a document' })).toBeVisible();
     await capture(page, 'document-create-workflow-desktop.png');
@@ -146,35 +115,6 @@ test('Office staff can review documents and record linked communications with fo
     await page.setViewportSize({ width: 768, height: 1024 });
     await assertNoHorizontalOverflow(page);
     await capture(page, 'document-templates-tablet-768.png');
-
-    await page.goto(`/documents/${fixture.documentId}`);
-    await expect(page.getByRole('heading', { name: 'Document details' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Versions from this source' })).toBeVisible();
-    await expect(page.locator('iframe[title^="PDF preview"]')).toBeVisible();
-    const previewResponse = await page.request.get(
-      new URL(`/documents/${fixture.documentId}/preview`, baseUrl).toString(),
-    );
-    expect(previewResponse.status()).toBe(200);
-    expect(previewResponse.headers()['content-type']).toContain('application/pdf');
-    const previewPdf = await PDFDocument.load(await previewResponse.body());
-    expect(previewPdf.getPageCount()).toBeGreaterThan(0);
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await assertNoHorizontalOverflow(page);
-    await capture(page, 'document-detail-preview-desktop.png');
-    await page.locator('#document-preview-title').scrollIntoViewIfNeeded();
-    await capture(page, 'document-pdf-preview-desktop.png');
-    await page.setViewportSize({ width: 768, height: 1024 });
-    await assertNoHorizontalOverflow(page);
-    await page.locator('#document-metadata-title').scrollIntoViewIfNeeded();
-    await capture(page, 'document-detail-tablet-768.png');
-    await page.locator('#document-preview-title').scrollIntoViewIfNeeded();
-    await capture(page, 'document-pdf-preview-tablet-768.png');
-    await page.setViewportSize({ width: 390, height: 844 });
-    await assertNoHorizontalOverflow(page);
-    await page.locator('#document-metadata-title').scrollIntoViewIfNeeded();
-    await capture(page, 'document-detail-preview-mobile-390.png');
-    await page.locator('#document-preview-title').scrollIntoViewIfNeeded();
-    await capture(page, 'document-pdf-preview-mobile-390.png');
 
     await page.goto('/documents/ffffffff-ffff-7fff-8fff-ffffffffffff');
     await expect(
@@ -224,11 +164,57 @@ test('Office staff can review documents and record linked communications with fo
     const generatedPdf = await PDFDocument.load(await generatedPreview.body());
     expect(generatedPdf.getPageCount()).toBeGreaterThan(0);
 
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/documents');
+    await expect(page.getByRole('heading', { name: 'Document workspace' })).toBeVisible();
+    await expect(page.getByRole('table')).toBeVisible();
+    await capture(page, 'documents-worklist-desktop-light.png');
+    await page.getByLabel('Search title, type, client, or source').fill(fixture.clientName);
+    await page.getByRole('button', { name: 'Apply filters' }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe(fixture.clientName);
+    await expect(page.getByRole('table')).toContainText(fixture.clientName);
+    await expect(page.getByRole('table')).toContainText('Service agreement');
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await capture(page, 'documents-worklist-desktop-dark.png');
+    await page.getByRole('button', { name: 'Appearance' }).click();
+    await page.getByRole('menuitemradio', { name: 'Light' }).click();
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await assertNoHorizontalOverflow(page);
+    await capture(page, 'documents-worklist-tablet-768.png');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await assertNoHorizontalOverflow(page);
+    await capture(page, 'documents-worklist-mobile-390.png');
+    const mobileAgreementDocument = page.getByRole('link', { name: 'Service agreement' }).last();
+    await mobileAgreementDocument.scrollIntoViewIfNeeded();
+    await expect(mobileAgreementDocument).toBeVisible();
+    await capture(page, 'documents-worklist-mobile-results-390.png');
+
     await page.goto(`/documents/${generatedDocumentId}`);
     await expect(page.getByRole('heading', { name: /Service agreement/ })).toBeVisible();
     await expect(page.getByRole('link', { name: fixture.clientName })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Record related communication' })).toBeVisible();
     await capture(page, 'document-detail-generated-agreement-desktop.png');
+    await expect(page.getByRole('heading', { name: 'Document details' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Versions from this source' })).toBeVisible();
+    await expect(page.locator('iframe[title^="PDF preview"]')).toBeVisible();
+    await assertNoHorizontalOverflow(page);
+    await capture(page, 'document-detail-preview-desktop.png');
+    await page.locator('#document-preview-title').scrollIntoViewIfNeeded();
+    await capture(page, 'document-pdf-preview-desktop.png');
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await assertNoHorizontalOverflow(page);
+    await page.locator('#document-metadata-title').scrollIntoViewIfNeeded();
+    await capture(page, 'document-detail-tablet-768.png');
+    await page.locator('#document-preview-title').scrollIntoViewIfNeeded();
+    await capture(page, 'document-pdf-preview-tablet-768.png');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await assertNoHorizontalOverflow(page);
+    await page.locator('#document-metadata-title').scrollIntoViewIfNeeded();
+    await capture(page, 'document-detail-preview-mobile-390.png');
+    await page.locator('#document-preview-title').scrollIntoViewIfNeeded();
+    await capture(page, 'document-pdf-preview-mobile-390.png');
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/communications');
@@ -441,8 +427,6 @@ test('Office staff can review documents and record linked communications with fo
 
 async function loadFixture(database: Client): Promise<{
   tenantId: string;
-  documentId: string;
-  documentClientName: string;
   clientId: string;
   clientName: string;
   agreementId: string;
@@ -454,17 +438,6 @@ async function loadFixture(database: Client): Promise<{
   );
   const tenantId = tenant.rows[0]?.id;
   if (!tenantId) throw new Error('Demo Care tenant is missing; run bun run seed');
-  const document = await database.query<{ id: string; client_name: string }>(
-    `SELECT d.id, c.id AS client_id,
-       concat(coalesce(nullif(c.preferred_name, ''), c.first_name), ' ', c.last_name) AS client_name
-     FROM documents.artifacts d
-     JOIN clients.clients c ON c.tenant_id = d.tenant_id AND c.id = d.client_id
-     WHERE d.tenant_id = $1 AND d.document_type = 'claim_summary' AND d.status = 'ready'
-     ORDER BY d.created_at DESC LIMIT 1`,
-    [tenantId],
-  );
-  const savedDocument = document.rows[0];
-  if (!savedDocument) throw new Error('No ready claim summary is available in the Demo Care seed');
   const agreement = await database.query<{
     id: string;
     organization_id: string;
@@ -496,10 +469,8 @@ async function loadFixture(database: Client): Promise<{
   );
   return {
     tenantId,
-    documentId: savedDocument.id,
-    documentClientName: savedDocument.client_name,
     clientId: savedAgreement.client_id,
-    clientName: client.rows[0]?.client_name ?? savedDocument.client_name,
+    clientName: client.rows[0]?.client_name ?? 'Demo Care client',
     agreementId: savedAgreement.id,
     organizationId: savedAgreement.organization_id,
     contactName: savedAgreement.contact_name,

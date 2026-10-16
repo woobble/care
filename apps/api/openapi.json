@@ -135,6 +135,56 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
+            "name": "roleId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "scopeType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "tenant",
+                "organization",
+                "facility",
+                "team"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -314,6 +364,20 @@
               "maximum": 100,
               "default": 20,
               "type": "integer"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "pending",
+                "accepted",
+                "expired",
+                "revoked"
+              ],
+              "type": "string"
             }
           }
         ],
@@ -22850,6 +22914,33 @@
           "traceId"
         ]
       },
+      "TenantMemberInvitationSummaryDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "accepted",
+              "expired",
+              "revoked"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "status",
+          "expiresAt",
+          "createdAt"
+        ]
+      },
       "TenantRoleDto": {
         "type": "object",
         "properties": {
@@ -22928,6 +23019,15 @@
               "active",
               "inactive",
               "revoked"
+            ]
+          },
+          "invitation": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TenantMemberInvitationSummaryDto"
+              }
             ]
           },
           "roles": {

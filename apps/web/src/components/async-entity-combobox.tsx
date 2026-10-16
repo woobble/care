@@ -56,6 +56,7 @@ export function AsyncEntityCombobox({
   minQueryLength = 1,
   debounceMs = 300,
   multiple = false,
+  disabled = false,
   valuePrefix,
   validAt,
   validFrom,
@@ -79,6 +80,7 @@ export function AsyncEntityCombobox({
   minQueryLength?: number;
   debounceMs?: number;
   multiple?: boolean;
+  disabled?: boolean;
   valuePrefix?: string;
   validAt?: string;
   validFrom?: string;
@@ -115,6 +117,7 @@ export function AsyncEntityCombobox({
   const listRef = useRef<HTMLDivElement>(null);
   const id = useId();
   const options = pages.flatMap((page) => page.items);
+  const popoverOpen = open && !disabled;
 
   function updateSelectedOptions(
     next: EntityOption[] | ((current: EntityOption[]) => EntityOption[]),
@@ -133,7 +136,7 @@ export function AsyncEntityCombobox({
     const version = ++requestVersion.current;
     const search = query.trim();
     const canBrowseWithoutQuery = browseOnEmpty && search.length === 0;
-    if (!open || (search.length < minQueryLength && !canBrowseWithoutQuery)) return;
+    if (!popoverOpen || (search.length < minQueryLength && !canBrowseWithoutQuery)) return;
 
     const controller = new AbortController();
     activeController.current = controller;
@@ -188,7 +191,7 @@ export function AsyncEntityCombobox({
     clientId,
     facilityId,
     minQueryLength,
-    open,
+    popoverOpen,
     organizationId,
     query,
     // Retry count intentionally restarts this effect after a failed search.
@@ -356,8 +359,9 @@ export function AsyncEntityCombobox({
       ) : null}
       <div className="relative min-w-0">
         <Popover
-          open={open}
+          open={popoverOpen}
           onOpenChange={(nextOpen) => {
+            if (disabled) return;
             setOpen(nextOpen);
             if (!nextOpen) {
               setPages([]);
@@ -372,9 +376,10 @@ export function AsyncEntityCombobox({
             <Button
               id={id}
               type="button"
+              disabled={disabled}
               variant="outline"
               role="combobox"
-              aria-expanded={open}
+              aria-expanded={popoverOpen}
               aria-required={required}
               aria-label={label}
               className={`h-10 w-full min-w-0 justify-between font-normal ${className ?? ''}`}
@@ -399,6 +404,7 @@ export function AsyncEntityCombobox({
             <Command shouldFilter={false}>
               <CommandInput
                 autoFocus
+                disabled={disabled}
                 value={query}
                 onValueChange={(value) => {
                   setQuery(value);
@@ -447,6 +453,7 @@ export function AsyncEntityCombobox({
                     <CommandItem
                       key={option.id}
                       value={option.id}
+                      disabled={disabled}
                       onSelect={() => selectOption(option)}
                     >
                       <span className="truncate">{option.label}</span>
@@ -488,6 +495,7 @@ export function AsyncEntityCombobox({
         {selectedOptions.length > 0 ? (
           <Button
             type="button"
+            disabled={disabled}
             variant="ghost"
             size="icon-sm"
             aria-label={t('entitySelector.clear')}

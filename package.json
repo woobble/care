@@ -50,6 +50,9 @@
     "turbo": "^2.11.8",
     "typescript": "^7.0.2"
   },
+  "overrides": {
+    "fastify": "5.12.7"
+  },
   "engines": {
     "bun": ">=1.4.0",
     "node": ">=24"

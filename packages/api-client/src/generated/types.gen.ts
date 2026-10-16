@@ -17,6 +17,12 @@ export type ProblemDetailsDto = {
     };
 };
 
+export type TenantMemberInvitationSummaryDto = {
+    status: 'pending' | 'accepted' | 'expired' | 'revoked';
+    expiresAt: string;
+    createdAt: string;
+};
+
 export type TenantRoleDto = {
     id: string;
     name: string;
@@ -35,6 +41,7 @@ export type TenantMemberDto = {
     displayName: string | null;
     email?: string | null;
     status: 'pending' | 'active' | 'inactive' | 'revoked';
+    invitation?: TenantMemberInvitationSummaryDto | null;
     roles: Array<TenantRoleDto>;
     scopes: Array<TenantScopeDto>;
     permissions: Array<string>;
@@ -3097,6 +3104,11 @@ export type TenantAccessControllerListMembersData = {
         page?: number;
         pageSize?: number;
         status?: 'pending' | 'active' | 'inactive' | 'revoked';
+        q?: string;
+        roleId?: string;
+        scopeType?: 'tenant' | 'organization' | 'facility' | 'team';
+        organizationId?: string;
+        facilityId?: string;
     };
     url: '/api/v1/admin/members';
 };
@@ -3152,6 +3164,7 @@ export type TenantAccessControllerListInvitationsData = {
     query?: {
         page?: number;
         pageSize?: number;
+        status?: 'pending' | 'accepted' | 'expired' | 'revoked';
     };
     url: '/api/v1/admin/invitations';
 };

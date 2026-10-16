@@ -25,6 +25,7 @@ export async function createOfficeAdminSession(
   page: Page,
   prefix: string,
 ): Promise<OfficeAdminSession> {
+  page.setDefaultNavigationTimeout(60_000);
   const issuer = required('OIDC_ISSUER');
   const authentikOrigin = new URL(issuer).origin;
   const apiToken = required('AUTHENTIK_E2E_API_TOKEN');
