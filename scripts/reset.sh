@@ -3,15 +3,20 @@ set -Eeuo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+if [[ -n "${COMPOSE_PROJECT_NAME:-}" && "${COMPOSE_PROJECT_NAME}" != "care-platform-dev" ]]; then
+  echo "Reset only targets the dedicated care-platform-dev project; clear COMPOSE_PROJECT_NAME first." >&2
+  exit 1
+fi
+
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker is required to reset the local application." >&2
   exit 1
 fi
 
-docker compose config --quiet
+docker compose --project-name care-platform-dev -f compose.yaml config --quiet
 
 cat <<'EOF'
-This resets the current Compose project. It deletes its containers and volumes,
+This resets the dedicated care-platform-dev Compose project. It deletes its containers and volumes,
 including PostgreSQL (application and Authentik data), Redis, SeaweedFS files,
 Prometheus metrics, and Grafana state. Source files, .env, dependencies, and
 Docker images are kept.
@@ -34,8 +39,8 @@ if [[ "$confirmation" != "RESET" ]]; then
   exit 0
 fi
 
-docker compose down --volumes --remove-orphans
-docker compose up -d --wait
+docker compose --project-name care-platform-dev -f compose.yaml down --volumes --remove-orphans
+docker compose --project-name care-platform-dev -f compose.yaml up -d --wait
 bun run migrate
 bun run seed
 

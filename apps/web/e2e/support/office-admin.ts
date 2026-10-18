@@ -267,7 +267,34 @@ export async function signInWithAuthentik(
   password: string,
 ): Promise<void> {
   await page.goto('/');
+  const providerRegistration = page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      request.method() === 'POST' && new URL(response.url()).pathname === '/api/auth/sign-in/social'
+    );
+  });
   await page.getByRole('button', { name: 'Sign in with Authentik' }).click();
+  const providerResponse = await providerRegistration;
+  expect(providerResponse.status(), 'Authentik provider registration should succeed').toBe(200);
+  const authentikOrigin = new URL(required('OIDC_ISSUER')).origin;
+  const failedAuthentikResponses: Array<{ path: string; status: number }> = [];
+  const failedAuthentikRequests: Array<{ path: string; error: string | undefined }> = [];
+  page.on('response', (response) => {
+    const url = new URL(response.url());
+    if (
+      url.origin === authentikOrigin &&
+      url.pathname.startsWith('/api/v3/flows/') &&
+      response.status() >= 400
+    ) {
+      failedAuthentikResponses.push({ path: url.pathname, status: response.status() });
+    }
+  });
+  page.on('requestfailed', (request) => {
+    const url = new URL(request.url());
+    if (url.origin === authentikOrigin) {
+      failedAuthentikRequests.push({ path: url.pathname, error: request.failure()?.errorText });
+    }
+  });
   const usernameField = page.locator('input[name="uidField"]');
   try {
     await expect(usernameField).toBeVisible({ timeout: 30_000 });
@@ -281,6 +308,31 @@ export async function signInWithAuthentik(
     .last()
     .click();
   const passwordField = page.getByLabel('Password');
+  try {
+    await expect(passwordField).toBeVisible({ timeout: 30_000 });
+  } catch (error) {
+    const pageDiagnostic = await page.evaluate(() => ({
+      pathname: location.pathname,
+      title: document.title,
+      inputNames: Array.from(document.querySelectorAll('input')).map((input) => input.name),
+      alerts: Array.from(document.querySelectorAll('[role="alert"]')).map((alert) =>
+        alert.textContent?.trim().slice(0, 160),
+      ),
+    }));
+    const safeDiagnostic = JSON.stringify({
+      page: pageDiagnostic,
+      failedResponses: failedAuthentikResponses,
+      failedRequests: failedAuthentikRequests.map(({ path, error: failure }) => ({
+        path,
+        error: failure?.slice(0, 100),
+      })),
+    })
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[EMAIL REDACTED]')
+      .replace(/https?:\/\/[^\s"']+/g, '[URL REDACTED]');
+    throw new Error(`Authentik did not show its password step: ${safeDiagnostic}`, {
+      cause: error,
+    });
+  }
   await passwordField.fill(password);
   await Promise.all([
     page.waitForURL((url) => url.origin === new URL(required('WEB_ORIGIN')).origin, {

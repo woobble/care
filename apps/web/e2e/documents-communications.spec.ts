@@ -8,6 +8,8 @@ import { PDFDocument } from 'pdf-lib';
 import { Client } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 
+import { expectTargetViewportLayouts } from './support/browser';
+
 const reviewDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../../artifacts/documents-communications-review',
@@ -570,6 +572,7 @@ async function waitForPlatformUser(
 }
 
 async function capture(page: Page, filename: string): Promise<void> {
+  await expectTargetViewportLayouts(page);
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   });

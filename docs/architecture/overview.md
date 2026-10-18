@@ -36,7 +36,7 @@ The benefits module owns client funding sources, benefit entitlements, effective
 
 Budget projections keep legal entitlement, planned service estimates, provider-recorded usage, and payer-confirmed balances distinct. § 45b carryover expires after June 30 of the following year. Service allocations check the service date, historical Pflegegrad, service category, and applicable NRW provider recognition. Unknown external consumption remains visibly uncertain; scheduling creates estimates only and never consumes funds.
 
-Meaningful mutations commit domain data, audit records, and versioned outbox events in the same transaction. Budget reads do not emit events, although they may materialize dated entitlement buckets with audit attribution. The worker currently records delivery state and performs no billing side effect.
+Meaningful mutations commit domain data, audit records, and versioned outbox events in the same transaction. Budget reads do not emit events, although they may materialize dated entitlement buckets with audit attribution. The worker currently records delivery state for all committed domain events and performs no billing side effect.
 
 The billing module consumes completed service execution, current service evidence, service prices, and Benefits allocation facts. It owns provider profiles, documented payer arrangements, billing candidates, reservations, invoice drafts and immutable issued snapshots, corrections, PDF artifacts, payments, and receivables. Issuance revalidates and locks performed services so reservations and issued amounts cannot exceed the service total across funding sources. Direct-payer invoices require an effective authorized mandate. Billing never infers reimbursement from an allocation or invoice.
 

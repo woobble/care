@@ -220,6 +220,16 @@ describe('benefits PostgreSQL integration', () => {
         serviceDate,
         now,
       });
+      const concurrentPerformedServiceId = await insertCompletedService(owner, {
+        tenantId,
+        clientId,
+        organizationId,
+        facilityId,
+        employeeId,
+        serviceId,
+        serviceDate,
+        now,
+      });
 
       const statutorySource = await benefits.createFundingSource(
         principal,
@@ -629,6 +639,82 @@ describe('benefits PostgreSQL integration', () => {
           {},
         ),
       ).rejects.toMatchObject({ code: 'BENEFIT_ALLOCATION_CONFLICT' });
+
+      const competingAllocations = [
+        { ...privateAllocation, amountCents: 6_000, idempotencyKey: uuidv7() },
+        { ...privateAllocation, amountCents: 6_000, idempotencyKey: uuidv7() },
+      ];
+      const concurrentAllocationResults = await Promise.allSettled(
+        competingAllocations.map((allocation) =>
+          benefits.allocateService(
+            principal,
+            concurrentPerformedServiceId,
+            [allocation],
+            context,
+            {},
+          ),
+        ),
+      );
+      const successfulConcurrentAllocations = concurrentAllocationResults.filter(
+        (result) => result.status === 'fulfilled',
+      );
+      const rejectedConcurrentAllocations = concurrentAllocationResults.filter(
+        (result) => result.status === 'rejected',
+      );
+      expect(successfulConcurrentAllocations).toHaveLength(1);
+      expect(rejectedConcurrentAllocations).toHaveLength(1);
+      const winningAllocationResult = successfulConcurrentAllocations[0]!;
+      if (winningAllocationResult.status !== 'fulfilled')
+        throw new Error('Expected one concurrent funding allocation to succeed');
+      expect(winningAllocationResult.value).toMatchObject({
+        performedServiceId: concurrentPerformedServiceId,
+        serviceAmountCents: 9_000,
+        previouslyAllocatedCents: 0,
+        allocatedCents: 6_000,
+        remainingCents: 3_000,
+      });
+      expect(rejectedConcurrentAllocations[0]!.reason).toMatchObject({
+        code: 'BENEFIT_ALLOCATION_CONFLICT',
+      });
+
+      const concurrentAllocationRows = await owner.query<{
+        id: string;
+        amount_cents: number;
+        idempotency_key: string;
+      }>(
+        `SELECT id, amount_cents, idempotency_key FROM benefits.service_allocations
+         WHERE tenant_id = $1 AND performed_service_id = $2`,
+        [tenantId, concurrentPerformedServiceId],
+      );
+      expect(concurrentAllocationRows.rows).toHaveLength(1);
+      const persistedConcurrentAllocation = concurrentAllocationRows.rows[0];
+      if (!persistedConcurrentAllocation)
+        throw new Error('Expected one concurrent funding allocation to persist');
+      expect(persistedConcurrentAllocation.amount_cents).toBe(6_000);
+      expect(competingAllocations.map((allocation) => allocation.idempotencyKey)).toContain(
+        persistedConcurrentAllocation.idempotency_key,
+      );
+      const concurrentLedgerRows = await owner.query<{
+        service_allocation_id: string;
+        amount_cents: number;
+      }>(
+        `SELECT service_allocation_id, amount_cents FROM benefits.ledger_entries
+         WHERE tenant_id = $1 AND performed_service_id = $2
+           AND entry_type = 'service_consumption_allocated'`,
+        [tenantId, concurrentPerformedServiceId],
+      );
+      expect(concurrentLedgerRows.rows).toHaveLength(1);
+      expect(concurrentLedgerRows.rows[0]).toMatchObject({
+        service_allocation_id: persistedConcurrentAllocation.id,
+        amount_cents: -6_000,
+      });
+      const concurrentOutboxRows = await owner.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM platform.outbox_messages
+         WHERE tenant_id = $1 AND event_type = 'benefit.service_allocated'
+           AND event->>'aggregateId' = $2`,
+        [tenantId, concurrentPerformedServiceId],
+      );
+      expect(concurrentOutboxRows.rows[0]?.count).toBe('1');
 
       const budget = await benefits.getBudget(principal, clientId, serviceDate);
       expect(

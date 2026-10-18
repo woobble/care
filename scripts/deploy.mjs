@@ -18,10 +18,18 @@ const operatorCommands = new Set([
 
 if (!operation || !operatorCommands.has(operation)) {
   process.stderr.write(
-    'Usage: bun run deploy:check | deploy:bootstrap-admin -- ... | backup:create | backup:verify | backup:restore | backup:prune\n',
+    'Usage: bun run deploy:check -- --production | deploy:bootstrap-admin -- --production ... | backup:create -- --production ... | backup:verify -- --production <id> | backup:restore -- --production ... | backup:prune -- --production [--apply]\n',
   );
   process.exit(2);
 }
+
+if (operatorArguments[0] !== '--production') {
+  process.stderr.write(
+    'This command accesses production deployment configuration. Pass --production explicitly before any operation arguments.\n',
+  );
+  process.exit(2);
+}
+operatorArguments.shift();
 
 try {
   const file = lstatSync(environmentFile);
@@ -41,6 +49,8 @@ try {
 
 const compose = [
   'compose',
+  '--project-name',
+  'care-platform-prod',
   '--env-file',
   '.env.production',
   '-f',

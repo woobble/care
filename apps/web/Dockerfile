@@ -1,4 +1,4 @@
-FROM oven/bun:1.4.2 AS build
+FROM oven/bun:1.4.3-alpine@sha256:629e17411f1f129dbec3af78d5af9c9f2a937435c80349437206c6b0b7422373 AS build
 WORKDIR /repo
 COPY . .
 RUN bun install --frozen-lockfile
@@ -10,11 +10,12 @@ RUN bun build \
   --target bun \
   --outfile apps/web/.next/standalone/apps/web/standalone-server.js
 
-FROM oven/bun:1.4.2 AS runtime
+FROM oven/bun:1.4.3-alpine@sha256:629e17411f1f129dbec3af78d5af9c9f2a937435c80349437206c6b0b7422373 AS runtime
 WORKDIR /repo
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
+RUN apk add --no-cache 'zlib=1.3.2-r1'
 COPY --from=build --chown=bun:bun /repo/apps/web/.next/standalone ./
 COPY --from=build --chown=bun:bun /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build --chown=bun:bun /repo/apps/web/public ./apps/web/public

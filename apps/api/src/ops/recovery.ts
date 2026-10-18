@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { performance } from 'node:perf_hooks';
 
 import {
   DeleteObjectCommand,
@@ -84,6 +85,14 @@ interface RecoveryManifest {
     databaseReferenceCount: number;
     orphanObjectCount: number;
   };
+  timingsMs?: {
+    globalsDump: number;
+    databaseDumps: Record<'care' | 'authentik', number>;
+    databaseDumpVerification: number;
+    objectStorageCopy: number;
+    recoverySetVerification: number;
+    total: number;
+  };
 }
 
 interface StorageTarget {
@@ -101,6 +110,7 @@ export async function createRecoverySet(args: string[]): Promise<void> {
       'Creation requires --confirm-quiesced after application and Authentik writes are stopped.',
     );
   }
+  const startedAt = performance.now();
   const source = resolveSecretFiles(process.env);
   const databaseConfig = loadMigrationConfig(source);
   const storageConfig = loadStorageConfig(source);
@@ -131,6 +141,7 @@ export async function createRecoverySet(args: string[]): Promise<void> {
   const globalsDatabaseUrl = new URL(databaseUrl);
   globalsDatabaseUrl.pathname = '/postgres';
   globalsDatabaseUrl.password = '';
+  const globalsStartedAt = performance.now();
   await runPostgresTool('pg_dumpall', databaseConfig.MIGRATION_DATABASE_URL, [
     '--globals-only',
     '--dbname',
@@ -138,14 +149,18 @@ export async function createRecoverySet(args: string[]): Promise<void> {
     '--file',
     globalsPath,
   ]);
+  const globalsDumpMs = elapsedMs(globalsStartedAt);
 
   const databaseArtifacts: RecoveryManifest['databases'] = [];
+  const databaseDumpMs: Record<'care' | 'authentik', number> = { care: 0, authentik: 0 };
+  let databaseDumpVerificationMs = 0;
   for (const name of databaseNames) {
     const artifact = `database-${name}.dump`;
     const artifactPath = join(setPath, artifact);
     await reservePrivateFile(artifactPath);
     const sourceUrl = new URL(databaseConfig.MIGRATION_DATABASE_URL);
     sourceUrl.pathname = `/${name}`;
+    const dumpStartedAt = performance.now();
     await runPostgresTool('pg_dump', sourceUrl.toString(), [
       '--format=custom',
       '--create',
@@ -153,7 +168,10 @@ export async function createRecoverySet(args: string[]): Promise<void> {
       artifactPath,
       ...connectionArguments(sourceUrl, name),
     ]);
+    databaseDumpMs[name] = elapsedMs(dumpStartedAt);
+    const verificationStartedAt = performance.now();
     await runPostgresTool('pg_restore', sourceUrl.toString(), ['--list', artifactPath]);
+    databaseDumpVerificationMs += elapsedMs(verificationStartedAt);
     databaseArtifacts.push({
       name,
       file: artifact,
@@ -163,6 +181,7 @@ export async function createRecoverySet(args: string[]): Promise<void> {
 
   const client = createStorageClient(storageConfig);
   const objectRecords: StoredObject[] = [];
+  const objectStorageStartedAt = performance.now();
   try {
     await client.send(new HeadBucketCommand({ Bucket: storageConfig.S3_BUCKET }));
     for await (const key of listObjectKeys(client, storageConfig.S3_BUCKET)) {
@@ -191,6 +210,7 @@ export async function createRecoverySet(args: string[]): Promise<void> {
   } finally {
     client.destroy();
   }
+  const objectStorageCopyMs = elapsedMs(objectStorageStartedAt);
 
   const objectReferences = await readDatabaseObjectReferences(
     databaseConfig.MIGRATION_DATABASE_URL,
@@ -222,9 +242,20 @@ export async function createRecoverySet(args: string[]): Promise<void> {
     },
   };
   await writeManifest(setPath, manifest);
-  await verifyRecoverySet(id, { markVerified: true });
+  const recoverySetVerificationStartedAt = performance.now();
+  const verifiedManifest = await verifyRecoverySet(id, { markVerified: true, quiet: true });
+  manifest.verifiedAt = verifiedManifest.verifiedAt;
+  manifest.timingsMs = {
+    globalsDump: globalsDumpMs,
+    databaseDumps: databaseDumpMs,
+    databaseDumpVerification: databaseDumpVerificationMs,
+    objectStorageCopy: objectStorageCopyMs,
+    recoverySetVerification: elapsedMs(recoverySetVerificationStartedAt),
+    total: elapsedMs(startedAt),
+  };
+  await writeManifest(setPath, manifest);
   process.stdout.write(
-    `Recovery set ${id} created and verified (${databaseArtifacts.length} databases, ${objectRecords.length} objects).\n`,
+    `Recovery set ${id} created and verified (${databaseArtifacts.length} databases, ${objectRecords.length} objects); timings ${JSON.stringify(manifest.timingsMs)} ms.\n`,
   );
 }
 
@@ -678,6 +709,21 @@ async function readManifest(setPath: string): Promise<RecoveryManifest> {
       (migration) =>
         !migration.module || !migration.name || !/^[a-f0-9]{64}$/.test(migration.checksum),
     ) ||
+    (manifest.timingsMs !== undefined &&
+      (!Number.isSafeInteger(manifest.timingsMs.globalsDump) ||
+        manifest.timingsMs.globalsDump < 0 ||
+        !Number.isSafeInteger(manifest.timingsMs.databaseDumps?.care) ||
+        manifest.timingsMs.databaseDumps.care < 0 ||
+        !Number.isSafeInteger(manifest.timingsMs.databaseDumps?.authentik) ||
+        manifest.timingsMs.databaseDumps.authentik < 0 ||
+        !Number.isSafeInteger(manifest.timingsMs.databaseDumpVerification) ||
+        manifest.timingsMs.databaseDumpVerification < 0 ||
+        !Number.isSafeInteger(manifest.timingsMs.objectStorageCopy) ||
+        manifest.timingsMs.objectStorageCopy < 0 ||
+        !Number.isSafeInteger(manifest.timingsMs.recoverySetVerification) ||
+        manifest.timingsMs.recoverySetVerification < 0 ||
+        !Number.isSafeInteger(manifest.timingsMs.total) ||
+        manifest.timingsMs.total < 0)) ||
     databaseNames.some((name) => {
       const database = manifest.databases.find((entry) => entry.name === name);
       return (
@@ -713,6 +759,10 @@ async function readManifest(setPath: string): Promise<RecoveryManifest> {
     throw new Error('Recovery manifest contains duplicate objects or an incorrect object count.');
   }
   return manifest;
+}
+
+function elapsedMs(startedAt: number): number {
+  return Math.max(0, Math.round(performance.now() - startedAt));
 }
 
 async function writeManifest(setPath: string, manifest: RecoveryManifest): Promise<void> {

@@ -1,7 +1,11 @@
-name: care-platform
+name: care-platform-prod
 
 services:
   postgres:
+    image: care-platform-postgres:18.6-go1.26.9
+    build:
+      context: .
+      dockerfile: infra/postgres/Dockerfile
     ports: !override []
     restart: unless-stopped
     networks: !override [care-private]
@@ -12,6 +16,10 @@ services:
     networks: !override [care-private]
 
   authentik-server:
+    image: care-platform-authentik:2026.8.4-openssl-deb13u3-urllib3-2.8.0
+    build:
+      context: .
+      dockerfile: infra/authentik/Dockerfile
     environment: !override
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?Set AUTHENTIK_SECRET_KEY in .env.production}
       AUTHENTIK_POSTGRESQL__HOST: postgres
@@ -41,6 +49,7 @@ services:
     ports: !override []
     restart: unless-stopped
     networks: !override [care-private, care-edge]
+    security_opt: [no-new-privileges:true]
     healthcheck:
       test: [CMD, ak, healthcheck]
       interval: 30s
@@ -49,6 +58,10 @@ services:
       start_period: 60s
 
   authentik-worker:
+    image: care-platform-authentik:2026.8.4-openssl-deb13u3-urllib3-2.8.0
+    build:
+      context: .
+      dockerfile: infra/authentik/Dockerfile
     environment: !override
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?Set AUTHENTIK_SECRET_KEY in .env.production}
       AUTHENTIK_POSTGRESQL__HOST: postgres
@@ -77,11 +90,17 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks: !override [care-private]
+    security_opt: [no-new-privileges:true]
 
   seaweedfs:
+    image: care-platform-seaweedfs:4.48-go1.26.9-xnet0.60.0
+    platform: linux/amd64
+    build:
+      context: ./infra/seaweedfs
     command:
       - server
       - -dir=/data
+      - -ip.bind=0.0.0.0
       - -s3
       - -s3.config=/run/secrets/seaweedfs_s3
       - -s3.port=8333
@@ -126,6 +145,10 @@ services:
     networks: !override [care-private]
 
   prometheus:
+    image: care-platform-prometheus:v3.15.0-go1.26.9-xnet0.60.0
+    platform: linux/amd64
+    build:
+      context: ./infra/prometheus
     profiles: !override [observability]
     ports: !override ['127.0.0.1:9090:9090']
     networks: !override [care-private]
@@ -135,6 +158,10 @@ services:
       - care-prometheus:/prometheus
 
   grafana:
+    image: care-platform-grafana:13.2.4-kin-openapi0.149.0-pruned
+    platform: linux/amd64
+    build:
+      context: ./infra/grafana
     profiles: !override [observability]
     ports: !override ['127.0.0.1:3002:3000']
     networks: !override [care-private]
@@ -145,6 +172,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      target: runtime
     command: [bun, apps/api/dist/migrate.js]
     environment:
       NODE_ENV: production
@@ -265,11 +293,24 @@ services:
     networks: [care-private, care-edge]
 
   osrm:
+    image: care-platform-osrm:v26.10.0-distroless-debian13-go1.26.9
+    platform: linux/amd64
+    build:
+      context: ./infra/osrm
     ports: !override []
+    entrypoint: [/usr/local/bin/care-osrm-launcher]
+    command: !reset []
+    volumes: !override
+      - ./data/osrm:/data:ro
+    healthcheck:
+      test: [CMD, /usr/local/bin/care-osrm-launcher, healthcheck]
     networks: !override [care-private]
 
   caddy:
-    image: caddy:2.10.2-alpine
+    image: care-platform-caddy:2.11.7-go1.26.9
+    build:
+      context: .
+      dockerfile: infra/caddy/Dockerfile
     environment:
       CADDY_EMAIL: ${CADDY_EMAIL:?Set CADDY_EMAIL in .env.production}
       WEB_HOST: ${WEB_HOST:?Set WEB_HOST in .env.production}
@@ -296,7 +337,10 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    networks: [care-edge]
+    networks:
+      care-edge:
+        aliases:
+          - ${AUTHENTIK_HOST:?Set AUTHENTIK_HOST in .env.production}
 
   operator:
     build:

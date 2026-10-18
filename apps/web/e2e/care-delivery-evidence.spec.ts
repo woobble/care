@@ -5,6 +5,7 @@ import { Client } from 'pg';
 import {
   acceptDialogDuringAction,
   dateInBerlin,
+  expectKeyboardTabSequence,
   expectMobileLayoutToFit,
   retryCareToday,
 } from './support/browser';
@@ -95,9 +96,11 @@ test('Caregivers can complete visits, finalize documentation, and acknowledge ev
     await expect(unlinkedEmployeeError).toBeHidden();
     const visitLink = caregiverPage.getByRole('link', { name: scenario.clientName });
     await expect(visitLink).toBeVisible();
+    await expectKeyboardTabSequence(caregiverPage);
     await visitLink.click();
     await expect(caregiverPage.getByRole('heading', { name: scenario.clientName })).toBeVisible();
     await expectMobileLayoutToFit(caregiverPage);
+    await expectKeyboardTabSequence(caregiverPage);
 
     await caregiverPage.getByRole('button', { name: 'Start visit' }).tap();
     await expect(caregiverPage.getByText('In progress', { exact: true })).toBeVisible();
@@ -110,6 +113,7 @@ test('Caregivers can complete visits, finalize documentation, and acknowledge ev
     await expect(
       caregiverPage.getByRole('status').filter({ hasText: 'Service outcome saved.' }),
     ).toBeVisible();
+    await expectKeyboardTabSequence(caregiverPage);
     await caregiverPage.getByRole('button', { name: 'Start documentation' }).tap();
     await expect(caregiverPage).toHaveURL(/notice=documentation-created/);
     const documentation = await database.query<{ id: string }>(

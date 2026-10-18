@@ -11,6 +11,7 @@ export {
 export {
   EmployeeApplicationService,
   EmployeeNotActiveForScheduleError,
+  EmployeeNotAssignableForVisitError,
   EmployeeNotAssignedToFacilityError,
   EmployeeHasFutureVisitsError,
   EmployeeHasInProgressExecutionError,

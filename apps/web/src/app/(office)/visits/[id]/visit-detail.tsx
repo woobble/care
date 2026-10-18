@@ -645,6 +645,7 @@ export default async function VisitDetailContent({ params, searchParams }: Visit
             <input type="hidden" name="visitId" value={visit.id} />
             <input type="hidden" name="returnTo" value={returnTo} />
             <Field
+              id="visit-detail-date"
               label={t('Visits.date')}
               name="localDate"
               type="date"
@@ -652,6 +653,7 @@ export default async function VisitDetailContent({ params, searchParams }: Visit
               required
             />
             <Field
+              id="visit-detail-start-time"
               label={t('Visits.start')}
               name="localStartTime"
               type="time"
@@ -659,6 +661,7 @@ export default async function VisitDetailContent({ params, searchParams }: Visit
               required
             />
             <Field
+              id="visit-detail-end-time"
               label={t('Visits.end')}
               name="localEndTime"
               type="time"
@@ -666,9 +669,9 @@ export default async function VisitDetailContent({ params, searchParams }: Visit
               required
             />
             <div className="grid gap-2 md:col-span-2">
-              <Label htmlFor="visit-note">{t('Visits.planningNote')}</Label>
+              <Label htmlFor="visit-detail-note">{t('Visits.planningNote')}</Label>
               <Textarea
-                id="visit-note"
+                id="visit-detail-note"
                 name="note"
                 defaultValue={visit.note ?? ''}
                 maxLength={2000}
@@ -878,10 +881,12 @@ export default async function VisitDetailContent({ params, searchParams }: Visit
 function Field({
   label,
   name,
+  id = name,
   type,
   defaultValue,
   required,
 }: {
+  id?: string;
   label: string;
   name: string;
   type: string;
@@ -890,8 +895,8 @@ function Field({
 }) {
   return (
     <div className="grid gap-2">
-      <Label htmlFor={name}>{label}</Label>
-      <Input id={name} name={name} type={type} defaultValue={defaultValue} required={required} />
+      <Label htmlFor={id}>{label}</Label>
+      <Input id={id} name={name} type={type} defaultValue={defaultValue} required={required} />
     </div>
   );
 }

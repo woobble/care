@@ -50,9 +50,9 @@ Routing is disabled by default. If enabled, use the internal Compose endpoint `h
 Start the stack and check it:
 
 ```sh
-docker compose --env-file .env.production -f compose.yaml -f compose.production.yaml config --quiet
-docker compose --env-file .env.production -f compose.yaml -f compose.production.yaml up -d --build --wait
-bun run deploy:check
+docker compose --project-name care-platform-prod --env-file .env.production -f compose.yaml -f compose.production.yaml config --quiet
+docker compose --project-name care-platform-prod --env-file .env.production -f compose.yaml -f compose.production.yaml up -d --build --wait
+bun run deploy:check -- --production
 ```
 
 The API migration service applies checksummed migrations before API and worker startup. A PostgreSQL advisory lock serializes concurrent migration invocations. Migrations do not reset or recreate databases.
@@ -62,7 +62,7 @@ The API migration service applies checksummed migrations before API and worker s
 Create an operator account in Authentik. Obtain its OIDC `sub` value (the configured provider uses the Authentik user UUID), then create the initial tenant and Administrator membership in the otherwise empty Care database:
 
 ```sh
-bun run deploy:bootstrap-admin -- \
+bun run deploy:bootstrap-admin -- --production \
   --tenant-name 'Pilot Care' \
   --tenant-slug pilot-care \
   --subject '<Authentik OIDC sub>' \
@@ -80,10 +80,10 @@ The recovery set includes custom-format dumps of both `care` and `authentik`, Po
 For a paired recovery set, schedule a maintenance window. Stop application, worker and Authentik writes, leave PostgreSQL and object storage running, then create and verify the set:
 
 ```sh
-docker compose --env-file .env.production -f compose.yaml -f compose.production.yaml stop web api worker authentik-server authentik-worker
-bun run backup:create -- --confirm-quiesced
-bun run backup:verify -- <recovery-set-id>
-docker compose --env-file .env.production -f compose.yaml -f compose.production.yaml up -d --wait
+docker compose --project-name care-platform-prod --env-file .env.production -f compose.yaml -f compose.production.yaml stop web api worker authentik-server authentik-worker
+bun run backup:create -- --production --confirm-quiesced
+bun run backup:verify -- --production <recovery-set-id>
+docker compose --project-name care-platform-prod --env-file .env.production -f compose.yaml -f compose.production.yaml up -d --wait
 ```
 
 Do not claim an atomic database/S3 snapshot: this procedure bounds consistency by stopping writers while both databases and the bucket are copied. For an external object-storage provider, also stop any other writers to that bucket. A failed create may leave an incomplete directory; verification and pruning ignore incomplete sets.
@@ -91,8 +91,8 @@ Do not claim an atomic database/S3 snapshot: this procedure bounds consistency b
 Set `BACKUP_DIR` to a dedicated encrypted host volume, outside the repository. The operator container expects the mounted directory to be private and writable by its `bun` user (UID 1000). `BACKUP_RETENTION_DAYS` defaults to 30 and is an operational default, not a legal retention period. Pruning is a dry run unless `--apply` is supplied; it deletes only checksum-verified sets and always keeps the newest verified set:
 
 ```sh
-bun run backup:prune
-bun run backup:prune -- --apply
+bun run backup:prune -- --production
+bun run backup:prune -- --production --apply
 ```
 
 Recovery-set verification checks checksums and confirms that PostgreSQL dump files are readable by `pg_restore`. It does not replace a restore drill. Keep the backup volume encrypted and access-restricted; the files contain personal, clinical, financial and authentication data.
@@ -115,7 +115,7 @@ Use a fresh isolated PostgreSQL cluster and a separate empty S3 bucket. The targ
 Place both target files in `OPERATOR_SECRETS_DIR` (default `./secrets`, mounted read-only at `/run/operator-secrets`). The restore command validates the private files, verified manifest, different PostgreSQL host, separate empty bucket, superuser rights and target PostgreSQL version before changing the target. It refuses to overwrite the source bucket or objects. The target cluster and bucket must be disposable and isolated from production.
 
 ```sh
-bun run backup:restore -- <recovery-set-id> \
+bun run backup:restore -- --production <recovery-set-id> \
   --target-database-url-file /run/operator-secrets/recovery-database-url \
   --target-storage-config-file /run/operator-secrets/recovery-storage.json \
   --confirm-target <target-host>:<target-port>
@@ -129,14 +129,14 @@ After restore, the tool compares migration checksums, forced-RLS counts, selecte
 2. Enter maintenance and create a verified paired recovery set.
 3. Build or pull the reviewed application images.
 4. Start the Compose stack; the one-shot migration service applies the additive, checksummed changes before API and worker startup.
-5. Run `bun run deploy:check`, then verify Authentik sign-in, client lookup, caregiver assignment, document retrieval and worker status with synthetic pilot data.
+5. Run `bun run deploy:check -- --production`, then verify Authentik sign-in, client lookup, caregiver assignment, document retrieval and worker status with synthetic pilot data.
 
 The migration runner serializes concurrent runs and rejects checksum changes. It does not automatically reverse schema changes. For a backward-incompatible migration, prepare a corrective forward migration or restore into an isolated cluster; do not promise an in-place rollback.
 
 ## Health and common failures
 
 - `https://<API_HOST>/health/live` reports process liveness. `/health/ready` reports PostgreSQL, object storage, worker heartbeat and optional routing status without connection strings or credentials.
-- `bun run deploy:check` validates production configuration, Compose, database migration checksums, object storage, Authentik discovery, API readiness, worker heartbeat, backup destination and latest verified backup integrity. It reports blocking failures separately from warnings.
+- `bun run deploy:check -- --production` validates production configuration, Compose, database migration checksums, object storage, Authentik discovery, API readiness, worker heartbeat, backup destination and latest verified backup integrity. It reports blocking failures separately from warnings.
 - The worker's `/health/ready` endpoint is private to the Compose network. The operator preflight prints the latest scheduler success/failure, pending and dead outbox counts, and heartbeat age.
 - Routing is optional. An unavailable configured OSRM endpoint is a warning and does not fail API readiness.
 - If Caddy cannot issue a certificate, check DNS, public port reachability, host clock and `CADDY_EMAIL`.
@@ -150,11 +150,11 @@ The migration runner serializes concurrent runs and rejects checksum changes. It
 The API and worker expose Prometheus metrics on internal ports `3002` and `3003`. These endpoints are not routed through Caddy. Enable the optional observability profile to scrape them; production includes a starter Care Platform dashboard and alert rules for API readiness, worker availability, scheduler degradation, dead-letter messages and document-generation failures. Review the alert thresholds and configure notification routing with the pilot operator. Choose a unique `GRAFANA_ADMIN_PASSWORD` in `.env.production` even when the profile is disabled, because Compose validates the complete production configuration:
 
 ```sh
-COMPOSE_PROFILES=observability docker compose --env-file .env.production -f compose.yaml -f compose.production.yaml up -d
+COMPOSE_PROFILES=observability docker compose --project-name care-platform-prod --env-file .env.production -f compose.yaml -f compose.production.yaml up -d
 ```
 
 Prometheus is available at `http://127.0.0.1:9090` and Grafana at `http://127.0.0.1:3002` on the host loopback interface only. Use an SSH local forward to inspect them remotely; neither UI is published on a public interface. If traces are also needed, set `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318` in `.env.production` and restart with the same profile.
 
-Useful Prometheus queries include `care_api_readiness`, `care_api_dependency_status{state="unavailable"}`, `increase(care_document_generation_failures_total[15m])`, `care_worker_scheduler_status{state="degraded"}`, `increase(care_worker_outbox_failures_total[15m])`, `care_worker_outbox_messages`, and `time() - care_worker_heartbeat_timestamp_seconds`. Use `bun run deploy:check` for the age and integrity of the latest verified recovery set. Labels use bounded route templates and operation types; they do not contain tenant or client identifiers. Alert rules and notification routing remain operator configuration.
+Useful Prometheus queries include `care_api_readiness`, `care_api_dependency_status{state="unavailable"}`, `increase(care_document_generation_failures_total[15m])`, `care_worker_scheduler_status{state="degraded"}`, `increase(care_worker_outbox_failures_total[15m])`, `care_worker_outbox_messages`, and `time() - care_worker_heartbeat_timestamp_seconds`. Use `bun run deploy:check -- --production` for the age and integrity of the latest verified recovery set. Labels use bounded route templates and operation types; they do not contain tenant or client identifiers. Alert rules and notification routing remain operator configuration.
 
 No production deployment, real-secret preflight or production restore has been verified by repository checks alone.

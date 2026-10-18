@@ -70,6 +70,16 @@ describe('Fastify HTTP adapter', () => {
       expect(contextResponse.headers['access-control-allow-origin']).toBe('http://localhost:3000');
       expect(contextResponse.headers['x-content-type-options']).toBe('nosniff');
       expect(contextResponse.headers['cache-control']).toBe('private, no-store');
+      expect(contextResponse.headers['access-control-allow-credentials']).toBeUndefined();
+
+      const foreignOriginResponse = await app.inject({
+        method: 'GET',
+        url: '/context',
+        headers: { origin: 'https://attacker.example' },
+      });
+      expect(foreignOriginResponse.headers['access-control-allow-origin']).toBe(
+        'http://localhost:3000',
+      );
 
       const invalidCorrelationResponse = await app.inject({
         method: 'GET',

@@ -661,6 +661,7 @@ export type EventHandler = (event: DomainEvent) => Promise<void>;
 
 export class EventDispatcher {
   private readonly handlers = new Map<EventName, EventHandler[]>();
+  private readonly allHandlers: EventHandler[] = [];
 
   subscribe(type: EventName, handler: EventHandler): void {
     const handlers = this.handlers.get(type) ?? [];
@@ -668,13 +669,22 @@ export class EventDispatcher {
     this.handlers.set(type, handlers);
   }
 
+  subscribeAll(handler: EventHandler): void {
+    this.allHandlers.push(handler);
+  }
+
   async dispatch(event: DomainEvent): Promise<void> {
     if (event.version !== 1) throw new UnsupportedEventVersionError(event.type, event.version);
     const handlers = this.handlers.get(event.type) ?? [];
-    if (handlers.length === 0) throw new MissingEventHandlerError(event.type);
+    if (handlers.length === 0 && this.allHandlers.length === 0) {
+      throw new MissingEventHandlerError(event.type);
+    }
     // Preserve subscription order; handlers may rely on earlier side effects.
     // oxlint-disable-next-line no-await-in-loop
     for (const handler of handlers) await handler(event);
+    // Catch-all handlers run after event-specific consumers.
+    // oxlint-disable-next-line no-await-in-loop
+    for (const handler of this.allHandlers) await handler(event);
   }
 }
 

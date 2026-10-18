@@ -1,5 +1,3 @@
-// oxlint-disable-next-line import/no-unassigned-import -- load dotenv before creating the auth provider
-import '@care/config/load-env';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';

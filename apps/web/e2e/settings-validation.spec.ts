@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
+import { expectTargetViewportLayouts } from './support/browser';
 import { createOfficeAdminSession, required } from './support/office-admin';
 
 test('Office settings persist changes and report recoverable save errors', async ({ page }) => {
@@ -13,6 +14,8 @@ test('Office settings persist changes and report recoverable save errors', async
     const office = await createOfficeAdminSession(database, page, 'settings');
     const organizationName = `E2E Settings ${office.runId}`;
     await page.goto('/administration/organizations');
+    await expect(page.getByRole('heading', { name: 'Create organization' })).toBeVisible();
+    await expectTargetViewportLayouts(page);
     await page.getByLabel('Name', { exact: true }).fill(organizationName);
     await page.getByLabel('Legal name').fill(`E2E Betreuungsdienst ${office.runId}`);
     await page.getByLabel('Address').fill('E2E Provider Street 1, 10115 Berlin');
@@ -30,6 +33,8 @@ test('Office settings persist changes and report recoverable save errors', async
 
     await page.goto('/billing/settings');
     let billingSection = page.getByRole('region', { name: organizationName });
+    await expect(billingSection).toBeVisible();
+    await expectTargetViewportLayouts(page);
     await billingSection.locator('input[name="bankAccountHolder"]').fill(organizationName);
     await billingSection.locator('input[name="iban"]').fill('DE89370400440532013000');
     await billingSection.locator('select[name="taxTreatment"]').selectOption('small_business');
@@ -73,6 +78,8 @@ test('Office settings persist changes and report recoverable save errors', async
 
     await page.goto(`/billing/claims/settings?organizationId=${organizationId}`);
     const payerSection = page.getByRole('region', { name: organizationName });
+    await expect(payerSection).toBeVisible();
+    await expectTargetViewportLayouts(page);
     const payerCreationForm = payerSection.locator('form').filter({
       has: page.getByRole('button', { name: 'Create payer' }),
     });
@@ -139,6 +146,8 @@ test('Office settings persist changes and report recoverable save errors', async
     const templateForm = page.locator('form').filter({
       has: page.getByRole('button', { name: 'Save new template version' }),
     });
+    await expect(templateForm).toBeVisible();
+    await expectTargetViewportLayouts(page);
     const savedTemplateHeader = `Synthetic template ${office.runId}`;
     await templateForm.locator('input[name="headerText"]').fill(savedTemplateHeader);
     await templateForm.locator('input[name="contactWebsite"]').fill('https://example.test');
@@ -171,6 +180,8 @@ test('Office settings persist changes and report recoverable save errors', async
     const agreementReminderForm = page.locator('form').filter({
       has: page.locator('input[name="category"][value="agreements"]'),
     });
+    await expect(agreementReminderForm).toBeVisible();
+    await expectTargetViewportLayouts(page);
     await agreementReminderForm.locator('input[name="offsetsDays"]').fill('45, 10, 0');
     await agreementReminderForm.getByRole('button', { name: 'Save changes' }).click();
     await expect(page).toHaveURL(/updated=saved/);

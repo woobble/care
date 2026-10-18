@@ -1,0 +1,6 @@
+services:
+  authentik-server:
+    image: care-platform-authentik:2026.8.4-openssl-deb13u3-urllib3-2.8.0
+
+  authentik-worker:
+    image: care-platform-authentik:2026.8.4-openssl-deb13u3-urllib3-2.8.0

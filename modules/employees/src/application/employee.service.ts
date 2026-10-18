@@ -119,6 +119,7 @@ export class EmployeeApplicationService {
   ): Promise<EmployeeSnapshot> {
     const employee = await this.requireEmployee(transaction, tenantId, employeeId, true);
     if (employee.status !== 'active') throw new EmployeeNotActiveForScheduleError();
+    if (employee.employmentType === 'office') throw new EmployeeNotAssignableForVisitError();
     if (employee.organizationId !== organizationId) {
       throw new EmployeeNotAssignedToFacilityError();
     }
@@ -1833,6 +1834,15 @@ export class EmployeeNotActiveForScheduleError extends Error {
   constructor() {
     super('Only active employees can be assigned to a visit');
     this.name = 'EmployeeNotActiveForScheduleError';
+  }
+}
+
+export class EmployeeNotAssignableForVisitError extends Error {
+  readonly code = 'VISIT_EMPLOYEE_NOT_ELIGIBLE';
+
+  constructor() {
+    super('Office employees cannot be assigned to visit delivery');
+    this.name = 'EmployeeNotAssignableForVisitError';
   }
 }
 

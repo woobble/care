@@ -34,7 +34,7 @@ import { loadApiConfig, loadMigrationConfig, loadStorageConfig } from '@care/con
 import { asUUID } from '@care/contracts';
 import { createDatabase, createUnitOfWork } from '@care/database';
 import { createDocumentsApplicationService } from '@care/documents';
-import { EmployeeApplicationService } from '@care/employees';
+import { EmployeeApplicationService, employeeRecords } from '@care/employees';
 import { identitySchema, seedSystemRoles } from '@care/identity';
 import { createOperationsApplicationService } from '@care/operations';
 import { OrganizationApplicationService, tenants } from '@care/organizations';
@@ -42,6 +42,7 @@ import { PERMISSIONS } from '@care/permissions';
 import { DrizzleOutboxRepository } from '@care/platform';
 import {
   createSchedulingApplicationService,
+  type EmployeeUnavailabilityInput,
   UnavailableRouteProvider,
   visitSubstitutions,
 } from '@care/scheduling';
@@ -50,6 +51,7 @@ import { createServiceEvidenceApplicationService } from '@care/service-evidence'
 import { createServiceApplicationService, ServicePriceApplicationService } from '@care/services';
 import { createS3ObjectStorage } from '@care/storage';
 import { createVisitExecutionApplicationService } from '@care/visit-execution';
+import { selectDailyPilotWorkload } from './pilot-workload';
 
 const PILOT_SLUG = 'muster-betreuungsdienst-nrw';
 const PILOT_NAME = 'Muster Betreuungsdienst NRW';
@@ -62,7 +64,12 @@ const PILOT_CAREGIVER_MEMBERSHIP_ID = uuidv5(
   'synthetic-pilot-caregiver-membership',
   PILOT_NAMESPACE,
 );
+let pilotPrimaryCaregiverEmployeeId: string | undefined;
 const PILOT_REFERENCE_DATE = process.env.PILOT_REFERENCE_DATE ?? '2026-10-12';
+const PILOT_WORKLOAD_VISITS_PER_WORKDAY =
+  process.env.PILOT_WORKLOAD_VISITS_PER_WORKDAY === undefined
+    ? undefined
+    : Number(process.env.PILOT_WORKLOAD_VISITS_PER_WORKDAY);
 const PILOT_DEDICATED_TEST_DATABASE = process.env.PILOT_DEDICATED_TEST_DATABASE === 'true';
 const PILOT_TEST_DATABASE_PORT = process.env.PILOT_TEST_DATABASE_PORT;
 const TIMEZONE = 'Europe/Berlin';
@@ -78,6 +85,16 @@ if (process.env.NODE_ENV !== 'development') {
 }
 if (!isIsoDate(PILOT_REFERENCE_DATE)) {
   throw new Error('PILOT_REFERENCE_DATE must be a valid YYYY-MM-DD date; no data was changed');
+}
+if (
+  PILOT_WORKLOAD_VISITS_PER_WORKDAY !== undefined &&
+  (!Number.isSafeInteger(PILOT_WORKLOAD_VISITS_PER_WORKDAY) ||
+    PILOT_WORKLOAD_VISITS_PER_WORKDAY < 2 ||
+    PILOT_WORKLOAD_VISITS_PER_WORKDAY > 6)
+) {
+  throw new Error(
+    'PILOT_WORKLOAD_VISITS_PER_WORKDAY must be an integer from 2 through 6; no data was changed',
+  );
 }
 if (
   PILOT_DEDICATED_TEST_DATABASE &&
@@ -1276,7 +1293,32 @@ async function ensureVisits(
     (assignment) => assignment.status === 'active',
   );
   if (!coverageAssignment) throw new Error('Pilot leave coverage visit has no active assignment');
-  const coverage = await ensureAbsenceSubstitution(coverageVisit, coverageAssignment);
+  const leaveCoverage = await ensureAbsenceSubstitution(coverageVisit, coverageAssignment, {
+    absenceReason: 'vacation',
+    substitutionReason: 'Synthetic pilot coverage for planned leave',
+    note: 'Synthetic pilot: planned leave coverage.',
+    eligibleCaregiverIds: new Set(caregivers.map((employee) => employee.id)),
+  });
+  const sicknessVisit = rows.find((visit) => visit.facilityId !== coverageVisit.facilityId);
+  if (!sicknessVisit) throw new Error('Pilot sickness coverage visit was not generated');
+  const sicknessAssignment = (await scheduling.listAssignments(principal, sicknessVisit.id)).find(
+    (assignment) => assignment.status === 'active',
+  );
+  if (!sicknessAssignment) {
+    throw new Error('Pilot sickness coverage visit has no active assignment');
+  }
+  const sicknessCoverage = await ensureAbsenceSubstitution(sicknessVisit, sicknessAssignment, {
+    absenceReason: 'sick_leave',
+    substitutionReason: 'Synthetic pilot sickness coverage',
+    note: 'Synthetic pilot: sickness absence coverage.',
+    eligibleCaregiverIds: new Set(caregivers.map((employee) => employee.id)),
+  });
+  const coverage = {
+    absenceScenario: leaveCoverage.absenceScenario,
+    substitutionStatus: leaveCoverage.substitutionStatus,
+    sicknessAbsenceScenario: sicknessCoverage.absenceScenario,
+    sicknessSubstitutionStatus: sicknessCoverage.substitutionStatus,
+  };
 
   const assignedRows: PilotVisit[] = [];
   for (let page = 1; ; page += 1) {
@@ -1452,28 +1494,79 @@ async function ensureVisits(
       `The pilot schedule has no finance-eligible visit whose scheduled window has ended by today (${localDateInBerlin(new Date())})`,
     );
   }
-  const referenceStart = new Date(`${PILOT_REFERENCE_DATE}T12:00:00.000Z`).getTime();
   const now = new Date();
-  const sameClientVisits = financeVisits.filter(
-    (visit) => visit.clientId === workflowVisit.clientId,
-  );
-  const timelineVisits: PilotVisit[] = [];
-  for (let week = 0; week < 4; week += 1) {
-    const candidates = sameClientVisits.filter((visit) => {
-      const visitDate = localDateInBerlin(visit.plannedStart);
-      const visitMidday = new Date(`${visitDate}T12:00:00.000Z`).getTime();
-      return Math.floor((visitMidday - referenceStart) / (7 * 24 * 60 * 60 * 1000)) === week;
-    });
-    const selected =
-      candidates.find((visit) => visit.id === workflowVisit.id && visit.plannedEnd <= now) ??
-      candidates.find((visit) => visit.plannedEnd <= now);
-    if (selected) timelineVisits.push(selected);
-  }
   const fullTimelineEndsInPast = addDays(PILOT_REFERENCE_DATE, 27) < localDateInBerlin(now);
-  if (fullTimelineEndsInPast && timelineVisits.length !== 4) {
-    throw new Error(
-      `The four-week retrospective scenario needs one ended finance-eligible visit per week; found ${timelineVisits.length}`,
+  let timelineVisits: PilotVisit[];
+  if (PILOT_WORKLOAD_VISITS_PER_WORKDAY !== undefined) {
+    const eligibleVisits = scenarioVisits
+      .filter((visit) => visit.status !== 'cancelled' && visit.plannedEnd <= now)
+      .map((visit) => {
+        const activeAssignments = visit.assignments.filter(
+          (assignment) => assignment.status === 'active',
+        );
+        if (activeAssignments.length !== 1) {
+          throw new Error(`Workload visit ${visit.id} has no unique active caregiver assignment`);
+        }
+        return {
+          visit,
+          id: visit.id,
+          localDate: localDateInBerlin(visit.plannedStart),
+          plannedStart: visit.plannedStart,
+          employeeId: activeAssignments[0]!.employeeId,
+        };
+      });
+    const scheduledWorkdays = new Set(
+      scenarioVisits
+        .filter((visit) => visit.status !== 'cancelled')
+        .map((visit) => localDateInBerlin(visit.plannedStart)),
     );
+    const eligibleWorkdays = new Set(eligibleVisits.map((item) => item.localDate));
+    if (fullTimelineEndsInPast && eligibleWorkdays.size !== scheduledWorkdays.size) {
+      throw new Error(
+        `The retrospective pilot workload has ended visits on ${eligibleWorkdays.size} of ${scheduledWorkdays.size} scheduled workdays`,
+      );
+    }
+    const selected = selectDailyPilotWorkload({
+      visits: eligibleVisits,
+      visitsPerWorkday: PILOT_WORKLOAD_VISITS_PER_WORKDAY,
+      preferredVisitId: workflowVisit.id,
+      requireTargetPerWorkday: fullTimelineEndsInPast,
+    });
+    const selectedWorkdays = new Set(selected.map((item) => item.localDate));
+    if (fullTimelineEndsInPast && selectedWorkdays.size !== scheduledWorkdays.size) {
+      throw new Error(
+        `The retrospective pilot workload covers ${selectedWorkdays.size} of ${scheduledWorkdays.size} scheduled workdays`,
+      );
+    }
+    const visitById = new Map(scenarioVisits.map((visit) => [visit.id, visit]));
+    timelineVisits = selected.map((item) => {
+      const visit = visitById.get(item.id);
+      if (!visit)
+        throw new Error(`Selected workload visit ${item.id} is not in the pilot schedule`);
+      return visit;
+    });
+  } else {
+    const referenceStart = new Date(`${PILOT_REFERENCE_DATE}T12:00:00.000Z`).getTime();
+    const sameClientVisits = financeVisits.filter(
+      (visit) => visit.clientId === workflowVisit.clientId,
+    );
+    timelineVisits = [];
+    for (let week = 0; week < 4; week += 1) {
+      const candidates = sameClientVisits.filter((visit) => {
+        const visitDate = localDateInBerlin(visit.plannedStart);
+        const visitMidday = new Date(`${visitDate}T12:00:00.000Z`).getTime();
+        return Math.floor((visitMidday - referenceStart) / (7 * 24 * 60 * 60 * 1000)) === week;
+      });
+      const selected =
+        candidates.find((visit) => visit.id === workflowVisit.id && visit.plannedEnd <= now) ??
+        candidates.find((visit) => visit.plannedEnd <= now);
+      if (selected) timelineVisits.push(selected);
+    }
+    if (fullTimelineEndsInPast && timelineVisits.length !== 4) {
+      throw new Error(
+        `The four-week retrospective scenario needs one ended finance-eligible visit per week; found ${timelineVisits.length}`,
+      );
+    }
   }
   return {
     ...totals,
@@ -1493,6 +1586,47 @@ async function ensurePilotCaregiverActor(
 ) {
   const caregiverRole = tenantRoles.find((role) => role.name === 'Caregiver');
   if (!caregiverRole) throw new Error('The pilot Caregiver role is missing');
+  const [employee] = await migrationDatabase.db
+    .select({ userId: employeeRecords.userId })
+    .from(employeeRecords)
+    .where(and(eq(employeeRecords.tenantId, PILOT_TENANT_ID), eq(employeeRecords.id, employeeId)))
+    .limit(1);
+  if (!employee) throw new Error(`Pilot caregiver ${employeeId} is missing`);
+
+  const derivedActorId = uuidv5(`synthetic-pilot-caregiver-actor:${employeeId}`, PILOT_NAMESPACE);
+  let actorUserId: string;
+  if (employee.userId === PILOT_CAREGIVER_ACTOR_ID) {
+    actorUserId = PILOT_CAREGIVER_ACTOR_ID;
+    pilotPrimaryCaregiverEmployeeId = employeeId;
+  } else if (employee.userId === derivedActorId) {
+    actorUserId = derivedActorId;
+  } else if (employee.userId !== null) {
+    throw new Error(`Pilot caregiver ${employeeId} is linked to an unexpected user`);
+  } else {
+    if (!pilotPrimaryCaregiverEmployeeId) {
+      const [existingPrimary] = await migrationDatabase.db
+        .select({ id: employeeRecords.id })
+        .from(employeeRecords)
+        .where(
+          and(
+            eq(employeeRecords.tenantId, PILOT_TENANT_ID),
+            eq(employeeRecords.userId, PILOT_CAREGIVER_ACTOR_ID),
+          ),
+        )
+        .limit(1);
+      pilotPrimaryCaregiverEmployeeId = existingPrimary?.id;
+    }
+    if (!pilotPrimaryCaregiverEmployeeId) {
+      actorUserId = PILOT_CAREGIVER_ACTOR_ID;
+      pilotPrimaryCaregiverEmployeeId = employeeId;
+    } else {
+      actorUserId = derivedActorId;
+    }
+  }
+  const membershipId =
+    actorUserId === PILOT_CAREGIVER_ACTOR_ID
+      ? PILOT_CAREGIVER_MEMBERSHIP_ID
+      : uuidv5(`synthetic-pilot-caregiver-membership:${employeeId}`, PILOT_NAMESPACE);
 
   await migrationDatabase.db.transaction(async (transaction) => {
     await transaction.execute(sql`select set_config('app.tenant_id', ${PILOT_TENANT_ID}, true)`);
@@ -1504,11 +1638,11 @@ async function ensurePilotCaregiverActor(
         email: identitySchema.users.email,
       })
       .from(identitySchema.users)
-      .where(eq(identitySchema.users.id, PILOT_CAREGIVER_ACTOR_ID))
+      .where(eq(identitySchema.users.id, actorUserId))
       .limit(1);
     if (!existingUser) {
       await transaction.insert(identitySchema.users).values({
-        id: PILOT_CAREGIVER_ACTOR_ID,
+        id: actorUserId,
         status: 'active',
         displayName: 'Synthetic pilot visit actor — no sign-in',
       });
@@ -1523,7 +1657,7 @@ async function ensurePilotCaregiverActor(
     const [externalIdentity] = await transaction
       .select({ id: identitySchema.externalIdentities.id })
       .from(identitySchema.externalIdentities)
-      .where(eq(identitySchema.externalIdentities.userId, PILOT_CAREGIVER_ACTOR_ID))
+      .where(eq(identitySchema.externalIdentities.userId, actorUserId))
       .limit(1);
     if (externalIdentity) {
       throw new Error('The seed-only pilot visit actor must not have an external login mapping');
@@ -1532,8 +1666,8 @@ async function ensurePilotCaregiverActor(
     await transaction
       .insert(identitySchema.tenantMemberships)
       .values({
-        id: PILOT_CAREGIVER_MEMBERSHIP_ID,
-        userId: PILOT_CAREGIVER_ACTOR_ID,
+        id: membershipId,
+        userId: actorUserId,
         tenantId: PILOT_TENANT_ID,
         status: 'active',
       })
@@ -1551,16 +1685,12 @@ async function ensurePilotCaregiverActor(
       .from(identitySchema.tenantMemberships)
       .where(
         and(
-          eq(identitySchema.tenantMemberships.userId, PILOT_CAREGIVER_ACTOR_ID),
+          eq(identitySchema.tenantMemberships.userId, actorUserId),
           eq(identitySchema.tenantMemberships.tenantId, PILOT_TENANT_ID),
         ),
       )
       .limit(1);
-    if (
-      !membership ||
-      membership.id !== PILOT_CAREGIVER_MEMBERSHIP_ID ||
-      membership.status !== 'active'
-    ) {
+    if (!membership || membership.id !== membershipId || membership.status !== 'active') {
       throw new Error('The seed-only pilot visit actor membership is inactive or unexpected');
     }
 
@@ -1604,13 +1734,7 @@ async function ensurePilotCaregiverActor(
     }
   });
 
-  await employeeService.linkUser(
-    principal,
-    employeeId,
-    PILOT_CAREGIVER_ACTOR_ID,
-    contextFor(),
-    auditContext,
-  );
+  await employeeService.linkUser(principal, employeeId, actorUserId, contextFor(), auditContext);
 
   const rolePermissions = await migrationDatabase.db
     .select({ permission: identitySchema.rolePermissions.permission })
@@ -1624,7 +1748,7 @@ async function ensurePilotCaregiverActor(
     throw new Error('The canonical Caregiver role cannot complete the pilot visit');
   }
   return {
-    userId: PILOT_CAREGIVER_ACTOR_ID,
+    userId: actorUserId,
     tenantId: PILOT_TENANT_ID,
     roles: ['Caregiver'],
     grants,
@@ -1639,7 +1763,7 @@ async function ensureCompletedPilotVisit(
   tenantRoles: Awaited<ReturnType<typeof seedSystemRoles>>,
 ) {
   const caregiverPrincipal = await ensurePilotCaregiverActor(caregiverEmployeeId, tenantRoles);
-  const request = contextForActor(PILOT_CAREGIVER_ACTOR_ID, organizationId);
+  const request = contextForActor(caregiverPrincipal.userId, organizationId);
   let detail = await visitExecution.get(caregiverPrincipal, visitId);
   if (detail.execution.status === 'not_started') {
     if (plannedVisitDate > localDateInBerlin(new Date())) {
@@ -2860,8 +2984,13 @@ async function ensurePilotFinancialScenario(input: {
 async function ensureAbsenceSubstitution(
   visit: PilotVisit,
   assignment: Awaited<ReturnType<typeof scheduling.listAssignments>>[number],
+  scenario: {
+    absenceReason: NonNullable<EmployeeUnavailabilityInput['reason']>;
+    substitutionReason: string;
+    note: string;
+    eligibleCaregiverIds: ReadonlySet<string>;
+  },
 ) {
-  const substitutionReason = 'Synthetic pilot coverage for planned leave';
   const priorSubstitutions = await unitOfWork.transaction(
     { tenantId: PILOT_TENANT_ID },
     (transaction) =>
@@ -2872,12 +3001,20 @@ async function ensureAbsenceSubstitution(
           and(
             eq(visitSubstitutions.tenantId, PILOT_TENANT_ID),
             eq(visitSubstitutions.visitId, visit.id),
-            eq(visitSubstitutions.reason, substitutionReason),
+            eq(visitSubstitutions.reason, scenario.substitutionReason),
           ),
         )
         .limit(1),
   );
   const priorSubstitution = priorSubstitutions[0];
+  if (
+    priorSubstitution &&
+    !scenario.eligibleCaregiverIds.has(priorSubstitution.substituteEmployeeId)
+  ) {
+    throw new Error(
+      `Existing pilot substitution ${priorSubstitution.id} targets a non-caregiver employee`,
+    );
+  }
   const absenceEmployeeId = priorSubstitution?.originalEmployeeId ?? assignment.employeeId;
 
   const absenceWindow = await scheduling.listUnavailability(
@@ -2890,7 +3027,7 @@ async function ensureAbsenceSubstitution(
     (item) =>
       item.startsAt.getTime() === visit.plannedStart.getTime() &&
       item.endsAt.getTime() === visit.plannedEnd.getTime() &&
-      item.reason === 'vacation',
+      item.reason === scenario.absenceReason,
   );
   if (!absenceExists) {
     await scheduling.createUnavailability(
@@ -2899,8 +3036,8 @@ async function ensureAbsenceSubstitution(
         employeeId: absenceEmployeeId,
         startsAt: visit.plannedStart,
         endsAt: visit.plannedEnd,
-        reason: 'vacation',
-        note: 'Synthetic pilot: planned leave coverage.',
+        reason: scenario.absenceReason,
+        note: scenario.note,
       },
       contextFor(visit.organizationId),
       auditContext,
@@ -2913,7 +3050,10 @@ async function ensureAbsenceSubstitution(
   }
 
   const candidates = await scheduling.substituteCandidates(principal, visit.id);
-  const substituteEmployeeId = priorSubstitution?.substituteEmployeeId ?? candidates[0]?.employeeId;
+  const substituteEmployeeId =
+    priorSubstitution?.substituteEmployeeId ??
+    candidates.find((candidate) => scenario.eligibleCaregiverIds.has(candidate.employeeId))
+      ?.employeeId;
   if (!substituteEmployeeId) {
     throw new Error(`No eligible substitute is available for pilot visit ${visit.id}`);
   }
@@ -2922,7 +3062,11 @@ async function ensureAbsenceSubstitution(
     (await scheduling.proposeSubstitution(
       principal,
       visit.id,
-      { originalAssignmentId: assignment.id, substituteEmployeeId, reason: substitutionReason },
+      {
+        originalAssignmentId: assignment.id,
+        substituteEmployeeId,
+        reason: scenario.substitutionReason,
+      },
       contextFor(visit.organizationId),
       auditContext,
     ));
@@ -2949,6 +3093,8 @@ function assertPilotConsistency(
     requiresManualPlacement: number;
     absenceScenario: boolean;
     substitutionStatus: 'confirmed' | 'proposed' | 'cancelled';
+    sicknessAbsenceScenario: boolean;
+    sicknessSubstitutionStatus: 'confirmed' | 'proposed' | 'cancelled';
   },
 ): void {
   if (
@@ -2963,7 +3109,9 @@ function assertPilotConsistency(
     visitSummary.publishedTours < 1 ||
     visitSummary.requiresManualPlacement !== 0 ||
     !visitSummary.absenceScenario ||
-    visitSummary.substitutionStatus !== 'confirmed'
+    visitSummary.substitutionStatus !== 'confirmed' ||
+    !visitSummary.sicknessAbsenceScenario ||
+    visitSummary.sicknessSubstitutionStatus !== 'confirmed'
   ) {
     throw new Error(
       'Pilot consistency check failed; inspect scoped pilot records before reseeding',
@@ -3141,8 +3289,10 @@ try {
       `synthetic funding sources=${fundingSourceCount} (eligibility and balances unconfirmed)`,
       `benefit scenario: provisional §45b and §45a entitlements=${benefitEntitlementCount}, synthetic provider-reported external use and conversion input=€25.00 each`,
       `scheduled visits=${generated.visitCount} generated=${generated.generated} already-existing=${generated.alreadyExisting} manual-placement=${generated.requiresManualPlacement} published-tours=${generated.publishedTours}`,
-      `weekly execution timeline=${completedTimelineVisits}/${generated.timelineVisits.length} available weeks (4-week schedule)`,
-      `exceptional coverage: absence=${generated.absenceScenario ? 'recorded' : 'missing'} substitution=${generated.substitutionStatus}`,
+      PILOT_WORKLOAD_VISITS_PER_WORKDAY === undefined
+        ? `weekly execution timeline=${completedTimelineVisits}/${generated.timelineVisits.length} available weeks (4-week schedule)`
+        : `daily execution workload=${completedTimelineVisits}/${generated.timelineVisits.length} visits across ${new Set(generated.timelineVisits.map((visit) => localDateInBerlin(visit.plannedStart))).size} workdays (target ${PILOT_WORKLOAD_VISITS_PER_WORKDAY}/day)`,
+      `exceptional coverage: planned leave=${generated.absenceScenario ? 'recorded' : 'missing'}/${generated.substitutionStatus}; sick leave=${generated.sicknessAbsenceScenario ? 'recorded' : 'missing'}/${generated.sicknessSubstitutionStatus}`,
       `completed synthetic visit=${financialScenario.completedVisitId} (client ${String(financialScenario.clientOrdinal + 1).padStart(2, '0')}, ${financialScenario.visitDate}) service allocation=${formatEuro(financialScenario.externalAllocationCents)} / ${formatEuro(financialScenario.serviceAmountCents)}`,
       `issued invoices=${financialScenario.invoiceCount} (split payer/client); claim=${financialScenario.claimId} synthetic decision and payment recorded locally only`,
       `client self-pay invoice=${formatEuro(financialScenario.clientInvoice.grandTotalCents)} paid=${formatEuro(financialScenario.clientPaidCents)} outstanding=${formatEuro(financialScenario.clientInvoice.outstandingCents ?? 0)}`,

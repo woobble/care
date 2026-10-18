@@ -1,6 +1,8 @@
 # Environment variables
 
-Copy `.env.example` to `.env` for local development. Compose reads it for infrastructure. Bun loads it for workspace commands. Change local development secrets together when changing a database password or OIDC client secret.
+Copy `.env.example` to `.env` for local development. Compose reads it for infrastructure. Bun's automatic env-file loading is disabled; application entry points explicitly load `.env` only in development and `.env.test` only in tests. Production application processes do not load dotenv files. Change local development secrets together when changing a database password or OIDC client secret.
+
+Create `.env.test` from a dedicated synthetic test configuration when a test needs environment variables. Test processes do not fall back to `.env`, and neither Bun nor application dotenv setup selects `.env.production` implicitly.
 
 | Variable                           | Used by                    | Purpose                                                                                                  |
 | ---------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -45,7 +47,7 @@ Local service endpoints: Authentik `9000`, SeaweedFS S3 `9002`, SeaweedFS filer 
 
 ## Production Compose
 
-Production uses `compose.yaml` with `compose.production.yaml` and a protected `.env.production` file. The override removes direct host ports for PostgreSQL, Redis, Authentik, SeaweedFS and OSRM; only Caddy publishes ports 80 and 443. Applications read supported secret files from Docker Compose mounts. Authentik SMTP credentials and bootstrap settings remain in the owner-only environment file because Authentik consumes those environment variables directly.
+Production uses `compose.yaml` with `compose.production.yaml` in the separate `care-platform-prod` Compose project and a protected `.env.production` file. Production wrappers require the explicit `--production` argument before accessing that file; direct Compose access must follow the runbook and specify `--project-name care-platform-prod --env-file .env.production`. Local Compose commands target `care-platform-dev`, or a validated isolated `care-platform-e2e` project name. The override removes direct host ports for PostgreSQL, Redis, Authentik, SeaweedFS and OSRM; only Caddy publishes ports 80 and 443. Applications read supported secret files from Docker Compose mounts. Authentik SMTP credentials and bootstrap settings remain in the owner-only environment file because Authentik consumes those environment variables directly.
 
 Copy `.env.production.example` only as a configuration template, replace all placeholders, and create the referenced protected secret files. It is not a runnable deployment or evidence of production readiness. Follow the [pilot operations runbook](runbooks/pilot-operations.md) and [readiness checklist](pilot-readiness.md) before using real data.
 
@@ -53,11 +55,13 @@ Copy `.env.production.example` only as a configuration template, replace all pla
 
 Both seed commands are development-only and refuse any `NODE_ENV` other than `development`. The general seed creates the Demo Care tenant, organization, two facilities, and Administrator/Office/Caregiver system roles, but grants no user membership. `DEV_SEED_OIDC_SUB` is only used by `bun run seed:identity` to establish the first local administrator. After that bootstrap, tenant access is managed through Administration in the application.
 
-Before `bun run test:e2e`, install the Playwright browser with `bunx playwright install chromium`. On Linux, use `bunx playwright install --with-deps chromium` when system browser libraries are absent. The E2E API token and all bootstrap credentials are for local development only.
+Before `bun run test:e2e`, install the Playwright browser with `bunx playwright install chromium`. On Linux, use `bunx playwright install --with-deps chromium` when system browser libraries are absent. Keep the E2E API token and bootstrap credentials local to the disposable test project.
 
 ## Isolated Authentik browser E2E
 
 Run the browser journey against its own Compose project so its PostgreSQL and Authentik data stay separate from the normal local stack. The Compose ports default to `9000` for Authentik, `9002` for SeaweedFS S3, and `9004` for its filer; override them when another local stack uses those ports. Keep `OIDC_ISSUER` and `S3_ENDPOINT` aligned with the chosen ports:
+
+Create an ignored `.env.test` from `.env.example` for the host-run Playwright API, web app, and fixture setup. Set `NODE_ENV=test` and point its database, OIDC, and object-storage settings at the same isolated E2E services. Docker Compose still uses `.env` for the E2E service interpolation. The application loader reads `.env.test` only in test mode; it does not fall back to `.env`.
 
 ```sh
 SWC_NATIVE_BINDING_CACHE="${XDG_RUNTIME_DIR:?Set a private runtime directory}/care-swc-cache" \
@@ -71,12 +75,12 @@ COMPOSE_PROJECT_NAME=care-platform-e2e \
 bun run test:e2e
 ```
 
-The command starts Compose, applies migrations, seeds the demo tenant, then Playwright starts the API and web app. The suite is one sequential browser journey covering office onboarding and scheduling, caregiver visit execution and acknowledgement, and billing, claims, and payment. It needs the local `AUTHENTIK_E2E_API_TOKEN` blueprint and the OIDC settings in `.env`. Use a private, user-owned SWC cache directory writable by the execution environment.
+The command starts Compose, applies migrations, seeds the demo tenant, then Playwright starts the API and web app using `.env.test`. The sequential 12-test suite covers identity and access, office onboarding and scheduling, caregiver visit execution and acknowledgement, Operations, and billing, claims, and payment. It needs the local `AUTHENTIK_E2E_API_TOKEN` blueprint. Use a private, user-owned SWC cache directory writable by the execution environment.
 
 The test uses run-scoped records and removes them on early failures. A failure after billing setup can retain records for diagnosis; keep them in the disposable E2E database until browser debugging is complete. Then remove only the isolated stack and its volumes:
 
 ```sh
-COMPOSE_PROJECT_NAME=care-platform-e2e docker compose down --volumes
+COMPOSE_PROJECT_NAME=care-platform-e2e docker compose -f compose.yaml down --volumes
 ```
 
 Do not use the general `bun run reset` command to clean E2E data. If SWC reports `ERR_SWC_NATIVE_CACHE`, point `SWC_NATIVE_BINDING_CACHE` at a private, user-owned directory the execution environment can write; do not weaken filesystem permissions.

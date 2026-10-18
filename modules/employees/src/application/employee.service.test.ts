@@ -23,7 +23,7 @@ import {
 } from '@module/employees/domain/employee';
 import type { EmployeeRepository } from '@module/employees/infrastructure/persistence/employee.repository';
 
-import { EmployeeApplicationService } from './employee.service';
+import { EmployeeApplicationService, EmployeeNotAssignableForVisitError } from './employee.service';
 
 const tenantId = '91ce6a63-434f-7423-a7dc-3eaf36766378';
 const organizationId = '193df432-2718-76ba-8a42-6b4242c3f121';
@@ -53,6 +53,51 @@ const employee: EmployeeSnapshot = {
 const requestContext: RequestContext = { requestId: 'request-id', correlationId: 'correlation-id' };
 
 describe('employee application rules', () => {
+  test('rejects Office employees from visit assignment while allowing caregivers', async () => {
+    const facilityAssignment = {
+      id: '036d992d-a4a2-7ce2-9843-19c6162ef4c8',
+      employeeId,
+      facilityId: '936f521e-324f-74c0-aa72-5bcb9440bd28',
+      facilityName: 'Facility One',
+      organizationId,
+      isPrimary: true,
+      status: 'active' as const,
+      validFrom: null,
+      validUntil: null,
+      facilityStatus: 'active' as const,
+    };
+    const office = createService({
+      findById: async () => ({ ...employee, employmentType: 'office' }),
+      facilityAssignments: async () => [facilityAssignment],
+    });
+
+    await expect(
+      office.service.validateForScheduling(
+        {} as DatabaseTransaction,
+        tenantId,
+        employeeId,
+        organizationId,
+        facilityAssignment.facilityId,
+        '2026-01-01',
+      ),
+    ).rejects.toBeInstanceOf(EmployeeNotAssignableForVisitError);
+
+    const caregiver = createService({
+      findById: async () => ({ ...employee, employmentType: 'part_time' }),
+      facilityAssignments: async () => [facilityAssignment],
+    });
+    await expect(
+      caregiver.service.validateForScheduling(
+        {} as DatabaseTransaction,
+        tenantId,
+        employeeId,
+        organizationId,
+        facilityAssignment.facilityId,
+        '2026-01-01',
+      ),
+    ).resolves.toMatchObject({ employmentType: 'part_time' });
+  });
+
   test('requires a primary facility and atomically promotes a newly assigned primary', async () => {
     const existingAssignment = {
       id: '036d992d-a4a2-7ce2-9843-19c6162ef4c8',

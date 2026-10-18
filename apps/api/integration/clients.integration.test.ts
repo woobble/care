@@ -1359,6 +1359,28 @@ describe('clients API', () => {
       expect(await teamCalendarResponse.json()).toMatchObject({ total: 0, items: [] });
       const firstGeneratedVisit = generatedVisitPage.items[0];
       if (!firstGeneratedVisit) throw new Error('Generation returned no concrete visits');
+      const inaccessibleEmployeeId = uuidv7();
+      await owner.query(
+        `INSERT INTO employees.employees (id, tenant_id, first_name, last_name)
+         VALUES ($1, $2, 'Out of scope', 'Employee')`,
+        [inaccessibleEmployeeId, otherTenantId],
+      );
+      const inaccessibleEmployeeAssignment = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/assignments`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ employeeId: inaccessibleEmployeeId }),
+        },
+      );
+      expect(inaccessibleEmployeeAssignment.status).toBe(404);
+      expect((await inaccessibleEmployeeAssignment.json()).code).toBe('EMPLOYEE_NOT_FOUND');
+      const assignmentsAfterDeniedEmployee = await fetch(
+        `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/assignments`,
+        { headers },
+      );
+      expect(assignmentsAfterDeniedEmployee.status).toBe(200);
+      expect(await assignmentsAfterDeniedEmployee.json()).toEqual([]);
       const firstVisitLocalTime = localDateTime(
         firstGeneratedVisit.plannedStart,
         firstGeneratedVisit.plannedEnd,
@@ -5089,6 +5111,15 @@ describe('clients API', () => {
         { method: 'POST', headers: caregiverAdminHeaders },
       );
       expect(caregiverCannotDeactivateMember.status).toBe(403);
+      const caregiverCannotModifyMemberScopes = await fetch(
+        `${baseUrl}/api/v1/admin/members/${secondMembershipId}/scopes`,
+        {
+          method: 'PUT',
+          headers: caregiverAdminHeaders,
+          body: JSON.stringify({ scopes: [{ scopeType: 'facility', scopeId: secondFacilityId }] }),
+        },
+      );
+      expect(caregiverCannotModifyMemberScopes.status).toBe(403);
       const tenantBAdminRequest = await fetch(`${baseUrl}/api/v1/admin/members`, {
         headers: { ...headers, 'X-Tenant-Id': otherTenantId },
       });

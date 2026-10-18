@@ -2,17 +2,29 @@
 	email {$CADDY_EMAIL}
 }
 
+(security_headers) {
+	header {
+		>Strict-Transport-Security "max-age=31536000"
+		>X-Content-Type-Options nosniff
+		>X-Frame-Options DENY
+		>Referrer-Policy strict-origin-when-cross-origin
+	}
+}
+
 {$WEB_HOST} {
+	import security_headers
 	encode zstd gzip
 	reverse_proxy web:3000
 }
 
 {$API_HOST} {
+	import security_headers
 	encode zstd gzip
 	reverse_proxy api:3001
 }
 
 {$AUTHENTIK_HOST} {
+	import security_headers
 	encode zstd gzip
 	reverse_proxy authentik-server:9000
 }

@@ -17,6 +17,8 @@ import {
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { resolveLocalComposeProject } from './local-compose-project.mjs';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_ROOT = path.join(ROOT, 'data', 'osrm');
 const GENERATIONS_ROOT = path.join(DATA_ROOT, 'generations');
@@ -41,6 +43,7 @@ const [command, ...args] = process.argv.slice(2);
 
 async function main() {
   if (args.length > 0) return usage(1);
+  resolveLocalComposeProject();
   const settings = loadSettings();
 
   switch (command) {
@@ -513,7 +516,16 @@ async function waitForRoute(metadata, port) {
 }
 
 async function compose(...composeArgs) {
-  await run('docker', ['compose', '--profile', 'routing', ...composeArgs]);
+  await run('docker', [
+    'compose',
+    '--project-name',
+    resolveLocalComposeProject(),
+    '-f',
+    'compose.yaml',
+    '--profile',
+    'routing',
+    ...composeArgs,
+  ]);
 }
 
 function run(name, commandArgs) {

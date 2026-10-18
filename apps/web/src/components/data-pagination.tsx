@@ -165,6 +165,7 @@ export async function DataPagination({
                 </Button>
               ) : (
                 <PaginationPrevious
+                  aria-label={t('Common.actions.previous')}
                   href={hrefForPage(currentPage - 1)}
                   text={stacked ? '' : t('Common.actions.previous')}
                 />
@@ -206,6 +207,7 @@ export async function DataPagination({
                 </Button>
               ) : (
                 <PaginationNext
+                  aria-label={t('Common.actions.next')}
                   href={hrefForPage(currentPage + 1)}
                   text={stacked ? '' : t('Common.actions.next')}
                 />

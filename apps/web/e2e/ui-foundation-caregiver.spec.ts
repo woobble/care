@@ -7,6 +7,8 @@ import type { Page } from '@playwright/test';
 import { Client } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 
+import { expectTargetViewportLayouts } from './support/browser';
+
 const reviewDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../../artifacts/ui-foundation-review',
@@ -368,6 +370,7 @@ async function authentikRequest<T = unknown>(
 }
 
 async function capture(page: Page, filename: string, fullPage = false): Promise<void> {
+  await expectTargetViewportLayouts(page);
   await page.screenshot({ path: resolve(reviewDirectory, filename), fullPage });
 }
 

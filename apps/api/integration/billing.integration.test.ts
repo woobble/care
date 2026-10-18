@@ -14,6 +14,7 @@ import {
   createBillingApplicationService,
   createBillingClaimsApplicationService,
   InvoiceIssuerIncompleteError,
+  InvoiceNotFoundError,
   InvoiceRecipientInvalidError,
 } from '@care/billing';
 import { asUUID } from '@care/contracts';
@@ -346,6 +347,14 @@ describe('billing PostgreSQL integration', () => {
       await expect(billing.getInvoicePdf(deniedPrincipal, mainInvoice.id)).rejects.toBeInstanceOf(
         AuthorizationDeniedError,
       );
+      const otherTenantInvoicePrincipal: AuthorizationPrincipal = {
+        userId: uuidv7(),
+        tenantId: otherTenantId,
+        grants: [{ permission: 'billing.read', scopeType: 'tenant', scopeId: otherTenantId }],
+      };
+      await expect(
+        billing.getInvoicePdf(otherTenantInvoicePrincipal, mainInvoice.id),
+      ).rejects.toBeInstanceOf(InvoiceNotFoundError);
 
       const fundingSourceId = uuidv7();
       const fundingAllocationId = uuidv7();

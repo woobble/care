@@ -1,0 +1,396 @@
+name: Build and scan a production image
+description: Build one allow-listed production image, optionally publish and rescan its immutable registry digest.
+
+inputs:
+  image:
+    description: Name from the fixed production image inventory in the calling workflow.
+    required: true
+  publish:
+    description: Publish to the approved GHCR namespace. The caller controls package permissions.
+    required: true
+  release-label:
+    description: Optional validated release label component; the emitted tag remains unique to this workflow run.
+    required: false
+    default: ''
+  registry-token:
+    description: Short-lived GHCR token for the publish-only job.
+    required: false
+    default: ''
+
+outputs:
+  image-reference:
+    description: Immutable GHCR reference verified after publication; empty in scan-only mode.
+    value: ${{ steps.registry.outputs.reference }}
+  image-digest:
+    description: Registry manifest digest verified after publication; empty in scan-only mode.
+    value: ${{ steps.registry.outputs.digest }}
+  local-image-id:
+    description: Docker config digest of the locally scanned build artifact.
+    value: ${{ steps.local-image.outputs.image_id }}
+  critical-count:
+    description: Unique Critical vulnerability IDs found in the final scan.
+    value: ${{ steps.registry-scan.outputs.critical || steps.local-scan.outputs.critical || '0' }}
+  high-count:
+    description: Unique High vulnerability IDs found in the final scan.
+    value: ${{ steps.registry-scan.outputs.high || steps.local-scan.outputs.high || '0' }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve allow-listed image build
+      id: build-inputs
+      shell: bash
+      env:
+        IMAGE_NAME: ${{ inputs.image }}
+        RELEASE_LABEL: ${{ inputs.release-label }}
+      run: |
+        set -euo pipefail
+        IMAGE=ghcr.io/woobble/care-platform
+        case "$IMAGE_NAME" in
+          api) context=.; file=apps/api/Dockerfile; target=runtime ;;
+          web) context=.; file=apps/web/Dockerfile; target=runtime ;;
+          worker) context=.; file=apps/worker/Dockerfile; target=runtime ;;
+          migrate) context=.; file=apps/api/Dockerfile; target=runtime ;;
+          operator) context=.; file=apps/api/Dockerfile; target=operator ;;
+          postgres) context=.; file=infra/postgres/Dockerfile; target='' ;;
+          authentik) context=.; file=infra/authentik/Dockerfile; target='' ;;
+          seaweedfs) context=./infra/seaweedfs; file=infra/seaweedfs/Dockerfile; target='' ;;
+          aws-cli) context=.; file=infra/aws-cli/Dockerfile; target='' ;;
+          caddy) context=.; file=infra/caddy/Dockerfile; target='' ;;
+          grafana) context=./infra/grafana; file=infra/grafana/Dockerfile; target='' ;;
+          prometheus) context=./infra/prometheus; file=infra/prometheus/Dockerfile; target='' ;;
+          osrm) context=./infra/osrm; file=infra/osrm/Dockerfile; target='' ;;
+          *) echo 'Image is not in the production allow-list.' >&2; exit 1 ;;
+        esac
+        if [[ -n "$RELEASE_LABEL" && ( ${#RELEASE_LABEL} -gt 24 || ! "$RELEASE_LABEL" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ) ]]; then
+          echo 'release-label must be a semantic version such as v1.2.3' >&2
+          exit 1
+        fi
+        source_tag="${IMAGE}:${IMAGE_NAME}-sha-${GITHUB_SHA}-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+        {
+          echo "image_name=$IMAGE_NAME"
+          echo "context=$context"
+          echo "file=$file"
+          echo "target=$target"
+          echo "source_tag=$source_tag"
+          if [[ -n "$RELEASE_LABEL" ]]; then
+            release_tag="${IMAGE}:${IMAGE_NAME}-${RELEASE_LABEL}-sha-${GITHUB_SHA}-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+            echo "release_tag=$release_tag"
+          fi
+          echo 'tags<<TAGS'
+          echo "$source_tag"
+          if [[ -n "$RELEASE_LABEL" ]]; then
+            echo "$release_tag"
+          fi
+          echo TAGS
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Set up Buildx
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+    - name: Set up Trivy
+      uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+      with:
+        version: v0.76.0
+
+    - name: Build local candidate
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: ${{ steps.build-inputs.outputs.context }}
+        file: ${{ steps.build-inputs.outputs.file }}
+        target: ${{ steps.build-inputs.outputs.target }}
+        platforms: linux/amd64
+        push: false
+        load: true
+        tags: ${{ steps.build-inputs.outputs.tags }}
+        labels: |
+          org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          org.opencontainers.image.revision=${{ github.sha }}
+        cache-from: type=gha,scope=care-platform-${{ steps.build-inputs.outputs.image_name }}
+        cache-to: type=gha,mode=max,scope=care-platform-${{ steps.build-inputs.outputs.image_name }}
+        sbom: false
+        provenance: false
+
+    - name: Identify exact local build artifact
+      id: local-image
+      shell: bash
+      env:
+        SOURCE_TAG: ${{ steps.build-inputs.outputs.source_tag }}
+      run: |
+        set -euo pipefail
+        image_id="$(docker image inspect --format '{{.Id}}' "$SOURCE_TAG")"
+        [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
+        echo "image_id=$image_id" >> "$GITHUB_OUTPUT"
+
+    - name: Verify shared vulnerability database snapshot
+      shell: bash
+      env:
+        TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+      run: |
+        set -euo pipefail
+        test -s "$TRIVY_CACHE_DIR/db/metadata.json"
+        echo "Using Trivy database updated at $(jq -r '.UpdatedAt' "$TRIVY_CACHE_DIR/db/metadata.json")"
+
+    - name: Scan exact final artifact
+      id: local-scan
+      shell: bash
+      env:
+        IMAGE_NAME: ${{ steps.build-inputs.outputs.image_name }}
+        SOURCE_TAG: ${{ steps.build-inputs.outputs.source_tag }}
+        LOCAL_IMAGE_ID: ${{ steps.local-image.outputs.image_id }}
+        REPORT: trivy-reports/${{ steps.build-inputs.outputs.image_name }}.prepublish.json
+        TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+      run: |
+        set -euo pipefail
+        mkdir -p trivy-reports
+        scan_ref="$SOURCE_TAG"
+        artifact_reference="$(docker image inspect --format '{{.Id}}' "$scan_ref")"
+        if [[ "$artifact_reference" != "$LOCAL_IMAGE_ID" ]]; then
+          echo 'The local scan tag does not resolve to the identified build artifact.' >&2
+          exit 1
+        fi
+        trivy --cache-dir "$TRIVY_CACHE_DIR" image \
+          --image-src docker \
+          --platform linux/amd64 \
+          --skip-db-update --skip-java-db-update \
+          --scanners vuln \
+          --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+          --format json --output "$REPORT" "$scan_ref"
+        critical="$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL") | .VulnerabilityID] | unique | length' "$REPORT")"
+        high="$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH") | .VulnerabilityID] | unique | length' "$REPORT")"
+        scanner_version="$(trivy --version | sed -n '1p')"
+        database_updated_at="$(jq -r '.UpdatedAt' "$TRIVY_CACHE_DIR/db/metadata.json")"
+        {
+          echo "## $IMAGE_NAME pre-publication production image scan"
+          echo
+          echo "- Scanned reference: \`$artifact_reference\`"
+          echo "- Platform: \`linux/amd64\`"
+          echo "- Scanner: \`$scanner_version\`"
+          echo "- Vulnerability database updated: \`$database_updated_at\`"
+          echo "- Critical vulnerability IDs: $critical"
+          echo "- High vulnerability IDs: $high"
+        } >> "$GITHUB_STEP_SUMMARY"
+        {
+          echo "critical=$critical"
+          echo "high=$high"
+          echo "reference=$artifact_reference"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Retain pre-publication Trivy report
+      if: always() && steps.local-scan.outcome == 'success'
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      with:
+        name: production-image-prepublish-scan-${{ steps.build-inputs.outputs.image_name }}
+        path: trivy-reports/${{ steps.build-inputs.outputs.image_name }}.prepublish.json
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Block publication on local critical or high findings
+      if: steps.local-scan.outcome == 'success'
+      shell: bash
+      env:
+        IMAGE_NAME: ${{ steps.build-inputs.outputs.image_name }}
+        CRITICAL: ${{ steps.local-scan.outputs.critical }}
+        HIGH: ${{ steps.local-scan.outputs.high }}
+      run: |
+        set -euo pipefail
+        if (( CRITICAL > 0 || HIGH > 0 )); then
+          echo "Actionable critical/high findings remain in $IMAGE_NAME; publication is blocked pending security-owner disposition." >&2
+          exit 1
+        fi
+
+    - name: Log in to GHCR after the local scan gate
+      if: inputs.publish == 'true'
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.registry-token }}
+
+    - name: Publish the scanned candidate
+      if: inputs.publish == 'true'
+      shell: bash
+      env:
+        SOURCE_TAG: ${{ steps.build-inputs.outputs.source_tag }}
+        RELEASE_TAG: ${{ steps.build-inputs.outputs.release_tag }}
+      run: |
+        set -euo pipefail
+        docker push --quiet "$SOURCE_TAG" >/dev/null
+        if [[ -n "$RELEASE_TAG" ]]; then
+          docker push --quiet "$RELEASE_TAG" >/dev/null
+        fi
+
+    - name: Verify registry reference, local config, and linux/amd64 manifest
+      id: registry
+      if: inputs.publish == 'true'
+      shell: bash
+      env:
+        SOURCE_TAG: ${{ steps.build-inputs.outputs.source_tag }}
+        RELEASE_TAG: ${{ steps.build-inputs.outputs.release_tag }}
+        LOCAL_IMAGE_ID: ${{ steps.local-image.outputs.image_id }}
+      run: |
+        set -euo pipefail
+        registry_output="$(docker buildx imagetools inspect "$SOURCE_TAG")"
+        digest="$(sed -n 's/^Digest:[[:space:]]*//p' <<< "$registry_output" | head -n 1)"
+        if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+          echo 'The registry did not return a valid immutable manifest digest.' >&2
+          exit 1
+        fi
+        reference="${SOURCE_TAG}@${digest}"
+        if ! grep -Fq 'linux/amd64' <<< "$registry_output"; then
+          echo 'The pushed manifest does not advertise linux/amd64.' >&2
+          exit 1
+        fi
+        raw_manifest="$(docker buildx imagetools inspect --raw "$reference")"
+        remote_config_digest="$(jq -r '.config.digest // empty' <<< "$raw_manifest")"
+        if [[ "$remote_config_digest" != "$LOCAL_IMAGE_ID" ]]; then
+          echo 'The registry manifest config does not match the locally scanned image config.' >&2
+          exit 1
+        fi
+        if [[ -n "$RELEASE_TAG" ]]; then
+          release_output="$(docker buildx imagetools inspect "$RELEASE_TAG")"
+          release_digest="$(sed -n 's/^Digest:[[:space:]]*//p' <<< "$release_output" | head -n 1)"
+          if [[ "$release_digest" != "$digest" ]]; then
+            echo 'The unique release tag does not resolve to the verified image digest.' >&2
+            exit 1
+          fi
+        fi
+        echo "reference=$reference" >> "$GITHUB_OUTPUT"
+        echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+    - name: Scan exact immutable registry artifact
+      id: registry-scan
+      if: inputs.publish == 'true'
+      shell: bash
+      env:
+        IMAGE_NAME: ${{ steps.build-inputs.outputs.image_name }}
+        REFERENCE: ${{ steps.registry.outputs.reference }}
+        TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+      run: |
+        set -euo pipefail
+        report="trivy-reports/${IMAGE_NAME}.registry.json"
+        trivy --cache-dir "$TRIVY_CACHE_DIR" image \
+          --image-src remote --platform linux/amd64 \
+          --skip-db-update --skip-java-db-update --scanners vuln \
+          --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+          --format json --output "$report" "$REFERENCE"
+        critical="$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL") | .VulnerabilityID] | unique | length' "$report")"
+        high="$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH") | .VulnerabilityID] | unique | length' "$report")"
+        scanner_version="$(trivy --version | sed -n '1p')"
+        database_updated_at="$(jq -r '.UpdatedAt' "$TRIVY_CACHE_DIR/db/metadata.json")"
+        [[ -n "$database_updated_at" && "$database_updated_at" != null ]]
+        {
+          echo "## $IMAGE_NAME immutable registry image scan"
+          echo
+          echo "- Scanned reference: \`$REFERENCE\`"
+          echo "- Platform: \`linux/amd64\`"
+          echo "- Scanner: \`$scanner_version\`"
+          echo "- Vulnerability database updated: \`$database_updated_at\`"
+          echo "- Critical vulnerability IDs: $critical"
+          echo "- High vulnerability IDs: $high"
+        } >> "$GITHUB_STEP_SUMMARY"
+        echo "critical=$critical" >> "$GITHUB_OUTPUT"
+        echo "high=$high" >> "$GITHUB_OUTPUT"
+        echo "scanner_version=$scanner_version" >> "$GITHUB_OUTPUT"
+        echo "database_updated_at=$database_updated_at" >> "$GITHUB_OUTPUT"
+
+    - name: Retain immutable registry Trivy report
+      if: always() && steps.registry-scan.outcome == 'success'
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      with:
+        name: production-image-registry-scan-${{ steps.build-inputs.outputs.image_name }}
+        path: trivy-reports/${{ steps.build-inputs.outputs.image_name }}.registry.json
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Block failed registry scan
+      if: steps.registry-scan.outcome == 'success'
+      shell: bash
+      env:
+        CRITICAL: ${{ steps.registry-scan.outputs.critical }}
+        HIGH: ${{ steps.registry-scan.outputs.high }}
+      run: |
+        set -euo pipefail
+        if (( CRITICAL > 0 || HIGH > 0 )); then
+          echo 'The exact immutable registry artifact contains critical/high findings.' >&2
+          exit 1
+        fi
+
+    - name: Generate signed GitHub build provenance
+      if: inputs.publish == 'true'
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+      with:
+        subject-name: ghcr.io/woobble/care-platform
+        subject-digest: ${{ steps.registry.outputs.digest }}
+        push-to-registry: true
+        create-storage-record: false
+        github-token: ${{ inputs.registry-token }}
+
+    - name: Verify signed provenance from this workflow
+      if: inputs.publish == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.registry-token }}
+        IMAGE_DIGEST: ${{ steps.registry.outputs.digest }}
+        SOURCE_REPOSITORY: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+        gh attestation verify \
+          "oci://ghcr.io/woobble/care-platform@${IMAGE_DIGEST}" \
+          --repo "$SOURCE_REPOSITORY" \
+          --signer-workflow "$SOURCE_REPOSITORY/.github/workflows/container-images.yml" \
+          --bundle-from-oci \
+          --deny-self-hosted-runners
+
+    - name: Record verified immutable image
+      if: inputs.publish == 'true'
+      shell: bash
+      env:
+        IMAGE_NAME: ${{ steps.build-inputs.outputs.image_name }}
+        REFERENCE: ${{ steps.registry.outputs.reference }}
+        DIGEST: ${{ steps.registry.outputs.digest }}
+        CONFIG_DIGEST: ${{ steps.local-image.outputs.image_id }}
+        CRITICAL: ${{ steps.registry-scan.outputs.critical }}
+        HIGH: ${{ steps.registry-scan.outputs.high }}
+        SCANNER_VERSION: ${{ steps.registry-scan.outputs.scanner_version }}
+        DATABASE_UPDATED_AT: ${{ steps.registry-scan.outputs.database_updated_at }}
+        SOURCE_COMMIT: ${{ github.sha }}
+        SOURCE_REPOSITORY: ${{ github.repository }}
+        WORKFLOW_REF: ${{ github.workflow_ref }}
+      run: |
+        set -euo pipefail
+        [[ "$REFERENCE" == *"@${DIGEST}" ]]
+        [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+        [[ "$CONFIG_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+        [[ "$CRITICAL" == 0 && "$HIGH" == 0 ]]
+        [[ -n "$SCANNER_VERSION" ]]
+        [[ -n "$DATABASE_UPDATED_AT" && "$DATABASE_UPDATED_AT" != null ]]
+        mkdir -p image-lock
+        jq -n \
+          --arg image "$IMAGE_NAME" \
+          --arg reference "$REFERENCE" \
+          --arg digest "$DIGEST" \
+          --arg configDigest "$CONFIG_DIGEST" \
+          --arg platform linux/amd64 \
+          --arg sourceCommit "$SOURCE_COMMIT" \
+          --arg sourceRepository "$SOURCE_REPOSITORY" \
+          --arg workflowRef "$WORKFLOW_REF" \
+          --arg scanner "$SCANNER_VERSION" \
+          --arg databaseUpdatedAt "$DATABASE_UPDATED_AT" \
+          --argjson critical "$CRITICAL" \
+          --argjson high "$HIGH" \
+          '{image:$image, reference:$reference, digest:$digest, configDigest:$configDigest,
+            platform:$platform, sourceCommit:$sourceCommit, sourceRepository:$sourceRepository,
+            workflowRef:$workflowRef, scan:{scanner:$scanner, databaseUpdatedAt:$databaseUpdatedAt,
+            critical:$critical, high:$high}, provenanceVerified:true}' \
+          > "image-lock/${IMAGE_NAME}.json"
+
+    - name: Retain verified immutable image record
+      if: inputs.publish == 'true'
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      with:
+        name: production-image-lock-${{ steps.build-inputs.outputs.image_name }}
+        path: image-lock/${{ steps.build-inputs.outputs.image_name }}.json
+        if-no-files-found: error
+        retention-days: 90

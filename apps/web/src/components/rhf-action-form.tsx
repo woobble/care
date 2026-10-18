@@ -196,6 +196,18 @@ function collectErrorMessages(value: unknown): string[] {
   return Object.values(value).flatMap(collectErrorMessages);
 }
 
+function hasFieldError(errors: unknown, fieldName: string): boolean {
+  let current = errors;
+  for (const segment of fieldName
+    .replace(/\[(\w+)\]/g, '.$1')
+    .split('.')
+    .filter(Boolean)) {
+    if (!current || typeof current !== 'object') return false;
+    current = Reflect.get(current, segment);
+  }
+  return Boolean(current);
+}
+
 export function RHFActionForm({
   action,
   beforeAction,
@@ -227,8 +239,43 @@ export function RHFActionForm({
     reValidateMode: 'onChange',
     resolver: zodResolver(nativeSchema as never) as Resolver<FormValues>,
   });
+  const errorSummaryId = useId();
+  const validationErrors = methods.formState.errors;
   const { getValues, register, reset, setValue } = methods;
   const nativeAction = action as (formData: FormData) => void | Promise<void>;
+
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) return;
+
+    const controls = form.querySelectorAll<NativeControl>(
+      'input[name], select[name], textarea[name]',
+    );
+    for (const control of controls) {
+      if (control.hasAttribute('data-rhf-controlled')) continue;
+
+      const describedBy = new Set(
+        (control.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean),
+      );
+      if (hasFieldError(validationErrors, control.name)) {
+        control.setAttribute('aria-invalid', 'true');
+        control.setAttribute('data-rhf-validation-invalid', 'true');
+        describedBy.add(errorSummaryId);
+      } else {
+        if (control.getAttribute('data-rhf-validation-invalid') === 'true') {
+          control.removeAttribute('aria-invalid');
+          control.removeAttribute('data-rhf-validation-invalid');
+        }
+        describedBy.delete(errorSummaryId);
+      }
+
+      if (describedBy.size) {
+        control.setAttribute('aria-describedby', Array.from(describedBy).join(' '));
+      } else {
+        control.removeAttribute('aria-describedby');
+      }
+    }
+  }, [errorSummaryId, validationErrors]);
 
   useEffect(() => {
     if (
@@ -408,7 +455,40 @@ export function RHFActionForm({
       submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement
         ? new FormData(event.currentTarget, submitter)
         : new FormData(event.currentTarget);
-    return methods.handleSubmit(() => submit(data))(event);
+    return methods.handleSubmit(
+      () => submit(data),
+      (errors) => {
+        const form = formRef.current;
+        if (!form) return;
+
+        const firstInvalidControl = Array.from(
+          form.querySelectorAll<NativeControl>('input[name], select[name], textarea[name]'),
+        ).find((control) => {
+          if (
+            !control.name ||
+            (control instanceof HTMLInputElement && control.type === 'hidden') ||
+            !hasFieldError(errors, control.name)
+          ) {
+            return false;
+          }
+          const style = window.getComputedStyle(control);
+          const rect = control.getBoundingClientRect();
+          return (
+            style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
+            rect.width > 0 &&
+            rect.height > 0
+          );
+        });
+        if (firstInvalidControl) {
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => {
+              if (firstInvalidControl.isConnected) firstInvalidControl.focus();
+            });
+          });
+        }
+      },
+    )(event);
   }
 
   return (
@@ -439,11 +519,9 @@ export function RHFActionForm({
           </div>
         ) : null}
         {collectErrorMessages(methods.formState.errors).length ? (
-          <div
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/10 p-3"
-          >
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3">
             <FieldError
+              id={errorSummaryId}
               errors={collectErrorMessages(methods.formState.errors).map((message) => ({
                 message,
               }))}

@@ -529,6 +529,22 @@ test('Office staff can configure services, clients, benefits, and agreements', a
     await page.getByRole('button', { name: 'Create category' }).click();
     await expect(page.locator(`input[name="code"][value="${serviceCategoryCode}"]`)).toBeVisible();
     await page.getByRole('link', { name: 'Create service' }).click();
+    const createServiceForm = page.locator('form').filter({
+      has: page.getByRole('button', { name: 'Create service' }),
+    });
+    await createServiceForm.evaluate((form) => {
+      (form as HTMLFormElement).noValidate = true;
+    });
+    await createServiceForm.getByRole('button', { name: 'Create service' }).click();
+    const validationAlert = createServiceForm.getByRole('alert');
+    await expect(validationAlert).toHaveCount(1);
+    await expect(validationAlert).toContainText('required');
+    const serviceCodeInput = page.locator('#code');
+    await expect(serviceCodeInput).toBeFocused();
+    await expect(serviceCodeInput).toHaveAttribute('aria-invalid', 'true');
+    const errorSummaryId = await validationAlert.getAttribute('id');
+    expect(errorSummaryId).toBeTruthy();
+    await expect(serviceCodeInput).toHaveAttribute('aria-describedby', new RegExp(errorSummaryId!));
     await page.locator('#code').fill(serviceCode);
     await page.locator('#name').fill(`E2E Service ${runId}`);
     await page.locator('#categoryId').selectOption({ label: serviceCategoryName });
@@ -536,6 +552,8 @@ test('Office staff can configure services, clients, benefits, and agreements', a
     await page.locator('#benefitCategory').selectOption('recognized_support');
     await page.locator('#defaultDurationMinutes').fill('30');
     await page.locator('#validFrom').fill(serviceValidFrom);
+    await expect(validationAlert).toHaveCount(0);
+    await expect(serviceCodeInput).not.toHaveAttribute('aria-invalid', 'true');
     await page.getByRole('button', { name: 'Create service' }).click();
     await expect(page.getByRole('heading', { name: `E2E Service ${runId}` })).toBeVisible();
     serviceId = new URL(page.url()).pathname.split('/').at(-1);

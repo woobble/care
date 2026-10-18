@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@care/ui/components/sheet';
 
-export function VisitDetailSheet({ children }: Readonly<{ children: React.ReactNode }>) {
+export function VisitDetailSheet({
+  visitId,
+  children,
+}: Readonly<{ visitId: string; children: React.ReactNode }>) {
   const router = useRouter();
   const t = useTranslations('Visits');
 
@@ -15,6 +18,14 @@ export function VisitDetailSheet({ children }: Readonly<{ children: React.ReactN
         side="right"
         closeLabel={t('closeDetails')}
         className="data-[side=right]:w-full data-[side=right]:max-w-none data-[side=right]:overflow-y-auto data-[side=right]:p-4 data-[side=right]:sm:w-[min(52rem,90vw)] data-[side=right]:sm:max-w-none data-[side=right]:sm:p-6"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => {
+              document.getElementById(`visit-${visitId}`)?.focus({ preventScroll: true });
+            });
+          });
+        }}
       >
         <SheetTitle className="sr-only">{t('detailsSheetTitle')}</SheetTitle>
         <SheetDescription className="sr-only">{t('detailsSheetDescription')}</SheetDescription>

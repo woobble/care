@@ -5,6 +5,9 @@ import {
   acceptDialogDuringAction,
   addDaysToDate,
   dateInBerlin,
+  expectFocusTrap,
+  expectMobileLayoutToFit,
+  expectTargetViewportLayouts,
   selectEntity,
 } from './support/browser';
 import {
@@ -33,6 +36,7 @@ test('Office staff can admit an existing client and plan visits', async ({ page 
 
     await page.goto('/admissions/new');
     await expect(page.getByRole('heading', { name: 'Create admission case' })).toBeVisible();
+    await expectTargetViewportLayouts(page);
     await page.getByLabel('Prospect first name').fill('Agreement');
     await page.getByLabel('Prospect last name').fill(`E2E ${scenario.runId}`);
     await selectEntity(page, 'Organization', scenario.organizationName, scenario.organizationName);
@@ -56,10 +60,12 @@ test('Office staff can admit an existing client and plan visits', async ({ page 
     await expect(
       page.getByText('Needs assessment complete', { exact: true }).first(),
     ).toBeVisible();
+    await expectTargetViewportLayouts(page);
 
     await page.goto(`/admissions?search=${encodeURIComponent(scenario.clientName)}`);
     const admissionLink = page.locator(`a[href="/admissions/${admissionCaseId}"]:visible`);
     await expect(admissionLink).toHaveText(scenario.clientName);
+    await expectTargetViewportLayouts(page);
     await admissionLink.click();
     await expect(page.getByRole('heading', { name: 'Admission readiness' })).toBeVisible();
     const stageForm = page.locator('form').filter({
@@ -86,6 +92,7 @@ test('Office staff can admit an existing client and plan visits', async ({ page 
     await expect(page.getByRole('heading', { name: 'Service planning' })).toBeVisible();
     const generationPanel = page.locator('details').filter({ hasText: 'Generate visits' }).first();
     await generationPanel.locator('summary').click();
+    await expectTargetViewportLayouts(page);
     const generationForm = generationPanel.locator('form');
     const generationFrom = addDaysToDate(serviceDate, 1);
     const generationUntil = addDaysToDate(generationFrom, 6);
@@ -106,9 +113,32 @@ test('Office staff can admit an existing client and plan visits', async ({ page 
     if (!visit) throw new Error('The active agreement did not generate a visit');
     await page.goto(`/planning?date=${visit.visit_date}`);
     await expect(page.getByRole('heading', { name: 'Planning' })).toBeVisible();
-    await expect(page.locator(`a[href="/visits/${visit.id}"]`)).toBeVisible();
-    await page.locator(`a[href="/visits/${visit.id}"]`).click();
-    await expect(page.getByRole('dialog')).toBeVisible();
+    const visitLink = page.locator(`a[href="/visits/${visit.id}"]`);
+    await expect(visitLink).toBeVisible();
+    await expectTargetViewportLayouts(page);
+    // oxlint-disable no-await-in-loop
+    for (const viewport of [
+      { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await visitLink.click();
+      const visitDetails = page.getByRole('dialog');
+      await expect(visitDetails).toBeVisible();
+      await expectFocusTrap(page, visitDetails);
+      await Promise.all(
+        ['Date', 'Start', 'End', 'Planning note'].map((label) =>
+          expect(visitDetails.getByLabel(label, { exact: true })).toBeVisible(),
+        ),
+      );
+      await expectMobileLayoutToFit(page, visitDetails);
+      await page.keyboard.press('Escape');
+      await expect(visitDetails).not.toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`/planning\\?date=${visit.visit_date}$`));
+      await expect(visitLink).toBeFocused();
+    }
+    // oxlint-enable no-await-in-loop
   } finally {
     try {
       if (scenario && admissionCaseId) {

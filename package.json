@@ -9,7 +9,7 @@
   "type": "module",
   "scripts": {
     "dev": "turbo run dev",
-    "build": "turbo run openapi --filter=@care/api && turbo run build",
+    "build": "NODE_ENV=test turbo run openapi --filter=@care/api && NODE_ENV=test turbo run build",
     "lint": "turbo run lint",
     "format": "oxfmt --config oxfmt.json . '!apps/web/test-results/**' '!apps/api/openapi.json' '!packages/api-client/src/generated/**'",
     "format:check": "oxfmt --config oxfmt.json --check . '!apps/web/test-results/**' '!apps/api/openapi.json' '!packages/api-client/src/generated/**'",
@@ -23,8 +23,8 @@
     "pilot:seed": "bun run --filter @care/api pilot:seed",
     "pilot:seed:identity": "DEV_SEED_TENANT_SLUG=muster-betreuungsdienst-nrw DEV_SEED_ROLE=Office bun run --filter @care/api seed:identity",
     "seed:identity": "bun run --filter @care/api seed:identity",
-    "infra:up": "docker compose --profile development up -d --wait && docker compose --profile development --profile bootstrap run --rm --no-deps seaweedfs-init",
-    "infra:down": "docker compose down",
+    "infra:up": "bun scripts/local-compose.mjs up",
+    "infra:down": "bun scripts/local-compose.mjs down",
     "deploy:check": "bun scripts/deploy.mjs preflight",
     "deploy:bootstrap-admin": "bun scripts/deploy.mjs bootstrap-admin",
     "backup:create": "bun scripts/deploy.mjs create",
@@ -51,6 +51,7 @@
     "typescript": "^7.0.2"
   },
   "overrides": {
+    "@hey-api/json-schema-ref-parser>js-yaml": "4.3.2",
     "fastify": "5.12.7"
   },
   "engines": {

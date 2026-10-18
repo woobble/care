@@ -894,6 +894,7 @@ export default async function PlanningPage({
                         <Link
                           className="font-medium text-primary tabular-nums underline"
                           href={visitHref(visit.id)}
+                          id={`visit-${visit.id}`}
                         >
                           {formatDay(dateAtZone(visit.plannedStart, visit.timezone), locale)}
                           <span className="block">
@@ -1031,6 +1032,7 @@ export default async function PlanningPage({
                                 <Link
                                   className="grid min-w-0 gap-1 rounded-md border p-3 hover:border-primary/40 hover:bg-accent"
                                   href={visitHref(visit.id)}
+                                  id={`visit-${visit.id}`}
                                 >
                                   <span className="flex flex-wrap items-baseline justify-between gap-2">
                                     <span className="font-medium tabular-nums">
@@ -1097,6 +1099,7 @@ export default async function PlanningPage({
                             <Link
                               className="grid min-w-0 gap-1 rounded-md border p-3 hover:border-primary/40 hover:bg-accent"
                               href={visitHref(visit.id)}
+                              id={`visit-${visit.id}`}
                             >
                               <span className="flex flex-wrap items-baseline justify-between gap-2">
                                 <span className="font-medium tabular-nums">
@@ -1169,6 +1172,7 @@ export default async function PlanningPage({
                               <Link
                                 className="grid min-w-0 gap-1 rounded-md border p-3 hover:border-primary/40 hover:bg-accent"
                                 href={`/visits/${visit.id}`}
+                                id={`visit-${visit.id}`}
                               >
                                 <span className="flex flex-wrap items-baseline justify-between gap-2">
                                   <span className="font-medium">

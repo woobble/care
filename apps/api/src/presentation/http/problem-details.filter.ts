@@ -84,6 +84,7 @@ import {
   EmployeeHasFutureVisitsError,
   EmployeeHasInProgressExecutionError,
   EmployeeNotActiveForScheduleError,
+  EmployeeNotAssignableForVisitError,
   EmployeeNotAssignedToFacilityError,
   InvalidEmployeeDataError,
   InvalidEmployeePaginationError,
@@ -475,6 +476,7 @@ function problemFor(exception: unknown, traceId: string): ProblemDetails {
     exception instanceof VisitAgreementServiceInvalidError ||
     exception instanceof DuplicateVisitAssignmentError ||
     exception instanceof EmployeeNotActiveForScheduleError ||
+    exception instanceof EmployeeNotAssignableForVisitError ||
     exception instanceof EmployeeNotAssignedToFacilityError ||
     exception instanceof EmployeeHasFutureVisitsError ||
     exception instanceof EmployeeHasInProgressExecutionError ||

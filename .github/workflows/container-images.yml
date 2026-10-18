@@ -1,0 +1,302 @@
+name: Production container images
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_images:
+        description: Publish reviewed candidates to ghcr.io/woobble/care-platform
+        type: boolean
+        required: true
+        default: false
+      release_label:
+        description: Optional version label component; emitted image tags remain unique to this workflow run
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-trivy-database:
+    name: Prepare shared Trivy vulnerability database
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Set up Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.76.0
+
+      - name: Download one vulnerability database snapshot
+        shell: bash
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: |
+          set -euo pipefail
+          trivy --cache-dir "$TRIVY_CACHE_DIR" image --download-db-only
+          test -s "$TRIVY_CACHE_DIR/db/metadata.json"
+          echo "Trivy vulnerability database: $(jq -r '.UpdatedAt' "$TRIVY_CACHE_DIR/db/metadata.json")"
+
+      - name: Share vulnerability database snapshot with scan jobs
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: production-trivy-database
+          path: ${{ runner.temp }}/trivy-cache
+          if-no-files-found: error
+          retention-days: 1
+
+  preflight:
+    name: Build and scan ${{ matrix.image }}
+    needs: [prepare-trivy-database]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        image:
+          - api
+          - web
+          - worker
+          - migrate
+          - operator
+          - postgres
+          - authentik
+          - seaweedfs
+          - aws-cli
+          - caddy
+          - grafana
+          - prometheus
+          - osrm
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Restore shared Trivy vulnerability database
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: production-trivy-database
+          path: ${{ runner.temp }}/trivy-cache
+
+      - name: Build and scan local candidate
+        uses: ./.github/actions/production-image
+        with:
+          image: ${{ matrix.image }}
+          publish: 'false'
+          release-label: ${{ inputs.release_label }}
+
+  scan-pinned-upstream:
+    name: Scan pinned Redis and OpenTelemetry images
+    needs: [prepare-trivy-database]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Set up Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.76.0
+
+      - name: Restore shared Trivy vulnerability database
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: production-trivy-database
+          path: ${{ runner.temp }}/trivy-cache
+
+      - name: Scan exact upstream digest references
+        id: scan
+        shell: bash
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: |
+          set -euo pipefail
+          mkdir -p trivy-reports
+          test -s "$TRIVY_CACHE_DIR/db/metadata.json"
+          database_updated_at="$(jq -r '.UpdatedAt' "$TRIVY_CACHE_DIR/db/metadata.json")"
+          for image in \
+            'redis|redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0' \
+            'otel|otel/opentelemetry-collector-contrib:0.163.1@sha256:1175b03003053962012f5a231f5567f66a3e8fdb960c7835c0e48f7aa1555806'; do
+            IFS='|' read -r name reference <<< "$image"
+            report="trivy-reports/${name}.json"
+            trivy --cache-dir "$TRIVY_CACHE_DIR" image \
+              --image-src remote --platform linux/amd64 \
+              --skip-db-update --skip-java-db-update --scanners vuln \
+              --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+              --format json --output "$report" "$reference"
+            echo "- `$name`: `$reference` (linux/amd64)" >> "$GITHUB_STEP_SUMMARY"
+          done
+          critical="$(jq -s '[.[].Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL") | .VulnerabilityID] | unique | length' trivy-reports/redis.json trivy-reports/otel.json)"
+          high="$(jq -s '[.[].Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH") | .VulnerabilityID] | unique | length' trivy-reports/redis.json trivy-reports/otel.json)"
+          scanner_version="$(trivy --version | sed -n '1p')"
+          {
+            echo "## Pinned upstream production image scans"
+            echo
+            echo "- Scanner: `$scanner_version`"
+            echo "- Vulnerability database updated: `$database_updated_at`"
+            echo "- Critical vulnerability IDs: $critical"
+            echo "- High vulnerability IDs: $high"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "critical=$critical" >> "$GITHUB_OUTPUT"
+          echo "high=$high" >> "$GITHUB_OUTPUT"
+
+      - name: Retain upstream Trivy reports
+        if: always() && steps.scan.outcome == 'success'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: production-upstream-image-scans
+          path: trivy-reports/*.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Fail on critical or high findings
+        if: steps.scan.outcome == 'success'
+        shell: bash
+        env:
+          CRITICAL: ${{ steps.scan.outputs.critical }}
+          HIGH: ${{ steps.scan.outputs.high }}
+        run: |
+          set -euo pipefail
+          if (( CRITICAL > 0 || HIGH > 0 )); then
+            echo 'Actionable critical/high findings remain in a pinned upstream production image.' >&2
+            exit 1
+          fi
+
+  publish:
+    name: Publish and rescan ${{ matrix.image }}
+    needs: [preflight, scan-pinned-upstream, prepare-trivy-database]
+    if: inputs.publish_images && needs.preflight.result == 'success' && needs.scan-pinned-upstream.result == 'success' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        image:
+          - api
+          - web
+          - worker
+          - migrate
+          - operator
+          - postgres
+          - authentik
+          - seaweedfs
+          - aws-cli
+          - caddy
+          - grafana
+          - prometheus
+          - osrm
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Restore shared Trivy vulnerability database
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: production-trivy-database
+          path: ${{ runner.temp }}/trivy-cache
+
+      - name: Publish and scan exact registry artifact
+        uses: ./.github/actions/production-image
+        with:
+          image: ${{ matrix.image }}
+          publish: 'true'
+          release-label: ${{ inputs.release_label }}
+          registry-token: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-image-lock:
+    name: Assemble verified GHCR image lock
+    needs: [publish]
+    if: inputs.publish_images && needs.publish.result == 'success' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Download verified per-image records
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: production-image-lock-*
+          path: image-locks
+          merge-multiple: true
+
+      - name: Validate and assemble immutable image lock
+        shell: bash
+        env:
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          expected_images=(api web worker migrate operator postgres authentik seaweedfs aws-cli caddy grafana prometheus osrm)
+          mapfile -t actual_images < <(jq -r '.image' image-locks/*.json | sort)
+          mapfile -t sorted_expected < <(printf '%s\n' "${expected_images[@]}" | sort)
+          if (( ${#actual_images[@]} != ${#sorted_expected[@]} )); then
+            echo 'The published image set is incomplete or contains duplicate records.' >&2
+            exit 1
+          fi
+          for index in "${!sorted_expected[@]}"; do
+            image="${sorted_expected[$index]}"
+            if [[ "${actual_images[$index]}" != "$image" ]]; then
+              echo 'The published image set does not match the production allow-list.' >&2
+              exit 1
+            fi
+            record="image-locks/${image}.json"
+            jq -e \
+              --arg image "$image" \
+              --arg commit "$SOURCE_COMMIT" \
+              --arg repository "$SOURCE_REPOSITORY" \
+              '(.image == $image) and (.sourceCommit == $commit) and
+               (.sourceRepository == $repository) and (.platform == "linux/amd64") and
+               (.provenanceVerified == true) and (.scan.critical == 0) and (.scan.high == 0) and
+               (.digest | test("^sha256:[0-9a-f]{64}$")) and
+               (.configDigest | test("^sha256:[0-9a-f]{64}$")) and
+               (.digest as $digest | (.reference | endswith("@" + $digest))) and
+               (.reference | startswith("ghcr.io/woobble/care-platform:" + $image + "-sha-" + $commit + "-run-"))' \
+              "$record" >/dev/null
+            reference="$(jq -r '.reference' "$record")"
+            if [[ ! "$reference" =~ ^ghcr\.io/woobble/care-platform:${image}-sha-${SOURCE_COMMIT}-run-[0-9]+-attempt-${RUN_ATTEMPT}@sha256:[0-9a-f]{64}$ ]]; then
+              echo "The $image reference is not the current run's immutable registry reference." >&2
+              exit 1
+            fi
+          done
+          jq -s \
+            --arg repository "$SOURCE_REPOSITORY" \
+            --arg commit "$SOURCE_COMMIT" \
+            --arg workflow "$WORKFLOW_REF" \
+            --arg runId "$RUN_ID" \
+            --arg runAttempt "$RUN_ATTEMPT" \
+            '{schemaVersion:1, sourceRepository:$repository, sourceCommit:$commit,
+              workflowRef:$workflow, runId:$runId, runAttempt:$runAttempt,
+              images:sort_by(.image)}' \
+            image-locks/*.json > care-platform-ghcr-image-lock.json
+          jq -e '.schemaVersion == 1 and (.images | length == 13)' care-platform-ghcr-image-lock.json >/dev/null
+          {
+            echo '## Verified immutable GHCR image lock'
+            echo
+            echo "- Source: \`$SOURCE_REPOSITORY@$SOURCE_COMMIT\`"
+            echo '- Architecture: `linux/amd64`'
+            echo '- Images: 13; all exact registry digests rescanned with zero Critical/High IDs and provenance verified.'
+            echo '- Artifact: `care-platform-ghcr-image-lock.json`'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain verified immutable image lock
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: care-platform-ghcr-image-lock
+          path: care-platform-ghcr-image-lock.json
+          if-no-files-found: error
+          retention-days: 90

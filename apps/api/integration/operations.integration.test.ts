@@ -604,12 +604,32 @@ describe('operations PostgreSQL/API integration', () => {
           onboardingCases: readOperationsDeadlineCases,
         },
       );
-      const firstDeadlineRun = await deadlineScheduler.run(
+      const deadlineSchedulerInternals = deadlineScheduler as unknown as {
+        evaluateDeadlineOccurrences: (
+          tenantId: string,
+          now: Date,
+        ) => Promise<{ failedDomains: string[]; remindersTriggered: number }>;
+      };
+      const evaluateDeadlineOccurrences =
+        deadlineSchedulerInternals.evaluateDeadlineOccurrences.bind(deadlineScheduler);
+      let interruptAfterDeadlineTasksCommit = true;
+      deadlineSchedulerInternals.evaluateDeadlineOccurrences = async (scheduledTenantId, runAt) => {
+        if (interruptAfterDeadlineTasksCommit) {
+          interruptAfterDeadlineTasksCommit = false;
+          throw new Error('Injected interruption after deadline task commit');
+        }
+        return evaluateDeadlineOccurrences(scheduledTenantId, runAt);
+      };
+      await expect(
+        deadlineScheduler.run(tenantId, 'operations-integration-deadlines-first-attempt', now),
+      ).rejects.toThrow('Injected interruption after deadline task commit');
+      const recoveredDeadlineRun = await deadlineScheduler.run(
         tenantId,
-        'operations-integration-deadlines',
-        now,
+        'operations-integration-deadlines-restart',
+        new Date(now.getTime() + 60_000),
       );
-      expect(firstDeadlineRun).toMatchObject({ status: 'succeeded', tasksCreated: 1 });
+      deadlineSchedulerInternals.evaluateDeadlineOccurrences = evaluateDeadlineOccurrences;
+      expect(recoveredDeadlineRun).toMatchObject({ status: 'succeeded', tasksCreated: 0 });
       const scheduledAgreementOccurrences = await owner.query<{
         first_detected_at: Date;
         last_observed_at: Date;
@@ -641,7 +661,7 @@ describe('operations PostgreSQL/API integration', () => {
       const repeatedDeadlineRun = await deadlineScheduler.run(
         tenantId,
         'operations-integration-deadlines-retry',
-        new Date(now.getTime() + 60_000),
+        new Date(now.getTime() + 120_000),
       );
       expect(repeatedDeadlineRun).toMatchObject({ status: 'succeeded', tasksCreated: 0 });
       const repeatedAgreementOccurrences = await owner.query<{
@@ -1117,6 +1137,68 @@ describe('operations PostgreSQL/API integration', () => {
         [tenantId, generatedOccurrences[0]!.taskId],
       );
       expect(generatedTask.rows).toEqual([{ id: generatedOccurrences[0]!.taskId, status: 'open' }]);
+
+      const restartSafeRecurrenceResponse = await fetch(
+        `${baseUrl}/api/v1/operations/recurring-tasks`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            organizationId,
+            facilityId,
+            clientId,
+            title: 'Annual restart-safe review',
+            priority: 'normal',
+            assignedEmployeeId: employeeId,
+            rule: { frequency: 'yearly', interval: 1 },
+            timezone: 'Europe/Berlin',
+            startDate: recurrenceStartDate,
+            timeOfDay: '09:00',
+            generationPolicy: 'generate_missed',
+          }),
+        },
+      );
+      expect(restartSafeRecurrenceResponse.status).toBe(201);
+      const restartSafeRecurrence = (await restartSafeRecurrenceResponse.json()) as { id: string };
+      const recurrenceSchedulerInternals = recurrenceScheduler as unknown as {
+        finishRun: (
+          tenantId: string,
+          workerId: string,
+          now: Date,
+          status: 'succeeded' | 'failed',
+          tasksCreated: number,
+          lastFailureCode: string | null,
+        ) => Promise<void>;
+      };
+      const finishRun = recurrenceSchedulerInternals.finishRun.bind(recurrenceScheduler);
+      let interruptAfterRecurrenceCommit = true;
+      recurrenceSchedulerInternals.finishRun = async (...args) => {
+        if (interruptAfterRecurrenceCommit) {
+          interruptAfterRecurrenceCommit = false;
+          throw new Error('Injected interruption after recurrence occurrence commit');
+        }
+        return finishRun(...args);
+      };
+      await expect(
+        recurrenceScheduler.runRecurringTaskScheduler(
+          tenantId,
+          'operations-integration-recurrence-first-attempt',
+          new Date(now.getTime() + 1_000),
+        ),
+      ).rejects.toThrow('Injected interruption after recurrence occurrence commit');
+      recurrenceSchedulerInternals.finishRun = finishRun;
+      const recoveredRecurrenceRun = await recurrenceScheduler.runRecurringTaskScheduler(
+        tenantId,
+        'operations-integration-recurrence-restart',
+        new Date(now.getTime() + 2_000),
+      );
+      expect(recoveredRecurrenceRun).toMatchObject({ status: 'succeeded', tasksCreated: 0 });
+      const recoveredRecurrenceOccurrences = await owner.query<{ task_id: string }>(
+        `SELECT task_id FROM operations.recurring_task_occurrences
+         WHERE tenant_id = $1 AND recurrence_definition_id = $2`,
+        [tenantId, restartSafeRecurrence.id],
+      );
+      expect(recoveredRecurrenceOccurrences.rows).toHaveLength(1);
 
       const recurrenceDetailsResponse = await fetch(
         `${baseUrl}/api/v1/operations/recurring-tasks/${recurrence.id}`,
@@ -1685,7 +1767,7 @@ describe('operations PostgreSQL/API integration', () => {
       });
       const taskDashboard = await fetch(`${baseUrl}/api/v1/operations/dashboard`, { headers });
       expect(taskDashboard.status).toBe(200);
-      expect(await taskDashboard.json()).toMatchObject({ tasks: { assignedToMe: 3 } });
+      expect(await taskDashboard.json()).toMatchObject({ tasks: { assignedToMe: 4 } });
 
       const activityResponse = await fetch(
         `${baseUrl}/api/v1/operations/tasks/${createdTask.id}/activity`,
@@ -1720,16 +1802,26 @@ describe('operations PostgreSQL/API integration', () => {
       });
       expect(wrongAssignee.status).toBe(400);
 
-      const completeTask = await fetch(
-        `${baseUrl}/api/v1/operations/tasks/${createdTask.id}/complete`,
-        {
+      const concurrentTaskCompletions = await Promise.all([
+        fetch(`${baseUrl}/api/v1/operations/tasks/${createdTask.id}/complete`, {
           method: 'POST',
           headers,
           body: JSON.stringify({ expectedVersion: createdTask.version }),
-        },
+        }),
+        fetch(`${baseUrl}/api/v1/operations/tasks/${createdTask.id}/complete`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ expectedVersion: createdTask.version }),
+        }),
+      ]);
+      expect(concurrentTaskCompletions.map((response) => response.status).sort()).toEqual([
+        200, 409,
+      ]);
+      const completedTaskResponse = concurrentTaskCompletions.find(
+        (response) => response.status === 200,
       );
-      expect(completeTask.status).toBe(200);
-      const completed = (await completeTask.json()) as {
+      if (!completedTaskResponse) throw new Error('Expected one concurrent task update to succeed');
+      const completed = (await completedTaskResponse.json()) as {
         status: string;
         version: number;
         completedAt: string | null;
@@ -1818,7 +1910,7 @@ describe('operations PostgreSQL/API integration', () => {
         headers,
       });
       expect(await clientScopedDashboard.json()).toMatchObject({
-        tasks: { assignedToMe: 4, urgent: 1 },
+        tasks: { assignedToMe: 5, urgent: 1 },
       });
 
       const executionPlannedStart = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
@@ -1972,9 +2064,13 @@ describe('operations PostgreSQL/API integration', () => {
       const tenantRecurringOccurrences = await appRole.query<{ task_id: string }>(
         'SELECT task_id FROM operations.recurring_task_occurrences ORDER BY task_id',
       );
-      expect(tenantRecurringOccurrences.rows.map((row) => row.task_id)).toEqual([
-        generatedOccurrences[0]!.taskId,
-      ]);
+      expect(tenantRecurringOccurrences.rows.map((row) => row.task_id)).toEqual(
+        expect.arrayContaining([
+          generatedOccurrences[0]!.taskId,
+          recoveredRecurrenceOccurrences.rows[0]!.task_id,
+        ]),
+      );
+      expect(tenantRecurringOccurrences.rows).toHaveLength(2);
       const tenantInteractions = await appRole.query<{ occurrence_id: string | null }>(
         'SELECT occurrence_id FROM operations.exception_interactions ORDER BY id',
       );

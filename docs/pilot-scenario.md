@@ -89,6 +89,37 @@ PILOT_REFERENCE_DATE=2026-09-14 bun run pilot:seed
 
 The second seed run should report `generated=0`, `already-existing=120`, and `weekly execution timeline=4/4 available weeks`. A different reference date on the same database creates another scheduled window; use the same fixed date for idempotent reruns. For a new simulation date, use a new isolated project/database. Inspect execution, document, evidence, allocation, invoice, claim, and payment relationships with read-only queries; do not repair business state with direct database writes.
 
+### Daily completed-visit workload
+
+To simulate several completed visits per working day without changing the default seed behavior, set `PILOT_WORKLOAD_VISITS_PER_WORKDAY` to an integer from 2 through 6. The seed selects visits across clients and caregivers, keeps the financial example visit in the workload, and rejects a retrospective day that cannot meet the requested count. Each synthetic caregiver receives a separate seed-only actor without an Authentik login. The two absence scenarios use the existing scheduling commands: planned leave and sick leave, each with a confirmed caregiver substitution.
+
+Use a new Compose project and database so the workload stays isolated from the earlier Goal 13 pilot data:
+
+```sh
+export CARE_E2E_POSTGRES_PORT=15436
+export CARE_E2E_S3_PORT=19052
+export CARE_E2E_FILER_PORT=19054
+docker compose -p care-goal14-workload -f compose.yaml -f compose.e2e.yaml up -d --wait postgres seaweedfs
+docker compose -p care-goal14-workload -f compose.yaml -f compose.e2e.yaml --profile bootstrap run --rm --no-deps seaweedfs-init
+
+export NODE_ENV=development
+export DATABASE_URL=postgres://care_app:care_dev_only@localhost:${CARE_E2E_POSTGRES_PORT}/care
+export MIGRATION_DATABASE_URL=postgres://care_owner:care_owner_dev_only@localhost:${CARE_E2E_POSTGRES_PORT}/care
+export WORKER_DATABASE_URL=postgres://care_worker:care_worker_dev_only@localhost:${CARE_E2E_POSTGRES_PORT}/care
+export PILOT_DEDICATED_TEST_DATABASE=true
+export PILOT_TEST_DATABASE_PORT=${CARE_E2E_POSTGRES_PORT}
+export PILOT_REFERENCE_DATE=2026-09-14
+export PILOT_WORKLOAD_VISITS_PER_WORKDAY=3
+export S3_ENDPOINT=http://localhost:${CARE_E2E_S3_PORT}
+
+bun run migrate
+bun run seed
+bun run pilot:seed
+bun run pilot:seed
+```
+
+For the retrospective 2026-09-14 window, the first and second pilot seed runs should each report 120 scheduled visits and `daily execution workload=60/60 visits across 20 workdays (target 3/day)`. The second run should report `generated=0` and `already-existing=120`. The mode completes execution, documentation, and evidence through their application workflows; it does not allocate or invoice the other completed services. Inspect the synthetic records with tenant-scoped read-only queries and do not use `down -v` on this retained project.
+
 ### Isolated Authentik and browser run
 
 The checked-in Compose override assigns non-default host ports. Use a unique Compose project name so Docker gives the database and storage separate project-scoped volumes:
@@ -134,4 +165,4 @@ bun run test:e2e
 
 The targeted substitution and caregiver draft checks can be run with `bun run test:e2e -- e2e/substitution-access.spec.ts` and `bun run test:e2e -- e2e/care-delivery-evidence.spec.ts`. Install the Playwright Chromium build with `bunx playwright install chromium` if it is not already present.
 
-To discard a disposable E2E environment, first inspect the exact project with `docker compose -p care-goal13-e2e -f compose.yaml -f compose.e2e.yaml ps`, confirm its project label is `care-goal13-e2e`, then run `docker compose -p care-goal13-e2e -f compose.yaml -f compose.e2e.yaml down -v --remove-orphans`. This removes only containers and volumes for that named project. Never substitute the shared `care-platform` project name. The pilot seed itself never drops or truncates records, and no volume cleanup was performed for this run.
+To discard a disposable E2E environment, first inspect the exact project with `docker compose -p care-goal13-e2e -f compose.yaml -f compose.e2e.yaml ps`, confirm its project label is `care-goal13-e2e`, then run `docker compose -p care-goal13-e2e -f compose.yaml -f compose.e2e.yaml down -v --remove-orphans`. This removes only containers and volumes for that named project. Never substitute the shared `care-platform-dev` or `care-platform-prod` project name. The pilot seed itself never drops or truncates records, and no volume cleanup was performed for this run.

@@ -7,7 +7,13 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 
 const configDirectory = dirname(fileURLToPath(import.meta.url));
-const envFile = resolve(configDirectory, '../../.env');
+if (process.env.NODE_ENV === 'production') {
+  throw new Error(
+    'Browser tests refuse NODE_ENV=production; configure a dedicated .env.test file.',
+  );
+}
+Reflect.set(process.env, 'NODE_ENV', process.env.NODE_ENV ?? 'test');
+const envFile = resolve(configDirectory, '../../.env.test');
 if (existsSync(envFile)) loadEnvFile(envFile);
 
 const baseURL =
@@ -43,7 +49,12 @@ export default defineConfig({
           command: 'bun run dev',
           cwd: resolve(configDirectory, '../api'),
           url: `${apiURL!}/health/live`,
-          env: { PORT: String(apiPort!), WEB_ORIGIN: baseURL },
+          env: {
+            CARE_DISABLE_DOTENV: 'true',
+            NODE_ENV: 'development',
+            PORT: String(apiPort!),
+            WEB_ORIGIN: baseURL,
+          },
           reuseExistingServer: false,
           timeout: 120_000,
         },
@@ -52,7 +63,13 @@ export default defineConfig({
           command: 'bun run dev',
           cwd: configDirectory,
           url: baseURL,
-          env: { PORT: webPort, API_INTERNAL_URL: apiURL, WEB_ORIGIN: baseURL },
+          env: {
+            CARE_DISABLE_DOTENV: 'true',
+            NODE_ENV: 'development',
+            PORT: webPort,
+            API_INTERNAL_URL: apiURL,
+            WEB_ORIGIN: baseURL,
+          },
           reuseExistingServer: false,
           timeout: 120_000,
         },

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
-import { dateInBerlin, submitServerAction } from './support/browser';
+import { dateInBerlin, expectTargetViewportLayouts, submitServerAction } from './support/browser';
 import {
   cleanupOfficeAdminSession,
   createOfficeAdminSession,
@@ -49,6 +49,7 @@ test('Office staff can allocate completed services, issue invoices, and record p
       .first()
       .locator('xpath=ancestor::li[1]');
     await expect(completedService).toBeVisible();
+    await expectTargetViewportLayouts(page);
     const allocationForm = completedService.locator('form');
     const fundingOption = await allocationForm
       .locator('select[name="allocation-0-selection"] option')
@@ -80,6 +81,7 @@ test('Office staff can allocate completed services, issue invoices, and record p
     });
     await page.goto(`/billing?${billingFilters.toString()}`);
     await expect(page.getByRole('heading', { name: 'Billable service worklist' })).toBeVisible();
+    await expectTargetViewportLayouts(page);
     const clientInvoiceGroup = page.locator('#worklist section').filter({
       has: page.locator('header p').filter({ hasText: 'Client invoice' }),
     });
@@ -105,6 +107,8 @@ test('Office staff can allocate completed services, issue invoices, and record p
 
     await page.goto(`/billing/payments?invoiceId=${invoiceId}`);
     const paymentForm = page.locator('section[aria-labelledby="record-payment-title"] form');
+    await expect(paymentForm).toBeVisible();
+    await expectTargetViewportLayouts(page);
     await expect(paymentForm.locator('input[name="invoiceId"]')).toHaveValue(invoiceId);
     await paymentForm.locator('input[name="payerName"]').fill(`E2E payer ${scenario.runId}`);
     await paymentForm.locator('input[name="payerReference"]').fill(`E2E-${scenario.runId}`);
@@ -122,6 +126,7 @@ test('Office staff can allocate completed services, issue invoices, and record p
     await expect(page.locator('section[aria-labelledby="invoice-summary-title"]')).toContainText(
       'Paid',
     );
+    await expectTargetViewportLayouts(page);
 
     const billingState = await database.query<{ status: string; grand_total_cents: number }>(
       'SELECT status, grand_total_cents FROM billing.invoices WHERE tenant_id = $1 AND id = $2',

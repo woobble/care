@@ -1,15 +1,16 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": [".env", ".env.*"],
+  "globalDependencies": [".env", ".env.test", ".env.example", ".env.production.example"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "env": ["SWC_NATIVE_BINDING_CACHE"]
+      "env": ["NODE_ENV", "SWC_NATIVE_BINDING_CACHE"]
     },
     "openapi": {
       "dependsOn": ["^build"],
-      "outputs": ["openapi.json"]
+      "outputs": ["openapi.json"],
+      "env": ["NODE_ENV"]
     },
     "dev": {
       "cache": false,

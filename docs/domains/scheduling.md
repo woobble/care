@@ -8,7 +8,7 @@ Scheduling owns visits, visit services, visit assignments, employee unavailabili
 
 Each visit belongs to one tenant, client, organization, and facility. Composite database references keep that context consistent. Each visit service snapshots the catalog code, name, and unit. Agreement-generated services also retain the agreement and agreement-service IDs. Snapshots keep historical schedules readable after catalog changes.
 
-Assignments have active or unassigned status. Unassignment records history instead of deleting the row. Employees must be active and assigned to the visit's facility for the local visit date. The model permits multiple employees per visit; each employee can be assigned only once to the same visit.
+Assignments have active or unassigned status. Unassignment records history instead of deleting the row. Employees must be active, assigned to the visit's facility for the local visit date, and not classified as Office staff. The model permits multiple employees per visit; each employee can be assigned only once to the same visit.
 
 ## Timezone and conflicts
 

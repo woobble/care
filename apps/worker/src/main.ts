@@ -2,6 +2,7 @@
 import '@care/config/load-env';
 import { createServer } from 'node:http';
 import { hostname } from 'node:os';
+import { performance } from 'node:perf_hooks';
 
 import { count, eq } from 'drizzle-orm';
 
@@ -80,134 +81,9 @@ async function main(): Promise<void> {
     onboardingCases: readOperationsDeadlineCases,
   });
   const dispatcher = new EventDispatcher();
-  for (const eventType of [
-    'organization.created',
-    'organization.updated',
-    'organization.activated',
-    'organization.archived',
-    'operations.recurrence_created',
-    'operations.recurrence_updated',
-    'operations.recurrence_paused',
-    'operations.recurrence_resumed',
-    'operations.recurrence_ended',
-    'operations.recurring_task_generated',
-    'operations.reminder_settings_updated',
-    'operations.task_created',
-    'facility.created',
-    'facility.updated',
-    'facility.activated',
-    'facility.archived',
-    'team.created',
-    'team.updated',
-    'team.activated',
-    'team.archived',
-    'employee.created',
-    'employee.updated',
-    'employee.status_changed',
-    'employee.user_linked',
-    'employee.user_unlinked',
-    'employee.facility_assignment_changed',
-    'employee.team_membership_changed',
-    'employee.qualification_changed',
-    'employee.skill_changed',
-    'qualification.created',
-    'qualification.updated',
-    'qualification.archived',
-    'skill.created',
-    'skill.updated',
-    'skill.archived',
-    'client.created',
-    'client.updated',
-    'client.activated',
-    'client.archived',
-    'client.provider_context_changed',
-    'client.address_changed',
-    'client.contact_changed',
-    'client.insurance_changed',
-    'client.pflegegrad_changed',
-    'communication.recorded',
-    'communication.amended',
-    'communication.preferences_updated',
-    'service.category_created',
-    'service.category_updated',
-    'service.category_archived',
-    'service.created',
-    'service.updated',
-    'service.archived',
-    'service.availability_changed',
-    'service.price_recorded',
-    'service_agreement.created',
-    'service_agreement.updated',
-    'service_agreement.activated',
-    'service_agreement.suspended',
-    'service_agreement.resumed',
-    'service_agreement.ended',
-    'service_agreement.service_added',
-    'service_agreement.service_changed',
-    'service_agreement.service_ended',
-    'visit.created',
-    'visit.generated',
-    'visit.updated',
-    'visit.rescheduled',
-    'visit.confirmed',
-    'visit.unconfirmed',
-    'visit.cancelled',
-    'visit.assignment_changed',
-    'visit_execution.started',
-    'visit_execution.completed',
-    'visit_execution.corrected',
-    'care_documentation.created',
-    'care_documentation.entry_added',
-    'care_documentation.entry_updated',
-    'care_documentation.entry_removed',
-    'care_documentation.finalized',
-    'care_documentation.amended',
-    'benefit.entitlement_created',
-    'benefit.entitlement_updated',
-    'benefit.opening_balance_recorded',
-    'benefit.adjustment_recorded',
-    'benefit.service_allocated',
-    'benefit.allocation_reversed',
-    'billing.profile.updated',
-    'billing.payer_arrangement.created',
-    'billing.payer_arrangement.updated',
-    'invoice.created',
-    'invoice.updated',
-    'invoice.issued',
-    'invoice.cancelled',
-    'invoice.corrected',
-    'payment.recorded',
-    'payment.allocated',
-    'payment.allocation_reversed',
-    'evidence_package.created',
-    'evidence_package.superseded',
-    'service_evidence.acknowledged',
-    'service_evidence.declined',
-    'service_evidence.acknowledgement_revoked',
-    'service_evidence.recorded',
-    'service_evidence.updated',
-    'incident.recorded',
-    'performed_service.recorded',
-    'performed_service.updated',
-    'performed_service.marked_not_performed',
-    'performed_service.unplanned_added',
-    'schedule.generation_completed',
-    'employee.unavailability_created',
-    'tenant.invitation.created',
-    'tenant.invitation.accepted',
-    'tenant.invitation.expired',
-    'tenant.invitation.revoked',
-    'tenant.member.invited',
-    'tenant.member.activated',
-    'tenant.member.deactivated',
-    'tenant.member.revoked',
-    'tenant.member.role_changed',
-    'tenant.member.scope_changed',
-  ] as const) {
-    dispatcher.subscribe(eventType, async () => {
-      logger.info({ eventType }, 'Domain event dispatched');
-    });
-  }
+  dispatcher.subscribeAll(async (event) => {
+    logger.info({ eventType: event.type }, 'Domain event dispatched');
+  });
   const startedAt = new Date();
   const workerId = `${hostname()}:${process.pid}:${startedAt.getTime()}`;
   const health = {
@@ -333,23 +209,63 @@ async function main(): Promise<void> {
         for (const id of ids) {
           const message = await outbox.claim(id, workerId, { leaseMs, maxAttempts });
           if (!message) continue;
+          const handlerContext = {
+            eventId: message.id,
+            eventType: message.event.type,
+            handlerCategory: 'domain_event_dispatch',
+            attemptCount: message.attemptCount,
+          };
+          const handlerStartedAt = performance.now();
           try {
             await dispatcher.dispatch(message.event);
             await outbox.markDelivered(message);
-            logger.info({ eventType: message.event.type }, 'Outbox event handled');
+            logger.info(
+              {
+                ...handlerContext,
+                handlerDurationMs: Math.max(0, Math.round(performance.now() - handlerStartedAt)),
+                recoveryOutcome: message.attemptCount > 1 ? 'redelivery_succeeded' : 'delivered',
+              },
+              'Outbox event handled',
+            );
           } catch (error) {
             health.lastOutboxFailureAt = new Date();
             health.lastOutboxFailureName = safeErrorName(error);
             workerMetrics.recordOutboxFailure('delivery');
+            const handlerDurationMs = Math.max(0, Math.round(performance.now() - handlerStartedAt));
             logger.error(
-              { eventType: message.event.type, errorName: health.lastOutboxFailureName },
+              {
+                ...handlerContext,
+                handlerDurationMs,
+                failureCategory: health.lastOutboxFailureName,
+              },
               'Outbox event handling failed',
             );
+            const recoveryStartedAt = performance.now();
             try {
               await outbox.markFailed(message, error, maxAttempts);
+              logger.warn(
+                {
+                  ...handlerContext,
+                  recoveryDurationMs: Math.max(
+                    0,
+                    Math.round(performance.now() - recoveryStartedAt),
+                  ),
+                  recoveryOutcome:
+                    message.attemptCount >= maxAttempts ? 'dead_lettered' : 'retry_scheduled',
+                },
+                'Outbox recovery recorded',
+              );
             } catch (recordError) {
               logger.error(
-                { errorName: safeErrorName(recordError), eventId: message.id },
+                {
+                  ...handlerContext,
+                  recoveryDurationMs: Math.max(
+                    0,
+                    Math.round(performance.now() - recoveryStartedAt),
+                  ),
+                  recoveryOutcome: 'recording_failed',
+                  failureCategory: safeErrorName(recordError),
+                },
                 'Could not record outbox delivery failure',
               );
             }

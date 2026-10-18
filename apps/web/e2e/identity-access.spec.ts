@@ -275,11 +275,15 @@ test('Office staff can invite users and administer tenant access', async ({ page
         resultingScopeKeys.has(`facility:${mainOfficeId}`));
     expect(isOneSubmittedReplacement).toBe(true);
     await page.reload();
-    await page
+    const facilityScopeInputs = page.locator('input[name="scope"][value^="facility:"]');
+    await expect(facilityScopeInputs).toHaveCount(resultingScopeKeys.size);
+    const clearFacilitySelection = page
       .getByRole('group', { name: 'Facilities' })
-      .getByRole('button', { name: 'Clear selection' })
-      .click();
+      .getByRole('button', { name: 'Clear selection' });
+    if (resultingScopeKeys.size > 0) await clearFacilitySelection.click();
+    await expect(facilityScopeInputs).toHaveCount(0);
     await selectEntity(page, 'Facilities', 'Facility West', /Facility West/);
+    await expect(facilityScope).toHaveCount(1);
     await acceptDialogDuringAction(page, () =>
       submitServerAction(page, page.getByRole('button', { name: 'Save scopes' })),
     );
@@ -413,6 +417,12 @@ test('Office staff can invite users and administer tenant access', async ({ page
       );
       const pilotOrganizationId = pilotOrganization.rows[0]?.id;
       if (!pilotOrganizationId) throw new Error('The synthetic pilot organization is missing');
+      const foreignOrganization = await database.query<{ id: string }>(
+        'SELECT id FROM organizations.organizations WHERE tenant_id = $1 LIMIT 1',
+        [tenantId],
+      );
+      const foreignOrganizationId = foreignOrganization.rows[0]?.id;
+      if (!foreignOrganizationId) throw new Error('The other synthetic organization is missing');
       const measuredRoutes = [
         `/operations?organizationId=${pilotOrganizationId}`,
         `/clients?q=Musterkunde&page=1&pageSize=20&organizationId=${pilotOrganizationId}`,
@@ -436,6 +446,73 @@ test('Office staff can invite users and administer tenant access', async ({ page
         Promise.resolve(),
       );
       console.log(`GOAL13_PILOT_PAGE_TIMINGS ${JSON.stringify(performanceObservations)}`);
+
+      const concurrentRoutes = [
+        ...measuredRoutes.map((route) => ({ route, tenantScoped: true })),
+        {
+          route: `/clients?q=Musterkunde&page=1&pageSize=20&organizationId=${foreignOrganizationId}`,
+          tenantScoped: false,
+        },
+      ];
+      const concurrentBatchSize = 3;
+      const batchCount = Math.ceil(concurrentRoutes.length / concurrentBatchSize);
+      const concurrentPages = await Promise.all(
+        Array.from({ length: concurrentBatchSize }, () => page.context().newPage()),
+      );
+      const concurrentObservations: Array<{ route: string; batch: number; elapsedMs: number }> = [];
+      const concurrentStartedAt = Date.now();
+      try {
+        // oxlint-disable no-await-in-loop -- Run three pages concurrently and keep batches sequential.
+        for (let batchIndex = 0; batchIndex < batchCount; batchIndex += 1) {
+          const batch = batchIndex + 1;
+          const batchRoutes = concurrentRoutes.slice(
+            batchIndex * concurrentBatchSize,
+            (batchIndex + 1) * concurrentBatchSize,
+          );
+          await Promise.all(
+            batchRoutes.map(async ({ route, tenantScoped }, index) => {
+              const concurrentPage = concurrentPages[index]!;
+              const startedAt = Date.now();
+              const response = await concurrentPage.goto(route);
+              expect(response?.status(), `Expected concurrent ${route} to load successfully`).toBe(
+                200,
+              );
+              await expect(concurrentPage.getByRole('heading', { level: 1 }).first()).toBeVisible();
+              if (!tenantScoped) {
+                await expect(concurrentPage.locator('p[role="alert"]')).toHaveCount(0);
+                await expect(
+                  concurrentPage.locator('section[aria-labelledby="client-list-title"]'),
+                ).toHaveCount(0);
+              }
+              concurrentObservations.push({
+                route: tenantScoped
+                  ? new URL(route, page.url()).pathname
+                  : '/clients (foreign organization)',
+                batch,
+                elapsedMs: Date.now() - startedAt,
+              });
+            }),
+          );
+        }
+      } finally {
+        await Promise.all(concurrentPages.map((concurrentPage) => concurrentPage.close()));
+      }
+      const concurrentDurations = concurrentObservations
+        .map((observation) => observation.elapsedMs)
+        .sort((left, right) => left - right);
+      const percentile = (fraction: number) =>
+        concurrentDurations[Math.ceil(concurrentDurations.length * fraction) - 1] ?? 0;
+      console.log(
+        `GOAL14_PILOT_CONCURRENT_READS ${JSON.stringify({
+          concurrency: concurrentPages.length,
+          routes: concurrentRoutes.length,
+          batches: batchCount,
+          totalElapsedMs: Date.now() - concurrentStartedAt,
+          p50PageMs: percentile(0.5),
+          p95PageMs: percentile(0.95),
+          observations: concurrentObservations,
+        })}`,
+      );
     }
   } finally {
     try {

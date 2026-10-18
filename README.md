@@ -37,26 +37,26 @@ Mailpit is at <http://localhost:8025> and accepts local SMTP on port `1026`. Pro
 
 ## Commands
 
-| Command                                 | Purpose                                                                                |
-| --------------------------------------- | -------------------------------------------------------------------------------------- |
-| `bun install --frozen-lockfile`         | Install root and workspace dependencies from `bun.lock`                                |
-| `bun run build`                         | Generate OpenAPI types and build all workspaces                                        |
-| `bun run typecheck`                     | Typecheck every workspace                                                              |
-| `bun run test`                          | Run unit tests                                                                         |
-| `bun run test:integration`              | Run PostgreSQL Testcontainers and API integration tests; Docker required               |
-| `bun run test:e2e`                      | Start the configured Compose project, migrate and seed, then run Authentik browser E2E |
-| `bun run migrate`                       | Apply checked, transactional SQL migrations                                            |
-| `bun run seed`                          | Create demo tenant, organization, facility, and roles                                  |
-| `bun run seed:identity`                 | Grant a configured Authentik subject demo tenant access                                |
-| `bun run infra:down`                    | Stop local services; keeps named volumes                                               |
-| `bun run clean`                         | Remove workspace build outputs, caches, coverage, and Playwright reports               |
-| `bun run reset`                         | Confirm and reset Compose data; reruns migrations and demo seed                        |
-| `bun run deploy:check`                  | Validate production Compose, configuration, dependencies and recovery destination      |
-| `bun run deploy:bootstrap-admin -- ...` | Create the first production tenant administrator on a fresh database                   |
-| `bun run backup:create -- ...`          | Create a quiesced, paired PostgreSQL and object-storage recovery set                   |
-| `bun run backup:verify -- <id>`         | Verify backup checksums and PostgreSQL dump readability                                |
-| `bun run backup:restore -- ...`         | Restore a verified set into fresh isolated database and storage targets                |
-| `bun run backup:prune`                  | Dry-run verified recovery-set retention                                                |
+| Command                                              | Purpose                                                                                |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `bun install --frozen-lockfile`                      | Install root and workspace dependencies from `bun.lock`                                |
+| `bun run build`                                      | Generate OpenAPI types and build all workspaces                                        |
+| `bun run typecheck`                                  | Typecheck every workspace                                                              |
+| `bun run test`                                       | Run unit tests                                                                         |
+| `bun run test:integration`                           | Run PostgreSQL Testcontainers and API integration tests; Docker required               |
+| `bun run test:e2e`                                   | Start the configured Compose project, migrate and seed, then run Authentik browser E2E |
+| `bun run migrate`                                    | Apply checked, transactional SQL migrations                                            |
+| `bun run seed`                                       | Create demo tenant, organization, facility, and roles                                  |
+| `bun run seed:identity`                              | Grant a configured Authentik subject demo tenant access                                |
+| `bun run infra:down`                                 | Stop local services; keeps named volumes                                               |
+| `bun run clean`                                      | Remove workspace build outputs, caches, coverage, and Playwright reports               |
+| `bun run reset`                                      | Confirm and reset Compose data; reruns migrations and demo seed                        |
+| `bun run deploy:check -- --production`               | Validate production Compose, configuration, dependencies and recovery destination      |
+| `bun run deploy:bootstrap-admin -- --production ...` | Create the first production tenant administrator on a fresh database                   |
+| `bun run backup:create -- --production ...`          | Create a quiesced, paired PostgreSQL and object-storage recovery set                   |
+| `bun run backup:verify -- --production <id>`         | Verify backup checksums and PostgreSQL dump readability                                |
+| `bun run backup:restore -- --production ...`         | Restore a verified set into fresh isolated database and storage targets                |
+| `bun run backup:prune -- --production`               | Dry-run verified recovery-set retention                                                |
 
 If Bun reports `EROFS accessing temporary directory`, run from a writable checkout and point its temporary files and package cache at writable paths. For example:
 
@@ -93,7 +93,7 @@ The API client is generated from `apps/api/openapi.json` with Hey API (`@hey-api
 
 ## Production pilot
 
-Production uses [compose.production.yaml](compose.production.yaml) as an override to the local development Compose file. It removes host-published infrastructure ports, adds Caddy TLS, protected Compose secrets, migration gating, worker health and an isolated operator image. Start with the sanitized [.env.production.example](.env.production.example), then follow the [deployment and recovery runbook](docs/runbooks/pilot-operations.md). Use the [pilot readiness checklist](docs/pilot-readiness.md) to separate implemented and verified behavior from operator configuration and external review.
+Production uses [compose.production.yaml](compose.production.yaml) as an override to the local development Compose file and the dedicated Compose project `care-platform-prod`. Local infrastructure uses `care-platform-dev`; isolated E2E projects use a `care-platform-e2e` name. Production wrappers refuse to access `.env.production` unless invoked with `--production`. The override removes host-published infrastructure ports, adds Caddy TLS, protected Compose secrets, migration gating, worker health and an isolated operator image. Start with the sanitized [.env.production.example](.env.production.example), then follow the [deployment and recovery runbook](docs/runbooks/pilot-operations.md). Use the [pilot readiness checklist](docs/pilot-readiness.md) to separate implemented and verified behavior from operator configuration and external review.
 
 The production images can also be built individually from the repository root so each Dockerfile can access the workspace lockfile and sibling packages:
 
@@ -121,7 +121,7 @@ The commands require Node 24+, Docker Compose, `curl`, and network access. They 
 
 To use a smaller or different extract, set `OSRM_REGION` to a Geofabrik path such as `europe/germany/berlin` and set both `ROUTING_OSRM_PROBE_FROM` and `ROUTING_OSRM_PROBE_TO` to connected road points inside it, then run setup again. An API process on the host uses `ROUTING_OSRM_URL=http://localhost:5000`; an API container on the same Compose network uses `ROUTING_OSRM_URL=http://osrm:5000`. Change the host URL when changing `ROUTING_OSRM_PORT`. This Compose file runs infrastructure only, so pass the internal URL through the API container's deployment environment.
 
-Run `bun run routing:update` to download the latest extract for the configured region. Preprocessing occurs beside the active generation; a failed download or preprocessing leaves the active dataset alone. Updates recreate OSRM and wait for its route health check before discarding the prior generation. If startup fails, the command restores the prior generation and restarts it. Updates briefly interrupt routing. `bun run routing:status` reports application configuration, configured and active region, preparation state, download/preparation dates, dataset availability, and endpoint readiness. To disable routing, unset `ROUTING_OSRM_URL` for the API and stop OSRM with `docker compose --profile routing stop osrm`.
+Run `bun run routing:update` to download the latest extract for the configured region. Preprocessing occurs beside the active generation; a failed download or preprocessing leaves the active dataset alone. Updates recreate OSRM and wait for its route health check before discarding the prior generation. If startup fails, the command restores the prior generation and restarts it. Updates briefly interrupt routing. `bun run routing:status` reports application configuration, configured and active region, preparation state, download/preparation dates, dataset availability, and endpoint readiness. To disable routing, unset `ROUTING_OSRM_URL` for the API and stop the local OSRM service with `docker compose --project-name care-platform-dev -f compose.yaml --profile routing stop osrm`.
 
 The API health response keeps its overall status healthy when optional routing is disabled or unavailable and reports routing as `not_configured`, `unverified`, `ready`, or `unavailable`. Compose health checks a real OSRM route using the active dataset's probe file. The service is on the internal Compose network; its optional host mapping is bound to loopback, not a public interface.
 

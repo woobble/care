@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
+import { v7 as uuidv7 } from 'uuid';
 
 import {
   cleanupOfficeAdminSession,
@@ -10,6 +11,7 @@ import {
 } from './support/office-admin';
 import {
   captureReviewScreenshot,
+  expectFocusTrap,
   expectMobileLayoutToFit,
   reviewDirectory,
 } from './support/browser';
@@ -23,9 +25,56 @@ test('Office navigation stays responsive across themes and screen sizes', async 
   const database = new Client({ connectionString: required('MIGRATION_DATABASE_URL') });
   await database.connect();
   let office: Awaited<ReturnType<typeof createOfficeAdminSession>> | undefined;
+  let paginationTenantId: string | undefined;
+  const paginationClientIds = Array.from({ length: 11 }, () => uuidv7());
   try {
-    office = await createOfficeAdminSession(database, page, 'office-shell');
-    const { displayName, email } = office;
+    const currentOffice = await createOfficeAdminSession(database, page, 'office-shell');
+    office = currentOffice;
+    paginationTenantId = currentOffice.tenantId;
+    const provider = await database.query<{ organization_id: string; facility_id: string }>(
+      `SELECT organization.id AS organization_id, facility.id AS facility_id
+       FROM organizations.organizations AS organization
+       JOIN organizations.facilities AS facility
+         ON facility.tenant_id = organization.tenant_id
+        AND facility.organization_id = organization.id
+       WHERE organization.tenant_id = $1
+       ORDER BY organization.created_at, facility.created_at
+       LIMIT 1`,
+      [currentOffice.tenantId],
+    );
+    const organizationId = provider.rows[0]?.organization_id;
+    const facilityId = provider.rows[0]?.facility_id;
+    if (!organizationId || !facilityId) {
+      throw new Error('Demo Care provider context is missing; run bun run seed');
+    }
+    await database.query('BEGIN');
+    try {
+      const clientRows = paginationClientIds.map((clientId, index) => [
+        clientId,
+        currentOffice.tenantId,
+        organizationId,
+        facilityId,
+        `E2E ${currentOffice.runId} ${index + 1}`,
+      ]);
+      const clientValues = clientRows
+        .map((_, index) => {
+          const first = index * 5 + 1;
+          return `($${first}, $${first + 1}, $${first + 2}, $${first + 3}, 'Pagination', $${first + 4}, 'active', now(), now())`;
+        })
+        .join(', ');
+      await database.query(
+        `INSERT INTO clients.clients
+           (id, tenant_id, organization_id, primary_facility_id, first_name, last_name, status,
+            created_at, updated_at)
+         VALUES ${clientValues}`,
+        clientRows.flat(),
+      );
+      await database.query('COMMIT');
+    } catch (error) {
+      await database.query('ROLLBACK');
+      throw error;
+    }
+    const { displayName, email } = currentOffice;
     const sidebar = page.locator('#office-sidebar');
     await test.step('office sidebar and responsive navigation', async () => {
       await page.goto('/clients?localeCheck=1');
@@ -104,6 +153,15 @@ test('Office navigation stays responsive across themes and screen sizes', async 
       await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
       const keyboardExpand = page.getByRole('button', { name: 'Expand sidebar' });
       await expect(keyboardExpand).toBeFocused();
+      const keyboardFocusIsVisible = await keyboardExpand.evaluate((element) => {
+        if (!element.matches(':focus-visible')) return false;
+        const style = getComputedStyle(element);
+        return (
+          (style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth) > 0) ||
+          style.boxShadow !== 'none'
+        );
+      });
+      expect(keyboardFocusIsVisible, 'Keyboard focus needs a visible outline or ring').toBe(true);
       await page.keyboard.press('Enter');
       await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
 
@@ -245,6 +303,7 @@ test('Office navigation stays responsive across themes and screen sizes', async 
       await expect(page.locator('#office-mobile-navigation')).toBeVisible();
       await expect(mobileNavigationTrigger).toHaveAttribute('aria-expanded', 'true');
       await page.screenshot({ path: testInfo.outputPath('office-390-mobile-drawer.png') });
+      await expectFocusTrap(page, page.getByRole('dialog'));
       await page.keyboard.press('Escape');
       await expect(page.locator('#office-mobile-navigation')).not.toBeVisible();
       await expect(mobileNavigationTrigger).toBeFocused();
@@ -351,9 +410,35 @@ test('Office navigation stays responsive across themes and screen sizes', async 
     await visitIssues.click();
     await expect(page).toHaveURL(/\/operations\/worklist\?.*category=visits/);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('/clients?localeCheck=1');
+    await page.context().addCookies([
+      {
+        name: 'CARE_LOCALE',
+        value: 'de',
+        url: new URL(required('WEB_ORIGIN')).origin,
+        httpOnly: true,
+        sameSite: 'Lax',
+      },
+    ]);
+    await page.goto('/clients?pageSize=10');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+    const pagination = page.getByRole('navigation', { name: 'Seitennavigation' });
+    await expect(pagination).toBeVisible();
+    await expect(pagination.getByRole('link', { name: 'Weiter', exact: true })).toBeVisible();
+    await expect(pagination.locator('[aria-current="page"]')).toHaveText('1');
+    await pagination.getByRole('link', { name: 'Weiter', exact: true }).click();
+    await expect(page).toHaveURL(/page=2/);
+    await expect(pagination.getByRole('link', { name: 'Zurück', exact: true })).toBeVisible();
+    await expect(pagination.locator('[aria-current="page"]')).toHaveText('2');
   } finally {
     try {
+      if (paginationTenantId) {
+        await database.query(
+          `UPDATE clients.clients
+           SET status = 'archived', updated_at = now()
+           WHERE tenant_id = $1 AND id = ANY($2::uuid[])`,
+          [paginationTenantId, paginationClientIds],
+        );
+      }
       if (office) await cleanupOfficeAdminSession(database, office);
     } finally {
       await database.end();

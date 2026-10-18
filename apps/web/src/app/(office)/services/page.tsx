@@ -381,7 +381,7 @@ export default async function ServicesPage({
         {canManageCategories ? (
           <RHFActionForm
             action={createServiceCategoryAction}
-            className="grid gap-3 rounded-md bg-background p-4 md:grid-cols-4"
+            className="grid gap-3 rounded-md bg-background p-4 sm:grid-cols-2 xl:grid-cols-4"
           >
             <Field label={t('Common.fields.name')} name="name" required maxLength={120} />
             <Field label={t('Services.optionalCode')} name="code" maxLength={40} />
@@ -406,7 +406,7 @@ export default async function ServicesPage({
                   <>
                     <RHFActionForm
                       action={updateServiceCategoryAction}
-                      className="grid gap-3 md:grid-cols-4"
+                      className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
                     >
                       <input type="hidden" name="categoryId" value={category.id} />
                       <Field
