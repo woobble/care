@@ -17,7 +17,7 @@
     "test": "turbo run test",
     "i18n:check": "bun run --filter @care/web i18n:check",
     "test:integration": "turbo run test:integration",
-    "test:e2e": "bun run infra:up && bun run migrate && bun run seed && turbo run test:e2e",
+    "test:e2e": "bun run infra:up && bun run migrate && bun run seed && NODE_ENV=test turbo run test:e2e",
     "migrate": "bun run --filter @care/api migrate",
     "seed": "bun run --filter @care/api seed",
     "pilot:seed": "bun run --filter @care/api pilot:seed",

@@ -184,7 +184,7 @@ export async function expectKeyboardTabSequence(page: Page): Promise<void> {
     }, selector);
 
   try {
-    for (let step = 0; step < tabStopCount; step += 1) {
+    for (let step = 0; step <= tabStopCount; step += 1) {
       // oxlint-disable-next-line no-await-in-loop -- Each Tab advances one real keyboard stop.
       await page.keyboard.press('Tab');
       if (step === 0) {
@@ -195,6 +195,8 @@ export async function expectKeyboardTabSequence(page: Page): Promise<void> {
       }
       // oxlint-disable-next-line no-await-in-loop -- Read focus after each keyboard movement.
       const focus = await getFocusedStop();
+
+      if (focus?.tag === 'body' && focus.index < 0) break;
 
       expect(
         focus,

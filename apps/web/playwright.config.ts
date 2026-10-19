@@ -25,6 +25,8 @@ const apiURL = apiPort
   : (process.env.API_INTERNAL_URL ?? 'http://localhost:3001');
 const webPort = new URL(baseURL).port || '3000';
 
+if (process.env.OIDC_ISSUER) await waitForOidcDiscovery(process.env.OIDC_ISSUER);
+
 if (!useExistingServers && apiURL) {
   // Give each run a fresh API process so an old dev server cannot keep stale storage settings.
   process.env.API_INTERNAL_URL = apiURL;
@@ -89,4 +91,48 @@ async function findAvailablePort(): Promise<number> {
     server.close((error) => (error ? reject(error) : resolveClose()));
   });
   return port;
+}
+
+async function waitForOidcDiscovery(issuer: string): Promise<void> {
+  const discoveryUrl = new URL('.well-known/openid-configuration', issuer);
+  const deadline = Date.now() + 90_000;
+  let lastStatus: number | undefined;
+
+  while (Date.now() < deadline) {
+    let response: Response | undefined;
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- poll until Authentik exposes its OIDC endpoints
+      response = await fetch(discoveryUrl, { signal: AbortSignal.timeout(2_000) });
+    } catch {
+      // Authentik can be healthy before its application blueprint is available.
+    }
+
+    if (response?.ok) {
+      // oxlint-disable-next-line no-await-in-loop -- validate this response before the next poll
+      const metadata = (await response.json()) as {
+        issuer?: unknown;
+        authorization_endpoint?: unknown;
+        token_endpoint?: unknown;
+      };
+      if (metadata.issuer !== issuer) {
+        throw new Error('Authentik discovery issuer does not match OIDC_ISSUER.');
+      }
+      if (
+        typeof metadata.authorization_endpoint !== 'string' ||
+        typeof metadata.token_endpoint !== 'string'
+      ) {
+        throw new Error('Authentik discovery is missing an authorization or token endpoint.');
+      }
+      return;
+    }
+
+    lastStatus = response?.status;
+    // oxlint-disable-next-line no-await-in-loop -- poll the observable OIDC discovery endpoint
+    await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+  }
+
+  const responseStatus = lastStatus ? `HTTP ${lastStatus}` : 'no response';
+  throw new Error(
+    `Authentik OIDC discovery was not ready before Playwright servers started (${responseStatus}).`,
+  );
 }

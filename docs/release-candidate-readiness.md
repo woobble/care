@@ -1498,3 +1498,35 @@ node --env-file=<synthetic-playwright-env> ./node_modules/.bin/playwright test \
 Goal 15C's OIDC session regression is **resolved and focused-runtime verified**. The full production-image browser suite remains **Fail** at 4/13. Goal 15B's container gate remains **Blocked** by the documented Authentik and Grafana findings and missing immutable GHCR references; no security-owner acceptance was added. Overall release readiness remains **Fail**, and the Care Platform is **not cleared for production deployment**. Accessibility, recovery, performance, and other release gates retain their independent statuses above.
 
 Repository quality gates passed after the focused regression changes: `bun run lint` (33/33 packages), `bun run format:check` (694 files), `bun run i18n:check` (3,528 messages), `bun run typecheck` (33/33 packages), `bun run test` (51/51 tasks), `bun run build` (32/32 tasks including OpenAPI and API-client generation), and `bunx oxlint --deny-warnings --format=agent`. Final `git diff --check` is recorded after the documentation update. The 13-test production-image browser suite result remains separate and is not represented as green by these repository checks.
+
+## 38. Goal 15D Authentik E2E regression closure — 2026-10-19
+
+The full Authentik E2E suite now passes twice consecutively against the development Compose stack and its patched E2E Authentik image. Both runs invoked the root `bun run test:e2e` script with `.env.test` and isolated project `care-platform-e2e-goal15d-root`, synthetic data, and dedicated local ports. The first run completed **13 passed, 0 failed, 0 skipped** (Playwright: 5.9 minutes; command exit 0). The repeat run completed **13 passed, 0 failed, 0 skipped** (Playwright: 5.4 minutes; command exit 0). The repeat also passed using the same persistent test database and Authentik state, checking cleanup and repeatability. A focused run of `accessibility-keyboard`, `authentik-client`, `office-operations`, and `ui-foundation-caregiver` passed all **5 tests** (3.0 minutes of Playwright time; command exit 0).
+
+### Confirmed causes and changes
+
+- `scripts/local-compose.mjs` omitted the E2E Compose overlay for isolated custom project names. The root runner therefore did not consistently apply the patched Authentik image, blueprint, and E2E port configuration. It now includes `compose.authentik-patched-e2e.yaml` for isolated projects.
+- Better Auth could begin OIDC provider setup before Authentik's blueprint exposed complete discovery metadata. `apps/web/playwright.config.ts` now waits for the configured issuer and its authorization/token endpoints before starting the web test servers, with bounded polling and request timeouts.
+- The root Turbo E2E task's prerequisite Next build inherited development mode and failed during prerendering. `package.json` now runs the seeded test setup in development mode and Turbo E2E tasks with `NODE_ENV=test`.
+- The planning test expected the old `Planning` heading while the page now renders `Week overview`; `apps/web/e2e/admission-planning.spec.ts` asserts the current heading.
+- Keyboard traversal treated the terminal `body` focus state after the last tabbable control as a missing focus target. `apps/web/e2e/support/browser.ts` now ends traversal when focus reaches `body` and continues checking visible controls for focus indicators.
+- The recurrence flow depended on an active employee left by another test. `apps/web/e2e/office-operations.spec.ts` now creates and cleans up its own synthetic employee and active primary facility assignment.
+- The caregiver screenshot flow depended on an externally/pilot-seeded visit. `apps/web/e2e/ui-foundation-caregiver.spec.ts` now seeds its own planned visit through a temporary office-admin session and cleans up the scenario and identity afterward.
+- `.planning-calendar-employee-trigger` set `box-shadow: none`, overriding the shared button's keyboard focus ring. `apps/web/src/app/globals.css` no longer suppresses that ring.
+
+No authentication, authorization, tenant-scoping, or test assertions were weakened. E2E output included the existing `NO_COLOR`/`FORCE_COLOR`, outdated JSX transform, Next destination-stream, and hydration warnings during passing tests; none caused a test failure or skip.
+
+### Repository checks and cleanup
+
+| Check                                        | Result                                                                  |
+| -------------------------------------------- | ----------------------------------------------------------------------- |
+| `bun run lint`                               | Passed, 33/33 packages                                                  |
+| `bun run format:check`                       | Passed, 706 files                                                       |
+| `bun run i18n:check`                         | Passed, 3,585 messages                                                  |
+| `bun run typecheck`                          | Passed, 33/33 packages                                                  |
+| `bun run test`                               | Passed, 51/51 tasks                                                     |
+| `bun run build`                              | Passed, 32/32 tasks; OpenAPI and API client generated through the build |
+| `bunx oxlint --deny-warnings --format=agent` | Passed                                                                  |
+| `git diff --check`                           | Passed                                                                  |
+
+After the second run, only `care-platform-e2e-goal15d-root` and its containers, network, and volumes were removed. The runs used only `.env.test`, synthetic data, and disposable volumes; `.env.production`, other Compose projects, production services, and production volumes were not accessed. This closes the Goal 15D E2E regression. It does not change the independent accessibility or container-security findings, Goal 15B's Authentik/Grafana vulnerability blockers, or the overall production release status: the platform remains **not cleared for production deployment**.

@@ -7,7 +7,11 @@ import type { Page } from '@playwright/test';
 import { Client } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 
-import { expectTargetViewportLayouts } from './support/browser';
+import { cleanupLifecycleScenario, seedLifecycleScenario } from './support/lifecycle-scenario';
+import type { LifecycleScenario } from './support/lifecycle-scenario';
+import { cleanupOfficeAdminSession, createOfficeAdminSession } from './support/office-admin';
+import type { OfficeAdminSession } from './support/office-admin';
+import { dateInBerlin, expectTargetViewportLayouts } from './support/browser';
 
 const reviewDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -30,44 +34,25 @@ test('Caregiver Today review screenshots use a temporary assigned employee', asy
   let tenantId: string | undefined;
   let membershipId: string | undefined;
   let employeeId: string | undefined;
+  let office: OfficeAdminSession | undefined;
+  let scenario: LifecycleScenario | undefined;
   let previousEmployeeUserId: string | null = null;
 
   await database.connect();
   try {
-    const target = await database.query<{
-      employee_id: string;
-      tenant_id: string;
-      user_id: string | null;
-      visit_id: string;
-      visit_date: string;
-      execution_id: string | null;
-    }>(`
-      SELECT employee.id AS employee_id, employee.tenant_id, employee.user_id,
-        visit.id AS visit_id,
-        (visit.planned_start AT TIME ZONE 'Europe/Berlin')::date::text AS visit_date,
-        execution.id AS execution_id
-      FROM employees.employees AS employee
-      JOIN scheduling.visit_assignments AS assignment
-        ON assignment.tenant_id = employee.tenant_id AND assignment.employee_id = employee.id
-      JOIN scheduling.visits AS visit
-        ON visit.tenant_id = assignment.tenant_id AND visit.id = assignment.visit_id
-      LEFT JOIN visit_execution.executions AS execution
-        ON execution.tenant_id = visit.tenant_id AND execution.visit_id = visit.id
-      WHERE employee.status = 'active'
-        AND employee.user_id IS NULL
-        AND assignment.status = 'active'
-        AND visit.status IN ('planned', 'confirmed')
-        AND (visit.planned_start AT TIME ZONE 'Europe/Berlin')::date =
-            (now() AT TIME ZONE 'Europe/Berlin')::date
-      ORDER BY visit.planned_start, employee.id
-      LIMIT 1
-    `);
-    const employee = target.rows[0];
-    if (!employee)
-      throw new Error('No unlinked caregiver with an assigned visit today is available');
-    employeeId = employee.employee_id;
-    tenantId = employee.tenant_id;
-    previousEmployeeUserId = employee.user_id;
+    office = await createOfficeAdminSession(database, page, 'caregiver-review-fixture');
+    scenario = await seedLifecycleScenario(database, office, {
+      visit: 'planned',
+      visitDate: dateInBerlin(),
+    });
+    if (!scenario.visitId) throw new Error('The caregiver review fixture did not create a visit');
+    const employee = {
+      visit_id: scenario.visitId,
+      visit_date: dateInBerlin(),
+      execution_id: null,
+    };
+    employeeId = scenario.employeeId;
+    tenantId = scenario.tenantId;
     user = await createAuthentikUser(authentikOrigin, apiToken, {
       username,
       email,
@@ -88,6 +73,7 @@ test('Caregiver Today review screenshots use a temporary assigned employee', asy
         hideNextDevToolbar();
       }
     });
+    await page.context().clearCookies();
     await signInWithAuthentik(page, username, password);
     await expect(
       page.getByText('Your account does not have access to an active organization.'),
@@ -239,22 +225,33 @@ test('Caregiver Today review screenshots use a temporary assigned employee', asy
     await page.setViewportSize({ width: 360, height: 844 });
     await assertNoHorizontalOverflow(page);
   } finally {
-    if (platformUserId && tenantId && membershipId) {
-      await cleanupReviewIdentity(database, {
-        ...(employeeId ? { employeeId } : {}),
-        membershipId,
-        platformUserId,
-        previousEmployeeUserId,
-        ...(user ? { subject: user.uuid } : {}),
-        tenantId,
-        issuer,
-      });
-    }
-    await database.end().catch(() => undefined);
-    if (user) {
-      await authentikRequest(authentikOrigin, apiToken, `/api/v3/core/users/${user.pk}/`, {
-        method: 'DELETE',
-      }).catch(() => undefined);
+    try {
+      try {
+        if (platformUserId && tenantId && membershipId) {
+          await cleanupReviewIdentity(database, {
+            ...(employeeId ? { employeeId } : {}),
+            membershipId,
+            platformUserId,
+            previousEmployeeUserId,
+            ...(user ? { subject: user.uuid } : {}),
+            tenantId,
+            issuer,
+          });
+        }
+      } finally {
+        try {
+          if (scenario) await cleanupLifecycleScenario(database, scenario);
+        } finally {
+          if (office) await cleanupOfficeAdminSession(database, office);
+        }
+      }
+    } finally {
+      await database.end().catch(() => undefined);
+      if (user) {
+        await authentikRequest(authentikOrigin, apiToken, `/api/v3/core/users/${user.pk}/`, {
+          method: 'DELETE',
+        }).catch(() => undefined);
+      }
     }
   }
 });

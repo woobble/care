@@ -15,6 +15,9 @@ if (!['up', 'down'].includes(operation)) {
 try {
   const projectName = resolveLocalComposeProject();
   const compose = ['compose', '--project-name', projectName, '-f', 'compose.yaml'];
+  if (projectName !== 'care-platform-dev') {
+    compose.push('-f', 'compose.e2e.yaml', '-f', 'compose.authentik-patched-e2e.yaml');
+  }
   if (operation === 'down') {
     execFileSync('docker', [...compose, 'down'], { cwd: projectRoot, stdio: 'inherit' });
   } else {

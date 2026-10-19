@@ -133,7 +133,7 @@ test('Office staff can admit an existing client and plan visits', async ({ page 
     const visit = generatedVisit.rows[0];
     if (!visit) throw new Error('The active agreement did not generate a visit');
     await page.goto(`/planning?date=${visit.visit_date}`);
-    await expect(page.getByRole('heading', { name: 'Planning' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Week overview' })).toBeVisible();
     const visitLink = page.locator(`a[href^="/visits/${visit.id}"]`);
     await expect(visitLink).toBeVisible();
     await mkdir(calendarReviewDirectory, { recursive: true });

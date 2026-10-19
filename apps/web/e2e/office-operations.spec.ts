@@ -125,40 +125,57 @@ test('Office staff can manage operational tasks and recurrence', async ({ page }
   let operationsTaskId: string | undefined;
   let operationsRecurrenceId: string | undefined;
   let onboardingCaseId: string | undefined;
+  let assignedEmployeeId: string | undefined;
   try {
     office = await createOfficeAdminSession(database, page, 'operations-tasks');
     const { tenantId, displayName, platformUserId, runId } = office;
     await test.step('operations tasks and recurrence can be managed from the office UI', async () => {
-      const employeeResult = await database.query<{
-        displayName: string;
+      const organizationResult = await database.query<{
         organizationName: string;
         organizationId: string;
+        facilityId: string;
       }>(
-        `SELECT
-           concat_ws(' ', coalesce(nullif(employee.preferred_name, ''), employee.first_name), employee.last_name) AS "displayName",
-           organization.name AS "organizationName",
-           organization.id AS "organizationId"
-         FROM employees.employees AS employee
-         INNER JOIN organizations.organizations AS organization
-           ON organization.tenant_id = employee.tenant_id
-          AND organization.id = employee.organization_id
-         WHERE employee.tenant_id = $1
-           AND employee.status = 'active'
-           AND organization.name !~* '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
-           AND concat_ws(
-             ' ',
-             coalesce(nullif(employee.preferred_name, ''), employee.first_name),
-             employee.last_name
-           ) !~* '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
-         ORDER BY employee.id
+        `SELECT organization.name AS "organizationName",
+                organization.id AS "organizationId",
+                facility.id AS "facilityId"
+         FROM organizations.organizations AS organization
+         INNER JOIN organizations.facilities AS facility
+           ON facility.tenant_id = organization.tenant_id
+          AND facility.organization_id = organization.id
+         WHERE organization.tenant_id = $1
+           AND organization.name = 'Demo Pflegedienst'
+           AND facility.name = 'Main Office'
          LIMIT 1`,
         [tenantId],
       );
-      const organizationName = employeeResult.rows[0]?.organizationName;
-      const assignedEmployeeName = employeeResult.rows[0]?.displayName;
-      const organizationId = employeeResult.rows[0]?.organizationId;
-      if (!organizationName || !assignedEmployeeName || !organizationId)
-        throw new Error('Demo Care has no active employee with readable references to assign');
+      const organization = organizationResult.rows[0];
+      if (!organization)
+        throw new Error('Demo Care needs its seeded Main Office organization for this fixture');
+      const { organizationName, organizationId, facilityId } = organization;
+      assignedEmployeeId = uuidv7();
+      const assignedEmployeeName = `E2E Operations ${runId}`;
+      const now = new Date();
+      await database.query('BEGIN');
+      try {
+        await database.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+        await database.query(
+          `INSERT INTO employees.employees
+             (id, tenant_id, organization_id, first_name, last_name, status, created_at, updated_at)
+           VALUES ($1, $2, $3, 'E2E Operations', $4, 'active', $5, $5)`,
+          [assignedEmployeeId, tenantId, organizationId, runId, now],
+        );
+        await database.query(
+          `INSERT INTO employees.employee_facility_assignments
+             (id, tenant_id, organization_id, employee_id, facility_id, is_primary,
+              status, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, true, 'active', $6, $6)`,
+          [uuidv7(), tenantId, organizationId, assignedEmployeeId, facilityId, now],
+        );
+        await database.query('COMMIT');
+      } catch (error) {
+        await database.query('ROLLBACK');
+        throw error;
+      }
       const assignedEmployeeOption = new RegExp(`^${assignedEmployeeName}$`);
 
       onboardingCaseId = uuidv7();
@@ -391,7 +408,13 @@ test('Office staff can manage operational tasks and recurrence', async ({ page }
               );
             }
           } finally {
-            await cleanupOfficeAdminSession(database, office);
+            try {
+              if (assignedEmployeeId) {
+                await cleanupOperationsEmployee(database, office.tenantId, assignedEmployeeId);
+              }
+            } finally {
+              await cleanupOfficeAdminSession(database, office);
+            }
           }
         }
       }
@@ -400,6 +423,29 @@ test('Office staff can manage operational tasks and recurrence', async ({ page }
     }
   }
 });
+
+async function cleanupOperationsEmployee(
+  database: Client,
+  tenantId: string,
+  employeeId: string,
+): Promise<void> {
+  await database.query('BEGIN');
+  try {
+    await database.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+    await database.query(
+      'DELETE FROM employees.employee_facility_assignments WHERE tenant_id = $1 AND employee_id = $2',
+      [tenantId, employeeId],
+    );
+    await database.query('DELETE FROM employees.employees WHERE tenant_id = $1 AND id = $2', [
+      tenantId,
+      employeeId,
+    ]);
+    await database.query('COMMIT');
+  } catch (error) {
+    await database.query('ROLLBACK');
+    throw error;
+  }
+}
 
 async function cleanupOperationsRecords(
   database: Client,
