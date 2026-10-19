@@ -318,23 +318,30 @@ runs:
         if-no-files-found: error
         retention-days: 90
 
-    - name: Block publication on local critical or high findings
+    - name: Apply local Critical/High exception gate
       id: local-gate
       shell: bash
       env:
         PUBLISH: ${{ inputs.publish }}
         PLATFORM: ${{ inputs.platform }}
-        AMD64_CRITICAL: ${{ steps.local-scan-amd64.outputs.critical || '0' }}
-        AMD64_HIGH: ${{ steps.local-scan-amd64.outputs.high || '0' }}
-        ARM64_CRITICAL: ${{ steps.local-scan-arm64.outputs.critical || '0' }}
-        ARM64_HIGH: ${{ steps.local-scan-arm64.outputs.high || '0' }}
         IMAGE_NAME: ${{ steps.build-inputs.outputs.image_name }}
       run: |
         set -euo pipefail
-        critical=$((AMD64_CRITICAL + ARM64_CRITICAL))
-        high=$((AMD64_HIGH + ARM64_HIGH))
+        reports=()
+        if [[ "$PUBLISH" == true || "$PLATFORM" == linux/amd64 ]]; then
+          reports+=("trivy-reports/${IMAGE_NAME}.linux-amd64.prepublish.json")
+        fi
+        if [[ "$PUBLISH" == true || "$PLATFORM" == linux/arm64 ]]; then
+          reports+=("trivy-reports/${IMAGE_NAME}.linux-arm64.prepublish.json")
+        fi
+        result="$(bash .github/scripts/check-container-image-findings.sh "$IMAGE_NAME" "${reports[@]}")"
+        critical="$(jq -r '.critical' <<< "$result")"
+        high="$(jq -r '.high' <<< "$result")"
         echo "critical=$critical" >> "$GITHUB_OUTPUT"
         echo "high=$high" >> "$GITHUB_OUTPUT"
+        echo "critical_ids=$(jq -c '.criticalIds' <<< "$result")" >> "$GITHUB_OUTPUT"
+        echo "high_ids=$(jq -c '.highIds' <<< "$result")" >> "$GITHUB_OUTPUT"
+        echo "accepted_findings=$(jq -c '.acceptedIds' <<< "$result")" >> "$GITHUB_OUTPUT"
         if [[ "$PUBLISH" == true ]]; then
           echo "## $IMAGE_NAME pre-publication scan gate" >> "$GITHUB_STEP_SUMMARY"
           echo >> "$GITHUB_STEP_SUMMARY"
@@ -344,12 +351,8 @@ runs:
           echo >> "$GITHUB_STEP_SUMMARY"
           echo "- Platform: $PLATFORM" >> "$GITHUB_STEP_SUMMARY"
         fi
-        echo "- Critical findings across built platforms: $critical" >> "$GITHUB_STEP_SUMMARY"
-        echo "- High findings across built platforms: $high" >> "$GITHUB_STEP_SUMMARY"
-        if (( critical > 0 || high > 0 )); then
-          echo "Actionable critical/high findings remain in $IMAGE_NAME; publication is blocked pending security-owner disposition." >&2
-          exit 1
-        fi
+        echo "- Critical findings across scanned artifacts: $critical" >> "$GITHUB_STEP_SUMMARY"
+        echo "- High findings across scanned artifacts: $high" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Log in to GHCR after the local scan gate
       if: inputs.publish == 'true'
@@ -504,25 +507,26 @@ runs:
         if-no-files-found: error
         retention-days: 90
 
-    - name: Block failed immutable registry scans
+    - name: Apply immutable registry Critical/High exception gate
       id: registry-gate
       if: inputs.publish == 'true'
       shell: bash
       env:
-        AMD64_CRITICAL: ${{ steps.registry-scan-amd64.outputs.critical }}
-        AMD64_HIGH: ${{ steps.registry-scan-amd64.outputs.high }}
-        ARM64_CRITICAL: ${{ steps.registry-scan-arm64.outputs.critical }}
-        ARM64_HIGH: ${{ steps.registry-scan-arm64.outputs.high }}
+        IMAGE_NAME: ${{ steps.build-inputs.outputs.image_name }}
       run: |
         set -euo pipefail
-        critical=$((AMD64_CRITICAL + ARM64_CRITICAL))
-        high=$((AMD64_HIGH + ARM64_HIGH))
+        result="$(bash .github/scripts/check-container-image-findings.sh \
+          "$IMAGE_NAME" \
+          "trivy-reports/${IMAGE_NAME}.linux-amd64.registry.json" \
+          "trivy-reports/${IMAGE_NAME}.linux-arm64.registry.json")"
+        critical="$(jq -r '.critical' <<< "$result")"
+        high="$(jq -r '.high' <<< "$result")"
         echo "critical=$critical" >> "$GITHUB_OUTPUT"
         echo "high=$high" >> "$GITHUB_OUTPUT"
-        if (( critical > 0 || high > 0 )); then
-          echo 'An exact immutable registry artifact contains critical/high findings.' >&2
-          exit 1
-        fi
+        echo "critical_ids=$(jq -c '.criticalIds' <<< "$result")" >> "$GITHUB_OUTPUT"
+        echo "high_ids=$(jq -c '.highIds' <<< "$result")" >> "$GITHUB_OUTPUT"
+        echo "accepted_findings=$(jq -c '.acceptedIds' <<< "$result")" >> "$GITHUB_OUTPUT"
+        echo "approval=$(jq -c '.approval' <<< "$result")" >> "$GITHUB_OUTPUT"
 
     - name: Create verified multi-platform manifest index
       if: inputs.publish == 'true'
@@ -619,6 +623,10 @@ runs:
         AMD64_HIGH: ${{ steps.registry-scan-amd64.outputs.high }}
         ARM64_CRITICAL: ${{ steps.registry-scan-arm64.outputs.critical }}
         ARM64_HIGH: ${{ steps.registry-scan-arm64.outputs.high }}
+        CRITICAL_IDS: ${{ steps.registry-gate.outputs.critical_ids }}
+        HIGH_IDS: ${{ steps.registry-gate.outputs.high_ids }}
+        ACCEPTED_FINDINGS: ${{ steps.registry-gate.outputs.accepted_findings }}
+        EXCEPTION_APPROVAL: ${{ steps.registry-gate.outputs.approval }}
         SCANNER_VERSION: ${{ steps.registry-scan-amd64.outputs.scanner_version }}
         AMD64_DATABASE_UPDATED_AT: ${{ steps.registry-scan-amd64.outputs.database_updated_at }}
         ARM64_DATABASE_UPDATED_AT: ${{ steps.registry-scan-arm64.outputs.database_updated_at }}
@@ -631,9 +639,22 @@ runs:
         [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
         [[ "$AMD64_DIGEST" =~ ^sha256:[0-9a-f]{64}$ && "$ARM64_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
         [[ "$AMD64_CONFIG_DIGEST" =~ ^sha256:[0-9a-f]{64}$ && "$ARM64_CONFIG_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
-        [[ "$AMD64_CRITICAL" == 0 && "$AMD64_HIGH" == 0 && "$ARM64_CRITICAL" == 0 && "$ARM64_HIGH" == 0 ]]
         [[ "$AMD64_DATABASE_UPDATED_AT" == "$ARM64_DATABASE_UPDATED_AT" ]]
         [[ -n "$SCANNER_VERSION" && -n "$AMD64_DATABASE_UPDATED_AT" && "$AMD64_DATABASE_UPDATED_AT" != null ]]
+        critical="$(jq 'length' <<< "$CRITICAL_IDS")"
+        high="$(jq 'length' <<< "$HIGH_IDS")"
+        jq -e \
+          --argjson criticalIds "$CRITICAL_IDS" \
+          --argjson highIds "$HIGH_IDS" \
+          --argjson acceptedIds "$ACCEPTED_FINDINGS" \
+          --argjson approval "$EXCEPTION_APPROVAL" \
+          --argjson critical "$critical" \
+          --argjson high "$high" \
+          '($criticalIds | length) == $critical and
+           ($highIds | length) == $high and
+           ([$criticalIds[], $highIds[]] | sort) == ($acceptedIds | sort) and
+           ($approval == null or ($approval.approver | type == "string" and length > 0))' \
+          <<< '{}'
         mkdir -p image-lock
         jq -n \
           --arg image "$IMAGE_NAME" \
@@ -650,17 +671,25 @@ runs:
           --arg workflowRef "$WORKFLOW_REF" \
           --arg scanner "$SCANNER_VERSION" \
           --arg databaseUpdatedAt "$AMD64_DATABASE_UPDATED_AT" \
+          --argjson critical "$critical" \
+          --argjson high "$high" \
+          --argjson criticalIds "$CRITICAL_IDS" \
+          --argjson highIds "$HIGH_IDS" \
+          --argjson acceptedIds "$ACCEPTED_FINDINGS" \
+          --argjson exceptionApproval "$EXCEPTION_APPROVAL" \
           --argjson amd64Critical "$AMD64_CRITICAL" \
           --argjson amd64High "$AMD64_HIGH" \
           --argjson arm64Critical "$ARM64_CRITICAL" \
           --argjson arm64High "$ARM64_HIGH" \
-          '{image:$image, reference:$reference, digest:$digest,
+          '{schemaVersion:1, image:$image, reference:$reference, digest:$digest,
             platforms:["linux/amd64","linux/arm64"],
             manifests:{
               "linux/amd64":{reference:$amd64Reference,digest:$amd64Digest,configDigest:$amd64ConfigDigest},
               "linux/arm64":{reference:$arm64Reference,digest:$arm64Digest,configDigest:$arm64ConfigDigest}},
             sourceCommit:$sourceCommit, sourceRepository:$sourceRepository, workflowRef:$workflowRef,
-            scan:{scanner:$scanner,databaseUpdatedAt:$databaseUpdatedAt,critical:0,high:0,
+            scan:{scanner:$scanner,databaseUpdatedAt:$databaseUpdatedAt,critical:$critical,high:$high,
+              criticalIds:$criticalIds,highIds:$highIds,acceptedFindingIds:$acceptedIds,
+              exceptionApproval:$exceptionApproval,
               byPlatform:{
                 "linux/amd64":{critical:$amd64Critical,high:$amd64High},
                 "linux/arm64":{critical:$arm64Critical,high:$arm64High}}},

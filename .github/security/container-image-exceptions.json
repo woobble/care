@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "approval": {
+    "approver": "Project owner",
+    "approvedOn": "2026-10-19",
+    "evidenceWorkflowRun": 39298521626,
+    "expiresOn": null
+  },
+  "exceptions": {
+    "authentik": [
+      "CVE-2025-69720",
+      "CVE-2026-16742",
+      "CVE-2026-54369",
+      "CVE-2026-6653",
+      "CVE-2026-74860",
+      "CVE-2026-76642",
+      "CVE-2026-78408",
+      "CVE-2026-78409",
+      "CVE-2026-78410",
+      "CVE-2026-86138",
+      "CVE-2026-86139",
+      "CVE-2026-86140",
+      "CVE-2026-86142",
+      "CVE-2026-86143",
+      "CVE-2026-86144",
+      "CVE-2026-9538"
+    ],
+    "grafana": ["CVE-2026-78667", "CVE-2026-78669", "CVE-2026-97031"]
+  }
+}
