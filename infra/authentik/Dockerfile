@@ -11,6 +11,7 @@ RUN apt-mark unhold libssl-dev libssl3t64 openssl \
   && rm -rf /var/lib/apt/lists/*
 
 RUN printf '%s\n' \
+    'aiohttp==3.14.4 --hash=sha256:f8f61a9b5fa56c58e3441f9dc64137f786232d40fb89127190d0e0f84e1e5865 --hash=sha256:fb22c8e4b60385a9b414c70c6e8b2d0f4b23ff7fc4bb572ceb58297b228169f1' \
     'urllib3==2.8.0 --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3' \
     > /tmp/authentik-security-requirements.txt \
   && pip3 --python /ak-root/.venv/bin/python install \
@@ -32,6 +33,6 @@ RUN find / -xdev -type f -perm -4000 -exec chmod u-s {} + \
 USER authentik
 
 LABEL org.opencontainers.image.source="https://github.com/goauthentik/authentik" \
-  org.opencontainers.image.version="2026.8.4-care-openssl-deb13u3-urllib3-2.8.0" \
+  org.opencontainers.image.version="2026.8.4-care-openssl-deb13u3-urllib3-2.8.0-aiohttp-3.14.4" \
   org.opencontainers.image.base.name="ghcr.io/goauthentik/server:2026.8.4" \
   org.opencontainers.image.base.digest="sha256:e7226ae116dac5aa0a5643803e735b010038f492c401e08e16b3bf1ac54c090c"

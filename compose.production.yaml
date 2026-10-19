@@ -16,7 +16,7 @@ services:
     networks: !override [care-private]
 
   authentik-server:
-    image: care-platform-authentik:2026.8.4-openssl-deb13u3-urllib3-2.8.0
+    image: care-platform-authentik:2026.8.4-openssl-deb13u3-urllib3-2.8.0-aiohttp-3.14.4
     build:
       context: .
       dockerfile: infra/authentik/Dockerfile
@@ -58,7 +58,7 @@ services:
       start_period: 60s
 
   authentik-worker:
-    image: care-platform-authentik:2026.8.4-openssl-deb13u3-urllib3-2.8.0
+    image: care-platform-authentik:2026.8.4-openssl-deb13u3-urllib3-2.8.0-aiohttp-3.14.4
     build:
       context: .
       dockerfile: infra/authentik/Dockerfile
