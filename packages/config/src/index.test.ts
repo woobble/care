@@ -40,6 +40,7 @@ function productionEnvironment(): NodeJS.ProcessEnv {
     OIDC_CLIENT_SECRET: 'oidc-client-secret-123456789012345678901234',
     AUTH_SECRET_FILE: secret('auth-secret', 'auth-secret-12345678901234567890123456789012'),
     WEB_ORIGIN: 'https://care-pilot.org',
+    API_PUBLIC_ORIGIN: 'https://api.care-pilot.org',
     API_INTERNAL_URL: 'http://api:3001',
     API_PUBLIC_URL: 'https://api.care-pilot.org',
     AUTHENTIK_PUBLIC_URL: 'https://login.care-pilot.org',

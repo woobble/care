@@ -56,6 +56,7 @@ describe('clients API', () => {
     process.env.OIDC_ISSUER = oidc.issuer;
     process.env.OIDC_CLIENT_ID = 'care-integration-test';
     process.env.WEB_ORIGIN = 'http://localhost:3000';
+    process.env.API_PUBLIC_ORIGIN = 'http://localhost:3001';
     process.env.S3_ENDPOINT = 'http://127.0.0.1:8333';
     process.env.S3_REGION = 'us-east-1';
     process.env.S3_BUCKET = 'care-test-private';
@@ -2429,12 +2430,16 @@ describe('clients API', () => {
         headers: caregiverHeaders,
       });
       expect(caregiverVisits.status).toBe(200);
-      const caregiverVisitItems = (await caregiverVisits.json()) as Array<{
-        id: string;
-        note: string | null;
-        updatedAt: string;
-        assignmentAssignedAt: string;
-      }>;
+      const caregiverVisitItems = (
+        (await caregiverVisits.json()) as {
+          items: Array<{
+            id: string;
+            note: string | null;
+            updatedAt: string;
+            assignmentAssignedAt: string;
+          }>;
+        }
+      ).items;
       const caregiverExecutionVisit = caregiverVisitItems.find(
         (item) => item.id === executionVisit.id,
       );

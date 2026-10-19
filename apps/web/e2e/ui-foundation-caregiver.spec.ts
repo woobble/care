@@ -39,10 +39,13 @@ test('Caregiver Today review screenshots use a temporary assigned employee', asy
       tenant_id: string;
       user_id: string | null;
       visit_id: string;
+      visit_date: string;
       execution_id: string | null;
     }>(`
       SELECT employee.id AS employee_id, employee.tenant_id, employee.user_id,
-        visit.id AS visit_id, execution.id AS execution_id
+        visit.id AS visit_id,
+        (visit.planned_start AT TIME ZONE 'Europe/Berlin')::date::text AS visit_date,
+        execution.id AS execution_id
       FROM employees.employees AS employee
       JOIN scheduling.visit_assignments AS assignment
         ON assignment.tenant_id = employee.tenant_id AND assignment.employee_id = employee.id
@@ -155,6 +158,46 @@ test('Caregiver Today review screenshots use a temporary assigned employee', asy
 
     await page.getByRole('button', { name: 'Appearance' }).click();
     await page.getByRole('menuitemradio', { name: 'Light' }).click();
+    await page.goto(`/care/calendar?date=${employee.visit_date}&view=agenda`);
+    await expect(page.getByRole('heading', { name: 'My calendar' })).toBeVisible();
+    const calendarVisitLink = page.locator(`a[href="/care/visits/${employee.visit_id}"]`).first();
+    await expect(calendarVisitLink).toBeVisible();
+    const visitDateLabel = new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'full',
+      timeZone: 'Europe/Berlin',
+    }).format(new Date(`${employee.visit_date}T12:00:00.000Z`));
+    await expect(page.getByText(visitDateLabel, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Monday, October 26, 2026', { exact: true })).toHaveCount(0);
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole('button', { name: 'Day', exact: true }).click();
+    await expect(page).toHaveURL(/view=day/);
+    await expect(page.locator('.care-calendar .rbc-calendar')).toBeVisible();
+    await expect(calendarVisitLink).toBeVisible();
+    await assertNoHorizontalOverflow(page);
+    await capture(page, 'caregiver-calendar-desktop-1440.png', true);
+
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.getByRole('button', { name: 'Week', exact: true }).click();
+    await expect(page).toHaveURL(/view=week/);
+    await expect(page.locator('.care-calendar .rbc-calendar')).toBeVisible();
+    await assertNoHorizontalOverflow(page);
+    await capture(page, 'caregiver-calendar-tablet-768.png', true);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Agenda', exact: true }).click();
+    await expect(page).toHaveURL(/view=agenda/);
+    await expect(calendarVisitLink).toBeVisible();
+    await assertNoHorizontalOverflow(page);
+    await capture(page, 'caregiver-calendar-mobile-390.png', true);
+
+    await page.getByRole('button', { name: 'Month', exact: true }).click();
+    await expect(page).toHaveURL(/view=month/);
+    await expect(page.locator('.care-calendar .rbc-calendar')).toBeVisible();
+    await assertNoHorizontalOverflow(page);
+    await page.getByRole('button', { name: 'Agenda', exact: true }).click();
+    await expect(page).toHaveURL(/view=agenda/);
+    await expect(page.locator('.care-calendar .rbc-calendar')).toHaveCount(0);
     const assignedVisit = page.locator(`a[href="/care/visits/${employee.visit_id}"]`).first();
     await expect(assignedVisit).toBeVisible();
     const clientName = (await assignedVisit.textContent())?.trim();

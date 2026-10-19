@@ -50,15 +50,23 @@ async function CareWorkspaceLayout({ children }: Readonly<{ children: React.Reac
             className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-2 px-4 sm:h-16"
             aria-label={t('main')}
           >
-            <Link
-              className="flex min-h-11 min-w-0 items-center gap-2 font-semibold text-foreground"
-              href="/care/today"
-            >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <HeartHandshake className="size-4" aria-hidden="true" />
-              </span>
-              <span className="truncate">{t('today')}</span>
-            </Link>
+            <div className="flex min-w-0 items-center gap-3">
+              <Link
+                className="flex min-h-11 min-w-0 items-center gap-2 font-semibold text-foreground"
+                href="/care/today"
+              >
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <HeartHandshake className="size-4" aria-hidden="true" />
+                </span>
+                <span className="truncate">{t('today')}</span>
+              </Link>
+              <Link
+                className="min-h-11 content-center rounded-md px-2 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                href="/care/calendar"
+              >
+                {t('calendar')}
+              </Link>
+            </div>
             <div className="flex shrink-0 items-center gap-1 sm:gap-2">
               <ThemeSwitcher />
               <AccountMenu

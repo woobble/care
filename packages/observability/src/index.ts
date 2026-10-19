@@ -26,6 +26,10 @@ export async function startTelemetry(
     instrumentations: [
       getNodeAutoInstrumentations({
         '@opentelemetry/instrumentation-fs': { enabled: false },
+        '@opentelemetry/instrumentation-http': {
+          ignoreIncomingRequestHook: (request) =>
+            request.url?.split('?', 1)[0]?.startsWith('/api/v1/calendar-subscriptions/') ?? false,
+        },
       }),
     ],
   });

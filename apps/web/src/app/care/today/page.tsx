@@ -22,9 +22,37 @@ export default async function CareTodayPage() {
   const evidencePromise = getEvidenceResult(api, header, range);
   const tourPromise = getTodayTourResult(api, header);
   const visitsResult = await get('/api/v1/me/visits', {
-    params: { query: { from: range.from, until: range.until }, header },
+    params: { query: { from: range.from, until: range.until, page: 1, pageSize: 100 }, header },
   });
-  const visits = visitsResult.data ?? [];
+  const visits = [...(visitsResult.data?.items ?? [])];
+  let visitLoadFailed = Boolean(visitsResult.error || !visitsResult.data);
+  if (visitsResult.data) {
+    const pageCount = Math.ceil(visitsResult.data.total / visitsResult.data.pageSize);
+    for (let batchStart = 2; batchStart <= pageCount; batchStart += 5) {
+      // oxlint-disable-next-line no-await-in-loop -- Subsequent bounded batches depend on the first page's total.
+      const pageResults = await Promise.all(
+        Array.from({ length: Math.min(5, pageCount - batchStart + 1) }, (_, offset) =>
+          get('/api/v1/me/visits', {
+            params: {
+              query: {
+                from: range.from,
+                until: range.until,
+                page: batchStart + offset,
+                pageSize: 100,
+              },
+              header,
+            },
+          }),
+        ),
+      );
+      if (pageResults.some((result) => result.error || !result.data)) {
+        visitLoadFailed = true;
+        break;
+      }
+      pageResults.forEach((result) => visits.push(...(result.data?.items ?? [])));
+    }
+  }
+  if (visitLoadFailed) visits.length = 0;
 
   const orderedVisits = visits
     .slice()
@@ -52,7 +80,6 @@ export default async function CareTodayPage() {
     ...featuredVisits,
     ...orderedVisits.filter(({ visit }) => !featuredVisitIds.has(visit.id)),
   ];
-  const visitLoadFailed = Boolean(visitsResult.error || !visitsResult.data);
   const employeeLinkRequired = visitsResult.error?.code?.endsWith('EMPLOYEE_LINK_REQUIRED');
 
   return (

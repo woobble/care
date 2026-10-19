@@ -52,6 +52,7 @@ const migrations = {
     '0001_scheduling.sql',
     '0002_advanced_planning.sql',
     '0003_operational_planning.sql',
+    '0004_calendar_subscriptions.sql',
   ],
   'visit-execution': [
     '0001_visit_execution.sql',

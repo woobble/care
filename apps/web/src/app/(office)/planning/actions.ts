@@ -174,6 +174,34 @@ export async function updateVisitAction(formData: FormData): Promise<void> {
   redirect(`/visits/${visitId}?${params.toString()}`);
 }
 
+export async function updateVisitFromCalendarAction(
+  formData: FormData,
+): Promise<{ ok: boolean; errorCode?: string }> {
+  const visitId = readUuid(formData.get('visitId'));
+  const localDate = readString(formData, 'localDate');
+  const localStartTime = readString(formData, 'localStartTime');
+  const localEndTime = readString(formData, 'localEndTime');
+  if (
+    !visitId ||
+    !datePattern.test(localDate) ||
+    !timePattern.test(localStartTime) ||
+    !timePattern.test(localEndTime) ||
+    localEndTime <= localStartTime
+  ) {
+    return { ok: false, errorCode: 'INVALID_REQUEST' };
+  }
+
+  const api = await getApiClient();
+  const { error } = await api.PATCH('/api/v1/visits/{id}', {
+    params: { path: { id: visitId }, header: await getTenantHeader() },
+    body: { localDate, localStartTime, localEndTime },
+  });
+  if (error) return { ok: false, errorCode: error.code };
+  revalidatePath('/planning');
+  revalidatePath(`/visits/${visitId}`);
+  return { ok: true };
+}
+
 export async function assignVisitAction(formData: FormData): Promise<void> {
   const visitId = readUuid(formData.get('visitId'));
   const employeeId = readUuid(formData.get('employeeId'));

@@ -7,11 +7,19 @@ import { FilterDisclosure } from '@app/web/components/filter-disclosure';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import {
+  ScheduleCalendarGrid,
+  ScheduleCalendarNavigation,
+  type ScheduleCalendarBackgroundEventInput,
+  type ScheduleCalendarEventInput,
+  type ScheduleCalendarView,
+} from '@app/web/components/schedule-calendar';
 import { TourStopOrderForm } from '@app/web/components/tour-stop-order-form';
 import type { Locale } from '@app/web/i18n/config';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatCurrency, formatLongDate, formatTime } from '@app/web/i18n/format';
 import { visitStatusKey } from '@app/web/i18n/status';
+import { dateRange } from '@app/web/lib/care-date';
 import {
   getApiClient,
   getPermissionGrants,
@@ -21,6 +29,7 @@ import {
 } from '@app/web/lib/api';
 import { redirectToValidPage } from '@app/web/lib/pagination';
 import type { components } from '@care/api-client';
+import { availabilityIntervalsBetween } from '@care/scheduling';
 import { Button } from '@care/ui/components/button';
 import { Input } from '@care/ui/components/input';
 import { Label } from '@care/ui/components/label';
@@ -34,6 +43,7 @@ import {
   estimateTourRouteAction,
   publishTourAction,
   suggestTourOrderAction,
+  updateVisitFromCalendarAction,
 } from './actions';
 
 type SearchParams = Promise<{
@@ -60,10 +70,16 @@ type SearchParams = Promise<{
   tourId?: string;
   suggestedTourId?: string;
   suggestedOrder?: string;
+  createStart?: string;
+  createEnd?: string;
+  createVisit?: string;
+  sortBy?: string;
+  sortOrder?: string;
 }>;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const statusValues = ['planned', 'confirmed', 'cancelled'] as const;
+const scheduleViewValues = ['month', 'week', 'day', 'agenda'] as const;
 
 type AdmissionPlanningContext = {
   id: string;
@@ -93,16 +109,21 @@ export default async function PlanningPage({
 }: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
-  const view = query.view === 'day' || query.view === 'list' ? query.view : 'week';
+  const view: ScheduleCalendarView =
+    scheduleViewValues.find((value) => value === query.view) ??
+    (query.view === 'list' ? 'agenda' : 'week');
   const selectedDate = validDate(query.date) ?? todayInBerlin();
-  const page = view === 'list' ? positivePage(query.page) : 1;
+  const page = view === 'agenda' ? positivePage(query.page) : 1;
   const requestedPageSize = Number(query.pageSize ?? '20');
   const pageSize =
-    view === 'list'
+    view === 'agenda'
       ? [10, 20, 50, 100].includes(requestedPageSize)
         ? requestedPageSize
         : 20
       : 100;
+  const sortBy =
+    query.sortBy === 'clientName' || query.sortBy === 'createdAt' ? query.sortBy : 'plannedStart';
+  const sortOrder = query.sortOrder === 'desc' ? 'desc' : 'asc';
   const requestedClientId = validUuid(query.clientId);
   const employeeId = validUuid(query.employeeId);
   const requestedOrganizationId = validUuid(query.organizationId);
@@ -119,12 +140,16 @@ export default async function PlanningPage({
   const status = statusValues.find((value) => value === query.status);
   const assigned =
     query.assigned === 'assigned' || query.assigned === 'unassigned' ? query.assigned : 'all';
-  const period = view === 'day' ? dayPeriod(selectedDate) : weekPeriod(selectedDate);
-  const requestRange = apiRange(period.start, period.endExclusive);
+  const period =
+    view === 'day'
+      ? dayPeriod(selectedDate)
+      : view === 'month'
+        ? monthVisiblePeriod(selectedDate)
+        : weekPeriod(selectedDate);
   const plannerHref = viewHref({
     date: selectedDate,
     view,
-    ...(view === 'list' ? { page, pageSize } : {}),
+    ...(view === 'agenda' ? { page, pageSize, sortBy, sortOrder } : {}),
     clientId: requestedClientId,
     admissionCaseId,
     employeeId,
@@ -144,6 +169,7 @@ export default async function PlanningPage({
   const tenantId = header['X-Tenant-Id'];
   const permissions = await getPermissionGrants(api);
   const canCreate = hasPermission(permissions, 'schedule.create');
+  const canReadSchedule = hasPermission(permissions, 'schedule.read');
   const canAssign = hasPermission(permissions, 'schedule.assign');
   const canEstimate = hasPermission(permissions, 'benefits.read');
   const canReadClient = hasPermission(permissions, 'client.read');
@@ -182,50 +208,218 @@ export default async function PlanningPage({
   const facilityId = admissionContextUsable
     ? (admission!.facilityId ?? undefined)
     : requestedFacilityId;
-  const [
-    visitResult,
-    clientResult,
-    employeeResult,
-    organizationResult,
-    facilityResult,
-    teamResult,
-    serviceResult,
-  ] = await Promise.all([
-    get('/api/v1/visits', {
-      params: {
-        query: {
-          from: requestRange.from,
-          until: requestRange.until,
-          page,
-          pageSize,
-          sortBy: 'plannedStart',
-          sortOrder: 'asc',
-          ...(clientId ? { clientId } : {}),
-          ...(employeeId ? { employeeId } : {}),
-          ...(organizationId ? { organizationId } : {}),
-          ...(facilityId ? { facilityId } : {}),
-          ...(teamId ? { teamId } : {}),
-          ...(serviceDefinitionId ? { serviceDefinitionId } : {}),
-          ...(status ? { status } : {}),
-          ...(search ? { search } : {}),
-          ...(assigned === 'all'
-            ? {}
-            : { unassigned: assigned === 'unassigned' ? 'true' : 'false' }),
-        },
-        header,
-      },
-    }),
-    clientId && hasPermission(permissions, 'client.read')
-      ? get('/api/v1/clients/{id}', { params: { path: { id: clientId }, header } })
-      : Promise.resolve(null),
-    employeeId && hasPermission(permissions, 'employee.read')
-      ? get('/api/v1/employees/{id}', { params: { path: { id: employeeId }, header } })
-      : Promise.resolve(null),
+  const [organizationResult, facilityResult] = await Promise.all([
     organizationId
       ? get('/api/v1/organizations/{id}', { params: { path: { id: organizationId }, header } })
       : Promise.resolve(null),
     facilityId
       ? get('/api/v1/facilities/{id}', { params: { path: { id: facilityId }, header } })
+      : Promise.resolve(null),
+  ]);
+  const selectedOrganization = organizationResult?.data as
+    | components['schemas']['OrganizationResponseDto']
+    | undefined;
+  const selectedFacility = facilityResult?.data as
+    | components['schemas']['FacilityResponseDto']
+    | undefined;
+  const calendarTimezone =
+    selectedFacility?.timezone ?? selectedOrganization?.timezone ?? 'Europe/Berlin';
+  const requestRange = apiRange(period.start, period.endExclusive, calendarTimezone);
+  const visitFilters = {
+    ...(clientId ? { clientId } : {}),
+    ...(employeeId ? { employeeId } : {}),
+    ...(organizationId ? { organizationId } : {}),
+    ...(facilityId ? { facilityId } : {}),
+    ...(teamId ? { teamId } : {}),
+    ...(serviceDefinitionId ? { serviceDefinitionId } : {}),
+    ...(status ? { status } : {}),
+    ...(search ? { search } : {}),
+    ...(assigned === 'all'
+      ? {}
+      : { unassigned: assigned === 'unassigned' ? ('true' as const) : ('false' as const) }),
+  };
+  const fetchVisitPage = (from: string, until: string, requestedPage: number, limit: number) =>
+    get('/api/v1/visits', {
+      params: {
+        query: {
+          from,
+          until,
+          page: requestedPage,
+          pageSize: limit,
+          sortBy: view === 'agenda' ? sortBy : 'plannedStart',
+          sortOrder: view === 'agenda' ? sortOrder : 'asc',
+          ...visitFilters,
+        },
+        header,
+      },
+    });
+  const visitLoad = (async () => {
+    if (view === 'agenda') {
+      const result = await fetchVisitPage(requestRange.from, requestRange.until, page, pageSize);
+      return {
+        data: result.data as components['schemas']['VisitListResponseDto'] | undefined,
+        error: result.error,
+      };
+    }
+
+    const allVisits = new Map<string, components['schemas']['VisitResponseDto']>();
+    const chunkStarts = datesBetween(period.start, period.endExclusive);
+    for (let index = 0; index < chunkStarts.length; index += 7) {
+      const chunkStart = chunkStarts[index]!;
+      const chunkEnd = chunkStarts[Math.min(index + 7, chunkStarts.length)] ?? period.endExclusive;
+      const chunkRange = apiRange(chunkStart, chunkEnd, calendarTimezone);
+      // oxlint-disable-next-line no-await-in-loop -- The first page supplies the total for this bounded chunk.
+      const first = await fetchVisitPage(chunkRange.from, chunkRange.until, 1, 100);
+      if (first.error || !first.data) return { data: undefined, error: first.error };
+      first.data.items.forEach((visit) => allVisits.set(visit.id, visit));
+
+      const pageCount = Math.ceil(first.data.total / first.data.pageSize);
+      for (let batchStart = 2; batchStart <= pageCount; batchStart += 5) {
+        // oxlint-disable-next-line no-await-in-loop -- Subsequent bounded batches depend on the first page's total.
+        const pageResults = await Promise.all(
+          Array.from({ length: Math.min(5, pageCount - batchStart + 1) }, (_, offset) =>
+            fetchVisitPage(chunkRange.from, chunkRange.until, batchStart + offset, 100),
+          ),
+        );
+        const failed = pageResults.find((result) => result.error || !result.data);
+        if (failed) return { data: undefined, error: failed.error };
+        pageResults.forEach((result) =>
+          result.data?.items.forEach((visit) => allVisits.set(visit.id, visit)),
+        );
+      }
+    }
+    const items = [...allVisits.values()].sort(
+      (left, right) =>
+        left.plannedStart.localeCompare(right.plannedStart) || left.id.localeCompare(right.id),
+    );
+    return {
+      data: { items, total: items.length, page: 1, pageSize: 100 },
+      error: undefined,
+    };
+  })();
+  const fetchWorklistPage = (from: string, until: string, requestedPage: number, limit: number) =>
+    get('/api/v1/scheduling/worklist', {
+      params: {
+        query: {
+          from,
+          until,
+          page: requestedPage,
+          pageSize: limit,
+          sortBy: 'plannedStart',
+          sortOrder: 'asc',
+          ...(employeeId ? { employeeId } : {}),
+          ...(organizationId ? { organizationId } : {}),
+          ...(facilityId ? { facilityId } : {}),
+          ...(teamId ? { teamId } : {}),
+          ...(status ? { status } : {}),
+          ...(search ? { search } : {}),
+          ...(assigned === 'all'
+            ? {}
+            : { unassigned: assigned === 'unassigned' ? ('true' as const) : ('false' as const) }),
+        },
+        header,
+      },
+    });
+  const worklistLoad = canReadSchedule
+    ? (async () => {
+        if (view === 'agenda') {
+          return fetchWorklistPage(requestRange.from, requestRange.until, page, pageSize);
+        }
+        const items = new Map<string, components['schemas']['SchedulingWorklistItemDto']>();
+        const chunkStarts = datesBetween(period.start, period.endExclusive);
+        for (let index = 0; index < chunkStarts.length; index += 7) {
+          const chunkRange = apiRange(
+            chunkStarts[index]!,
+            chunkStarts[Math.min(index + 7, chunkStarts.length)] ?? period.endExclusive,
+            calendarTimezone,
+          );
+          // oxlint-disable-next-line no-await-in-loop -- The first page supplies the total for this bounded chunk.
+          const first = await fetchWorklistPage(chunkRange.from, chunkRange.until, 1, 100);
+          if (first.error || !first.data) return first;
+          first.data.items.forEach((item) => items.set(item.visit.id, item));
+          const pageCount = Math.ceil(first.data.total / first.data.pageSize);
+          for (let batchStart = 2; batchStart <= pageCount; batchStart += 5) {
+            // oxlint-disable-next-line no-await-in-loop -- Subsequent bounded batches depend on the first page's total.
+            const pageResults = await Promise.all(
+              Array.from({ length: Math.min(5, pageCount - batchStart + 1) }, (_, offset) =>
+                fetchWorklistPage(chunkRange.from, chunkRange.until, batchStart + offset, 100),
+              ),
+            );
+            const failed = pageResults.find((result) => result.error || !result.data);
+            if (failed) return failed;
+            pageResults.forEach((result) =>
+              result.data?.items.forEach((item) => items.set(item.visit.id, item)),
+            );
+          }
+        }
+        const sortedItems = [...items.values()].sort(
+          (left, right) =>
+            left.visit.plannedStart.localeCompare(right.visit.plannedStart) ||
+            left.visit.id.localeCompare(right.visit.id),
+        );
+        return {
+          data: {
+            items: sortedItems,
+            total: sortedItems.length,
+            page: 1,
+            pageSize: 100,
+          },
+          error: undefined,
+        };
+      })()
+    : Promise.resolve(null);
+  const availabilityContextLoad =
+    employeeId && view !== 'agenda' && canReadSchedule
+      ? (async () => {
+          const availabilityResult = await get('/api/v1/employees/{employeeId}/availability', {
+            params: { path: { employeeId }, header },
+          });
+          if (availabilityResult.error || !availabilityResult.data) {
+            return { availability: null, absences: [], failed: true };
+          }
+          const chunkStarts = datesBetween(period.start, period.endExclusive);
+          const absenceResults = await Promise.all(
+            Array.from({ length: Math.ceil(chunkStarts.length / 7) }, (_, index) => {
+              const offset = index * 7;
+              const range = apiRange(
+                chunkStarts[offset]!,
+                chunkStarts[Math.min(offset + 7, chunkStarts.length)] ?? period.endExclusive,
+                calendarTimezone,
+              );
+              return get('/api/v1/employees/{employeeId}/unavailability', {
+                params: { path: { employeeId }, query: range, header },
+              });
+            }),
+          );
+          if (absenceResults.some((result) => result.error || !result.data)) {
+            return { availability: null, absences: [], failed: true };
+          }
+          const absences = new Map<string, components['schemas']['EmployeeAbsenceResponseDto']>();
+          for (const result of absenceResults) {
+            result.data?.absences.forEach((absence) => absences.set(absence.id, absence));
+          }
+          return {
+            availability: availabilityResult.data.availability,
+            absences: [...absences.values()].filter((absence) => absence.status === 'active'),
+            failed: false,
+          };
+        })()
+      : Promise.resolve(null);
+  const [
+    availabilityContext,
+    visitResult,
+    clientResult,
+    employeeResult,
+    teamResult,
+    serviceResult,
+  ] = await Promise.all([
+    availabilityContextLoad,
+    visitLoad,
+    clientId && hasPermission(permissions, 'client.read')
+      ? get('/api/v1/clients/{id}', { params: { path: { id: clientId }, header } })
+      : Promise.resolve(null),
+    employeeId && hasPermission(permissions, 'employee.read')
+      ? get('/api/v1/employees/{id}', { params: { path: { id: employeeId }, header } })
       : Promise.resolve(null),
     teamId
       ? get('/api/v1/teams/{id}', { params: { path: { id: teamId }, header } })
@@ -247,11 +441,9 @@ export default async function PlanningPage({
       : Promise.resolve(null),
   ]);
 
-  const visitData = visitResult.data as unknown as
-    | components['schemas']['VisitListResponseDto']
-    | undefined;
+  const visitData = visitResult.data;
   const visitError = visitResult.error as { code?: string } | undefined;
-  if (view === 'list' && visitData) {
+  if (view === 'agenda' && visitData) {
     redirectToValidPage('/planning', query, page, pageSize, visitData.total);
   }
   const [selectedServiceResult, estimateClientResult, estimateServiceResult] = await Promise.all([
@@ -274,12 +466,6 @@ export default async function PlanningPage({
     | undefined;
   const selectedEmployee = employeeResult?.data as
     | components['schemas']['EmployeeResponseDto']
-    | undefined;
-  const selectedOrganization = organizationResult?.data as
-    | components['schemas']['OrganizationResponseDto']
-    | undefined;
-  const selectedFacility = facilityResult?.data as
-    | components['schemas']['FacilityResponseDto']
     | undefined;
   const selectedTeam = teamResult?.data as components['schemas']['TeamResponseDto'] | undefined;
   const selectedService = selectedServiceResult?.data as
@@ -310,43 +496,134 @@ export default async function PlanningPage({
           },
         })
       : Promise.resolve(null),
-    hasPermission(permissions, 'schedule.read')
-      ? get('/api/v1/scheduling/worklist', {
-          params: {
-            query: {
-              from: requestRange.from,
-              until: requestRange.until,
-              page: view === 'list' ? page : 1,
-              pageSize: view === 'list' ? pageSize : 100,
-              sortBy: 'plannedStart',
-              sortOrder: 'asc',
-              ...(employeeId ? { employeeId } : {}),
-              ...(organizationId ? { organizationId } : {}),
-              ...(facilityId ? { facilityId } : {}),
-              ...(teamId ? { teamId } : {}),
-              ...(status ? { status } : {}),
-              ...(search ? { search } : {}),
-              ...(assigned === 'all'
-                ? {}
-                : { unassigned: assigned === 'unassigned' ? 'true' : 'false' }),
-            },
-            header,
-          },
-        })
-      : Promise.resolve(null),
+    worklistLoad,
   ]);
   const worklistData = worklistResult?.data as unknown as
     | components['schemas']['SchedulingWorklistResponseDto']
     | undefined;
+  const worklistFailed = Boolean(canReadSchedule && (worklistResult?.error || !worklistData));
+  const conflictMessages: Record<string, string> = {
+    missing_assignment: t('Planning.conflicts.missing_assignment'),
+    employee_overlap: t('Planning.conflicts.employee_overlap'),
+    employee_absence: t('Planning.conflicts.employee_absence'),
+    outside_employee_availability: t('Planning.conflicts.outside_employee_availability'),
+    employee_availability_unknown: t('Planning.conflicts.employee_availability_unknown'),
+    insufficient_travel_time: t('Planning.conflicts.insufficient_travel_time'),
+    travel_feasibility_unknown: t('Planning.conflicts.travel_feasibility_unknown'),
+    client_overlap: t('Planning.conflicts.client_overlap'),
+    employee_preference: t('Planning.conflicts.employee_preference'),
+    client_preference: t('Planning.conflicts.client_preference'),
+    substitution_awaiting_confirmation: t('Planning.conflicts.substitution_awaiting_confirmation'),
+    unpublished_schedule_changes: t('Planning.conflicts.unpublished_schedule_changes'),
+  };
   const conflictsByVisit = new Map(
     (worklistData?.items ?? []).map((item) => [item.visit.id, item.conflicts]),
   );
-  const visitsByDate = new Map<string, typeof visits>();
-  for (const visit of visits) {
-    const localDate = dateAtZone(visit.plannedStart, visit.timezone);
-    visitsByDate.set(localDate, [...(visitsByDate.get(localDate) ?? []), visit]);
+  const selectedEmployeeName = selectedEmployee
+    ? `${selectedEmployee.preferredName || selectedEmployee.firstName} ${selectedEmployee.lastName}`
+    : (visits
+        .flatMap((visit) => visit.assignments)
+        .find((assignment) => assignment.employeeId === employeeId)?.employeeDisplayName ??
+      t('Planning.selectedEmployee'));
+  const availabilityReasonLabels = {
+    vacation: t('Employees.detail.absenceReasons.vacation'),
+    sick_leave: t('Employees.detail.absenceReasons.sick_leave'),
+    training: t('Employees.detail.absenceReasons.training'),
+    personal_unavailability: t('Employees.detail.absenceReasons.personal_unavailability'),
+    other: t('Employees.detail.absenceReasons.other'),
+  };
+  const availabilityBackgroundEvents: ScheduleCalendarBackgroundEventInput[] =
+    employeeId && availabilityContext && !availabilityContext.failed
+      ? [
+          ...availabilityIntervalsBetween(
+            new Date(requestRange.from),
+            new Date(requestRange.until),
+            availabilityContext.availability,
+          ).map((interval, index) => ({
+            id: `availability-${employeeId}-${index}`,
+            start: interval.start.toISOString(),
+            end: interval.end.toISOString(),
+            resourceId: employeeId,
+            resourceName: selectedEmployeeName,
+            label:
+              interval.kind === 'working'
+                ? t('Planning.calendarWorkingHours')
+                : t('Planning.calendarUnavailable'),
+            kind: interval.kind,
+          })),
+          ...availabilityContext.absences.map((absence) => ({
+            id: `absence-${absence.id}`,
+            start: absence.startsAt,
+            end: absence.endsAt,
+            resourceId: employeeId,
+            resourceName: selectedEmployeeName,
+            label: t('Planning.calendarAbsence', {
+              reason: availabilityReasonLabels[absence.reason],
+            }),
+            kind: 'absence' as const,
+          })),
+        ]
+      : [];
+  const canReadExecution = hasPermission(permissions, 'visit_execution.read');
+  const canReschedule = hasPermission(permissions, 'schedule.update') && canReadExecution;
+  const executionSummaryRows: components['schemas']['VisitExecutionSummaryResponseDto'][] = [];
+  let executionSummaryFailed = false;
+  if (canReschedule && view !== 'agenda') {
+    const visitIdBatches = Array.from({ length: Math.ceil(visits.length / 100) }, (_, index) =>
+      visits.slice(index * 100, (index + 1) * 100).map((visit) => visit.id),
+    );
+    for (let index = 0; index < visitIdBatches.length; index += 5) {
+      // oxlint-disable-next-line no-await-in-loop -- Fetching summaries in groups of five bounds request fan-out.
+      const summaryResults = await Promise.all(
+        visitIdBatches.slice(index, index + 5).map((visitIds) =>
+          get('/api/v1/visit-executions/summaries', {
+            params: { query: { visitIds: visitIds.join(',') }, header },
+          }),
+        ),
+      );
+      if (summaryResults.some((result) => result.error || !result.data)) {
+        executionSummaryFailed = true;
+        break;
+      }
+      summaryResults.forEach((result) => executionSummaryRows.push(...(result.data ?? [])));
+    }
   }
-  const days = datesBetween(period.start, period.endExclusive);
+  const executionByVisit = new Map(
+    executionSummaryRows.map((summary) => [summary.visitId, summary.executionStatus]),
+  );
+  const calendarEvents: ScheduleCalendarEventInput[] = visits.map((visit) => {
+    const visitConflicts = conflictsByVisit.get(visit.id) ?? [];
+    const conflictLabels = visitConflicts.map(
+      (conflict) => conflictMessages[conflict.code] ?? conflict.code,
+    );
+    const timeLabel = `${formatTime(visit.plannedStart, locale, visit.timezone)}–${formatTime(visit.plannedEnd, locale, visit.timezone)}`;
+    return {
+      id: visit.id,
+      clientName: visit.clientDisplayName,
+      serviceNames: visit.services.map((service) => service.serviceName),
+      employeeNames: visit.assignments.map((assignment) => assignment.employeeDisplayName),
+      resourceIds: visit.assignments.map((assignment) => assignment.employeeId),
+      start: visit.plannedStart,
+      end: visit.plannedEnd,
+      timezone: visit.timezone,
+      status: visit.status,
+      statusLabel: t(visitStatusKey(visit.status)),
+      detail: [
+        visit.clientDisplayName,
+        timeLabel,
+        visit.services.map((service) => service.serviceName).join(', '),
+        visit.assignments.map((assignment) => assignment.employeeDisplayName).join(', '),
+        t(visitStatusKey(visit.status)),
+        ...conflictLabels,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      href: visitHref(visit.id),
+      conflictLabels,
+      protectedFromReschedule:
+        executionSummaryFailed || executionByVisit.get(visit.id) !== 'not_started',
+    };
+  });
   const requestedServiceNames = admission
     ? admission.assessment?.requestedServices.length
       ? admission.assessment.requestedServices
@@ -396,8 +673,9 @@ export default async function PlanningPage({
         .join('\n')
         .slice(0, 2000)
     : '';
-  const selectedDayVisits = visitsByDate.get(selectedDate) ?? [];
-  const unassignedDayVisits = selectedDayVisits.filter((visit) => visit.assignments.length === 0);
+  const selectedDayVisits = visits.filter(
+    (visit) => dateAtZone(visit.plannedStart, visit.timezone) === selectedDate,
+  );
   const employeeVisitGroups = new Map<string, typeof selectedDayVisits>();
   for (const visit of selectedDayVisits) {
     for (const assignment of visit.assignments) {
@@ -448,20 +726,6 @@ export default async function PlanningPage({
     .split(',')
     .map((value) => validUuid(value))
     .filter((value): value is string => value !== null);
-  const conflictMessages: Record<string, string> = {
-    missing_assignment: t('Planning.conflicts.missing_assignment'),
-    employee_overlap: t('Planning.conflicts.employee_overlap'),
-    employee_absence: t('Planning.conflicts.employee_absence'),
-    outside_employee_availability: t('Planning.conflicts.outside_employee_availability'),
-    employee_availability_unknown: t('Planning.conflicts.employee_availability_unknown'),
-    insufficient_travel_time: t('Planning.conflicts.insufficient_travel_time'),
-    travel_feasibility_unknown: t('Planning.conflicts.travel_feasibility_unknown'),
-    client_overlap: t('Planning.conflicts.client_overlap'),
-    employee_preference: t('Planning.conflicts.employee_preference'),
-    client_preference: t('Planning.conflicts.client_preference'),
-    substitution_awaiting_confirmation: t('Planning.conflicts.substitution_awaiting_confirmation'),
-    unpublished_schedule_changes: t('Planning.conflicts.unpublished_schedule_changes'),
-  };
   const openCount = visits.filter((visit) => visit.assignments.length === 0).length;
   const error = query.error ?? visitError?.code;
   const estimateError = (estimateResult?.error as { code?: string } | undefined)?.code;
@@ -475,33 +739,6 @@ export default async function PlanningPage({
         eyebrow={t('Navigation.office')}
         title={t('Planning.title')}
         description={t('Planning.description')}
-        actions={
-          <>
-            <Button asChild variant={view === 'week' ? 'default' : 'secondary'} size="sm">
-              <Link href={viewHref({ ...query, date: selectedDate, view: 'week', page: '1' })}>
-                {t('Planning.week')}
-              </Link>
-            </Button>
-            <Button asChild variant={view === 'day' ? 'default' : 'secondary'} size="sm">
-              <Link href={viewHref({ ...query, date: selectedDate, view: 'day', page: '1' })}>
-                {t('Planning.day')}
-              </Link>
-            </Button>
-            <Button asChild variant={view === 'list' ? 'default' : 'secondary'} size="sm">
-              <Link
-                href={viewHref({
-                  ...query,
-                  date: selectedDate,
-                  view: 'list',
-                  page: '1',
-                  pageSize: '20',
-                })}
-              >
-                {t('Planning.list')}
-              </Link>
-            </Button>
-          </>
-        }
       />
 
       {error ? (
@@ -529,75 +766,24 @@ export default async function PlanningPage({
         </p>
       ) : null}
 
-      <section
-        aria-label={t('Planning.calendarNavigation')}
-        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3"
-      >
-        <Button asChild variant="secondary">
-          <Link
-            href={viewHref({
-              ...query,
-              date: addDays(period.start, view === 'day' ? -1 : -7),
-              page: '1',
-            })}
-          >
-            {t('Planning.previous')}
-          </Link>
-        </Button>
-        <h2 className="text-lg font-semibold">
-          {view === 'day'
-            ? formatDay(period.start, locale)
-            : `${formatDay(period.start, locale)} – ${formatDay(addDays(period.endExclusive, -1), locale)}`}
-        </h2>
-        <Button asChild variant="secondary">
-          <Link href={viewHref({ ...query, date: todayInBerlin(), page: '1' })}>
-            {t('Planning.today')}
-          </Link>
-        </Button>
-        <form method="get" className="flex flex-wrap items-end gap-2">
-          <input type="hidden" name="view" value={view} />
-          <input type="hidden" name="page" value="1" />
-          {view === 'list' ? <input type="hidden" name="pageSize" value={pageSize} /> : null}
-          {[
-            ['clientId', clientId],
-            ['admissionCaseId', admissionCaseId],
-            ['employeeId', employeeId],
-            ['organizationId', organizationId],
-            ['facilityId', facilityId],
-            ['teamId', teamId],
-            ['status', status],
-            ['assigned', assigned === 'all' ? undefined : assigned],
-            ['serviceDefinitionId', serviceDefinitionId],
-            ['search', search],
-          ].map(([name, value]) =>
-            value ? <input key={name} type="hidden" name={name} value={value} /> : null,
-          )}
-          <div className="grid gap-1">
-            <Label htmlFor="planner-date-jump">{t('Planning.date')}</Label>
-            <Input
-              id="planner-date-jump"
-              name="date"
-              type="date"
-              defaultValue={selectedDate}
-              required
-            />
-          </div>
-          <Button type="submit" variant="secondary">
-            {t('Planning.goToDate')}
-          </Button>
-        </form>
-        <Button asChild variant="secondary">
-          <Link
-            href={viewHref({
-              ...query,
-              date: addDays(period.start, view === 'day' ? 1 : 7),
-              page: '1',
-            })}
-          >
-            {t('Planning.next')}
-          </Link>
-        </Button>
-      </section>
+      <ScheduleCalendarNavigation
+        date={selectedDate}
+        view={view}
+        locale={locale === 'de' ? 'de' : 'en'}
+        timezone={calendarTimezone}
+        labels={{
+          month: t('Planning.month'),
+          week: t('Planning.week'),
+          day: t('Planning.day'),
+          agenda: t('Planning.agenda'),
+          previous: t('Planning.previous'),
+          next: t('Planning.next'),
+          today: t('Planning.today'),
+          date: t('Planning.date'),
+          goToDate: t('Planning.goToDate'),
+          calendarNavigation: t('Planning.calendarNavigation'),
+        }}
+      />
 
       <FilterDisclosure title={t('Planning.filters')}>
         <form
@@ -606,13 +792,30 @@ export default async function PlanningPage({
         >
           <input type="hidden" name="view" value={view} />
           <input type="hidden" name="page" value="1" />
-          <input type="hidden" name="pageSize" value={pageSize} />
+          {view === 'agenda' ? <input type="hidden" name="pageSize" value={pageSize} /> : null}
           <Field
             label={t('Planning.search')}
             name="search"
             type="search"
             defaultValue={search ?? ''}
           />
+          {view === 'agenda' ? (
+            <>
+              <SelectField label={t('Planning.sortBy')} name="sortBy" defaultValue={sortBy}>
+                <option value="plannedStart">{t('Planning.sortByDate')}</option>
+                <option value="clientName">{t('Planning.sortByClient')}</option>
+                <option value="createdAt">{t('Planning.sortByCreated')}</option>
+              </SelectField>
+              <SelectField
+                label={t('Planning.sortOrder')}
+                name="sortOrder"
+                defaultValue={sortOrder}
+              >
+                <option value="asc">{t('Planning.sortAscending')}</option>
+                <option value="desc">{t('Planning.sortDescending')}</option>
+              </SelectField>
+            </>
+          ) : null}
           <AsyncEntityCombobox
             label={t('Planning.organization')}
             name="organizationId"
@@ -853,11 +1056,13 @@ export default async function PlanningPage({
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="calendar-title" className="text-xl font-semibold">
             {t(
-              view === 'list'
+              view === 'agenda'
                 ? 'Planning.listOverview'
-                : view === 'week'
-                  ? 'Planning.weekOverview'
-                  : 'Planning.dayOverview',
+                : view === 'month'
+                  ? 'Planning.monthOverview'
+                  : view === 'week'
+                    ? 'Planning.weekOverview'
+                    : 'Planning.dayOverview',
             )}
           </h2>
           <p className="text-sm text-muted-foreground">
@@ -865,6 +1070,14 @@ export default async function PlanningPage({
             {t('Planning.openCount', { count: openCount })}
           </p>
         </div>
+        {worklistFailed ? (
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            {t('Planning.worklistLoadFailed')}
+          </p>
+        ) : null}
         {visitResult.error ? (
           <p
             role="alert"
@@ -872,7 +1085,7 @@ export default async function PlanningPage({
           >
             {t(errorMessageKey(visitError?.code ?? 'UNKNOWN'))}
           </p>
-        ) : view === 'list' ? (
+        ) : view === 'agenda' ? (
           visits.length ? (
             <ol aria-label={t('Planning.listOverview')} className="grid gap-2">
               {visits.map((visit) => {
@@ -984,255 +1197,50 @@ export default async function PlanningPage({
               {t('Planning.noVisits')}
             </p>
           )
-        ) : (
+        ) : view === 'month' || view === 'week' || view === 'day' ? (
           <>
-            {visitData && visitData.total > visits.length ? (
-              <p className="rounded-md border border-warning/40 bg-warning-muted p-3 text-sm text-warning-foreground">
-                {t('Planning.calendarLimit', { limit: visits.length })}{' '}
-                <Link
-                  className="font-medium underline"
-                  href={viewHref({ ...query, view: 'list', page: '1', pageSize: '20' })}
-                >
-                  {t('Planning.list')}
-                </Link>
+            {availabilityContext?.failed ? (
+              <p
+                role="alert"
+                className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+              >
+                {t('Planning.calendarContextLoadFailed')}
               </p>
             ) : null}
-            {view === 'day' ? (
-              selectedDayVisits.length ? (
-                <div className="grid min-w-0 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-                  {[...employeeVisitGroups].map(([dayEmployeeId, employeeVisits]) => {
-                    const employeeName = employeeVisits[0]?.assignments.find(
-                      (assignment) => assignment.employeeId === dayEmployeeId,
-                    )?.employeeDisplayName;
-                    return (
-                      <section
-                        key={dayEmployeeId}
-                        aria-label={employeeName ?? t('Planning.employeeTour')}
-                        className="grid min-w-0 content-start gap-3 rounded-lg border bg-card p-3"
-                      >
-                        <header className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
-                          <ResourceReference
-                            className="font-semibold"
-                            label={employeeName ?? t('Planning.employeeTour')}
-                            href={
-                              hasPermission(permissions, 'employee.read')
-                                ? `/employees/${dayEmployeeId}`
-                                : null
-                            }
-                          />
-                          <span className="text-sm text-muted-foreground">
-                            {t('Planning.visitCount', { count: employeeVisits.length })}
-                          </span>
-                        </header>
-                        <ol className="grid min-w-0 gap-2">
-                          {employeeVisits.map((visit) => {
-                            const visitConflicts = conflictsByVisit.get(visit.id) ?? [];
-                            return (
-                              <li key={visit.id}>
-                                <Link
-                                  className="grid min-w-0 gap-1 rounded-md border p-3 hover:border-primary/40 hover:bg-accent"
-                                  href={visitHref(visit.id)}
-                                  id={`visit-${visit.id}`}
-                                >
-                                  <span className="flex flex-wrap items-baseline justify-between gap-2">
-                                    <span className="font-medium tabular-nums">
-                                      {formatTime(visit.plannedStart, locale, visit.timezone)}–
-                                      {formatTime(visit.plannedEnd, locale, visit.timezone)}
-                                    </span>
-                                    <span className="rounded-full border px-2 py-1 text-xs">
-                                      {t(visitStatusKey(visit.status))}
-                                    </span>
-                                  </span>
-                                  <strong className="truncate">{visit.clientDisplayName}</strong>
-                                  <span className="text-sm text-muted-foreground">
-                                    {visit.services
-                                      .map(
-                                        (service) =>
-                                          `${service.serviceCode} ${service.serviceName}`,
-                                      )
-                                      .join(' · ')}
-                                  </span>
-                                  <span className="text-sm text-muted-foreground">
-                                    {visit.facilityName}
-                                  </span>
-                                  {visitConflicts.length ? (
-                                    <span className="flex flex-wrap gap-1 pt-1">
-                                      {visitConflicts.map((conflict, index) => (
-                                        <span
-                                          key={`${conflict.code}-${conflict.relatedVisitId ?? index}`}
-                                          className={
-                                            'rounded-full px-2 py-1 text-xs ' +
-                                            (conflict.severity === 'blocking'
-                                              ? 'bg-destructive/15 text-destructive'
-                                              : 'bg-warning-muted text-warning-foreground')
-                                          }
-                                        >
-                                          {conflictMessages[conflict.code] ?? conflict.code}
-                                        </span>
-                                      ))}
-                                    </span>
-                                  ) : null}
-                                </Link>
-                              </li>
-                            );
-                          })}
-                        </ol>
-                      </section>
-                    );
-                  })}
-                  {unassignedDayVisits.length ? (
-                    <section
-                      aria-labelledby="unassigned-day-visits"
-                      className="grid min-w-0 content-start gap-3 rounded-lg border border-dashed bg-card p-3"
-                    >
-                      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
-                        <h3 id="unassigned-day-visits" className="font-semibold">
-                          {t('Planning.openVisits')}
-                        </h3>
-                        <span className="text-sm text-muted-foreground">
-                          {t('Planning.visitCount', { count: unassignedDayVisits.length })}
-                        </span>
-                      </header>
-                      <ol className="grid min-w-0 gap-2">
-                        {unassignedDayVisits.map((visit) => (
-                          <li key={visit.id}>
-                            <Link
-                              className="grid min-w-0 gap-1 rounded-md border p-3 hover:border-primary/40 hover:bg-accent"
-                              href={visitHref(visit.id)}
-                              id={`visit-${visit.id}`}
-                            >
-                              <span className="flex flex-wrap items-baseline justify-between gap-2">
-                                <span className="font-medium tabular-nums">
-                                  {formatTime(visit.plannedStart, locale, visit.timezone)}–
-                                  {formatTime(visit.plannedEnd, locale, visit.timezone)}
-                                </span>
-                                <span className="rounded-full border px-2 py-1 text-xs">
-                                  {t(visitStatusKey(visit.status))}
-                                </span>
-                              </span>
-                              <strong className="truncate">{visit.clientDisplayName}</strong>
-                              <span className="text-sm text-muted-foreground">
-                                {visit.services
-                                  .map((service) => `${service.serviceCode} ${service.serviceName}`)
-                                  .join(' · ')}
-                              </span>
-                              {conflictsByVisit.get(visit.id)?.length ? (
-                                <span className="flex flex-wrap gap-1 pt-1">
-                                  {(conflictsByVisit.get(visit.id) ?? []).map((conflict, index) => (
-                                    <span
-                                      key={`${conflict.code}-${conflict.relatedVisitId ?? index}`}
-                                      className={
-                                        'rounded-full px-2 py-1 text-xs ' +
-                                        (conflict.severity === 'blocking'
-                                          ? 'bg-destructive/15 text-destructive'
-                                          : 'bg-warning-muted text-warning-foreground')
-                                      }
-                                    >
-                                      {conflictMessages[conflict.code] ?? conflict.code}
-                                    </span>
-                                  ))}
-                                </span>
-                              ) : null}
-                            </Link>
-                          </li>
-                        ))}
-                      </ol>
-                    </section>
-                  ) : null}
-                </div>
-              ) : (
-                <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
-                  {t('Planning.noVisits')}
-                </p>
-              )
-            ) : (
-              <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                {days.map((day) => {
-                  const dayVisits = visitsByDate.get(day) ?? [];
-                  const dayUnassigned = dayVisits.filter((visit) => visit.assignments.length === 0);
-                  return (
-                    <section
-                      key={day}
-                      aria-labelledby={`day-${day}`}
-                      className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-2 rounded-lg border bg-card p-4"
-                    >
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <h3 id={`day-${day}`} className="font-semibold">
-                          {formatDay(day, locale)}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          {t('Planning.visitCount', { count: dayVisits.length })} ·{' '}
-                          {t('Planning.openCount', { count: dayUnassigned.length })}
-                        </p>
-                      </div>
-                      {dayVisits.length ? (
-                        <ol className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
-                          {dayVisits.map((visit) => (
-                            <li key={visit.id}>
-                              <Link
-                                className="grid min-w-0 gap-1 rounded-md border p-3 hover:border-primary/40 hover:bg-accent"
-                                href={`/visits/${visit.id}`}
-                                id={`visit-${visit.id}`}
-                              >
-                                <span className="flex flex-wrap items-baseline justify-between gap-2">
-                                  <span className="font-medium">
-                                    {formatTime(visit.plannedStart, locale, visit.timezone)}–
-                                    {formatTime(visit.plannedEnd, locale, visit.timezone)}
-                                  </span>
-                                  <span className="rounded-full border px-2 py-1 text-xs">
-                                    {t(visitStatusKey(visit.status))}
-                                  </span>
-                                </span>
-                                <strong>{visit.clientDisplayName}</strong>
-                                <span className="text-sm text-muted-foreground">
-                                  {visit.services
-                                    .map(
-                                      (service) => `${service.serviceCode} ${service.serviceName}`,
-                                    )
-                                    .join(' · ')}
-                                </span>
-                                <span className="text-sm text-muted-foreground">
-                                  {visit.assignments.length
-                                    ? visit.assignments
-                                        .map((item) => item.employeeDisplayName)
-                                        .join(', ')
-                                    : t('Planning.open')}{' '}
-                                  · {visit.facilityName}
-                                </span>
-                                {(conflictsByVisit.get(visit.id)?.length ?? 0) > 0 ? (
-                                  <span className="flex flex-wrap gap-1 pt-1">
-                                    {(conflictsByVisit.get(visit.id) ?? []).map(
-                                      (conflict, index) => (
-                                        <span
-                                          key={`${conflict.code}-${conflict.relatedVisitId ?? index}`}
-                                          className={
-                                            'rounded-full px-2 py-1 text-xs ' +
-                                            (conflict.severity === 'blocking'
-                                              ? 'bg-destructive/15 text-destructive'
-                                              : 'bg-warning-muted text-warning-foreground')
-                                          }
-                                        >
-                                          {conflictMessages[conflict.code] ?? conflict.code}
-                                        </span>
-                                      ),
-                                    )}
-                                  </span>
-                                ) : null}
-                              </Link>
-                            </li>
-                          ))}
-                        </ol>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">{t('Planning.noVisits')}</p>
-                      )}
-                    </section>
-                  );
-                })}
-              </div>
-            )}
+            {availabilityContext &&
+            !availabilityContext.failed &&
+            !availabilityContext.availability ? (
+              <p className="rounded-md border bg-warning-muted p-3 text-sm text-warning-foreground">
+                {t('Planning.calendarAvailabilityUnknown')}
+              </p>
+            ) : null}
+            {!employeeId && canReadSchedule ? (
+              <p className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+                {t('Planning.selectEmployeeForAvailability')}
+              </p>
+            ) : null}
+            <ScheduleCalendarGrid
+              events={calendarEvents}
+              backgroundEvents={availabilityBackgroundEvents}
+              date={selectedDate}
+              view={view}
+              timezone={calendarTimezone}
+              locale={locale === 'de' ? 'de' : 'en'}
+              monthCountLabels={{
+                one: t('Planning.visitCount', { count: 1 }),
+                other: t('Planning.visitCount', { count: 2 }),
+              }}
+              emptyLabel={t('Planning.noVisits')}
+              {...(canCreate && canReadClient
+                ? { createVisitLabel: t('Planning.createVisit') }
+                : {})}
+              rescheduleErrorLabel={t('Planning.calendarRescheduleError')}
+              canReschedule={canReschedule && canReadSchedule && !worklistFailed}
+              rescheduleAction={updateVisitFromCalendarAction}
+            />
           </>
-        )}
-        {view === 'list' && visitData ? (
+        ) : null}
+        {view === 'agenda' && visitData ? (
           <DataPagination
             pathname="/planning"
             page={visitData.page}
@@ -1251,6 +1259,9 @@ export default async function PlanningPage({
               assigned,
               serviceDefinitionId,
               search,
+              sortBy,
+              sortOrder,
+              pageSize,
             }}
           />
         ) : null}
@@ -1465,6 +1476,7 @@ export default async function PlanningPage({
 
       {canCreate && (!admissionHandoffRequested || admissionContextUsable) ? (
         <section
+          id="create-visit"
           aria-labelledby="create-title"
           className="grid gap-3 rounded-lg border bg-card p-5"
         >
@@ -1521,9 +1533,10 @@ export default async function PlanningPage({
                 name="localStartTime"
                 type="time"
                 defaultValue={
-                  admissionContextUsable && admission?.assessment?.preferredTimeStart
+                  validTime(query.createStart ?? '', '') ||
+                  (admissionContextUsable && admission?.assessment?.preferredTimeStart
                     ? validTime(admission.assessment.preferredTimeStart, '08:00')
-                    : '08:00'
+                    : '08:00')
                 }
                 required
               />
@@ -1532,9 +1545,10 @@ export default async function PlanningPage({
                 name="localEndTime"
                 type="time"
                 defaultValue={
-                  admissionContextUsable && admission?.assessment?.preferredTimeEnd
+                  validTime(query.createEnd ?? '', '') ||
+                  (admissionContextUsable && admission?.assessment?.preferredTimeEnd
                     ? validTime(admission.assessment.preferredTimeEnd, '09:00')
-                    : '09:00'
+                    : '09:00')
                 }
                 required
               />
@@ -1732,6 +1746,19 @@ function weekPeriod(date: string): { start: string; endExclusive: string } {
   return { start, endExclusive: addDays(start, 7) };
 }
 
+function monthVisiblePeriod(date: string): { start: string; endExclusive: string } {
+  const monthStart = `${date.slice(0, 7)}-01`;
+  const monthStartValue = new Date(`${monthStart}T00:00:00Z`);
+  const lastDay = new Date(
+    Date.UTC(monthStartValue.getUTCFullYear(), monthStartValue.getUTCMonth() + 1, 0),
+  );
+  const lastDate = lastDay.toISOString().slice(0, 10);
+  return {
+    start: weekPeriod(monthStart).start,
+    endExclusive: weekPeriod(lastDate).endExclusive,
+  };
+}
+
 function datesBetween(from: string, until: string): string[] {
   const values: string[] = [];
   for (let date = from; date < until; date = addDays(date, 1)) values.push(date);
@@ -1744,12 +1771,13 @@ function addDays(value: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-function apiRange(start: string, endExclusive: string): { from: string; until: string } {
-  const padding = 15 * 60 * 60 * 1000;
-  return {
-    from: new Date(Date.parse(`${start}T00:00:00Z`) - padding).toISOString(),
-    until: new Date(Date.parse(`${endExclusive}T00:00:00Z`) + padding).toISOString(),
-  };
+function apiRange(
+  start: string,
+  endExclusive: string,
+  timezone: string,
+): { from: string; until: string } {
+  const range = dateRange(start, addDays(endExclusive, -1), timezone);
+  return { from: range.from, until: range.until };
 }
 
 function viewHref(query: object): string {

@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'react-big-calendar/lib/css/react-big-calendar.css';
 @source '../../../../packages/ui/src';
 
 :root {
@@ -82,6 +83,212 @@
   --sidebar-border: oklch(0.32 0.01 260);
   --sidebar-accent: oklch(0.285 0.035 158);
   --sidebar-accent-foreground: oklch(0.91 0.045 160);
+}
+
+.care-calendar {
+  overflow-x: auto;
+  color: var(--foreground);
+}
+
+.care-calendar .rbc-calendar {
+  min-width: 0;
+  color: var(--foreground);
+  font: inherit;
+}
+
+.care-calendar .rbc-header,
+.care-calendar .rbc-time-header-content,
+.care-calendar .rbc-time-content,
+.care-calendar .rbc-day-bg + .rbc-day-bg,
+.care-calendar .rbc-month-view,
+.care-calendar .rbc-time-view,
+.care-calendar .rbc-agenda-view table,
+.care-calendar .rbc-agenda-view table thead > tr > th,
+.care-calendar .rbc-agenda-view table tbody > tr > td {
+  border-color: var(--border);
+}
+
+.care-calendar .rbc-header {
+  padding: 0.55rem 0.25rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.care-calendar .rbc-off-range-bg,
+.care-calendar .rbc-time-gutter .rbc-timeslot-group {
+  background: var(--background);
+}
+
+.care-calendar .rbc-today {
+  background: color-mix(in oklab, var(--primary) 8%, var(--card));
+}
+
+.care-calendar .rbc-event,
+.care-calendar .rbc-day-slot .rbc-background-event {
+  min-width: 0;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid color-mix(in oklab, var(--primary) 58%, var(--border));
+  border-radius: 0.45rem;
+  background: color-mix(in oklab, var(--primary) 14%, var(--card));
+  color: var(--foreground);
+}
+
+.care-calendar .care-calendar-event-confirmed {
+  border-color: color-mix(in oklab, var(--success) 55%, var(--border));
+  background: color-mix(in oklab, var(--success) 14%, var(--card));
+}
+
+.care-calendar .care-calendar-event-cancelled {
+  border-color: var(--border);
+  background: var(--muted);
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+
+.care-calendar .care-calendar-background {
+  min-width: 0;
+  border-width: 1px;
+  border-style: dashed;
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.care-calendar .care-calendar-background-working {
+  border-color: color-mix(in oklab, var(--primary) 50%, var(--border));
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--primary) 10%, var(--card)),
+    color-mix(in oklab, var(--primary) 10%, var(--card)) 5px,
+    color-mix(in oklab, var(--primary) 5%, var(--card)) 5px,
+    color-mix(in oklab, var(--primary) 5%, var(--card)) 10px
+  );
+}
+
+.care-calendar .care-calendar-background-unavailable,
+.care-calendar .care-calendar-background-absence {
+  border-color: color-mix(in oklab, var(--destructive) 55%, var(--border));
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--destructive) 12%, var(--card)),
+    color-mix(in oklab, var(--destructive) 12%, var(--card)) 5px,
+    color-mix(in oklab, var(--destructive) 5%, var(--card)) 5px,
+    color-mix(in oklab, var(--destructive) 5%, var(--card)) 10px
+  );
+}
+
+.care-calendar-month-date {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  border-radius: 0.3rem;
+  padding: 0.15rem 0.25rem;
+  text-align: start;
+}
+
+.care-calendar-month-date:hover {
+  background: var(--accent);
+}
+
+.care-calendar-month-count {
+  display: inline-flex;
+  min-width: 1.4rem;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--muted);
+  padding-inline: 0.3rem;
+  color: var(--muted-foreground);
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.care-calendar-background-label {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.care-calendar .care-calendar-event-content {
+  display: grid;
+  min-width: 0;
+  gap: 0.1rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.care-calendar .care-calendar-event-content:focus-visible,
+.care-calendar .rbc-button-link:focus-visible,
+.care-calendar button:focus-visible,
+.care-calendar a:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.care-calendar-event-time,
+.care-calendar-event-client,
+.care-calendar-event-services,
+.care-calendar-event-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.care-calendar-event-time,
+.care-calendar-event-status {
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.care-calendar-event-conflict {
+  overflow: hidden;
+  color: var(--destructive);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
+.care-calendar-event-tour {
+  overflow: hidden;
+  color: var(--primary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
+.care-calendar-event-services {
+  font-size: 0.68rem;
+}
+
+.care-calendar .rbc-show-more {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.care-calendar .rbc-button-link,
+.care-calendar-month-date {
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+}
+
+@media (max-width: 639px) {
+  .care-calendar .rbc-header {
+    padding-inline: 0.1rem;
+    font-size: 0.625rem;
+  }
+
+  .care-calendar .rbc-event {
+    padding: 0.1rem 0.2rem;
+    font-size: 0.68rem;
+  }
+
+  .care-calendar-event-services,
+  .care-calendar-event-status {
+    display: none;
+  }
 }
 
 @theme inline {

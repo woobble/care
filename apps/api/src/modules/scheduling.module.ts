@@ -8,6 +8,7 @@ import {
   SchedulingOperationsController,
   SchedulingToursController,
   MyTodayTourController,
+  MyPublishedToursController,
   SubstitutionsController,
   EmployeeSchedulingPreferencesController,
   ClientSchedulingPreferencesController,
@@ -16,7 +17,13 @@ import {
   VisitsController,
 } from '@app/api/presentation/http/scheduling.controller';
 import {
+  CalendarSubscriptionFeedController,
+  CalendarSubscriptionRateLimiter,
+  MyCalendarSubscriptionController,
+} from '@app/api/presentation/http/calendar-subscriptions.controller';
+import {
   AUDIT_WRITER,
+  CALENDAR_SUBSCRIPTION_APPLICATION,
   CLIENT_APPLICATION,
   EMPLOYEE_APPLICATION,
   ORGANIZATION_APPLICATION,
@@ -35,6 +42,7 @@ import type { EmployeeApplicationService } from '@care/employees';
 import type { OrganizationApplicationService } from '@care/organizations';
 import type { OutboxWriter } from '@care/platform';
 import {
+  CalendarSubscriptionApplicationService,
   createSchedulingApplicationService,
   type SchedulingApplicationService,
 } from '@care/scheduling';
@@ -68,12 +76,15 @@ import { VisitExecutionModule } from './visit-execution.module';
   ],
   controllers: [
     VisitsController,
+    MyCalendarSubscriptionController,
+    CalendarSubscriptionFeedController,
     AgreementVisitGenerationController,
     EmployeeUnavailabilityController,
     EmployeeAvailabilityController,
     SchedulingOperationsController,
     SchedulingToursController,
     MyTodayTourController,
+    MyPublishedToursController,
     SubstitutionsController,
     EmployeeSchedulingPreferencesController,
     ClientSchedulingPreferencesController,
@@ -82,6 +93,17 @@ import { VisitExecutionModule } from './visit-execution.module';
   providers: [
     OidcGuard,
     TenantContextGuard,
+    CalendarSubscriptionRateLimiter,
+    {
+      provide: CALENDAR_SUBSCRIPTION_APPLICATION,
+      inject: [UNIT_OF_WORK, AUDIT_WRITER, OUTBOX_WRITER],
+      useFactory: (
+        unitOfWork: UnitOfWork,
+        audit: AuditWriter,
+        outbox: OutboxWriter,
+      ): CalendarSubscriptionApplicationService =>
+        new CalendarSubscriptionApplicationService(unitOfWork, audit, outbox),
+    },
     {
       provide: SCHEDULING_APPLICATION,
       inject: [

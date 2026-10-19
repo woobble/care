@@ -1052,6 +1052,43 @@ export class MyTodayTourResponseDto {
   stops!: CaregiverTourStopResponseDto[];
 }
 
+export class MyPublishedTourStopResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  visitId!: string;
+
+  @ApiProperty({ minimum: 1 })
+  sequence!: number;
+
+  @ApiPropertyOptional({ nullable: true })
+  estimatedTravelMinutes!: number | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  estimatedDistanceMeters!: number | null;
+}
+
+export class MyPublishedTourResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  tourId!: string;
+
+  @ApiProperty({ format: 'date' })
+  localDate!: string;
+
+  @ApiProperty()
+  timezone!: string;
+
+  @ApiProperty({ minimum: 1 })
+  version!: number;
+
+  @ApiProperty({ format: 'date-time' })
+  publishedAt!: string;
+
+  @ApiProperty({ type: [TourChangeSummaryDto] })
+  changeSummary!: Array<{ type: string }>;
+
+  @ApiProperty({ type: [MyPublishedTourStopResponseDto] })
+  stops!: MyPublishedTourStopResponseDto[];
+}
+
 export class RoutingLocationDto {
   @ApiProperty({ minimum: -90, maximum: 90 })
   latitude!: number;

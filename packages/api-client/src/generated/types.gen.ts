@@ -251,6 +251,13 @@ export type CaregiverVisitResponseDto = {
     services: Array<CaregiverVisitServiceResponseDto>;
 };
 
+export type CaregiverVisitListResponseDto = {
+    items: Array<CaregiverVisitResponseDto>;
+    page: number;
+    pageSize: number;
+    total: number;
+};
+
 export type ExecutionClientTimeWindowResponseDto = {
     startsAt: string;
     endsAt: string;
@@ -1396,6 +1403,31 @@ export type VisitSubstitutionResponseDto = {
     reason: string;
 };
 
+export type CalendarSubscriptionStatusResponseDto = {
+    active: boolean;
+    createdAt?: string | null;
+};
+
+export type CalendarSubscriptionCreatedResponseDto = {
+    active: boolean;
+    /**
+     * HTTPS subscription URL. Shown once.
+     */
+    httpsUrl: string;
+    /**
+     * webcal URL for compatible calendar applications.
+     */
+    webcalUrl: string;
+    createdAt: string;
+};
+
+export type CalendarSubscriptionRevokedResponseDto = {
+    /**
+     * Whether an active subscription was revoked.
+     */
+    revoked: boolean;
+};
+
 export type ScheduleGenerationRequestDto = {
     from: string;
     until: string;
@@ -1602,6 +1634,23 @@ export type MyTodayTourResponseDto = {
     publishedAt: string;
     changeSummary: Array<TourChangeSummaryDto>;
     stops: Array<CaregiverTourStopResponseDto>;
+};
+
+export type MyPublishedTourStopResponseDto = {
+    visitId: string;
+    sequence: number;
+    estimatedTravelMinutes?: number | null;
+    estimatedDistanceMeters?: number | null;
+};
+
+export type MyPublishedTourResponseDto = {
+    tourId: string;
+    localDate: string;
+    timezone: string;
+    version: number;
+    publishedAt: string;
+    changeSummary: Array<TourChangeSummaryDto>;
+    stops: Array<MyPublishedTourStopResponseDto>;
 };
 
 export type SchedulingPreferenceTimeWindowDto = {
@@ -3998,6 +4047,8 @@ export type MyVisitsControllerListData = {
     };
     path?: never;
     query: {
+        pageSize?: number;
+        page?: number;
         until: unknown;
         from: unknown;
     };
@@ -4014,7 +4065,7 @@ export type MyVisitsControllerListErrors = {
 export type MyVisitsControllerListError = MyVisitsControllerListErrors[keyof MyVisitsControllerListErrors];
 
 export type MyVisitsControllerListResponses = {
-    200: Array<CaregiverVisitResponseDto>;
+    200: CaregiverVisitListResponseDto;
 };
 
 export type MyVisitsControllerListResponse = MyVisitsControllerListResponses[keyof MyVisitsControllerListResponses];
@@ -7270,6 +7321,119 @@ export type VisitsControllerProposeSubstitutionResponses = {
 
 export type VisitsControllerProposeSubstitutionResponse = VisitsControllerProposeSubstitutionResponses[keyof VisitsControllerProposeSubstitutionResponses];
 
+export type MyCalendarSubscriptionControllerRevokeData = {
+    body?: never;
+    headers: {
+        /**
+         * Tenant selected for this request
+         */
+        'X-Tenant-Id': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/me/calendar-subscription';
+};
+
+export type MyCalendarSubscriptionControllerRevokeErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type MyCalendarSubscriptionControllerRevokeError = MyCalendarSubscriptionControllerRevokeErrors[keyof MyCalendarSubscriptionControllerRevokeErrors];
+
+export type MyCalendarSubscriptionControllerRevokeResponses = {
+    200: CalendarSubscriptionRevokedResponseDto;
+};
+
+export type MyCalendarSubscriptionControllerRevokeResponse = MyCalendarSubscriptionControllerRevokeResponses[keyof MyCalendarSubscriptionControllerRevokeResponses];
+
+export type MyCalendarSubscriptionControllerGetData = {
+    body?: never;
+    headers: {
+        /**
+         * Tenant selected for this request
+         */
+        'X-Tenant-Id': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/me/calendar-subscription';
+};
+
+export type MyCalendarSubscriptionControllerGetErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type MyCalendarSubscriptionControllerGetError = MyCalendarSubscriptionControllerGetErrors[keyof MyCalendarSubscriptionControllerGetErrors];
+
+export type MyCalendarSubscriptionControllerGetResponses = {
+    200: CalendarSubscriptionStatusResponseDto;
+};
+
+export type MyCalendarSubscriptionControllerGetResponse = MyCalendarSubscriptionControllerGetResponses[keyof MyCalendarSubscriptionControllerGetResponses];
+
+export type MyCalendarSubscriptionControllerCreateData = {
+    body?: never;
+    headers: {
+        /**
+         * Tenant selected for this request
+         */
+        'X-Tenant-Id': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/me/calendar-subscription';
+};
+
+export type MyCalendarSubscriptionControllerCreateErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type MyCalendarSubscriptionControllerCreateError = MyCalendarSubscriptionControllerCreateErrors[keyof MyCalendarSubscriptionControllerCreateErrors];
+
+export type MyCalendarSubscriptionControllerCreateResponses = {
+    201: CalendarSubscriptionCreatedResponseDto;
+};
+
+export type MyCalendarSubscriptionControllerCreateResponse = MyCalendarSubscriptionControllerCreateResponses[keyof MyCalendarSubscriptionControllerCreateResponses];
+
+export type CalendarSubscriptionFeedControllerGetData = {
+    body?: never;
+    path: {
+        tenantId: string;
+        /**
+         * Cryptographically random subscription token
+         */
+        token: string;
+    };
+    query?: never;
+    url: '/api/v1/calendar-subscriptions/{tenantId}/{token}.ics';
+};
+
+export type CalendarSubscriptionFeedControllerGetErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type CalendarSubscriptionFeedControllerGetError = CalendarSubscriptionFeedControllerGetErrors[keyof CalendarSubscriptionFeedControllerGetErrors];
+
+export type CalendarSubscriptionFeedControllerGetResponses = {
+    /**
+     * RFC 5545 iCalendar feed
+     */
+    200: unknown;
+};
+
 export type AgreementVisitGenerationControllerGenerateData = {
     body: ScheduleGenerationRequestDto;
     headers: {
@@ -7849,6 +8013,40 @@ export type MyTodayTourControllerGetTourResponses = {
 };
 
 export type MyTodayTourControllerGetTourResponse = MyTodayTourControllerGetTourResponses[keyof MyTodayTourControllerGetTourResponses];
+
+export type MyPublishedToursControllerListData = {
+    body?: never;
+    headers: {
+        /**
+         * Tenant selected for this request
+         */
+        'X-Tenant-Id': string;
+    };
+    path?: never;
+    query: {
+        /**
+         * Exclusive end date
+         */
+        until: unknown;
+        from: unknown;
+    };
+    url: '/api/v1/me/tours';
+};
+
+export type MyPublishedToursControllerListErrors = {
+    /**
+     * Problem Details response
+     */
+    default: ProblemDetailsDto;
+};
+
+export type MyPublishedToursControllerListError = MyPublishedToursControllerListErrors[keyof MyPublishedToursControllerListErrors];
+
+export type MyPublishedToursControllerListResponses = {
+    200: Array<MyPublishedTourResponseDto>;
+};
+
+export type MyPublishedToursControllerListResponse = MyPublishedToursControllerListResponses[keyof MyPublishedToursControllerListResponses];
 
 export type SubstitutionsControllerConfirmData = {
     body?: never;

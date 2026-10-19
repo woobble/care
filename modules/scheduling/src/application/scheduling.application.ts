@@ -463,7 +463,7 @@ export class SchedulingApplicationService {
           changes.timeWindowEnd === undefined ? visit.timeWindowEnd : changes.timeWindowEnd,
         note: changes.note === undefined ? visit.note : changes.note?.trim() || null,
         manuallyAdjusted: visit.manuallyAdjusted || visit.origin === 'agreement_generated',
-        updatedAt: new Date(),
+        updatedAt: nextVisitUpdatedAt(visit.updatedAt),
       };
       validateVisit(next);
       const timeChanged =
@@ -511,7 +511,7 @@ export class SchedulingApplicationService {
           principal.tenantId,
           next,
           principal.userId,
-          new Date(),
+          next.updatedAt,
         );
       }
       const event = timeChanged
@@ -612,7 +612,7 @@ export class SchedulingApplicationService {
         visit.id,
       );
       if (existing.includes(input.employeeId)) throw new DuplicateVisitAssignmentError();
-      const now = new Date();
+      const now = nextVisitUpdatedAt(visit.updatedAt);
       const employee = await this.validateEmployeeAssignment(
         transaction,
         principal.tenantId,
@@ -621,6 +621,7 @@ export class SchedulingApplicationService {
       );
       const assignment = makeAssignment(principal, visit.id, employee.id, input.role ?? null, now);
       await this.repository.insertAssignment(transaction, assignment);
+      await this.repository.updateVisit(transaction, { ...visit, updatedAt: now });
       await this.invalidateToursForVisit(
         transaction,
         principal.tenantId,
@@ -669,8 +670,9 @@ export class SchedulingApplicationService {
         `client:${visit.clientId}`,
         `employee:${assignment.employeeId}`,
       ]);
-      const now = new Date();
+      const now = nextVisitUpdatedAt(visit.updatedAt);
       await this.repository.unassign(transaction, principal.tenantId, visit.id, assignmentId, now);
+      await this.repository.updateVisit(transaction, { ...visit, updatedAt: now });
       await this.invalidateToursForVisit(
         transaction,
         principal.tenantId,
@@ -1044,12 +1046,13 @@ export class SchedulingApplicationService {
         substitution.substituteEmployeeId,
         visit,
       );
-      const now = new Date();
+      const now = nextVisitUpdatedAt(visit.updatedAt);
       await this.repository.insertAssignment(
         transaction,
         makeAssignment(principal, visit.id, substitution.substituteEmployeeId, original.role, now),
       );
       await this.repository.unassign(transaction, principal.tenantId, visit.id, original.id, now);
+      await this.repository.updateVisit(transaction, { ...visit, updatedAt: now });
       if (
         !(await this.repository.updateVisitSubstitution(
           transaction,
@@ -1962,6 +1965,106 @@ export class SchedulingApplicationService {
           : [],
         stops,
       };
+    });
+  }
+
+  async getMyPublishedTours(principal: AuthorizationPrincipal, from: string, until: string) {
+    if (
+      !validLocalDate(from) ||
+      !validLocalDate(until) ||
+      until <= from ||
+      dayDistance(from, until) > 31
+    ) {
+      throw new InvalidTourError();
+    }
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      const employee = await this.repository.employeeByUser(
+        transaction,
+        principal.tenantId,
+        principal.userId,
+      );
+      if (!employee) return [];
+      const tours = await this.repository.listTours(
+        transaction,
+        principal.tenantId,
+        employee.id,
+        from,
+        until,
+      );
+      const publications = await this.repository.latestTourPublicationsForTours(
+        transaction,
+        principal.tenantId,
+        tours.map((tour) => tour.id),
+      );
+      const publicationsByTour = new Map(
+        publications.map((publication) => [publication.tourId, publication]),
+      );
+      const snapshotStopsByTour = new Map(
+        publications.map((publication) => [
+          publication.tourId,
+          Array.isArray(publication.snapshot)
+            ? publication.snapshot.flatMap((value) => {
+                if (!isPublishedStop(value)) return [];
+                const row = value as Record<string, unknown>;
+                const sequence = row.sequence;
+                if (typeof sequence !== 'number' || !Number.isInteger(sequence) || sequence < 1)
+                  return [];
+                return [
+                  {
+                    visitId: value.visitId,
+                    sequence,
+                    estimatedTravelMinutes:
+                      typeof row.estimatedTravelMinutes === 'number'
+                        ? row.estimatedTravelMinutes
+                        : null,
+                    estimatedDistanceMeters:
+                      typeof row.estimatedDistanceMeters === 'number'
+                        ? row.estimatedDistanceMeters
+                        : null,
+                  },
+                ];
+              })
+            : [],
+        ]),
+      );
+      const snapshotVisitIds = [
+        ...new Set(
+          [...snapshotStopsByTour.values()].flatMap((stops) => stops.map((stop) => stop.visitId)),
+        ),
+      ];
+      const currentVisits = await this.repository.visitsAssignedToEmployeeByIds(
+        transaction,
+        principal.tenantId,
+        employee.id,
+        snapshotVisitIds,
+      );
+      const currentVisitsById = new Map(currentVisits.map((visit) => [visit.id, visit]));
+      const publishedTours = [];
+      for (const tour of tours) {
+        const publication = publicationsByTour.get(tour.id);
+        if (!publication) continue;
+        const stops = (snapshotStopsByTour.get(tour.id) ?? []).filter((stop) => {
+          const visit = currentVisitsById.get(stop.visitId);
+          return visit !== undefined && sameTourDate(visit, tour.localDate, tour.timezone);
+        });
+        if (!stops.length) continue;
+        publishedTours.push({
+          tourId: tour.id,
+          localDate: tour.localDate,
+          timezone: tour.timezone,
+          version: publication.version,
+          publishedAt: publication.publishedAt.toISOString(),
+          changeSummary: Array.isArray(publication.changeSummary)
+            ? publication.changeSummary.flatMap((change) => {
+                if (typeof change !== 'object' || change === null) return [];
+                const type = (change as Record<string, unknown>).type;
+                return typeof type === 'string' ? [{ type }] : [];
+              })
+            : [],
+          stops,
+        });
+      }
+      return publishedTours;
     });
   }
 
@@ -2947,7 +3050,7 @@ export class SchedulingApplicationService {
           : operation === 'unconfirm'
             ? lifecycle.unconfirm()
             : lifecycle.cancel();
-      const next = { ...visit, status, updatedAt: new Date() };
+      const next = { ...visit, status, updatedAt: nextVisitUpdatedAt(visit.updatedAt) };
       await this.repository.updateVisit(transaction, next);
       if (operation === 'cancel') {
         await this.invalidateToursForVisit(
@@ -3615,6 +3718,11 @@ function validateTourRequest(localDate: string, timezone: string, visitIds: stri
   ) {
     throw new InvalidTourError();
   }
+}
+
+function nextVisitUpdatedAt(previous: Date): Date {
+  const nextWholeSecond = Math.floor(previous.getTime() / 1_000) * 1_000 + 1_000;
+  return new Date(Math.max(Date.now(), nextWholeSecond));
 }
 
 function validLocalDate(value: string): boolean {

@@ -2224,6 +2224,22 @@
             }
           },
           {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
             "name": "until",
             "required": true,
             "in": "query",
@@ -2246,10 +2262,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CaregiverVisitResponseDto"
-                  }
+                  "$ref": "#/components/schemas/CaregiverVisitListResponseDto"
                 }
               }
             }
@@ -9803,6 +9816,191 @@
         ]
       }
     },
+    "/api/v1/me/calendar-subscription": {
+      "get": {
+        "operationId": "MyCalendarSubscriptionController_get",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSubscriptionStatusResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read the current caregiver calendar subscription status",
+        "tags": [
+          "caregiver calendar subscriptions"
+        ]
+      },
+      "post": {
+        "operationId": "MyCalendarSubscriptionController_create",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSubscriptionCreatedResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create or rotate a read-only caregiver calendar subscription",
+        "tags": [
+          "caregiver calendar subscriptions"
+        ]
+      },
+      "delete": {
+        "operationId": "MyCalendarSubscriptionController_revoke",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarSubscriptionRevokedResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Revoke the current caregiver calendar subscription",
+        "tags": [
+          "caregiver calendar subscriptions"
+        ]
+      }
+    },
+    "/api/v1/calendar-subscriptions/{tenantId}/{token}.ics": {
+      "get": {
+        "description": "Read-only feed. The token is a bearer secret; access is checked against current caregiver membership and employee linkage on every request.",
+        "operationId": "CalendarSubscriptionFeedController_get",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "description": "Cryptographically random subscription token",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "RFC 5545 iCalendar feed",
+            "content": {
+              "text/calendar": {}
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Read a token-protected caregiver iCalendar subscription feed",
+        "tags": [
+          "caregiver calendar subscriptions"
+        ]
+      }
+    },
     "/api/v1/service-agreements/{id}/generate-visits": {
       "post": {
         "operationId": "AgreementVisitGenerationController_generate",
@@ -11150,6 +11348,73 @@
           }
         ],
         "summary": "Read the current user’s own latest published tour for today",
+        "tags": [
+          "caregiver schedule"
+        ]
+      }
+    },
+    "/api/v1/me/tours": {
+      "get": {
+        "operationId": "MyPublishedToursController_list",
+        "parameters": [
+          {
+            "name": "X-Tenant-Id",
+            "in": "header",
+            "description": "Tenant selected for this request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "required": true,
+            "in": "query",
+            "description": "Exclusive end date",
+            "schema": {
+              "format": "date"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MyPublishedTourResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem Details response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List only the current employee’s published tour snapshots",
         "tags": [
           "caregiver schedule"
         ]
@@ -23886,6 +24151,32 @@
           "services"
         ]
       },
+      "CaregiverVisitListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CaregiverVisitResponseDto"
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
       "ExecutionClientTimeWindowResponseDto": {
         "type": "object",
         "properties": {
@@ -29113,6 +29404,63 @@
           "reason"
         ]
       },
+      "CalendarSubscriptionStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "active"
+        ]
+      },
+      "CalendarSubscriptionCreatedResponseDto": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "example": true
+          },
+          "httpsUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "HTTPS subscription URL. Shown once."
+          },
+          "webcalUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "webcal URL for compatible calendar applications."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "active",
+          "httpsUrl",
+          "webcalUrl",
+          "createdAt"
+        ]
+      },
+      "CalendarSubscriptionRevokedResponseDto": {
+        "type": "object",
+        "properties": {
+          "revoked": {
+            "type": "boolean",
+            "description": "Whether an active subscription was revoked."
+          }
+        },
+        "required": [
+          "revoked"
+        ]
+      },
       "ScheduleGenerationRequestDto": {
         "type": "object",
         "properties": {
@@ -30006,6 +30354,76 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CaregiverTourStopResponseDto"
+            }
+          }
+        },
+        "required": [
+          "tourId",
+          "localDate",
+          "timezone",
+          "version",
+          "publishedAt",
+          "changeSummary",
+          "stops"
+        ]
+      },
+      "MyPublishedTourStopResponseDto": {
+        "type": "object",
+        "properties": {
+          "visitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sequence": {
+            "type": "number",
+            "minimum": 1
+          },
+          "estimatedTravelMinutes": {
+            "type": "number",
+            "nullable": true
+          },
+          "estimatedDistanceMeters": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "visitId",
+          "sequence"
+        ]
+      },
+      "MyPublishedTourResponseDto": {
+        "type": "object",
+        "properties": {
+          "tourId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "localDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "changeSummary": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TourChangeSummaryDto"
+            }
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyPublishedTourStopResponseDto"
             }
           }
         },

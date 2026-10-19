@@ -91,7 +91,7 @@ export async function configureApiHttp(
           req: {
             id: request.id,
             method: request.method,
-            url: request.url.split('?', 1)[0],
+            url: request.routeOptions.url ?? request.method,
           },
           res: { statusCode: reply.statusCode },
           responseTime: durationMs,

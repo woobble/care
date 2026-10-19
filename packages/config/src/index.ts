@@ -157,6 +157,7 @@ function assertProductionApi(config: {
   DATABASE_URL: string;
   OIDC_ISSUER: string;
   WEB_ORIGIN: string;
+  API_PUBLIC_ORIGIN: string;
   TRUSTED_PROXY_HOPS: number;
   ROUTING_OSRM_URL?: string | undefined;
 }): void {
@@ -164,6 +165,7 @@ function assertProductionApi(config: {
   assertProductionDatabase('DATABASE_URL', config.DATABASE_URL);
   productionUrl('OIDC_ISSUER', config.OIDC_ISSUER, true);
   productionUrl('WEB_ORIGIN', config.WEB_ORIGIN, true);
+  productionUrl('API_PUBLIC_ORIGIN', config.API_PUBLIC_ORIGIN, true);
   if (config.ROUTING_OSRM_URL) {
     const routing = new URL(config.ROUTING_OSRM_URL);
     if (routing.hostname === 'osrm') {
@@ -247,6 +249,7 @@ export function loadApiConfig(source: NodeJS.ProcessEnv = process.env) {
       OIDC_ISSUER: issuer,
       OIDC_CLIENT_ID: z.string().min(1),
       WEB_ORIGIN: url,
+      API_PUBLIC_ORIGIN: url,
       PORT: z.coerce.number().int().min(1).max(65535).default(3001),
       API_METRICS_PORT: z.coerce
         .number()

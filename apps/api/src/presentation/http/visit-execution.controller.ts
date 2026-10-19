@@ -35,7 +35,7 @@ import {
 
 import { ProblemDetailsDto } from './dto';
 import {
-  CaregiverVisitResponseDto,
+  CaregiverVisitListResponseDto,
   CompleteExecutionRequestDto,
   CorrectExecutionTimesRequestDto,
   CorrectExecutionTimesResponseDto,
@@ -162,11 +162,19 @@ export class MyVisitsController {
   @ApiOperation({ summary: 'List visits actively assigned to the current employee' })
   @ApiQuery({ name: 'from', required: true, format: 'date-time' })
   @ApiQuery({ name: 'until', required: true, format: 'date-time' })
-  @ApiOkResponse({ type: [CaregiverVisitResponseDto] })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiOkResponse({ type: CaregiverVisitListResponseDto })
   async list(@Req() request: ApiRequest, @Query() query: Record<string, string | undefined>) {
     const parsed = myVisitsQuerySchema.safeParse(query);
     if (!parsed.success) throw new BadRequestException();
-    return this.execution.myVisits(this.principal(request), parsed.data.from, parsed.data.until);
+    return this.execution.myVisits(
+      this.principal(request),
+      parsed.data.from,
+      parsed.data.until,
+      parsed.data.page,
+      parsed.data.pageSize,
+    );
   }
 
   private principal(request: ApiRequest) {

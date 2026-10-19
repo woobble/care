@@ -20,6 +20,7 @@ import {
 import { clientRecords } from '@care/clients';
 import { employeeRecords } from '@care/employees';
 import { facilities } from '@care/organizations';
+import { tenantMemberships } from '@care/identity';
 import { agreementServices, agreements } from '@care/service-agreements';
 import { serviceDefinitions } from '@care/services';
 
@@ -223,6 +224,46 @@ export const visitAssignments = scheduling.table(
       name: 'visit_assignments_employee_fk',
       columns: [table.tenantId, table.employeeId],
       foreignColumns: [employeeRecords.tenantId, employeeRecords.id],
+    }),
+  ],
+);
+
+export const calendarSubscriptions = scheduling.table(
+  'calendar_subscriptions',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('calendar_subscriptions_tenant_id_uq').on(table.tenantId, table.id),
+    uniqueIndex('calendar_subscriptions_tenant_token_hash_uq').on(table.tenantId, table.tokenHash),
+    uniqueIndex('calendar_subscriptions_active_employee_uq')
+      .on(table.tenantId, table.employeeId)
+      .where(sql`${table.revokedAt} IS NULL`),
+    index('calendar_subscriptions_employee_created_idx').on(
+      table.tenantId,
+      table.employeeId,
+      table.createdAt,
+    ),
+    check('calendar_subscriptions_token_hash_ck', sql`${table.tokenHash} ~ '^[0-9a-f]{64}$'`),
+    check(
+      'calendar_subscriptions_revoked_at_ck',
+      sql`${table.revokedAt} IS NULL OR ${table.revokedAt} >= ${table.createdAt}`,
+    ),
+    foreignKey({
+      name: 'calendar_subscriptions_employee_fk',
+      columns: [table.tenantId, table.employeeId],
+      foreignColumns: [employeeRecords.tenantId, employeeRecords.id],
+    }),
+    foreignKey({
+      name: 'calendar_subscriptions_membership_fk',
+      columns: [table.tenantId, table.userId],
+      foreignColumns: [tenantMemberships.tenantId, tenantMemberships.userId],
     }),
   ],
 );
@@ -636,6 +677,7 @@ export const schedulingSchema = {
   visits,
   visitServices,
   visitAssignments,
+  calendarSubscriptions,
   employeeUnavailability,
   employeeAvailability,
   employeeAvailabilityWindows,

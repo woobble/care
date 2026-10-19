@@ -331,18 +331,33 @@ export class VisitExecutionApplicationService {
     principal: AuthorizationPrincipal,
     from: Date,
     until: Date,
-  ): Promise<CaregiverVisitSummary[]> {
+    page = 1,
+    pageSize = 100,
+  ): Promise<{ items: CaregiverVisitSummary[]; page: number; pageSize: number; total: number }> {
     if (
       !validInstant(from) ||
       !validInstant(until) ||
       until <= from ||
-      until.getTime() - from.getTime() > 31 * 24 * 60 * 60 * 1000
+      until.getTime() - from.getTime() > 31 * 24 * 60 * 60 * 1000 ||
+      !Number.isInteger(page) ||
+      page < 1 ||
+      !Number.isInteger(pageSize) ||
+      pageSize < 1 ||
+      pageSize > 100
     ) {
       throw new InvalidVisitExecutionQueryError();
     }
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const employee = await this.requireEmployee(transaction, principal);
       const rows = await this.repository.listAssignedVisits(transaction, {
+        tenantId: principal.tenantId,
+        employeeId: employee.id,
+        from,
+        until,
+        page,
+        pageSize,
+      });
+      const total = await this.repository.countAssignedVisits(transaction, {
         tenantId: principal.tenantId,
         employeeId: employee.id,
         from,
@@ -370,7 +385,7 @@ export class VisitExecutionApplicationService {
         executions.map((execution) => [execution.visitId, execution]),
       );
 
-      return rows.map(
+      const items = rows.map(
         ({ visit, preferredName, firstName, lastName, address, assignmentAssignedAt }) => {
           const execution = executionByVisit.get(visit.id);
           return {
@@ -394,7 +409,12 @@ export class VisitExecutionApplicationService {
             plannedStart: visit.plannedStart.toISOString(),
             plannedEnd: visit.plannedEnd.toISOString(),
             timezone: visit.timezone,
-            executionStatus: execution?.status ?? 'not_started',
+            executionStatus:
+              execution?.status === 'in_progress'
+                ? ('in_progress' as const)
+                : execution?.status === 'completed'
+                  ? ('completed' as const)
+                  : ('not_started' as const),
             actualStart: execution?.actualStart.toISOString() ?? null,
             actualEnd: execution?.actualEnd?.toISOString() ?? null,
             services: (servicesByVisit.get(visit.id) ?? []).map((service) => ({
@@ -407,6 +427,7 @@ export class VisitExecutionApplicationService {
           };
         },
       );
+      return { items, page, pageSize, total };
     });
   }
 

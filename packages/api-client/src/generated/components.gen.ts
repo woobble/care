@@ -53,9 +53,13 @@ import type {
   BillingProfileResponseDto,
   BillingSettingsEntryResponseDto,
   BillingSettingsListResponseDto,
+  CalendarSubscriptionCreatedResponseDto,
+  CalendarSubscriptionRevokedResponseDto,
+  CalendarSubscriptionStatusResponseDto,
   CareDocumentDto,
   CareDocumentationDetailDto,
   CaregiverTourStopResponseDto,
+  CaregiverVisitListResponseDto,
   CaregiverVisitResponseDto,
   CaregiverVisitServiceResponseDto,
   ClaimCreateDto,
@@ -152,6 +156,8 @@ import type {
   LinkableUserResponseDto,
   LinkableUserSearchResponseDto,
   MeResponseDto,
+  MyPublishedTourResponseDto,
+  MyPublishedTourStopResponseDto,
   MyTodayTourResponseDto,
   OperationsDashboardResponseDto,
   OperationsExceptionHistoryResponseDto,
@@ -334,9 +340,13 @@ export type components = {
     BillingProfileResponseDto: BillingProfileResponseDto;
     BillingSettingsEntryResponseDto: BillingSettingsEntryResponseDto;
     BillingSettingsListResponseDto: BillingSettingsListResponseDto;
+    CalendarSubscriptionCreatedResponseDto: CalendarSubscriptionCreatedResponseDto;
+    CalendarSubscriptionRevokedResponseDto: CalendarSubscriptionRevokedResponseDto;
+    CalendarSubscriptionStatusResponseDto: CalendarSubscriptionStatusResponseDto;
     CareDocumentDto: CareDocumentDto;
     CareDocumentationDetailDto: CareDocumentationDetailDto;
     CaregiverTourStopResponseDto: CaregiverTourStopResponseDto;
+    CaregiverVisitListResponseDto: CaregiverVisitListResponseDto;
     CaregiverVisitResponseDto: CaregiverVisitResponseDto;
     CaregiverVisitServiceResponseDto: CaregiverVisitServiceResponseDto;
     ClaimCreateDto: ClaimCreateDto;
@@ -433,6 +443,8 @@ export type components = {
     LinkableUserResponseDto: LinkableUserResponseDto;
     LinkableUserSearchResponseDto: LinkableUserSearchResponseDto;
     MeResponseDto: MeResponseDto;
+    MyPublishedTourResponseDto: MyPublishedTourResponseDto;
+    MyPublishedTourStopResponseDto: MyPublishedTourStopResponseDto;
     MyTodayTourResponseDto: MyTodayTourResponseDto;
     OperationsDashboardResponseDto: OperationsDashboardResponseDto;
     OperationsExceptionHistoryResponseDto: OperationsExceptionHistoryResponseDto;

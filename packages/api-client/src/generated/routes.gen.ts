@@ -177,6 +177,9 @@ export const routeOperations = {
     get: "billingControllerSettings",
     put: "billingControllerSaveSettings",
   },
+  "/api/v1/calendar-subscriptions/{tenantId}/{token}.ics": {
+    get: "calendarSubscriptionFeedControllerGet",
+  },
   "/api/v1/care-documentation": {
     get: "careDocumentationControllerWorklist",
   },
@@ -427,6 +430,11 @@ export const routeOperations = {
   "/api/v1/me": {
     get: "meControllerMe",
   },
+  "/api/v1/me/calendar-subscription": {
+    delete: "myCalendarSubscriptionControllerRevoke",
+    get: "myCalendarSubscriptionControllerGet",
+    post: "myCalendarSubscriptionControllerCreate",
+  },
   "/api/v1/me/documentation": {
     get: "careDocumentationControllerMyWorklist",
   },
@@ -441,6 +449,9 @@ export const routeOperations = {
   },
   "/api/v1/me/today/tour": {
     get: "myTodayTourControllerGetTour",
+  },
+  "/api/v1/me/tours": {
+    get: "myPublishedToursControllerList",
   },
   "/api/v1/me/visits": {
     get: "myVisitsControllerList",

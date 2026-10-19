@@ -28,6 +28,12 @@ export interface EmployeeAvailability {
 
 export type AvailabilityResult = 'available' | 'outside' | 'unknown';
 
+export type AvailabilityInterval = {
+  kind: 'working' | 'unavailable';
+  start: Date;
+  end: Date;
+};
+
 export function validateEmployeeAvailability(value: EmployeeAvailability): void {
   if (
     !isSupportedTimeZone(value.timezone) ||
@@ -153,6 +159,63 @@ export function availabilityForVisit(
   }
 
   return 'outside';
+}
+
+export function availabilityIntervalsBetween(
+  from: Date,
+  until: Date,
+  availability: EmployeeAvailability | null,
+): AvailabilityInterval[] {
+  if (
+    !availability ||
+    !Number.isFinite(from.getTime()) ||
+    !Number.isFinite(until.getTime()) ||
+    until <= from ||
+    until.getTime() - from.getTime() > 62 * 24 * 60 * 60 * 1000
+  ) {
+    return [];
+  }
+
+  const firstDate = localDate(from, availability.timezone);
+  const lastDate = localDate(new Date(until.getTime() - 1), availability.timezone);
+  const intervals: AvailabilityInterval[] = [];
+  for (const date of datesBetween(firstDate, lastDate)) {
+    const exceptions = availability.exceptions.filter((exception) => exception.localDate === date);
+    const hasWorkingOverride = exceptions.some(
+      (exception) => exception.kind === 'working_hours' || exception.kind === 'closed',
+    );
+    const windows = hasWorkingOverride
+      ? exceptions
+          .filter(
+            (
+              exception,
+            ): exception is AvailabilityException & { startsAt: string; endsAt: string } =>
+              exception.kind === 'working_hours' &&
+              exception.startsAt !== null &&
+              exception.endsAt !== null,
+          )
+          .map(({ startsAt, endsAt }) => ({ startsAt, endsAt }))
+      : availability.windows
+          .filter((window) => window.weekday === isoWeekday(date))
+          .map(({ startsAt, endsAt }) => ({ startsAt, endsAt }));
+
+    for (const window of windows) {
+      const interval = windowInterval(date, window.startsAt, window.endsAt, availability.timezone);
+      if (interval && overlaps(from, until, interval.start, interval.end)) {
+        intervals.push({ kind: 'working', ...interval });
+      }
+    }
+
+    for (const exception of exceptions) {
+      if (exception.kind !== 'closed' && exception.kind !== 'unavailable') continue;
+      const interval = exceptionInterval(exception, availability.timezone);
+      if (interval && overlaps(from, until, interval.start, interval.end)) {
+        intervals.push({ kind: 'unavailable', ...interval });
+      }
+    }
+  }
+
+  return intervals.sort((left, right) => left.start.getTime() - right.start.getTime());
 }
 
 export class InvalidEmployeeAvailabilityError extends Error {

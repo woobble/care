@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, or } from 'drizzle-orm';
+import { and, asc, count, eq, gt, gte, inArray, isNull, lt, lte, or } from 'drizzle-orm';
 
 import { clientAddresses, clientRecords } from '@care/clients';
 import type { DatabaseTransaction } from '@care/database';
@@ -403,7 +403,14 @@ export class VisitExecutionRepository {
 
   async listAssignedVisits(
     transaction: DatabaseTransaction,
-    input: { tenantId: string; employeeId: string; from: Date; until: Date },
+    input: {
+      tenantId: string;
+      employeeId: string;
+      from: Date;
+      until: Date;
+      page: number;
+      pageSize: number;
+    },
   ) {
     return transaction
       .select({
@@ -444,7 +451,34 @@ export class VisitExecutionRepository {
         ),
       )
       .orderBy(asc(visits.plannedStart), asc(visits.id))
-      .limit(100);
+      .limit(input.pageSize)
+      .offset((input.page - 1) * input.pageSize);
+  }
+
+  async countAssignedVisits(
+    transaction: DatabaseTransaction,
+    input: { tenantId: string; employeeId: string; from: Date; until: Date },
+  ): Promise<number> {
+    const [row] = await transaction
+      .select({ total: count() })
+      .from(visits)
+      .innerJoin(
+        visitAssignments,
+        and(
+          eq(visitAssignments.tenantId, visits.tenantId),
+          eq(visitAssignments.visitId, visits.id),
+          eq(visitAssignments.employeeId, input.employeeId),
+          eq(visitAssignments.status, 'active'),
+        ),
+      )
+      .where(
+        and(
+          eq(visits.tenantId, input.tenantId),
+          lt(visits.plannedStart, input.until),
+          gt(visits.plannedEnd, input.from),
+        ),
+      );
+    return row?.total ?? 0;
   }
 
   async plannedServicesForVisits(

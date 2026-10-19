@@ -3,6 +3,7 @@ export {
   visits,
   visitServices,
   visitAssignments,
+  calendarSubscriptions,
   employeeUnavailability,
   employeeAvailability,
   employeeAvailabilityWindows,
@@ -38,10 +39,12 @@ export {
 } from './domain/tour';
 export {
   availabilityForVisit,
+  availabilityIntervalsBetween,
   validateEmployeeAvailability,
   InvalidEmployeeAvailabilityError,
   type AvailabilityException,
   type AvailabilityExceptionKind,
+  type AvailabilityInterval,
   type AvailabilityResult,
   type AvailabilityWindow,
   type EmployeeAvailability,
@@ -115,6 +118,15 @@ export {
   type UpdateTourStopsInput,
   type TourSummary,
 } from './application/scheduling.application';
+export {
+  CalendarSubscriptionApplicationService,
+  CalendarSubscriptionPermissionError,
+  CalendarSubscriptionUnavailableError,
+  CALENDAR_FEED_HISTORY_DAYS,
+  CALENDAR_FEED_FUTURE_DAYS,
+  type CalendarSubscriptionReference,
+  type CalendarFeedEvent,
+} from './application/calendar-subscription.application';
 export type {
   VisitCalendarRow,
   VisitReadScope,

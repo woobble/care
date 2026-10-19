@@ -18,6 +18,8 @@ const reasonCodes = [
 export const myVisitsQuerySchema = z.object({
   from: timestamp,
   until: timestamp,
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(100),
 });
 
 export const executionSummariesQuerySchema = z
@@ -332,6 +334,20 @@ export class CaregiverVisitResponseDto {
 
   @ApiProperty({ type: [CaregiverVisitServiceResponseDto] })
   services!: CaregiverVisitServiceResponseDto[];
+}
+
+export class CaregiverVisitListResponseDto {
+  @ApiProperty({ type: [CaregiverVisitResponseDto] })
+  items!: CaregiverVisitResponseDto[];
+
+  @ApiProperty()
+  page!: number;
+
+  @ApiProperty()
+  pageSize!: number;
+
+  @ApiProperty()
+  total!: number;
 }
 
 export class VisitExecutionSummaryResponseDto {

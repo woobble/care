@@ -1,3 +1,7 @@
+import { mkdir } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
@@ -21,6 +25,11 @@ import {
   seedLifecycleScenario,
 } from './support/lifecycle-scenario';
 
+const calendarReviewDirectory = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../artifacts/calendar-review',
+);
+
 test('Office staff can admit an existing client and plan visits', async ({ page }) => {
   test.setTimeout(300_000);
   page.setDefaultTimeout(15_000);
@@ -33,6 +42,18 @@ test('Office staff can admit an existing client and plan visits', async ({ page 
     office = await createOfficeAdminSession(database, page, 'admission-planning');
     scenario = await seedLifecycleScenario(database, office);
     const serviceDate = dateInBerlin();
+    await page.addInitScript(() => {
+      const hideNextDevToolbar = () => {
+        const style = document.createElement('style');
+        style.textContent = 'nextjs-portal { display: none !important; }';
+        document.head?.append(style);
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', hideNextDevToolbar, { once: true });
+      } else {
+        hideNextDevToolbar();
+      }
+    });
 
     await page.goto('/admissions/new');
     await expect(page.getByRole('heading', { name: 'Create admission case' })).toBeVisible();
@@ -113,9 +134,69 @@ test('Office staff can admit an existing client and plan visits', async ({ page 
     if (!visit) throw new Error('The active agreement did not generate a visit');
     await page.goto(`/planning?date=${visit.visit_date}`);
     await expect(page.getByRole('heading', { name: 'Planning' })).toBeVisible();
-    const visitLink = page.locator(`a[href="/visits/${visit.id}"]`);
+    const visitLink = page.locator(`a[href^="/visits/${visit.id}"]`);
     await expect(visitLink).toBeVisible();
-    await expectTargetViewportLayouts(page);
+    await mkdir(calendarReviewDirectory, { recursive: true });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole('button', { name: 'Month', exact: true }).click();
+    await expect(page).toHaveURL(/view=month/);
+    await expect(page.locator('.care-calendar .rbc-calendar')).toBeVisible();
+    await expect(visitLink).toBeVisible();
+    await expectMobileLayoutToFit(page);
+    await page.screenshot({
+      path: resolve(calendarReviewDirectory, 'planning-month-desktop-1440.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
+
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.getByRole('button', { name: 'Week', exact: true }).click();
+    await expect(page).toHaveURL(/view=week/);
+    await expect(page.locator('.care-calendar .rbc-calendar')).toBeVisible();
+    await expect(visitLink).toBeVisible();
+    await expectMobileLayoutToFit(page);
+    await page.screenshot({
+      path: resolve(calendarReviewDirectory, 'planning-week-tablet-768.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Agenda', exact: true }).click();
+    await expect(page).toHaveURL(/view=agenda/);
+    await expect(visitLink).toBeVisible();
+    await expect(page.getByText('Monday, October 26, 2026', { exact: true })).toHaveCount(0);
+    await expectMobileLayoutToFit(page);
+    await page.screenshot({
+      path: resolve(calendarReviewDirectory, 'planning-agenda-mobile-390.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole('button', { name: 'Day', exact: true }).click();
+    await expect(page).toHaveURL(/view=day/);
+    await expect(page.locator('.care-calendar .rbc-calendar')).toBeVisible();
+    const earlyDaySlot = page.locator('.rbc-day-slot .rbc-time-slot').nth(4);
+    await earlyDaySlot.scrollIntoViewIfNeeded();
+    await earlyDaySlot.evaluate((element) => {
+      const { top } = element.getBoundingClientRect();
+      window.scrollBy({ top: top - window.innerHeight / 2, behavior: 'instant' });
+    });
+    const slotBounds = await earlyDaySlot.boundingBox();
+    if (!slotBounds) throw new Error('The empty calendar time slot is not visible');
+    await page.mouse.click(
+      slotBounds.x + slotBounds.width / 2,
+      slotBounds.y + slotBounds.height / 2,
+    );
+    await expect(page).toHaveURL(/createVisit=1/);
+    const createVisit = page.locator('#create-visit');
+    await expect(createVisit.getByLabel('Date')).toHaveValue(visit.visit_date);
+    await expect(createVisit.getByLabel('Start')).toHaveValue('08:00');
+    await expect(createVisit.getByLabel('End')).toHaveValue('09:00');
+
+    await page.goto(`/planning?date=${visit.visit_date}&view=day`);
+    await expect(visitLink).toBeVisible();
     // oxlint-disable no-await-in-loop
     for (const viewport of [
       { width: 390, height: 844 },
@@ -135,7 +216,7 @@ test('Office staff can admit an existing client and plan visits', async ({ page 
       await expectMobileLayoutToFit(page, visitDetails);
       await page.keyboard.press('Escape');
       await expect(visitDetails).not.toBeVisible();
-      await expect(page).toHaveURL(new RegExp(`/planning\\?date=${visit.visit_date}$`));
+      await expect(page).toHaveURL(new RegExp(`/planning\\?date=${visit.visit_date}&view=day$`));
       await expect(visitLink).toBeFocused();
     }
     // oxlint-enable no-await-in-loop

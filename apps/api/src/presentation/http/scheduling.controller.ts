@@ -89,6 +89,7 @@ import {
   TourListItemResponseDto,
   VisitSubstitutionResponseDto,
   MyTodayTourResponseDto,
+  MyPublishedTourResponseDto,
   SubstituteCandidateResponseDto,
 } from './scheduling.dto';
 import {
@@ -98,6 +99,13 @@ import {
   visitResponse,
 } from './scheduling.mapper';
 import { withoutUndefined } from './validation';
+
+const myPublishedToursQuerySchema = z
+  .object({
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .strict();
 
 @ApiTags('visits')
 @ApiBearerAuth()
@@ -750,6 +758,34 @@ export class MyTodayTourController {
   async getTour(@Req() request: ApiRequest) {
     if (!request.principal) throw new BadRequestException();
     return this.scheduling.getMyTodayTour(request.principal);
+  }
+}
+
+@ApiTags('caregiver schedule')
+@ApiBearerAuth()
+@ApiHeader({ name: 'X-Tenant-Id', required: true, description: 'Tenant selected for this request' })
+@ApiDefaultResponse({ type: ProblemDetailsDto, description: 'Problem Details response' })
+@UseGuards(OidcGuard, TenantContextGuard)
+@Controller('api/v1/me/tours')
+export class MyPublishedToursController {
+  constructor(
+    @Inject(SCHEDULING_APPLICATION)
+    private readonly scheduling: SchedulingApplicationService,
+  ) {}
+
+  @Get()
+  @ApiOperation({ summary: 'List only the current employee’s published tour snapshots' })
+  @ApiQuery({ name: 'from', required: true, format: 'date' })
+  @ApiQuery({ name: 'until', required: true, format: 'date', description: 'Exclusive end date' })
+  @ApiOkResponse({ type: [MyPublishedTourResponseDto] })
+  async list(@Req() request: ApiRequest, @Query() query: Record<string, string | undefined>) {
+    const parsed = myPublishedToursQuerySchema.safeParse(query);
+    if (!parsed.success || !request.principal) throw new BadRequestException();
+    return this.scheduling.getMyPublishedTours(
+      request.principal,
+      parsed.data.from,
+      parsed.data.until,
+    );
   }
 }
 

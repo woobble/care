@@ -48,6 +48,13 @@ export function formatVisitTime(value: string, timezone: string, locale: Locale)
   }).format(new Date(value));
 }
 
+export function formatVisitDate(value: string, timezone: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale, {
+    timeZone: timezone,
+    dateStyle: 'full',
+  }).format(new Date(value));
+}
+
 export function formatVisitDateTime(value: string, timezone: string, locale: Locale): string {
   return new Intl.DateTimeFormat(locale, {
     timeZone: timezone,

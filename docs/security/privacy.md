@@ -20,6 +20,8 @@ Service-evidence packages contain only the service facts shown to a signatory an
 
 API responses default to `Cache-Control: private, no-store`, and the server-side API client disables fetch caching. Authenticated application responses and document downloads therefore are not stored in shared HTTP or Next.js data caches by default.
 
+Caregiver iCalendar subscriptions are bearer links. The database stores a one-way token hash; the secret is shown only when a caregiver creates or replaces the link. The feed contains generic visit titles, UTC start/end times, scheduling status, and a short generic description. It excludes client names, addresses, service names, visit notes, and employee details. The API sets `Cache-Control: private, no-store`, logs only the route template, uses the route template for request metrics, and suppresses HTTP tracing for token-bearing feed requests. The feed is read-only. External calendar providers copy and cache subscribed events; revoking a link blocks later refreshes but cannot remove copies already held by a provider. Calendar refresh timing is controlled by each provider. The public feed is rate-limited to 120 requests per minute per client IP and 30 requests per minute per valid token, per API process.
+
 Routing is disabled by default. When enabled, route requests send visit coordinates to the configured OSRM endpoint. Production accepts the private Compose service over HTTP or an external endpoint over HTTPS; the provider and processing region still require operator and privacy review before real client locations are sent.
 
 ## Employee qualifications

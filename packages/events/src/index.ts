@@ -211,6 +211,14 @@ export interface EventPayloadMap {
     subjectId: string;
   };
   'scheduling.routing_location_updated': { clientId: string };
+  'scheduling.calendar_subscription_created': {
+    employeeId: string;
+    subscriptionId: string;
+  };
+  'scheduling.calendar_subscription_revoked': {
+    employeeId: string;
+    subscriptionId: string;
+  };
   'visit_execution.started': {
     executionId: string;
     visitId: string;

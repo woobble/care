@@ -24,6 +24,11 @@ class FastifyProbeController {
     return request.context;
   }
 
+  @Get('calendar-subscriptions/:tenantId/:token.ics')
+  calendarSubscription() {
+    return { ok: true };
+  }
+
   @Post('empty-json')
   emptyJson(@Body() body: unknown) {
     return body;
@@ -126,6 +131,35 @@ describe('Fastify HTTP adapter', () => {
         payload: multipleFiles.payload,
       });
       expect(multipleFilesResponse.statusCode).toBe(400);
+    } finally {
+      await app.close();
+    }
+  });
+
+  test('logs the route template instead of a token-bearing calendar URL', async () => {
+    const app = await NestFactory.create<NestFastifyApplication>(
+      FastifyProbeModule,
+      createApiFastifyAdapter(),
+      { logger: false },
+    );
+    const logCalls: unknown[] = [];
+    const logger = {
+      info: (...values: unknown[]) => logCalls.push(values),
+      warn: (...values: unknown[]) => logCalls.push(values),
+    } as unknown as NonNullable<Parameters<typeof configureApiHttp>[2]>;
+    const secretToken = 'a'.repeat(43);
+
+    try {
+      await configureApiHttp(app, 'http://localhost:3000', logger);
+      await app.init();
+      const response = await app.inject({
+        method: 'GET',
+        url: `/calendar-subscriptions/019a0b6e-2f05-7b52-a76a-0800f1e670d0/${secretToken}.ics`,
+      });
+      expect(response.statusCode).toBe(200);
+      const logged = JSON.stringify(logCalls);
+      expect(logged).not.toContain(secretToken);
+      expect(logged).toContain('/calendar-subscriptions/:tenantId/:token.ics');
     } finally {
       await app.close();
     }

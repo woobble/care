@@ -889,6 +889,21 @@ export class SchedulingRepository {
     return row ?? null;
   }
 
+  async latestTourPublicationsForTours(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    tourIds: string[],
+  ) {
+    if (!tourIds.length) return [];
+    return transaction
+      .selectDistinctOn([tourPublications.tourId])
+      .from(tourPublications)
+      .where(
+        and(eq(tourPublications.tenantId, tenantId), inArray(tourPublications.tourId, tourIds)),
+      )
+      .orderBy(tourPublications.tourId, desc(tourPublications.version));
+  }
+
   async tourPublicationsForTour(
     transaction: DatabaseTransaction,
     tenantId: string,
@@ -908,6 +923,35 @@ export class SchedulingRepository {
       .innerJoin(tours, and(eq(tours.tenantId, tourStops.tenantId), eq(tours.id, tourStops.tourId)))
       .where(and(eq(tourStops.tenantId, tenantId), eq(tourStops.visitId, visitId)))
       .orderBy(asc(tours.id));
+  }
+
+  async visitsAssignedToEmployeeByIds(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    employeeId: string,
+    visitIds: string[],
+  ) {
+    if (!visitIds.length) return [];
+    const rows = await transaction
+      .select({ visit: visits })
+      .from(visits)
+      .innerJoin(
+        visitAssignments,
+        and(
+          eq(visitAssignments.tenantId, visits.tenantId),
+          eq(visitAssignments.visitId, visits.id),
+          eq(visitAssignments.employeeId, employeeId),
+          eq(visitAssignments.status, 'active'),
+        ),
+      )
+      .where(
+        and(
+          eq(visits.tenantId, tenantId),
+          inArray(visits.id, visitIds),
+          inArray(visits.status, ['planned', 'confirmed']),
+        ),
+      );
+    return rows.map(({ visit }) => visit);
   }
 
   async listTourStopsForEmployeeDate(

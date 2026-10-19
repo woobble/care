@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   availabilityForVisit,
+  availabilityIntervalsBetween,
   validateEmployeeAvailability,
   InvalidEmployeeAvailabilityError,
 } from './availability';
@@ -101,6 +102,38 @@ describe('employee availability', () => {
         absent,
       ),
     ).toBe('outside');
+  });
+
+  test('expands working hours and unavailable exceptions across daylight saving time', () => {
+    const intervals = availabilityIntervalsBetween(
+      new Date('2026-10-24T22:00:00.000Z'),
+      new Date('2026-10-25T23:00:00.000Z'),
+      {
+        ...availability,
+        windows: [{ weekday: 7, startsAt: '01:00', endsAt: '04:00' }],
+        exceptions: [
+          {
+            localDate: '2026-10-25',
+            kind: 'unavailable',
+            startsAt: '11:00',
+            endsAt: '12:00',
+          },
+        ],
+      },
+    );
+
+    expect(intervals).toEqual([
+      {
+        kind: 'working',
+        start: new Date('2026-10-24T23:00:00.000Z'),
+        end: new Date('2026-10-25T03:00:00.000Z'),
+      },
+      {
+        kind: 'unavailable',
+        start: new Date('2026-10-25T10:00:00.000Z'),
+        end: new Date('2026-10-25T11:00:00.000Z'),
+      },
+    ]);
   });
 
   test('rejects invalid time zones, windows, and duplicate windows', () => {
