@@ -13,18 +13,25 @@ import {
 export function FilterDisclosure({
   title,
   children,
-}: Readonly<{ title: string; children: ReactNode }>) {
-  const [open, setOpen] = useState(true);
+  defaultOpenOnDesktop = true,
+  desktopToggle = false,
+}: Readonly<{
+  title: string;
+  children: ReactNode;
+  defaultOpenOnDesktop?: boolean;
+  desktopToggle?: boolean;
+}>) {
+  const [open, setOpen] = useState(defaultOpenOnDesktop);
 
   useEffect(() => {
     const desktop = window.matchMedia('(min-width: 768px)');
     const syncDisclosureToViewport = () => {
-      setOpen(desktop.matches);
+      setOpen(desktop.matches && defaultOpenOnDesktop);
     };
     syncDisclosureToViewport();
     desktop.addEventListener('change', syncDisclosureToViewport);
     return () => desktop.removeEventListener('change', syncDisclosureToViewport);
-  }, []);
+  }, [defaultOpenOnDesktop]);
 
   return (
     <Collapsible
@@ -36,7 +43,7 @@ export function FilterDisclosure({
         <Button
           type="button"
           variant="ghost"
-          className="group flex min-h-11 w-full justify-between rounded-none px-4 py-2 text-left text-sm font-semibold md:hidden"
+          className={`group flex min-h-11 w-full justify-between rounded-none px-4 py-2 text-left text-sm font-semibold ${desktopToggle ? '' : 'md:hidden'}`}
         >
           {title}
           <ChevronDown

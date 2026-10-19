@@ -52,6 +52,7 @@ export function AsyncEntityCombobox({
   placeholder,
   browseOnEmpty = false,
   required = false,
+  hideLabel = false,
   className,
   minQueryLength = 1,
   debounceMs = 300,
@@ -76,6 +77,7 @@ export function AsyncEntityCombobox({
   placeholder?: string;
   browseOnEmpty?: boolean;
   required?: boolean;
+  hideLabel?: boolean;
   className?: string;
   minQueryLength?: number;
   debounceMs?: number;
@@ -338,7 +340,7 @@ export function AsyncEntityCombobox({
 
   return (
     <div className="grid min-w-0 gap-1.5">
-      <Label htmlFor={id}>
+      <Label htmlFor={id} className={hideLabel ? 'sr-only' : undefined}>
         {label}
         {required ? <span aria-hidden="true"> *</span> : null}
       </Label>

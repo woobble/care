@@ -6,13 +6,21 @@ import type { DateHeaderProps, EventProps, View } from 'react-big-calendar';
 import { enUS } from 'date-fns/locale/en-US';
 import { de } from 'date-fns/locale/de';
 import { format, getDay, parse, startOfWeek } from 'date-fns';
-import { createContext, useContext, useMemo, useState, useSyncExternalStore } from 'react';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
 import { Label } from '@care/ui/components/label';
 
 const localizer = dateFnsLocalizer({
@@ -76,11 +84,13 @@ export function ScheduleCalendarNavigation({
   locale,
   timezone = 'Europe/Berlin',
   labels,
+  employeeSelector,
 }: Readonly<{
   date: string;
   view: ScheduleCalendarView;
   locale: 'en' | 'de';
   timezone?: string;
+  employeeSelector?: ReactNode;
   labels: {
     month: string;
     week: string;
@@ -97,6 +107,7 @@ export function ScheduleCalendarNavigation({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const title = getRangeTitle(date, view, locale);
 
   useEffect(() => {
@@ -119,50 +130,80 @@ export function ScheduleCalendarNavigation({
   return (
     <section
       aria-label={labels.calendarNavigation}
-      className="grid gap-3 rounded-xl border border-border bg-card p-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center"
+      className={`schedule-calendar-navigation grid min-w-0 gap-3 rounded-2xl border border-border bg-card p-3 sm:items-center ${
+        employeeSelector
+          ? 'sm:grid-cols-[minmax(0,1fr)_minmax(15rem,0.85fr)_auto]'
+          : 'sm:grid-cols-[minmax(0,1fr)_auto]'
+      }`}
     >
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="schedule-calendar-controls flex min-w-0 flex-wrap items-center gap-2">
         <Button
           type="button"
+          size="icon"
           variant="secondary"
+          aria-label={labels.previous}
           onClick={() => updateUrl(shiftDate(date, view, -1))}
         >
-          {labels.previous}
+          <ChevronLeft aria-hidden="true" />
+        </Button>
+        <div className="schedule-calendar-range flex min-h-10 min-w-0 items-center gap-2 rounded-xl border border-border bg-background/70 px-3">
+          <CalendarDays className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <h2 className="truncate text-sm font-semibold tabular-nums" aria-live="polite">
+            {title}
+          </h2>
+        </div>
+        <Button
+          type="button"
+          size="icon"
+          variant="secondary"
+          aria-label={labels.next}
+          onClick={() => updateUrl(shiftDate(date, view, 1))}
+        >
+          <ChevronRight aria-hidden="true" />
         </Button>
         <Button
           type="button"
-          variant="secondary"
+          variant="ghost"
+          className="min-h-10 px-3 text-sm"
           onClick={() => updateUrl(todayInTimezone(timezone))}
         >
           {labels.today}
         </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => updateUrl(shiftDate(date, view, 1))}
-        >
-          {labels.next}
-        </Button>
-      </div>
-      <h2 className="text-center text-lg font-semibold" aria-live="polite">
-        {title}
-      </h2>
-      <div className="flex flex-wrap items-end justify-start gap-2 sm:justify-end">
-        <div className="grid gap-1">
-          <Label htmlFor="schedule-calendar-date">{labels.date}</Label>
-          <Input
+        <div className="schedule-calendar-date-picker">
+          <Label htmlFor="schedule-calendar-date" className="sr-only">
+            {labels.goToDate}
+          </Label>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            aria-label={labels.goToDate}
+            onClick={() => {
+              const input = dateInputRef.current;
+              if (!input) return;
+              if (typeof input.showPicker === 'function') input.showPicker();
+              else input.click();
+            }}
+          >
+            <CalendarDays aria-hidden="true" />
+          </Button>
+          <input
+            ref={dateInputRef}
             id="schedule-calendar-date"
             type="date"
             value={date}
+            tabIndex={-1}
             onChange={(event) => {
               if (event.currentTarget.value) updateUrl(event.currentTarget.value);
             }}
-            className="min-h-10 w-40"
           />
         </div>
       </div>
+      {employeeSelector ? (
+        <div className="planning-calendar-employee min-w-0">{employeeSelector}</div>
+      ) : null}
       <div
-        className="flex flex-wrap gap-1 sm:col-span-3"
+        className="schedule-calendar-views flex min-w-0 flex-wrap gap-1"
         role="group"
         aria-label={labels.calendarNavigation}
       >
@@ -192,6 +233,7 @@ export function ScheduleCalendarGrid({
   timezone,
   locale,
   emptyLabel,
+  emptyOverlay,
   createVisitLabel,
   rescheduleErrorLabel,
   canReschedule = false,
@@ -205,6 +247,7 @@ export function ScheduleCalendarGrid({
   timezone: string;
   locale: 'en' | 'de';
   emptyLabel: string;
+  emptyOverlay?: ReactNode;
   createVisitLabel?: string;
   rescheduleErrorLabel: string;
   canReschedule?: boolean;
@@ -403,8 +446,9 @@ export function ScheduleCalendarGrid({
             style={{ height: view === 'month' ? 'min(70vh, 760px)' : 'min(78vh, 900px)' }}
           />
         </monthHeaderContext.Provider>
+        {emptyOverlay ? <div className="care-calendar-empty-overlay">{emptyOverlay}</div> : null}
       </div>
-      {!calendarEvents.length ? (
+      {!calendarEvents.length && !emptyOverlay ? (
         <p className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
           {emptyLabel}
         </p>

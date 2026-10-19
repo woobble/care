@@ -1,4 +1,5 @@
 import { getLocale, getTranslations } from 'next-intl/server';
+import { CalendarPlus, Check, Clock3, UsersRound } from 'lucide-react';
 import Link from 'next/link';
 
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
@@ -728,17 +729,61 @@ export default async function PlanningPage({
     .filter((value): value is string => value !== null);
   const openCount = visits.filter((visit) => visit.assignments.length === 0).length;
   const error = query.error ?? visitError?.code;
+  const calendarTitleKey =
+    view === 'agenda'
+      ? 'Planning.listOverview'
+      : view === 'month'
+        ? 'Planning.monthOverview'
+        : view === 'week'
+          ? 'Planning.weekOverview'
+          : 'Planning.dayOverview';
+  const calendarTitle = t(calendarTitleKey);
+  const calendarDescription =
+    view !== 'agenda' && !employeeId && canReadSchedule
+      ? t('Planning.selectEmployeeForAvailability')
+      : t('Planning.description');
   const estimateError = (estimateResult?.error as { code?: string } | undefined)?.code;
   const estimate = estimateResult?.data as
     | components['schemas']['BenefitEstimateResponseDto']
     | undefined;
 
   return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+    <div className="planning-dashboard grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
       <PageHeader
-        eyebrow={t('Navigation.office')}
-        title={t('Planning.title')}
-        description={t('Planning.description')}
+        title={calendarTitle}
+        description={calendarDescription}
+        actions={
+          view === 'agenda' ? null : (
+            <div className="planning-calendar-stats">
+              <div className="planning-calendar-stat">
+                <span className="planning-calendar-stat-icon planning-calendar-stat-icon-visits">
+                  <UsersRound className="size-5" aria-hidden="true" />
+                </span>
+                <div className="grid gap-0.5">
+                  <p className="planning-calendar-stat-value">
+                    {t('Planning.visitCount', { count: visitData?.total ?? 0 })}
+                  </p>
+                  <p className="planning-calendar-stat-caption">
+                    {t('Planning.calendarPeriodCaption')}
+                  </p>
+                </div>
+              </div>
+              <div className="planning-calendar-stat">
+                <span className="planning-calendar-stat-icon planning-calendar-stat-icon-open">
+                  <Clock3 className="size-5" aria-hidden="true" />
+                </span>
+                <div className="grid gap-0.5">
+                  <p className="planning-calendar-stat-value">
+                    {t('Planning.calendarOpenValue', { count: openCount })}
+                  </p>
+                  <p className="planning-calendar-stat-caption">
+                    {t('Planning.calendarOpenCaption')}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )
+        }
       />
 
       {error ? (
@@ -783,15 +828,68 @@ export default async function PlanningPage({
           goToDate: t('Planning.goToDate'),
           calendarNavigation: t('Planning.calendarNavigation'),
         }}
+        employeeSelector={
+          canReadSchedule ? (
+            <form
+              id="planning-employee-filter"
+              method="get"
+              className="planning-calendar-employee-form"
+            >
+              {Object.entries(query).map(([name, value]) =>
+                name !== 'employeeId' &&
+                name !== 'date' &&
+                name !== 'view' &&
+                name !== 'page' &&
+                name !== 'pageSize' &&
+                typeof value === 'string' ? (
+                  <input key={name} type="hidden" name={name} value={value} />
+                ) : null,
+              )}
+              <input type="hidden" name="date" value={selectedDate} />
+              <input type="hidden" name="view" value={view} />
+              <input type="hidden" name="page" value="1" />
+              {view === 'agenda' ? <input type="hidden" name="pageSize" value={pageSize} /> : null}
+              <div className="planning-calendar-employee-control">
+                <UsersRound className="planning-calendar-employee-icon" aria-hidden="true" />
+                <AsyncEntityCombobox
+                  label={t('Planning.employees')}
+                  name="employeeId"
+                  entity="employees"
+                  placeholder={t('Planning.calendarSelectEmployee')}
+                  hideLabel
+                  className="planning-calendar-employee-trigger"
+                  {...(selectedEmployee
+                    ? {
+                        initialOption: {
+                          id: selectedEmployee.id,
+                          label: `${selectedEmployee.preferredName || selectedEmployee.firstName} ${selectedEmployee.lastName}`,
+                        },
+                      }
+                    : {})}
+                />
+              </div>
+              <Button
+                type="submit"
+                size="icon"
+                variant="secondary"
+                aria-label={t('Planning.applyFilters')}
+              >
+                <Check aria-hidden="true" />
+              </Button>
+            </form>
+          ) : null
+        }
       />
 
-      <FilterDisclosure title={t('Planning.filters')}>
+      <FilterDisclosure title={t('Planning.filters')} defaultOpenOnDesktop={false} desktopToggle>
         <form
           method="get"
           className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
         >
+          <input type="hidden" name="date" value={selectedDate} />
           <input type="hidden" name="view" value={view} />
           <input type="hidden" name="page" value="1" />
+          {employeeId ? <input type="hidden" name="employeeId" value={employeeId} /> : null}
           {view === 'agenda' ? <input type="hidden" name="pageSize" value={pageSize} /> : null}
           <Field
             label={t('Planning.search')}
@@ -856,20 +954,6 @@ export default async function PlanningPage({
                   initialOption: {
                     id: selectedTeam.id,
                     label: `${selectedTeam.organizationName} · ${selectedTeam.name}`,
-                  },
-                }
-              : {})}
-          />
-          <AsyncEntityCombobox
-            label={t('Planning.employees')}
-            name="employeeId"
-            entity="employees"
-            placeholder={t('Planning.allEmployees')}
-            {...(selectedEmployee
-              ? {
-                  initialOption: {
-                    id: selectedEmployee.id,
-                    label: `${selectedEmployee.preferredName || selectedEmployee.firstName} ${selectedEmployee.lastName}`,
                   },
                 }
               : {})}
@@ -1050,26 +1134,9 @@ export default async function PlanningPage({
       ) : null}
 
       <section
-        aria-labelledby="calendar-title"
-        className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3"
+        aria-label={calendarTitle}
+        className="planning-calendar-section grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3"
       >
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="calendar-title" className="text-xl font-semibold">
-            {t(
-              view === 'agenda'
-                ? 'Planning.listOverview'
-                : view === 'month'
-                  ? 'Planning.monthOverview'
-                  : view === 'week'
-                    ? 'Planning.weekOverview'
-                    : 'Planning.dayOverview',
-            )}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {t('Planning.visitCount', { count: visitData?.total ?? 0 })} ·{' '}
-            {t('Planning.openCount', { count: openCount })}
-          </p>
-        </div>
         {worklistFailed ? (
           <p
             role="alert"
@@ -1214,11 +1281,6 @@ export default async function PlanningPage({
                 {t('Planning.calendarAvailabilityUnknown')}
               </p>
             ) : null}
-            {!employeeId && canReadSchedule ? (
-              <p className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
-                {t('Planning.selectEmployeeForAvailability')}
-              </p>
-            ) : null}
             <ScheduleCalendarGrid
               events={calendarEvents}
               backgroundEvents={availabilityBackgroundEvents}
@@ -1231,6 +1293,23 @@ export default async function PlanningPage({
                 other: t('Planning.visitCount', { count: 2 }),
               }}
               emptyLabel={t('Planning.noVisits')}
+              emptyOverlay={
+                !employeeId && canReadSchedule && calendarEvents.length === 0 ? (
+                  <div className="planning-calendar-empty-state">
+                    <span className="planning-calendar-empty-icon">
+                      <CalendarPlus className="size-8" aria-hidden="true" />
+                    </span>
+                    <h3>{t('Planning.calendarNoEmployeeTitle')}</h3>
+                    <p>{t('Planning.selectEmployeeForAvailability')}</p>
+                    <Button asChild className="planning-calendar-empty-action">
+                      <Link href="#planning-employee-filter">
+                        <UsersRound aria-hidden="true" />
+                        {t('Planning.calendarSelectEmployee')}
+                      </Link>
+                    </Button>
+                  </div>
+                ) : undefined
+              }
               {...(canCreate && canReadClient
                 ? { createVisitLabel: t('Planning.createVisit') }
                 : {})}

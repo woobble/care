@@ -291,6 +291,351 @@
   }
 }
 
+.planning-calendar-stats {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.planning-calendar-stat {
+  display: flex;
+  min-width: 0;
+  min-height: 4.2rem;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid color-mix(in oklab, var(--border) 82%, transparent);
+  border-radius: 1rem;
+  background: linear-gradient(
+    145deg,
+    color-mix(in oklab, var(--card) 92%, var(--background)),
+    var(--card)
+  );
+  padding: 0.7rem 0.85rem;
+}
+
+.planning-calendar-stat-icon {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+}
+
+.planning-calendar-stat-icon-visits {
+  background: color-mix(in oklab, var(--primary) 15%, var(--card));
+  color: var(--primary);
+}
+
+.planning-calendar-stat-icon-open {
+  background: color-mix(in oklab, var(--warning) 15%, var(--card));
+  color: var(--warning);
+}
+
+.planning-calendar-stat-value {
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+
+.planning-calendar-stat-caption {
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.planning-calendar-navigation {
+  background: linear-gradient(
+    155deg,
+    color-mix(in oklab, var(--card) 95%, var(--background)),
+    var(--card)
+  );
+  box-shadow: 0 10px 34px color-mix(in oklab, var(--foreground) 5%, transparent);
+}
+
+.schedule-calendar-controls {
+  flex-wrap: nowrap;
+}
+
+.schedule-calendar-controls > button,
+.schedule-calendar-views > button {
+  flex: 0 0 auto;
+}
+
+.schedule-calendar-range {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(27rem, 100%);
+}
+
+.schedule-calendar-date-picker {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.schedule-calendar-date-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.schedule-calendar-views {
+  justify-content: flex-end;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: color-mix(in oklab, var(--background) 86%, var(--card));
+  padding: 0.22rem;
+}
+
+.schedule-calendar-views > button {
+  min-width: 3.8rem;
+}
+
+.planning-calendar-employee-form {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.45rem;
+}
+
+.planning-calendar-employee-control {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: color-mix(in oklab, var(--background) 85%, var(--card));
+  padding-inline: 0.65rem 0.35rem;
+}
+
+.planning-calendar-employee-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+}
+
+.planning-calendar-employee-control > div {
+  flex: 1 1 auto;
+}
+
+.planning-calendar-employee-trigger {
+  min-height: 2.75rem;
+  border: 0;
+  background: transparent;
+  padding-inline: 0.1rem;
+  box-shadow: none;
+}
+
+.planning-dashboard .care-calendar {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in oklab, var(--border) 86%, transparent);
+  border-radius: 1rem;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--card) 93%, var(--background)),
+    var(--card)
+  );
+  padding: 0;
+  box-shadow: 0 14px 42px color-mix(in oklab, var(--foreground) 5%, transparent);
+}
+
+.planning-dashboard .care-calendar .rbc-calendar {
+  min-width: 0;
+}
+
+.planning-dashboard .care-calendar .rbc-time-view,
+.planning-dashboard .care-calendar .rbc-month-view {
+  overflow: hidden;
+  border: 0;
+  border-radius: inherit;
+}
+
+.planning-dashboard .care-calendar .rbc-time-header,
+.planning-dashboard .care-calendar .rbc-time-content {
+  border-color: color-mix(in oklab, var(--border) 80%, transparent);
+}
+
+.planning-dashboard .care-calendar .rbc-header {
+  min-height: 3.6rem;
+  background: color-mix(in oklab, var(--card) 82%, var(--background));
+  color: var(--muted-foreground);
+  line-height: 1.35;
+}
+
+.planning-dashboard .care-calendar .rbc-header.rbc-today {
+  background: color-mix(in oklab, var(--primary) 10%, var(--card));
+  color: var(--foreground);
+}
+
+.planning-dashboard .care-calendar .rbc-time-header-content,
+.planning-dashboard .care-calendar .rbc-day-bg + .rbc-day-bg,
+.planning-dashboard .care-calendar .rbc-time-content > * + * > * {
+  border-color: color-mix(in oklab, var(--border) 78%, transparent);
+}
+
+.planning-dashboard .care-calendar .rbc-time-content {
+  border-top: 1px solid var(--border);
+}
+
+.planning-dashboard .care-calendar .rbc-time-slot {
+  border-top: 1px dashed color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.planning-dashboard .care-calendar .rbc-timeslot-group {
+  border-bottom-color: color-mix(in oklab, var(--border) 78%, transparent);
+}
+
+.planning-dashboard .care-calendar .rbc-day-bg.rbc-today,
+.planning-dashboard .care-calendar .rbc-time-column.rbc-now {
+  background: color-mix(in oklab, var(--primary) 7%, var(--card));
+}
+
+.planning-dashboard .care-calendar .rbc-current-time-indicator {
+  z-index: 3;
+  height: 2px;
+  background-color: var(--primary);
+}
+
+.planning-dashboard .care-calendar .rbc-current-time-indicator::before {
+  position: absolute;
+  top: -3px;
+  left: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--primary);
+  content: '';
+}
+
+.care-calendar-empty-overlay {
+  position: absolute;
+  z-index: 4;
+  inset: 4rem 0 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  pointer-events: none;
+}
+
+.planning-calendar-empty-state {
+  display: grid;
+  max-width: 32rem;
+  justify-items: center;
+  gap: 0.7rem;
+  padding: 1rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.planning-calendar-empty-icon {
+  display: grid;
+  width: 6.5rem;
+  height: 6.5rem;
+  place-items: center;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--muted-foreground) 14%, transparent) 0 34%,
+    color-mix(in oklab, var(--muted-foreground) 8%, transparent) 35% 57%,
+    transparent 58%
+  );
+  color: var(--muted-foreground);
+}
+
+.planning-calendar-empty-state h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.planning-calendar-empty-state p {
+  max-width: 28rem;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.planning-calendar-empty-action {
+  min-height: 2.85rem;
+  margin-top: 0.25rem;
+  border-radius: 999px;
+  padding-inline: 1.4rem;
+  pointer-events: auto;
+}
+
+@media (min-width: 1280px) {
+  .planning-calendar-stats {
+    width: auto;
+    min-width: 29rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .schedule-calendar-navigation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .schedule-calendar-controls {
+    flex-wrap: wrap;
+  }
+
+  .planning-calendar-employee-form {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .schedule-calendar-views {
+    justify-content: stretch;
+  }
+
+  .schedule-calendar-views > button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 639px) {
+  .planning-calendar-stats {
+    gap: 0.5rem;
+  }
+
+  .planning-calendar-stat {
+    gap: 0.5rem;
+    padding: 0.6rem;
+  }
+
+  .planning-calendar-stat-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .planning-calendar-stat-value {
+    font-size: 0.78rem;
+  }
+
+  .planning-calendar-stat-caption {
+    font-size: 0.65rem;
+  }
+
+  .schedule-calendar-range {
+    flex: 1 1 11rem;
+  }
+
+  .care-calendar-empty-overlay {
+    inset: 3.4rem 0 0;
+  }
+}
+
 @theme inline {
   --spacing: 0.25rem;
   --font-sans:
