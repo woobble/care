@@ -1,6 +1,8 @@
-FROM golang:1.26.9-alpine@sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade AS build
+FROM --platform=$BUILDPLATFORM golang:1.26.9-alpine@sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade AS build
 
 ARG PROMETHEUS_COMMIT=5241a27fe3c6983549fccc32f6e65917408c63cd
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /src
 
 RUN apk add --no-cache bash ca-certificates coreutils curl git gzip \
@@ -22,13 +24,13 @@ RUN PREBUILT_ASSETS_STATIC_DIR=web/ui/static scripts/compress_assets.sh \
   && go mod edit -require=golang.org/x/net@v0.60.0 \
   && go mod download golang.org/x/net@v0.60.0 \
   && mkdir -p /out \
-  && CGO_ENABLED=0 go build \
+  && CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build \
     -trimpath \
     -buildvcs=false \
     -tags=netgo,builtinassets \
     -ldflags='-s -w -X github.com/prometheus/common/version.Version=3.15.0 -X github.com/prometheus/common/version.Revision=5241a27fe3c6983549fccc32f6e65917408c63cd -X github.com/prometheus/common/version.Branch=release-3.15 -X github.com/prometheus/common/version.BuildUser=care-security-build -X github.com/prometheus/common/version.BuildDate=20260909-00:00:00' \
     -o /out/prometheus ./cmd/prometheus \
-  && CGO_ENABLED=0 go build \
+  && CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build \
     -trimpath \
     -buildvcs=false \
     -tags=netgo,builtinassets \

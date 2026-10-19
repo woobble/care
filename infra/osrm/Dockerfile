@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build \
   -ldflags='-s -w' \
   -o /out/care-osrm-launcher ./launcher.go
 
-FROM gcr.io/distroless/cc-debian13:latest@sha256:480c5ff295373a2223ae2a08b7793e98c8f22c90f6ae9b20fe1f61feffda72ea
+FROM gcr.io/distroless/cc-debian13:latest@sha256:159783207c2cd44c2aa5715961d13c8612368ac9bd450f887e3f08fc8ea461e3
 
 COPY --from=osrm --chown=0:0 /usr/local/bin/osrm-routed /usr/local/bin/osrm-routed
 COPY --from=launcher-build --chown=0:0 /out/care-osrm-launcher /usr/local/bin/care-osrm-launcher

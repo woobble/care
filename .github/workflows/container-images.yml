@@ -52,10 +52,10 @@ jobs:
           retention-days: 1
 
   preflight:
-    name: Build and scan ${{ matrix.image }}
+    name: Build and scan ${{ matrix.image }} (${{ matrix.platform }})
     needs: [prepare-trivy-database]
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     permissions:
       contents: read
     strategy:
@@ -76,6 +76,7 @@ jobs:
           - grafana
           - prometheus
           - osrm
+        platform: [linux/amd64, linux/arm64]
     steps:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -90,6 +91,7 @@ jobs:
         uses: ./.github/actions/production-image
         with:
           image: ${{ matrix.image }}
+          platform: ${{ matrix.platform }}
           publish: 'false'
           release-label: ${{ inputs.release_label }}
 
@@ -122,20 +124,23 @@ jobs:
           mkdir -p trivy-reports
           test -s "$TRIVY_CACHE_DIR/db/metadata.json"
           database_updated_at="$(jq -r '.UpdatedAt' "$TRIVY_CACHE_DIR/db/metadata.json")"
-          for image in \
+          for platform in linux/amd64 linux/arm64; do
+            platform_arch="${platform#linux/}"
+            for image in \
             'redis|redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0' \
             'otel|otel/opentelemetry-collector-contrib:0.163.1@sha256:1175b03003053962012f5a231f5567f66a3e8fdb960c7835c0e48f7aa1555806'; do
             IFS='|' read -r name reference <<< "$image"
-            report="trivy-reports/${name}.json"
+            report="trivy-reports/${name}-${platform_arch}.json"
             trivy --cache-dir "$TRIVY_CACHE_DIR" image \
-              --image-src remote --platform linux/amd64 \
+              --image-src remote --platform "$platform" \
               --skip-db-update --skip-java-db-update --scanners vuln \
               --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
               --format json --output "$report" "$reference"
-            echo "- `$name`: `$reference` (linux/amd64)" >> "$GITHUB_STEP_SUMMARY"
+            echo "- $name: $reference ($platform)" >> "$GITHUB_STEP_SUMMARY"
           done
-          critical="$(jq -s '[.[].Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL") | .VulnerabilityID] | unique | length' trivy-reports/redis.json trivy-reports/otel.json)"
-          high="$(jq -s '[.[].Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH") | .VulnerabilityID] | unique | length' trivy-reports/redis.json trivy-reports/otel.json)"
+          done
+          critical="$(jq -s '[.[].Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL") | .VulnerabilityID] | unique | length' trivy-reports/*.json)"
+          high="$(jq -s '[.[].Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH") | .VulnerabilityID] | unique | length' trivy-reports/*.json)"
           scanner_version="$(trivy --version | sed -n '1p')"
           {
             echo "## Pinned upstream production image scans"
@@ -171,7 +176,7 @@ jobs:
           fi
 
   publish:
-    name: Publish and rescan ${{ matrix.image }}
+    name: Publish and rescan ${{ matrix.image }} (amd64 and arm64)
     needs: [preflight, scan-pinned-upstream, prepare-trivy-database]
     if: inputs.publish_images && needs.preflight.result == 'success' && needs.scan-pinned-upstream.result == 'success' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
@@ -260,10 +265,13 @@ jobs:
               --arg commit "$SOURCE_COMMIT" \
               --arg repository "$SOURCE_REPOSITORY" \
               '(.image == $image) and (.sourceCommit == $commit) and
-               (.sourceRepository == $repository) and (.platform == "linux/amd64") and
+               (.sourceRepository == $repository) and (.platforms == ["linux/amd64","linux/arm64"]) and
                (.provenanceVerified == true) and (.scan.critical == 0) and (.scan.high == 0) and
                (.digest | test("^sha256:[0-9a-f]{64}$")) and
-               (.configDigest | test("^sha256:[0-9a-f]{64}$")) and
+               (.manifests["linux/amd64"].digest | test("^sha256:[0-9a-f]{64}$")) and
+               (.manifests["linux/arm64"].digest | test("^sha256:[0-9a-f]{64}$")) and
+               (.manifests["linux/amd64"].configDigest | test("^sha256:[0-9a-f]{64}$")) and
+               (.manifests["linux/arm64"].configDigest | test("^sha256:[0-9a-f]{64}$")) and
                (.digest as $digest | (.reference | endswith("@" + $digest))) and
                (.reference | startswith("ghcr.io/woobble/care-platform:" + $image + "-sha-" + $commit + "-run-"))' \
               "$record" >/dev/null
@@ -279,17 +287,17 @@ jobs:
             --arg workflow "$WORKFLOW_REF" \
             --arg runId "$RUN_ID" \
             --arg runAttempt "$RUN_ATTEMPT" \
-            '{schemaVersion:1, sourceRepository:$repository, sourceCommit:$commit,
+            '{schemaVersion:2, sourceRepository:$repository, sourceCommit:$commit,
               workflowRef:$workflow, runId:$runId, runAttempt:$runAttempt,
               images:sort_by(.image)}' \
             image-locks/*.json > care-platform-ghcr-image-lock.json
-          jq -e '.schemaVersion == 1 and (.images | length == 13)' care-platform-ghcr-image-lock.json >/dev/null
+          jq -e '.schemaVersion == 2 and (.images | length == 13)' care-platform-ghcr-image-lock.json >/dev/null
           {
             echo '## Verified immutable GHCR image lock'
             echo
             echo "- Source: \`$SOURCE_REPOSITORY@$SOURCE_COMMIT\`"
-            echo '- Architecture: `linux/amd64`'
-            echo '- Images: 13; all exact registry digests rescanned with zero Critical/High IDs and provenance verified.'
+            echo '- Platforms: linux/amd64 and linux/arm64'
+            echo '- Images: 13 multi-platform indexes; every exact child manifest was rescanned with zero Critical/High IDs and provenance verified.'
             echo '- Artifact: `care-platform-ghcr-image-lock.json`'
           } >> "$GITHUB_STEP_SUMMARY"
 

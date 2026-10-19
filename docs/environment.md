@@ -49,6 +49,12 @@ Local service endpoints: Authentik `9000`, SeaweedFS S3 `9002`, SeaweedFS filer 
 
 Production uses `compose.yaml` with `compose.production.yaml` in the separate `care-platform-prod` Compose project and a protected `.env.production` file. Production wrappers require the explicit `--production` argument before accessing that file; direct Compose access must follow the runbook and specify `--project-name care-platform-prod --env-file .env.production`. Local Compose commands target `care-platform-dev`, or a validated isolated `care-platform-e2e` project name. The override removes direct host ports for PostgreSQL, Redis, Authentik, SeaweedFS and OSRM; only Caddy publishes ports 80 and 443. Applications read supported secret files from Docker Compose mounts. Authentik SMTP credentials and bootstrap settings remain in the owner-only environment file because Authentik consumes those environment variables directly.
 
+### Production image platforms
+
+The production image build workflow targets `linux/amd64` and `linux/arm64`. Its preflight matrix uses native GitHub-hosted runners for each architecture, and the publish path builds and scans both platform artifacts before creating and verifying an immutable image index. The workflow also starts each locally built image's target-platform executable as a smoke check. See the [Goal 16A image compatibility and verification record](release-candidate-readiness.md) for the 15-image assessment and current publication blockers. GitHub documents the `ubuntu-24.04-arm` hosted runner in its [runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+
+The four upstream-built services that previously forced `linux/amd64` in the production override now follow the host's manifest selection. The 13 custom images still need an authorized, passing GHCR publication before production Compose can use immutable multi-platform references; the existing Authentik and Grafana Critical/High scan findings keep that release gate closed.
+
 Copy `.env.production.example` only as a configuration template, replace all placeholders, and create the referenced protected secret files. It is not a runnable deployment or evidence of production readiness. Follow the [pilot operations runbook](runbooks/pilot-operations.md) and [readiness checklist](pilot-readiness.md) before using real data.
 
 `REDIS_URL` is not required by the app worker. Redis remains in Compose for Authentik and future queue-backed jobs.

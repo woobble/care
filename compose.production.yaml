@@ -94,7 +94,6 @@ services:
 
   seaweedfs:
     image: care-platform-seaweedfs:4.48-go1.26.9-xnet0.60.0
-    platform: linux/amd64
     build:
       context: ./infra/seaweedfs
     command:
@@ -146,7 +145,6 @@ services:
 
   prometheus:
     image: care-platform-prometheus:v3.15.0-go1.26.9-xnet0.60.0
-    platform: linux/amd64
     build:
       context: ./infra/prometheus
     profiles: !override [observability]
@@ -159,7 +157,6 @@ services:
 
   grafana:
     image: care-platform-grafana:13.2.4-kin-openapi0.149.0-pruned
-    platform: linux/amd64
     build:
       context: ./infra/grafana
     profiles: !override [observability]
@@ -295,7 +292,6 @@ services:
 
   osrm:
     image: care-platform-osrm:v26.10.0-distroless-debian13-go1.26.9
-    platform: linux/amd64
     build:
       context: ./infra/osrm
     ports: !override []

@@ -1,15 +1,19 @@
 name: Build and scan a production image
-description: Build one allow-listed production image, optionally publish and rescan its immutable registry digest.
+description: Build and scan one allow-listed production image for one or both supported platforms, then optionally publish and verify an immutable multi-platform index.
 
 inputs:
   image:
     description: Name from the fixed production image inventory in the calling workflow.
     required: true
+  platform:
+    description: Single platform for native preflight builds. Publish mode builds both production platforms.
+    required: false
+    default: linux/amd64
   publish:
     description: Publish to the approved GHCR namespace. The caller controls package permissions.
     required: true
   release-label:
-    description: Optional validated release label component; the emitted tag remains unique to this workflow run.
+    description: Optional validated release label component; the emitted image tags remain unique to this workflow run.
     required: false
     default: ''
   registry-token:
@@ -19,20 +23,23 @@ inputs:
 
 outputs:
   image-reference:
-    description: Immutable GHCR reference verified after publication; empty in scan-only mode.
+    description: Immutable multi-platform GHCR index reference verified after publication; empty in scan-only mode.
     value: ${{ steps.registry.outputs.reference }}
   image-digest:
-    description: Registry manifest digest verified after publication; empty in scan-only mode.
+    description: Multi-platform registry index digest verified after publication; empty in scan-only mode.
     value: ${{ steps.registry.outputs.digest }}
-  local-image-id:
-    description: Docker config digest of the locally scanned build artifact.
-    value: ${{ steps.local-image.outputs.image_id }}
+  amd64-image-config-digest:
+    description: Docker config digest of the locally built linux/amd64 candidate.
+    value: ${{ steps.local-amd64.outputs.image_id }}
+  arm64-image-config-digest:
+    description: Docker config digest of the locally built linux/arm64 candidate.
+    value: ${{ steps.local-arm64.outputs.image_id }}
   critical-count:
-    description: Unique Critical vulnerability IDs found in the final scan.
-    value: ${{ steps.registry-scan.outputs.critical || steps.local-scan.outputs.critical || '0' }}
+    description: Critical vulnerability findings across the final architecture scans.
+    value: ${{ steps.registry-gate.outputs.critical || steps.local-gate.outputs.critical || '0' }}
   high-count:
-    description: Unique High vulnerability IDs found in the final scan.
-    value: ${{ steps.registry-scan.outputs.high || steps.local-scan.outputs.high || '0' }}
+    description: High vulnerability findings across the final architecture scans.
+    value: ${{ steps.registry-gate.outputs.high || steps.local-gate.outputs.high || '0' }}
 
 runs:
   using: composite
@@ -42,6 +49,7 @@ runs:
       shell: bash
       env:
         IMAGE_NAME: ${{ inputs.image }}
+        PLATFORM: ${{ inputs.platform }}
         RELEASE_LABEL: ${{ inputs.release-label }}
       run: |
         set -euo pipefail
@@ -62,28 +70,38 @@ runs:
           osrm) context=./infra/osrm; file=infra/osrm/Dockerfile; target='' ;;
           *) echo 'Image is not in the production allow-list.' >&2; exit 1 ;;
         esac
+        if [[ "$PLATFORM" != linux/amd64 && "$PLATFORM" != linux/arm64 ]]; then
+          echo 'Only linux/amd64 and linux/arm64 are supported.' >&2
+          exit 1
+        fi
         if [[ -n "$RELEASE_LABEL" && ( ${#RELEASE_LABEL} -gt 24 || ! "$RELEASE_LABEL" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ) ]]; then
           echo 'release-label must be a semantic version such as v1.2.3' >&2
           exit 1
         fi
         source_tag="${IMAGE}:${IMAGE_NAME}-sha-${GITHUB_SHA}-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+        amd64_tag="${source_tag}-linux-amd64"
+        arm64_tag="${source_tag}-linux-arm64"
         {
           echo "image_name=$IMAGE_NAME"
           echo "context=$context"
           echo "file=$file"
           echo "target=$target"
+          echo "platform=$PLATFORM"
           echo "source_tag=$source_tag"
+          echo "amd64_tag=$amd64_tag"
+          echo "arm64_tag=$arm64_tag"
           if [[ -n "$RELEASE_LABEL" ]]; then
             release_tag="${IMAGE}:${IMAGE_NAME}-${RELEASE_LABEL}-sha-${GITHUB_SHA}-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
             echo "release_tag=$release_tag"
           fi
-          echo 'tags<<TAGS'
-          echo "$source_tag"
-          if [[ -n "$RELEASE_LABEL" ]]; then
-            echo "$release_tag"
-          fi
-          echo TAGS
         } >> "$GITHUB_OUTPUT"
+
+    - name: Set up QEMU for the publish-time cross-platform build
+      if: inputs.publish == 'true'
+      uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      with:
+        platforms: arm64
+        cache-image: false
 
     - name: Set up Buildx
       uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -93,7 +111,8 @@ runs:
       with:
         version: v0.76.0
 
-    - name: Build local candidate
+    - name: Build local linux/amd64 candidate
+      if: inputs.publish == 'true' || inputs.platform == 'linux/amd64'
       uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
       with:
         context: ${{ steps.build-inputs.outputs.context }}
@@ -102,25 +121,97 @@ runs:
         platforms: linux/amd64
         push: false
         load: true
-        tags: ${{ steps.build-inputs.outputs.tags }}
+        tags: ${{ steps.build-inputs.outputs.amd64_tag }}
         labels: |
           org.opencontainers.image.source=https://github.com/${{ github.repository }}
           org.opencontainers.image.revision=${{ github.sha }}
-        cache-from: type=gha,scope=care-platform-${{ steps.build-inputs.outputs.image_name }}
-        cache-to: type=gha,mode=max,scope=care-platform-${{ steps.build-inputs.outputs.image_name }}
+        cache-from: type=gha,scope=care-platform-${{ steps.build-inputs.outputs.image_name }}-amd64
+        cache-to: type=gha,mode=max,scope=care-platform-${{ steps.build-inputs.outputs.image_name }}-amd64
         sbom: false
         provenance: false
 
-    - name: Identify exact local build artifact
-      id: local-image
+    - name: Build local linux/arm64 candidate
+      if: inputs.publish == 'true' || inputs.platform == 'linux/arm64'
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: ${{ steps.build-inputs.outputs.context }}
+        file: ${{ steps.build-inputs.outputs.file }}
+        target: ${{ steps.build-inputs.outputs.target }}
+        platforms: linux/arm64
+        push: false
+        load: true
+        tags: ${{ steps.build-inputs.outputs.arm64_tag }}
+        labels: |
+          org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          org.opencontainers.image.revision=${{ github.sha }}
+        cache-from: type=gha,scope=care-platform-${{ steps.build-inputs.outputs.image_name }}-arm64
+        cache-to: type=gha,mode=max,scope=care-platform-${{ steps.build-inputs.outputs.image_name }}-arm64
+        sbom: false
+        provenance: false
+
+    - name: Identify exact local linux/amd64 artifact
+      id: local-amd64
+      if: inputs.publish == 'true' || inputs.platform == 'linux/amd64'
       shell: bash
       env:
-        SOURCE_TAG: ${{ steps.build-inputs.outputs.source_tag }}
+        IMAGE_TAG: ${{ steps.build-inputs.outputs.amd64_tag }}
       run: |
         set -euo pipefail
-        image_id="$(docker image inspect --format '{{.Id}}' "$SOURCE_TAG")"
-        [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
+        image_info="$(docker image inspect --format '{{.Id}}|{{.Os}}|{{.Architecture}}' "$IMAGE_TAG")"
+        IFS='|' read -r image_id image_os image_arch <<< "$image_info"
+        [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ && "$image_os" == linux && "$image_arch" == amd64 ]]
         echo "image_id=$image_id" >> "$GITHUB_OUTPUT"
+
+    - name: Identify exact local linux/arm64 artifact
+      id: local-arm64
+      if: inputs.publish == 'true' || inputs.platform == 'linux/arm64'
+      shell: bash
+      env:
+        IMAGE_TAG: ${{ steps.build-inputs.outputs.arm64_tag }}
+      run: |
+        set -euo pipefail
+        image_info="$(docker image inspect --format '{{.Id}}|{{.Os}}|{{.Architecture}}' "$IMAGE_TAG")"
+        IFS='|' read -r image_id image_os image_arch <<< "$image_info"
+        [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ && "$image_os" == linux && "$image_arch" == arm64 ]]
+        echo "image_id=$image_id" >> "$GITHUB_OUTPUT"
+
+    - name: Smoke target-platform runtime executable
+      shell: bash
+      env:
+        IMAGE_NAME: ${{ steps.build-inputs.outputs.image_name }}
+        PLATFORM: ${{ inputs.platform }}
+        PUBLISH: ${{ inputs.publish }}
+        AMD64_TAG: ${{ steps.build-inputs.outputs.amd64_tag }}
+        ARM64_TAG: ${{ steps.build-inputs.outputs.arm64_tag }}
+      run: |
+        set -euo pipefail
+        if [[ "$PUBLISH" == true ]]; then
+          platforms=(linux/amd64 linux/arm64)
+        else
+          platforms=("$PLATFORM")
+        fi
+        case "$IMAGE_NAME" in
+          api|web|worker|migrate|operator) entrypoint=bun; command=(--version) ;;
+          postgres) entrypoint=/usr/local/bin/gosu; command=(nobody true) ;;
+          authentik) entrypoint=/ak-root/.venv/bin/python; command=(--version) ;;
+          seaweedfs) entrypoint=/usr/bin/weed; command=(version) ;;
+          aws-cli) entrypoint=aws; command=(--version) ;;
+          caddy) entrypoint=caddy; command=(version) ;;
+          grafana) entrypoint=/usr/share/grafana/bin/grafana; command=(--version) ;;
+          prometheus) entrypoint=/bin/prometheus; command=(--version) ;;
+          osrm) entrypoint=/usr/local/bin/osrm-routed; command=(--version) ;;
+          *) echo 'Image is not in the production allow-list.' >&2; exit 1 ;;
+        esac
+        for platform in "${platforms[@]}"; do
+          case "$platform" in
+            linux/amd64) image_tag="$AMD64_TAG" ;;
+            linux/arm64) image_tag="$ARM64_TAG" ;;
+            *) echo "Unsupported platform: $platform" >&2; exit 1 ;;
+          esac
+          echo "Smoke $IMAGE_NAME on $platform"
+          docker run --rm --network none --platform "$platform" \
+            --entrypoint "$entrypoint" "$image_tag" "${command[@]}"
+        done
 
     - name: Verify shared vulnerability database snapshot
       shell: bash
@@ -131,42 +222,36 @@ runs:
         test -s "$TRIVY_CACHE_DIR/db/metadata.json"
         echo "Using Trivy database updated at $(jq -r '.UpdatedAt' "$TRIVY_CACHE_DIR/db/metadata.json")"
 
-    - name: Scan exact final artifact
-      id: local-scan
+    - name: Scan exact local linux/amd64 artifact
+      id: local-scan-amd64
+      if: inputs.publish == 'true' || inputs.platform == 'linux/amd64'
       shell: bash
       env:
         IMAGE_NAME: ${{ steps.build-inputs.outputs.image_name }}
-        SOURCE_TAG: ${{ steps.build-inputs.outputs.source_tag }}
-        LOCAL_IMAGE_ID: ${{ steps.local-image.outputs.image_id }}
-        REPORT: trivy-reports/${{ steps.build-inputs.outputs.image_name }}.prepublish.json
+        IMAGE_TAG: ${{ steps.build-inputs.outputs.amd64_tag }}
+        LOCAL_IMAGE_ID: ${{ steps.local-amd64.outputs.image_id }}
+        REPORT: trivy-reports/${{ steps.build-inputs.outputs.image_name }}.linux-amd64.prepublish.json
         TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
       run: |
         set -euo pipefail
         mkdir -p trivy-reports
-        scan_ref="$SOURCE_TAG"
-        artifact_reference="$(docker image inspect --format '{{.Id}}' "$scan_ref")"
+        artifact_reference="$(docker image inspect --format '{{.Id}}' "$IMAGE_TAG")"
         if [[ "$artifact_reference" != "$LOCAL_IMAGE_ID" ]]; then
-          echo 'The local scan tag does not resolve to the identified build artifact.' >&2
+          echo 'The linux/amd64 scan tag does not resolve to the identified build artifact.' >&2
           exit 1
         fi
         trivy --cache-dir "$TRIVY_CACHE_DIR" image \
-          --image-src docker \
-          --platform linux/amd64 \
-          --skip-db-update --skip-java-db-update \
-          --scanners vuln \
+          --image-src docker --platform linux/amd64 \
+          --skip-db-update --skip-java-db-update --scanners vuln \
           --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
-          --format json --output "$REPORT" "$scan_ref"
+          --format json --output "$REPORT" "$IMAGE_TAG"
         critical="$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL") | .VulnerabilityID] | unique | length' "$REPORT")"
         high="$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH") | .VulnerabilityID] | unique | length' "$REPORT")"
-        scanner_version="$(trivy --version | sed -n '1p')"
-        database_updated_at="$(jq -r '.UpdatedAt' "$TRIVY_CACHE_DIR/db/metadata.json")"
         {
-          echo "## $IMAGE_NAME pre-publication production image scan"
+          echo "## $IMAGE_NAME pre-publication linux/amd64 image scan"
           echo
-          echo "- Scanned reference: \`$artifact_reference\`"
-          echo "- Platform: \`linux/amd64\`"
-          echo "- Scanner: \`$scanner_version\`"
-          echo "- Vulnerability database updated: \`$database_updated_at\`"
+          echo "- Scanned local config digest: $artifact_reference"
+          echo "- Platform: linux/amd64"
           echo "- Critical vulnerability IDs: $critical"
           echo "- High vulnerability IDs: $high"
         } >> "$GITHUB_STEP_SUMMARY"
@@ -176,25 +261,92 @@ runs:
           echo "reference=$artifact_reference"
         } >> "$GITHUB_OUTPUT"
 
-    - name: Retain pre-publication Trivy report
-      if: always() && steps.local-scan.outcome == 'success'
+    - name: Scan exact local linux/arm64 artifact
+      id: local-scan-arm64
+      if: inputs.publish == 'true' || inputs.platform == 'linux/arm64'
+      shell: bash
+      env:
+        IMAGE_NAME: ${{ steps.build-inputs.outputs.image_name }}
+        IMAGE_TAG: ${{ steps.build-inputs.outputs.arm64_tag }}
+        LOCAL_IMAGE_ID: ${{ steps.local-arm64.outputs.image_id }}
+        REPORT: trivy-reports/${{ steps.build-inputs.outputs.image_name }}.linux-arm64.prepublish.json
+        TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+      run: |
+        set -euo pipefail
+        mkdir -p trivy-reports
+        artifact_reference="$(docker image inspect --format '{{.Id}}' "$IMAGE_TAG")"
+        if [[ "$artifact_reference" != "$LOCAL_IMAGE_ID" ]]; then
+          echo 'The linux/arm64 scan tag does not resolve to the identified build artifact.' >&2
+          exit 1
+        fi
+        trivy --cache-dir "$TRIVY_CACHE_DIR" image \
+          --image-src docker --platform linux/arm64 \
+          --skip-db-update --skip-java-db-update --scanners vuln \
+          --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+          --format json --output "$REPORT" "$IMAGE_TAG"
+        critical="$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL") | .VulnerabilityID] | unique | length' "$REPORT")"
+        high="$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH") | .VulnerabilityID] | unique | length' "$REPORT")"
+        {
+          echo "## $IMAGE_NAME pre-publication linux/arm64 image scan"
+          echo
+          echo "- Scanned local config digest: $artifact_reference"
+          echo "- Platform: linux/arm64"
+          echo "- Critical vulnerability IDs: $critical"
+          echo "- High vulnerability IDs: $high"
+        } >> "$GITHUB_STEP_SUMMARY"
+        {
+          echo "critical=$critical"
+          echo "high=$high"
+          echo "reference=$artifact_reference"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Retain pre-publication linux/amd64 Trivy report
+      if: always() && steps.local-scan-amd64.outcome == 'success'
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
       with:
-        name: production-image-prepublish-scan-${{ steps.build-inputs.outputs.image_name }}
-        path: trivy-reports/${{ steps.build-inputs.outputs.image_name }}.prepublish.json
+        name: production-image-prepublish-scan-${{ steps.build-inputs.outputs.image_name }}-linux-amd64
+        path: trivy-reports/${{ steps.build-inputs.outputs.image_name }}.linux-amd64.prepublish.json
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Retain pre-publication linux/arm64 Trivy report
+      if: always() && steps.local-scan-arm64.outcome == 'success'
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      with:
+        name: production-image-prepublish-scan-${{ steps.build-inputs.outputs.image_name }}-linux-arm64
+        path: trivy-reports/${{ steps.build-inputs.outputs.image_name }}.linux-arm64.prepublish.json
         if-no-files-found: error
         retention-days: 90
 
     - name: Block publication on local critical or high findings
-      if: steps.local-scan.outcome == 'success'
+      id: local-gate
       shell: bash
       env:
+        PUBLISH: ${{ inputs.publish }}
+        PLATFORM: ${{ inputs.platform }}
+        AMD64_CRITICAL: ${{ steps.local-scan-amd64.outputs.critical || '0' }}
+        AMD64_HIGH: ${{ steps.local-scan-amd64.outputs.high || '0' }}
+        ARM64_CRITICAL: ${{ steps.local-scan-arm64.outputs.critical || '0' }}
+        ARM64_HIGH: ${{ steps.local-scan-arm64.outputs.high || '0' }}
         IMAGE_NAME: ${{ steps.build-inputs.outputs.image_name }}
-        CRITICAL: ${{ steps.local-scan.outputs.critical }}
-        HIGH: ${{ steps.local-scan.outputs.high }}
       run: |
         set -euo pipefail
-        if (( CRITICAL > 0 || HIGH > 0 )); then
+        critical=$((AMD64_CRITICAL + ARM64_CRITICAL))
+        high=$((AMD64_HIGH + ARM64_HIGH))
+        echo "critical=$critical" >> "$GITHUB_OUTPUT"
+        echo "high=$high" >> "$GITHUB_OUTPUT"
+        if [[ "$PUBLISH" == true ]]; then
+          echo "## $IMAGE_NAME pre-publication scan gate" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "- Platforms: linux/amd64 and linux/arm64" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "## $IMAGE_NAME $PLATFORM pre-publication scan gate" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "- Platform: $PLATFORM" >> "$GITHUB_STEP_SUMMARY"
+        fi
+        echo "- Critical findings across built platforms: $critical" >> "$GITHUB_STEP_SUMMARY"
+        echo "- High findings across built platforms: $high" >> "$GITHUB_STEP_SUMMARY"
+        if (( critical > 0 || high > 0 )); then
           echo "Actionable critical/high findings remain in $IMAGE_NAME; publication is blocked pending security-owner disposition." >&2
           exit 1
         fi
@@ -207,68 +359,70 @@ runs:
         username: ${{ github.actor }}
         password: ${{ inputs.registry-token }}
 
-    - name: Publish the scanned candidate
+    - name: Push the exact scanned platform candidates
       if: inputs.publish == 'true'
       shell: bash
       env:
-        SOURCE_TAG: ${{ steps.build-inputs.outputs.source_tag }}
-        RELEASE_TAG: ${{ steps.build-inputs.outputs.release_tag }}
+        AMD64_TAG: ${{ steps.build-inputs.outputs.amd64_tag }}
+        ARM64_TAG: ${{ steps.build-inputs.outputs.arm64_tag }}
       run: |
         set -euo pipefail
-        docker push --quiet "$SOURCE_TAG" >/dev/null
-        if [[ -n "$RELEASE_TAG" ]]; then
-          docker push --quiet "$RELEASE_TAG" >/dev/null
-        fi
+        docker push --quiet "$AMD64_TAG" >/dev/null
+        docker push --quiet "$ARM64_TAG" >/dev/null
 
-    - name: Verify registry reference, local config, and linux/amd64 manifest
-      id: registry
+    - name: Verify pushed child manifests match the scanned candidates
+      id: child-registry
       if: inputs.publish == 'true'
       shell: bash
       env:
-        SOURCE_TAG: ${{ steps.build-inputs.outputs.source_tag }}
-        RELEASE_TAG: ${{ steps.build-inputs.outputs.release_tag }}
-        LOCAL_IMAGE_ID: ${{ steps.local-image.outputs.image_id }}
+        AMD64_TAG: ${{ steps.build-inputs.outputs.amd64_tag }}
+        ARM64_TAG: ${{ steps.build-inputs.outputs.arm64_tag }}
+        AMD64_IMAGE_ID: ${{ steps.local-amd64.outputs.image_id }}
+        ARM64_IMAGE_ID: ${{ steps.local-arm64.outputs.image_id }}
       run: |
         set -euo pipefail
-        registry_output="$(docker buildx imagetools inspect "$SOURCE_TAG")"
-        digest="$(sed -n 's/^Digest:[[:space:]]*//p' <<< "$registry_output" | head -n 1)"
-        if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-          echo 'The registry did not return a valid immutable manifest digest.' >&2
-          exit 1
-        fi
-        reference="${SOURCE_TAG}@${digest}"
-        if ! grep -Fq 'linux/amd64' <<< "$registry_output"; then
-          echo 'The pushed manifest does not advertise linux/amd64.' >&2
-          exit 1
-        fi
-        raw_manifest="$(docker buildx imagetools inspect --raw "$reference")"
-        remote_config_digest="$(jq -r '.config.digest // empty' <<< "$raw_manifest")"
-        if [[ "$remote_config_digest" != "$LOCAL_IMAGE_ID" ]]; then
-          echo 'The registry manifest config does not match the locally scanned image config.' >&2
-          exit 1
-        fi
-        if [[ -n "$RELEASE_TAG" ]]; then
-          release_output="$(docker buildx imagetools inspect "$RELEASE_TAG")"
-          release_digest="$(sed -n 's/^Digest:[[:space:]]*//p' <<< "$release_output" | head -n 1)"
-          if [[ "$release_digest" != "$digest" ]]; then
-            echo 'The unique release tag does not resolve to the verified image digest.' >&2
-            exit 1
+        resolve_child() {
+          local tag="$1"
+          local platform="$2"
+          local expected_config="$3"
+          local inspect_output digest raw config_digest platform_pattern
+          inspect_output="$(docker buildx imagetools inspect "$tag")"
+          digest="$(sed -n 's/^Digest:[[:space:]]*//p' <<< "$inspect_output" | head -n 1)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          case "$platform" in
+            linux/amd64) platform_pattern='^[[:space:]]*Platform:[[:space:]]+linux/amd64$' ;;
+            linux/arm64) platform_pattern='^[[:space:]]*Platform:[[:space:]]+linux/arm64(/v8)?$' ;;
+            *) echo "Unsupported platform: $platform" >&2; return 1 ;;
+          esac
+          grep -Eq "$platform_pattern" <<< "$inspect_output"
+          raw="$(docker buildx imagetools inspect --raw "$tag@$digest")"
+          config_digest="$(jq -r '.config.digest // empty' <<< "$raw")"
+          if [[ "$config_digest" != "$expected_config" ]]; then
+            echo "The $platform registry manifest config differs from the exact locally scanned image." >&2
+            return 1
           fi
-        fi
-        echo "reference=$reference" >> "$GITHUB_OUTPUT"
-        echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          printf '%s@%s\n' "$tag" "$digest"
+        }
+        amd64_reference="$(resolve_child "$AMD64_TAG" linux/amd64 "$AMD64_IMAGE_ID")"
+        arm64_reference="$(resolve_child "$ARM64_TAG" linux/arm64 "$ARM64_IMAGE_ID")"
+        {
+          echo "amd64_reference=$amd64_reference"
+          echo "amd64_digest=${amd64_reference##*@}"
+          echo "arm64_reference=$arm64_reference"
+          echo "arm64_digest=${arm64_reference##*@}"
+        } >> "$GITHUB_OUTPUT"
 
-    - name: Scan exact immutable registry artifact
-      id: registry-scan
+    - name: Scan immutable linux/amd64 GHCR candidate
+      id: registry-scan-amd64
       if: inputs.publish == 'true'
       shell: bash
       env:
         IMAGE_NAME: ${{ steps.build-inputs.outputs.image_name }}
-        REFERENCE: ${{ steps.registry.outputs.reference }}
+        REFERENCE: ${{ steps.child-registry.outputs.amd64_reference }}
         TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
       run: |
         set -euo pipefail
-        report="trivy-reports/${IMAGE_NAME}.registry.json"
+        report="trivy-reports/${IMAGE_NAME}.linux-amd64.registry.json"
         trivy --cache-dir "$TRIVY_CACHE_DIR" image \
           --image-src remote --platform linux/amd64 \
           --skip-db-update --skip-java-db-update --scanners vuln \
@@ -280,41 +434,146 @@ runs:
         database_updated_at="$(jq -r '.UpdatedAt' "$TRIVY_CACHE_DIR/db/metadata.json")"
         [[ -n "$database_updated_at" && "$database_updated_at" != null ]]
         {
-          echo "## $IMAGE_NAME immutable registry image scan"
+          echo "## $IMAGE_NAME immutable linux/amd64 registry image scan"
           echo
-          echo "- Scanned reference: \`$REFERENCE\`"
-          echo "- Platform: \`linux/amd64\`"
-          echo "- Scanner: \`$scanner_version\`"
-          echo "- Vulnerability database updated: \`$database_updated_at\`"
+          echo "- Scanned reference: $REFERENCE"
+          echo "- Scanner: $scanner_version"
+          echo "- Vulnerability database updated: $database_updated_at"
           echo "- Critical vulnerability IDs: $critical"
           echo "- High vulnerability IDs: $high"
         } >> "$GITHUB_STEP_SUMMARY"
-        echo "critical=$critical" >> "$GITHUB_OUTPUT"
-        echo "high=$high" >> "$GITHUB_OUTPUT"
-        echo "scanner_version=$scanner_version" >> "$GITHUB_OUTPUT"
-        echo "database_updated_at=$database_updated_at" >> "$GITHUB_OUTPUT"
+        {
+          echo "critical=$critical"
+          echo "high=$high"
+          echo "scanner_version=$scanner_version"
+          echo "database_updated_at=$database_updated_at"
+        } >> "$GITHUB_OUTPUT"
 
-    - name: Retain immutable registry Trivy report
-      if: always() && steps.registry-scan.outcome == 'success'
+    - name: Scan immutable linux/arm64 GHCR candidate
+      id: registry-scan-arm64
+      if: inputs.publish == 'true'
+      shell: bash
+      env:
+        IMAGE_NAME: ${{ steps.build-inputs.outputs.image_name }}
+        REFERENCE: ${{ steps.child-registry.outputs.arm64_reference }}
+        TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+      run: |
+        set -euo pipefail
+        report="trivy-reports/${IMAGE_NAME}.linux-arm64.registry.json"
+        trivy --cache-dir "$TRIVY_CACHE_DIR" image \
+          --image-src remote --platform linux/arm64 \
+          --skip-db-update --skip-java-db-update --scanners vuln \
+          --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+          --format json --output "$report" "$REFERENCE"
+        critical="$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL") | .VulnerabilityID] | unique | length' "$report")"
+        high="$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH") | .VulnerabilityID] | unique | length' "$report")"
+        scanner_version="$(trivy --version | sed -n '1p')"
+        database_updated_at="$(jq -r '.UpdatedAt' "$TRIVY_CACHE_DIR/db/metadata.json")"
+        [[ -n "$database_updated_at" && "$database_updated_at" != null ]]
+        {
+          echo "## $IMAGE_NAME immutable linux/arm64 registry image scan"
+          echo
+          echo "- Scanned reference: $REFERENCE"
+          echo "- Scanner: $scanner_version"
+          echo "- Vulnerability database updated: $database_updated_at"
+          echo "- Critical vulnerability IDs: $critical"
+          echo "- High vulnerability IDs: $high"
+        } >> "$GITHUB_STEP_SUMMARY"
+        {
+          echo "critical=$critical"
+          echo "high=$high"
+          echo "scanner_version=$scanner_version"
+          echo "database_updated_at=$database_updated_at"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Retain immutable linux/amd64 registry Trivy report
+      if: always() && steps.registry-scan-amd64.outcome == 'success'
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
       with:
-        name: production-image-registry-scan-${{ steps.build-inputs.outputs.image_name }}
-        path: trivy-reports/${{ steps.build-inputs.outputs.image_name }}.registry.json
+        name: production-image-registry-scan-${{ steps.build-inputs.outputs.image_name }}-linux-amd64
+        path: trivy-reports/${{ steps.build-inputs.outputs.image_name }}.linux-amd64.registry.json
         if-no-files-found: error
         retention-days: 90
 
-    - name: Block failed registry scan
-      if: steps.registry-scan.outcome == 'success'
+    - name: Retain immutable linux/arm64 registry Trivy report
+      if: always() && steps.registry-scan-arm64.outcome == 'success'
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      with:
+        name: production-image-registry-scan-${{ steps.build-inputs.outputs.image_name }}-linux-arm64
+        path: trivy-reports/${{ steps.build-inputs.outputs.image_name }}.linux-arm64.registry.json
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Block failed immutable registry scans
+      id: registry-gate
+      if: inputs.publish == 'true'
       shell: bash
       env:
-        CRITICAL: ${{ steps.registry-scan.outputs.critical }}
-        HIGH: ${{ steps.registry-scan.outputs.high }}
+        AMD64_CRITICAL: ${{ steps.registry-scan-amd64.outputs.critical }}
+        AMD64_HIGH: ${{ steps.registry-scan-amd64.outputs.high }}
+        ARM64_CRITICAL: ${{ steps.registry-scan-arm64.outputs.critical }}
+        ARM64_HIGH: ${{ steps.registry-scan-arm64.outputs.high }}
       run: |
         set -euo pipefail
-        if (( CRITICAL > 0 || HIGH > 0 )); then
-          echo 'The exact immutable registry artifact contains critical/high findings.' >&2
+        critical=$((AMD64_CRITICAL + ARM64_CRITICAL))
+        high=$((AMD64_HIGH + ARM64_HIGH))
+        echo "critical=$critical" >> "$GITHUB_OUTPUT"
+        echo "high=$high" >> "$GITHUB_OUTPUT"
+        if (( critical > 0 || high > 0 )); then
+          echo 'An exact immutable registry artifact contains critical/high findings.' >&2
           exit 1
         fi
+
+    - name: Create verified multi-platform manifest index
+      if: inputs.publish == 'true'
+      shell: bash
+      env:
+        SOURCE_TAG: ${{ steps.build-inputs.outputs.source_tag }}
+        RELEASE_TAG: ${{ steps.build-inputs.outputs.release_tag }}
+        AMD64_REFERENCE: ${{ steps.child-registry.outputs.amd64_reference }}
+        ARM64_REFERENCE: ${{ steps.child-registry.outputs.arm64_reference }}
+      run: |
+        set -euo pipefail
+        tags=(--tag "$SOURCE_TAG")
+        if [[ -n "$RELEASE_TAG" ]]; then
+          tags+=(--tag "$RELEASE_TAG")
+        fi
+        docker buildx imagetools create "${tags[@]}" "$AMD64_REFERENCE" "$ARM64_REFERENCE"
+
+    - name: Verify immutable index advertises both platforms and exact children
+      id: registry
+      if: inputs.publish == 'true'
+      shell: bash
+      env:
+        SOURCE_TAG: ${{ steps.build-inputs.outputs.source_tag }}
+        RELEASE_TAG: ${{ steps.build-inputs.outputs.release_tag }}
+        AMD64_DIGEST: ${{ steps.child-registry.outputs.amd64_digest }}
+        ARM64_DIGEST: ${{ steps.child-registry.outputs.arm64_digest }}
+      run: |
+        set -euo pipefail
+        registry_output="$(docker buildx imagetools inspect "$SOURCE_TAG")"
+        digest="$(sed -n 's/^Digest:[[:space:]]*//p' <<< "$registry_output" | head -n 1)"
+        [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+        raw_index="$(docker buildx imagetools inspect --raw "$SOURCE_TAG@$digest")"
+        amd64_child="$(jq -r '[.manifests[]? | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest] | first // empty' <<< "$raw_index")"
+        arm64_child="$(jq -r '[.manifests[]? | select(.platform.os == "linux" and .platform.architecture == "arm64") | .digest] | first // empty' <<< "$raw_index")"
+        if [[ "$amd64_child" != "$AMD64_DIGEST" || "$arm64_child" != "$ARM64_DIGEST" ]]; then
+          echo 'The immutable index does not reference the exact scanned linux/amd64 and linux/arm64 manifests.' >&2
+          exit 1
+        fi
+        reference="${SOURCE_TAG}@${digest}"
+        if [[ -n "$RELEASE_TAG" ]]; then
+          release_output="$(docker buildx imagetools inspect "$RELEASE_TAG")"
+          release_digest="$(sed -n 's/^Digest:[[:space:]]*//p' <<< "$release_output" | head -n 1)"
+          if [[ "$release_digest" != "$digest" ]]; then
+            echo 'The unique release tag does not resolve to the verified multi-platform index digest.' >&2
+            exit 1
+          fi
+        fi
+        {
+          echo "reference=$reference"
+          echo "digest=$digest"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Generate signed GitHub build provenance
       if: inputs.publish == 'true'
@@ -343,47 +602,69 @@ runs:
           --bundle-from-oci \
           --deny-self-hosted-runners
 
-    - name: Record verified immutable image
+    - name: Record verified immutable multi-platform image
       if: inputs.publish == 'true'
       shell: bash
       env:
         IMAGE_NAME: ${{ steps.build-inputs.outputs.image_name }}
         REFERENCE: ${{ steps.registry.outputs.reference }}
         DIGEST: ${{ steps.registry.outputs.digest }}
-        CONFIG_DIGEST: ${{ steps.local-image.outputs.image_id }}
-        CRITICAL: ${{ steps.registry-scan.outputs.critical }}
-        HIGH: ${{ steps.registry-scan.outputs.high }}
-        SCANNER_VERSION: ${{ steps.registry-scan.outputs.scanner_version }}
-        DATABASE_UPDATED_AT: ${{ steps.registry-scan.outputs.database_updated_at }}
+        AMD64_REFERENCE: ${{ steps.child-registry.outputs.amd64_reference }}
+        AMD64_DIGEST: ${{ steps.child-registry.outputs.amd64_digest }}
+        AMD64_CONFIG_DIGEST: ${{ steps.local-amd64.outputs.image_id }}
+        ARM64_REFERENCE: ${{ steps.child-registry.outputs.arm64_reference }}
+        ARM64_DIGEST: ${{ steps.child-registry.outputs.arm64_digest }}
+        ARM64_CONFIG_DIGEST: ${{ steps.local-arm64.outputs.image_id }}
+        AMD64_CRITICAL: ${{ steps.registry-scan-amd64.outputs.critical }}
+        AMD64_HIGH: ${{ steps.registry-scan-amd64.outputs.high }}
+        ARM64_CRITICAL: ${{ steps.registry-scan-arm64.outputs.critical }}
+        ARM64_HIGH: ${{ steps.registry-scan-arm64.outputs.high }}
+        SCANNER_VERSION: ${{ steps.registry-scan-amd64.outputs.scanner_version }}
+        AMD64_DATABASE_UPDATED_AT: ${{ steps.registry-scan-amd64.outputs.database_updated_at }}
+        ARM64_DATABASE_UPDATED_AT: ${{ steps.registry-scan-arm64.outputs.database_updated_at }}
         SOURCE_COMMIT: ${{ github.sha }}
         SOURCE_REPOSITORY: ${{ github.repository }}
         WORKFLOW_REF: ${{ github.workflow_ref }}
       run: |
         set -euo pipefail
-        [[ "$REFERENCE" == *"@${DIGEST}" ]]
+        [[ "$REFERENCE" == *"@$DIGEST" ]]
         [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
-        [[ "$CONFIG_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
-        [[ "$CRITICAL" == 0 && "$HIGH" == 0 ]]
-        [[ -n "$SCANNER_VERSION" ]]
-        [[ -n "$DATABASE_UPDATED_AT" && "$DATABASE_UPDATED_AT" != null ]]
+        [[ "$AMD64_DIGEST" =~ ^sha256:[0-9a-f]{64}$ && "$ARM64_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+        [[ "$AMD64_CONFIG_DIGEST" =~ ^sha256:[0-9a-f]{64}$ && "$ARM64_CONFIG_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+        [[ "$AMD64_CRITICAL" == 0 && "$AMD64_HIGH" == 0 && "$ARM64_CRITICAL" == 0 && "$ARM64_HIGH" == 0 ]]
+        [[ "$AMD64_DATABASE_UPDATED_AT" == "$ARM64_DATABASE_UPDATED_AT" ]]
+        [[ -n "$SCANNER_VERSION" && -n "$AMD64_DATABASE_UPDATED_AT" && "$AMD64_DATABASE_UPDATED_AT" != null ]]
         mkdir -p image-lock
         jq -n \
           --arg image "$IMAGE_NAME" \
           --arg reference "$REFERENCE" \
           --arg digest "$DIGEST" \
-          --arg configDigest "$CONFIG_DIGEST" \
-          --arg platform linux/amd64 \
+          --arg amd64Reference "$AMD64_REFERENCE" \
+          --arg amd64Digest "$AMD64_DIGEST" \
+          --arg amd64ConfigDigest "$AMD64_CONFIG_DIGEST" \
+          --arg arm64Reference "$ARM64_REFERENCE" \
+          --arg arm64Digest "$ARM64_DIGEST" \
+          --arg arm64ConfigDigest "$ARM64_CONFIG_DIGEST" \
           --arg sourceCommit "$SOURCE_COMMIT" \
           --arg sourceRepository "$SOURCE_REPOSITORY" \
           --arg workflowRef "$WORKFLOW_REF" \
           --arg scanner "$SCANNER_VERSION" \
-          --arg databaseUpdatedAt "$DATABASE_UPDATED_AT" \
-          --argjson critical "$CRITICAL" \
-          --argjson high "$HIGH" \
-          '{image:$image, reference:$reference, digest:$digest, configDigest:$configDigest,
-            platform:$platform, sourceCommit:$sourceCommit, sourceRepository:$sourceRepository,
-            workflowRef:$workflowRef, scan:{scanner:$scanner, databaseUpdatedAt:$databaseUpdatedAt,
-            critical:$critical, high:$high}, provenanceVerified:true}' \
+          --arg databaseUpdatedAt "$AMD64_DATABASE_UPDATED_AT" \
+          --argjson amd64Critical "$AMD64_CRITICAL" \
+          --argjson amd64High "$AMD64_HIGH" \
+          --argjson arm64Critical "$ARM64_CRITICAL" \
+          --argjson arm64High "$ARM64_HIGH" \
+          '{image:$image, reference:$reference, digest:$digest,
+            platforms:["linux/amd64","linux/arm64"],
+            manifests:{
+              "linux/amd64":{reference:$amd64Reference,digest:$amd64Digest,configDigest:$amd64ConfigDigest},
+              "linux/arm64":{reference:$arm64Reference,digest:$arm64Digest,configDigest:$arm64ConfigDigest}},
+            sourceCommit:$sourceCommit, sourceRepository:$sourceRepository, workflowRef:$workflowRef,
+            scan:{scanner:$scanner,databaseUpdatedAt:$databaseUpdatedAt,critical:0,high:0,
+              byPlatform:{
+                "linux/amd64":{critical:$amd64Critical,high:$amd64High},
+                "linux/arm64":{critical:$arm64Critical,high:$arm64High}}},
+            provenanceVerified:true}' \
           > "image-lock/${IMAGE_NAME}.json"
 
     - name: Retain verified immutable image record
