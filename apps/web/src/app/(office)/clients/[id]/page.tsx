@@ -23,6 +23,7 @@ import {
   updateFuturePflegegradAction,
 } from '@app/web/app/(office)/clients/actions';
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
+import { ClientProfileSectionNav } from '@app/web/components/client-profile-section-nav';
 import { ClientProfileOverview } from '@app/web/components/client-profile-overview';
 import { DataPagination } from '@app/web/components/data-pagination';
 import { PageLoadingSkeleton } from '@app/web/components/page-loading-skeleton';
@@ -220,9 +221,9 @@ export default async function ClientDetailPage({
           </>
         }
       />
-      <nav
-        aria-label={t('Clients.detail.navigationLabel')}
-        className="flex min-w-0 [scrollbar-width:thin] items-center gap-1 overflow-x-auto border-b border-border py-1 text-sm"
+      <ClientProfileSectionNav
+        ariaLabel={t('Clients.detail.navigationLabel')}
+        className="flex min-w-0 [scrollbar-width:thin] items-center gap-1 overflow-x-auto border-b border-border px-1 py-1 text-sm [&>a]:scroll-mx-1"
       >
         <SectionLink href="#overview">{t('Clients.detail.overviewTab')}</SectionLink>
         <SectionLink href="#personal-information">{t('Clients.form.personalData')}</SectionLink>
@@ -284,7 +285,7 @@ export default async function ClientDetailPage({
           <SectionLink href="#admissions">{t('Onboarding.title')}</SectionLink>
         ) : null}
         <SectionLink href="#timeline">{t('Clients.detail.timelineTab')}</SectionLink>
-      </nav>
+      </ClientProfileSectionNav>
       <ClientProfileOverview
         client={client}
         permissions={permissions}

@@ -38,6 +38,212 @@ export function weekdayInBerlin(date: string): number {
   return value;
 }
 
+export async function measureAccessibilityTokenContrast(
+  page: Page,
+): Promise<Record<string, number>> {
+  return page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) throw new Error('Canvas color measurement is unavailable');
+    canvas.width = 1;
+    canvas.height = 1;
+
+    const pixel = (color: string) => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = color;
+      context.fillRect(0, 0, 1, 1);
+      const data = context.getImageData(0, 0, 1, 1).data;
+      return [data[0]!, data[1]!, data[2]!].map((channel) => channel / 255);
+    };
+    const luminance = (color: number[]) => {
+      const linear = color.map((channel) =>
+        channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+      );
+      return linear[0]! * 0.2126 + linear[1]! * 0.7152 + linear[2]! * 0.0722;
+    };
+    const contrast = (first: string, second: string) => {
+      const [lighter, darker] = [luminance(pixel(first)), luminance(pixel(second))].sort(
+        (a, b) => b - a,
+      );
+      return Number(((lighter! + 0.05) / (darker! + 0.05)).toFixed(2));
+    };
+    const rootStyle = getComputedStyle(document.documentElement);
+    const colors = {
+      input: rootStyle.getPropertyValue('--input').trim(),
+      ring: rootStyle.getPropertyValue('--ring').trim(),
+      destructive: rootStyle.getPropertyValue('--destructive').trim(),
+      background: rootStyle.getPropertyValue('--background').trim(),
+      card: rootStyle.getPropertyValue('--card').trim(),
+      popover: rootStyle.getPropertyValue('--popover').trim(),
+    };
+
+    return {
+      inputOnBackground: contrast(colors.input, colors.background),
+      inputOnCard: contrast(colors.input, colors.card),
+      inputOnPopover: contrast(colors.input, colors.popover),
+      ringOnBackground: contrast(colors.ring, colors.background),
+      ringOnCard: contrast(colors.ring, colors.card),
+      ringOnPopover: contrast(colors.ring, colors.popover),
+      destructiveOnBackground: contrast(colors.destructive, colors.background),
+      destructiveOnCard: contrast(colors.destructive, colors.card),
+      destructiveOnPopover: contrast(colors.destructive, colors.popover),
+    };
+  });
+}
+
+export async function expectCommandPlaceholderContrast(page: Page): Promise<number> {
+  const placeholderRatio = await page.locator('[data-slot="command-input"]').evaluate((element) => {
+    const input = element as HTMLInputElement;
+    const group = input.closest('[data-slot="input-group"]');
+    const command = input.closest('[data-slot="command"]');
+    const placeholder = getComputedStyle(input, '::placeholder');
+    const background = command ? getComputedStyle(command).backgroundColor : null;
+    if (!group || !background) throw new Error('Command input surfaces are unavailable');
+
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) throw new Error('Canvas color measurement is unavailable');
+    canvas.width = 1;
+    canvas.height = 1;
+    context.fillStyle = background;
+    context.fillRect(0, 0, 1, 1);
+    context.fillStyle = getComputedStyle(group).backgroundColor;
+    context.fillRect(0, 0, 1, 1);
+    const backgroundPixel = context.getImageData(0, 0, 1, 1).data;
+    context.globalAlpha = Number(placeholder.opacity);
+    context.fillStyle = placeholder.color;
+    context.fillRect(0, 0, 1, 1);
+    context.globalAlpha = 1;
+    const textPixel = context.getImageData(0, 0, 1, 1).data;
+    const luminance = (channels: Uint8ClampedArray) => {
+      const linear = Array.from(channels.slice(0, 3), (channel) => {
+        const value = channel / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      return linear[0]! * 0.2126 + linear[1]! * 0.7152 + linear[2]! * 0.0722;
+    };
+    const [lighter, darker] = [luminance(textPixel), luminance(backgroundPixel)].sort(
+      (a, b) => b - a,
+    );
+    return Number(((lighter! + 0.05) / (darker! + 0.05)).toFixed(2));
+  });
+
+  expect(
+    placeholderRatio,
+    'Command search placeholder text should meet 4.5:1 against its rendered input surface',
+  ).toBeGreaterThanOrEqual(4.5);
+  return placeholderRatio;
+}
+
+export async function expectClientSectionNavKeyboardVisibility(page: Page): Promise<void> {
+  const navSelector = 'main nav:has(a[href="#overview"])';
+  const nav = page.locator(navSelector);
+  await expect(nav).toHaveCount(1);
+  const linkCount = await nav.locator('a[href]').count();
+  expect(linkCount, 'The client section navigation should contain links').toBeGreaterThan(0);
+  await nav.evaluate((element) => {
+    element.scrollLeft = 0;
+    const sentinel = document.createElement('button');
+    sentinel.id = 'care-client-nav-keyboard-sentinel';
+    sentinel.type = 'button';
+    sentinel.setAttribute('aria-hidden', 'true');
+    Object.assign(sentinel.style, {
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      width: '1px',
+      height: '1px',
+      opacity: '0',
+      pointerEvents: 'none',
+    });
+    element.before(sentinel);
+    sentinel.focus();
+  });
+
+  try {
+    for (let index = 0; index < linkCount; index += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- Each key press moves through one nav item.
+      await page.keyboard.press('Tab');
+      // oxlint-disable-next-line no-await-in-loop -- Smooth scrolling can finish after the key event.
+      await expect
+        .poll(
+          async () =>
+            page.evaluate((selector) => {
+              const navElement = document.querySelector(selector);
+              const active = document.activeElement;
+              if (
+                !navElement ||
+                !(active instanceof HTMLAnchorElement) ||
+                !navElement.contains(active)
+              ) {
+                return false;
+              }
+              const navRect = navElement.getBoundingClientRect();
+              const linkRect = active.getBoundingClientRect();
+              const left = navRect.left + navElement.clientLeft;
+              const top = navRect.top + navElement.clientTop;
+              return (
+                linkRect.left >= left + 2 &&
+                linkRect.right <= left + navElement.clientWidth - 2 &&
+                linkRect.top >= top + 2 &&
+                linkRect.bottom <= top + navElement.clientHeight - 2
+              );
+            }, navSelector),
+          { timeout: 2_000 },
+        )
+        .toBe(true);
+      // oxlint-disable-next-line no-await-in-loop -- Check each focused item before moving onward.
+      const focus = await page.evaluate((selector) => {
+        const navElement = document.querySelector(selector);
+        const active = document.activeElement;
+        if (!navElement || !(active instanceof HTMLAnchorElement) || !navElement.contains(active)) {
+          return null;
+        }
+        const navRect = navElement.getBoundingClientRect();
+        const linkRect = active.getBoundingClientRect();
+        const left = navRect.left + navElement.clientLeft;
+        const top = navRect.top + navElement.clientTop;
+        const style = getComputedStyle(active);
+        return {
+          index: Array.from(navElement.querySelectorAll('a[href]')).indexOf(active),
+          href: active.getAttribute('href'),
+          focusedWithKeyboard: active.matches(':focus-visible'),
+          fullyVisible:
+            linkRect.left >= left + 2 &&
+            linkRect.right <= left + navElement.clientWidth - 2 &&
+            linkRect.top >= top + 2 &&
+            linkRect.bottom <= top + navElement.clientHeight - 2,
+          navLeft: Math.round(navRect.left),
+          navRight: Math.round(navRect.right),
+          linkLeft: Math.round(linkRect.left),
+          linkRight: Math.round(linkRect.right),
+          scrollLeft: navElement.scrollLeft,
+          indicatorVisible:
+            (style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth) > 0) ||
+            style.boxShadow !== 'none',
+        };
+      }, navSelector);
+
+      expect(
+        focus,
+        `Client navigation Tab stop ${index + 1} should stay in the section nav`,
+      ).not.toBeNull();
+      expect(focus?.index).toBe(index);
+      expect(focus?.focusedWithKeyboard).toBe(true);
+      expect(focus?.indicatorVisible).toBe(true);
+      expect(
+        focus?.fullyVisible,
+        `Focused client section should scroll fully into view: ${JSON.stringify(focus)}`,
+      ).toBe(true);
+    }
+  } finally {
+    await page.evaluate(() => {
+      document.getElementById('care-client-nav-keyboard-sentinel')?.remove();
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+  }
+}
+
 export async function expectFocusTrap(page: Page, dialog: Locator): Promise<void> {
   await expect(dialog).toHaveAttribute('aria-modal', 'true');
   await expect(dialog.locator(':focus')).toHaveCount(1);
@@ -110,7 +316,21 @@ export async function expectKeyboardTabSequence(page: Page): Promise<void> {
     tabStopCount,
     'The workflow page should expose keyboard-operable controls',
   ).toBeGreaterThan(0);
-  const originalScroll = await page.evaluate(() => ({ x: window.scrollX, y: window.scrollY }));
+  const originalScroll = await page.evaluate(() => {
+    const scrollPositions = Array.from(document.querySelectorAll('*'))
+      .filter((element) => {
+        const style = getComputedStyle(element);
+        return (
+          ((style.overflowX === 'auto' || style.overflowX === 'scroll') &&
+            element.scrollWidth > element.clientWidth) ||
+          ((style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+            element.scrollHeight > element.clientHeight)
+        );
+      })
+      .map((element) => ({ element, left: element.scrollLeft, top: element.scrollTop }));
+    Reflect.set(window, '__careKeyboardAuditScrollPositions', scrollPositions);
+    return { x: window.scrollX, y: window.scrollY };
+  });
   const visited = new Set<number>();
 
   await page.evaluate(() => {
@@ -221,6 +441,14 @@ export async function expectKeyboardTabSequence(page: Page): Promise<void> {
     await page.evaluate(({ x, y }) => {
       document.getElementById('care-keyboard-audit-sentinel')?.remove();
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      const scrollPositions = Reflect.get(window, '__careKeyboardAuditScrollPositions') as
+        | Array<{ element: Element; left: number; top: number }>
+        | undefined;
+      for (const scrollPosition of scrollPositions ?? []) {
+        scrollPosition.element.scrollLeft = scrollPosition.left;
+        scrollPosition.element.scrollTop = scrollPosition.top;
+      }
+      Reflect.deleteProperty(window, '__careKeyboardAuditScrollPositions');
       window.scrollTo(x, y);
     }, originalScroll);
   }

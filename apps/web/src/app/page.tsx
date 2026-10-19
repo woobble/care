@@ -123,7 +123,7 @@ export default async function TenantSelectionPage({
             id="tenantId"
             name="tenantId"
             required
-            selectClassName="min-h-11 rounded-md border border-border bg-card px-3"
+            selectClassName="min-h-11 rounded-md border border-input bg-card px-3"
             className="w-full"
           >
             {tenants.map((tenant) => (

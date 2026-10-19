@@ -58,6 +58,67 @@ export interface AccessibilityScan {
     lowestRatio: number | null;
     lowestTarget: unknown[] | null;
     incompleteNodes: number;
+    incomplete: Array<{
+      target: unknown[];
+      checks: Array<{ id: string; message: string; data: unknown }>;
+      rendered: {
+        selector: string;
+        tag: string;
+        role: string | null;
+        id: string;
+        classes: string;
+        color: string;
+        backgroundColor: string;
+        backgroundImage: string;
+        opacity: string;
+        filter: string;
+        backdropFilter: string;
+        mixBlendMode: string;
+        borderColor: string;
+        borderWidth: string;
+        borderStyle: string;
+        outlineColor: string;
+        outlineWidth: string;
+        outlineStyle: string;
+        placeholderColor: string | null;
+        visible: boolean;
+        intersectsViewport: boolean;
+        ariaHidden: string | null;
+        inert: boolean;
+        topAtCenter: { tag: string; id: string; classes: string } | null;
+        fontSize: string;
+        fontWeight: string;
+        lineHeight: string;
+        rect: { x: number; y: number; width: number; height: number };
+        ancestors: Array<{
+          tag: string;
+          id: string;
+          classes: string;
+          backgroundColor: string;
+          backgroundImage: string;
+          opacity: string;
+          filter: string;
+          backdropFilter: string;
+          mixBlendMode: string;
+          transform: string;
+          position: string;
+          overflow: string;
+          clipPath: string;
+          ariaHidden: string | null;
+          inert: boolean;
+        }>;
+        textStyles: Array<{
+          tag: string;
+          classes: string;
+          color: string;
+          opacity: string;
+          fontSize: string;
+          fontWeight: string;
+          lineHeight: string;
+          rects: Array<{ x: number; y: number; width: number; height: number }>;
+        }>;
+      } | null;
+    }>;
   };
 }
 
@@ -100,6 +161,154 @@ export async function scanAccessibility(
       )
     : undefined;
   const incompleteContrastRule = results.incomplete.find((rule) => rule.id === 'color-contrast');
+  const incompleteContrastNodes = await Promise.all(
+    (incompleteContrastRule?.nodes ?? []).map(async (node) => {
+      const selector = node.target.find((target): target is string => typeof target === 'string');
+      const rendered = selector
+        ? await page
+            .locator(selector)
+            .first()
+            .evaluate((element, targetSelector) => {
+              const style = getComputedStyle(element);
+              const rect = element.getBoundingClientRect();
+              const intersectsViewport =
+                rect.width > 0 &&
+                rect.height > 0 &&
+                rect.right > 0 &&
+                rect.left < document.documentElement.clientWidth &&
+                rect.bottom > 0 &&
+                rect.top < document.documentElement.clientHeight;
+              const visible =
+                element.checkVisibility({ opacityProperty: true, visibilityProperty: true }) &&
+                !element.closest('[hidden], [inert], [aria-hidden="true"]');
+              const topElement =
+                rect.width > 0 && rect.height > 0
+                  ? document.elementFromPoint(
+                      Math.min(
+                        document.documentElement.clientWidth - 1,
+                        Math.max(0, rect.x + rect.width / 2),
+                      ),
+                      Math.min(
+                        document.documentElement.clientHeight - 1,
+                        Math.max(0, rect.y + rect.height / 2),
+                      ),
+                    )
+                  : null;
+              const ancestors = [];
+              let current: Element | null = element;
+              while (current && ancestors.length < 8) {
+                const ancestorStyle = getComputedStyle(current);
+                ancestors.push({
+                  tag: current.localName,
+                  id: current.id,
+                  classes: typeof current.className === 'string' ? current.className : '',
+                  backgroundColor: ancestorStyle.backgroundColor,
+                  backgroundImage: ancestorStyle.backgroundImage,
+                  opacity: ancestorStyle.opacity,
+                  filter: ancestorStyle.filter,
+                  backdropFilter: ancestorStyle.backdropFilter,
+                  mixBlendMode: ancestorStyle.mixBlendMode,
+                  transform: ancestorStyle.transform,
+                  position: ancestorStyle.position,
+                  overflow: `${ancestorStyle.overflowX} ${ancestorStyle.overflowY}`,
+                  clipPath: ancestorStyle.clipPath,
+                  ariaHidden: current.getAttribute('aria-hidden'),
+                  inert: current.hasAttribute('inert'),
+                });
+                current = current.parentElement;
+              }
+
+              const textStyles = [];
+              const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+              let textNode = walker.nextNode();
+              while (textNode && textStyles.length < 60) {
+                if (textNode.textContent?.trim() && textNode.parentElement) {
+                  const textElement = textNode.parentElement;
+                  const textStyle = getComputedStyle(textElement);
+                  const range = document.createRange();
+                  range.selectNodeContents(textNode);
+                  textStyles.push({
+                    tag: textElement.localName,
+                    classes: typeof textElement.className === 'string' ? textElement.className : '',
+                    color: textStyle.color,
+                    opacity: textStyle.opacity,
+                    fontSize: textStyle.fontSize,
+                    fontWeight: textStyle.fontWeight,
+                    lineHeight: textStyle.lineHeight,
+                    rects: Array.from(range.getClientRects()).map((textRect) => ({
+                      x: Math.round(textRect.x * 100) / 100,
+                      y: Math.round(textRect.y * 100) / 100,
+                      width: Math.round(textRect.width * 100) / 100,
+                      height: Math.round(textRect.height * 100) / 100,
+                    })),
+                  });
+                }
+                textNode = walker.nextNode();
+              }
+
+              return {
+                selector: targetSelector,
+                tag: element.localName,
+                role: element.getAttribute('role'),
+                id: element.id,
+                classes: typeof element.className === 'string' ? element.className : '',
+                color: style.color,
+                backgroundColor: style.backgroundColor,
+                backgroundImage: style.backgroundImage,
+                opacity: style.opacity,
+                filter: style.filter,
+                backdropFilter: style.backdropFilter,
+                mixBlendMode: style.mixBlendMode,
+                borderColor: style.borderColor,
+                borderWidth: style.borderWidth,
+                borderStyle: style.borderStyle,
+                outlineColor: style.outlineColor,
+                outlineWidth: style.outlineWidth,
+                outlineStyle: style.outlineStyle,
+                placeholderColor:
+                  element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+                    ? getComputedStyle(element, '::placeholder').color
+                    : null,
+                visible,
+                intersectsViewport,
+                ariaHidden: element.getAttribute('aria-hidden'),
+                inert: element.hasAttribute('inert'),
+                topAtCenter: topElement
+                  ? {
+                      tag: topElement.localName,
+                      id: topElement.id,
+                      classes: typeof topElement.className === 'string' ? topElement.className : '',
+                    }
+                  : null,
+                fontSize: style.fontSize,
+                fontWeight: style.fontWeight,
+                lineHeight: style.lineHeight,
+                rect: {
+                  x: Math.round(rect.x * 100) / 100,
+                  y: Math.round(rect.y * 100) / 100,
+                  width: Math.round(rect.width * 100) / 100,
+                  height: Math.round(rect.height * 100) / 100,
+                },
+                ancestors,
+                textStyles,
+              };
+            }, selector)
+            .catch(() => null)
+        : null;
+
+      return {
+        target: node.target,
+        checks: [...node.any, ...node.all, ...node.none]
+          .filter((check) => check.id === 'color-contrast')
+          .map((check) => ({
+            id: check.id,
+            message: check.message,
+            data: check.data ?? null,
+          })),
+        rendered,
+      };
+    }),
+  );
   const contrastFailures = results.violations
     .filter((violation) => violation.id === 'color-contrast')
     .flatMap((violation) =>
@@ -209,6 +418,7 @@ export async function scanAccessibility(
       lowestRatio: lowestContrast?.ratio ?? null,
       lowestTarget: lowestContrast?.target ?? null,
       incompleteNodes: incompleteContrastRule?.nodes.length ?? 0,
+      incomplete: incompleteContrastNodes,
     },
   };
   const filename = label
@@ -237,6 +447,18 @@ export async function sampleRenderedBoundaryContrast(
       const rect = element.getBoundingClientRect();
       const style = getComputedStyle(element);
       const borderWidth = Number.parseFloat(style.borderTopWidth);
+      const borderColorAlpha = (() => {
+        const colorCanvas = document.createElement('canvas');
+        colorCanvas.width = 1;
+        colorCanvas.height = 1;
+        const colorContext = colorCanvas.getContext('2d', { willReadFrequently: true });
+        if (!colorContext) throw new Error('Canvas color parsing is not available');
+        colorContext.fillStyle = style.borderTopColor;
+        colorContext.fillRect(0, 0, 1, 1);
+        return (colorContext.getImageData(0, 0, 1, 1).data[3] ?? 0) / 255;
+      })();
+      const paintedBorder =
+        borderWidth > 0 && style.borderTopStyle !== 'none' && borderColorAlpha > 0;
       const parseColor = (value: string) => {
         const colorCanvas = document.createElement('canvas');
         colorCanvas.width = 1;
@@ -265,13 +487,12 @@ export async function sampleRenderedBoundaryContrast(
         const data = context.getImageData(imageX, imageY, 1, 1).data;
         return [data[0] ?? 0, data[1] ?? 0, data[2] ?? 0];
       };
-      const averagePixel = (x: number, y: number) => {
+      const averagePixel = (x: number, y: number, includeVertical = true) => {
         const neighbors = [
           getPixel(x, y),
           getPixel(x - 1, y),
           getPixel(x + 1, y),
-          getPixel(x, y - 1),
-          getPixel(x, y + 1),
+          ...(includeVertical ? [getPixel(x, y - 1), getPixel(x, y + 1)] : []),
         ];
         return [0, 1, 2].map((channel) =>
           Math.round(
@@ -282,19 +503,22 @@ export async function sampleRenderedBoundaryContrast(
       const samples: Array<{ foreground: number[]; background: number[] }> = [];
       const left = Math.ceil(rect.left + 8);
       const right = Math.floor(rect.right - 8);
-      const foregroundY = Math.round(
-        (rect.top + (borderWidth > 0 ? Math.max(0.5, borderWidth / 2) : 4)) * scaleY,
+      const foregroundY = Math.floor(
+        (rect.top + (paintedBorder ? borderWidth / 2 : borderWidth + 1)) * scaleY,
       );
-      const backgroundY = Math.round((rect.top - Math.max(2, borderWidth + 1)) * scaleY);
+      const backgroundY = paintedBorder
+        ? Math.floor((rect.top + borderWidth + 2) * scaleY)
+        : Math.floor((rect.top - Math.max(2, borderWidth + 1)) * scaleY);
       for (let cssX = left; cssX < right; cssX += 2) {
-        const imageX = Math.round(cssX * scaleX);
+        const imageX = Math.floor(cssX * scaleX);
         samples.push({
-          foreground: averagePixel(imageX, foregroundY),
+          foreground: averagePixel(imageX, foregroundY, !paintedBorder),
           background: averagePixel(imageX, backgroundY),
         });
       }
       return {
         borderWidth,
+        paintedBorder,
         targetClasses: element.getAttribute('class') ?? '',
         borderColor: style.borderTopColor,
         backgroundColor: style.backgroundColor,
@@ -319,14 +543,12 @@ export async function sampleRenderedBoundaryContrast(
         0,
       ),
     );
-  const paintedSamples = pixels.samples.filter(({ foreground }) =>
-    pixels.borderWidth > 0
-      ? colorDistance(foreground, pixels.surfaceRgb) > 8
-      : colorDistance(foreground, pixels.surfaceRgb) < 8,
-  );
+  const paintedSamples = pixels.paintedBorder
+    ? pixels.samples
+    : pixels.samples.filter(({ foreground }) => colorDistance(foreground, pixels.surfaceRgb) < 8);
   const ratios = paintedSamples
     .map(({ foreground, background }) => {
-      const first = luminance(foreground);
+      const first = luminance(pixels.paintedBorder ? pixels.borderRgb : foreground);
       const second = luminance(background);
       return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
     })

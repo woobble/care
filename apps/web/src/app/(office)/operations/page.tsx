@@ -220,7 +220,7 @@ export default async function OperationsDashboardPage({
                       <li key={item.id}>
                         <Link
                           href={workItemSourceHref(item)}
-                          className="grid min-w-0 gap-2 rounded-lg border border-border bg-card px-3 py-3 transition-colors hover:border-primary/40 hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-4"
+                          className="grid min-w-0 gap-2 rounded-lg border border-input bg-card px-3 py-3 transition-colors hover:border-primary/40 hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-4"
                         >
                           <span className="grid min-w-0 gap-1">
                             <span className="truncate text-sm font-semibold">
@@ -496,7 +496,7 @@ async function TodayScheduleSection({
                 <li key={visit.id}>
                   <ResourceCardLink
                     href={visitHref}
-                    className="grid min-w-0 gap-2 rounded-lg border border-border bg-card px-3 py-3 transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-center sm:px-4"
+                    className="grid min-w-0 gap-2 rounded-lg border border-input bg-card px-3 py-3 transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-center sm:px-4"
                   >
                     <time
                       dateTime={visit.plannedStart}

@@ -203,7 +203,7 @@ export default async function BillingReceivablesPage({
           <NativeSelect
             name="recipientType"
             defaultValue={recipientType ?? ''}
-            selectClassName="min-h-10 rounded-md border border-border bg-card px-3 py-2"
+            selectClassName="min-h-10 rounded-md border border-input bg-card px-3 py-2"
             className="w-full"
           >
             <option value="">{t('allRecipients')}</option>
@@ -216,7 +216,7 @@ export default async function BillingReceivablesPage({
           <NativeSelect
             name="status"
             defaultValue={status}
-            selectClassName="min-h-10 rounded-md border border-border bg-card px-3 py-2"
+            selectClassName="min-h-10 rounded-md border border-input bg-card px-3 py-2"
             className="w-full"
           >
             <option value="open">{t('openReceivables')}</option>

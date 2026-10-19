@@ -11,6 +11,7 @@ import {
 import {
   acceptDialogDuringAction,
   dateInBerlin,
+  expectCommandPlaceholderContrast,
   expectKeyboardTabSequence,
   expectMobileLayoutToFit,
   retryCareToday,
@@ -71,6 +72,8 @@ test('Caregivers can complete visits, finalize documentation, and acknowledge ev
     const caregiverName = `Caregiver E2E ${scenario.runId}`;
     await page.goto(`/employees/${scenario.employeeId}`);
     await page.getByRole('combobox', { name: 'Link an active user' }).click();
+    const commandPlaceholderContrast = await expectCommandPlaceholderContrast(page);
+    console.info(`[a11y] light command placeholder contrast: ${commandPlaceholderContrast}:1`);
     await page.getByRole('combobox', { name: 'Search by name' }).fill(caregiverName);
     const caregiverOption = page
       .getByRole('dialog')

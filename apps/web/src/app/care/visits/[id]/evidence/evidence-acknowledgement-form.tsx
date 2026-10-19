@@ -239,7 +239,7 @@ export function EvidenceAcknowledgementForm({
           <button
             type="submit"
             disabled={submitting || !online}
-            className="min-h-12 rounded-md border border-border px-4 font-semibold text-foreground"
+            className="min-h-12 rounded-md border border-input px-4 font-semibold text-foreground"
           >
             {t('recordDecline')}
           </button>

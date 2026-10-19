@@ -718,7 +718,7 @@ function SelectField({
         id={id}
         name={name}
         defaultValue={defaultValue}
-        selectClassName="min-h-10 w-full min-w-0 max-w-full rounded-md border border-border bg-card px-3 py-2"
+        selectClassName="min-h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-card px-3 py-2"
         className="w-full"
       >
         {children}
