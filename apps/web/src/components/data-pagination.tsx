@@ -26,6 +26,7 @@ type DataPaginationBaseProps = Readonly<{
   pageParam?: string;
   pageSizeParam?: string;
   controlId?: string;
+  navigationLabel?: string;
   stacked?: boolean;
   totalIsLowerBound?: boolean;
 }>;
@@ -48,6 +49,7 @@ export async function DataPagination({
   pageParam = 'page',
   pageSizeParam = 'pageSize',
   controlId = 'page-size',
+  navigationLabel,
   stacked = false,
   totalIsLowerBound = false,
 }: DataPaginationProps) {
@@ -126,7 +128,7 @@ export async function DataPagination({
           </Button>
         </form>
         <Pagination
-          aria-label={t('Common.fields.pagination')}
+          aria-label={navigationLabel ?? t('Common.fields.pagination')}
           className={`mx-0 w-auto justify-start ${stacked ? '' : 'xl:justify-end'}`}
         >
           <PaginationContent className="max-w-full flex-wrap gap-1">

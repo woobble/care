@@ -37,20 +37,23 @@ export function AccountMenu({
   const name = profileName?.trim() || undefined;
   const userEmail = email?.trim() || undefined;
   const initials = getInitials(name ?? userEmail);
+  const triggerLabel = initials
+    ? `${initials} ${name ?? labels.account}`
+    : (name ?? labels.account);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
           variant="ghost"
-          aria-label={name ? `${labels.account}: ${name}` : labels.account}
+          aria-label={triggerLabel}
           title={labels.account}
           className="h-10 min-h-10 shrink-0 gap-2 rounded-full px-1.5 sm:px-2"
         >
           <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
             {initials ?? <UserRound className="size-4" aria-hidden="true" />}
-          </span>
+          </span>{' '}
           <span className="hidden max-w-32 truncate text-sm sm:block">
             {name ?? labels.account}
           </span>

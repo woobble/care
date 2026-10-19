@@ -401,6 +401,7 @@ export function AsyncEntityCombobox({
           </PopoverTrigger>
           <PopoverContent
             align="start"
+            aria-label={label}
             className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0"
           >
             <Command shouldFilter={false}>

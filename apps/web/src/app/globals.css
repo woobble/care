@@ -2,6 +2,14 @@
 @import 'react-big-calendar/lib/css/react-big-calendar.css';
 @source '../../../../packages/ui/src';
 
+main > * {
+  min-width: 0;
+}
+
+main > .grid {
+  grid-auto-columns: minmax(0, 1fr);
+}
+
 :root {
   color-scheme: light;
   --radius: 0.9rem;
@@ -16,6 +24,7 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.2 0.015 255);
   --primary: oklch(0.43 0.12 160);
+  --primary-hover: oklch(0.37 0.12 160);
   --primary-foreground: oklch(0.985 0.01 160);
   --secondary: oklch(0.95 0.008 255);
   --secondary-foreground: oklch(0.29 0.018 255);
@@ -55,6 +64,7 @@
   --popover: oklch(0.235 0.01 260);
   --popover-foreground: oklch(0.94 0.01 255);
   --primary: oklch(0.7 0.13 160);
+  --primary-hover: oklch(0.64 0.13 160);
   --primary-foreground: oklch(0.18 0.04 160);
   --secondary: oklch(0.26 0.01 260);
   --secondary-foreground: oklch(0.88 0.01 255);
@@ -62,7 +72,7 @@
   --muted-foreground: oklch(0.72 0.012 255);
   --accent: oklch(0.28 0.035 158);
   --accent-foreground: oklch(0.9 0.035 160);
-  --destructive: oklch(0.63 0.18 27);
+  --destructive: oklch(0.7 0.17 27);
   --destructive-foreground: oklch(0.98 0.01 27);
   --success: oklch(0.74 0.13 157);
   --success-foreground: oklch(0.82 0.09 157);
@@ -647,6 +657,7 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -682,8 +693,10 @@
   --radius-2xl: calc(var(--radius) + 5px);
 }
 
-* {
-  border-color: var(--border);
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 }
 
 html {

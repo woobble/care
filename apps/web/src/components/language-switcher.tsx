@@ -25,7 +25,7 @@ export function LanguageSwitcher({ locale }: Readonly<{ locale: Locale }>) {
         <Button
           type="button"
           variant="ghost"
-          aria-label={t('language')}
+          aria-label={`${t('language')}: ${locale}`}
           title={t('language')}
           disabled={pending}
           className="h-10 min-h-10 shrink-0 gap-1.5 rounded-full px-2 sm:px-2.5"

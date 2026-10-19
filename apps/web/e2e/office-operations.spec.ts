@@ -52,7 +52,7 @@ test('Operations dashboards and worklists work across screen sizes', async ({ pa
       await captureReviewScreenshot(page, 'operations-dashboard-mobile-390.png', true);
       await expectMobileLayoutToFit(page);
 
-      await page.getByRole('link', { name: /Visit issues:/ }).click();
+      await page.getByRole('link', { name: /^Visit issues\b/ }).click();
       await expect(page).toHaveURL(/\/operations\/worklist\?category=visits$/);
       await expect(page.getByRole('heading', { name: 'Action queue' })).toBeVisible();
 

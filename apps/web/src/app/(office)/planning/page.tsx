@@ -1226,14 +1226,14 @@ export default async function PlanningPage({
                           <span className="text-sm">{t('Planning.open')}</span>
                         )}
                       </div>
-                      <div className="grid min-w-0 gap-1 md:justify-items-start">
+                      <div className="grid min-w-0 gap-1">
                         <span className="text-xs text-muted-foreground md:hidden">
                           {t('Planning.facility')}
                         </span>
-                        <span className="truncate text-sm">
+                        <span className="min-w-0 truncate text-sm">
                           {visit.facilityName} · {visit.organizationName}
                         </span>
-                        <span className="rounded-full border px-2 py-1 text-xs">
+                        <span className="rounded-full border px-2 py-1 text-xs md:justify-self-start">
                           {t(visitStatusKey(visit.status))}
                         </span>
                       </div>

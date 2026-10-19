@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
+import { expectNoWcagAccessibilityViolations, scanAccessibility } from './support/accessibility';
 import {
   acceptDialogDuringAction,
   addDaysToDate,
@@ -30,7 +31,7 @@ const calendarReviewDirectory = resolve(
   '../../../artifacts/calendar-review',
 );
 
-test('Office staff can admit an existing client and plan visits', async ({ page }) => {
+test('Office staff can admit an existing client and plan visits', async ({ page }, testInfo) => {
   test.setTimeout(300_000);
   page.setDefaultTimeout(15_000);
   const database = new Client({ connectionString: required('MIGRATION_DATABASE_URL') });
@@ -38,6 +39,7 @@ test('Office staff can admit an existing client and plan visits', async ({ page 
   let office: Awaited<ReturnType<typeof createOfficeAdminSession>> | undefined;
   let scenario: Awaited<ReturnType<typeof seedLifecycleScenario>> | undefined;
   let admissionCaseId: string | undefined;
+  const accessibilityScans = [];
   try {
     office = await createOfficeAdminSession(database, page, 'admission-planning');
     scenario = await seedLifecycleScenario(database, office);
@@ -134,7 +136,7 @@ test('Office staff can admit an existing client and plan visits', async ({ page 
     if (!visit) throw new Error('The active agreement did not generate a visit');
     await page.goto(`/planning?date=${visit.visit_date}`);
     await expect(page.getByRole('heading', { name: 'Week overview' })).toBeVisible();
-    const visitLink = page.locator(`a[href^="/visits/${visit.id}"]`);
+    const visitLink = page.locator(`#visit-${visit.id}`);
     await expect(visitLink).toBeVisible();
     await mkdir(calendarReviewDirectory, { recursive: true });
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -204,7 +206,7 @@ test('Office staff can admit an existing client and plan visits', async ({ page 
       { width: 1440, height: 900 },
     ]) {
       await page.setViewportSize(viewport);
-      await visitLink.click();
+      await visitLink.press('Enter');
       const visitDetails = page.getByRole('dialog');
       await expect(visitDetails).toBeVisible();
       await expectFocusTrap(page, visitDetails);
@@ -214,12 +216,16 @@ test('Office staff can admit an existing client and plan visits', async ({ page 
         ),
       );
       await expectMobileLayoutToFit(page, visitDetails);
+      accessibilityScans.push(
+        await scanAccessibility(page, testInfo, `visit-details-dialog-${viewport.width}`),
+      );
       await page.keyboard.press('Escape');
       await expect(visitDetails).not.toBeVisible();
       await expect(page).toHaveURL(new RegExp(`/planning\\?date=${visit.visit_date}&view=day$`));
       await expect(visitLink).toBeFocused();
     }
     // oxlint-enable no-await-in-loop
+    expectNoWcagAccessibilityViolations(accessibilityScans);
   } finally {
     try {
       if (scenario && admissionCaseId) {

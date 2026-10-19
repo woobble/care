@@ -328,6 +328,7 @@ export default async function BenefitsWorklistPage({
             pageParam="clientPage"
             pageSizeParam="clientPageSize"
             controlId="benefit-clients-page-size"
+            navigationLabel={t('Benefits.clientWorklistTitle')}
           />
         ) : null}
       </section>
@@ -462,6 +463,7 @@ export default async function BenefitsWorklistPage({
             pageParam="servicePage"
             pageSizeParam="servicePageSize"
             controlId="benefit-services-page-size"
+            navigationLabel={t('Benefits.serviceWorklistTitle')}
           />
         ) : null}
       </section>

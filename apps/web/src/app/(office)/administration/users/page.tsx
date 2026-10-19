@@ -422,6 +422,7 @@ export default async function UsersAccessPage({
             page={members.page}
             pageSize={members.pageSize}
             totalItems={members.total}
+            navigationLabel={t('Users.membersTitle')}
             filters={{ ...memberFilters, ...invitationFilters, invitationPage, invitationPageSize }}
           />
         ) : null}
@@ -546,6 +547,7 @@ export default async function UsersAccessPage({
             pageParam="invitationPage"
             pageSizeParam="invitationPageSize"
             controlId="invitation-page-size"
+            navigationLabel={t('Users.invitationsTitle')}
             filters={{ ...memberFilters, ...invitationFilters, page, pageSize }}
           />
         ) : null}

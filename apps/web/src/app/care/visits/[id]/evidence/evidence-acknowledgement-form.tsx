@@ -305,7 +305,7 @@ function SignaturePad({
         onPointerCancel={() => setActiveStroke([])}
         aria-describedby="signature-accessibility-help"
         aria-disabled={disabled}
-        className="h-36 w-full touch-none rounded-md border-2 border-dashed border-border bg-background"
+        className="h-36 w-full touch-none rounded-md border-2 border-dashed border-primary bg-background"
       >
         {allStrokes.map((stroke) => (
           <path

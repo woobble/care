@@ -38,7 +38,7 @@ export function ThemeSwitcher() {
   const selectedTheme = options.find((option) => option.value === theme)?.value ?? 'system';
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"

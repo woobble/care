@@ -200,7 +200,7 @@ test('An absence substitution moves caregiver visibility and access to the confi
     await expect(originalPage).toHaveURL(/\/clients$/);
     await expect(
       originalPage.getByRole('button', {
-        name: new RegExp(`Account: Caregiver E2E ${office.runId} original`),
+        name: new RegExp(`CE Caregiver E2E ${office.runId} original`),
       }),
     ).toBeVisible();
     const deniedVisit = await originalPage.goto(`/care/visits/${scenario.visitId}`);
@@ -213,7 +213,7 @@ test('An absence substitution moves caregiver visibility and access to the confi
     await expect(substitutePage).toHaveURL(/\/clients$/);
     await expect(
       substitutePage.getByRole('button', {
-        name: new RegExp(`Account: Caregiver E2E ${office.runId} substitute`),
+        name: new RegExp(`CE Caregiver E2E ${office.runId} substitute`),
       }),
     ).toBeVisible();
     const assignedVisit = await substitutePage.goto(`/care/visits/${scenario.visitId}`);

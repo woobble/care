@@ -1,14 +1,18 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
+import { expectNoWcagAccessibilityViolations, scanAccessibility } from './support/accessibility';
 import { expectTargetViewportLayouts } from './support/browser';
 import { createOfficeAdminSession, required } from './support/office-admin';
 
-test('Office settings persist changes and report recoverable save errors', async ({ page }) => {
+test('Office settings persist changes and report recoverable save errors', async ({
+  page,
+}, testInfo) => {
   test.setTimeout(180_000);
   page.setDefaultTimeout(20_000);
   const database = new Client({ connectionString: required('MIGRATION_DATABASE_URL') });
   await database.connect();
+  const accessibilityScans = [];
 
   try {
     const office = await createOfficeAdminSession(database, page, 'settings');
@@ -64,6 +68,9 @@ test('Office settings persist changes and report recoverable save errors', async
     await billingSection.getByRole('button', { name: 'Save billing profile' }).click();
     await expect(billingSection.getByRole('alert')).toContainText(
       'Billing settings changed in another session.',
+    );
+    accessibilityScans.push(
+      await scanAccessibility(page, testInfo, 'billing-concurrency-error-alert'),
     );
     await expect(page.getByRole('status')).toHaveCount(0);
     await expect(billingSection.locator('input[name="bankAccountHolder"]')).toHaveValue(
@@ -127,6 +134,9 @@ test('Office settings persist changes and report recoverable save errors', async
     await expect(payerRequirementsForm.getByRole('alert')).toContainText(
       'Enter a valid payer requirements source and effective period.',
     );
+    accessibilityScans.push(
+      await scanAccessibility(page, testInfo, 'payer-validation-error-alert'),
+    );
     await expect(page.getByRole('status')).toHaveCount(0);
     await expect(payerRequirementsForm.locator('input[name="sourceName"]')).toHaveValue(
       'Synthetic E2E invalid attempt',
@@ -168,6 +178,9 @@ test('Office settings persist changes and report recoverable save errors', async
     await expect(templateForm.getByRole('alert')).toContainText(
       'The template changed. Reload it and try again.',
     );
+    accessibilityScans.push(
+      await scanAccessibility(page, testInfo, 'document-template-concurrency-error-alert'),
+    );
     await expect(page.getByRole('status')).toHaveCount(0);
     await expect(page.locator('input[name="headerText"]')).toHaveValue(
       'Unpersisted concurrent template edit',
@@ -199,6 +212,9 @@ test('Office settings persist changes and report recoverable save errors', async
     await expect(reminderVersion).toHaveValue('0');
     await savedReminderForm.getByRole('button', { name: 'Save changes' }).click();
     await expect(savedReminderForm.getByRole('alert')).toBeVisible();
+    accessibilityScans.push(
+      await scanAccessibility(page, testInfo, 'reminder-settings-concurrency-error-alert'),
+    );
     await expect(page.getByRole('status')).toHaveCount(0);
     await expect(savedReminderForm.locator('input[name="offsetsDays"]')).toHaveValue('46, 12, 0');
     await page.reload();
@@ -209,6 +225,7 @@ test('Office settings persist changes and report recoverable save errors', async
         .locator('input[name="offsetsDays"]'),
     ).toHaveValue('45, 10, 0');
     await expect(page.getByRole('status')).toHaveCount(0);
+    expectNoWcagAccessibilityViolations(accessibilityScans);
   } finally {
     await database.end();
   }

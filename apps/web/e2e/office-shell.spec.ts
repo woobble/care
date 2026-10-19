@@ -5,6 +5,11 @@ import { Client } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 
 import {
+  expectNoWcagAccessibilityViolations,
+  scanAccessibility,
+  writeAccessibilityReport,
+} from './support/accessibility';
+import {
   cleanupOfficeAdminSession,
   createOfficeAdminSession,
   required,
@@ -26,6 +31,7 @@ test('Office navigation stays responsive across themes and screen sizes', async 
   await database.connect();
   let office: Awaited<ReturnType<typeof createOfficeAdminSession>> | undefined;
   let paginationTenantId: string | undefined;
+  const accessibilityScans = [];
   const paginationClientIds = Array.from({ length: 11 }, () => uuidv7());
   try {
     const currentOffice = await createOfficeAdminSession(database, page, 'office-shell');
@@ -96,22 +102,27 @@ test('Office navigation stays responsive across themes and screen sizes', async 
         path: testInfo.outputPath('office-1440-collapsed-light.png'),
         fullPage: true,
       });
-      await page.evaluate(() => {
-        document.querySelector('main h1')?.setAttribute('data-shell-node-check', 'kept');
-      });
       await page.emulateMedia({ reducedMotion: 'reduce' });
       const reducedTransitionDuration = await sidebar.evaluate(
         (element) => getComputedStyle(element).transitionDuration,
       );
       expect(Number.parseFloat(reducedTransitionDuration)).toBeLessThanOrEqual(0.001);
       await page.emulateMedia({ reducedMotion: 'no-preference' });
-      const accountTrigger = page.getByRole('button', { name: /Account: / });
+      const accountTrigger = page.getByRole('button', { name: new RegExp(displayName) });
       await accountTrigger.click();
       const accountMenu = page.getByRole('menu');
       await expect(accountMenu.getByText(displayName, { exact: true })).toBeVisible();
       await expect(accountMenu.getByText(email, { exact: true })).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath('office-account-menu.png') });
+      accessibilityScans.push(await scanAccessibility(page, testInfo, 'office-account-menu-1440'));
       await page.keyboard.press('Escape');
+      await expect
+        .poll(() =>
+          page
+            .locator('main')
+            .evaluate((element) => element.closest('[aria-hidden="true"]') === null),
+        )
+        .toBe(true);
 
       await expandSidebar.click();
       await page.waitForTimeout(90);
@@ -139,6 +150,13 @@ test('Office navigation stays responsive across themes and screen sizes', async 
       const expandedIconBox = await sidebar.locator('a[aria-current="page"] svg').boundingBox();
       expect(expandedIconBox).not.toBeNull();
       expect(Math.abs(expandedIconBox!.x - collapsedIconBox!.x - 10)).toBeLessThan(1);
+      await page.evaluate(() => {
+        document.querySelector('main h1')?.setAttribute('data-shell-node-check', 'kept');
+      });
+      await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+      await page.getByRole('button', { name: 'Expand sidebar' }).click();
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
       await page.screenshot({
         path: testInfo.outputPath('office-1440-expanded-light.png'),
         fullPage: true,
@@ -276,7 +294,7 @@ test('Office navigation stays responsive across themes and screen sizes', async 
       await page.getByRole('button', { name: 'Language' }).click();
       await expect(page.getByRole('menuitemradio', { name: 'Deutsch' })).toBeVisible();
       await page.keyboard.press('Escape');
-      const tabletAccountTrigger = page.getByRole('button', { name: /Account: / });
+      const tabletAccountTrigger = page.getByRole('button', { name: new RegExp(displayName) });
       await tabletAccountTrigger.click();
       await expect(page.getByRole('menu').getByText(email, { exact: true })).toBeVisible();
       await page.keyboard.press('Escape');
@@ -304,6 +322,9 @@ test('Office navigation stays responsive across themes and screen sizes', async 
       await expect(mobileNavigationTrigger).toHaveAttribute('aria-expanded', 'true');
       await page.screenshot({ path: testInfo.outputPath('office-390-mobile-drawer.png') });
       await expectFocusTrap(page, page.getByRole('dialog'));
+      accessibilityScans.push(
+        await scanAccessibility(page, testInfo, 'office-mobile-navigation-sheet-390'),
+      );
       await page.keyboard.press('Escape');
       await expect(page.locator('#office-mobile-navigation')).not.toBeVisible();
       await expect(mobileNavigationTrigger).toBeFocused();
@@ -405,7 +426,7 @@ test('Office navigation stays responsive across themes and screen sizes', async 
     await scheduledVisits.click();
     await expect(page).toHaveURL(/\/planning(?:\?|$)/);
     await page.goto('/operations', { waitUntil: 'domcontentloaded' });
-    const visitIssues = page.getByRole('link', { name: /Visit issues:/ });
+    const visitIssues = page.getByRole('link', { name: /^Visit issues\b/ });
     await expect(visitIssues).toBeVisible();
     await visitIssues.click();
     await expect(page).toHaveURL(/\/operations\/worklist\?.*category=visits/);
@@ -429,6 +450,15 @@ test('Office navigation stays responsive across themes and screen sizes', async 
     await expect(page).toHaveURL(/page=2/);
     await expect(pagination.getByRole('link', { name: 'Zurück', exact: true })).toBeVisible();
     await expect(pagination.locator('[aria-current="page"]')).toHaveText('2');
+    accessibilityScans.push(
+      await scanAccessibility(page, testInfo, 'office-client-pagination-page-2-de'),
+    );
+    expectNoWcagAccessibilityViolations(accessibilityScans);
+    await writeAccessibilityReport(
+      accessibilityScans,
+      testInfo,
+      'office-open-states-accessibility-report.json',
+    );
   } finally {
     try {
       if (paginationTenantId) {

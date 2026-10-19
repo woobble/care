@@ -2,21 +2,25 @@
 
 import { dateFnsLocalizer, Calendar } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
-import type { DateHeaderProps, EventProps, View } from 'react-big-calendar';
+import type { DateHeaderProps, EventProps, EventWrapperProps, View } from 'react-big-calendar';
 import { enUS } from 'date-fns/locale/en-US';
 import { de } from 'date-fns/locale/de';
 import { format, getDay, parse, startOfWeek } from 'date-fns';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
 import {
+  cloneElement,
   createContext,
   useContext,
+  isValidElement,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
+  type ReactElement,
   type ReactNode,
 } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 
@@ -256,6 +260,7 @@ export function ScheduleCalendarGrid({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const calendarRef = useRef<HTMLDivElement>(null);
   const [pendingMoves, setPendingMoves] = useState<Record<string, { start: Date; end: Date }>>({});
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
   const showResourceColumns = useSyncExternalStore(
@@ -263,6 +268,31 @@ export function ScheduleCalendarGrid({
     getResourceColumnMediaSnapshot,
     () => false,
   );
+
+  useLayoutEffect(() => {
+    const calendar = calendarRef.current;
+    if (!calendar) return;
+
+    const removeInvalidAllDayRoles = () => {
+      // react-big-calendar assigns rowgroup/row roles to its all-day strip without a valid grid parent or child cells.
+      for (const allDayCell of calendar.querySelectorAll('.rbc-allday-cell[role="rowgroup"]')) {
+        allDayCell.removeAttribute('role');
+        allDayCell.querySelectorAll('.rbc-row-content[role="row"]').forEach((row) => {
+          row.removeAttribute('role');
+        });
+      }
+    };
+
+    removeInvalidAllDayRoles();
+    const observer = new MutationObserver(removeInvalidAllDayRoles);
+    observer.observe(calendar, {
+      attributes: true,
+      attributeFilter: ['role'],
+      childList: true,
+      subtree: true,
+    });
+    return () => observer.disconnect();
+  }, []);
 
   const calendarEvents = useMemo(
     () =>
@@ -381,7 +411,10 @@ export function ScheduleCalendarGrid({
           {rescheduleErrorLabel}
         </p>
       ) : null}
-      <div className="care-calendar min-w-0 rounded-xl border border-border bg-card p-2 sm:p-3">
+      <div
+        ref={calendarRef}
+        className="care-calendar min-w-0 rounded-xl border border-border bg-card p-2 sm:p-3"
+      >
         <monthHeaderContext.Provider value={monthHeaderValue}>
           <DragAndDropCalendar
             localizer={localizer}
@@ -410,6 +443,10 @@ export function ScheduleCalendarGrid({
                 router.push(`${pathname}?${params.toString()}`, { scroll: false });
               }
             }}
+            onSelectEvent={(event) => {
+              const selectedEvent = event as CalendarEvent;
+              if (!selectedEvent.backgroundKind) router.push(selectedEvent.href);
+            }}
             onEventDrop={({ event, start, end }) => {
               const moved = event as CalendarEvent;
               if (moved.draggable && start instanceof Date && end instanceof Date)
@@ -436,12 +473,21 @@ export function ScheduleCalendarGrid({
             min={timeAt(6, 0)}
             max={timeAt(23, 0)}
             scrollToTime={timeAt(7, 0)}
-            components={{ event: CalendarEventCard, month: { dateHeader: MonthDateHeader } }}
-            eventPropGetter={(event) => ({
-              className: event.backgroundKind
-                ? `care-calendar-background care-calendar-background-${event.backgroundKind}`
-                : `care-calendar-event care-calendar-event-${event.status}`,
-            })}
+            components={{
+              event: CalendarEventCard,
+              eventWrapper: CalendarEventWrapper,
+              month: { dateHeader: MonthDateHeader },
+              week: { header: CalendarWeekHeader },
+              day: { header: CalendarWeekHeader },
+            }}
+            eventPropGetter={(event) => {
+              const calendarEvent = event as CalendarEvent;
+              return {
+                className: calendarEvent.backgroundKind
+                  ? `care-calendar-background care-calendar-background-${calendarEvent.backgroundKind}`
+                  : `care-calendar-event care-calendar-event-${calendarEvent.status}`,
+              };
+            }}
             messages={messages}
             style={{ height: view === 'month' ? 'min(70vh, 760px)' : 'min(78vh, 900px)' }}
           />
@@ -457,6 +503,23 @@ export function ScheduleCalendarGrid({
   );
 }
 
+function CalendarEventWrapper({
+  children,
+}: Readonly<EventWrapperProps<CalendarEvent> & { children?: ReactNode }>) {
+  if (!isValidElement(children)) return children;
+  const dndWrapper = children as ReactElement<{ children?: ReactNode }>;
+  const eventElement = dndWrapper.props.children;
+  if (!isValidElement(eventElement)) return children;
+  const presentationalEvent = cloneElement(
+    eventElement as ReactElement<{ role?: string; tabIndex?: number }>,
+    {
+      role: 'presentation',
+      tabIndex: -1,
+    },
+  );
+  return cloneElement(dndWrapper, { children: presentationalEvent });
+}
+
 function CalendarEventCard({ event }: EventProps<CalendarEvent>) {
   if (event.backgroundKind) {
     return <span className="care-calendar-background-label">{event.statusLabel}</span>;
@@ -465,8 +528,8 @@ function CalendarEventCard({ event }: EventProps<CalendarEvent>) {
     <Link
       id={`visit-${event.id}`}
       href={event.href}
-      aria-label={event.detail}
       className="care-calendar-event-content"
+      onClick={(clickEvent) => clickEvent.stopPropagation()}
     >
       <span className="care-calendar-event-time">
         {format(event.start, 'HH:mm')}–{format(event.end, 'HH:mm')}
@@ -482,6 +545,10 @@ function CalendarEventCard({ event }: EventProps<CalendarEvent>) {
       <span className="care-calendar-event-status">{event.statusLabel}</span>
     </Link>
   );
+}
+
+function CalendarWeekHeader({ label }: Readonly<{ label: ReactNode }>) {
+  return <span>{label}</span>;
 }
 
 function MonthDateHeader({ date: headerDate, label, onDrillDown }: DateHeaderProps) {

@@ -3,6 +3,12 @@ import type { BrowserContext } from '@playwright/test';
 import { Client } from 'pg';
 
 import {
+  expectNoWcagAccessibilityViolations,
+  sampleRenderedBoundaryContrast,
+  scanAccessibility,
+  writeAccessibilityReport,
+} from './support/accessibility';
+import {
   acceptDialogDuringAction,
   dateInBerlin,
   expectKeyboardTabSequence,
@@ -25,7 +31,7 @@ import type { CaregiverIdentity, LifecycleScenario } from './support/lifecycle-s
 test('Caregivers can complete visits, finalize documentation, and acknowledge evidence', async ({
   page,
   browser,
-}) => {
+}, testInfo) => {
   test.setTimeout(600_000);
   page.setDefaultTimeout(15_000);
   const database = new Client({ connectionString: required('MIGRATION_DATABASE_URL') });
@@ -34,6 +40,8 @@ test('Caregivers can complete visits, finalize documentation, and acknowledge ev
   let scenario: LifecycleScenario | undefined;
   let caregiver: CaregiverIdentity | undefined;
   let caregiverContext: BrowserContext | undefined;
+  const accessibilityScans = [];
+  const renderedNonTextContrastSamples = [];
   try {
     office = await createOfficeAdminSession(database, page, 'care-delivery');
     scenario = await seedLifecycleScenario(database, office, { visit: 'planned' });
@@ -56,6 +64,9 @@ test('Caregivers can complete visits, finalize documentation, and acknowledge ev
       { exact: true },
     );
     await expect(unlinkedEmployeeError).toBeVisible();
+    accessibilityScans.push(
+      await scanAccessibility(caregiverPage, testInfo, 'care-unlinked-employee-error-412'),
+    );
 
     const caregiverName = `Caregiver E2E ${scenario.runId}`;
     await page.goto(`/employees/${scenario.employeeId}`);
@@ -65,6 +76,9 @@ test('Caregivers can complete visits, finalize documentation, and acknowledge ev
       .getByRole('dialog')
       .getByRole('option', { name: new RegExp(`${caregiverName}.*${caregiver.email}`) });
     await expect(caregiverOption).toBeVisible();
+    accessibilityScans.push(
+      await scanAccessibility(page, testInfo, 'office-caregiver-combobox-results'),
+    );
     await caregiverOption.click();
     await acceptDialogDuringAction(page, () =>
       page.getByRole('button', { name: 'Link user' }).click(),
@@ -91,15 +105,27 @@ test('Caregivers can complete visits, finalize documentation, and acknowledge ev
       timeZone: 'Europe/Berlin',
     }).format(startsAt);
     await caregiverPage.goto('/care/today');
+    await caregiverPage.setViewportSize({ width: 390, height: 844 });
     await expect(caregiverPage.getByRole('heading', { name: 'My visits' })).toBeVisible();
     await expect(caregiverPage.getByText(`Visits for ${careDate}`, { exact: true })).toBeVisible();
     await expect(unlinkedEmployeeError).toBeHidden();
     const visitLink = caregiverPage.getByRole('link', { name: scenario.clientName });
     await expect(visitLink).toBeVisible();
+    await expectMobileLayoutToFit(caregiverPage);
+    accessibilityScans.push(await scanAccessibility(caregiverPage, testInfo, 'care-today-390'));
     await expectKeyboardTabSequence(caregiverPage);
     await visitLink.click();
     await expect(caregiverPage.getByRole('heading', { name: scenario.clientName })).toBeVisible();
     await expectMobileLayoutToFit(caregiverPage);
+    accessibilityScans.push(
+      await scanAccessibility(caregiverPage, testInfo, 'care-visit-detail-390'),
+    );
+    await caregiverPage.setViewportSize({ width: 720, height: 450 });
+    await expectMobileLayoutToFit(caregiverPage);
+    accessibilityScans.push(
+      await scanAccessibility(caregiverPage, testInfo, 'care-visit-detail-720x450'),
+    );
+    await caregiverPage.setViewportSize({ width: 390, height: 844 });
     await expectKeyboardTabSequence(caregiverPage);
 
     await caregiverPage.getByRole('button', { name: 'Start visit' }).tap();
@@ -113,6 +139,12 @@ test('Caregivers can complete visits, finalize documentation, and acknowledge ev
     await expect(
       caregiverPage.getByRole('status').filter({ hasText: 'Service outcome saved.' }),
     ).toBeVisible();
+    await caregiverPage.setViewportSize({ width: 768, height: 1024 });
+    await expectMobileLayoutToFit(caregiverPage);
+    accessibilityScans.push(
+      await scanAccessibility(caregiverPage, testInfo, 'care-visit-in-progress-768'),
+    );
+    await caregiverPage.setViewportSize({ width: 390, height: 844 });
     await expectKeyboardTabSequence(caregiverPage);
     await caregiverPage.getByRole('button', { name: 'Start documentation' }).tap();
     await expect(caregiverPage).toHaveURL(/notice=documentation-created/);
@@ -179,6 +211,9 @@ test('Caregivers can complete visits, finalize documentation, and acknowledge ev
         .getByRole('status')
         .filter({ hasText: 'The submission result is unclear.' }),
     ).toBeVisible({ timeout: 20_000 });
+    accessibilityScans.push(
+      await scanAccessibility(caregiverPage, testInfo, 'care-documentation-uncertain-submit-390'),
+    );
     await caregiverPage.unroute(visitActionPath);
     await caregiverPage.reload();
     await expect(interruptedEntryForm.getByText(/An unsent draft from/)).toBeVisible();
@@ -215,11 +250,34 @@ test('Caregivers can complete visits, finalize documentation, and acknowledge ev
     await caregiverPage.goto(`/care/visits/${scenario.visitId}/evidence`);
     await caregiverPage.getByRole('button', { name: 'Create service evidence' }).tap();
     await expect(caregiverPage.getByText('Version 1', { exact: true })).toBeVisible();
+    await expectMobileLayoutToFit(caregiverPage);
+    const signatureBoundaryContrast = await sampleRenderedBoundaryContrast(
+      caregiverPage,
+      testInfo,
+      'care-signature-pad-boundary-390',
+      'svg[role="img"][aria-label]',
+    );
+    expect(signatureBoundaryContrast.tenthPercentileRatio ?? 0).toBeGreaterThanOrEqual(3);
+    renderedNonTextContrastSamples.push(signatureBoundaryContrast);
+    accessibilityScans.push(
+      await scanAccessibility(caregiverPage, testInfo, 'care-evidence-touch-signature-390'),
+    );
     await caregiverPage
       .getByLabel('Select the person acknowledging')
       .selectOption(`representative:${scenario.representativeContactId}`);
     await caregiverPage.locator('input[name="method-choice"][value="typed_confirmation"]').check();
     await caregiverPage.locator('input[name="confirmationName"]').fill('E2E Representative');
+    const submitBoundaryContrast = await sampleRenderedBoundaryContrast(
+      caregiverPage,
+      testInfo,
+      'care-evidence-submit-boundary-390',
+      'form#acknowledge-evidence > button[type="submit"]',
+    );
+    expect(submitBoundaryContrast.tenthPercentileRatio ?? 0).toBeGreaterThanOrEqual(3);
+    renderedNonTextContrastSamples.push(submitBoundaryContrast);
+    accessibilityScans.push(
+      await scanAccessibility(caregiverPage, testInfo, 'care-evidence-typed-confirmation-390'),
+    );
     await acceptDialogDuringAction(caregiverPage, () =>
       caregiverPage.getByRole('button', { name: 'Record acknowledgement' }).tap(),
     );
@@ -240,6 +298,13 @@ test('Caregivers can complete visits, finalize documentation, and acknowledge ev
       [scenario.tenantId, scenario.visitId],
     );
     expect(evidence.rows[0]).toEqual({ status: 'acknowledged', version: 1 });
+    expectNoWcagAccessibilityViolations(accessibilityScans);
+    await writeAccessibilityReport(
+      accessibilityScans,
+      testInfo,
+      'caregiver-accessibility-report.json',
+      { renderedNonTextContrastSamples },
+    );
   } finally {
     try {
       await caregiverContext?.close().catch(() => undefined);
