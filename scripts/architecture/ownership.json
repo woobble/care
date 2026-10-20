@@ -1,0 +1,140 @@
+{
+  "modules": {
+    "audit": {
+      "public": "modules/audit/src/index.ts",
+      "persistence": ["modules/audit/src/schema.ts"]
+    },
+    "benefits": {
+      "public": "modules/benefits/src/index.ts",
+      "persistence": ["modules/benefits/src/schema.ts"]
+    },
+    "billing": {
+      "public": "modules/billing/src/index.ts",
+      "persistence": [
+        "modules/billing/src/claims/payer-schema.ts",
+        "modules/billing/src/claims/schema.ts",
+        "modules/billing/src/schema.ts"
+      ]
+    },
+    "care-documentation": {
+      "public": "modules/care-documentation/src/index.ts",
+      "persistence": ["modules/care-documentation/src/schema.ts"]
+    },
+    "clients": {
+      "public": "modules/clients/src/index.ts",
+      "persistence": ["modules/clients/src/schema.ts"]
+    },
+    "communications": {
+      "public": "modules/communications/src/index.ts",
+      "persistence": ["modules/communications/src/schema.ts"]
+    },
+    "documents": {
+      "public": "modules/documents/src/index.ts",
+      "persistence": ["modules/documents/src/schema.ts"]
+    },
+    "employees": {
+      "public": "modules/employees/src/index.ts",
+      "persistence": ["modules/employees/src/schema.ts"]
+    },
+    "identity": {
+      "public": "modules/identity/src/index.ts",
+      "persistence": ["modules/identity/src/auth-schema.ts", "modules/identity/src/schema.ts"]
+    },
+    "onboarding": {
+      "public": "modules/onboarding/src/index.ts",
+      "persistence": ["modules/onboarding/src/schema.ts"]
+    },
+    "operations": {
+      "public": "modules/operations/src/index.ts",
+      "persistence": ["modules/operations/src/schema.ts"]
+    },
+    "organizations": {
+      "public": "modules/organizations/src/index.ts",
+      "persistence": ["modules/organizations/src/schema.ts"]
+    },
+    "platform": {
+      "public": "modules/platform/src/index.ts",
+      "persistence": ["modules/platform/src/schema.ts"]
+    },
+    "scheduling": {
+      "public": "modules/scheduling/src/index.ts",
+      "persistence": ["modules/scheduling/src/schema.ts"]
+    },
+    "service-agreements": {
+      "public": "modules/service-agreements/src/index.ts",
+      "persistence": ["modules/service-agreements/src/schema.ts"]
+    },
+    "service-evidence": {
+      "public": "modules/service-evidence/src/index.ts",
+      "persistence": ["modules/service-evidence/src/schema.ts"]
+    },
+    "services": {
+      "public": "modules/services/src/index.ts",
+      "persistence": ["modules/services/src/schema.ts"]
+    },
+    "visit-execution": {
+      "public": "modules/visit-execution/src/index.ts",
+      "persistence": ["modules/visit-execution/src/schema.ts"]
+    }
+  },
+  "exceptions": [
+    {
+      "files": [
+        "apps/api/src/database/schema.ts",
+        "apps/api/src/migrate.ts",
+        "apps/api/src/seed.ts",
+        "apps/api/src/seed-identity.ts",
+        "apps/api/src/pilot-seed.ts",
+        "apps/worker/src/main.ts"
+      ],
+      "allow": ["persistence", "private"],
+      "reason": "Infrastructure schema composition, migration/seed entry points and worker bootstrap; no general application exception."
+    },
+    {
+      "files": [
+        "modules/audit/src/schema.ts",
+        "modules/benefits/src/schema.ts",
+        "modules/billing/src/claims/payer-schema.ts",
+        "modules/billing/src/claims/schema.ts",
+        "modules/billing/src/schema.ts",
+        "modules/care-documentation/src/schema.ts",
+        "modules/clients/src/schema.ts",
+        "modules/communications/src/schema.ts",
+        "modules/documents/src/schema.ts",
+        "modules/employees/src/schema.ts",
+        "modules/identity/src/auth-schema.ts",
+        "modules/identity/src/schema.ts",
+        "modules/onboarding/src/schema.ts",
+        "modules/operations/src/schema.ts",
+        "modules/organizations/src/schema.ts",
+        "modules/platform/src/schema.ts",
+        "modules/scheduling/src/schema.ts",
+        "modules/service-agreements/src/schema.ts",
+        "modules/service-evidence/src/schema.ts",
+        "modules/services/src/schema.ts",
+        "modules/visit-execution/src/schema.ts"
+      ],
+      "allow": ["persistence"],
+      "reason": "Owned schema declarations may reference foreign keys. Application queries are not exempt."
+    },
+    {
+      "files": [
+        "apps/api/integration/benefits.integration.test.ts",
+        "apps/api/integration/billing.integration.test.ts",
+        "apps/api/integration/calendar-subscriptions.integration.test.ts",
+        "apps/api/integration/clients.integration.test.ts",
+        "apps/api/integration/communications.integration.test.ts",
+        "apps/api/integration/documents.integration.test.ts",
+        "apps/api/integration/operations.integration.test.ts",
+        "apps/worker/integration/outbox.integration.test.ts"
+      ],
+      "allow": ["persistence", "private"],
+      "reason": "Integration fixture setup and persisted-state assertions."
+    },
+    {
+      "files": ["apps/web/src/auth.ts"],
+      "allow": ["direction", "persistence"],
+      "reason": "Better Auth server adapter composes the Identity-owned session schema; no frontend domain business logic."
+    }
+  ]
+}

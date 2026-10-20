@@ -49,3 +49,7 @@ English is the default locale and German is also supported through `next-intl`. 
 ## Local services
 
 Docker Compose starts PostgreSQL, Redis, Authentik, SeaweedFS, Mailpit, an OpenTelemetry Collector, Prometheus, and Grafana. SeaweedFS provides the local S3-compatible endpoint. These infrastructure services do not create domain service boundaries.
+
+## Enforced module boundaries
+
+See [module boundaries](module-boundaries.md) for ownership, public interfaces, composition and exception policy; [dependency map](dependency-map.md) for confirmed import debt; and the [Goal 01 to Goal 02 handoff](goal-01-to-goal-02.md) for Operations worklist preparation. Run `bun run architecture:check` and `bun run architecture:test` before adding domain dependencies.

@@ -1,0 +1,1317 @@
+{
+  "description": "Goal 01 initial reviewed import-debt baseline. Do not regenerate during checks. Remove resolved entries; additions require architectural review with a reason. Identity is kind + file + imported symbol + target; lines are informational. See docs/architecture/module-boundaries.md.",
+  "violations": [
+    {
+      "kind": "direction",
+      "file": "apps/web/src/app/(office)/planning/page.tsx",
+      "symbol": "availabilityIntervalsBetween",
+      "target": "modules/scheduling/src/index.ts",
+      "reason": "Web must consume HTTP contracts, not backend domain modules.",
+      "line": 33
+    },
+    {
+      "kind": "direction",
+      "file": "apps/web/src/components/agreement-cost-summary.tsx",
+      "symbol": "FourWeekServiceEstimate",
+      "target": "modules/services/src/domain/service-price.ts",
+      "reason": "Web must consume HTTP contracts, not backend domain modules.",
+      "line": 12
+    },
+    {
+      "kind": "direction",
+      "file": "apps/web/src/components/agreement-cost-summary.tsx",
+      "symbol": "ServicePriceEstimateReason",
+      "target": "modules/services/src/domain/service-price.ts",
+      "reason": "Web must consume HTTP contracts, not backend domain modules.",
+      "line": 12
+    },
+    {
+      "kind": "direction",
+      "file": "apps/web/src/components/agreement-cost-summary.tsx",
+      "symbol": "ServicePricingUnit",
+      "target": "modules/services/src/domain/service-price.ts",
+      "reason": "Web must consume HTTP contracts, not backend domain modules.",
+      "line": 12
+    },
+    {
+      "kind": "direction",
+      "file": "apps/web/src/components/agreement-cost-summary.tsx",
+      "symbol": "summarizeFourWeekServiceEstimates",
+      "target": "modules/services/src/domain/service-price.ts",
+      "reason": "Web must consume HTTP contracts, not backend domain modules.",
+      "line": 17
+    },
+    {
+      "kind": "direction",
+      "file": "apps/web/src/components/agreement-service-fields.tsx",
+      "symbol": "estimateServicePriceForFourWeeks",
+      "target": "modules/services/src/domain/service-price.ts",
+      "reason": "Web must consume HTTP contracts, not backend domain modules.",
+      "line": 13
+    },
+    {
+      "kind": "direction",
+      "file": "apps/web/src/components/agreement-service-fields.tsx",
+      "symbol": "ServicePricingUnit",
+      "target": "modules/services/src/domain/service-price.ts",
+      "reason": "Web must consume HTTP contracts, not backend domain modules.",
+      "line": 13
+    },
+    {
+      "kind": "persistence",
+      "file": "apps/api/src/ops/bootstrap.ts",
+      "symbol": "auditSchema",
+      "target": "modules/audit/src/schema.ts#auditSchema",
+      "reason": "Persistence belongs to audit; use its public application/query API.",
+      "line": 4
+    },
+    {
+      "kind": "persistence",
+      "file": "apps/api/src/ops/bootstrap.ts",
+      "symbol": "identitySchema",
+      "target": "modules/identity/src/schema.ts#identitySchema",
+      "reason": "Persistence belongs to identity; use its public application/query API.",
+      "line": 7
+    },
+    {
+      "kind": "persistence",
+      "file": "apps/api/src/ops/bootstrap.ts",
+      "symbol": "organizationsSchema",
+      "target": "modules/organizations/src/schema.ts#organizationsSchema",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 8
+    },
+    {
+      "kind": "persistence",
+      "file": "apps/api/src/ops/bootstrap.ts",
+      "symbol": "tenants",
+      "target": "modules/organizations/src/schema.ts#tenants",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 8
+    },
+    {
+      "kind": "persistence",
+      "file": "apps/api/src/presentation/http/health.controller.ts",
+      "symbol": "workerHealth",
+      "target": "modules/platform/src/schema.ts#workerHealth",
+      "reason": "Persistence belongs to platform; use its public application/query API.",
+      "line": 10
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/benefits/src/application/benefits.application.ts",
+      "symbol": "clientInsurances",
+      "target": "modules/clients/src/schema.ts#clientInsurances",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 22
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/benefits/src/application/benefits.application.ts",
+      "symbol": "clientRecords",
+      "target": "modules/clients/src/schema.ts#clientRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 22
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/benefits/src/application/benefits.application.ts",
+      "symbol": "organizationsTable",
+      "target": "modules/organizations/src/schema.ts#organizationsTable",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 27
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/benefits/src/application/benefits.application.ts",
+      "symbol": "performedServices",
+      "target": "modules/visit-execution/src/schema.ts#performedServices",
+      "reason": "Persistence belongs to visit-execution; use its public application/query API.",
+      "line": 34
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/benefits/src/application/benefits.application.ts",
+      "symbol": "pflegegradRecords",
+      "target": "modules/clients/src/schema.ts#pflegegradRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 22
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/benefits/src/application/benefits.application.ts",
+      "symbol": "serviceDefinitions",
+      "target": "modules/services/src/schema.ts#serviceDefinitions",
+      "reason": "Persistence belongs to services; use its public application/query API.",
+      "line": 33
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/benefits/src/application/benefits.application.ts",
+      "symbol": "servicePrices",
+      "target": "modules/services/src/schema.ts#servicePrices",
+      "reason": "Persistence belongs to services; use its public application/query API.",
+      "line": 32
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/benefits/src/application/benefits.application.ts",
+      "symbol": "visitExecutions",
+      "target": "modules/visit-execution/src/schema.ts#visitExecutions",
+      "reason": "Persistence belongs to visit-execution; use its public application/query API.",
+      "line": 34
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/benefits/src/application/benefits.application.ts",
+      "symbol": "visits",
+      "target": "modules/scheduling/src/schema.ts#visits",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 31
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/benefits/src/application/benefits.application.ts",
+      "symbol": "visitServices",
+      "target": "modules/scheduling/src/schema.ts#visitServices",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 31
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/application/billing.application.ts",
+      "symbol": "clientAddresses",
+      "target": "modules/clients/src/schema.ts#clientAddresses",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 25
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/application/billing.application.ts",
+      "symbol": "clientInsurances",
+      "target": "modules/clients/src/schema.ts#clientInsurances",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 25
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/application/billing.application.ts",
+      "symbol": "clientRecords",
+      "target": "modules/clients/src/schema.ts#clientRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 25
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/application/billing.application.ts",
+      "symbol": "facilities",
+      "target": "modules/organizations/src/schema.ts#facilities",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 32
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/application/billing.application.ts",
+      "symbol": "organizationsTable",
+      "target": "modules/organizations/src/schema.ts#organizationsTable",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 32
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/application/billing.application.ts",
+      "symbol": "performedServices",
+      "target": "modules/visit-execution/src/schema.ts#performedServices",
+      "reason": "Persistence belongs to visit-execution; use its public application/query API.",
+      "line": 41
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/application/billing.application.ts",
+      "symbol": "visitExecutions",
+      "target": "modules/visit-execution/src/schema.ts#visitExecutions",
+      "reason": "Persistence belongs to visit-execution; use its public application/query API.",
+      "line": 41
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/application/billing.application.ts",
+      "symbol": "visits",
+      "target": "modules/scheduling/src/schema.ts#visits",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 36
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/claims/claims.application.ts",
+      "symbol": "acknowledgements",
+      "target": "modules/service-evidence/src/schema.ts#acknowledgements",
+      "reason": "Persistence belongs to service-evidence; use its public application/query API.",
+      "line": 39
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/claims/claims.application.ts",
+      "symbol": "benefitFundingSources",
+      "target": "modules/benefits/src/schema.ts#benefitFundingSources",
+      "reason": "Persistence belongs to benefits; use its public application/query API.",
+      "line": 22
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/claims/claims.application.ts",
+      "symbol": "clientInsurances",
+      "target": "modules/clients/src/schema.ts#clientInsurances",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 28
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/claims/claims.application.ts",
+      "symbol": "clientRecords",
+      "target": "modules/clients/src/schema.ts#clientRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 28
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/claims/claims.application.ts",
+      "symbol": "evidencePackages",
+      "target": "modules/service-evidence/src/schema.ts#evidencePackages",
+      "reason": "Persistence belongs to service-evidence; use its public application/query API.",
+      "line": 39
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/claims/claims.application.ts",
+      "symbol": "organizationsTable",
+      "target": "modules/organizations/src/schema.ts#organizationsTable",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 34
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/claims/claims.application.ts",
+      "symbol": "providerRecognitions",
+      "target": "modules/benefits/src/schema.ts#providerRecognitions",
+      "reason": "Persistence belongs to benefits; use its public application/query API.",
+      "line": 22
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/claims/claims.application.ts",
+      "symbol": "serviceAllocationReversals",
+      "target": "modules/benefits/src/schema.ts#serviceAllocationReversals",
+      "reason": "Persistence belongs to benefits; use its public application/query API.",
+      "line": 22
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/billing/src/claims/claims.application.ts",
+      "symbol": "serviceAllocations",
+      "target": "modules/benefits/src/schema.ts#serviceAllocations",
+      "reason": "Persistence belongs to benefits; use its public application/query API.",
+      "line": 22
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/care-documentation/src/infrastructure/care-documentation.repository.ts",
+      "symbol": "clientRecords",
+      "target": "modules/clients/src/schema.ts#clientRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 3
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/care-documentation/src/infrastructure/care-documentation.repository.ts",
+      "symbol": "employeeRecords",
+      "target": "modules/employees/src/schema.ts#employeeRecords",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 5
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/care-documentation/src/infrastructure/care-documentation.repository.ts",
+      "symbol": "employeeTeamMemberships",
+      "target": "modules/employees/src/schema.ts#employeeTeamMemberships",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 5
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/care-documentation/src/infrastructure/care-documentation.repository.ts",
+      "symbol": "performedServices",
+      "target": "modules/visit-execution/src/schema.ts#performedServices",
+      "reason": "Persistence belongs to visit-execution; use its public application/query API.",
+      "line": 7
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/care-documentation/src/infrastructure/care-documentation.repository.ts",
+      "symbol": "visitAssignments",
+      "target": "modules/scheduling/src/schema.ts#visitAssignments",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 6
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/care-documentation/src/infrastructure/care-documentation.repository.ts",
+      "symbol": "visitExecutions",
+      "target": "modules/visit-execution/src/schema.ts#visitExecutions",
+      "reason": "Persistence belongs to visit-execution; use its public application/query API.",
+      "line": 7
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/care-documentation/src/infrastructure/care-documentation.repository.ts",
+      "symbol": "visits",
+      "target": "modules/scheduling/src/schema.ts#visits",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 6
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/clients/src/infrastructure/persistence/client-master-data.repository.ts",
+      "symbol": "auditEntries",
+      "target": "modules/audit/src/schema.ts#auditEntries",
+      "reason": "Persistence belongs to audit; use its public application/query API.",
+      "line": 3
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/clients/src/infrastructure/persistence/client.repository.ts",
+      "symbol": "facilities",
+      "target": "modules/organizations/src/schema.ts#facilities",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 19
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/clients/src/infrastructure/persistence/client.repository.ts",
+      "symbol": "organizationsTable",
+      "target": "modules/organizations/src/schema.ts#organizationsTable",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 19
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/communications/src/application/communications.application.ts",
+      "symbol": "agreements",
+      "target": "modules/service-agreements/src/schema.ts#agreements",
+      "reason": "Persistence belongs to service-agreements; use its public application/query API.",
+      "line": 36
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/communications/src/application/communications.application.ts",
+      "symbol": "claims",
+      "target": "modules/billing/src/claims/schema.ts#claims",
+      "reason": "Persistence belongs to billing; use its public application/query API.",
+      "line": 19
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/communications/src/application/communications.application.ts",
+      "symbol": "clientContactRoles",
+      "target": "modules/clients/src/schema.ts#clientContactRoles",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 20
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/communications/src/application/communications.application.ts",
+      "symbol": "clientContacts",
+      "target": "modules/clients/src/schema.ts#clientContacts",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 20
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/communications/src/application/communications.application.ts",
+      "symbol": "clientRecords",
+      "target": "modules/clients/src/schema.ts#clientRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 20
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/communications/src/application/communications.application.ts",
+      "symbol": "documentArtifacts",
+      "target": "modules/documents/src/schema.ts#documentArtifacts",
+      "reason": "Persistence belongs to documents; use its public application/query API.",
+      "line": 23
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/communications/src/application/communications.application.ts",
+      "symbol": "invoices",
+      "target": "modules/billing/src/schema.ts#invoices",
+      "reason": "Persistence belongs to billing; use its public application/query API.",
+      "line": 19
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/communications/src/application/communications.application.ts",
+      "symbol": "tasks",
+      "target": "modules/operations/src/schema.ts#tasks",
+      "reason": "Persistence belongs to operations; use its public application/query API.",
+      "line": 26
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/communications/src/application/communications.application.ts",
+      "symbol": "users",
+      "target": "modules/identity/src/schema.ts#users",
+      "reason": "Persistence belongs to identity; use its public application/query API.",
+      "line": 25
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/communications/src/application/communications.application.ts",
+      "symbol": "visits",
+      "target": "modules/scheduling/src/schema.ts#visits",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 35
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/documents/src/application/documents.application.ts",
+      "symbol": "clientRecords",
+      "target": "modules/clients/src/schema.ts#clientRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 9
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/employees/src/infrastructure/persistence/employee-visibility.ts",
+      "symbol": "facilities",
+      "target": "modules/organizations/src/schema.ts#facilities",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 5
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/employees/src/infrastructure/persistence/employee-visibility.ts",
+      "symbol": "teams",
+      "target": "modules/organizations/src/schema.ts#teams",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 5
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/employees/src/infrastructure/persistence/employee.repository.ts",
+      "symbol": "facilities",
+      "target": "modules/organizations/src/schema.ts#facilities",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 5
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/employees/src/infrastructure/persistence/employee.repository.ts",
+      "symbol": "organizationsTable",
+      "target": "modules/organizations/src/schema.ts#organizationsTable",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 5
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/employees/src/infrastructure/persistence/employee.repository.ts",
+      "symbol": "teams",
+      "target": "modules/organizations/src/schema.ts#teams",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 5
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/employees/src/infrastructure/persistence/employee.repository.ts",
+      "symbol": "tenantMemberships",
+      "target": "modules/identity/src/schema.ts#tenantMemberships",
+      "reason": "Persistence belongs to identity; use its public application/query API.",
+      "line": 4
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/employees/src/infrastructure/persistence/employee.repository.ts",
+      "symbol": "users",
+      "target": "modules/identity/src/schema.ts#users",
+      "reason": "Persistence belongs to identity; use its public application/query API.",
+      "line": 4
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/identity/src/application/authorization-principal.ts",
+      "symbol": "tenants",
+      "target": "modules/organizations/src/schema.ts#tenants",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 4
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/identity/src/application/identity.service.ts",
+      "symbol": "tenants",
+      "target": "modules/organizations/src/schema.ts#tenants",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 7
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/identity/src/application/tenant-access.service.ts",
+      "symbol": "facilities",
+      "target": "modules/organizations/src/schema.ts#facilities",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 9
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/identity/src/application/tenant-access.service.ts",
+      "symbol": "organizationsTable",
+      "target": "modules/organizations/src/schema.ts#organizationsTable",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 9
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/identity/src/application/tenant-access.service.ts",
+      "symbol": "teams",
+      "target": "modules/organizations/src/schema.ts#teams",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 9
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "agreements",
+      "target": "modules/service-agreements/src/schema.ts#agreements",
+      "reason": "Persistence belongs to service-agreements; use its public application/query API.",
+      "line": 46
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "agreementServices",
+      "target": "modules/service-agreements/src/schema.ts#agreementServices",
+      "reason": "Persistence belongs to service-agreements; use its public application/query API.",
+      "line": 46
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "benefitFundingSources",
+      "target": "modules/benefits/src/schema.ts#benefitFundingSources",
+      "reason": "Persistence belongs to benefits; use its public application/query API.",
+      "line": 19
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "clientBenefitEntitlements",
+      "target": "modules/benefits/src/schema.ts#clientBenefitEntitlements",
+      "reason": "Persistence belongs to benefits; use its public application/query API.",
+      "line": 19
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "clientContactRoles",
+      "target": "modules/clients/src/schema.ts#clientContactRoles",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 20
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "clientContacts",
+      "target": "modules/clients/src/schema.ts#clientContacts",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 20
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "clientInsurances",
+      "target": "modules/clients/src/schema.ts#clientInsurances",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 20
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "clientRecords",
+      "target": "modules/clients/src/schema.ts#clientRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 20
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "documentArtifacts",
+      "target": "modules/documents/src/schema.ts#documentArtifacts",
+      "reason": "Persistence belongs to documents; use its public application/query API.",
+      "line": 32
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "employeeRecords",
+      "target": "modules/employees/src/schema.ts#employeeRecords",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 33
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "facilities",
+      "target": "modules/organizations/src/schema.ts#facilities",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 37
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "interactions",
+      "target": "modules/communications/src/schema.ts#interactions",
+      "reason": "Persistence belongs to communications; use its public application/query API.",
+      "line": 28
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "organizationsTable",
+      "target": "modules/organizations/src/schema.ts#organizationsTable",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 37
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "pflegegradRecords",
+      "target": "modules/clients/src/schema.ts#pflegegradRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 20
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "prospectInteractions",
+      "target": "modules/communications/src/schema.ts#prospectInteractions",
+      "reason": "Persistence belongs to communications; use its public application/query API.",
+      "line": 28
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "tasks",
+      "target": "modules/operations/src/schema.ts#tasks",
+      "reason": "Persistence belongs to operations; use its public application/query API.",
+      "line": 36
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "tenantMemberships",
+      "target": "modules/identity/src/schema.ts#tenantMemberships",
+      "reason": "Persistence belongs to identity; use its public application/query API.",
+      "line": 35
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "users",
+      "target": "modules/identity/src/schema.ts#users",
+      "reason": "Persistence belongs to identity; use its public application/query API.",
+      "line": 35
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/onboarding/src/application/onboarding.application.ts",
+      "symbol": "visits",
+      "target": "modules/scheduling/src/schema.ts#visits",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 45
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/deadline-scheduler.application.ts",
+      "symbol": "agreements",
+      "target": "modules/service-agreements/src/schema.ts#agreements",
+      "reason": "Persistence belongs to service-agreements; use its public application/query API.",
+      "line": 19
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/deadline-scheduler.application.ts",
+      "symbol": "benefitFundingSources",
+      "target": "modules/benefits/src/schema.ts#benefitFundingSources",
+      "reason": "Persistence belongs to benefits; use its public application/query API.",
+      "line": 5
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/deadline-scheduler.application.ts",
+      "symbol": "clientBenefitEntitlements",
+      "target": "modules/benefits/src/schema.ts#clientBenefitEntitlements",
+      "reason": "Persistence belongs to benefits; use its public application/query API.",
+      "line": 5
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/deadline-scheduler.application.ts",
+      "symbol": "clientRecords",
+      "target": "modules/clients/src/schema.ts#clientRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 8
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/deadline-scheduler.application.ts",
+      "symbol": "employeeFacilityAssignments",
+      "target": "modules/employees/src/schema.ts#employeeFacilityAssignments",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 10
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/deadline-scheduler.application.ts",
+      "symbol": "employeeQualifications",
+      "target": "modules/employees/src/schema.ts#employeeQualifications",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 10
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/deadline-scheduler.application.ts",
+      "symbol": "employeeRecords",
+      "target": "modules/employees/src/schema.ts#employeeRecords",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 10
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/deadline-scheduler.application.ts",
+      "symbol": "organizationsTable",
+      "target": "modules/organizations/src/schema.ts#organizationsTable",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 16
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/deadline-scheduler.application.ts",
+      "symbol": "payerArrangements",
+      "target": "modules/billing/src/schema.ts#payerArrangements",
+      "reason": "Persistence belongs to billing; use its public application/query API.",
+      "line": 6
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations-guards.ts",
+      "symbol": "employeeFacilityAssignments",
+      "target": "modules/employees/src/schema.ts#employeeFacilityAssignments",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 4
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations-guards.ts",
+      "symbol": "employeeRecords",
+      "target": "modules/employees/src/schema.ts#employeeRecords",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 4
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "agreements",
+      "target": "modules/service-agreements/src/schema.ts#agreements",
+      "reason": "Persistence belongs to service-agreements; use its public application/query API.",
+      "line": 64
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "benefitFundingSources",
+      "target": "modules/benefits/src/schema.ts#benefitFundingSources",
+      "reason": "Persistence belongs to benefits; use its public application/query API.",
+      "line": 26
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "careDocuments",
+      "target": "modules/care-documentation/src/schema.ts#careDocuments",
+      "reason": "Persistence belongs to care-documentation; use its public application/query API.",
+      "line": 34
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "claims",
+      "target": "modules/billing/src/claims/schema.ts#claims",
+      "reason": "Persistence belongs to billing; use its public application/query API.",
+      "line": 28
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "clientBenefitEntitlements",
+      "target": "modules/benefits/src/schema.ts#clientBenefitEntitlements",
+      "reason": "Persistence belongs to benefits; use its public application/query API.",
+      "line": 26
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "clientRecords",
+      "target": "modules/clients/src/schema.ts#clientRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 35
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "documentArtifacts",
+      "target": "modules/documents/src/schema.ts#documentArtifacts",
+      "reason": "Persistence belongs to documents; use its public application/query API.",
+      "line": 38
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "employeeFacilityAssignments",
+      "target": "modules/employees/src/schema.ts#employeeFacilityAssignments",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 39
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "employeeQualifications",
+      "target": "modules/employees/src/schema.ts#employeeQualifications",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 39
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "employeeRecords",
+      "target": "modules/employees/src/schema.ts#employeeRecords",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 39
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "evidencePackages",
+      "target": "modules/service-evidence/src/schema.ts#evidencePackages",
+      "reason": "Persistence belongs to service-evidence; use its public application/query API.",
+      "line": 70
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "facilities",
+      "target": "modules/organizations/src/schema.ts#facilities",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 47
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "invoices",
+      "target": "modules/billing/src/schema.ts#invoices",
+      "reason": "Persistence belongs to billing; use its public application/query API.",
+      "line": 28
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "organizationsTable",
+      "target": "modules/organizations/src/schema.ts#organizationsTable",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 47
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "payerArrangements",
+      "target": "modules/billing/src/schema.ts#payerArrangements",
+      "reason": "Persistence belongs to billing; use its public application/query API.",
+      "line": 28
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "qualificationDefinitions",
+      "target": "modules/employees/src/schema.ts#qualificationDefinitions",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 39
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "tenantMemberships",
+      "target": "modules/identity/src/schema.ts#tenantMemberships",
+      "reason": "Persistence belongs to identity; use its public application/query API.",
+      "line": 46
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "users",
+      "target": "modules/identity/src/schema.ts#users",
+      "reason": "Persistence belongs to identity; use its public application/query API.",
+      "line": 46
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/operations.application.ts",
+      "symbol": "visits",
+      "target": "modules/scheduling/src/schema.ts#visits",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 63
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/recurrence.application.ts",
+      "symbol": "clientRecords",
+      "target": "modules/clients/src/schema.ts#clientRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 6
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/recurrence.application.ts",
+      "symbol": "facilities",
+      "target": "modules/organizations/src/schema.ts#facilities",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 10
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/operations/src/application/recurrence.application.ts",
+      "symbol": "organizationsTable",
+      "target": "modules/organizations/src/schema.ts#organizationsTable",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 10
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/scheduling/src/application/calendar-subscription.application.ts",
+      "symbol": "identitySchema",
+      "target": "modules/identity/src/schema.ts#identitySchema",
+      "reason": "Persistence belongs to identity; use its public application/query API.",
+      "line": 10
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/scheduling/src/infrastructure/calendar-subscription.repository.ts",
+      "symbol": "employeeRecords",
+      "target": "modules/employees/src/schema.ts#employeeRecords",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 4
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/scheduling/src/infrastructure/calendar-subscription.repository.ts",
+      "symbol": "employeeTeamMemberships",
+      "target": "modules/employees/src/schema.ts#employeeTeamMemberships",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 4
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/scheduling/src/infrastructure/scheduling.repository.ts",
+      "symbol": "auditEntries",
+      "target": "modules/audit/src/schema.ts#auditEntries",
+      "reason": "Persistence belongs to audit; use its public application/query API.",
+      "line": 5
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/scheduling/src/infrastructure/scheduling.repository.ts",
+      "symbol": "clientRecords",
+      "target": "modules/clients/src/schema.ts#clientRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 6
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/scheduling/src/infrastructure/scheduling.repository.ts",
+      "symbol": "employeeRecords",
+      "target": "modules/employees/src/schema.ts#employeeRecords",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 8
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/scheduling/src/infrastructure/scheduling.repository.ts",
+      "symbol": "facilities",
+      "target": "modules/organizations/src/schema.ts#facilities",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 9
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/scheduling/src/infrastructure/scheduling.repository.ts",
+      "symbol": "organizationsTable",
+      "target": "modules/organizations/src/schema.ts#organizationsTable",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 9
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/service-evidence/src/infrastructure/service-evidence.repository.ts",
+      "symbol": "careDocuments",
+      "target": "modules/care-documentation/src/schema.ts#careDocuments",
+      "reason": "Persistence belongs to care-documentation; use its public application/query API.",
+      "line": 3
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/service-evidence/src/infrastructure/service-evidence.repository.ts",
+      "symbol": "clientContactRoles",
+      "target": "modules/clients/src/schema.ts#clientContactRoles",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 9
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/service-evidence/src/infrastructure/service-evidence.repository.ts",
+      "symbol": "clientContacts",
+      "target": "modules/clients/src/schema.ts#clientContacts",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 9
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/service-evidence/src/infrastructure/service-evidence.repository.ts",
+      "symbol": "clientRecords",
+      "target": "modules/clients/src/schema.ts#clientRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 9
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/service-evidence/src/infrastructure/service-evidence.repository.ts",
+      "symbol": "documentationAmendments",
+      "target": "modules/care-documentation/src/schema.ts#documentationAmendments",
+      "reason": "Persistence belongs to care-documentation; use its public application/query API.",
+      "line": 3
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/service-evidence/src/infrastructure/service-evidence.repository.ts",
+      "symbol": "employeeRecords",
+      "target": "modules/employees/src/schema.ts#employeeRecords",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 11
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/service-evidence/src/infrastructure/service-evidence.repository.ts",
+      "symbol": "employeeTeamMemberships",
+      "target": "modules/employees/src/schema.ts#employeeTeamMemberships",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 11
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/service-evidence/src/infrastructure/service-evidence.repository.ts",
+      "symbol": "performedServices",
+      "target": "modules/visit-execution/src/schema.ts#performedServices",
+      "reason": "Persistence belongs to visit-execution; use its public application/query API.",
+      "line": 14
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/service-evidence/src/infrastructure/service-evidence.repository.ts",
+      "symbol": "serviceEvidence",
+      "target": "modules/care-documentation/src/schema.ts#serviceEvidence",
+      "reason": "Persistence belongs to care-documentation; use its public application/query API.",
+      "line": 3
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/service-evidence/src/infrastructure/service-evidence.repository.ts",
+      "symbol": "visitAssignments",
+      "target": "modules/scheduling/src/schema.ts#visitAssignments",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 13
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/service-evidence/src/infrastructure/service-evidence.repository.ts",
+      "symbol": "visitExecutions",
+      "target": "modules/visit-execution/src/schema.ts#visitExecutions",
+      "reason": "Persistence belongs to visit-execution; use its public application/query API.",
+      "line": 14
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/service-evidence/src/infrastructure/service-evidence.repository.ts",
+      "symbol": "visits",
+      "target": "modules/scheduling/src/schema.ts#visits",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 13
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/services/src/application/service-price.application.ts",
+      "symbol": "facilities",
+      "target": "modules/organizations/src/schema.ts#facilities",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 8
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/services/src/infrastructure/service.repository.ts",
+      "symbol": "facilities",
+      "target": "modules/organizations/src/schema.ts#facilities",
+      "reason": "Persistence belongs to organizations; use its public application/query API.",
+      "line": 19
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/visit-execution/src/infrastructure/visit-execution.guards.ts",
+      "symbol": "visitAssignments",
+      "target": "modules/scheduling/src/schema.ts#visitAssignments",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 4
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/visit-execution/src/infrastructure/visit-execution.guards.ts",
+      "symbol": "visits",
+      "target": "modules/scheduling/src/schema.ts#visits",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 5
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/visit-execution/src/infrastructure/visit-execution.repository.ts",
+      "symbol": "clientAddresses",
+      "target": "modules/clients/src/schema.ts#clientAddresses",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 3
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/visit-execution/src/infrastructure/visit-execution.repository.ts",
+      "symbol": "clientRecords",
+      "target": "modules/clients/src/schema.ts#clientRecords",
+      "reason": "Persistence belongs to clients; use its public application/query API.",
+      "line": 3
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/visit-execution/src/infrastructure/visit-execution.repository.ts",
+      "symbol": "clientSchedulingPreferences",
+      "target": "modules/scheduling/src/schema.ts#clientSchedulingPreferences",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 6
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/visit-execution/src/infrastructure/visit-execution.repository.ts",
+      "symbol": "employeeRecords",
+      "target": "modules/employees/src/schema.ts#employeeRecords",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 5
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/visit-execution/src/infrastructure/visit-execution.repository.ts",
+      "symbol": "employeeTeamMemberships",
+      "target": "modules/employees/src/schema.ts#employeeTeamMemberships",
+      "reason": "Persistence belongs to employees; use its public application/query API.",
+      "line": 5
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/visit-execution/src/infrastructure/visit-execution.repository.ts",
+      "symbol": "serviceAvailability",
+      "target": "modules/services/src/schema.ts#serviceAvailability",
+      "reason": "Persistence belongs to services; use its public application/query API.",
+      "line": 12
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/visit-execution/src/infrastructure/visit-execution.repository.ts",
+      "symbol": "serviceDefinitions",
+      "target": "modules/services/src/schema.ts#serviceDefinitions",
+      "reason": "Persistence belongs to services; use its public application/query API.",
+      "line": 12
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/visit-execution/src/infrastructure/visit-execution.repository.ts",
+      "symbol": "visitAssignments",
+      "target": "modules/scheduling/src/schema.ts#visitAssignments",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 6
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/visit-execution/src/infrastructure/visit-execution.repository.ts",
+      "symbol": "visits",
+      "target": "modules/scheduling/src/schema.ts#visits",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 6
+    },
+    {
+      "kind": "persistence",
+      "file": "modules/visit-execution/src/infrastructure/visit-execution.repository.ts",
+      "symbol": "visitServices",
+      "target": "modules/scheduling/src/schema.ts#visitServices",
+      "reason": "Persistence belongs to scheduling; use its public application/query API.",
+      "line": 6
+    },
+    {
+      "kind": "private",
+      "file": "apps/web/src/components/agreement-cost-summary.tsx",
+      "symbol": "FourWeekServiceEstimate",
+      "target": "modules/services/src/domain/service-price.ts",
+      "reason": "Use @care/services; this implementation file is private.",
+      "line": 12
+    },
+    {
+      "kind": "private",
+      "file": "apps/web/src/components/agreement-cost-summary.tsx",
+      "symbol": "ServicePriceEstimateReason",
+      "target": "modules/services/src/domain/service-price.ts",
+      "reason": "Use @care/services; this implementation file is private.",
+      "line": 12
+    },
+    {
+      "kind": "private",
+      "file": "apps/web/src/components/agreement-cost-summary.tsx",
+      "symbol": "ServicePricingUnit",
+      "target": "modules/services/src/domain/service-price.ts",
+      "reason": "Use @care/services; this implementation file is private.",
+      "line": 12
+    },
+    {
+      "kind": "private",
+      "file": "apps/web/src/components/agreement-cost-summary.tsx",
+      "symbol": "summarizeFourWeekServiceEstimates",
+      "target": "modules/services/src/domain/service-price.ts",
+      "reason": "Use @care/services; this implementation file is private.",
+      "line": 17
+    },
+    {
+      "kind": "private",
+      "file": "apps/web/src/components/agreement-service-fields.tsx",
+      "symbol": "estimateServicePriceForFourWeeks",
+      "target": "modules/services/src/domain/service-price.ts",
+      "reason": "Use @care/services; this implementation file is private.",
+      "line": 13
+    },
+    {
+      "kind": "private",
+      "file": "apps/web/src/components/agreement-service-fields.tsx",
+      "symbol": "ServicePricingUnit",
+      "target": "modules/services/src/domain/service-price.ts",
+      "reason": "Use @care/services; this implementation file is private.",
+      "line": 13
+    }
+  ]
+}

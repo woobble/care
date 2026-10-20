@@ -44,9 +44,9 @@ import {
 import type { OutboxWriter } from '@care/platform';
 import { visits } from '@care/scheduling';
 import { agreementServices, agreements } from '@care/service-agreements';
-import type { ServicePriceApplicationService } from '@module/services/application/service-price.application';
-import type { ServiceApplicationService } from '@module/services/application/service.application';
-import { selectEffectiveServicePrice } from '@module/services/domain/service-price';
+import type { ServicePriceApplicationService } from '@care/services';
+import type { ServiceApplicationService } from '@care/services';
+import { selectEffectiveServicePrice } from '@care/services';
 
 import {
   DEFAULT_CHECKLIST_ITEMS,
