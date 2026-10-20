@@ -4,58 +4,41 @@ This runbook covers the single-host Docker Compose pilot. It does not provide hi
 
 ## Initial deployment
 
-Use Docker Engine and Compose 2.24.4 or newer. Configure DNS for the web, API and Authentik hosts before starting Caddy so it can obtain HTTPS certificates.
+Use Docker Engine, Compose 2.24.4 or newer, Bun 1.4+, and Node 24+. Point DNS records for the web, API and Authentik hosts at the VPS, and allow inbound ports 80 and 443 so Caddy can obtain certificates.
+
+Mount a dedicated encrypted backup volume at `/srv/care-backups` and prepare its private directory:
 
 ```sh
-cp .env.production.example .env.production
-chmod 600 .env.production
-install -d -m 700 secrets /srv/care-backups
+sudo install -d -o 1000 -g 1000 -m 700 /srv/care-backups
 ```
 
-Edit `.env.production` with the real public hostnames and SMTP settings. Replace every placeholder. Use unique high-entropy values for the PostgreSQL, application, worker, Authentik and OIDC secrets. Keep this file owner-readable only. Do not pass secret values as command-line arguments.
-
-Create the referenced files under `secrets/` with mode `0600` and owner UID `1000`. The API, web, worker and operator containers run as the unprivileged `bun` user with UID `1000`; Compose file secrets preserve host ownership, so a different host operator account must assign the files to UID `1000` for those containers to read them. The deployment command rejects missing, linked, empty, oversized or group/world-readable secret files before invoking Compose.
-
-- `care-database-url`: PostgreSQL URL using `care_app` and database `care`.
-- `care-migration-database-url`: PostgreSQL superuser URL using `care_owner` and database `care`; the operator uses it for migrations, paired backups and first-admin setup.
-- `care-worker-database-url`: PostgreSQL URL using `care_worker` and database `care`.
-- `web-auth-secret`: at least 32 random characters.
-- `s3-access-key` and `s3-secret-key`: credentials for the private application bucket.
-- `seaweedfs-init-access-key` and `seaweedfs-init-secret-key`: a separate, short-lived bootstrap identity used only to create the bucket.
-- `seaweedfs-s3.json`: the SeaweedFS S3 identity configuration. Give the application identity read, list, tagging and write actions; give the bucket-creation identity admin and list actions. Do not reuse the bucket-creation keys for API or worker access.
-
-For the default internal SeaweedFS endpoint, the application identity's keys must match `s3-access-key` and `s3-secret-key`. If using external S3, use external credentials in those two files and keep any unused local SeaweedFS application identity separate. The initialization identity must match the two `S3_INIT_*_FILE` values. The JSON shape is:
-
-```json
-{
-  "identities": [
-    {
-      "name": "care-app",
-      "credentials": [{ "accessKey": "<app-key>", "secretKey": "<app-secret>" }],
-      "actions": ["Read", "List", "Tagging", "Write"]
-    },
-    {
-      "name": "care-init",
-      "credentials": [{ "accessKey": "<init-key>", "secretKey": "<init-secret>" }],
-      "actions": ["Admin", "List"]
-    }
-  ]
-}
-```
-
-The passwords in the three PostgreSQL URLs must match `POSTGRES_PASSWORD`, `CARE_APP_PASSWORD` and `CARE_WORKER_PASSWORD`; URL-encode reserved characters in those URLs. The production Compose file keeps PostgreSQL, Redis, SeaweedFS, the worker and the application on private networks. Caddy is the only service that publishes host ports (80 and 443). The default storage endpoint is the private SeaweedFS service. If you point `S3_ENDPOINT` at an external S3-compatible service, require HTTPS and confirm the provider's access controls, durability and backup guarantees; the recovery tool still copies all bucket objects into the recovery set.
-
-Routing is disabled by default. If enabled, use the internal Compose endpoint `http://osrm:5000` or an HTTPS endpoint for an external routing provider. Route requests contain visit coordinates; approve the provider and processing region before sending real client locations.
-
-Start the stack and check it:
+From the repository root, run the setup wizard:
 
 ```sh
-docker compose --project-name care-platform-prod --env-file .env.production -f compose.yaml -f compose.production.yaml config --quiet
-docker compose --project-name care-platform-prod --env-file .env.production -f compose.yaml -f compose.production.yaml up -d --build --wait
+bun run deploy:setup -- --production
+```
+
+It asks for the three public hostnames, Caddy's certificate contact email and backup volume path. Mount an encrypted volume at `/srv/care-backups` first, or enter its mount path. Setup creates `.env.production`, random application credentials, PostgreSQL connection secret files, the separate SeaweedFS identities, and a private backup directory. It refuses to overwrite an existing production environment. Generated files are owner-only and assigned to UID `1000` for the runtime containers. Secret values are not printed.
+
+Before the first deploy, set `SMTP_HOST`, `SMTP_FROM`, `SMTP_USERNAME`, and `SMTP_PASSWORD` in `.env.production` to real SMTP credentials. Authentik uses SMTP for account messages; Caddy's certificate email is a separate contact setting. Keep `.env.production` at mode `0600` and do not pass secret values as command-line arguments.
+
+The setup wizard enables self-hosted OSRM for the full Germany extract. The first deploy downloads and preprocesses the map, which needs substantial temporary disk space, RAM, CPU and time. Routing sends coordinates only; it does not send names, notes or care details. To disable routing, run setup with `--without-routing`.
+
+Start the production stack with one command:
+
+```sh
+bun run deploy:up -- --production
+```
+
+This checks Compose configuration and secret-file permissions, pulls the pinned images, prepares OSRM when enabled, starts the stack and waits for service health. The migration service applies checked, checksummed migrations before API and worker startup. It then runs the production preflight for application configuration, PostgreSQL, object storage, Authentik, API readiness, worker heartbeat and the backup destination. Migrations do not reset or recreate databases.
+
+For later readiness checks, use:
+
+```sh
 bun run deploy:check -- --production
 ```
 
-The API migration service applies checksummed migrations before API and worker startup. A PostgreSQL advisory lock serializes concurrent migration invocations. Migrations do not reset or recreate databases.
+PostgreSQL, Redis, SeaweedFS, the worker and application stay on private networks. Caddy is the only service that publishes host ports (80 and 443). If you use external S3 instead of the private SeaweedFS service, require HTTPS and confirm the provider's access controls, durability and backup guarantees; recovery sets copy all bucket objects.
 
 ## First administrator
 
@@ -127,9 +110,9 @@ After restore, the tool compares migration checksums, forced-RLS counts, selecte
 
 1. Record the deployed image/application commit and migration registry.
 2. Enter maintenance and create a verified paired recovery set.
-3. Build or pull the reviewed application images.
-4. Start the Compose stack; the one-shot migration service applies the additive, checksummed changes before API and worker startup.
-5. Run `bun run deploy:check -- --production`, then verify Authentik sign-in, client lookup, caregiver assignment, document retrieval and worker status with synthetic pilot data.
+3. Update the checkout to the reviewed release.
+4. Run `bun run deploy:up -- --production`; it pulls the pinned images, applies checksummed migrations before API and worker startup, waits for health and runs preflight.
+5. Verify Authentik sign-in, client lookup, caregiver assignment, document retrieval and worker status with synthetic pilot data.
 
 The migration runner serializes concurrent runs and rejects checksum changes. It does not automatically reverse schema changes. For a backward-incompatible migration, prepare a corrective forward migration or restore into an isolated cluster; do not promise an in-place rollback.
 

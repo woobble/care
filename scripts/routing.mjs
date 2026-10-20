@@ -1,5 +1,6 @@
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { lstatSync, readFileSync } from 'node:fs';
 import {
   mkdir,
   mkdtemp,
@@ -15,6 +16,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
+import { parseEnv } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 import { resolveLocalComposeProject } from './local-compose-project.mjs';
@@ -33,22 +35,26 @@ const OSRM_IMAGE =
   'ghcr.io/project-osrm/osrm-backend:v26.10.0-debian@sha256:55dbfd47d984c2cacd64e32901b4321c86b5ec761438e69aa053dc78698a786f';
 const STARTUP_TIMEOUT_MS = 5 * 60 * 1000;
 
-try {
-  process.loadEnvFile(path.join(ROOT, '.env'));
-} catch (error) {
-  if (error.code !== 'ENOENT') throw error;
-}
-
 const [command, ...args] = process.argv.slice(2);
+const production = args.includes('--production');
+let productionEnvironment = {};
+let commandEnvironment = process.env;
 
 async function main() {
-  if (args.length > 0) return usage(1);
-  resolveLocalComposeProject();
+  if (args.some((argument) => argument !== '--production') || args.length > Number(production)) {
+    return usage(1);
+  }
+  if (production) loadProductionEnvironment();
+  else loadDevelopmentEnvironment();
+  if (!production) resolveLocalComposeProject();
   const settings = loadSettings();
 
   switch (command) {
     case 'setup':
       await withLock(() => installDataset(settings));
+      return showStatus(settings);
+    case 'ensure':
+      await withLock(() => ensureDataset(settings));
       return showStatus(settings);
     case 'update':
       await withLock(async () => {
@@ -70,22 +76,90 @@ function usage(exitCode) {
   bun run routing:setup
   bun run routing:update
   bun run routing:status
+  bun run routing:setup -- --production
+  bun run routing:update -- --production
+  bun run routing:status -- --production
 
-Set OSRM_REGION in .env to choose a Geofabrik extract.`);
+Production deploys use OSRM_REGION from .env.production. Set OSRM_REGION in .env to choose a development extract.`);
   process.exitCode = exitCode;
 }
 
+function loadDevelopmentEnvironment() {
+  try {
+    process.loadEnvFile(path.join(ROOT, '.env'));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+}
+
+function loadProductionEnvironment() {
+  const environmentFile = path.join(ROOT, '.env.production');
+  try {
+    const info = lstatSync(environmentFile);
+    if (!info.isFile() || info.isSymbolicLink() || (info.mode & 0o077) !== 0) {
+      throw new Error('.env.production must be a regular file with mode 0600 or stricter.');
+    }
+  } catch (error) {
+    if (error.code === 'ENOENT')
+      throw new Error('.env.production is missing. Run deploy:setup first.', { cause: error });
+    throw error;
+  }
+  productionEnvironment = parseEnv(readFileSync(environmentFile, 'utf8'));
+  const environment = { ...process.env };
+  for (const filename of [
+    '.env',
+    '.env.local',
+    '.env.development',
+    '.env.test',
+    '.env.production',
+    '.env.production.local',
+  ]) {
+    try {
+      for (const name of Object.keys(parseEnv(readFileSync(path.join(ROOT, filename), 'utf8')))) {
+        delete environment[name];
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  commandEnvironment = environment;
+}
+
 function loadSettings() {
-  const region = parseRegion(process.env.OSRM_REGION || DEFAULT_REGION);
+  const environment = production ? productionEnvironment : process.env;
+  const region = parseRegion(
+    environment.OSRM_REGION || (production ? 'europe/germany' : DEFAULT_REGION),
+  );
   const probe = {
-    from: parseCoordinate(process.env.ROUTING_OSRM_PROBE_FROM || DEFAULT_PROBE_FROM),
-    to: parseCoordinate(process.env.ROUTING_OSRM_PROBE_TO || DEFAULT_PROBE_TO),
+    from: parseCoordinate(environment.ROUTING_OSRM_PROBE_FROM || DEFAULT_PROBE_FROM),
+    to: parseCoordinate(environment.ROUTING_OSRM_PROBE_TO || DEFAULT_PROBE_TO),
   };
-  const port = Number(process.env.ROUTING_OSRM_PORT || '5000');
+  const port = Number(environment.ROUTING_OSRM_PORT || '5000');
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('ROUTING_OSRM_PORT must be an integer from 1 to 65535.');
   }
   return { region, probe, port };
+}
+
+async function ensureDataset(settings) {
+  let active;
+  try {
+    active = await readActiveDataset();
+    if (active) await assertPreparedDataset(active.directory, active.metadata.datasetName);
+  } catch {
+    active = null;
+  }
+
+  if (!active || active.metadata.region !== settings.region) {
+    await installDataset(settings);
+    return;
+  }
+
+  console.log(
+    `Using prepared ${active.metadata.region} dataset from ${active.metadata.preparedAt}.`,
+  );
+  await compose('up', '-d', '--wait', '--wait-timeout', '300', 'osrm');
+  await waitForRoute(active.metadata, settings.port);
 }
 
 function parseRegion(value) {
@@ -428,9 +502,10 @@ async function removeOldGenerations(activeDirectory) {
 }
 
 async function showStatus(settings) {
-  console.log(
-    `Application routing: ${process.env.ROUTING_OSRM_URL ? 'enabled' : 'not_configured'}`,
-  );
+  const routingUrl = production
+    ? productionEnvironment.ROUTING_OSRM_URL
+    : process.env.ROUTING_OSRM_URL;
+  console.log(`Application routing: ${routingUrl ? 'enabled' : 'not_configured'}`);
   console.log(`Configured region: ${settings.region}`);
   console.log(`Preparation: ${await preparationStatus()}`);
 
@@ -457,10 +532,11 @@ async function showStatus(settings) {
   const regionMatches = active.metadata.region === settings.region;
   console.log(`Configured region matches dataset: ${regionMatches ? 'yes' : 'no'}`);
   const result = await checkRoute(active.metadata, settings.port);
+  const endpoint = production
+    ? 'internal Compose health check'
+    : `http://127.0.0.1:${settings.port}`;
   console.log(
-    result.ready
-      ? `Endpoint: ready (http://127.0.0.1:${settings.port})`
-      : `Endpoint: unavailable (${result.message})`,
+    result.ready ? `Endpoint: ready (${endpoint})` : `Endpoint: unavailable (${result.message})`,
   );
   if (!result.ready || !regionMatches) process.exitCode = 1;
 }
@@ -483,6 +559,7 @@ async function preparationStatus() {
 }
 
 async function checkRoute(metadata, port) {
+  if (production) return checkProductionComposeHealth();
   const { from, to } = metadata.probe;
   const route = `${formatCoordinate(from)};${formatCoordinate(to)}`;
   try {
@@ -496,6 +573,37 @@ async function checkRoute(metadata, port) {
     return { ready: false, retry: response.status >= 500 || response.status === 429, message };
   } catch (error) {
     return { ready: false, retry: true, message: error.message };
+  }
+}
+
+function checkProductionComposeHealth() {
+  try {
+    const containerId = capture('docker', composeArguments('ps', '-q', 'osrm'));
+    if (!containerId)
+      return { ready: false, retry: true, message: 'OSRM container is not running' };
+    const health = execFileSync(
+      'docker',
+      [
+        'inspect',
+        '--format',
+        '{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}',
+        containerId,
+      ],
+      {
+        cwd: ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: commandEnvironment,
+      },
+    ).trim();
+    if (health === 'healthy') return { ready: true };
+    return {
+      ready: false,
+      retry: health === 'starting',
+      message: health === 'no-healthcheck' ? 'OSRM health check is missing' : `OSRM is ${health}`,
+    };
+  } catch {
+    return { ready: false, retry: true, message: 'cannot read OSRM container health' };
   }
 }
 
@@ -516,21 +624,43 @@ async function waitForRoute(metadata, port) {
 }
 
 async function compose(...composeArgs) {
-  await run('docker', [
+  await run('docker', composeArguments(...composeArgs));
+}
+
+function composeArguments(...composeArgs) {
+  return [
     'compose',
     '--project-name',
-    resolveLocalComposeProject(),
-    '-f',
-    'compose.yaml',
+    production ? 'care-platform-prod' : resolveLocalComposeProject(),
+    ...(production
+      ? ['--env-file', '.env.production', '-f', 'compose.yaml', '-f', 'compose.production.yaml']
+      : ['-f', 'compose.yaml']),
     '--profile',
     'routing',
     ...composeArgs,
-  ]);
+  ];
+}
+
+function capture(name, commandArgs) {
+  try {
+    return execFileSync(name, commandArgs, {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: commandEnvironment,
+    }).trim();
+  } catch {
+    return '';
+  }
 }
 
 function run(name, commandArgs) {
   return new Promise((resolve, reject) => {
-    const child = spawn(name, commandArgs, { cwd: ROOT, stdio: 'inherit' });
+    const child = spawn(name, commandArgs, {
+      cwd: ROOT,
+      stdio: 'inherit',
+      env: commandEnvironment,
+    });
     child.once('error', (error) => {
       if (error.code === 'ENOENT') {
         reject(
