@@ -53,6 +53,7 @@ Mailpit is at <http://localhost:8025> and accepts local SMTP on port `1026`. Pro
 | `bun run reset`                                      | Confirm and reset Compose data; reruns migrations and demo seed                        |
 | `bun run deploy:setup -- --production`               | Generate private production credentials and scaffold `.env.production`                 |
 | `bun run deploy:up -- --production`                  | Pull images, prepare configured OSRM, start production and run preflight               |
+| `bun run deploy:update -- --production`              | Fast-forward the clean checkout from its Git upstream, then deploy and run preflight   |
 | `bun run deploy:check -- --production`               | Validate production Compose, configuration, dependencies and recovery destination      |
 | `bun run deploy:bootstrap-admin -- --production ...` | Create the first production tenant administrator on a fresh database                   |
 | `bun run backup:create -- --production ...`          | Create a quiesced, paired PostgreSQL and object-storage recovery set                   |

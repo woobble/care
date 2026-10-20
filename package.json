@@ -28,6 +28,7 @@
     "deploy:check": "node scripts/deploy.mjs preflight",
     "deploy:setup": "node scripts/deploy-setup.mjs",
     "deploy:up": "node scripts/deploy.mjs up",
+    "deploy:update": "node scripts/deploy-update.mjs",
     "deploy:bootstrap-admin": "node scripts/deploy.mjs bootstrap-admin",
     "backup:create": "node scripts/deploy.mjs create",
     "backup:verify": "node scripts/deploy.mjs verify",

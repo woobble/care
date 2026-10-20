@@ -110,8 +110,8 @@ After restore, the tool compares migration checksums, forced-RLS counts, selecte
 
 1. Record the deployed image/application commit and migration registry.
 2. Enter maintenance and create a verified paired recovery set.
-3. Update the checkout to the reviewed release.
-4. Run `bun run deploy:up -- --production`; it pulls the pinned images, applies checksummed migrations before API and worker startup, waits for health and runs preflight.
+3. Ensure the VPS checkout is clean and its current branch tracks the remote release branch. Only merge reviewed commits into that branch.
+4. Run `bun run deploy:update -- --production`. It fetches the configured upstream, fast-forwards the checkout, then pulls pinned images, applies checksummed migrations before API and worker startup, waits for health and runs preflight. It stops before deployment if the checkout is dirty, detached, ahead of the upstream or has diverged.
 5. Verify Authentik sign-in, client lookup, caregiver assignment, document retrieval and worker status with synthetic pilot data.
 
 The migration runner serializes concurrent runs and rejects checksum changes. It does not automatically reverse schema changes. For a backward-incompatible migration, prepare a corrective forward migration or restore into an isolated cluster; do not promise an in-place rollback.
