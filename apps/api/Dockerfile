@@ -1,7 +1,8 @@
 FROM oven/bun:1.4.3-alpine@sha256:629e17411f1f129dbec3af78d5af9c9f2a937435c80349437206c6b0b7422373 AS pruner
 WORKDIR /repo
 COPY . .
-RUN bun install --frozen-lockfile
+RUN --mount=type=cache,id=care-bun-install,target=/root/.bun/install/cache \
+  bun install --frozen-lockfile
 RUN bunx turbo prune @care/api --docker --production
 
 FROM oven/bun:1.4.3-alpine@sha256:629e17411f1f129dbec3af78d5af9c9f2a937435c80349437206c6b0b7422373 AS dependencies
@@ -9,7 +10,8 @@ WORKDIR /repo
 COPY --from=pruner /repo/out/json/ ./
 COPY --from=pruner /repo/out/bun.lock ./bun.lock
 # Bun retains workspace devDependencies during production installs; these compilers are build-only.
-RUN bun install --frozen-lockfile --production \
+RUN --mount=type=cache,id=care-bun-install,target=/root/.bun/install/cache \
+  bun install --frozen-lockfile --production \
   && rm -rf node_modules/.bun/typescript@* node_modules/.bun/@typescript+typescript-*
 
 FROM oven/bun:1.4.3-alpine@sha256:629e17411f1f129dbec3af78d5af9c9f2a937435c80349437206c6b0b7422373 AS build

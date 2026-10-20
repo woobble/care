@@ -391,6 +391,7 @@ artifacts/
 .caveman/
 .vscode/
 .turbo/
+.buildkit-cache/
 .agents/
 .codex/
 graphify-out/

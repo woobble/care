@@ -1,5 +1,6 @@
 .git
 .cache
+.buildkit-cache
 .agents
 .codex
 graphify-out

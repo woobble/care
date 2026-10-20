@@ -51,6 +51,7 @@ runs:
         IMAGE_NAME: ${{ inputs.image }}
         PLATFORM: ${{ inputs.platform }}
         RELEASE_LABEL: ${{ inputs.release-label }}
+        PUBLISH: ${{ inputs.publish }}
       run: |
         set -euo pipefail
         IMAGE=ghcr.io/woobble/care-platform
@@ -70,9 +71,30 @@ runs:
           osrm) context=./infra/osrm; file=infra/osrm/Dockerfile; target='' ;;
           *) echo 'Image is not in the production allow-list.' >&2; exit 1 ;;
         esac
+        cache_kind=none
+        cache_paths=''
+        cache_map='{}'
+        case "$IMAGE_NAME" in
+          api|web|worker|migrate|operator)
+            cache_kind=bun
+            cache_paths=.buildkit-cache/bun-install
+            cache_map='{".buildkit-cache/bun-install":{"target":"/root/.bun/install/cache","id":"care-bun-install"}}'
+            cache_fingerprint="$(sha256sum "$file" bun.lock | sha256sum | cut -d' ' -f1)"
+            ;;
+          seaweedfs|caddy|grafana|prometheus)
+            cache_kind=go
+            cache_paths=.buildkit-cache/go-mod
+            cache_map='{".buildkit-cache/go-mod":{"target":"/go/pkg/mod","id":"care-go-mod"}}'
+            cache_fingerprint="$(sha256sum "$file" | sha256sum | cut -d' ' -f1)"
+            ;;
+        esac
         if [[ "$PLATFORM" != linux/amd64 && "$PLATFORM" != linux/arm64 ]]; then
           echo 'Only linux/amd64 and linux/arm64 are supported.' >&2
           exit 1
+        fi
+        cache_platform="${PLATFORM//\//-}"
+        if [[ "$PUBLISH" == true ]]; then
+          cache_platform=linux-amd64
         fi
         if [[ -n "$RELEASE_LABEL" && ( ${#RELEASE_LABEL} -gt 24 || ! "$RELEASE_LABEL" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ) ]]; then
           echo 'release-label must be a semantic version such as v1.2.3' >&2
@@ -87,6 +109,13 @@ runs:
           echo "file=$file"
           echo "target=$target"
           echo "platform=$PLATFORM"
+          echo "cache_kind=$cache_kind"
+          echo "cache_paths=$cache_paths"
+          echo "cache_platform=$cache_platform"
+          echo "cache_key=buildkit-mounts-${IMAGE_NAME}-${cache_platform}-${cache_fingerprint:-none}"
+          echo 'cache_map<<CACHE_MAP_EOF'
+          echo "$cache_map"
+          echo 'CACHE_MAP_EOF'
           echo "source_tag=$source_tag"
           echo "amd64_tag=$amd64_tag"
           echo "arm64_tag=$arm64_tag"
@@ -104,7 +133,33 @@ runs:
         cache-image: false
 
     - name: Set up Buildx
+      id: buildx
       uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+    - name: Prepare BuildKit dependency cache directory
+      if: steps.build-inputs.outputs.cache_kind != 'none'
+      shell: bash
+      env:
+        CACHE_PATH: ${{ steps.build-inputs.outputs.cache_paths }}
+      run: mkdir -p "$CACHE_PATH"
+
+    - name: Restore BuildKit dependency cache
+      id: buildkit-cache
+      if: steps.build-inputs.outputs.cache_kind != 'none'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.build-inputs.outputs.cache_paths }}
+        key: ${{ runner.os }}-${{ steps.build-inputs.outputs.cache_key }}
+        restore-keys: |
+          ${{ runner.os }}-buildkit-mounts-${{ steps.build-inputs.outputs.image_name }}-${{ steps.build-inputs.outputs.cache_platform }}-
+
+    - name: Inject and save BuildKit dependency cache mounts
+      if: steps.build-inputs.outputs.cache_kind != 'none'
+      uses: reproducible-containers/buildkit-cache-dance@5de31fc1534ed8789e63d41ea933c5df9944a261 # v3.1.0
+      with:
+        builder: ${{ steps.buildx.outputs.name }}
+        cache-map: ${{ steps.build-inputs.outputs.cache_map }}
+        skip-extraction: ${{ steps.buildkit-cache.outputs.cache-hit }}
 
     - name: Set up Trivy
       uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1

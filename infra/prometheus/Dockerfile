@@ -20,7 +20,8 @@ RUN curl -fsSLo /tmp/prometheus-web-ui.tar.gz \
   && tar -xzf /tmp/prometheus-web-ui.tar.gz -C web/ui \
   && test -d web/ui/static
 
-RUN PREBUILT_ASSETS_STATIC_DIR=web/ui/static scripts/compress_assets.sh \
+RUN --mount=type=cache,id=care-go-mod,target=/go/pkg/mod \
+  PREBUILT_ASSETS_STATIC_DIR=web/ui/static scripts/compress_assets.sh \
   && go mod edit -require=golang.org/x/net@v0.60.0 \
   && go mod download golang.org/x/net@v0.60.0 \
   && mkdir -p /out \

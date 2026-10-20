@@ -13,10 +13,12 @@ RUN apk add --no-cache git \
 
 WORKDIR /src
 
-RUN go mod edit -require=golang.org/x/net@v0.60.0 \
+RUN --mount=type=cache,id=care-go-mod,target=/go/pkg/mod \
+  go mod edit -require=golang.org/x/net@v0.60.0 \
   && go mod download golang.org/x/net@v0.60.0
 
-RUN mkdir -p /out \
+RUN --mount=type=cache,id=care-go-mod,target=/go/pkg/mod \
+  mkdir -p /out \
   && GOOS="$TARGETOS" GOARCH="$TARGETARCH" CGO_ENABLED=0 go build \
     -trimpath \
     -buildvcs=false \

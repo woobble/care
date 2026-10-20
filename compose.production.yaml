@@ -2,10 +2,8 @@ name: care-platform-prod
 
 services:
   postgres:
-    image: care-platform-postgres:18.6-go1.26.9
-    build:
-      context: .
-      dockerfile: infra/postgres/Dockerfile
+    image: ghcr.io/woobble/care-platform:postgres-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:3422b622083c7a9184544f91cd9e5504e7dd92d6deb9016a5bf3aee584986ae3
+    build: !reset null
     ports: !override []
     restart: unless-stopped
     networks: !override [care-private]
@@ -16,10 +14,8 @@ services:
     networks: !override [care-private]
 
   authentik-server:
-    image: care-platform-authentik:2026.8.4-openssl-deb13u3-urllib3-2.8.0-aiohttp-3.14.4
-    build:
-      context: .
-      dockerfile: infra/authentik/Dockerfile
+    image: ghcr.io/woobble/care-platform:authentik-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:dc61f3ecb29f8a5fc1db3899f10069f17e2ef1078699684a0ae01dd4473d600d
+    build: !reset null
     environment: !override
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?Set AUTHENTIK_SECRET_KEY in .env.production}
       AUTHENTIK_POSTGRESQL__HOST: postgres
@@ -58,10 +54,8 @@ services:
       start_period: 60s
 
   authentik-worker:
-    image: care-platform-authentik:2026.8.4-openssl-deb13u3-urllib3-2.8.0-aiohttp-3.14.4
-    build:
-      context: .
-      dockerfile: infra/authentik/Dockerfile
+    image: ghcr.io/woobble/care-platform:authentik-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:dc61f3ecb29f8a5fc1db3899f10069f17e2ef1078699684a0ae01dd4473d600d
+    build: !reset null
     environment: !override
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?Set AUTHENTIK_SECRET_KEY in .env.production}
       AUTHENTIK_POSTGRESQL__HOST: postgres
@@ -93,9 +87,8 @@ services:
     security_opt: [no-new-privileges:true]
 
   seaweedfs:
-    image: care-platform-seaweedfs:4.48-go1.26.9-xnet0.60.0
-    build:
-      context: ./infra/seaweedfs
+    image: ghcr.io/woobble/care-platform:seaweedfs-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:ce675b90de4fde061ff91d2693c6692dc3e0ba730caa39209d9b1d70caa20cee
+    build: !reset null
     command:
       - server
       - -dir=/data
@@ -111,6 +104,8 @@ services:
 
   seaweedfs-init:
     profiles: !override []
+    image: ghcr.io/woobble/care-platform:aws-cli-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:60854f744c70bbe8f1fd51f2e9a51279faf6d0a2b7c49db1dbfafd2eeffba255
+    build: !reset null
     entrypoint: [/bin/sh, -eu, -c]
     command:
       - >-
@@ -144,9 +139,8 @@ services:
     networks: !override [care-private]
 
   prometheus:
-    image: care-platform-prometheus:v3.15.0-go1.26.9-xnet0.60.0
-    build:
-      context: ./infra/prometheus
+    image: ghcr.io/woobble/care-platform:prometheus-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:092f1af44d51073f39f91a64d6f3dd235db2a851f2a666458daadea92082b636
+    build: !reset null
     profiles: !override [observability]
     ports: !override ['127.0.0.1:9090:9090']
     networks: !override [care-private]
@@ -156,9 +150,8 @@ services:
       - care-prometheus:/prometheus
 
   grafana:
-    image: care-platform-grafana:13.2.4-kin-openapi0.149.0-pruned
-    build:
-      context: ./infra/grafana
+    image: ghcr.io/woobble/care-platform:grafana-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:6bf6748f80ff90e975b91df8a0d4e5d60d1eb758d371f5602ef9b21ffae5be52
+    build: !reset null
     profiles: !override [observability]
     ports: !override ['127.0.0.1:3002:3000']
     networks: !override [care-private]
@@ -166,10 +159,8 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env.production}
 
   migrate:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-      target: runtime
+    image: ghcr.io/woobble/care-platform:migrate-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:47d501ca690ef908b2f4891a859ba7bcdf2bf1768898dfb0866b168ada74d6f9
+    build: !reset null
     command: [bun, apps/api/dist/migrate.js]
     environment:
       NODE_ENV: production
@@ -182,10 +173,8 @@ services:
     networks: [care-private]
 
   api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-      target: runtime
+    image: ghcr.io/woobble/care-platform:api-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:9eb23d4b23bdfa840144399f3241d367f07c658f933444199c4021edd77fe30b
+    build: !reset null
     environment: !override
       NODE_ENV: production
       DATABASE_URL_FILE: /run/secrets/care_database_url
@@ -229,9 +218,8 @@ services:
     networks: [care-private, care-edge]
 
   worker:
-    build:
-      context: .
-      dockerfile: apps/worker/Dockerfile
+    image: ghcr.io/woobble/care-platform:worker-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:430eec8a7cc93f9b077b922bf03793525759fc038b0d3cd5b3f83c42333b04e5
+    build: !reset null
     environment: !override
       NODE_ENV: production
       WORKER_DATABASE_URL_FILE: /run/secrets/worker_database_url
@@ -258,9 +246,8 @@ services:
     networks: [care-private]
 
   web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
+    image: ghcr.io/woobble/care-platform:web-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:a15c7b70905960d1f09b0ce5868db99cd9b29701339212826a6a25a4bdf740f5
+    build: !reset null
     environment: !override
       NODE_ENV: production
       DATABASE_URL_FILE: /run/secrets/care_database_url
@@ -291,9 +278,8 @@ services:
     networks: [care-private, care-edge]
 
   osrm:
-    image: care-platform-osrm:v26.10.0-distroless-debian13-go1.26.9
-    build:
-      context: ./infra/osrm
+    image: ghcr.io/woobble/care-platform:osrm-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:63444cd3a5cc30d407adae219de8659b70f420bd22910867719c1b02b759b065
+    build: !reset null
     ports: !override []
     entrypoint: [/usr/local/bin/care-osrm-launcher]
     command: !reset []
@@ -304,10 +290,8 @@ services:
     networks: !override [care-private]
 
   caddy:
-    image: care-platform-caddy:2.11.7-go1.26.9
-    build:
-      context: .
-      dockerfile: infra/caddy/Dockerfile
+    image: ghcr.io/woobble/care-platform:caddy-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:274c6f6d0bdf84e367b0d6a3e24623b64d05f368726e9c077bae1caa52243d5e
+    build: !reset null
     environment:
       CADDY_EMAIL: ${CADDY_EMAIL:?Set CADDY_EMAIL in .env.production}
       WEB_HOST: ${WEB_HOST:?Set WEB_HOST in .env.production}
@@ -340,10 +324,8 @@ services:
           - ${AUTHENTIK_HOST:?Set AUTHENTIK_HOST in .env.production}
 
   operator:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-      target: operator
+    image: ghcr.io/woobble/care-platform:operator-sha-14d7a0f117c82b8e7e5141317f89de6e48c205e3-run-39334177170-attempt-1@sha256:551e5396dae11cfeae13fda1d552c5151e7ed886f8095bb945b8888b8956f41d
+    build: !reset null
     command: [bun, apps/api/dist/ops/cli.js]
     environment: !override
       NODE_ENV: production

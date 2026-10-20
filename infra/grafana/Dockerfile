@@ -14,7 +14,8 @@ RUN git init \
   && git checkout --detach FETCH_HEAD \
   && test "$(git rev-parse HEAD)" = "$GRAFANA_COMMIT"
 
-RUN go mod edit -require=github.com/getkin/kin-openapi@v0.149.0 \
+RUN --mount=type=cache,id=care-go-mod,target=/go/pkg/mod \
+  go mod edit -require=github.com/getkin/kin-openapi@v0.149.0 \
   && go mod download github.com/getkin/kin-openapi@v0.149.0 \
   && BUILD_STAMP="$(git show -s --format=%ct HEAD)" \
   && mkdir -p /out \
