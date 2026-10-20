@@ -60,3 +60,9 @@ export type {
   QualificationInput,
   TeamMembershipInput,
 } from './application/employee.service';
+
+export {
+  QualificationExpiryQueries,
+  type QualificationExpiryQuery,
+  type QualificationExpiryFact,
+} from './application/operations-expiry';

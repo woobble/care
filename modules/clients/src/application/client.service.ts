@@ -1,3 +1,4 @@
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 
 import type { AuditWriter } from '@care/audit';
@@ -5,8 +6,9 @@ import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { createDomainEvent } from '@care/events';
 import { OrganizationRepository } from '@care/organizations';
-import { assertCan, type AuthorizationPrincipal } from '@care/permissions';
+import { assertCan, can, type AuthorizationPrincipal } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
+
 import {
   Client,
   type ClientPersonalData,
@@ -22,6 +24,7 @@ import {
 } from '@module/clients/domain/client-master-data';
 import { ClientMasterDataRepository } from '@module/clients/infrastructure/persistence/client-master-data.repository';
 import { ClientRepository } from '@module/clients/infrastructure/persistence/client.repository';
+import { clientRecords } from '@module/clients/schema';
 
 import { clientScopeFilter, authorizeClientResource } from './client-access';
 import { appendClientChange } from './client-change';
@@ -88,6 +91,52 @@ export class ClientApplicationService {
     private readonly scheduling?: ClientSchedulingGuard,
     private readonly execution?: ClientExecutionGuard,
   ) {}
+
+  /** Trusted owner-facing references: callers must read source IDs/provider context from their own tables. */
+  async operationsDeadlineContexts(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    references: readonly {
+      clientId: string;
+      organizationId?: string | null;
+      facilityId?: string | null;
+    }[],
+    permission: 'service_agreement.read' | 'benefits.review' | 'billing.read',
+  ) {
+    if (references.length > 100) throw new RangeError('Client deadline batches are limited to 100');
+    if (!references.length) return [];
+    const rows = await transaction
+      .select({
+        clientId: clientRecords.id,
+        clientName: sql<string>`concat_ws(' ', coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}), ${clientRecords.lastName})`,
+        organizationId: clientRecords.organizationId,
+        facilityId: clientRecords.primaryFacilityId,
+      })
+      .from(clientRecords)
+      .where(
+        and(
+          eq(clientRecords.tenantId, principal.tenantId),
+          inArray(
+            clientRecords.id,
+            references.map((ref) => ref.clientId),
+          ),
+        ),
+      );
+    return rows.filter((row) =>
+      references.some((ref) => {
+        if (ref.clientId !== row.clientId) return false;
+        const organizationId = ref.organizationId ?? row.organizationId;
+        const facilityId = ref.facilityId === undefined ? row.facilityId : ref.facilityId;
+        const resource = {
+          tenantId: principal.tenantId,
+          clientId: row.clientId,
+          ...(organizationId ? { organizationId } : {}),
+          ...(facilityId ? { facilityId } : {}),
+        };
+        return can(principal, { action: permission, resource });
+      }),
+    );
+  }
 
   async getForServiceAgreement(
     transaction: DatabaseTransaction,

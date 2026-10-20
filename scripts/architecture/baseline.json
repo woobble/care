@@ -828,14 +828,6 @@
     {
       "kind": "persistence",
       "file": "modules/operations/src/application/operations.application.ts",
-      "symbol": "benefitFundingSources",
-      "target": "modules/benefits/src/schema.ts#benefitFundingSources",
-      "reason": "Persistence belongs to benefits; use its public application/query API.",
-      "line": 26
-    },
-    {
-      "kind": "persistence",
-      "file": "modules/operations/src/application/operations.application.ts",
       "symbol": "careDocuments",
       "target": "modules/care-documentation/src/schema.ts#careDocuments",
       "reason": "Persistence belongs to care-documentation; use its public application/query API.",
@@ -876,22 +868,6 @@
     {
       "kind": "persistence",
       "file": "modules/operations/src/application/operations.application.ts",
-      "symbol": "employeeFacilityAssignments",
-      "target": "modules/employees/src/schema.ts#employeeFacilityAssignments",
-      "reason": "Persistence belongs to employees; use its public application/query API.",
-      "line": 39
-    },
-    {
-      "kind": "persistence",
-      "file": "modules/operations/src/application/operations.application.ts",
-      "symbol": "employeeQualifications",
-      "target": "modules/employees/src/schema.ts#employeeQualifications",
-      "reason": "Persistence belongs to employees; use its public application/query API.",
-      "line": 39
-    },
-    {
-      "kind": "persistence",
-      "file": "modules/operations/src/application/operations.application.ts",
       "symbol": "employeeRecords",
       "target": "modules/employees/src/schema.ts#employeeRecords",
       "reason": "Persistence belongs to employees; use its public application/query API.",
@@ -928,22 +904,6 @@
       "target": "modules/organizations/src/schema.ts#organizationsTable",
       "reason": "Persistence belongs to organizations; use its public application/query API.",
       "line": 47
-    },
-    {
-      "kind": "persistence",
-      "file": "modules/operations/src/application/operations.application.ts",
-      "symbol": "payerArrangements",
-      "target": "modules/billing/src/schema.ts#payerArrangements",
-      "reason": "Persistence belongs to billing; use its public application/query API.",
-      "line": 28
-    },
-    {
-      "kind": "persistence",
-      "file": "modules/operations/src/application/operations.application.ts",
-      "symbol": "qualificationDefinitions",
-      "target": "modules/employees/src/schema.ts#qualificationDefinitions",
-      "reason": "Persistence belongs to employees; use its public application/query API.",
-      "line": 39
     },
     {
       "kind": "persistence",

@@ -1,28 +1,28 @@
+import { and, eq, inArray, exists, or, sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 
 import type { AuditWriter } from '@care/audit';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
-import { createDomainEvent } from '@care/events';
-import type { DomainEvent } from '@care/events';
+import { createDomainEvent, type DomainEvent } from '@care/events';
 import { assertCan, can, type AuthorizationPrincipal, type Permission } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
+
 import {
   FacilityHasActiveTeamsError,
   OrganizationHasActiveChildrenError,
   transitionStructureStatus,
-} from '@module/organizations/domain/organization';
-import type {
-  FacilityData,
-  FacilitySnapshot,
-  OrganizationData,
-  OrganizationSnapshot,
-  StructureStatus,
-  TeamData,
-  TeamSnapshot,
+  type FacilityData,
+  type FacilitySnapshot,
+  type OrganizationData,
+  type OrganizationSnapshot,
+  type StructureStatus,
+  type TeamData,
+  type TeamSnapshot,
 } from '@module/organizations/domain/organization';
 import { isSupportedTimeZone } from '@module/organizations/domain/timezone';
 import { OrganizationRepository } from '@module/organizations/infrastructure/persistence/organization.repository';
+import { organizationsTable, facilities } from '@module/organizations/schema';
 
 export interface OrganizationServiceAgreementGuard {
   hasActiveForOrganization(
@@ -82,6 +82,61 @@ export class OrganizationApplicationService {
     private readonly scheduling?: OrganizationSchedulingGuard,
     private readonly execution?: OrganizationExecutionGuard,
   ) {}
+
+  /** Only timezone facts for organizations visible through Operations, including facility grants. */
+  async operationsTimezones(principal: AuthorizationPrincipal, organizationIds: readonly string[]) {
+    const ids = [...new Set(organizationIds)];
+    if (ids.length > 1000) throw new RangeError('Timezone batches are limited to 1000');
+    if (!ids.length) return new Map<string, string>();
+    const grants = principal.grants.filter((grant) => grant.permission === 'operations.read');
+    const tenantWide = grants.some(
+      (grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId,
+    );
+    const organizationScope = grants
+      .filter((grant) => grant.scopeType === 'organization')
+      .map((grant) => grant.scopeId);
+    const facilityScope = grants
+      .filter((grant) => grant.scopeType === 'facility')
+      .map((grant) => grant.scopeId);
+    const rows = await this.unitOfWork.transaction(
+      { tenantId: principal.tenantId },
+      (transaction) =>
+        transaction
+          .select({
+            id: organizationsTable.id,
+            timezone: organizationsTable.timezone,
+          })
+          .from(organizationsTable)
+          .where(
+            and(
+              eq(organizationsTable.tenantId, principal.tenantId),
+              inArray(organizationsTable.id, ids),
+              tenantWide
+                ? sql`true`
+                : or(
+                    organizationScope.length
+                      ? inArray(organizationsTable.id, organizationScope)
+                      : sql`false`,
+                    facilityScope.length
+                      ? exists(
+                          transaction
+                            .select({ id: facilities.id })
+                            .from(facilities)
+                            .where(
+                              and(
+                                eq(facilities.tenantId, principal.tenantId),
+                                eq(facilities.organizationId, organizationsTable.id),
+                                inArray(facilities.id, facilityScope),
+                              ),
+                            ),
+                        )
+                      : sql`false`,
+                  ),
+            ),
+          ),
+    );
+    return new Map(rows.map((row) => [row.id, row.timezone]));
+  }
 
   async listOrganizations(
     principal: AuthorizationPrincipal,

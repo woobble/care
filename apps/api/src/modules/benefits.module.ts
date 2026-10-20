@@ -3,20 +3,35 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from '@app/api/database/database.module';
 import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import { BenefitsController } from '@app/api/presentation/http/benefits.controller';
-import { AUDIT_WRITER, BENEFITS_APPLICATION, OUTBOX_WRITER, UNIT_OF_WORK } from '@app/api/tokens';
+import {
+  CLIENT_APPLICATION,
+  AUDIT_WRITER,
+  BENEFITS_APPLICATION,
+  OUTBOX_WRITER,
+  UNIT_OF_WORK,
+} from '@app/api/tokens';
+
 import type { AuditWriter } from '@care/audit';
-import { createBenefitsApplicationService } from '@care/benefits';
+import { BenefitEntitlementExpiryQueries, createBenefitsApplicationService } from '@care/benefits';
+import type { ClientApplicationService } from '@care/clients';
 import type { UnitOfWork } from '@care/database';
 import type { OutboxWriter } from '@care/platform';
 
 import { AuditModule } from './audit.module';
+import { ClientsModule } from './clients.module';
 import { IdentityModule } from './identity.module';
 import { PlatformModule } from './platform.module';
 
 @Module({
-  imports: [DatabaseModule, IdentityModule, AuditModule, PlatformModule],
+  imports: [ClientsModule, DatabaseModule, IdentityModule, AuditModule, PlatformModule],
   controllers: [BenefitsController],
   providers: [
+    {
+      provide: BenefitEntitlementExpiryQueries,
+      inject: [UNIT_OF_WORK, CLIENT_APPLICATION],
+      useFactory: (unitOfWork: UnitOfWork, clients: ClientApplicationService) =>
+        new BenefitEntitlementExpiryQueries(unitOfWork, clients),
+    },
     OidcGuard,
     TenantContextGuard,
     {
@@ -26,6 +41,6 @@ import { PlatformModule } from './platform.module';
         createBenefitsApplicationService(unitOfWork, audit, outbox),
     },
   ],
-  exports: [BENEFITS_APPLICATION],
+  exports: [BenefitEntitlementExpiryQueries, BENEFITS_APPLICATION],
 })
 export class BenefitsModule {}

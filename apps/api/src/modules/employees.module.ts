@@ -11,9 +11,14 @@ import {
   VISIT_EXECUTION_GUARDS,
   UNIT_OF_WORK,
 } from '@app/api/tokens';
+
 import type { AuditWriter } from '@care/audit';
 import type { UnitOfWork } from '@care/database';
-import { EmployeeApplicationService, type EmployeeSchedulingGuard } from '@care/employees';
+import {
+  QualificationExpiryQueries,
+  EmployeeApplicationService,
+  type EmployeeSchedulingGuard,
+} from '@care/employees';
 import type { OutboxWriter } from '@care/platform';
 import type { VisitExecutionGuards } from '@care/visit-execution';
 
@@ -34,6 +39,11 @@ import { VisitExecutionModule } from './visit-execution.module';
   ],
   controllers: [EmployeesController],
   providers: [
+    {
+      provide: QualificationExpiryQueries,
+      inject: [UNIT_OF_WORK],
+      useFactory: (unitOfWork: UnitOfWork) => new QualificationExpiryQueries(unitOfWork),
+    },
     OidcGuard,
     TenantContextGuard,
     {
@@ -55,6 +65,6 @@ import { VisitExecutionModule } from './visit-execution.module';
         new EmployeeApplicationService(unitOfWork, audit, outbox, undefined, scheduling, execution),
     },
   ],
-  exports: [EMPLOYEE_APPLICATION],
+  exports: [QualificationExpiryQueries, EMPLOYEE_APPLICATION],
 })
 export class EmployeesModule {}

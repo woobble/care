@@ -6,3 +6,9 @@ export * from './claims/payer-schema';
 export * from './claims/schema';
 export * from './claims/domain';
 export * from './claims/claims.application';
+
+export {
+  PayerArrangementExpiryQueries,
+  type PayerArrangementExpiryQuery,
+  type PayerArrangementExpiryFact,
+} from './application/operations-expiry';

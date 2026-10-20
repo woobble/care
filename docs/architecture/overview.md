@@ -53,3 +53,5 @@ Docker Compose starts PostgreSQL, Redis, Authentik, SeaweedFS, Mailpit, an OpenT
 ## Enforced module boundaries
 
 See [module boundaries](module-boundaries.md) for ownership, public interfaces, composition and exception policy; [dependency map](dependency-map.md) for confirmed import debt; and the [Goal 01 to Goal 02 handoff](goal-01-to-goal-02.md) for Operations worklist preparation. Run `bun run architecture:check` and `bun run architecture:test` before adding domain dependencies.
+
+Goal 02 moved the four Operations deadline reads and timezone enrichment behind authorized owner capabilities. See the [Goal 02 to Goal 03 handoff](goal-02-to-goal-03.md) for verification, remaining persistence debt and the focused Scheduling tour extraction plan.

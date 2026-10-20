@@ -64,3 +64,9 @@ export {
   type BenefitAllocationExportFilters,
   type BenefitAllocationExportRow,
 } from './application/benefits.application';
+
+export {
+  BenefitEntitlementExpiryQueries,
+  type BenefitEntitlementExpiryQuery,
+  type BenefitEntitlementExpiryFact,
+} from './application/operations-expiry';

@@ -45,3 +45,9 @@ export {
   createServiceAgreementGuards,
   type ServiceAgreementGuards,
 } from './infrastructure/service-agreement-guard';
+
+export {
+  AgreementExpiryQueries,
+  type AgreementExpiryQuery,
+  type AgreementExpiryFact,
+} from './application/operations-expiry';

@@ -1,6 +1,6 @@
 # Dependency and violation map
 
-Goal 01 source snapshot. Refresh this report deliberately after architectural changes; `bun scripts/architecture/check.mjs --report` prints the current machine-readable map without changing the baseline. Import edges include types, schema declarations and re-exports. This is not a runtime call graph.
+Goal 02 source snapshot. Refresh this report deliberately after architectural changes; `bun scripts/architecture/check.mjs --report` prints the current machine-readable map without changing the baseline. Import edges include types, schema declarations and re-exports. This is not a runtime call graph.
 
 ## Observed module dependencies
 
@@ -27,7 +27,7 @@ Audit and Platform have no outgoing module import edges. No direct module import
 
 ## Confirmed import debt
 
-151 persistence imports, 6 private imports, 7 direction violations. Legitimate exceptions are excluded. These are import sites/symbols, not counts of database queries. The baseline retains every exact path, line, symbol, owning schema and reason.
+146 persistence imports, 6 private imports, 7 direction violations. Legitimate exceptions are excluded. These are import sites/symbols, not counts of database queries. The baseline retains every exact path, line, symbol, owning schema and reason.
 
 | Source file                                                                       | Findings                 |
 | --------------------------------------------------------------------------------- | ------------------------ |
@@ -52,7 +52,7 @@ Audit and Platform have no outgoing module import edges. No direct module import
 | `modules/onboarding/src/application/onboarding.application.ts`                    | persistence: 19          |
 | `modules/operations/src/application/deadline-scheduler.application.ts`            | persistence: 9           |
 | `modules/operations/src/application/operations-guards.ts`                         | persistence: 2           |
-| `modules/operations/src/application/operations.application.ts`                    | persistence: 19          |
+| `modules/operations/src/application/operations.application.ts`                    | persistence: 14          |
 | `modules/operations/src/application/recurrence.application.ts`                    | persistence: 3           |
 | `modules/scheduling/src/application/calendar-subscription.application.ts`         | persistence: 1           |
 | `modules/scheduling/src/infrastructure/calendar-subscription.repository.ts`       | persistence: 2           |
@@ -65,11 +65,15 @@ Audit and Platform have no outgoing module import edges. No direct module import
 
 ## Migration order
 
-1. Operations worklist deadline reads, scope/name/timezone enrichment and reconciliation (Goal 02 handoff). Operations has 33 persistence import sites across its application services.
+1. Operations worklist deadline reads, scope/name/timezone enrichment and reconciliation (Goal 02 handoff). Operations has 28 remaining persistence import sites across its application services.
 2. Onboarding readiness and source validation (19 persistence imports); Communications source/task/contact reads (10). Preserve independent source permissions and prospect isolation.
 3. Billing (17), Service Evidence (12), Visit Execution (12), Benefits (10), Scheduling (8), Care Documentation (7). Replace source facts with bounded queries/guards while retaining transaction locks and authorization; do not mechanically move SQL into shared infrastructure.
 4. Employee, Identity, Client and catalog/provider checks. Use focused owner-facing guards/read contracts.
 5. Web imports of Scheduling availability and Services pricing logic/types: design a safe public pure contract or move the required calculation into a suitable shared contract package. Avoid importing backend root barrels into browser bundles.
 6. API transport access to tables: replace remaining controller reads with owner APIs. Better Auth schema composition is an explicit legitimate server exception.
 
-Raw SQL is outside the import checker. Confirmed additional debt: `modules/operations/src/application/operations.application.ts:3029` reads Communications and Clients in source validation. Potential improvements (not confirmed violations): narrower public barrels, dedicated DTOs instead of table-inferred return types, and future event consumers replacing the worker catch-all.
+Raw SQL is outside the import checker. Confirmed additional debt: `modules/operations/src/application/operations.application.ts:2886` reads Communications and Clients in source validation. Potential improvements (not confirmed violations): narrower public barrels, dedicated DTOs instead of table-inferred return types, and future event consumers replacing the worker catch-all.
+
+## Goal 02 deadline reads
+
+The four `listWorkItems` expiry streams now call Service Agreements, Employees, Benefits and Billing owner query classes. Client display/provider facts come from the bounded authorized Clients projection; organization timezone enrichment comes from Organizations. Five Operations persistence imports were removed without adding violations or regenerating the baseline. The application retains 14 foreign persistence imports for task validation, enrichment and reconciliation, and raw SQL debt remains. See [the Goal 02 to Goal 03 handoff](goal-02-to-goal-03.md) for scope, security, pagination, performance tradeoffs and the Scheduling extraction plan. Goal 03 does not inherit the deferred Operations cleanup automatically.

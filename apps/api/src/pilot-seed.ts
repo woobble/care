@@ -5,17 +5,18 @@ import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { v5 as uuidv5, v7 as uuidv7 } from 'uuid';
 
 import { databaseSchema } from '@app/api/database/schema';
+
 import { DrizzleAuditWriter } from '@care/audit';
 import {
+  BenefitEntitlementExpiryQueries,
   clientBenefitEntitlements,
   createBenefitsApplicationService,
   serviceAllocations,
 } from '@care/benefits';
 import {
+  PayerArrangementExpiryQueries,
   createBillingApplicationService,
   createBillingClaimsApplicationService,
-} from '@care/billing';
-import {
   claims,
   invoiceLines,
   invoices,
@@ -34,7 +35,11 @@ import { loadApiConfig, loadMigrationConfig, loadStorageConfig } from '@care/con
 import { asUUID } from '@care/contracts';
 import { createDatabase, createUnitOfWork } from '@care/database';
 import { createDocumentsApplicationService } from '@care/documents';
-import { EmployeeApplicationService, employeeRecords } from '@care/employees';
+import {
+  QualificationExpiryQueries,
+  EmployeeApplicationService,
+  employeeRecords,
+} from '@care/employees';
 import { identitySchema, seedSystemRoles } from '@care/identity';
 import { createOperationsApplicationService } from '@care/operations';
 import { OrganizationApplicationService, tenants } from '@care/organizations';
@@ -46,11 +51,15 @@ import {
   UnavailableRouteProvider,
   visitSubstitutions,
 } from '@care/scheduling';
-import { createServiceAgreementApplicationService } from '@care/service-agreements';
+import {
+  AgreementExpiryQueries,
+  createServiceAgreementApplicationService,
+} from '@care/service-agreements';
 import { createServiceEvidenceApplicationService } from '@care/service-evidence';
 import { createServiceApplicationService, ServicePriceApplicationService } from '@care/services';
 import { createS3ObjectStorage } from '@care/storage';
 import { createVisitExecutionApplicationService } from '@care/visit-execution';
+
 import { selectDailyPilotWorkload } from './pilot-workload';
 
 const PILOT_SLUG = 'muster-betreuungsdienst-nrw';
@@ -197,6 +206,11 @@ const billingClaims = createBillingClaimsApplicationService(
   objectStorage,
 );
 const operations = createOperationsApplicationService(unitOfWork, audit, outbox, {
+  agreements: new AgreementExpiryQueries(unitOfWork, clientService),
+  qualifications: new QualificationExpiryQueries(unitOfWork),
+  benefitExpiry: new BenefitEntitlementExpiryQueries(unitOfWork, clientService),
+  payerExpiry: new PayerArrangementExpiryQueries(unitOfWork, clientService),
+  organizations: organizationService,
   scheduling,
   execution: visitExecution,
   documentation: careDocumentation,

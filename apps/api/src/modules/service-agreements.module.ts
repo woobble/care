@@ -16,12 +16,14 @@ import {
   SERVICE_APPLICATION,
   UNIT_OF_WORK,
 } from '@app/api/tokens';
+
 import type { AuditWriter } from '@care/audit';
 import type { ClientApplicationService } from '@care/clients';
 import type { UnitOfWork } from '@care/database';
 import type { OrganizationApplicationService } from '@care/organizations';
 import type { OutboxWriter } from '@care/platform';
 import {
+  AgreementExpiryQueries,
   createServiceAgreementApplicationService,
   type ServiceAgreementGuards,
   type ServiceAgreementApplicationService,
@@ -49,6 +51,12 @@ import { ServicesModule } from './services.module';
   ],
   controllers: [ClientServiceAgreementsController, ServiceAgreementsController],
   providers: [
+    {
+      provide: AgreementExpiryQueries,
+      inject: [UNIT_OF_WORK, CLIENT_APPLICATION],
+      useFactory: (unitOfWork: UnitOfWork, clients: ClientApplicationService) =>
+        new AgreementExpiryQueries(unitOfWork, clients),
+    },
     OidcGuard,
     TenantContextGuard,
     {
@@ -82,6 +90,6 @@ import { ServicesModule } from './services.module';
         ),
     },
   ],
-  exports: [SERVICE_AGREEMENT_APPLICATION],
+  exports: [AgreementExpiryQueries, SERVICE_AGREEMENT_APPLICATION],
 })
 export class ServiceAgreementsModule {}

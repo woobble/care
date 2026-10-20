@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createServer } from 'node:http';
-import type { Server } from 'node:http';
+import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { NestFactory } from '@nestjs/core';
@@ -12,21 +11,32 @@ import { v7 as uuidv7 } from 'uuid';
 import { AppModule } from '@app/api/app.module';
 import { configureApiHttp, createApiFastifyAdapter } from '@app/api/http/fastify';
 import {
+  ORGANIZATION_APPLICATION,
+  OPERATIONS_APPLICATION,
+  CLIENT_APPLICATION,
   AUDIT_WRITER,
   BENEFITS_APPLICATION,
   OPERATIONS_RECURRENCE_APPLICATION,
   OUTBOX_WRITER,
   UNIT_OF_WORK,
 } from '@app/api/tokens';
+
 import type { AuditWriter } from '@care/audit';
-import type { BenefitsApplicationService } from '@care/benefits';
+import { BenefitEntitlementExpiryQueries, type BenefitsApplicationService } from '@care/benefits';
+import { PayerArrangementExpiryQueries } from '@care/billing';
+import type { ClientApplicationService } from '@care/clients';
 import type { UnitOfWork } from '@care/database';
+import { QualificationExpiryQueries } from '@care/employees';
 import { readOperationsDeadlineCases } from '@care/onboarding';
 import {
+  type OperationsApplicationService,
   OperationsDeadlineTaskScheduler,
   type OperationsRecurrenceApplicationService,
 } from '@care/operations';
+import type { OrganizationApplicationService } from '@care/organizations';
+import type { AuthorizationPrincipal, Permission } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
+import { AgreementExpiryQueries } from '@care/service-agreements';
 import { startCareTestDatabase } from '@care/testing';
 
 describe('operations PostgreSQL/API integration', () => {
@@ -986,6 +996,327 @@ describe('operations PostgreSQL/API integration', () => {
           item.issueCode === 'payer_authorization_expiry',
       );
       expect(payerArrangementDeadline?.dueAt).toBeDefined();
+
+      // Exercise the actual Nest-composed owner contracts, independently of Operations' gates.
+      const expiryQuery = {
+        fromDate: today,
+        untilDate: inNineDays,
+        effectiveOn: today,
+        offset: 0,
+        pageSize: 100 as const,
+      };
+      const principalFor = (
+        permission: Permission,
+        scopeType: 'tenant' | 'organization' | 'facility' = 'tenant',
+        scopeId = tenantId,
+      ): AuthorizationPrincipal => ({
+        tenantId,
+        userId,
+        grants: [{ permission, scopeType, scopeId }],
+      });
+      const expirySources = [
+        {
+          source: api!.get(AgreementExpiryQueries),
+          permission: 'service_agreement.read' as const,
+          id: agreementId,
+        },
+        {
+          source: api!.get(QualificationExpiryQueries),
+          permission: 'employee.read' as const,
+          id: employeeQualificationId,
+        },
+        {
+          source: api!.get(BenefitEntitlementExpiryQueries),
+          permission: 'benefits.review' as const,
+          id: benefitEntitlementId,
+        },
+        {
+          source: api!.get(PayerArrangementExpiryQueries),
+          permission: 'billing.read' as const,
+          id: payerArrangementId,
+        },
+      ];
+      for (const { source, permission, id } of expirySources) {
+        // oxlint-disable no-await-in-loop -- Security checks deliberately exercise each composed source in order.
+        await expect(
+          source.operationsExpiryPage({ tenantId, userId, grants: [] }, expiryQuery),
+        ).rejects.toThrow();
+        const visible = await source.operationsExpiryPage(
+          principalFor(permission, 'facility', facilityId),
+          expiryQuery,
+        );
+        expect(visible.items.map((row) => row.id)).toContain(id);
+        const outside = await source.operationsExpiryPage(
+          principalFor(permission, 'organization', otherOrganizationId),
+          expiryQuery,
+        );
+        expect(outside.items).toEqual([]);
+        expect(
+          (
+            await source.operationsExpiryPage(principalFor(permission), {
+              ...expiryQuery,
+              facilityId: otherFacilityId,
+            })
+          ).items,
+        ).toEqual([]);
+        expect(
+          (
+            await source.operationsExpiryPage(
+              {
+                ...principalFor(permission),
+                tenantId: otherTenantId,
+                grants: [{ permission, scopeType: 'tenant', scopeId: otherTenantId }],
+              },
+              expiryQuery,
+            )
+          ).items,
+        ).toEqual([]);
+        await expect(
+          source.operationsExpiryPage(principalFor(permission), {
+            ...expiryQuery,
+            pageSize: 101 as 100,
+          }),
+        ).rejects.toThrow();
+        // oxlint-enable no-await-in-loop
+      }
+      const operationsForScopes = api!.get<OperationsApplicationService>(OPERATIONS_APPLICATION);
+      for (const [sourceDomain, permission] of [
+        ['service_agreements', 'service_agreement.read'],
+        ['employee_qualifications', 'employee.read'],
+        ['benefits', 'benefits.review'],
+        ['billing', 'billing.read'],
+      ] as const) {
+        // oxlint-disable no-await-in-loop -- Verify each source gate and the independent Operations scope.
+        expect(
+          await operationsForScopes.listWorkItems(principalFor('operations.read'), {
+            sourceDomain,
+            deadlinesOnly: true,
+          }),
+        ).toMatchObject({ items: [], total: 0, truncated: false });
+        const intersectedPrincipal = principalFor(permission, 'facility', facilityId);
+        intersectedPrincipal.grants = [
+          ...intersectedPrincipal.grants,
+          {
+            permission: 'operations.read',
+            scopeType: 'organization',
+            scopeId: otherOrganizationId,
+          },
+        ];
+        expect(
+          await operationsForScopes.listWorkItems(intersectedPrincipal, {
+            sourceDomain,
+            deadlinesOnly: true,
+          }),
+        ).toMatchObject({ items: [], total: 0, truncated: false });
+        // oxlint-enable no-await-in-loop
+      }
+      const organizations = api!.get<OrganizationApplicationService>(ORGANIZATION_APPLICATION);
+      expect(
+        await organizations.operationsTimezones(
+          principalFor('operations.read', 'facility', facilityId),
+          [organizationId],
+        ),
+      ).toEqual(new Map([[organizationId, 'Europe/Berlin']]));
+      expect(
+        await organizations.operationsTimezones(
+          principalFor('operations.read', 'facility', otherFacilityId),
+          [organizationId],
+        ),
+      ).toEqual(new Map());
+      expect(
+        await organizations.operationsTimezones(principalFor('operations.read'), [
+          otherOrganizationId,
+        ]),
+      ).toEqual(new Map());
+      expect(
+        await organizations.operationsTimezones({ tenantId, userId, grants: [] }, [organizationId]),
+      ).toEqual(new Map());
+
+      // A whole raw page may be invisible. Its empty authorized projection must not stop scanning.
+      const hiddenOrganizationId = uuidv7();
+      const hiddenClientId = uuidv7();
+      const hiddenFacilityId = uuidv7();
+      const hiddenFundingId = uuidv7();
+      const hiddenEntitlementIds = Array.from({ length: 100 }, () => uuidv7());
+      await owner.query(
+        'INSERT INTO organizations.organizations (id, tenant_id, name) VALUES ($1, $2, $3)',
+        [hiddenOrganizationId, tenantId, 'Hidden expiry provider'],
+      );
+      await owner.query(
+        'INSERT INTO organizations.facilities (id, tenant_id, organization_id, name) VALUES ($1, $2, $3, $4)',
+        [hiddenFacilityId, tenantId, hiddenOrganizationId, 'Hidden facility'],
+      );
+      await owner.query(
+        `INSERT INTO clients.clients (id, tenant_id, organization_id, primary_facility_id, first_name, last_name, status, created_at, updated_at) VALUES ($1, $2, $3, $4, 'Hidden', 'Client', 'active', $5, $5)`,
+        [hiddenClientId, tenantId, hiddenOrganizationId, hiddenFacilityId, now],
+      );
+      await owner.query(
+        `INSERT INTO benefits.funding_sources (id, tenant_id, client_id, source_type, status, created_by, created_at, updated_at) VALUES ($1, $2, $3, 'other', 'active', $4, $5, $5)`,
+        [hiddenFundingId, tenantId, hiddenClientId, userId, now],
+      );
+      await owner.query(
+        `INSERT INTO benefits.client_entitlements (id, tenant_id, client_id, benefit_type, funding_source_id, valid_from, valid_until, status, calculation_mode, source, version, created_by, created_at, updated_at)
+        SELECT id, $1, $2, 'other', $3, $4::date - ordinality::int, $4::date - ordinality::int, 'confirmed', 'external_input', 'provider_reported', 1, $5, $6, $6 FROM unnest($7::uuid[]) WITH ORDINALITY AS entries(id, ordinality)`,
+        [tenantId, hiddenClientId, hiddenFundingId, today, userId, now, hiddenEntitlementIds],
+      );
+      // Count actual SELECT constructions in these simple source/client reads; no per-item lookups.
+      let selectCount = 0;
+      const realUnitOfWork = api!.get<UnitOfWork>(UNIT_OF_WORK);
+      const countedUnitOfWork: UnitOfWork = {
+        transaction(options, operation) {
+          return realUnitOfWork.transaction(options, (transaction) =>
+            operation(
+              new Proxy(transaction, {
+                get(target, property) {
+                  if (property === 'select')
+                    return (...args: Parameters<typeof transaction.select>) => {
+                      selectCount += 1;
+                      return target.select(...args);
+                    };
+                  return Reflect.get(target, property);
+                },
+              }),
+            ),
+          );
+        },
+      };
+      const measuredExpiry = new BenefitEntitlementExpiryQueries(
+        countedUnitOfWork,
+        api!.get<ClientApplicationService>(CLIENT_APPLICATION),
+      );
+      const measurementQuery = {
+        ...expiryQuery,
+        fromDate: new Date(now.getTime() - 120 * 86_400_000).toISOString().slice(0, 10),
+      };
+      const measuredStartedAt = performance.now();
+      expect(
+        (
+          await measuredExpiry.operationsExpiryPage(
+            principalFor('benefits.review'),
+            measurementQuery,
+          )
+        ).items,
+      ).toHaveLength(100);
+      expect(selectCount).toBe(2);
+      const firstPageMs = performance.now() - measuredStartedAt;
+      selectCount = 0;
+      const tailStartedAt = performance.now();
+      expect(
+        (
+          await measuredExpiry.operationsExpiryPage(principalFor('benefits.review'), {
+            ...measurementQuery,
+            offset: 100,
+          })
+        ).items,
+      ).toHaveLength(1);
+      expect(selectCount).toBe(2);
+      console.info('Goal 02 expiry page measurement', {
+        firstPageMs: Math.round(firstPageMs * 100) / 100,
+        tailPageMs: Math.round((performance.now() - tailStartedAt) * 100) / 100,
+        selectsPerPage: selectCount,
+      });
+      const benefitExpiry = api!.get(BenefitEntitlementExpiryQueries);
+      const scopedBenefitPrincipal = principalFor(
+        'benefits.review',
+        'organization',
+        organizationId,
+      );
+      const hiddenExpiryQuery = {
+        ...expiryQuery,
+        fromDate: new Date(now.getTime() - 120 * 86_400_000).toISOString().slice(0, 10),
+      };
+      expect(
+        await benefitExpiry.operationsExpiryPage(scopedBenefitPrincipal, hiddenExpiryQuery),
+      ).toEqual({ items: [], complete: false });
+      expect(
+        await benefitExpiry.operationsExpiryPage(scopedBenefitPrincipal, {
+          ...hiddenExpiryQuery,
+          offset: 100,
+        }),
+      ).toMatchObject({
+        items: [expect.objectContaining({ id: benefitEntitlementId })],
+        complete: true,
+      });
+      const operations = api!.get<OperationsApplicationService>(OPERATIONS_APPLICATION);
+      const scopedOperationsPrincipal = {
+        ...scopedBenefitPrincipal,
+        grants: [
+          ...scopedBenefitPrincipal.grants,
+          {
+            permission: 'operations.read' as const,
+            scopeType: 'organization' as const,
+            scopeId: organizationId,
+          },
+        ],
+      };
+      const scanned = await operations.listWorkItems(scopedOperationsPrincipal, {
+        sourceDomain: 'benefits',
+        deadlinesOnly: true,
+      });
+      expect(scanned).toMatchObject({
+        total: 1,
+        truncated: false,
+        items: [expect.objectContaining({ sourceEntityId: benefitEntitlementId })],
+      });
+      await owner.query(
+        'DELETE FROM benefits.client_entitlements WHERE tenant_id = $1 AND id = ANY($2::uuid[])',
+        [tenantId, hiddenEntitlementIds],
+      );
+
+      // A later page failure preserves previously observed, still-current occurrences.
+      const qualifications = api!.get(QualificationExpiryQueries);
+      const readQualificationPage = qualifications.operationsExpiryPage.bind(qualifications);
+      try {
+        qualifications.operationsExpiryPage = async (principal, query) => {
+          if (query.offset >= 100) throw new Error('Injected expiry page failure');
+          return readQualificationPage(principal, query);
+        };
+        const failedRead = await fetch(
+          `${baseUrl}/api/v1/operations/work-items?sourceDomain=employee_qualifications`,
+          { headers },
+        );
+        expect(await failedRead.json()).toMatchObject({ truncated: true });
+        const stillOpen = await owner.query(
+          `SELECT count(*)::int AS count FROM operations.exception_occurrences WHERE tenant_id = $1 AND source_domain = 'employee_qualifications' AND resolved_at IS NULL`,
+          [tenantId],
+        );
+        expect(stillOpen.rows[0].count).toBe(102);
+      } finally {
+        qualifications.operationsExpiryPage = readQualificationPage;
+      }
+
+      // Local end-of-day is preserved for provider timezones independently of the default timezone.
+      await owner.query(
+        "UPDATE organizations.organizations SET timezone = 'America/New_York' WHERE id = $1",
+        [organizationId],
+      );
+      const zoned = await fetch(`${baseUrl}/api/v1/operations/deadlines?category=agreements`, {
+        headers,
+      });
+      const zonedBody = (await zoned.json()) as {
+        items: Array<{ sourceEntityId: string; dueAt: string }>;
+      };
+      const zonedDue = new Date(
+        zonedBody.items.find((item) => item.sourceEntityId === agreementId)!.dueAt,
+      );
+      const localParts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+      }).formatToParts(zonedDue);
+      const part = (type: Intl.DateTimeFormatPartTypes) =>
+        localParts.find((value) => value.type === type)!.value;
+      expect(`${part('year')}-${part('month')}-${part('day')}`).toBe(inEightDays);
+      expect(`${part('hour')}:${part('minute')}:${part('second')}`).toBe('23:59:59');
+      await owner.query(
+        "UPDATE organizations.organizations SET timezone = 'Europe/Berlin' WHERE id = $1",
+        [organizationId],
+      );
 
       const onboardingDeadlinesResponse = await fetch(
         `${baseUrl}/api/v1/operations/deadlines?category=onboarding`,

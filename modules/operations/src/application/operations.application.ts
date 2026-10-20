@@ -10,7 +10,6 @@ import {
   isNotNull,
   isNull,
   gte,
-  lte,
   lt,
   max,
   ne,
@@ -22,29 +21,36 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { v7 as uuidv7 } from 'uuid';
 
 import type { AuditWriter } from '@care/audit';
-import type { BenefitsApplicationService } from '@care/benefits';
-import { benefitFundingSources, clientBenefitEntitlements } from '@care/benefits';
-import type { BillingApplicationService, BillingClaimsApplicationService } from '@care/billing';
-import { invoices, claims, payerArrangements } from '@care/billing';
+import {
+  type BenefitEntitlementExpiryQueries,
+  type BenefitsApplicationService,
+  clientBenefitEntitlements,
+} from '@care/benefits';
+import {
+  type PayerArrangementExpiryQueries,
+  type BillingApplicationService,
+  type BillingClaimsApplicationService,
+  invoices,
+  claims,
+} from '@care/billing';
 import {
   CareDocumentationNotFoundError,
   CareDocumentationVisitRelationshipRequiredError,
   type CareDocumentationApplicationService,
+  careDocuments,
 } from '@care/care-documentation';
-import { careDocuments } from '@care/care-documentation';
 import { clientRecords } from '@care/clients';
 import type { RequestContext } from '@care/contracts';
 import type { DatabaseTransaction, UnitOfWork } from '@care/database';
 import { documentArtifacts } from '@care/documents';
-import {
-  employeeFacilityAssignments,
-  employeeQualifications,
-  employeeRecords,
-  qualificationDefinitions,
-} from '@care/employees';
+import { type QualificationExpiryQueries, employeeRecords } from '@care/employees';
 import { createDomainEvent } from '@care/events';
 import { tenantMemberships, users } from '@care/identity';
-import { facilities, organizationsTable } from '@care/organizations';
+import {
+  type OrganizationApplicationService,
+  facilities,
+  organizationsTable,
+} from '@care/organizations';
 import {
   assertCan,
   AuthorizationDeniedError,
@@ -59,16 +65,17 @@ import {
   VisitOutsideProviderContextError,
   localDateTimeToInstant,
   type SchedulingApplicationService,
+  visits,
 } from '@care/scheduling';
-import { visits } from '@care/scheduling';
-import { agreements } from '@care/service-agreements';
+import { type AgreementExpiryQueries, agreements } from '@care/service-agreements';
 import {
   EvidencePackageNotFoundError,
   ServiceEvidenceVisitRelationshipRequiredError,
   type ServiceEvidenceApplicationService,
+  evidencePackages,
 } from '@care/service-evidence';
-import { evidencePackages } from '@care/service-evidence';
 import type { VisitExecutionApplicationService } from '@care/visit-execution';
+
 import {
   evidenceIssueCode,
   evidencePackageIssueCode,
@@ -133,6 +140,11 @@ export interface OperationsReminderPolicyInput {
 }
 
 export interface OperationsSourceServices {
+  organizations: Pick<OrganizationApplicationService, 'operationsTimezones'>;
+  payerExpiry: Pick<PayerArrangementExpiryQueries, 'operationsExpiryPage'>;
+  benefitExpiry: Pick<BenefitEntitlementExpiryQueries, 'operationsExpiryPage'>;
+  qualifications: Pick<QualificationExpiryQueries, 'operationsExpiryPage'>;
+  agreements: Pick<AgreementExpiryQueries, 'operationsExpiryPage'>;
   scheduling: Pick<SchedulingApplicationService, 'getWorklist' | 'getWorklistForVisit'>;
   execution: Pick<VisitExecutionApplicationService, 'operationsSummaries' | 'operationsIssueState'>;
   documentation: Pick<CareDocumentationApplicationService, 'worklist' | 'getForVisit'>;
@@ -309,7 +321,7 @@ export class OperationsApplicationService {
     const deadlineItems = worklist.items.filter(
       (item) => deadlinePolicyCategory(item) !== null && item.dueAt !== null,
     );
-    const deadlineTimezones = await this.organizationTimezones(principal.tenantId, [
+    const deadlineTimezones = await this.organizationTimezones(principal, [
       ...new Set(
         deadlineItems.flatMap((item) => (item.organizationId ? [item.organizationId] : [])),
       ),
@@ -613,10 +625,6 @@ export class OperationsApplicationService {
       benefitDeadlines: canRead('benefits.review') && sourceEnabled('benefits'),
       payerArrangements: canRead('billing.read') && sourceEnabled('billing'),
     };
-    const agreementScope = permissionScope(principal, 'service_agreement.read');
-    const employeeScope = permissionScope(principal, 'employee.read');
-    const benefitScope = permissionScope(principal, 'benefits.review');
-    const billingScope = permissionScope(principal, 'billing.read');
     const policies = await this.unitOfWork.transaction(
       { tenantId: principal.tenantId },
       (transaction) =>
@@ -671,7 +679,7 @@ export class OperationsApplicationService {
         const organizationIds = batch.flatMap((item) =>
           item.organizationId ? [item.organizationId] : [],
         );
-        const timezones = await this.organizationTimezones(principal.tenantId, organizationIds);
+        const timezones = await this.organizationTimezones(principal, organizationIds);
         const policyVisible = batch.filter((item) => {
           const policyCategory = deadlinePolicyCategory(item);
           if (!policyCategory || !item.dueAt || !item.organizationId) return true;
@@ -785,22 +793,20 @@ export class OperationsApplicationService {
         return false;
       }
     };
-    const streamDatabasePages = async <T>(
+    const streamExpiryPages = async <T>(
       sourceDomain: string,
       enabled: boolean,
-      readPage: (transaction: DatabaseTransaction, offset: number) => Promise<readonly T[]>,
+      readPage: (offset: number) => Promise<{ items: readonly T[]; complete: boolean }>,
       visitPage: (rows: readonly T[]) => Promise<void>,
     ) =>
       readSource(sourceDomain, enabled, async () => {
-        await forEachOffsetPage(
-          100,
-          (offset) =>
-            this.unitOfWork.transaction({ tenantId: principal.tenantId }, (transaction) =>
-              readPage(transaction, offset),
-            ),
-          visitPage,
-        );
-        return true;
+        // oxlint-disable no-await-in-loop
+        for (let offset = 0; ; offset += 100) {
+          const page = await readPage(offset);
+          await visitPage(page.items);
+          if (page.complete) return true;
+        }
+        // oxlint-enable no-await-in-loop
       });
     const [
       scheduleComplete,
@@ -1007,7 +1013,7 @@ export class OperationsApplicationService {
           async (page, pageSize) => (await readClientPage(page, pageSize)).clients,
           async (rows) => {
             const timezones = await this.organizationTimezones(
-              principal.tenantId,
+              principal,
               rows.map((row) => row.organizationId).filter((id): id is string => Boolean(id)),
             );
             const projected: ProjectedOperationsWorkItem[] = [];
@@ -1139,7 +1145,7 @@ export class OperationsApplicationService {
             }),
           async (rows) => {
             const timezones = await this.organizationTimezones(
-              principal.tenantId,
+              principal,
               rows.map((row) => row.organizationId),
             );
             const projected = rows.flatMap((invoice) => {
@@ -1273,7 +1279,7 @@ export class OperationsApplicationService {
           },
           async (admissions) => {
             const timezones = await this.organizationTimezones(
-              principal.tenantId,
+              principal,
               admissions.map((admission) => admission.organizationId),
             );
             const projected: ProjectedOperationsWorkItem[] = [];
@@ -1353,50 +1359,22 @@ export class OperationsApplicationService {
         );
         return result.complete;
       }),
-      streamDatabasePages(
+      streamExpiryPages(
         'service_agreements',
         sourceRequested.agreements,
-        (transaction, offset) =>
-          transaction
-            .select({
-              id: agreements.id,
-              clientId: agreements.clientId,
-              clientName: sql<string>`concat_ws(' ', coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}), ${clientRecords.lastName})`,
-              organizationId: agreements.organizationId,
-              facilityId: agreements.facilityId,
-              validUntil: agreements.validUntil,
-            })
-            .from(agreements)
-            .innerJoin(
-              clientRecords,
-              and(
-                eq(clientRecords.tenantId, agreements.tenantId),
-                eq(clientRecords.id, agreements.clientId),
-              ),
-            )
-            .where(
-              and(
-                eq(agreements.tenantId, principal.tenantId),
-                inArray(agreements.status, ['active', 'suspended']),
-                scopedTo(agreementScope, agreements.organizationId, agreements.facilityId),
-                ...(query.organizationId
-                  ? [eq(agreements.organizationId, query.organizationId)]
-                  : []),
-                ...(query.facilityId ? [eq(agreements.facilityId, query.facilityId)] : []),
-                ...(query.clientId ? [eq(agreements.clientId, query.clientId)] : []),
-                isNotNull(agreements.validUntil),
-                gte(agreements.validUntil, deadlineFrom),
-                lte(agreements.validUntil, deadlineUntil),
-                ...(query.fromDate ? [gte(agreements.validUntil, query.fromDate)] : []),
-                ...(query.untilDate ? [lte(agreements.validUntil, query.untilDate)] : []),
-              ),
-            )
-            .orderBy(asc(agreements.validUntil), asc(agreements.id))
-            .limit(100)
-            .offset(offset),
+        (offset) =>
+          this.sources.agreements.operationsExpiryPage(principal, {
+            ...query,
+            fromDate:
+              query.fromDate && query.fromDate > deadlineFrom ? query.fromDate : deadlineFrom,
+            untilDate:
+              query.untilDate && query.untilDate < deadlineUntil ? query.untilDate : deadlineUntil,
+            offset,
+            pageSize: 100,
+          }),
         async (rows) => {
           const timezones = await this.organizationTimezones(
-            principal.tenantId,
+            principal,
             rows.map((row) => row.organizationId).filter((id): id is string => Boolean(id)),
           );
           await collectProjectedItems(
@@ -1428,77 +1406,22 @@ export class OperationsApplicationService {
           );
         },
       ),
-      streamDatabasePages(
+      streamExpiryPages(
         'employee_qualifications',
         sourceRequested.qualifications,
-        (transaction, offset) =>
-          transaction
-            .select({
-              id: employeeQualifications.id,
-              employeeId: employeeRecords.id,
-              employeeName: sql<string>`concat_ws(' ', coalesce(nullif(${employeeRecords.preferredName}, ''), ${employeeRecords.firstName}), ${employeeRecords.lastName})`,
-              qualificationName: qualificationDefinitions.name,
-              organizationId: employeeRecords.organizationId,
-              facilityId: employeeFacilityAssignments.facilityId,
-              validUntil: employeeQualifications.validUntil,
-            })
-            .from(employeeQualifications)
-            .innerJoin(
-              employeeRecords,
-              and(
-                eq(employeeRecords.tenantId, employeeQualifications.tenantId),
-                eq(employeeRecords.id, employeeQualifications.employeeId),
-              ),
-            )
-            .innerJoin(
-              qualificationDefinitions,
-              and(
-                eq(qualificationDefinitions.tenantId, employeeQualifications.tenantId),
-                eq(qualificationDefinitions.id, employeeQualifications.qualificationId),
-              ),
-            )
-            .leftJoin(
-              employeeFacilityAssignments,
-              and(
-                eq(employeeFacilityAssignments.tenantId, employeeRecords.tenantId),
-                eq(employeeFacilityAssignments.employeeId, employeeRecords.id),
-                eq(employeeFacilityAssignments.organizationId, employeeRecords.organizationId),
-                eq(employeeFacilityAssignments.isPrimary, true),
-                eq(employeeFacilityAssignments.status, 'active'),
-              ),
-            )
-            .where(
-              and(
-                eq(employeeQualifications.tenantId, principal.tenantId),
-                eq(employeeQualifications.status, 'active'),
-                eq(employeeRecords.status, 'active'),
-                scopedTo(
-                  employeeScope,
-                  employeeRecords.organizationId,
-                  employeeFacilityAssignments.facilityId,
-                ),
-                ...(query.organizationId
-                  ? [eq(employeeRecords.organizationId, query.organizationId)]
-                  : []),
-                ...(query.facilityId
-                  ? [eq(employeeFacilityAssignments.facilityId, query.facilityId)]
-                  : []),
-                ...(query.employeeId ? [eq(employeeRecords.id, query.employeeId)] : []),
-                isNotNull(employeeQualifications.validUntil),
-                gte(employeeQualifications.validUntil, deadlineFrom),
-                lte(employeeQualifications.validUntil, deadlineUntil),
-                ...(query.fromDate ? [gte(employeeQualifications.validUntil, query.fromDate)] : []),
-                ...(query.untilDate
-                  ? [lte(employeeQualifications.validUntil, query.untilDate)]
-                  : []),
-              ),
-            )
-            .orderBy(asc(employeeQualifications.validUntil), asc(employeeQualifications.id))
-            .limit(100)
-            .offset(offset),
+        (offset) =>
+          this.sources.qualifications.operationsExpiryPage(principal, {
+            ...query,
+            fromDate:
+              query.fromDate && query.fromDate > deadlineFrom ? query.fromDate : deadlineFrom,
+            untilDate:
+              query.untilDate && query.untilDate < deadlineUntil ? query.untilDate : deadlineUntil,
+            offset,
+            pageSize: 100,
+          }),
         async (rows) => {
           const timezones = await this.organizationTimezones(
-            principal.tenantId,
+            principal,
             rows.map((row) => row.organizationId).filter((id): id is string => Boolean(id)),
           );
           await collectProjectedItems(
@@ -1532,69 +1455,22 @@ export class OperationsApplicationService {
           );
         },
       ),
-      streamDatabasePages(
+      streamExpiryPages(
         'benefits',
         sourceRequested.benefitDeadlines,
-        (transaction, offset) =>
-          transaction
-            .select({
-              id: clientBenefitEntitlements.id,
-              clientId: clientRecords.id,
-              clientName: sql<string>`concat_ws(' ', coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}), ${clientRecords.lastName})`,
-              organizationId: clientRecords.organizationId,
-              facilityId: clientRecords.primaryFacilityId,
-              validUntil: clientBenefitEntitlements.validUntil,
-            })
-            .from(clientBenefitEntitlements)
-            .innerJoin(
-              benefitFundingSources,
-              and(
-                eq(benefitFundingSources.tenantId, clientBenefitEntitlements.tenantId),
-                eq(benefitFundingSources.clientId, clientBenefitEntitlements.clientId),
-                eq(benefitFundingSources.id, clientBenefitEntitlements.fundingSourceId),
-                eq(benefitFundingSources.status, 'active'),
-              ),
-            )
-            .innerJoin(
-              clientRecords,
-              and(
-                eq(clientRecords.tenantId, clientBenefitEntitlements.tenantId),
-                eq(clientRecords.id, clientBenefitEntitlements.clientId),
-              ),
-            )
-            .where(
-              and(
-                eq(clientBenefitEntitlements.tenantId, principal.tenantId),
-                inArray(clientBenefitEntitlements.status, ['confirmed', 'provisional']),
-                isNotNull(clientBenefitEntitlements.validUntil),
-                gte(clientBenefitEntitlements.validUntil, deadlineFrom),
-                lte(clientBenefitEntitlements.validUntil, deadlineUntil),
-                scopedTo(
-                  benefitScope,
-                  clientRecords.organizationId,
-                  clientRecords.primaryFacilityId,
-                ),
-                ...(query.organizationId
-                  ? [eq(clientRecords.organizationId, query.organizationId)]
-                  : []),
-                ...(query.facilityId
-                  ? [eq(clientRecords.primaryFacilityId, query.facilityId)]
-                  : []),
-                ...(query.clientId ? [eq(clientRecords.id, query.clientId)] : []),
-                ...(query.fromDate
-                  ? [gte(clientBenefitEntitlements.validUntil, query.fromDate)]
-                  : []),
-                ...(query.untilDate
-                  ? [lte(clientBenefitEntitlements.validUntil, query.untilDate)]
-                  : []),
-              ),
-            )
-            .orderBy(asc(clientBenefitEntitlements.validUntil), asc(clientBenefitEntitlements.id))
-            .limit(100)
-            .offset(offset),
+        (offset) =>
+          this.sources.benefitExpiry.operationsExpiryPage(principal, {
+            ...query,
+            fromDate:
+              query.fromDate && query.fromDate > deadlineFrom ? query.fromDate : deadlineFrom,
+            untilDate:
+              query.untilDate && query.untilDate < deadlineUntil ? query.untilDate : deadlineUntil,
+            offset,
+            pageSize: 100,
+          }),
         async (rows) => {
           const timezones = await this.organizationTimezones(
-            principal.tenantId,
+            principal,
             rows.map((row) => row.organizationId).filter((id): id is string => Boolean(id)),
           );
           await collectProjectedItems(
@@ -1626,57 +1502,23 @@ export class OperationsApplicationService {
           );
         },
       ),
-      streamDatabasePages(
+      streamExpiryPages(
         'billing',
         sourceRequested.payerArrangements,
-        (transaction, offset) =>
-          transaction
-            .select({
-              id: payerArrangements.id,
-              clientId: clientRecords.id,
-              clientName: sql<string>`concat_ws(' ', coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}), ${clientRecords.lastName})`,
-              organizationId: payerArrangements.organizationId,
-              facilityId: clientRecords.primaryFacilityId,
-              validUntil: payerArrangements.validUntil,
-            })
-            .from(payerArrangements)
-            .innerJoin(
-              clientRecords,
-              and(
-                eq(clientRecords.tenantId, payerArrangements.tenantId),
-                eq(clientRecords.id, payerArrangements.clientId),
-              ),
-            )
-            .where(
-              and(
-                eq(payerArrangements.tenantId, principal.tenantId),
-                eq(payerArrangements.mandateStatus, 'authorized'),
-                lte(payerArrangements.validFrom, todayUtc),
-                isNotNull(payerArrangements.validUntil),
-                gte(payerArrangements.validUntil, deadlineFrom),
-                lte(payerArrangements.validUntil, deadlineUntil),
-                scopedTo(
-                  billingScope,
-                  payerArrangements.organizationId,
-                  clientRecords.primaryFacilityId,
-                ),
-                ...(query.organizationId
-                  ? [eq(payerArrangements.organizationId, query.organizationId)]
-                  : []),
-                ...(query.facilityId
-                  ? [eq(clientRecords.primaryFacilityId, query.facilityId)]
-                  : []),
-                ...(query.clientId ? [eq(clientRecords.id, query.clientId)] : []),
-                ...(query.fromDate ? [gte(payerArrangements.validUntil, query.fromDate)] : []),
-                ...(query.untilDate ? [lte(payerArrangements.validUntil, query.untilDate)] : []),
-              ),
-            )
-            .orderBy(asc(payerArrangements.validUntil), asc(payerArrangements.id))
-            .limit(100)
-            .offset(offset),
+        (offset) =>
+          this.sources.payerExpiry.operationsExpiryPage(principal, {
+            ...query,
+            fromDate:
+              query.fromDate && query.fromDate > deadlineFrom ? query.fromDate : deadlineFrom,
+            untilDate:
+              query.untilDate && query.untilDate < deadlineUntil ? query.untilDate : deadlineUntil,
+            offset,
+            pageSize: 100,
+            effectiveOn: todayUtc,
+          }),
         async (rows) => {
           const timezones = await this.organizationTimezones(
-            principal.tenantId,
+            principal,
             rows.map((row) => row.organizationId),
           );
           await collectProjectedItems(
@@ -3169,19 +3011,8 @@ export class OperationsApplicationService {
     );
   }
 
-  private async organizationTimezones(tenantId: string, organizationIds: string[]) {
-    const ids = [...new Set(organizationIds)];
-    if (!ids.length) return new Map<string, string>();
-    const rows = await this.unitOfWork.transaction({ tenantId }, async (transaction) =>
-      transaction
-        .select({
-          id: organizationsTable.id,
-          timezone: organizationsTable.timezone,
-        })
-        .from(organizationsTable)
-        .where(and(eq(organizationsTable.tenantId, tenantId), inArray(organizationsTable.id, ids))),
-    );
-    return new Map(rows.map((row) => [row.id, row.timezone]));
+  private organizationTimezones(principal: AuthorizationPrincipal, organizationIds: string[]) {
+    return this.sources.organizations.operationsTimezones(principal, organizationIds);
   }
 
   private taskScopeConditions(principal: AuthorizationPrincipal): SQL[] | null {
@@ -3977,23 +3808,6 @@ async function forEachResultPage<R extends { items: readonly unknown[]; total: n
     total: firstPage.total,
     complete: totalUnchanged && itemsRead === firstPage.total,
   };
-}
-
-async function forEachOffsetPage<T>(
-  pageSize: number,
-  readPage: (offset: number) => Promise<readonly T[]>,
-  visitPage: (items: readonly T[]) => Promise<void>,
-): Promise<void> {
-  let offset = 0;
-  // oxlint-disable no-await-in-loop
-  while (true) {
-    const page = await readPage(offset);
-    if (!page.length) return;
-    await visitPage(page);
-    if (page.length < pageSize) return;
-    offset += pageSize;
-  }
-  // oxlint-enable no-await-in-loop
 }
 
 function retainSortedPrefix<T>(

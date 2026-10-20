@@ -5,6 +5,7 @@ import { OidcGuard, TenantContextGuard } from '@app/api/http/auth.guards';
 import { BillingController } from '@app/api/presentation/http/billing.controller';
 import { ClaimsController } from '@app/api/presentation/http/claims.controller';
 import {
+  CLIENT_APPLICATION,
   AUDIT_WRITER,
   BENEFITS_APPLICATION,
   BILLING_APPLICATION,
@@ -16,12 +17,15 @@ import {
   SERVICE_PRICE_APPLICATION,
   UNIT_OF_WORK,
 } from '@app/api/tokens';
+
 import type { AuditWriter } from '@care/audit';
 import type { BenefitsApplicationService } from '@care/benefits';
 import {
+  PayerArrangementExpiryQueries,
   createBillingApplicationService,
   createBillingClaimsApplicationService,
 } from '@care/billing';
+import type { ClientApplicationService } from '@care/clients';
 import type { UnitOfWork } from '@care/database';
 import type { DocumentsApplicationService } from '@care/documents';
 import type { OutboxWriter } from '@care/platform';
@@ -31,6 +35,7 @@ import type { ObjectStorage } from '@care/storage';
 
 import { AuditModule } from './audit.module';
 import { BenefitsModule } from './benefits.module';
+import { ClientsModule } from './clients.module';
 import { DocumentsModule } from './documents.module';
 import { IdentityModule } from './identity.module';
 import { PlatformModule } from './platform.module';
@@ -39,6 +44,7 @@ import { ServicesModule } from './services.module';
 
 @Module({
   imports: [
+    ClientsModule,
     DatabaseModule,
     IdentityModule,
     AuditModule,
@@ -50,6 +56,12 @@ import { ServicesModule } from './services.module';
   ],
   controllers: [BillingController, ClaimsController],
   providers: [
+    {
+      provide: PayerArrangementExpiryQueries,
+      inject: [UNIT_OF_WORK, CLIENT_APPLICATION],
+      useFactory: (unitOfWork: UnitOfWork, clients: ClientApplicationService) =>
+        new PayerArrangementExpiryQueries(unitOfWork, clients),
+    },
     OidcGuard,
     TenantContextGuard,
     {
@@ -113,6 +125,6 @@ import { ServicesModule } from './services.module';
         ),
     },
   ],
-  exports: [BILLING_APPLICATION, BILLING_CLAIMS_APPLICATION],
+  exports: [PayerArrangementExpiryQueries, BILLING_APPLICATION, BILLING_CLAIMS_APPLICATION],
 })
 export class BillingModule {}
