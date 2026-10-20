@@ -61,3 +61,7 @@ Meaningful recurrence, policy, task-generation, acknowledgement, and snooze chan
 ## Limits
 
 Automatic deadline-task creation currently supports agreement expiry only. There is no calendar sync, workflow engine, external notification channel, or automatic source-record update. Document expiry and claim response deadlines require authoritative source fields and are not projected in this slice.
+
+## Internal task boundary
+
+OperationsApplicationService remains the public facade. Task commands, activity/history, task-owned persistence, list filtering/pagination and dashboard task statistics are implemented by the internal OperationsTasksApplicationService. Deadline resolution, combined queues, dashboard composition and exception workflows remain in the facade. A typed LegacyOperationsTaskData adapter at the existing application-file import location supplies foreign source/client validation, employee lookup, display joins, client-scope predicates and organization-timezone SQL. It opens no additional transactions; each existing transaction boundary is preserved. Replacing that adapter with owner APIs is deferred debt, not a new public API. Recurrence and deadline schedulers retain their separate system-write paths. See the [Goal 04 handoff](../architecture/goal-04-to-goal-05.md).

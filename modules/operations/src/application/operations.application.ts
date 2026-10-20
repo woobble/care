@@ -5,7 +5,6 @@ import {
   desc,
   eq,
   exists,
-  ilike,
   inArray,
   isNotNull,
   isNull,
@@ -86,16 +85,46 @@ import {
   exceptionOccurrences,
   reminderPolicies,
   schedulerRuns,
-  taskActivity,
   tasks,
 } from '@module/operations/schema';
 
 import { validateOperationsAssignee } from './operations-guards';
 
+import { OperationsTasksApplicationService } from './tasks.application';
+import type { OperationsTaskData } from './tasks.ports';
+import { sourcePermission } from './task-rules';
+import { hasGrant, bounded, displayNameWithoutIdentifiers } from './operations-helpers';
+import {
+  InvalidOperationsInputError,
+  OperationsTaskNotFoundError,
+  OperationsSourceNotFoundError,
+  OperationsTaskVersionConflictError,
+} from './task.errors';
+export {
+  InvalidOperationsInputError,
+  OperationsTaskNotFoundError,
+  OperationsSourceNotFoundError,
+  OperationsTaskVersionConflictError,
+  OperationsTaskStateError,
+} from './task.errors';
+import type {
+  SourceType,
+  TaskStatus,
+  TaskPriority,
+  OperationsSourceReference,
+  OperationsTaskInput,
+  OperationsTaskPatch,
+  OperationsTaskListQuery,
+  TaskResourceContext,
+} from './task.contracts';
+export type {
+  OperationsSourceReference,
+  OperationsTaskInput,
+  OperationsTaskPatch,
+  OperationsTaskListQuery,
+} from './task.contracts';
+
 type AuditContext = { ip?: string; userAgent?: string };
-type SourceType = NonNullable<(typeof tasks.$inferSelect)['sourceType']>;
-type TaskStatus = (typeof tasks.$inferSelect)['status'];
-type TaskPriority = (typeof tasks.$inferSelect)['priority'];
 type ClaimReadiness = Awaited<ReturnType<BillingClaimsApplicationService['readiness']>>;
 const projectionSourceAt = Symbol('projectionSourceAt');
 type ProjectedOperationsWorkItem = OperationsWorkItem & {
@@ -174,32 +203,6 @@ export interface OperationsSourceServices {
       startDateActionable: boolean;
     }>;
   };
-}
-
-export interface OperationsSourceReference {
-  type: SourceType;
-  id: string;
-}
-
-export interface OperationsTaskInput {
-  organizationId?: string;
-  facilityId?: string | null;
-  clientId?: string | null;
-  title: string;
-  description?: string | null;
-  priority?: TaskPriority;
-  assignedEmployeeId?: string | null;
-  dueAt?: Date | null;
-  source?: OperationsSourceReference | null;
-}
-
-export interface OperationsTaskPatch {
-  expectedVersion: number;
-  title?: string;
-  description?: string | null;
-  priority?: TaskPriority;
-  assignedEmployeeId?: string | null;
-  dueAt?: Date | null;
 }
 
 export interface OperationsQuery {
@@ -303,12 +306,22 @@ const employeeScopedSourceDomains = new Set([
 ]);
 
 export class OperationsApplicationService {
+  private readonly taskManagement: OperationsTasksApplicationService;
+  private readonly taskData: OperationsTaskData;
   constructor(
     private readonly unitOfWork: UnitOfWork,
     private readonly audit: AuditWriter,
     private readonly outbox: OutboxWriter,
     private readonly sources: OperationsSourceServices,
-  ) {}
+  ) {
+    this.taskData = new LegacyOperationsTaskData(unitOfWork);
+    this.taskManagement = new OperationsTasksApplicationService(
+      unitOfWork,
+      audit,
+      outbox,
+      this.taskData,
+    );
+  }
 
   async dashboard(
     principal: AuthorizationPrincipal,
@@ -316,7 +329,7 @@ export class OperationsApplicationService {
   ) {
     const [worklist, tasksSummary] = await Promise.all([
       this.listWorkItems(principal, { ...query, page: 1, pageSize: 1000 }),
-      this.taskSummary(principal, query),
+      this.taskManagement.taskSummary(principal, query),
     ]);
     const deadlineItems = worklist.items.filter(
       (item) => deadlinePolicyCategory(item) !== null && item.dueAt !== null,
@@ -1697,139 +1710,13 @@ export class OperationsApplicationService {
     auditContext: AuditContext,
     sourceDeadlineKey: string | null = null,
   ) {
-    if (!validTaskInput(input)) throw new InvalidOperationsInputError();
-    const sourceContext = input.source ? await this.validateSource(principal, input.source) : null;
-    const referencedClientContext = input.clientId
-      ? await this.clientContext(principal, input.clientId)
-      : sourceContext?.clientId
-        ? await this.clientContext(principal, sourceContext.clientId)
-        : null;
-    const organizationId =
-      input.organizationId ??
-      sourceContext?.organizationId ??
-      referencedClientContext?.organizationId;
-    if (!organizationId) throw new InvalidOperationsInputError();
-    if (
-      (sourceContext && sourceContext.organizationId !== organizationId) ||
-      (referencedClientContext && referencedClientContext.organizationId !== organizationId)
-    ) {
-      throw new InvalidOperationsInputError();
-    }
-    const derivedFacilityId = sourceContext
-      ? sourceContext.facilityId
-      : (referencedClientContext?.facilityId ?? null);
-    const facilityId = input.facilityId === undefined ? derivedFacilityId : input.facilityId;
-    if (
-      input.facilityId !== undefined &&
-      ((sourceContext?.facilityId && sourceContext.facilityId !== input.facilityId) ||
-        (!sourceContext &&
-          referencedClientContext?.facilityId &&
-          referencedClientContext.facilityId !== input.facilityId))
-    ) {
-      throw new InvalidOperationsInputError();
-    }
-    const clientId =
-      input.clientId === undefined ? (sourceContext?.clientId ?? null) : input.clientId;
-    if (
-      sourceContext &&
-      (sourceContext.facilityId !== facilityId ||
-        (sourceContext.clientId && sourceContext.clientId !== clientId))
-    ) {
-      throw new InvalidOperationsInputError();
-    }
-    const resource = {
-      tenantId: principal.tenantId,
-      organizationId,
-      ...(facilityId ? { facilityId } : {}),
-      ...(clientId ? { clientId } : {}),
-    };
-    assertCan(principal, { action: 'operations.tasks.create', resource });
-    await this.assertTaskScope(resource);
-    if (input.assignedEmployeeId) {
-      assertCan(principal, { action: 'operations.tasks.assign', resource });
-    }
-
-    const now = new Date();
-    const id = uuidv7();
-    const sourceColumns = sourceColumnsFor(input.source ?? null);
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      if (sourceDeadlineKey) {
-        await transaction.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtextextended(${`operations-deadline-task:${principal.tenantId}:${sourceDeadlineKey}`}, 0))`,
-        );
-        const [existing] = await transaction
-          .select()
-          .from(tasks)
-          .where(
-            and(
-              eq(tasks.tenantId, principal.tenantId),
-              eq(tasks.sourceDeadlineKey, sourceDeadlineKey),
-            ),
-          )
-          .limit(1);
-        if (existing) return this.taskView(principal, existing);
-      }
-      if (input.assignedEmployeeId) {
-        await this.validateAssignee(
-          transaction,
-          principal.tenantId,
-          input.assignedEmployeeId,
-          organizationId,
-          facilityId,
-        );
-      }
-      const [task] = await transaction
-        .insert(tasks)
-        .values({
-          id,
-          tenantId: principal.tenantId,
-          organizationId,
-          facilityId,
-          clientId,
-          title: input.title.trim(),
-          description: normalizeOptional(input.description),
-          status: 'open',
-          priority: input.priority ?? 'normal',
-          assignedEmployeeId: input.assignedEmployeeId ?? null,
-          createdByUserId: principal.userId,
-          completedByUserId: null,
-          dueAt: input.dueAt ?? null,
-          completedAt: null,
-          sourceType: input.source?.type ?? null,
-          ...sourceColumns,
-          sourceDeadlineKey,
-          version: 1,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning();
-      await this.addActivity(transaction, principal, task!, 'created', {
-        status: 'open',
-        priority: task!.priority,
-      });
-      if (task!.assignedEmployeeId) {
-        await this.addActivity(transaction, principal, task!, 'assigned', {
-          employeeId: task!.assignedEmployeeId,
-        });
-      }
-      await this.recordStateChange(transaction, principal, request, auditContext, {
-        type: 'operations.task_created',
-        action: 'operations.task_created',
-        aggregateId: id,
-        payload: { taskId: id, organizationId, clientId },
-        metadata: { taskId: id, organizationId, clientId },
-      });
-      if (task!.assignedEmployeeId) {
-        await this.recordStateChange(transaction, principal, request, auditContext, {
-          type: 'operations.task_assigned',
-          action: 'operations.task_assigned',
-          aggregateId: id,
-          payload: { taskId: id, employeeId: task!.assignedEmployeeId },
-          metadata: { taskId: id },
-        });
-      }
-      return this.taskView(principal, task!);
-    });
+    return this.taskManagement.createTask(
+      principal,
+      input,
+      request,
+      auditContext,
+      sourceDeadlineKey,
+    );
   }
 
   async createDeadlineTask(
@@ -1870,123 +1757,7 @@ export class OperationsApplicationService {
   }
 
   async listTasks(principal: AuthorizationPrincipal, query: OperationsTaskListQuery = {}) {
-    this.requireAnyGrant(principal, 'operations.read');
-    const page = bounded(query.page, 1, 1, 100_000);
-    const pageSize = bounded(query.pageSize, 25, 1, 100);
-    if (query.assignedEmployeeId) this.requireAnyGrant(principal, 'operations.tasks.assign');
-    const scopeConditions = this.taskScopeConditions(principal);
-    if (scopeConditions && !scopeConditions.length) return { items: [], page, pageSize, total: 0 };
-    const conditions: SQL[] = [eq(tasks.tenantId, principal.tenantId), ...(scopeConditions ?? [])];
-    if (query.organizationId) conditions.push(eq(tasks.organizationId, query.organizationId));
-    if (query.facilityId) conditions.push(eq(tasks.facilityId, query.facilityId));
-    if (query.clientId) conditions.push(eq(tasks.clientId, query.clientId));
-    if (query.sourceTypes) {
-      if (!query.sourceTypes.length) return { items: [], page, pageSize, total: 0 };
-      conditions.push(inArray(tasks.sourceType, query.sourceTypes));
-    }
-    if (query.status) conditions.push(eq(tasks.status, query.status));
-    if (query.priority) conditions.push(eq(tasks.priority, query.priority));
-    if (query.assignedEmployeeId)
-      conditions.push(eq(tasks.assignedEmployeeId, query.assignedEmployeeId));
-    if (query.assignedToMe) {
-      const employeeId = await this.employeeForUser(principal.tenantId, principal.userId);
-      if (!employeeId) return { items: [], page, pageSize, total: 0 };
-      conditions.push(eq(tasks.assignedEmployeeId, employeeId));
-    }
-    if (query.search?.trim()) {
-      const pattern = `%${escapeLike(query.search.trim())}%`;
-      const matchingClientName = sql`
-        EXISTS (
-        SELECT 1
-        FROM ${clientRecords}
-        WHERE ${clientRecords.tenantId} = ${tasks.tenantId}
-          AND ${clientRecords.id} = ${tasks.clientId}
-          AND concat_ws(
-            ' ',
-            coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}),
-            ${clientRecords.lastName}
-          ) ILIKE ${pattern}
-        )
-      `;
-      conditions.push(
-        or(ilike(tasks.title, pattern), ilike(tasks.description, pattern), matchingClientName)!,
-      );
-    }
-    const now = new Date();
-    const { dueDate: localDueDate, today: localToday } = taskDueLocalDates();
-    if (query.due === 'overdue') {
-      conditions.push(lt(tasks.dueAt, now), inArray(tasks.status, ['open', 'in_progress']));
-    } else if (query.due === 'today') {
-      conditions.push(sql`${tasks.dueAt} IS NOT NULL AND ${localDueDate} = ${localToday}`);
-      conditions.push(inArray(tasks.status, ['open', 'in_progress']));
-    } else if (query.due === 'upcoming') {
-      conditions.push(sql`${tasks.dueAt} IS NOT NULL AND ${localDueDate} > ${localToday}`);
-      conditions.push(inArray(tasks.status, ['open', 'in_progress']));
-    }
-    if (query.fromDate) {
-      conditions.push(sql`${localDueDate} >= ${query.fromDate}::date`);
-    }
-    if (query.untilDate) {
-      conditions.push(sql`${localDueDate} <= ${query.untilDate}::date`);
-    }
-    if (query.order === 'created') {
-      // Listing is stable by newest creation when explicitly requested.
-    }
-    const where = and(...conditions);
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const [totalRow] = await transaction.select({ count: count() }).from(tasks).where(where);
-      const rows = await transaction
-        .select({
-          task: tasks,
-          clientName: sql<
-            string | null
-          >`nullif(concat_ws(' ', coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}), ${clientRecords.lastName}), '')`,
-          assignedEmployeeName: sql<
-            string | null
-          >`nullif(concat_ws(' ', coalesce(nullif(${employeeRecords.preferredName}, ''), ${employeeRecords.firstName}), ${employeeRecords.lastName}), '')`,
-        })
-        .from(tasks)
-        .leftJoin(
-          clientRecords,
-          and(eq(clientRecords.tenantId, tasks.tenantId), eq(clientRecords.id, tasks.clientId)),
-        )
-        .leftJoin(
-          employeeRecords,
-          and(
-            eq(employeeRecords.tenantId, tasks.tenantId),
-            eq(employeeRecords.id, tasks.assignedEmployeeId),
-          ),
-        )
-        .where(where)
-        .orderBy(
-          query.order === 'created'
-            ? desc(tasks.createdAt)
-            : query.order === 'priority'
-              ? sql`CASE ${tasks.priority} WHEN 'urgent' THEN 4 WHEN 'high' THEN 3 WHEN 'normal' THEN 2 ELSE 1 END DESC, ${tasks.dueAt} ASC NULLS LAST`
-              : sql`${tasks.dueAt} asc nulls last`,
-          desc(tasks.id),
-        )
-        .limit(pageSize)
-        .offset(bounded(query.offset, (page - 1) * pageSize, 0, 10_000_000));
-      const items = [];
-      for (const row of rows) {
-        const task = row.task;
-        const resource = taskResource(task);
-        if (!can(principal, { action: 'operations.read', resource })) continue;
-        items.push({
-          ...this.taskView(principal, task),
-          clientName:
-            task.clientId && can(principal, { action: 'client.read', resource })
-              ? displayNameWithoutIdentifiers(row.clientName)
-              : null,
-          assignedEmployeeName:
-            task.assignedEmployeeId && can(principal, { action: 'employee.read', resource })
-              ? displayNameWithoutIdentifiers(row.assignedEmployeeName)
-              : null,
-        });
-      }
-      return { items, page, pageSize, total: totalRow?.count ?? 0 };
-    });
+    return this.taskManagement.listTasks(principal, query);
   }
 
   async listWorkQueue(principal: AuthorizationPrincipal, query: OperationsWorkQueueQuery = {}) {
@@ -2002,7 +1773,7 @@ export class OperationsApplicationService {
     const exceptionAssigneeId =
       query.assignedEmployeeId ??
       (query.assignedToMe
-        ? await this.employeeForUser(principal.tenantId, principal.userId)
+        ? await this.taskData.employeeForUser(principal.tenantId, principal.userId)
         : undefined);
     const taskQuery: OperationsTaskListQuery = {
       ...(query.organizationId ? { organizationId: query.organizationId } : {}),
@@ -2156,38 +1927,11 @@ export class OperationsApplicationService {
   }
 
   async getTask(principal: AuthorizationPrincipal, taskId: string) {
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const task = await this.readTask(transaction, principal, taskId, 'operations.read');
-      return this.taskView(principal, task);
-    });
+    return this.taskManagement.getTask(principal, taskId);
   }
 
   async taskActivityList(principal: AuthorizationPrincipal, taskId: string) {
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const task = await this.readTask(transaction, principal, taskId, 'operations.read');
-      const rows = await transaction
-        .select()
-        .from(taskActivity)
-        .where(and(eq(taskActivity.tenantId, principal.tenantId), eq(taskActivity.taskId, task.id)))
-        .orderBy(asc(taskActivity.occurredAt), asc(taskActivity.id))
-        .limit(200);
-      const actorIds = [...new Set(rows.map((row) => row.actorUserId))];
-      const actorRows = actorIds.length
-        ? await transaction
-            .select({ id: users.id, displayName: users.displayName })
-            .from(tenantMemberships)
-            .innerJoin(users, eq(users.id, tenantMemberships.userId))
-            .where(
-              and(eq(tenantMemberships.tenantId, principal.tenantId), inArray(users.id, actorIds)),
-            )
-        : [];
-      const actorNames = new Map(
-        actorRows.flatMap((actor) =>
-          actor.displayName ? [[actor.id, actor.displayName] as const] : [],
-        ),
-      );
-      return rows.map((row) => ({ ...row, actorName: actorNames.get(row.actorUserId) ?? null }));
-    });
+    return this.taskManagement.taskActivityList(principal, taskId);
   }
 
   async patchTask(
@@ -2197,7 +1941,7 @@ export class OperationsApplicationService {
     request: RequestContext,
     auditContext: AuditContext,
   ) {
-    return this.updateTask(principal, taskId, input, request, auditContext);
+    return this.taskManagement.patchTask(principal, taskId, input, request, auditContext);
   }
 
   async startTask(
@@ -2207,14 +1951,7 @@ export class OperationsApplicationService {
     request: RequestContext,
     auditContext: AuditContext,
   ) {
-    return this.transitionTask(
-      principal,
-      taskId,
-      expectedVersion,
-      'in_progress',
-      request,
-      auditContext,
-    );
+    return this.taskManagement.startTask(principal, taskId, expectedVersion, request, auditContext);
   }
 
   async completeTask(
@@ -2224,11 +1961,10 @@ export class OperationsApplicationService {
     request: RequestContext,
     auditContext: AuditContext,
   ) {
-    return this.transitionTask(
+    return this.taskManagement.completeTask(
       principal,
       taskId,
       expectedVersion,
-      'completed',
       request,
       auditContext,
     );
@@ -2241,7 +1977,13 @@ export class OperationsApplicationService {
     request: RequestContext,
     auditContext: AuditContext,
   ) {
-    return this.transitionTask(principal, taskId, expectedVersion, 'open', request, auditContext);
+    return this.taskManagement.reopenTask(
+      principal,
+      taskId,
+      expectedVersion,
+      request,
+      auditContext,
+    );
   }
 
   async cancelTask(
@@ -2251,11 +1993,10 @@ export class OperationsApplicationService {
     request: RequestContext,
     auditContext: AuditContext,
   ) {
-    return this.transitionTask(
+    return this.taskManagement.cancelTask(
       principal,
       taskId,
       expectedVersion,
-      'cancelled',
       request,
       auditContext,
     );
@@ -2268,28 +2009,7 @@ export class OperationsApplicationService {
     request: RequestContext,
     auditContext: AuditContext,
   ) {
-    const normalized = comment.trim();
-    if (normalized.length < 1 || normalized.length > 4000) throw new InvalidOperationsInputError();
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const task = await this.readTask(transaction, principal, taskId, 'operations.tasks.manage');
-      const now = new Date();
-      await transaction.insert(taskActivity).values({
-        id: uuidv7(),
-        tenantId: principal.tenantId,
-        taskId: task.id,
-        actorUserId: principal.userId,
-        kind: 'comment',
-        details: {},
-        comment: normalized,
-        occurredAt: now,
-      });
-      await this.recordAudit(transaction, principal, request, auditContext, {
-        action: 'operations.task_comment_added',
-        resourceId: task.id,
-        metadata: { taskId: task.id },
-      });
-      return { added: true, occurredAt: now.toISOString() };
-    });
+    return this.taskManagement.addComment(principal, taskId, comment, request, auditContext);
   }
 
   async acknowledgeException(
@@ -2406,585 +2126,6 @@ export class OperationsApplicationService {
     });
   }
 
-  private async updateTask(
-    principal: AuthorizationPrincipal,
-    taskId: string,
-    input: OperationsTaskPatch,
-    request: RequestContext,
-    auditContext: AuditContext,
-  ) {
-    if (
-      !Number.isSafeInteger(input.expectedVersion) ||
-      input.expectedVersion < 1 ||
-      !validPatch(input)
-    )
-      throw new InvalidOperationsInputError();
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const task = await this.readTask(transaction, principal, taskId, 'operations.tasks.manage');
-      if (task.version !== input.expectedVersion) throw new OperationsTaskVersionConflictError();
-      if (task.status === 'completed' || task.status === 'cancelled')
-        throw new OperationsTaskStateError();
-      const changedFields: string[] = [];
-      const values: Partial<typeof tasks.$inferInsert> = {
-        version: task.version + 1,
-        updatedAt: new Date(),
-      };
-      if (input.title !== undefined && input.title.trim() !== task.title) {
-        values.title = input.title.trim();
-        changedFields.push('title');
-      }
-      if (
-        input.description !== undefined &&
-        normalizeOptional(input.description) !== task.description
-      ) {
-        values.description = normalizeOptional(input.description);
-        changedFields.push('description');
-      }
-      if (input.priority !== undefined && input.priority !== task.priority) {
-        values.priority = input.priority;
-        changedFields.push('priority');
-      }
-      if (input.dueAt !== undefined && input.dueAt?.getTime() !== task.dueAt?.getTime()) {
-        values.dueAt = input.dueAt;
-        changedFields.push('due_date');
-      }
-      if (
-        input.assignedEmployeeId !== undefined &&
-        input.assignedEmployeeId !== task.assignedEmployeeId
-      ) {
-        assertCan(principal, { action: 'operations.tasks.assign', resource: taskResource(task) });
-        if (input.assignedEmployeeId)
-          await this.validateAssignee(
-            transaction,
-            principal.tenantId,
-            input.assignedEmployeeId,
-            task.organizationId,
-            task.facilityId,
-          );
-        values.assignedEmployeeId = input.assignedEmployeeId;
-        changedFields.push('assigned_employee');
-      }
-      if (!changedFields.length) return this.taskView(principal, task);
-      const [updated] = await transaction
-        .update(tasks)
-        .set(values)
-        .where(
-          and(
-            eq(tasks.tenantId, principal.tenantId),
-            eq(tasks.id, task.id),
-            eq(tasks.version, input.expectedVersion),
-          ),
-        )
-        .returning();
-      if (!updated) throw new OperationsTaskVersionConflictError();
-      await this.addActivity(transaction, principal, updated, 'edited', { changedFields });
-      if (changedFields.includes('assigned_employee')) {
-        await this.addActivity(transaction, principal, updated, 'assigned', {
-          employeeId: updated.assignedEmployeeId,
-        });
-      }
-      if (changedFields.includes('priority')) {
-        await this.addActivity(transaction, principal, updated, 'priority_changed', {
-          priority: updated.priority,
-        });
-      }
-      if (changedFields.includes('due_date')) {
-        await this.addActivity(transaction, principal, updated, 'due_date_changed', {
-          dueAt: updated.dueAt?.toISOString() ?? null,
-        });
-      }
-      const eventType = changedFields.includes('assigned_employee')
-        ? 'operations.task_assigned'
-        : 'operations.task_updated';
-      const payload =
-        eventType === 'operations.task_assigned'
-          ? { taskId: task.id, employeeId: updated.assignedEmployeeId }
-          : { taskId: task.id, changedFields };
-      await this.recordStateChange(transaction, principal, request, auditContext, {
-        type: eventType,
-        action: eventType,
-        aggregateId: task.id,
-        payload,
-        metadata: { taskId: task.id, changedFields },
-      });
-      return this.taskView(principal, updated);
-    });
-  }
-
-  private async transitionTask(
-    principal: AuthorizationPrincipal,
-    taskId: string,
-    expectedVersion: number,
-    status: TaskStatus,
-    request: RequestContext,
-    auditContext: AuditContext,
-  ) {
-    if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1)
-      throw new InvalidOperationsInputError();
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const task = await this.readTask(transaction, principal, taskId, 'operations.tasks.manage');
-      if (task.version !== expectedVersion) throw new OperationsTaskVersionConflictError();
-      const allowed =
-        status === 'in_progress'
-          ? task.status === 'open'
-          : status === 'completed'
-            ? task.status === 'open' || task.status === 'in_progress'
-            : status === 'open'
-              ? task.status === 'completed'
-              : task.status === 'open' || task.status === 'in_progress';
-      if (!allowed) throw new OperationsTaskStateError();
-      const now = new Date();
-      const [updated] = await transaction
-        .update(tasks)
-        .set({
-          status,
-          completedAt: status === 'completed' ? now : null,
-          completedByUserId: status === 'completed' ? principal.userId : null,
-          version: task.version + 1,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(tasks.tenantId, principal.tenantId),
-            eq(tasks.id, task.id),
-            eq(tasks.version, expectedVersion),
-          ),
-        )
-        .returning();
-      if (!updated) throw new OperationsTaskVersionConflictError();
-      await this.addActivity(transaction, principal, updated, 'status_changed', {
-        from: task.status,
-        to: status,
-      });
-      const type =
-        status === 'completed'
-          ? 'operations.task_completed'
-          : status === 'cancelled'
-            ? 'operations.task_cancelled'
-            : status === 'open'
-              ? 'operations.task_reopened'
-              : 'operations.task_updated';
-      const action = type;
-      const payload =
-        type === 'operations.task_updated'
-          ? { taskId: task.id, changedFields: ['status'] }
-          : { taskId: task.id };
-      await this.recordStateChange(transaction, principal, request, auditContext, {
-        type,
-        action,
-        aggregateId: task.id,
-        payload,
-        metadata: { taskId: task.id, from: task.status, to: status },
-      });
-      return this.taskView(principal, updated);
-    });
-  }
-
-  private async taskSummary(
-    principal: AuthorizationPrincipal,
-    query: Pick<OperationsQuery, 'organizationId' | 'facilityId'>,
-  ) {
-    const scopeConditions = this.taskScopeConditions(principal);
-    if (scopeConditions && !scopeConditions.length)
-      return { assignedToMe: 0, dueToday: 0, overdue: 0, urgent: 0 };
-    const conditions: SQL[] = [
-      eq(tasks.tenantId, principal.tenantId),
-      ...(scopeConditions ?? []),
-      inArray(tasks.status, ['open', 'in_progress']),
-    ];
-    if (query.organizationId) conditions.push(eq(tasks.organizationId, query.organizationId));
-    if (query.facilityId) conditions.push(eq(tasks.facilityId, query.facilityId));
-    const employeeId = await this.employeeForUser(principal.tenantId, principal.userId);
-    if (!employeeId) return { assignedToMe: 0, dueToday: 0, overdue: 0, urgent: 0 };
-    conditions.push(eq(tasks.assignedEmployeeId, employeeId));
-    const { dueDate: localDueDate, today: localToday } = taskDueLocalDates();
-    const where = and(...conditions);
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const [summary] = await transaction
-        .select({
-          assignedToMe: count(),
-          dueToday: sql<number>`count(*) filter (where ${tasks.dueAt} IS NOT NULL AND ${localDueDate} = ${localToday})`,
-          overdue: sql<number>`count(*) filter (where ${tasks.dueAt} < now())`,
-          urgent: sql<number>`count(*) filter (where ${tasks.priority} = 'urgent')`,
-        })
-        .from(tasks)
-        .where(where);
-      return {
-        assignedToMe: Number(summary?.assignedToMe ?? 0),
-        dueToday: Number(summary?.dueToday ?? 0),
-        overdue: Number(summary?.overdue ?? 0),
-        urgent: Number(summary?.urgent ?? 0),
-      };
-    });
-  }
-
-  private taskView(principal: AuthorizationPrincipal, task: typeof tasks.$inferSelect) {
-    let source: OperationsSourceReference | null = null;
-    const sourceId = sourceIdFromRow(task);
-    if (task.sourceType && sourceId) {
-      const action = sourcePermission(task.sourceType);
-      if (can(principal, { action, resource: taskResource(task) }))
-        source = { type: task.sourceType, id: sourceId };
-    }
-    return {
-      id: task.id,
-      organizationId: task.organizationId,
-      facilityId: task.facilityId,
-      clientId: task.clientId,
-      title: task.title,
-      description: task.description,
-      status: task.status,
-      priority: task.priority,
-      assignedEmployeeId: task.assignedEmployeeId,
-      assignmentWarningCode: task.assignmentWarningCode,
-      createdByUserId: task.createdByUserId,
-      completedByUserId: task.completedByUserId,
-      dueAt: task.dueAt,
-      completedAt: task.completedAt,
-      source,
-      version: task.version,
-      createdAt: task.createdAt,
-      updatedAt: task.updatedAt,
-    };
-  }
-
-  private async readTask(
-    transaction: DatabaseTransaction,
-    principal: AuthorizationPrincipal,
-    taskId: string,
-    permission: 'operations.read' | 'operations.tasks.manage',
-  ) {
-    const [task] = await transaction
-      .select()
-      .from(tasks)
-      .where(and(eq(tasks.tenantId, principal.tenantId), eq(tasks.id, taskId)))
-      .limit(1);
-    if (!task) throw new OperationsTaskNotFoundError();
-    assertCan(principal, { action: permission, resource: taskResource(task) });
-    await this.assertTaskClientAccess(transaction, principal, task);
-    return task;
-  }
-
-  private async assertTaskClientAccess(
-    transaction: DatabaseTransaction,
-    principal: AuthorizationPrincipal,
-    task: typeof tasks.$inferSelect,
-  ) {
-    if (!task.clientId) return;
-    const [client] = await transaction
-      .select({
-        id: clientRecords.id,
-        organizationId: clientRecords.organizationId,
-        facilityId: clientRecords.primaryFacilityId,
-      })
-      .from(clientRecords)
-      .where(
-        and(eq(clientRecords.tenantId, principal.tenantId), eq(clientRecords.id, task.clientId)),
-      )
-      .limit(1);
-    if (!client) throw new OperationsTaskNotFoundError();
-    assertCan(principal, {
-      action: 'client.read',
-      resource: {
-        tenantId: principal.tenantId,
-        clientId: client.id,
-        ...(client.organizationId ? { organizationId: client.organizationId } : {}),
-        ...(client.facilityId ? { facilityId: client.facilityId } : {}),
-      },
-    });
-  }
-
-  private async addActivity(
-    transaction: DatabaseTransaction,
-    principal: AuthorizationPrincipal,
-    task: typeof tasks.$inferSelect,
-    kind: (typeof taskActivity.$inferInsert)['kind'],
-    details: Record<string, unknown>,
-  ) {
-    await transaction.insert(taskActivity).values({
-      id: uuidv7(),
-      tenantId: principal.tenantId,
-      taskId: task.id,
-      actorUserId: principal.userId,
-      kind,
-      details,
-      comment: null,
-      occurredAt: new Date(),
-    });
-  }
-
-  private async validateSource(
-    principal: AuthorizationPrincipal,
-    source: OperationsSourceReference,
-  ): Promise<TaskResourceContext> {
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      let result: TaskResourceContext | null = null;
-      switch (source.type) {
-        case 'client': {
-          const [row] = await transaction
-            .select()
-            .from(clientRecords)
-            .where(
-              and(eq(clientRecords.tenantId, principal.tenantId), eq(clientRecords.id, source.id)),
-            )
-            .limit(1);
-          result = row?.organizationId
-            ? {
-                organizationId: row.organizationId,
-                facilityId: row.primaryFacilityId,
-                clientId: row.id,
-              }
-            : null;
-          break;
-        }
-        case 'visit': {
-          const [row] = await transaction
-            .select()
-            .from(visits)
-            .where(and(eq(visits.tenantId, principal.tenantId), eq(visits.id, source.id)))
-            .limit(1);
-          result = row
-            ? {
-                organizationId: row.organizationId,
-                facilityId: row.facilityId,
-                clientId: row.clientId,
-              }
-            : null;
-          break;
-        }
-        case 'service_agreement': {
-          const [row] = await transaction
-            .select()
-            .from(agreements)
-            .where(and(eq(agreements.tenantId, principal.tenantId), eq(agreements.id, source.id)))
-            .limit(1);
-          result = row
-            ? {
-                organizationId: row.organizationId,
-                facilityId: row.facilityId,
-                clientId: row.clientId,
-              }
-            : null;
-          break;
-        }
-        case 'service_evidence': {
-          const [row] = await transaction
-            .select({ visit: visits })
-            .from(evidencePackages)
-            .innerJoin(
-              careDocuments,
-              and(
-                eq(careDocuments.tenantId, evidencePackages.tenantId),
-                eq(careDocuments.id, evidencePackages.documentationId),
-              ),
-            )
-            .innerJoin(
-              visits,
-              and(
-                eq(visits.tenantId, careDocuments.tenantId),
-                eq(visits.id, careDocuments.visitId),
-              ),
-            )
-            .where(
-              and(
-                eq(evidencePackages.tenantId, principal.tenantId),
-                eq(evidencePackages.id, source.id),
-              ),
-            )
-            .limit(1);
-          result = row
-            ? {
-                organizationId: row.visit.organizationId,
-                facilityId: row.visit.facilityId,
-                clientId: row.visit.clientId,
-              }
-            : null;
-          break;
-        }
-        case 'invoice': {
-          const [row] = await transaction
-            .select()
-            .from(invoices)
-            .where(and(eq(invoices.tenantId, principal.tenantId), eq(invoices.id, source.id)))
-            .limit(1);
-          result = row
-            ? {
-                organizationId: row.organizationId,
-                facilityId: row.facilityId,
-                clientId: row.clientId,
-              }
-            : null;
-          break;
-        }
-        case 'claim': {
-          const [row] = await transaction
-            .select()
-            .from(claims)
-            .where(and(eq(claims.tenantId, principal.tenantId), eq(claims.id, source.id)))
-            .limit(1);
-          result = row
-            ? {
-                organizationId: row.organizationId,
-                facilityId: row.facilityId,
-                clientId: row.clientId,
-              }
-            : null;
-          break;
-        }
-        case 'benefit_entitlement': {
-          const [row] = await transaction
-            .select({ entitlement: clientBenefitEntitlements, client: clientRecords })
-            .from(clientBenefitEntitlements)
-            .innerJoin(
-              clientRecords,
-              and(
-                eq(clientRecords.tenantId, clientBenefitEntitlements.tenantId),
-                eq(clientRecords.id, clientBenefitEntitlements.clientId),
-              ),
-            )
-            .where(
-              and(
-                eq(clientBenefitEntitlements.tenantId, principal.tenantId),
-                eq(clientBenefitEntitlements.id, source.id),
-              ),
-            )
-            .limit(1);
-          result = row?.client.organizationId
-            ? {
-                organizationId: row.client.organizationId,
-                facilityId: row.client.primaryFacilityId,
-                clientId: row.client.id,
-              }
-            : null;
-          break;
-        }
-        case 'document': {
-          const [row] = await transaction
-            .select()
-            .from(documentArtifacts)
-            .where(
-              and(
-                eq(documentArtifacts.tenantId, principal.tenantId),
-                eq(documentArtifacts.id, source.id),
-              ),
-            )
-            .limit(1);
-          result = row
-            ? {
-                organizationId: row.organizationId,
-                facilityId: row.facilityId,
-                clientId: row.clientId,
-              }
-            : null;
-          break;
-        }
-        case 'communication': {
-          const resultSet = await transaction.execute(sql`
-            SELECT client.organization_id AS "organizationId",
-                   client.primary_facility_id AS "facilityId",
-                   interaction.client_id AS "clientId"
-            FROM communications.interactions AS interaction
-            INNER JOIN clients.clients AS client
-              ON client.tenant_id = interaction.tenant_id
-             AND client.id = interaction.client_id
-            WHERE interaction.tenant_id = ${principal.tenantId}
-              AND interaction.id = ${source.id}
-            LIMIT 1
-          `);
-          const row = resultSet.rows[0] as
-            | { organizationId: string | null; facilityId: string | null; clientId: string }
-            | undefined;
-          result = row?.organizationId
-            ? {
-                organizationId: row.organizationId,
-                facilityId: row.facilityId,
-                clientId: row.clientId,
-              }
-            : null;
-          break;
-        }
-      }
-      if (!result) throw new OperationsSourceNotFoundError();
-      assertCan(principal, {
-        action: sourcePermission(source.type),
-        resource: {
-          tenantId: principal.tenantId,
-          organizationId: result.organizationId,
-          ...(result.facilityId ? { facilityId: result.facilityId } : {}),
-          ...(result.clientId ? { clientId: result.clientId } : {}),
-        },
-      });
-      return result;
-    });
-  }
-
-  private async clientContext(
-    principal: AuthorizationPrincipal,
-    clientId: string,
-  ): Promise<TaskResourceContext> {
-    return this.validateSource(principal, { type: 'client', id: clientId });
-  }
-
-  private async assertTaskScope(resource: ResourceContext) {
-    const result = await this.unitOfWork.transaction(
-      { tenantId: resource.tenantId },
-      async (transaction) => {
-        const [organization] = await transaction
-          .select({ id: organizationsTable.id })
-          .from(organizationsTable)
-          .where(
-            and(
-              eq(organizationsTable.tenantId, resource.tenantId),
-              eq(organizationsTable.id, resource.organizationId!),
-            ),
-          )
-          .limit(1);
-        if (!organization) return false;
-        if (!resource.facilityId) return true;
-        const [facility] = await transaction
-          .select({ id: facilities.id })
-          .from(facilities)
-          .where(
-            and(
-              eq(facilities.tenantId, resource.tenantId),
-              eq(facilities.organizationId, resource.organizationId!),
-              eq(facilities.id, resource.facilityId),
-            ),
-          )
-          .limit(1);
-        return facility !== undefined;
-      },
-    );
-    if (!result) throw new InvalidOperationsInputError();
-  }
-
-  private async validateAssignee(
-    transaction: DatabaseTransaction,
-    tenantId: string,
-    employeeId: string,
-    organizationId: string,
-    facilityId: string | null,
-  ) {
-    await validateOperationsAssignee(transaction, tenantId, employeeId, organizationId, facilityId);
-  }
-
-  private async employeeForUser(tenantId: string, userId: string) {
-    const rows = await this.unitOfWork.transaction({ tenantId }, async (transaction) =>
-      transaction
-        .select({ id: employeeRecords.id })
-        .from(employeeRecords)
-        .where(
-          and(
-            eq(employeeRecords.tenantId, tenantId),
-            eq(employeeRecords.userId, userId),
-            eq(employeeRecords.status, 'active'),
-          ),
-        )
-        .limit(1),
-    );
-    return rows[0]?.id ?? null;
-  }
-
   private async clientResources(tenantId: string, clientIds: string[]) {
     if (!clientIds.length)
       return new Map<string, { organizationId: string | null; facilityId: string | null }>();
@@ -3013,72 +2154,6 @@ export class OperationsApplicationService {
 
   private organizationTimezones(principal: AuthorizationPrincipal, organizationIds: string[]) {
     return this.sources.organizations.operationsTimezones(principal, organizationIds);
-  }
-
-  private taskScopeConditions(principal: AuthorizationPrincipal): SQL[] | null {
-    const grants = principal.grants.filter((grant) => grant.permission === 'operations.read');
-    const tenantWide = grants.some(
-      (grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId,
-    );
-    const organizationIds = [
-      ...new Set(
-        grants.filter((grant) => grant.scopeType === 'organization').map((grant) => grant.scopeId),
-      ),
-    ];
-    const facilitiesInScope = [
-      ...new Set(
-        grants.filter((grant) => grant.scopeType === 'facility').map((grant) => grant.scopeId),
-      ),
-    ];
-    if (!tenantWide && !organizationIds.length && !facilitiesInScope.length) return [];
-
-    const taskScope: SQL | null = tenantWide
-      ? null
-      : or(
-          ...(organizationIds.length ? [inArray(tasks.organizationId, organizationIds)] : []),
-          ...(facilitiesInScope.length ? [inArray(tasks.facilityId, facilitiesInScope)] : []),
-        )!;
-
-    const clientGrants = principal.grants.filter((grant) => grant.permission === 'client.read');
-    const clientTenantWide = clientGrants.some(
-      (grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId,
-    );
-    const clientOrganizationIds = [
-      ...new Set(
-        clientGrants
-          .filter((grant) => grant.scopeType === 'organization')
-          .map((grant) => grant.scopeId),
-      ),
-    ];
-    const clientFacilityIds = [
-      ...new Set(
-        clientGrants
-          .filter((grant) => grant.scopeType === 'facility')
-          .map((grant) => grant.scopeId),
-      ),
-    ];
-    const conditions: SQL[] = taskScope ? [taskScope] : [];
-    if (!clientTenantWide) {
-      const clientScopes: SQL[] = [];
-      if (clientOrganizationIds.length) {
-        clientScopes.push(inArray(clientRecords.organizationId, clientOrganizationIds));
-      }
-      if (clientFacilityIds.length) {
-        clientScopes.push(inArray(clientRecords.primaryFacilityId, clientFacilityIds));
-      }
-      if (!clientScopes.length) {
-        conditions.push(isNull(tasks.clientId));
-      } else {
-        const readableClient = exists(sql`
-          SELECT 1 FROM ${clientRecords}
-          WHERE ${clientRecords.tenantId} = ${tasks.tenantId}
-            AND ${clientRecords.id} = ${tasks.clientId}
-            AND ${or(...clientScopes)}
-        `);
-        conditions.push(or(isNull(tasks.clientId), readableClient)!);
-      }
-    }
-    return conditions.length ? conditions : null;
   }
 
   private requireAnyGrant(principal: AuthorizationPrincipal, permission: Permission) {
@@ -3592,66 +2667,6 @@ export class OperationsApplicationService {
     throw new OperationsWorkItemNotFoundError();
   }
 
-  private async recordStateChange(
-    transaction: DatabaseTransaction,
-    principal: AuthorizationPrincipal,
-    request: RequestContext,
-    auditContext: AuditContext,
-    input: {
-      type: string;
-      action: string;
-      aggregateId: string;
-      payload: Record<string, unknown>;
-      metadata: Record<string, unknown>;
-    },
-  ) {
-    const event = createDomainEvent({
-      type: input.type as import('@care/events').EventName,
-      tenantId: principal.tenantId,
-      aggregateType: 'operations',
-      aggregateId: input.aggregateId,
-      actor: { type: 'user', id: principal.userId },
-      correlationId: request.correlationId,
-      payload: input.payload as never,
-    });
-    await this.audit.append(transaction, {
-      id: event.id,
-      tenantId: principal.tenantId,
-      actorId: principal.userId,
-      action: input.action,
-      resourceType: 'office_task',
-      resourceId: input.aggregateId,
-      timestamp: new Date(event.occurredAt),
-      requestId: request.requestId,
-      correlationId: request.correlationId,
-      ...auditContext,
-      metadata: input.metadata,
-    });
-    await this.outbox.enqueue(transaction, event);
-  }
-
-  private async recordAudit(
-    transaction: DatabaseTransaction,
-    principal: AuthorizationPrincipal,
-    request: RequestContext,
-    auditContext: AuditContext,
-    input: { action: string; resourceId: string; metadata: Record<string, unknown> },
-  ) {
-    await this.audit.append(transaction, {
-      id: uuidv7(),
-      tenantId: principal.tenantId,
-      actorId: principal.userId,
-      action: input.action,
-      resourceType: 'office_task',
-      resourceId: input.resourceId,
-      timestamp: new Date(),
-      requestId: request.requestId,
-      correlationId: request.correlationId,
-      ...auditContext,
-      metadata: input.metadata,
-    });
-  }
-
   private async recordExceptionChange(
     transaction: DatabaseTransaction,
     principal: AuthorizationPrincipal,
@@ -3699,60 +2714,11 @@ export class OperationsApplicationService {
   }
 }
 
-export class InvalidOperationsInputError extends Error {
-  readonly code = 'OPERATIONS_INVALID_INPUT';
-  constructor() {
-    super('The operations request is invalid');
-  }
-}
-export class OperationsTaskNotFoundError extends Error {
-  readonly code = 'OPERATIONS_TASK_NOT_FOUND';
-  constructor() {
-    super('The task was not found');
-  }
-}
 export class OperationsWorkItemNotFoundError extends Error {
   readonly code = 'OPERATIONS_WORK_ITEM_NOT_FOUND';
   constructor() {
     super('The operational work item was not found');
   }
-}
-export class OperationsSourceNotFoundError extends Error {
-  readonly code = 'OPERATIONS_SOURCE_NOT_FOUND';
-  constructor() {
-    super('The referenced source record was not found');
-  }
-}
-export class OperationsTaskVersionConflictError extends Error {
-  readonly code = 'OPERATIONS_TASK_VERSION_CONFLICT';
-  constructor() {
-    super('The task changed in another Office session');
-  }
-}
-export class OperationsTaskStateError extends Error {
-  readonly code = 'OPERATIONS_TASK_INVALID_STATE';
-  constructor() {
-    super('The task cannot make the requested transition');
-  }
-}
-
-export interface OperationsTaskListQuery {
-  organizationId?: string;
-  facilityId?: string;
-  clientId?: string;
-  status?: TaskStatus;
-  priority?: TaskPriority;
-  assignedEmployeeId?: string;
-  assignedToMe?: boolean;
-  sourceTypes?: SourceType[];
-  due?: 'overdue' | 'today' | 'upcoming';
-  fromDate?: string;
-  untilDate?: string;
-  search?: string;
-  order?: 'due' | 'created' | 'priority';
-  page?: number;
-  pageSize?: number;
-  offset?: number;
 }
 
 export function createOperationsApplicationService(
@@ -3762,28 +2728,6 @@ export function createOperationsApplicationService(
   sources: OperationsSourceServices,
 ) {
   return new OperationsApplicationService(unitOfWork, audit, outbox, sources);
-}
-
-interface TaskResourceContext {
-  organizationId: string;
-  facilityId: string | null;
-  clientId: string | null;
-}
-
-function hasGrant(principal: AuthorizationPrincipal, permission: Permission): boolean {
-  return principal.grants.some((grant) => grant.permission === permission);
-}
-
-function bounded(
-  value: number | undefined,
-  fallback: number,
-  min: number,
-  maximum: number,
-): number {
-  const result = value ?? fallback;
-  if (!Number.isSafeInteger(result) || result < min || result > maximum)
-    throw new InvalidOperationsInputError();
-  return result;
 }
 
 async function forEachResultPage<R extends { items: readonly unknown[]; total: number }>(
@@ -3843,112 +2787,8 @@ function retainSortedPrefix<T>(
   }
 }
 
-function validTaskInput(input: OperationsTaskInput): boolean {
-  return (
-    typeof input.title === 'string' &&
-    input.title.trim().length > 0 &&
-    input.title.trim().length <= 200 &&
-    (input.description == null ||
-      (typeof input.description === 'string' && input.description.length <= 8000)) &&
-    (input.priority === undefined ||
-      ['low', 'normal', 'high', 'urgent'].includes(input.priority)) &&
-    (input.dueAt === undefined || input.dueAt === null || Number.isFinite(input.dueAt.getTime())) &&
-    (input.source === undefined ||
-      input.source === null ||
-      (validSourceType(input.source.type) && isUuid(input.source.id)))
-  );
-}
-
-function validPatch(input: OperationsTaskPatch): boolean {
-  return (
-    (input.title === undefined ||
-      (typeof input.title === 'string' &&
-        input.title.trim().length > 0 &&
-        input.title.trim().length <= 200)) &&
-    (input.description === undefined ||
-      input.description === null ||
-      (typeof input.description === 'string' && input.description.length <= 8000)) &&
-    (input.priority === undefined ||
-      ['low', 'normal', 'high', 'urgent'].includes(input.priority)) &&
-    (input.assignedEmployeeId === undefined ||
-      input.assignedEmployeeId === null ||
-      isUuid(input.assignedEmployeeId)) &&
-    (input.dueAt === undefined || input.dueAt === null || Number.isFinite(input.dueAt.getTime()))
-  );
-}
-
-function validSourceType(value: string): value is SourceType {
-  return [
-    'client',
-    'visit',
-    'service_agreement',
-    'service_evidence',
-    'invoice',
-    'claim',
-    'benefit_entitlement',
-    'document',
-    'communication',
-  ].includes(value);
-}
-
-function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
-function displayNameWithoutIdentifiers(value: string | null): string | null {
-  const normalized = value?.trim();
-  if (
-    !normalized ||
-    /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i.test(normalized)
-  )
-    return null;
-  return normalized;
-}
-
-function normalizeOptional(value: string | null | undefined): string | null {
-  return value?.trim() || null;
-}
-
-function escapeLike(value: string): string {
-  return value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
-}
-
 function normalizeOperationsSearchText(value: string): string {
   return value.toLocaleLowerCase().replaceAll('_', ' ').replace(/\s+/g, ' ').trim();
-}
-
-function taskResource(
-  task: Pick<typeof tasks.$inferSelect, 'tenantId' | 'organizationId' | 'facilityId' | 'clientId'>,
-): ResourceContext {
-  return {
-    tenantId: task.tenantId,
-    organizationId: task.organizationId,
-    ...(task.facilityId ? { facilityId: task.facilityId } : {}),
-    ...(task.clientId ? { clientId: task.clientId } : {}),
-  };
-}
-
-function sourcePermission(type: SourceType): Permission {
-  switch (type) {
-    case 'client':
-      return 'client.read';
-    case 'visit':
-      return 'schedule.read';
-    case 'service_agreement':
-      return 'service_agreement.read';
-    case 'service_evidence':
-      return 'service_evidence.read';
-    case 'invoice':
-      return 'billing.read';
-    case 'claim':
-      return 'claims.read';
-    case 'benefit_entitlement':
-      return 'benefits.read';
-    case 'document':
-      return 'documents.read';
-    case 'communication':
-      return 'communications.read';
-  }
 }
 
 function taskSourceTypesForDomain(sourceDomain: string): SourceType[] {
@@ -3974,45 +2814,6 @@ function taskSourceTypesForDomain(sourceDomain: string): SourceType[] {
       return [];
     default:
       return [];
-  }
-}
-
-function sourceColumnsFor(source: OperationsSourceReference | null) {
-  return {
-    sourceClientId: source?.type === 'client' ? source.id : null,
-    sourceVisitId: source?.type === 'visit' ? source.id : null,
-    sourceAgreementId: source?.type === 'service_agreement' ? source.id : null,
-    sourceEvidencePackageId: source?.type === 'service_evidence' ? source.id : null,
-    sourceInvoiceId: source?.type === 'invoice' ? source.id : null,
-    sourceClaimId: source?.type === 'claim' ? source.id : null,
-    sourceEntitlementId: source?.type === 'benefit_entitlement' ? source.id : null,
-    sourceDocumentId: source?.type === 'document' ? source.id : null,
-    sourceCommunicationId: source?.type === 'communication' ? source.id : null,
-  };
-}
-
-function sourceIdFromRow(task: typeof tasks.$inferSelect): string | null {
-  switch (task.sourceType) {
-    case 'client':
-      return task.sourceClientId;
-    case 'visit':
-      return task.sourceVisitId;
-    case 'service_agreement':
-      return task.sourceAgreementId;
-    case 'service_evidence':
-      return task.sourceEvidencePackageId;
-    case 'invoice':
-      return task.sourceInvoiceId;
-    case 'claim':
-      return task.sourceClaimId;
-    case 'benefit_entitlement':
-      return task.sourceEntitlementId;
-    case 'document':
-      return task.sourceDocumentId;
-    case 'communication':
-      return task.sourceCommunicationId;
-    default:
-      return null;
   }
 }
 
@@ -4346,4 +3147,406 @@ function exceptionState(
   if (!previous) return 'open';
   if (previous.action === 'acknowledged') return 'acknowledged';
   return previous.snoozedUntil && previous.snoozedUntil > now ? 'snoozed' : 'open';
+}
+
+/** Temporary foreign-data adapter. Keep baselined imports here until owner APIs replace these queries. */
+class LegacyOperationsTaskData implements OperationsTaskData {
+  constructor(private readonly unitOfWork: UnitOfWork) {}
+
+  async validateSource(
+    principal: AuthorizationPrincipal,
+    source: OperationsSourceReference,
+  ): Promise<TaskResourceContext> {
+    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
+      let result: TaskResourceContext | null = null;
+      switch (source.type) {
+        case 'client': {
+          const [row] = await transaction
+            .select()
+            .from(clientRecords)
+            .where(
+              and(eq(clientRecords.tenantId, principal.tenantId), eq(clientRecords.id, source.id)),
+            )
+            .limit(1);
+          result = row?.organizationId
+            ? {
+                organizationId: row.organizationId,
+                facilityId: row.primaryFacilityId,
+                clientId: row.id,
+              }
+            : null;
+          break;
+        }
+        case 'visit': {
+          const [row] = await transaction
+            .select()
+            .from(visits)
+            .where(and(eq(visits.tenantId, principal.tenantId), eq(visits.id, source.id)))
+            .limit(1);
+          result = row
+            ? {
+                organizationId: row.organizationId,
+                facilityId: row.facilityId,
+                clientId: row.clientId,
+              }
+            : null;
+          break;
+        }
+        case 'service_agreement': {
+          const [row] = await transaction
+            .select()
+            .from(agreements)
+            .where(and(eq(agreements.tenantId, principal.tenantId), eq(agreements.id, source.id)))
+            .limit(1);
+          result = row
+            ? {
+                organizationId: row.organizationId,
+                facilityId: row.facilityId,
+                clientId: row.clientId,
+              }
+            : null;
+          break;
+        }
+        case 'service_evidence': {
+          const [row] = await transaction
+            .select({ visit: visits })
+            .from(evidencePackages)
+            .innerJoin(
+              careDocuments,
+              and(
+                eq(careDocuments.tenantId, evidencePackages.tenantId),
+                eq(careDocuments.id, evidencePackages.documentationId),
+              ),
+            )
+            .innerJoin(
+              visits,
+              and(
+                eq(visits.tenantId, careDocuments.tenantId),
+                eq(visits.id, careDocuments.visitId),
+              ),
+            )
+            .where(
+              and(
+                eq(evidencePackages.tenantId, principal.tenantId),
+                eq(evidencePackages.id, source.id),
+              ),
+            )
+            .limit(1);
+          result = row
+            ? {
+                organizationId: row.visit.organizationId,
+                facilityId: row.visit.facilityId,
+                clientId: row.visit.clientId,
+              }
+            : null;
+          break;
+        }
+        case 'invoice': {
+          const [row] = await transaction
+            .select()
+            .from(invoices)
+            .where(and(eq(invoices.tenantId, principal.tenantId), eq(invoices.id, source.id)))
+            .limit(1);
+          result = row
+            ? {
+                organizationId: row.organizationId,
+                facilityId: row.facilityId,
+                clientId: row.clientId,
+              }
+            : null;
+          break;
+        }
+        case 'claim': {
+          const [row] = await transaction
+            .select()
+            .from(claims)
+            .where(and(eq(claims.tenantId, principal.tenantId), eq(claims.id, source.id)))
+            .limit(1);
+          result = row
+            ? {
+                organizationId: row.organizationId,
+                facilityId: row.facilityId,
+                clientId: row.clientId,
+              }
+            : null;
+          break;
+        }
+        case 'benefit_entitlement': {
+          const [row] = await transaction
+            .select({ entitlement: clientBenefitEntitlements, client: clientRecords })
+            .from(clientBenefitEntitlements)
+            .innerJoin(
+              clientRecords,
+              and(
+                eq(clientRecords.tenantId, clientBenefitEntitlements.tenantId),
+                eq(clientRecords.id, clientBenefitEntitlements.clientId),
+              ),
+            )
+            .where(
+              and(
+                eq(clientBenefitEntitlements.tenantId, principal.tenantId),
+                eq(clientBenefitEntitlements.id, source.id),
+              ),
+            )
+            .limit(1);
+          result = row?.client.organizationId
+            ? {
+                organizationId: row.client.organizationId,
+                facilityId: row.client.primaryFacilityId,
+                clientId: row.client.id,
+              }
+            : null;
+          break;
+        }
+        case 'document': {
+          const [row] = await transaction
+            .select()
+            .from(documentArtifacts)
+            .where(
+              and(
+                eq(documentArtifacts.tenantId, principal.tenantId),
+                eq(documentArtifacts.id, source.id),
+              ),
+            )
+            .limit(1);
+          result = row
+            ? {
+                organizationId: row.organizationId,
+                facilityId: row.facilityId,
+                clientId: row.clientId,
+              }
+            : null;
+          break;
+        }
+        case 'communication': {
+          const resultSet = await transaction.execute(sql`
+            SELECT client.organization_id AS "organizationId",
+                   client.primary_facility_id AS "facilityId",
+                   interaction.client_id AS "clientId"
+            FROM communications.interactions AS interaction
+            INNER JOIN clients.clients AS client
+              ON client.tenant_id = interaction.tenant_id
+             AND client.id = interaction.client_id
+            WHERE interaction.tenant_id = ${principal.tenantId}
+              AND interaction.id = ${source.id}
+            LIMIT 1
+          `);
+          const row = resultSet.rows[0] as
+            | { organizationId: string | null; facilityId: string | null; clientId: string }
+            | undefined;
+          result = row?.organizationId
+            ? {
+                organizationId: row.organizationId,
+                facilityId: row.facilityId,
+                clientId: row.clientId,
+              }
+            : null;
+          break;
+        }
+      }
+      if (!result) throw new OperationsSourceNotFoundError();
+      assertCan(principal, {
+        action: sourcePermission(source.type),
+        resource: {
+          tenantId: principal.tenantId,
+          organizationId: result.organizationId,
+          ...(result.facilityId ? { facilityId: result.facilityId } : {}),
+          ...(result.clientId ? { clientId: result.clientId } : {}),
+        },
+      });
+      return result;
+    });
+  }
+
+  async clientContext(
+    principal: AuthorizationPrincipal,
+    clientId: string,
+  ): Promise<TaskResourceContext> {
+    return this.validateSource(principal, { type: 'client', id: clientId });
+  }
+
+  async assertTaskScope(resource: ResourceContext) {
+    const result = await this.unitOfWork.transaction(
+      { tenantId: resource.tenantId },
+      async (transaction) => {
+        const [organization] = await transaction
+          .select({ id: organizationsTable.id })
+          .from(organizationsTable)
+          .where(
+            and(
+              eq(organizationsTable.tenantId, resource.tenantId),
+              eq(organizationsTable.id, resource.organizationId!),
+            ),
+          )
+          .limit(1);
+        if (!organization) return false;
+        if (!resource.facilityId) return true;
+        const [facility] = await transaction
+          .select({ id: facilities.id })
+          .from(facilities)
+          .where(
+            and(
+              eq(facilities.tenantId, resource.tenantId),
+              eq(facilities.organizationId, resource.organizationId!),
+              eq(facilities.id, resource.facilityId),
+            ),
+          )
+          .limit(1);
+        return facility !== undefined;
+      },
+    );
+    if (!result) throw new InvalidOperationsInputError();
+  }
+
+  async assertTaskClientAccess(
+    transaction: DatabaseTransaction,
+    principal: AuthorizationPrincipal,
+    task: typeof tasks.$inferSelect,
+  ) {
+    if (!task.clientId) return;
+    const [client] = await transaction
+      .select({
+        id: clientRecords.id,
+        organizationId: clientRecords.organizationId,
+        facilityId: clientRecords.primaryFacilityId,
+      })
+      .from(clientRecords)
+      .where(
+        and(eq(clientRecords.tenantId, principal.tenantId), eq(clientRecords.id, task.clientId)),
+      )
+      .limit(1);
+    if (!client) throw new OperationsTaskNotFoundError();
+    assertCan(principal, {
+      action: 'client.read',
+      resource: {
+        tenantId: principal.tenantId,
+        clientId: client.id,
+        ...(client.organizationId ? { organizationId: client.organizationId } : {}),
+        ...(client.facilityId ? { facilityId: client.facilityId } : {}),
+      },
+    });
+  }
+
+  async employeeForUser(tenantId: string, userId: string) {
+    const rows = await this.unitOfWork.transaction({ tenantId }, async (transaction) =>
+      transaction
+        .select({ id: employeeRecords.id })
+        .from(employeeRecords)
+        .where(
+          and(
+            eq(employeeRecords.tenantId, tenantId),
+            eq(employeeRecords.userId, userId),
+            eq(employeeRecords.status, 'active'),
+          ),
+        )
+        .limit(1),
+    );
+    return rows[0]?.id ?? null;
+  }
+
+  async activityActors(transaction: DatabaseTransaction, tenantId: string, actorIds: string[]) {
+    return await transaction
+      .select({ id: users.id, displayName: users.displayName })
+      .from(tenantMemberships)
+      .innerJoin(users, eq(users.id, tenantMemberships.userId))
+      .where(and(eq(tenantMemberships.tenantId, tenantId), inArray(users.id, actorIds)));
+  }
+
+  async listWithDisplay(
+    transaction: DatabaseTransaction,
+    where: SQL | undefined,
+    orderBy: SQL[],
+    pageSize: number,
+    offset: number,
+  ) {
+    return await transaction
+      .select({
+        task: tasks,
+        clientName: sql<
+          string | null
+        >`nullif(concat_ws(' ', coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}), ${clientRecords.lastName}), '')`,
+        assignedEmployeeName: sql<
+          string | null
+        >`nullif(concat_ws(' ', coalesce(nullif(${employeeRecords.preferredName}, ''), ${employeeRecords.firstName}), ${employeeRecords.lastName}), '')`,
+      })
+      .from(tasks)
+      .leftJoin(
+        clientRecords,
+        and(eq(clientRecords.tenantId, tasks.tenantId), eq(clientRecords.id, tasks.clientId)),
+      )
+      .leftJoin(
+        employeeRecords,
+        and(
+          eq(employeeRecords.tenantId, tasks.tenantId),
+          eq(employeeRecords.id, tasks.assignedEmployeeId),
+        ),
+      )
+      .where(where)
+      .orderBy(...orderBy)
+      .limit(pageSize)
+      .offset(offset);
+  }
+
+  matchingClientName(pattern: string): SQL {
+    return sql`
+        EXISTS (
+        SELECT 1
+        FROM ${clientRecords}
+        WHERE ${clientRecords.tenantId} = ${tasks.tenantId}
+          AND ${clientRecords.id} = ${tasks.clientId}
+          AND concat_ws(
+            ' ',
+            coalesce(nullif(${clientRecords.preferredName}, ''), ${clientRecords.firstName}),
+            ${clientRecords.lastName}
+          ) ILIKE ${pattern}
+        )
+      `;
+  }
+
+  dueLocalDates() {
+    return taskDueLocalDates();
+  }
+
+  clientReadScope(principal: AuthorizationPrincipal): SQL | null {
+    const clientGrants = principal.grants.filter((grant) => grant.permission === 'client.read');
+    const clientTenantWide = clientGrants.some(
+      (grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId,
+    );
+    const clientOrganizationIds = [
+      ...new Set(
+        clientGrants
+          .filter((grant) => grant.scopeType === 'organization')
+          .map((grant) => grant.scopeId),
+      ),
+    ];
+    const clientFacilityIds = [
+      ...new Set(
+        clientGrants
+          .filter((grant) => grant.scopeType === 'facility')
+          .map((grant) => grant.scopeId),
+      ),
+    ];
+    const conditions: SQL[] = [];
+    if (!clientTenantWide) {
+      const clientScopes: SQL[] = [];
+      if (clientOrganizationIds.length) {
+        clientScopes.push(inArray(clientRecords.organizationId, clientOrganizationIds));
+      }
+      if (clientFacilityIds.length) {
+        clientScopes.push(inArray(clientRecords.primaryFacilityId, clientFacilityIds));
+      }
+      if (!clientScopes.length) {
+        conditions.push(isNull(tasks.clientId));
+      } else {
+        const readableClient = exists(sql`
+          SELECT 1 FROM ${clientRecords}
+          WHERE ${clientRecords.tenantId} = ${tasks.tenantId}
+            AND ${clientRecords.id} = ${tasks.clientId}
+            AND ${or(...clientScopes)}
+        `);
+        conditions.push(or(isNull(tasks.clientId), readableClient)!);
+      }
+    }
+    return conditions[0] ?? null;
+  }
 }

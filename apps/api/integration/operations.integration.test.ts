@@ -1902,6 +1902,102 @@ describe('operations PostgreSQL/API integration', () => {
         assignedEmployeeId: employeeId,
       });
 
+      // Task management remains reachable through the public facade, with separate display/source permissions.
+      const taskReader: AuthorizationPrincipal = {
+        userId,
+        tenantId,
+        grants: [
+          { permission: 'operations.read', scopeType: 'tenant', scopeId: tenantId },
+          { permission: 'client.read', scopeType: 'tenant', scopeId: tenantId },
+        ],
+      };
+      const redactedTaskList = await operations.listTasks(taskReader, { assignedToMe: true });
+      expect(redactedTaskList.items.find((task) => task.id === createdTask.id)).toMatchObject({
+        assignedEmployeeName: null,
+      });
+      expect(await operations.getTask(taskReader, followUpTask.id)).toMatchObject({ source: null });
+      const providerScopedReader: AuthorizationPrincipal = {
+        ...taskReader,
+        grants: [
+          { permission: 'operations.read', scopeType: 'organization', scopeId: organizationId },
+        ],
+      };
+      expect(await operations.getTask(providerScopedReader, createdTask.id)).toMatchObject({
+        id: createdTask.id,
+      });
+      await expect(
+        operations.getTask(
+          {
+            ...providerScopedReader,
+            grants: [
+              {
+                permission: 'operations.read',
+                scopeType: 'organization',
+                scopeId: otherOrganizationId,
+              },
+            ],
+          },
+          createdTask.id,
+        ),
+      ).rejects.toMatchObject({ code: 'INSUFFICIENT_PERMISSION' });
+      await expect(
+        operations.getTask({ ...taskReader, tenantId: otherTenantId }, createdTask.id),
+      ).rejects.toMatchObject({ code: 'OPERATIONS_TASK_NOT_FOUND' });
+      await expect(
+        operations.createTask(
+          taskReader,
+          { organizationId, title: 'Denied create' },
+          { requestId: 'task-denied', correlationId: 'task-denied' },
+          {},
+        ),
+      ).rejects.toMatchObject({ code: 'INSUFFICIENT_PERMISSION' });
+      const missingTaskSource = await fetch(baseUrl + '/api/v1/operations/tasks', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ title: 'Missing source', source: { type: 'visit', id: uuidv7() } }),
+      });
+      expect(missingTaskSource.status).toBe(404);
+      const wrongTaskProvider = await fetch(baseUrl + '/api/v1/operations/tasks', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ organizationId: otherOrganizationId, title: 'Foreign provider' }),
+      });
+      expect(wrongTaskProvider.status).toBe(400);
+      const invalidTaskInput = await fetch(baseUrl + '/api/v1/operations/tasks', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ organizationId, title: '   ' }),
+      });
+      expect(invalidTaskInput.status).toBe(400);
+      const noOpBefore = await owner.query(
+        'SELECT version, updated_at FROM operations.tasks WHERE id = $1',
+        [createdTask.id],
+      );
+      const noOpAuditBefore = await owner.query(
+        'SELECT count(*) FROM audit.audit_entries WHERE resource_id = $1',
+        [createdTask.id],
+      );
+      const noOpPatch = await fetch(baseUrl + '/api/v1/operations/tasks/' + createdTask.id, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ expectedVersion: 1, title: 'Call the client about next week' }),
+      });
+      expect(noOpPatch.status).toBe(200);
+      expect(await noOpPatch.json()).toMatchObject({ version: 1 });
+      expect(
+        (
+          await owner.query('SELECT version, updated_at FROM operations.tasks WHERE id = $1', [
+            createdTask.id,
+          ])
+        ).rows,
+      ).toEqual(noOpBefore.rows);
+      expect(
+        (
+          await owner.query('SELECT count(*) FROM audit.audit_entries WHERE resource_id = $1', [
+            createdTask.id,
+          ])
+        ).rows,
+      ).toEqual(noOpAuditBefore.rows);
       const combinedQueue = await fetch(
         `${baseUrl}/api/v1/operations/work-queue?page=1&pageSize=1`,
         { headers },
@@ -2189,6 +2285,163 @@ describe('operations PostgreSQL/API integration', () => {
         ),
       ).toBe(true);
 
+      // Exercise all remaining lifecycle edges and rollback on the same task, preserving fixture totals.
+      const taskPath = baseUrl + '/api/v1/operations/tasks/' + createdTask.id;
+      const mutateTask = (suffix: string, body: Record<string, unknown>, method = 'POST') =>
+        fetch(taskPath + suffix, { method, headers, body: JSON.stringify(body) });
+      const badVersion = await mutateTask('/start', { expectedVersion: 0 });
+      expect(badVersion.status).toBe(400);
+      const invalidReopen = await mutateTask('/reopen', { expectedVersion: 3 });
+      expect(invalidReopen.status).toBe(409);
+      const startTask = await mutateTask('/start', { expectedVersion: 3 });
+      expect(startTask.status).toBe(200);
+      expect(await startTask.json()).toMatchObject({
+        status: 'in_progress',
+        version: 4,
+        completedAt: null,
+        completedByUserId: null,
+      });
+      const invalidStart = await mutateTask('/start', { expectedVersion: 4 });
+      expect(invalidStart.status).toBe(409);
+      const clearAssignment = await mutateTask(
+        '',
+        { expectedVersion: 4, assignedEmployeeId: null },
+        'PATCH',
+      );
+      expect(clearAssignment.status).toBe(200);
+      expect(await clearAssignment.json()).toMatchObject({ version: 5, assignedEmployeeId: null });
+      const restoreAssignment = await mutateTask(
+        '',
+        { expectedVersion: 5, assignedEmployeeId: employeeId },
+        'PATCH',
+      );
+      expect(restoreAssignment.status).toBe(200);
+      expect(await restoreAssignment.json()).toMatchObject({
+        version: 6,
+        assignedEmployeeId: employeeId,
+      });
+      const invalidReassignment = await mutateTask(
+        '',
+        { expectedVersion: 6, assignedEmployeeId: otherEmployeeId },
+        'PATCH',
+      );
+      expect(invalidReassignment.status).toBe(400);
+      const stalePatch = await mutateTask('', { expectedVersion: 5, priority: 'urgent' }, 'PATCH');
+      expect(stalePatch.status).toBe(409);
+      const beforeRollback = await owner.query(
+        `SELECT (SELECT row_to_json(task) FROM operations.tasks AS task WHERE id = $1) AS task,
+                (SELECT count(*)::int FROM operations.task_activity WHERE task_id = $1) AS activities,
+                (SELECT count(*)::int FROM audit.audit_entries WHERE resource_id = $1) AS audits,
+                (SELECT count(*)::int FROM platform.outbox_messages WHERE event->>'aggregateId' = $1::text) AS events`,
+        [createdTask.id],
+      );
+      // Disposable PostgreSQL-only failure after task/history/audit writes, before outbox commit.
+      await owner.query(`CREATE FUNCTION platform.reject_test_task_update() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN IF NEW.event_type = 'operations.task_updated' THEN RAISE EXCEPTION 'test task outbox failure'; END IF; RETURN NEW; END $$`);
+      await owner.query(
+        `CREATE TRIGGER reject_test_task_update BEFORE INSERT ON platform.outbox_messages FOR EACH ROW EXECUTE FUNCTION platform.reject_test_task_update()`,
+      );
+      try {
+        const failedPatch = await mutateTask(
+          '',
+          { expectedVersion: 6, priority: 'urgent' },
+          'PATCH',
+        );
+        expect(failedPatch.status).toBe(500);
+        expect(
+          (
+            await owner.query(
+              `SELECT (SELECT row_to_json(task) FROM operations.tasks AS task WHERE id = $1) AS task,
+                  (SELECT count(*)::int FROM operations.task_activity WHERE task_id = $1) AS activities,
+                  (SELECT count(*)::int FROM audit.audit_entries WHERE resource_id = $1) AS audits,
+                  (SELECT count(*)::int FROM platform.outbox_messages WHERE event->>'aggregateId' = $1::text) AS events`,
+              [createdTask.id],
+            )
+          ).rows,
+        ).toEqual(beforeRollback.rows);
+      } finally {
+        await owner.query('DROP TRIGGER reject_test_task_update ON platform.outbox_messages');
+        await owner.query('DROP FUNCTION platform.reject_test_task_update()');
+      }
+      const beforeComment = await owner.query(
+        'SELECT version, updated_at FROM operations.tasks WHERE id = $1',
+        [createdTask.id],
+      );
+      const taskOutboxBeforeComment = await owner.query(
+        `SELECT count(*) FROM platform.outbox_messages WHERE event->>'aggregateId' = $1`,
+        [createdTask.id],
+      );
+      const finalComment = await mutateTask('/comments', { comment: '  Protected task comment  ' });
+      expect(finalComment.status).toBe(201);
+      expect(
+        (
+          await owner.query('SELECT version, updated_at FROM operations.tasks WHERE id = $1', [
+            createdTask.id,
+          ])
+        ).rows,
+      ).toEqual(beforeComment.rows);
+      expect(
+        (
+          await owner.query(
+            `SELECT count(*) FROM platform.outbox_messages WHERE event->>'aggregateId' = $1`,
+            [createdTask.id],
+          )
+        ).rows,
+      ).toEqual(taskOutboxBeforeComment.rows);
+      expect(
+        (
+          await owner.query(
+            `SELECT comment FROM operations.task_activity WHERE task_id = $1 AND comment = 'Protected task comment'`,
+            [createdTask.id],
+          )
+        ).rowCount,
+      ).toBe(1);
+      const taskAuditPairs = await owner.query(
+        `SELECT audit.id, outbox.id AS event_id FROM audit.audit_entries AS audit
+         LEFT JOIN platform.outbox_messages AS outbox ON audit.id = outbox.id AND audit.tenant_id = outbox.tenant_id
+         WHERE audit.resource_id = $1 AND audit.action <> 'operations.task_comment_added'`,
+        [createdTask.id],
+      );
+      expect(taskAuditPairs.rows.every((row) => row.id === row.event_id)).toBe(true);
+      expect(
+        JSON.stringify(
+          (
+            await owner.query('SELECT metadata FROM audit.audit_entries WHERE resource_id = $1', [
+              createdTask.id,
+            ])
+          ).rows,
+        ),
+      ).not.toContain('Protected task comment');
+      // Scheduler-created tasks retain occurrence identity when read and no-op edited through the facade.
+      const generatedTaskDetails = await operations.getTask(
+        taskReader,
+        generatedOccurrences[0]!.taskId,
+      );
+      expect(generatedTaskDetails.id).toBe(generatedOccurrences[0]!.taskId);
+      const occurrenceBeforeEdit = await owner.query(
+        'SELECT * FROM operations.recurring_task_occurrences WHERE task_id = $1',
+        [generatedTaskDetails.id],
+      );
+      const generatedNoOp = await fetch(
+        baseUrl + '/api/v1/operations/tasks/' + generatedTaskDetails.id,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: generatedTaskDetails.version,
+            title: generatedTaskDetails.title,
+          }),
+        },
+      );
+      expect(generatedNoOp.status).toBe(200);
+      expect(
+        (
+          await owner.query(
+            'SELECT * FROM operations.recurring_task_occurrences WHERE task_id = $1',
+            [generatedTaskDetails.id],
+          )
+        ).rows,
+      ).toEqual(occurrenceBeforeEdit.rows);
       const clientTaskResponse = await fetch(`${baseUrl}/api/v1/operations/tasks`, {
         method: 'POST',
         headers,
@@ -2244,6 +2497,23 @@ describe('operations PostgreSQL/API integration', () => {
       expect(await clientScopedDashboard.json()).toMatchObject({
         tasks: { assignedToMe: 5, urgent: 1 },
       });
+
+      const cancelledTask = await mutateTask('/cancel', { expectedVersion: 6 });
+      expect(cancelledTask.status).toBe(200);
+      expect(await cancelledTask.json()).toMatchObject({
+        status: 'cancelled',
+        version: 7,
+        completedAt: null,
+        completedByUserId: null,
+      });
+      const terminalPatch = await mutateTask(
+        '',
+        { expectedVersion: 7, priority: 'urgent' },
+        'PATCH',
+      );
+      expect(terminalPatch.status).toBe(409);
+      const terminalComplete = await mutateTask('/complete', { expectedVersion: 7 });
+      expect(terminalComplete.status).toBe(409);
 
       const executionPlannedStart = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
       const executionPlannedEnd = new Date(now.getTime() - 24 * 60 * 60 * 1000);
