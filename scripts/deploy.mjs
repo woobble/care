@@ -83,7 +83,18 @@ try {
   });
   execFileSync(
     'docker',
-    [...compose, 'run', '--rm', '--no-deps', 'operator', operation, ...operatorArguments],
+    [
+      ...compose,
+      'run',
+      '--rm',
+      '--no-deps',
+      '--entrypoint',
+      'bun',
+      'operator',
+      'apps/api/dist/ops/cli.js',
+      operation,
+      ...operatorArguments,
+    ],
     {
       cwd: projectRoot,
       stdio: 'inherit',
