@@ -1875,6 +1875,31 @@ describe('clients API', () => {
       });
       expect(createTour.status).toBe(201);
       const tour = (await createTour.json()) as { id: string; version: number; status: string };
+      const deniedTourWrite = await fetch(`${baseUrl}/api/v1/scheduling/tours/${tour.id}/stops`, {
+        method: 'PUT',
+        headers: { ...headers, Authorization: `Bearer ${await issueToken(caregiverSubject)}` },
+        body: JSON.stringify({
+          expectedVersion: tour.version,
+          stops: [{ visitId: firstGeneratedVisit.id }],
+        }),
+      });
+      expect(deniedTourWrite.status).toBe(403);
+      const foreignTenantTour = await fetch(`${baseUrl}/api/v1/scheduling/tours/${tour.id}`, {
+        headers: { ...headers, 'X-Tenant-Id': otherTenantId },
+      });
+      expect([403, 404]).toContain(foreignTenantTour.status);
+      const duplicateTourStops = await fetch(
+        `${baseUrl}/api/v1/scheduling/tours/${tour.id}/stops`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            expectedVersion: tour.version,
+            stops: [{ visitId: firstGeneratedVisit.id }, { visitId: firstGeneratedVisit.id }],
+          }),
+        },
+      );
+      expect(duplicateTourStops.status).toBe(400);
       const estimateTour = await fetch(
         `${baseUrl}/api/v1/scheduling/tours/${tour.id}/estimate-travel`,
         {
@@ -1889,6 +1914,49 @@ describe('clients API', () => {
         route: { status: string };
       };
       expect(['unavailable', 'unresolved']).toContain(estimatedTour.route.status);
+      // Inject an outbox failure only in this disposable database. Domain, history and audit must roll back together.
+      const beforeFailedPublication = await owner.query(
+        `SELECT (SELECT version FROM scheduling.tours WHERE id = $1) AS version,
+                (SELECT count(*)::int FROM audit.audit_entries WHERE resource_id = $1) AS audits,
+                (SELECT count(*)::int FROM scheduling.tour_publications WHERE tour_id = $1) AS publications`,
+        [tour.id],
+      );
+      await owner.query(`CREATE FUNCTION platform.reject_test_tour_publication() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN IF NEW.event_type = 'scheduling.tour_published' THEN RAISE EXCEPTION 'test publication failure'; END IF; RETURN NEW; END $$`);
+      await owner.query(`CREATE TRIGGER reject_test_tour_publication BEFORE INSERT ON platform.outbox_messages
+        FOR EACH ROW EXECUTE FUNCTION platform.reject_test_tour_publication()`);
+      try {
+        const failedPublication = await fetch(
+          `${baseUrl}/api/v1/scheduling/tours/${tour.id}/publish`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ expectedVersion: estimatedTour.tour.version }),
+          },
+        );
+        expect(failedPublication.status).toBe(500);
+        expect(
+          (
+            await owner.query(
+              `SELECT (SELECT version FROM scheduling.tours WHERE id = $1) AS version,
+                  (SELECT count(*)::int FROM audit.audit_entries WHERE resource_id = $1) AS audits,
+                  (SELECT count(*)::int FROM scheduling.tour_publications WHERE tour_id = $1) AS publications`,
+              [tour.id],
+            )
+          ).rows,
+        ).toEqual(beforeFailedPublication.rows);
+        expect(
+          (
+            await owner.query(
+              `SELECT id FROM platform.outbox_messages WHERE event_type = 'scheduling.tour_published' AND event->>'aggregateId' = $1`,
+              [tour.id],
+            )
+          ).rows,
+        ).toHaveLength(0);
+      } finally {
+        await owner.query('DROP TRIGGER reject_test_tour_publication ON platform.outbox_messages');
+        await owner.query('DROP FUNCTION platform.reject_test_tour_publication()');
+      }
       const firstPublication = await fetch(
         `${baseUrl}/api/v1/scheduling/tours/${tour.id}/publish`,
         {
@@ -1902,6 +1970,19 @@ describe('clients API', () => {
         tour: { version: number; latestPublication: { version: number } };
       };
       expect(publishedTour.tour.latestPublication.version).toBe(1);
+      const immutableFirstSnapshot = await owner.query(
+        `SELECT snapshot, change_summary FROM scheduling.tour_publications WHERE tour_id = $1 AND version = 1`,
+        [tour.id],
+      );
+      const staleTourPublication = await fetch(
+        `${baseUrl}/api/v1/scheduling/tours/${tour.id}/publish`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ expectedVersion: estimatedTour.tour.version }),
+        },
+      );
+      expect(staleTourPublication.status).toBe(409);
       const revisePublishedTour = await fetch(
         `${baseUrl}/api/v1/scheduling/tours/${tour.id}/stops`,
         {
@@ -1931,6 +2012,27 @@ describe('clients API', () => {
         ),
       ).toMatchObject({ rows: [{ version: 1 }, { version: 2 }] });
 
+      expect(
+        (
+          await owner.query(
+            `SELECT snapshot, change_summary FROM scheduling.tour_publications WHERE tour_id = $1 AND version = 1`,
+            [tour.id],
+          )
+        ).rows,
+      ).toEqual(immutableFirstSnapshot.rows);
+      const tourAuditOutbox = await owner.query(
+        `SELECT audit.action, outbox.event_type FROM audit.audit_entries AS audit
+         JOIN platform.outbox_messages AS outbox ON outbox.id = audit.id AND outbox.tenant_id = audit.tenant_id
+         WHERE audit.tenant_id = $1 AND audit.resource_id = $2 ORDER BY audit.timestamp`,
+        [tenantId, tour.id],
+      );
+      expect(tourAuditOutbox.rows.map((row) => row.action)).toEqual([
+        'scheduling.tour_created',
+        'scheduling.tour_published',
+        'scheduling.tour_reordered',
+        'scheduling.tour_published',
+      ]);
+      expect(tourAuditOutbox.rows.every((row) => row.action === row.event_type)).toBe(true);
       const confirmedVisit = await fetch(
         `${baseUrl}/api/v1/visits/${firstGeneratedVisit.id}/confirm`,
         { method: 'POST', headers },
@@ -1947,6 +2049,23 @@ describe('clients API', () => {
         { method: 'POST', headers },
       );
       expect(cancelledVisit.status).toBe(200);
+      const invalidatedTour = await fetch(`${baseUrl}/api/v1/scheduling/tours/${tour.id}`, {
+        headers,
+      });
+      expect(invalidatedTour.status).toBe(200);
+      expect(await invalidatedTour.json()).toMatchObject({
+        status: 'draft',
+        stops: [],
+        latestPublication: { version: 2 },
+      });
+      expect(
+        (
+          await owner.query(
+            `SELECT snapshot, change_summary FROM scheduling.tour_publications WHERE tour_id = $1 AND version = 1`,
+            [tour.id],
+          )
+        ).rows,
+      ).toEqual(immutableFirstSnapshot.rows);
       for (const visit of generatedVisitPage.items.slice(1)) {
         // oxlint-disable-next-line no-await-in-loop -- Keep integration setup and polling ordered.
         const response = await fetch(`${baseUrl}/api/v1/visits/${visit.id}/cancel`, {

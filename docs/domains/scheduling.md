@@ -81,3 +81,7 @@ Scheduling reads and mutations use the existing `schedule.read`, `schedule.updat
 ## Deliberate limits
 
 Scheduling does not start or complete visits, record actual arrival/departure, assert performed services, collect care documentation or signatures, optimize staffing, send notifications, or create billing facts. Routing provides driving estimates only; it has no live traffic, GPS tracking, map view, or turn-by-turn navigation. Agreement changes do not trigger automatic visit reconciliation, and `occurrences_per_week` waits for Office placement.
+
+## Internal application boundaries
+
+SchedulingApplicationService remains the public facade. Its seven Office tour operations delegate to the internal SchedulingToursApplicationService, which owns stop validation, routing previews/estimates and immutable publication orchestration. Both services use transaction-aware SchedulingPlanningGuards and SchedulingEventWriter; these collaborators never open transactions. Routing retains its read transaction, external provider call, and separate locked version recheck before persistence. Caregiver projections and visit-driven publication invalidation remain in the facade. See the [Goal 03 handoff](../architecture/goal-03-to-goal-04.md).
