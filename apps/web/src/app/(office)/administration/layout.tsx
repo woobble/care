@@ -1,7 +1,8 @@
 import { getTranslations } from 'next-intl/server';
-import Link from 'next/link';
 
 import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
+
+import { AdministrationNavigationLinks } from './administration-nav-links';
 
 export default async function AdministrationLayout({
   children,
@@ -65,50 +66,27 @@ export default async function AdministrationLayout({
       ],
     },
   ] as const;
+  const navigationGroups = groups
+    .map((group, index) => ({
+      key: group.key,
+      label: t(group.key),
+      links: [
+        ...(index === 0 ? [{ href: '/administration', label: t('overview') }] : []),
+        ...group.links
+          .filter((link) => hasPermission(permissions, link.permission))
+          .map((link) => ({ href: link.href, label: t(link.key) })),
+      ],
+    }))
+    .filter((group) => group.links.length);
   return (
     <div className="grid gap-6">
       <nav
         aria-label={t('administration')}
         className="grid gap-3 border-b border-border pb-3 sm:grid-cols-2 xl:grid-cols-3"
       >
-        <section className="grid content-start gap-1">
-          <h2 className="px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {t('administrationAccess')}
-          </h2>
-          <NavLink href="/administration" label={t('overview')} />
-          {groups[0].links
-            .filter((link) => hasPermission(permissions, link.permission))
-            .map((link) => (
-              <NavLink key={link.key} href={link.href} label={t(link.key)} />
-            ))}
-        </section>
-        {groups.slice(1).map((group) => {
-          const links = group.links.filter((link) => hasPermission(permissions, link.permission));
-          if (!links.length) return null;
-          return (
-            <section key={group.key} className="grid content-start gap-1">
-              <h2 className="px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {t(group.key)}
-              </h2>
-              {links.map((link) => (
-                <NavLink key={link.key} href={link.href} label={t(link.key)} />
-              ))}
-            </section>
-          );
-        })}
+        <AdministrationNavigationLinks groups={navigationGroups} />
       </nav>
       {children}
     </div>
-  );
-}
-
-function NavLink({ href, label }: Readonly<{ href: string; label: string }>) {
-  return (
-    <Link
-      className="min-h-10 rounded-md px-3 py-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-      href={href}
-    >
-      {label}
-    </Link>
   );
 }

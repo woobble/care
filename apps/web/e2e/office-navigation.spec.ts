@@ -1318,3 +1318,337 @@ for (const locale of ['en', 'de'] as const) {
     await expect(nav.locator('a[aria-current="page"]')).toHaveAttribute('href', '/billing');
   });
 }
+
+async function administrationNavigationProps(locale: 'en' | 'de', permissions: string[]) {
+  return JSON.parse(
+    execFileSync(
+      'bun',
+      [
+        resolve(import.meta.dirname, '../scripts/office-navigation.fixture.ts'),
+        JSON.stringify({ locale, permissions, administrationNavigation: true, collapsed: false }),
+      ],
+      { encoding: 'utf8' },
+    ),
+  ) as NavigationFixtureProps;
+}
+const administrationGrants = [
+  'tenant.members.read',
+  'audit.read',
+  'organization.read',
+  'facility.read',
+  'team.read',
+  'employee.read',
+  'documents.templates.manage',
+  'billing.settings.manage',
+  'claims.settings.manage',
+  'operations.reminder_settings.manage',
+];
+for (const locale of ['en', 'de'] as const) {
+  const labels = (locale === 'en' ? en : de).Navigation;
+  test(`real Administration client groups before/after across routes and permissions (${locale})`, async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(90_000);
+    const folder =
+      process.env.ADMIN_NAV_SCREENSHOTS_DIR ?? testInfo.outputPath('administration-navigation');
+    await mkdir(folder, { recursive: true });
+    const scenarios = [
+      {
+        name: 'overview',
+        path: '/administration',
+        current: '/administration',
+        baseline: 'all',
+        permissions: administrationGrants,
+      },
+      {
+        name: 'users',
+        path: '/administration/users',
+        current: '/administration/users',
+        baseline: 'all',
+        permissions: administrationGrants,
+      },
+      {
+        name: 'user-detail',
+        path: '/administration/users/synthetic-id',
+        current: '/administration/users',
+        baseline: 'all',
+        permissions: administrationGrants,
+      },
+      {
+        name: 'invitations',
+        path: '/administration/users#invitations-title',
+        current: '/administration/users',
+        baseline: 'all',
+        permissions: administrationGrants,
+      },
+      {
+        name: 'organization-detail',
+        path: '/administration/organizations/synthetic-id',
+        current: '/administration/organizations',
+        baseline: 'all',
+        permissions: administrationGrants,
+      },
+      {
+        name: 'facility-detail',
+        path: '/administration/facilities/synthetic-id',
+        current: '/administration/facilities',
+        baseline: 'all',
+        permissions: administrationGrants,
+      },
+      {
+        name: 'team-detail',
+        path: '/administration/teams/synthetic-id',
+        current: '/administration/teams',
+        baseline: 'all',
+        permissions: administrationGrants,
+      },
+      {
+        name: 'qualifications',
+        path: '/administration/qualifications',
+        current: '/administration/qualifications',
+        baseline: 'all',
+        permissions: administrationGrants,
+      },
+      {
+        name: 'audit',
+        path: '/administration/audit',
+        current: '/administration/audit',
+        baseline: 'all',
+        permissions: administrationGrants,
+      },
+      {
+        name: 'templates',
+        path: '/administration/document-templates',
+        current: '/administration/document-templates',
+        baseline: 'all',
+        permissions: administrationGrants,
+      },
+      {
+        name: 'hidden-users',
+        path: '/administration/users',
+        current: undefined,
+        baseline: 'organization',
+        permissions: ['organization.read'],
+      },
+      {
+        name: 'unmatched',
+        path: '/administration/unknown',
+        current: undefined,
+        baseline: 'all',
+        permissions: administrationGrants,
+      },
+      {
+        name: 'settings-only',
+        path: '/administration',
+        current: '/administration',
+        baseline: 'billing-settings',
+        permissions: ['billing.settings.manage'],
+      },
+    ];
+    // oxlint-disable no-await-in-loop -- Compare original layout HTML with the real live renderer on one page.
+    for (const scenario of scenarios) {
+      const props = await administrationNavigationProps(locale, scenario.permissions);
+      const navigation = props.administrationNavigation!;
+      for (const width of [1440, 390]) {
+        let originalGeometry: unknown;
+        let originalContext: string | null = null;
+        for (const phase of process.env.ADMIN_NAV_BASELINE_DIR ? ['before', 'after'] : ['after']) {
+          const old =
+            phase === 'before'
+              ? (JSON.parse(
+                  await readFile(
+                    join(
+                      process.env.ADMIN_NAV_BASELINE_DIR!,
+                      `${locale}-${scenario.baseline}.json`,
+                    ),
+                    'utf8',
+                  ),
+                ).administrationNavigation as { html: string })
+              : undefined;
+          await page.context().clearCookies();
+          await page.unrouteAll();
+          await page.setViewportSize({ width, height: 900 });
+          await mount(page, {
+            locale,
+            path: scenario.path,
+            props: {
+              ...props,
+              administrationNavigation: { ...navigation, ...(old ? { beforeHtml: old.html } : {}) },
+            },
+          });
+          await page.evaluate(() => window.scrollTo(0, 0));
+          const nav = page
+            .getByRole('main')
+            .getByRole('navigation', { name: labels.administration, exact: true });
+          expect(
+            await nav.locator(':scope > section').evaluateAll((sections) =>
+              sections.map((section) => ({
+                heading: section.querySelector('h2')!.textContent,
+                links: [...section.querySelectorAll('a')].map((link) => ({
+                  href: link.getAttribute('href'),
+                  label: link.textContent,
+                })),
+              })),
+            ),
+          ).toEqual(
+            navigation.groups.map((group) => ({ heading: group.label, links: group.links })),
+          );
+          const current = nav.locator('a[aria-current="page"]');
+          const href = phase === 'before' ? undefined : scenario.current;
+          await expect(current).toHaveCount(href ? 1 : 0);
+          if (href) {
+            await expect(current).toHaveAttribute('href', href);
+            await expect(current).toHaveAccessibleName(
+              navigation.groups.flatMap((group) => group.links).find((link) => link.href === href)!
+                .label,
+            );
+            expect(
+              await current.evaluate((element) => getComputedStyle(element).textDecorationLine),
+            ).toContain('underline');
+            expect(
+              await current.evaluate((element) => getComputedStyle(element).backgroundColor),
+            ).not.toBe('rgba(0, 0, 0, 0)');
+          }
+          const invitations = nav.locator('a[href="/administration/users#invitations-title"]');
+          if (await invitations.count())
+            await expect(invitations).not.toHaveAttribute('aria-current');
+          const geometry = await nav.locator('section,h2,a').evaluateAll((elements) =>
+            elements.map((element) => {
+              const { x, y, width: elementWidth, height } = element.getBoundingClientRect();
+              return { tag: element.tagName, x, y, width: elementWidth, height };
+            }),
+          );
+          expect(geometry.filter((box) => box.tag === 'A').every((box) => box.height >= 40)).toBe(
+            true,
+          );
+          const primaryContext = await page.locator('#office-page-context').textContent();
+          if (phase === 'before') {
+            originalGeometry = geometry;
+            originalContext = primaryContext;
+          } else if (originalGeometry) {
+            expect(geometry).toEqual(originalGeometry);
+            expect(primaryContext).toBe(originalContext);
+          }
+          const axe = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze();
+          expect(axe.violations).toEqual([]);
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          ).toBe(true);
+          await page.evaluate(() => document.fonts.ready);
+          const name = `${locale}-${scenario.name}-${width}-${phase}`;
+          await page.screenshot({ path: join(folder, `${name}.png`), animations: 'disabled' });
+          await writeFile(
+            join(folder, `${name}.json`),
+            JSON.stringify(
+              {
+                locale,
+                route: scenario.path,
+                width,
+                phase,
+                currentHref: href ?? null,
+                groups: navigation.groups,
+                geometry,
+                primaryContext,
+                navBounds: await nav.boundingBox(),
+                violations: axe.violations,
+              },
+              null,
+              2,
+            ),
+          );
+        }
+      }
+    }
+    // oxlint-enable no-await-in-loop
+  });
+
+  test(`Administration client updates groups and path, preserves focus and native invitations jump (${locale})`, async ({
+    page,
+  }) => {
+    const props = await administrationNavigationProps(locale, administrationGrants);
+    await page.setViewportSize({ width: 390, height: 900 });
+    await mount(page, { locale, path: '/administration', props });
+    const nav = page
+      .getByRole('main')
+      .getByRole('navigation', { name: labels.administration, exact: true });
+    const links = nav.getByRole('link');
+    await links.first().focus();
+    await page.keyboard.press('Tab');
+    await expect(links.nth(1)).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(links.first()).toBeFocused();
+    expect(
+      await links.first().evaluate((element) => {
+        const style = getComputedStyle(element);
+        return (
+          element.matches(':focus-visible') &&
+          (style.outlineStyle !== 'none' || style.boxShadow !== 'none')
+        );
+      }),
+    ).toBe(true);
+    // oxlint-disable no-await-in-loop -- Observe every transition in the same mounted renderer.
+    for (const [path, href] of [
+      ['/administration/users/id', '/administration/users'],
+      ['/administration/organizations/id', '/administration/organizations'],
+      ['/administration/facilities/id', '/administration/facilities'],
+      ['/administration/teams/id', '/administration/teams'],
+      ['/administration/audit', '/administration/audit'],
+      ['/administration/unknown', undefined],
+      ['/administration/', '/administration'],
+      ['/administration?view=synthetic', '/administration'],
+    ]) {
+      await page.evaluate((route) => window.navigationHarness.navigate(route!), path);
+      const current = nav.locator('a[aria-current="page"]');
+      await expect(current).toHaveCount(href ? 1 : 0);
+      if (href) await expect(current).toHaveAttribute('href', href);
+    }
+    await page.evaluate(() => window.navigationHarness.navigate('/administration/users'));
+    const hidden = await administrationNavigationProps(locale, ['organization.read']);
+    await page.evaluate((next) => window.navigationHarness.render(next), hidden);
+    await expect(nav.locator('section')).toHaveCount(2);
+    await expect(nav.getByRole('link')).toHaveCount(2);
+    await expect(nav.locator('a[aria-current]')).toHaveCount(0);
+    const none = await administrationNavigationProps(locale, []);
+    await page.evaluate((next) => window.navigationHarness.render(next), none);
+    await expect(nav.locator('section')).toHaveCount(1);
+    await expect(nav.getByRole('link')).toHaveCount(1);
+    await expect(nav.locator('a[aria-current]')).toHaveCount(0);
+    for (const phase of process.env.ADMIN_NAV_BASELINE_DIR ? ['before', 'after'] : ['after']) {
+      const old =
+        phase === 'before'
+          ? (JSON.parse(
+              await readFile(
+                join(process.env.ADMIN_NAV_BASELINE_DIR!, `${locale}-all.json`),
+                'utf8',
+              ),
+            ).administrationNavigation as { html: string })
+          : undefined;
+      await page.evaluate((next) => window.navigationHarness.render(next), {
+        ...props,
+        administrationNavigation: {
+          ...props.administrationNavigation!,
+          ...(old ? { beforeHtml: old.html } : {}),
+        },
+      });
+      await page.evaluate(() => window.navigationHarness.navigate('/administration/users'));
+      const invitations = nav.getByRole('link', { name: labels.invitations, exact: true });
+      await invitations.click();
+      await expect(page).toHaveURL('http://navigation.test/administration/users#invitations-title');
+      await expect(page.getByRole('heading', { name: 'Synthetic invitations' })).toBeInViewport();
+      await expect(invitations).not.toHaveAttribute('aria-current');
+      if (phase === 'after')
+        await expect(nav.locator('a[aria-current="page"]')).toHaveAttribute(
+          'href',
+          '/administration/users',
+        );
+    }
+    // oxlint-enable no-await-in-loop
+    // The test preview mirrors segment unmounting; it does not keep this nav on Billing pages.
+    await page.evaluate(() => window.navigationHarness.navigate('/administration'));
+    await nav.getByRole('link', { name: labels.billingSettings, exact: true }).click();
+    await expect(page).toHaveURL('http://navigation.test/billing/settings');
+    await expect(nav).toHaveCount(0);
+  });
+}

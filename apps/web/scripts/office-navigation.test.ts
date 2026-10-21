@@ -712,3 +712,172 @@ for (const locale of ['en', 'de'] as const) {
     expect(current.html).toContain('underline');
   });
 }
+
+type AdministrationNavigationReport = {
+  groups: Array<{ key: string; label: string; links: Array<{ href: string; label: string }> }>;
+  label: string;
+  className: string;
+  html: string;
+  layoutHtml: string;
+  layoutClassName: string;
+  childrenPreserved: boolean;
+  calls: unknown[];
+  clientPropsKeys: string[];
+  clientTypeIsReal: boolean;
+};
+async function administrationNavigation(
+  locale: 'en' | 'de',
+  permissions: string[],
+  pathname = '/',
+) {
+  const child = Bun.spawn(
+    [
+      Bun.which('bun')!,
+      resolve(import.meta.dir, 'office-navigation.fixture.ts'),
+      JSON.stringify({ locale, permissions, administrationNavigation: true, pathname }),
+    ],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+  const [code, output, errors] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  if (code !== 0) throw new Error(errors);
+  return (JSON.parse(output) as { administrationNavigation: AdministrationNavigationReport })
+    .administrationNavigation;
+}
+for (const locale of ['en', 'de'] as const) {
+  const labels = (locale === 'en' ? en : de).Navigation;
+  const definitions = [
+    {
+      key: 'administrationAccess',
+      label: labels.administrationAccess,
+      links: [
+        { href: '/administration', label: labels.overview, permission: null },
+        { href: '/administration/users', label: labels.users, permission: 'tenant.members.read' },
+        {
+          href: '/administration/users#invitations-title',
+          label: labels.invitations,
+          permission: 'tenant.members.read',
+        },
+        { href: '/administration/audit', label: labels.audit, permission: 'audit.read' },
+      ],
+    },
+    {
+      key: 'administrationOrganization',
+      label: labels.administrationOrganization,
+      links: [
+        {
+          href: '/administration/organizations',
+          label: labels.organizations,
+          permission: 'organization.read',
+        },
+        {
+          href: '/administration/facilities',
+          label: labels.facilities,
+          permission: 'facility.read',
+        },
+        { href: '/administration/teams', label: labels.teams, permission: 'team.read' },
+        {
+          href: '/administration/qualifications',
+          label: labels.qualifications,
+          permission: 'employee.read',
+        },
+      ],
+    },
+    {
+      key: 'administrationConfiguration',
+      label: labels.administrationConfiguration,
+      links: [
+        {
+          href: '/administration/document-templates',
+          label: labels.documentTemplates,
+          permission: 'documents.templates.manage',
+        },
+        {
+          href: '/billing/settings',
+          label: labels.billingSettings,
+          permission: 'billing.settings.manage',
+        },
+        {
+          href: '/billing/claims/settings',
+          label: labels.claimsSettings,
+          permission: 'claims.settings.manage',
+        },
+        {
+          href: '/operations/reminder-settings',
+          label: labels.reminderSettings,
+          permission: 'operations.reminder_settings.manage',
+        },
+      ],
+    },
+  ];
+  test(`actual AdministrationLayout preserves independently filtered localized groups and safe client props (${locale})`, async () => {
+    const gates = [
+      ...new Set(
+        definitions.flatMap((group) =>
+          group.links.flatMap((link) => (link.permission ? [link.permission] : [])),
+        ),
+      ),
+    ];
+    const cases = [
+      [],
+      ['client.read'],
+      ...gates.map((gate) => [gate]),
+      gates,
+      gates.slice(2, 6),
+      gates.slice(6),
+      [gates[0]!, gates[2]!, gates[7]!],
+    ];
+    await Promise.all(
+      cases.map(async (permissions) => {
+        const result = await administrationNavigation(locale, permissions);
+        expect(result.groups).toEqual(
+          definitions
+            .map((group) => ({
+              key: group.key,
+              label: group.label,
+              links: group.links
+                .filter((link) => link.permission === null || permissions.includes(link.permission))
+                .map(({ href, label }) => ({ href, label })),
+            }))
+            .filter((group) => group.links.length),
+        );
+        expect(result.groups[0]!.key).toBe('administrationAccess');
+        expect(result.groups[0]!.links[0]).toEqual({
+          href: '/administration',
+          label: labels.overview,
+        });
+        expect(result.clientPropsKeys).toEqual(['groups']);
+        expect(result.clientTypeIsReal).toBe(true);
+        expect(result.childrenPreserved).toBe(true);
+        expect(result.layoutClassName).toBe('grid gap-6');
+        expect(result.className).toBe(
+          'grid gap-3 border-b border-border pb-3 sm:grid-cols-2 xl:grid-cols-3',
+        );
+        expect(result.label).toBe(labels.administration);
+        expect(result.calls).toEqual([]);
+        expect(result.html).not.toContain('aria-current');
+        for (const group of result.groups) {
+          expect(Object.keys(group)).toEqual(['key', 'label', 'links']);
+          for (const link of group.links) expect(Object.keys(link)).toEqual(['href', 'label']);
+        }
+      }),
+    );
+    const [normal, duplicate, reordered] = await Promise.all([
+      administrationNavigation(locale, gates),
+      administrationNavigation(locale, [...gates, ...gates]),
+      administrationNavigation(locale, [...gates].reverse()),
+    ]);
+    expect(duplicate).toEqual(normal);
+    expect(reordered).toEqual(normal);
+    const selected = await administrationNavigation(
+      locale,
+      gates,
+      '/administration/users#invitations-title',
+    );
+    expect((selected.html.match(/aria-current="page"/g) ?? []).length).toBe(1);
+    expect(selected.html).toMatch(/href="\/administration\/users" aria-current="page"/);
+  });
+}
