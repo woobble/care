@@ -48,3 +48,7 @@ Financial mutations write audit rows and versioned outbox events in the same tra
 - [§ 27 UStG](https://www.gesetze-im-internet.de/ustg_1980/__27.html) and the [BMF E-Rechnung guidance](https://www.bundesfinanzministerium.de/Content/DE/FAQ/e-rechnung.html) — transition and structured-format requirements.
 
 Direct Pflegekasse claims transmission, insurer interfaces, structured E-Rechnung generation, bank synchronization, payment initiation, reminders, and general-ledger accounting remain outside this slice.
+
+## Internal settlement boundary
+
+BillingApplicationService remains the public facade. Seven payment/receivable methods delegate to BillingPaymentsApplicationService. BillingSettlementQueries owns invoice locks, correction/payment totals, active payment balances and the SQL expressions used by settlement filters; invoice corrections, projections and worker deadline reads share these facts. Every helper uses its caller's transaction. Independent LegacyBillingInvoiceData retains existing foreign display/search/provider queries at their baselined source location and is composed from settlement reads and the evidence capability, without a facade dependency. Public package exports and financial contracts remain unchanged. See the [Goal 05 handoff](../architecture/goal-05-to-goal-06.md).

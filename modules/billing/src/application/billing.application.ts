@@ -12,7 +12,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  lt,
   lte,
   or,
   sql,
@@ -30,8 +29,8 @@ import { ExportFilterInvalidError, ExportRowLimitExceededError } from '@care/doc
 import { createDomainEvent } from '@care/events';
 import { createLogger } from '@care/logging';
 import { facilities, organizationsTable } from '@care/organizations';
-import { assertCan, can } from '@care/permissions';
-import type { AuthorizationPrincipal, Permission } from '@care/permissions';
+import { can } from '@care/permissions';
+import type { AuthorizationPrincipal } from '@care/permissions';
 import type { OutboxWriter } from '@care/platform';
 import { visits } from '@care/scheduling';
 import type { ServiceEvidenceApplicationService } from '@care/service-evidence';
@@ -39,9 +38,9 @@ import { ServicePriceApplicationService } from '@care/services';
 import type { ServicePricingUnit } from '@care/services';
 import type { ObjectStorage } from '@care/storage';
 import { performedServices, visitExecutions } from '@care/visit-execution';
-import { ClaimPaymentAmountExceededError } from '@module/billing/claims/domain';
+
 import { payers } from '@module/billing/claims/payer-schema';
-import { claims, claimDecisions } from '@module/billing/claims/schema';
+
 import {
   calculateInvoiceAmounts,
   calculateServiceAmountCents,
@@ -68,12 +67,7 @@ import {
   InvalidPayerArrangementError,
   InvoiceInvalidStateError,
   PayerArrangementNotFoundError,
-  PaymentAllocationExceededError,
-  PaymentAmountInvalidError,
-  PaymentNotFoundError,
-  PaymentReversalConflictError,
   assertCorrectionAmount,
-  assertPaymentAllocation,
   type ReceivableStatus,
   type TaxTreatment,
 } from '@module/billing/domain/billing';
@@ -96,6 +90,30 @@ import {
   paymentReversals,
   payments,
 } from '@module/billing/schema';
+
+import { BillingPaymentsApplicationService } from './payments.application';
+import { BillingSettlementQueries, receivableFactsByInvoice } from './settlement-queries';
+import type { BillingInvoiceData } from './payments.ports';
+import {
+  optionalText,
+  currentDate,
+  billingScopeConditions,
+  requireOrganization,
+  requireClient,
+  auditRecord,
+} from './billing-support';
+import type {
+  PaymentAllocationInput,
+  BillingPaymentView,
+  BillingInvoiceView,
+  RecordPaymentInput,
+} from './payment.contracts';
+export type {
+  PaymentAllocationInput,
+  BillingPaymentView,
+  BillingInvoiceView,
+  RecordPaymentInput,
+} from './payment.contracts';
 
 const billingLogger = createLogger('care-billing');
 
@@ -122,7 +140,6 @@ function invoicePdfFailureCode(
 }
 
 type AuditContext = { ip?: string; userAgent?: string };
-type BillingPermission = Extract<Permission, `billing.${string}`>;
 
 export interface BillingProfileInput {
   organizationId: string;
@@ -253,80 +270,6 @@ export interface InvoiceCorrectionInput {
   lines: Array<{ invoiceLineId: string; amountCents: number }>;
 }
 
-export interface PaymentAllocationInput {
-  paymentId: string;
-  invoiceId: string;
-  claimId?: string | null;
-  amountCents: number;
-}
-
-export interface BillingPaymentView {
-  id: string;
-  organizationId: string;
-  payerReference: string | null;
-  payerNameSnapshot: string | null;
-  amountCents: number;
-  currency: 'EUR';
-  receivedAt: Date;
-  method: 'bank_transfer' | 'cash' | 'other';
-  reference: string | null;
-  allocatedCents: number;
-  remainingCents: number;
-  allocationHistory: Array<{
-    allocationId: string;
-    invoiceId: string;
-    invoiceNumber: string | null;
-    amountCents: number;
-    allocatedAt: Date;
-    reversedAt: Date | null;
-    reversalReason: string | null;
-  }>;
-}
-
-export interface BillingInvoiceView {
-  id: string;
-  organizationId: string;
-  facilityId: string;
-  clientId: string;
-  clientName: string;
-  recipientName: string | null;
-  recipientAddress: string | null;
-  payerArrangementId: string | null;
-  recipientType: 'client' | 'payer';
-  invoiceNumber: string | null;
-  issueDate: string | null;
-  servicePeriodFrom: string | null;
-  servicePeriodUntil: string | null;
-  dueDate: string | null;
-  currency: 'EUR';
-  subtotalCents: number;
-  taxTotalCents: number;
-  grandTotalCents: number;
-  status: 'draft' | 'issued' | 'cancelled';
-  version: number;
-  issuerSnapshot: Record<string, unknown> | null;
-  recipientSnapshot: Record<string, unknown> | null;
-  lines: Array<typeof invoiceLines.$inferSelect>;
-  corrections: Array<typeof invoiceCorrections.$inferSelect>;
-  paymentHistory: Array<{
-    allocationId: string;
-    paymentId: string;
-    amountCents: number;
-    allocatedAt: Date;
-    method: 'bank_transfer' | 'cash' | 'other';
-    receivedAt: Date;
-    reference: string | null;
-    payerNameSnapshot: string | null;
-    reversedAt: Date | null;
-    reversalReason: string | null;
-  }>;
-  pdfStatus: 'pending' | 'ready' | 'failed' | null;
-  receivableStatus: ReceivableStatus | null;
-  paidCents: number;
-  outstandingCents: number | null;
-  evidenceDiscrepancy: boolean;
-}
-
 export interface BillingExportFilters {
   from: string;
   until: string;
@@ -338,17 +281,10 @@ export interface BillingExportFilters {
   fundingType?: string;
 }
 
-export interface RecordPaymentInput {
-  organizationId: string;
-  payerReference?: string | null;
-  payerName?: string | null;
-  amountCents: number;
-  receivedAt: string;
-  method: 'bank_transfer' | 'cash' | 'other';
-  reference?: string | null;
-}
-
 export class BillingApplicationService {
+  private readonly settlement = new BillingSettlementQueries();
+  private readonly invoiceData: BillingInvoiceData;
+  private readonly paymentService: BillingPaymentsApplicationService;
   constructor(
     private readonly unitOfWork: UnitOfWork,
     private readonly audit: AuditWriter,
@@ -361,7 +297,16 @@ export class BillingApplicationService {
       DocumentsApplicationService,
       'renderingConfiguration' | 'artifactForSourceAuthorization'
     >,
-  ) {}
+  ) {
+    this.invoiceData = new LegacyBillingInvoiceData(this.settlement, evidence);
+    this.paymentService = new BillingPaymentsApplicationService(
+      unitOfWork,
+      audit,
+      outbox,
+      this.settlement,
+      this.invoiceData,
+    );
+  }
 
   private readonly pdfRenderer = new BillingPdfRenderer();
 
@@ -403,7 +348,7 @@ export class BillingApplicationService {
     request: RequestContext,
     auditContext: AuditContext,
   ) {
-    this.requireOrganization(principal, 'billing.settings.manage', input.organizationId);
+    requireOrganization(principal, 'billing.settings.manage', input.organizationId);
     this.validateProfileInput(input);
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const [organization] = await transaction
@@ -489,7 +434,7 @@ export class BillingApplicationService {
       });
       await this.audit.append(
         transaction,
-        this.auditRecord(principal, request, auditContext, {
+        auditRecord(principal, request, auditContext, {
           id: event.id,
           action: 'billing.profile_updated',
           resourceType: 'billing_profile',
@@ -520,13 +465,7 @@ export class BillingApplicationService {
       if (!client) throw new BillingClientNotFoundError();
       const organizationId = input.organizationId ?? client.organizationId;
       if (!organizationId) throw new InvoiceRecipientInvalidError();
-      this.requireClient(
-        principal,
-        'billing.read',
-        input.clientId,
-        organizationId,
-        client.facilityId,
-      );
+      requireClient(principal, 'billing.read', input.clientId, organizationId, client.facilityId);
       const rows = await transaction
         .select()
         .from(payerArrangements)
@@ -548,7 +487,7 @@ export class BillingApplicationService {
     request: RequestContext,
     auditContext: AuditContext,
   ) {
-    this.requireClient(principal, 'billing.settings.manage', input.clientId, input.organizationId);
+    requireClient(principal, 'billing.settings.manage', input.clientId, input.organizationId);
     this.validatePayerArrangement(input);
     if (input.mandateDocumentArtifactId) {
       const documents = this.documents;
@@ -677,7 +616,7 @@ export class BillingApplicationService {
       });
       await this.audit.append(
         transaction,
-        this.auditRecord(principal, request, auditContext, {
+        auditRecord(principal, request, auditContext, {
           id: event.id,
           action: 'billing.payer_arrangement_created',
           resourceType: 'payer_arrangement',
@@ -750,7 +689,7 @@ export class BillingApplicationService {
         .for('update')
         .limit(1);
       if (!arrangement) throw new PayerArrangementNotFoundError();
-      this.requireClient(
+      requireClient(
         principal,
         'billing.settings.manage',
         arrangement.clientId,
@@ -835,7 +774,7 @@ export class BillingApplicationService {
       });
       await this.audit.append(
         transaction,
-        this.auditRecord(principal, request, auditContext, {
+        auditRecord(principal, request, auditContext, {
           id: event.id,
           action: 'billing.payer_arrangement_updated',
           resourceType: 'payer_arrangement',
@@ -1071,7 +1010,7 @@ export class BillingApplicationService {
     request: RequestContext,
     auditContext: AuditContext,
   ): Promise<BillingInvoiceView> {
-    this.requireClient(
+    requireClient(
       principal,
       'billing.manage',
       input.clientId,
@@ -1130,7 +1069,7 @@ export class BillingApplicationService {
       });
       await this.audit.append(
         transaction,
-        this.auditRecord(principal, request, auditContext, {
+        auditRecord(principal, request, auditContext, {
           id: event.id,
           action: 'invoice.created',
           resourceType: 'invoice',
@@ -1144,7 +1083,7 @@ export class BillingApplicationService {
         }),
       );
       await this.outbox.enqueue(transaction, event);
-      return this.invoiceView(transaction, principal, invoice!, lines);
+      return this.invoiceData.invoiceView(transaction, principal, invoice!, lines);
     });
   }
 
@@ -1156,8 +1095,8 @@ export class BillingApplicationService {
     auditContext: AuditContext,
   ): Promise<BillingInvoiceView> {
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const invoice = await this.lockInvoice(transaction, principal.tenantId, invoiceId);
-      this.requireClient(
+      const invoice = await this.settlement.lockInvoice(transaction, principal.tenantId, invoiceId);
+      requireClient(
         principal,
         'billing.manage',
         invoice.clientId,
@@ -1212,7 +1151,7 @@ export class BillingApplicationService {
       });
       await this.audit.append(
         transaction,
-        this.auditRecord(principal, request, auditContext, {
+        auditRecord(principal, request, auditContext, {
           id: event.id,
           action: 'invoice.updated',
           resourceType: 'invoice',
@@ -1225,7 +1164,7 @@ export class BillingApplicationService {
         }),
       );
       await this.outbox.enqueue(transaction, event);
-      return this.invoiceView(transaction, principal, updated!, lines);
+      return this.invoiceData.invoiceView(transaction, principal, updated!, lines);
     });
   }
 
@@ -1236,8 +1175,8 @@ export class BillingApplicationService {
     auditContext: AuditContext,
   ): Promise<BillingInvoiceView> {
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const invoice = await this.lockInvoice(transaction, principal.tenantId, invoiceId);
-      this.requireClient(
+      const invoice = await this.settlement.lockInvoice(transaction, principal.tenantId, invoiceId);
+      requireClient(
         principal,
         'billing.manage',
         invoice.clientId,
@@ -1261,7 +1200,7 @@ export class BillingApplicationService {
       });
       await this.audit.append(
         transaction,
-        this.auditRecord(principal, request, auditContext, {
+        auditRecord(principal, request, auditContext, {
           id: event.id,
           action: 'invoice.cancelled',
           resourceType: 'invoice',
@@ -1277,7 +1216,7 @@ export class BillingApplicationService {
           and(eq(invoiceLines.tenantId, principal.tenantId), eq(invoiceLines.invoiceId, invoiceId)),
         )
         .orderBy(asc(invoiceLines.serviceDate), asc(invoiceLines.createdAt));
-      return this.invoiceView(transaction, principal, cancelled!, lines);
+      return this.invoiceData.invoiceView(transaction, principal, cancelled!, lines);
     });
   }
 
@@ -1328,10 +1267,9 @@ export class BillingApplicationService {
     if (query.from && query.until && query.from > query.until) {
       throw new InvalidBillingProfileError();
     }
-    if (query.organizationId)
-      this.requireOrganization(principal, 'billing.read', query.organizationId);
+    if (query.organizationId) requireOrganization(principal, 'billing.read', query.organizationId);
     if (query.clientId && query.organizationId) {
-      this.requireClient(principal, 'billing.read', query.clientId, query.organizationId);
+      requireClient(principal, 'billing.read', query.clientId, query.organizationId);
     }
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const where = [eq(invoices.tenantId, principal.tenantId)];
@@ -1383,7 +1321,7 @@ export class BillingApplicationService {
       const result: BillingInvoiceView[] = [];
       for (const invoice of rows) {
         // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
-        result.push(await this.invoiceView(transaction, principal, invoice));
+        result.push(await this.invoiceData.invoiceView(transaction, principal, invoice));
       }
       const total = Number(countRows[0]?.total ?? 0);
       return { items: result, page, pageSize, total, totalPages: Math.ceil(total / pageSize) };
@@ -1395,15 +1333,15 @@ export class BillingApplicationService {
     invoiceId: string,
   ): Promise<BillingInvoiceView> {
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const invoice = await this.lockInvoice(transaction, principal.tenantId, invoiceId);
-      this.requireClient(
+      const invoice = await this.settlement.lockInvoice(transaction, principal.tenantId, invoiceId);
+      requireClient(
         principal,
         'billing.read',
         invoice.clientId,
         invoice.organizationId,
         invoice.facilityId,
       );
-      return this.invoiceView(transaction, principal, invoice);
+      return this.invoiceData.invoiceView(transaction, principal, invoice);
     });
   }
 
@@ -1504,9 +1442,9 @@ export class BillingApplicationService {
   ): Promise<BillingInvoiceView[]> {
     validateExportRange(filters.from, filters.until);
     if (filters.organizationId)
-      this.requireOrganization(principal, 'billing.read', filters.organizationId);
+      requireOrganization(principal, 'billing.read', filters.organizationId);
     if (filters.organizationId && filters.clientId) {
-      this.requireClient(principal, 'billing.read', filters.clientId, filters.organizationId);
+      requireClient(principal, 'billing.read', filters.clientId, filters.organizationId);
     }
     return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
       const where = [
@@ -1549,7 +1487,7 @@ export class BillingApplicationService {
         )
           continue;
         // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
-        const view = await this.invoiceView(transaction, principal, invoice);
+        const view = await this.invoiceData.invoiceView(transaction, principal, invoice);
         if (!outstandingOnly || (view.outstandingCents !== null && view.outstandingCents > 0)) {
           result.push(view);
         }
@@ -1576,7 +1514,7 @@ export class BillingApplicationService {
       pageSize?: number;
     } = {},
   ): Promise<BillingInvoiceView[]> {
-    return (await this.receivablesPage(principal, query)).items;
+    return this.paymentService.receivables(principal, query);
   }
 
   async receivablesPage(
@@ -1594,126 +1532,7 @@ export class BillingApplicationService {
       pageSize?: number;
     } = {},
   ) {
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 25;
-    if (
-      !Number.isSafeInteger(page) ||
-      page < 1 ||
-      !Number.isSafeInteger(pageSize) ||
-      pageSize < 1 ||
-      pageSize > 100
-    ) {
-      throw new InvalidBillingProfileError();
-    }
-    if (query.from && query.until && query.from > query.until) {
-      throw new InvalidBillingProfileError();
-    }
-    if (query.organizationId)
-      this.requireOrganization(principal, 'billing.payments.read', query.organizationId);
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const correctionsCents = sql<number>`coalesce((
-          select sum(${invoiceCorrections.amountCents})
-          from ${invoiceCorrections}
-          where ${invoiceCorrections.tenantId} = ${invoices.tenantId}
-            and ${invoiceCorrections.invoiceId} = ${invoices.id}
-        ), 0)`;
-      const paymentsCents = sql<number>`coalesce((
-          select sum(${paymentAllocations.amountCents})
-          from ${paymentAllocations}
-          where ${paymentAllocations.tenantId} = ${invoices.tenantId}
-            and ${paymentAllocations.invoiceId} = ${invoices.id}
-            and not exists (
-              select 1
-              from ${paymentReversals}
-              where ${paymentReversals.tenantId} = ${paymentAllocations.tenantId}
-                and ${paymentReversals.allocationId} = ${paymentAllocations.id}
-            )
-        ), 0)`;
-      const outstandingCents = sql<number>`
-        ${invoices.grandTotalCents} - ${correctionsCents} - ${paymentsCents}
-      `;
-      const where = [
-        eq(invoices.tenantId, principal.tenantId),
-        eq(invoices.status, 'issued'),
-        billingScopeConditions(principal, 'billing.payments.read') ?? sql`false`,
-      ];
-      if (query.organizationId) where.push(eq(invoices.organizationId, query.organizationId));
-      if (query.facilityId) where.push(eq(invoices.facilityId, query.facilityId));
-      if (query.clientId) where.push(eq(invoices.clientId, query.clientId));
-      if (query.recipientType) where.push(eq(invoices.recipientType, query.recipientType));
-      if (query.from) where.push(gte(invoices.dueDate, query.from));
-      if (query.until) where.push(lte(invoices.dueDate, query.until));
-      const selectedStatus = query.status ?? 'open';
-      switch (selectedStatus) {
-        case 'open':
-          where.push(gt(outstandingCents, 0));
-          break;
-        case 'unpaid':
-          where.push(
-            gt(outstandingCents, 0),
-            eq(paymentsCents, 0),
-            gte(invoices.dueDate, currentDate()),
-          );
-          break;
-        case 'partially_paid':
-          where.push(
-            gt(outstandingCents, 0),
-            gt(paymentsCents, 0),
-            gte(invoices.dueDate, currentDate()),
-          );
-          break;
-        case 'paid':
-          where.push(eq(outstandingCents, 0), lt(correctionsCents, invoices.grandTotalCents));
-          break;
-        case 'overdue':
-          where.push(gt(outstandingCents, 0), lt(invoices.dueDate, currentDate()));
-          break;
-        case 'corrected':
-          where.push(eq(correctionsCents, invoices.grandTotalCents), eq(paymentsCents, 0));
-          break;
-      }
-      const search = query.q?.trim();
-      if (search) {
-        const pattern = `%${search}%`;
-        const matchingClients = transaction
-          .select({ id: clientRecords.id })
-          .from(clientRecords)
-          .where(
-            and(
-              eq(clientRecords.tenantId, principal.tenantId),
-              or(
-                ilike(clientRecords.firstName, pattern),
-                ilike(clientRecords.preferredName, pattern),
-                ilike(clientRecords.lastName, pattern),
-                sql`concat(coalesce(${clientRecords.preferredName}, ${clientRecords.firstName}), ' ', ${clientRecords.lastName}) ilike ${pattern}`,
-              ),
-            ),
-          );
-        where.push(
-          or(
-            ilike(invoices.invoiceNumber, pattern),
-            ilike(sql`coalesce(${invoices.recipientSnapshot}->>'name', '')`, pattern),
-            inArray(invoices.clientId, matchingClients),
-          )!,
-        );
-      }
-      const whereClause = and(...where);
-      const [countRows, rows] = await Promise.all([
-        transaction.select({ total: count() }).from(invoices).where(whereClause),
-        transaction
-          .select()
-          .from(invoices)
-          .where(whereClause)
-          .orderBy(asc(invoices.dueDate), desc(invoices.issueDate), asc(invoices.id))
-          .limit(pageSize)
-          .offset((page - 1) * pageSize),
-      ]);
-      const items = await Promise.all(
-        rows.map((invoice) => this.invoiceView(transaction, principal, invoice)),
-      );
-      const total = Number(countRows[0]?.total ?? 0);
-      return { items, page, pageSize, total, totalPages: Math.ceil(total / pageSize) };
-    });
+    return this.paymentService.receivablesPage(principal, query);
   }
 
   async listPayments(
@@ -1729,7 +1548,7 @@ export class BillingApplicationService {
       pageSize?: number;
     } = {},
   ): Promise<BillingPaymentView[]> {
-    return (await this.listPaymentsPage(principal, query)).items;
+    return this.paymentService.listPayments(principal, query);
   }
 
   async listPaymentsPage(
@@ -1745,89 +1564,7 @@ export class BillingApplicationService {
       pageSize?: number;
     } = {},
   ) {
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 25;
-    if (
-      !Number.isSafeInteger(page) ||
-      page < 1 ||
-      !Number.isSafeInteger(pageSize) ||
-      pageSize < 1 ||
-      pageSize > 100
-    ) {
-      throw new InvalidBillingProfileError();
-    }
-    if (query.organizationId)
-      this.requireOrganization(principal, 'billing.payments.read', query.organizationId);
-    if (query.from && query.until && query.from > query.until) {
-      throw new InvalidBillingProfileError();
-    }
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const where = [eq(payments.tenantId, principal.tenantId)];
-      where.push(billingPaymentScopeConditions(principal) ?? sql`false`);
-      if (query.organizationId) where.push(eq(payments.organizationId, query.organizationId));
-      if (query.method) where.push(eq(payments.method, query.method));
-      const receivedDate = sql<string>`(${payments.receivedAt} at time zone 'Europe/Berlin')::date::text`;
-      if (query.from) where.push(gte(receivedDate, query.from));
-      if (query.until) where.push(lte(receivedDate, query.until));
-      const search = query.q?.trim();
-      if (search) {
-        const pattern = `%${search}%`;
-        const matchingPaymentsByInvoice = transaction
-          .select({ paymentId: paymentAllocations.paymentId })
-          .from(paymentAllocations)
-          .innerJoin(
-            invoices,
-            and(
-              eq(invoices.tenantId, paymentAllocations.tenantId),
-              eq(invoices.id, paymentAllocations.invoiceId),
-            ),
-          )
-          .where(
-            and(
-              eq(paymentAllocations.tenantId, principal.tenantId),
-              ilike(invoices.invoiceNumber, pattern),
-            ),
-          );
-        where.push(
-          or(
-            ilike(payments.reference, pattern),
-            ilike(payments.payerReference, pattern),
-            ilike(payments.payerNameSnapshot, pattern),
-            inArray(payments.id, matchingPaymentsByInvoice),
-          )!,
-        );
-      }
-      if (query.remainingOnly) {
-        where.push(sql`${payments.amountCents} > coalesce((
-          select sum(${paymentAllocations.amountCents})
-          from ${paymentAllocations}
-          where ${paymentAllocations.tenantId} = ${payments.tenantId}
-            and ${paymentAllocations.paymentId} = ${payments.id}
-            and not exists (
-              select 1
-              from ${paymentReversals}
-              where ${paymentReversals.tenantId} = ${paymentAllocations.tenantId}
-                and ${paymentReversals.allocationId} = ${paymentAllocations.id}
-            )
-        ), 0)`);
-      }
-      const whereClause = and(...where);
-      const [countRows, rows] = await Promise.all([
-        transaction.select({ total: count() }).from(payments).where(whereClause),
-        transaction
-          .select()
-          .from(payments)
-          .where(whereClause)
-          .orderBy(desc(payments.receivedAt), desc(payments.id))
-          .limit(pageSize)
-          .offset((page - 1) * pageSize),
-      ]);
-      const items = await Promise.all(
-        rows.map((payment) => this.paymentView(transaction, principal.tenantId, payment)),
-      );
-      const total = Number(countRows[0]?.total ?? 0);
-      return { items, page, pageSize, total, totalPages: Math.ceil(total / pageSize) };
-    });
+    return this.paymentService.listPaymentsPage(principal, query);
   }
 
   async recordPayment(
@@ -1836,81 +1573,7 @@ export class BillingApplicationService {
     request: RequestContext,
     auditContext: AuditContext,
   ): Promise<BillingPaymentView> {
-    this.requireOrganization(principal, 'billing.payments.manage', input.organizationId);
-    const receivedAt = new Date(input.receivedAt);
-    if (
-      !input.organizationId ||
-      !Number.isSafeInteger(input.amountCents) ||
-      input.amountCents <= 0 ||
-      input.amountCents > 2_000_000_000 ||
-      Number.isNaN(receivedAt.valueOf()) ||
-      !['bank_transfer', 'cash', 'other'].includes(input.method) ||
-      (input.reference?.length ?? 0) > 500 ||
-      (input.payerName?.length ?? 0) > 200 ||
-      (input.payerReference?.length ?? 0) > 200
-    )
-      throw new PaymentAmountInvalidError();
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const [organization] = await transaction
-        .select({ id: organizationsTable.id })
-        .from(organizationsTable)
-        .where(
-          and(
-            eq(organizationsTable.tenantId, principal.tenantId),
-            eq(organizationsTable.id, input.organizationId),
-          ),
-        )
-        .limit(1);
-      if (!organization) throw new BillingClientNotFoundError();
-      const id = uuidv7();
-      const now = new Date();
-      const [payment] = await transaction
-        .insert(payments)
-        .values({
-          id,
-          tenantId: principal.tenantId,
-          organizationId: input.organizationId,
-          payerReference: optionalText(input.payerReference),
-          payerNameSnapshot: optionalText(input.payerName),
-          amountCents: input.amountCents,
-          currency: 'EUR',
-          receivedAt,
-          method: input.method,
-          reference: optionalText(input.reference),
-          recordedBy: principal.userId,
-          createdAt: now,
-        })
-        .returning();
-      const event = createDomainEvent({
-        tenantId: principal.tenantId,
-        type: 'payment.recorded',
-        aggregateType: 'payment',
-        aggregateId: id,
-        actor: { type: 'user', id: principal.userId },
-        correlationId: request.correlationId,
-        payload: {
-          paymentId: id,
-          organizationId: input.organizationId,
-          amountCents: input.amountCents,
-        },
-      });
-      await this.audit.append(
-        transaction,
-        this.auditRecord(principal, request, auditContext, {
-          id: event.id,
-          action: 'payment.recorded',
-          resourceType: 'payment',
-          resourceId: id,
-          metadata: {
-            organizationId: input.organizationId,
-            amountCents: input.amountCents,
-            method: input.method,
-          },
-        }),
-      );
-      await this.outbox.enqueue(transaction, event);
-      return this.paymentView(transaction, principal.tenantId, payment!);
-    });
+    return this.paymentService.recordPayment(principal, input, request, auditContext);
   }
 
   async allocatePayment(
@@ -1919,172 +1582,7 @@ export class BillingApplicationService {
     request: RequestContext,
     auditContext: AuditContext,
   ) {
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const [payment] = await transaction
-        .select()
-        .from(payments)
-        .where(and(eq(payments.tenantId, principal.tenantId), eq(payments.id, input.paymentId)))
-        .for('update')
-        .limit(1);
-      if (!payment) throw new PaymentNotFoundError();
-      const invoice = await this.lockInvoice(transaction, principal.tenantId, input.invoiceId);
-      this.requireClient(
-        principal,
-        'billing.payments.manage',
-        invoice.clientId,
-        invoice.organizationId,
-        invoice.facilityId,
-      );
-      if (invoice.status !== 'issued' || invoice.organizationId !== payment.organizationId) {
-        throw new PaymentAllocationExceededError();
-      }
-      let claim: typeof claims.$inferSelect | null = null;
-      if (input.claimId) {
-        const [linkedClaim] = await transaction
-          .select()
-          .from(claims)
-          .where(
-            and(
-              eq(claims.tenantId, principal.tenantId),
-              eq(claims.id, input.claimId),
-              eq(claims.invoiceId, invoice.id),
-            ),
-          )
-          .for('update')
-          .limit(1);
-        if (!linkedClaim) throw new ClaimPaymentAmountExceededError();
-        assertCan(principal, {
-          action: 'claims.reconcile',
-          resource: {
-            tenantId: principal.tenantId,
-            organizationId: linkedClaim.organizationId,
-            facilityId: linkedClaim.facilityId,
-            clientId: linkedClaim.clientId,
-          },
-        });
-        if (!['accepted', 'partially_accepted', 'resubmitted'].includes(linkedClaim.status)) {
-          throw new ClaimPaymentAmountExceededError();
-        }
-        const [decision] = await transaction
-          .select({ acceptedCents: claimDecisions.acceptedCents })
-          .from(claimDecisions)
-          .where(
-            and(
-              eq(claimDecisions.tenantId, principal.tenantId),
-              eq(claimDecisions.claimId, linkedClaim.id),
-            ),
-          )
-          .orderBy(desc(claimDecisions.createdAt), desc(claimDecisions.id))
-          .limit(1);
-        const claimAllocations = await transaction
-          .select({ allocation: paymentAllocations, reversal: paymentReversals })
-          .from(paymentAllocations)
-          .leftJoin(
-            paymentReversals,
-            and(
-              eq(paymentReversals.tenantId, paymentAllocations.tenantId),
-              eq(paymentReversals.allocationId, paymentAllocations.id),
-            ),
-          )
-          .where(
-            and(
-              eq(paymentAllocations.tenantId, principal.tenantId),
-              eq(paymentAllocations.claimId, linkedClaim.id),
-            ),
-          );
-        const activeAllocations = claimAllocations.filter((row) => !row.reversal);
-        const paidCents = activeAllocations.reduce(
-          (total, row) => total + row.allocation.amountCents,
-          0,
-        );
-        if (
-          !decision ||
-          activeAllocations.some((row) => row.allocation.paymentId === payment.id) ||
-          input.amountCents > decision.acceptedCents - paidCents
-        ) {
-          throw new ClaimPaymentAmountExceededError();
-        }
-        claim = linkedClaim;
-      }
-      const paymentUsage = await this.paymentUsage(transaction, principal.tenantId, payment.id);
-      const receivable = await this.receivableFacts(transaction, invoice);
-      assertPaymentAllocation({
-        amountCents: input.amountCents,
-        paymentRemainingCents: payment.amountCents - paymentUsage.allocatedCents,
-        invoiceOutstandingCents: receivable.outstandingCents,
-      });
-      const id = uuidv7();
-      const now = new Date();
-      await transaction.insert(paymentAllocations).values({
-        id,
-        tenantId: principal.tenantId,
-        paymentId: payment.id,
-        invoiceId: invoice.id,
-        claimId: claim?.id ?? null,
-        amountCents: input.amountCents,
-        createdBy: principal.userId,
-        createdAt: now,
-      });
-      const event = createDomainEvent({
-        tenantId: principal.tenantId,
-        type: 'payment.allocated',
-        aggregateType: 'payment',
-        aggregateId: payment.id,
-        actor: { type: 'user', id: principal.userId },
-        correlationId: request.correlationId,
-        payload: {
-          paymentId: payment.id,
-          allocationId: id,
-          invoiceId: invoice.id,
-          amountCents: input.amountCents,
-        },
-      });
-      await this.audit.append(
-        transaction,
-        this.auditRecord(principal, request, auditContext, {
-          id: event.id,
-          action: 'payment.allocated',
-          resourceType: 'payment_allocation',
-          resourceId: id,
-          metadata: {
-            paymentId: payment.id,
-            invoiceId: invoice.id,
-            amountCents: input.amountCents,
-          },
-        }),
-      );
-      await this.outbox.enqueue(transaction, event);
-      if (claim) {
-        const claimEvent = createDomainEvent({
-          tenantId: principal.tenantId,
-          type: 'claim.payment_linked',
-          aggregateType: 'claim',
-          aggregateId: claim.id,
-          actor: { type: 'user', id: principal.userId },
-          correlationId: request.correlationId,
-          payload: { claimId: claim.id, paymentAllocationId: id, amountCents: input.amountCents },
-        });
-        await this.audit.append(
-          transaction,
-          this.auditRecord(principal, request, auditContext, {
-            id: claimEvent.id,
-            action: 'claim.payment_linked',
-            resourceType: 'claim',
-            resourceId: claim.id,
-            metadata: { paymentAllocationId: id, amountCents: input.amountCents },
-          }),
-        );
-        await this.outbox.enqueue(transaction, claimEvent);
-      }
-      return {
-        id,
-        paymentId: payment.id,
-        invoiceId: invoice.id,
-        claimId: claim?.id ?? null,
-        amountCents: input.amountCents,
-        createdAt: now.toISOString(),
-      };
-    });
+    return this.paymentService.allocatePayment(principal, input, request, auditContext);
   }
 
   async reversePaymentAllocation(
@@ -2094,108 +1592,13 @@ export class BillingApplicationService {
     request: RequestContext,
     auditContext: AuditContext,
   ) {
-    const normalizedReason = optionalText(reason);
-    if (!normalizedReason || normalizedReason.length > 1000)
-      throw new PaymentReversalConflictError();
-    return this.unitOfWork.transaction({ tenantId: principal.tenantId }, async (transaction) => {
-      const [source] = await transaction
-        .select()
-        .from(paymentAllocations)
-        .where(
-          and(
-            eq(paymentAllocations.tenantId, principal.tenantId),
-            eq(paymentAllocations.id, allocationId),
-          ),
-        )
-        .limit(1);
-      if (!source) throw new PaymentNotFoundError();
-      const [payment] = await transaction
-        .select()
-        .from(payments)
-        .where(and(eq(payments.tenantId, principal.tenantId), eq(payments.id, source.paymentId)))
-        .for('update')
-        .limit(1);
-      if (!payment) throw new PaymentNotFoundError();
-      const invoice = await this.lockInvoice(transaction, principal.tenantId, source.invoiceId);
-      this.requireClient(
-        principal,
-        'billing.payments.manage',
-        invoice.clientId,
-        invoice.organizationId,
-        invoice.facilityId,
-      );
-      if (source.claimId) {
-        const [claim] = await transaction
-          .select()
-          .from(claims)
-          .where(
-            and(
-              eq(claims.tenantId, principal.tenantId),
-              eq(claims.id, source.claimId),
-              eq(claims.invoiceId, invoice.id),
-            ),
-          )
-          .for('update')
-          .limit(1);
-        if (!claim) throw new ClaimPaymentAmountExceededError();
-        assertCan(principal, {
-          action: 'claims.reconcile',
-          resource: {
-            tenantId: principal.tenantId,
-            organizationId: claim.organizationId,
-            facilityId: claim.facilityId,
-            clientId: claim.clientId,
-          },
-        });
-      }
-      const [existing] = await transaction
-        .select({ id: paymentReversals.id })
-        .from(paymentReversals)
-        .where(
-          and(
-            eq(paymentReversals.tenantId, principal.tenantId),
-            eq(paymentReversals.allocationId, allocationId),
-          ),
-        )
-        .limit(1);
-      if (existing) throw new PaymentReversalConflictError();
-      const id = uuidv7();
-      const now = new Date();
-      await transaction.insert(paymentReversals).values({
-        id,
-        tenantId: principal.tenantId,
-        allocationId,
-        reason: normalizedReason,
-        reversedBy: principal.userId,
-        reversedAt: now,
-      });
-      const event = createDomainEvent({
-        tenantId: principal.tenantId,
-        type: 'payment.allocation_reversed',
-        aggregateType: 'payment',
-        aggregateId: payment.id,
-        actor: { type: 'user', id: principal.userId },
-        correlationId: request.correlationId,
-        payload: {
-          paymentId: payment.id,
-          allocationId,
-          invoiceId: invoice.id,
-          amountCents: source.amountCents,
-        },
-      });
-      await this.audit.append(
-        transaction,
-        this.auditRecord(principal, request, auditContext, {
-          id: event.id,
-          action: 'payment.allocation_reversed',
-          resourceType: 'payment_allocation',
-          resourceId: allocationId,
-          metadata: { paymentId: payment.id, invoiceId: invoice.id, reason: normalizedReason },
-        }),
-      );
-      await this.outbox.enqueue(transaction, event);
-      return { allocationId, reversedAt: now.toISOString() };
-    });
+    return this.paymentService.reversePaymentAllocation(
+      principal,
+      allocationId,
+      reason,
+      request,
+      auditContext,
+    );
   }
 
   async issueInvoice(
@@ -2208,8 +1611,12 @@ export class BillingApplicationService {
     const issued = await this.unitOfWork.transaction(
       { tenantId: principal.tenantId },
       async (transaction) => {
-        const invoice = await this.lockInvoice(transaction, principal.tenantId, invoiceId);
-        this.requireClient(
+        const invoice = await this.settlement.lockInvoice(
+          transaction,
+          principal.tenantId,
+          invoiceId,
+        );
+        requireClient(
           principal,
           'billing.issue',
           invoice.clientId,
@@ -2414,7 +1821,7 @@ export class BillingApplicationService {
         });
         await this.audit.append(
           transaction,
-          this.auditRecord(principal, request, auditContext, {
+          auditRecord(principal, request, auditContext, {
             id: event.id,
             action: 'invoice.issued',
             resourceType: 'invoice',
@@ -2465,8 +1872,12 @@ export class BillingApplicationService {
     const document = await this.unitOfWork.transaction(
       { tenantId: principal.tenantId },
       async (transaction) => {
-        const invoice = await this.lockInvoice(transaction, principal.tenantId, invoiceId);
-        this.requireClient(
+        const invoice = await this.settlement.lockInvoice(
+          transaction,
+          principal.tenantId,
+          invoiceId,
+        );
+        requireClient(
           principal,
           'billing.read',
           invoice.clientId,
@@ -2510,8 +1921,12 @@ export class BillingApplicationService {
     const generated = await this.unitOfWork.transaction(
       { tenantId: principal.tenantId },
       async (transaction) => {
-        const invoice = await this.lockInvoice(transaction, principal.tenantId, invoiceId);
-        this.requireClient(
+        const invoice = await this.settlement.lockInvoice(
+          transaction,
+          principal.tenantId,
+          invoiceId,
+        );
+        requireClient(
           principal,
           'billing.issue',
           invoice.clientId,
@@ -2553,7 +1968,7 @@ export class BillingApplicationService {
         const eventId = uuidv7();
         await this.audit.append(
           transaction,
-          this.auditRecord(principal, request, auditContext, {
+          auditRecord(principal, request, auditContext, {
             id: eventId,
             action: 'invoice.pdf_regeneration_requested',
             resourceType: 'invoice_document',
@@ -2600,8 +2015,12 @@ export class BillingApplicationService {
     const corrected = await this.unitOfWork.transaction(
       { tenantId: principal.tenantId },
       async (transaction) => {
-        const invoice = await this.lockInvoice(transaction, principal.tenantId, invoiceId);
-        this.requireClient(
+        const invoice = await this.settlement.lockInvoice(
+          transaction,
+          principal.tenantId,
+          invoiceId,
+        );
+        requireClient(
           principal,
           'billing.correct',
           invoice.clientId,
@@ -2673,7 +2092,7 @@ export class BillingApplicationService {
           amountCents += selection.amountCents;
         }
         if (!Number.isSafeInteger(amountCents)) throw new InvalidInvoiceCorrectionError();
-        const receivable = await this.receivableFacts(transaction, invoice);
+        const receivable = await this.settlement.receivableFacts(transaction, invoice);
         assertCorrectionAmount(amountCents, receivable.outstandingCents);
         if (!invoice.issuerSnapshot) throw new InvoiceIssuerIncompleteError();
         const correctionDate = currentDate();
@@ -2762,7 +2181,7 @@ export class BillingApplicationService {
         });
         await this.audit.append(
           transaction,
-          this.auditRecord(principal, request, auditContext, {
+          auditRecord(principal, request, auditContext, {
             id: event.id,
             action: 'invoice.corrected',
             resourceType: 'invoice_correction',
@@ -2813,8 +2232,12 @@ export class BillingApplicationService {
     const document = await this.unitOfWork.transaction(
       { tenantId: principal.tenantId },
       async (transaction) => {
-        const invoice = await this.lockInvoice(transaction, principal.tenantId, invoiceId);
-        this.requireClient(
+        const invoice = await this.settlement.lockInvoice(
+          transaction,
+          principal.tenantId,
+          invoiceId,
+        );
+        requireClient(
           principal,
           'billing.read',
           invoice.clientId,
@@ -2890,13 +2313,7 @@ export class BillingApplicationService {
       ) {
         throw new InvoiceRecipientInvalidError();
       }
-      this.requireClient(
-        principal,
-        'billing.manage',
-        row.clientId,
-        row.organizationId,
-        row.facilityId,
-      );
+      requireClient(principal, 'billing.manage', row.clientId, row.organizationId, row.facilityId);
       let profile = profiles.get(row.organizationId);
       if (profile === undefined) {
         // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
@@ -3042,17 +2459,6 @@ export class BillingApplicationService {
     };
   }
 
-  private async lockInvoice(transaction: DatabaseTransaction, tenantId: string, invoiceId: string) {
-    const [invoice] = await transaction
-      .select()
-      .from(invoices)
-      .where(and(eq(invoices.tenantId, tenantId), eq(invoices.id, invoiceId)))
-      .for('update')
-      .limit(1);
-    if (!invoice) throw new InvoiceNotFoundError();
-    return invoice;
-  }
-
   private async lockPerformedServices(
     transaction: DatabaseTransaction,
     tenantId: string,
@@ -3144,312 +2550,6 @@ export class BillingApplicationService {
         ),
       )
       .orderBy(asc(performedServices.id));
-  }
-
-  private async invoiceView(
-    transaction: DatabaseTransaction,
-    _principal: AuthorizationPrincipal,
-    invoice: typeof invoices.$inferSelect,
-    suppliedLines?: Array<typeof invoiceLines.$inferSelect>,
-  ): Promise<BillingInvoiceView> {
-    const [client] = await transaction
-      .select({
-        firstName: clientRecords.firstName,
-        preferredName: clientRecords.preferredName,
-        lastName: clientRecords.lastName,
-      })
-      .from(clientRecords)
-      .where(
-        and(eq(clientRecords.tenantId, invoice.tenantId), eq(clientRecords.id, invoice.clientId)),
-      )
-      .limit(1);
-    const clientName = client
-      ? `${client.preferredName?.trim() || client.firstName} ${client.lastName}`
-      : invoice.clientId;
-    const issuedRecipientName = invoice.recipientSnapshot
-      ? optionalSnapshotString(invoice.recipientSnapshot, 'name')
-      : null;
-    const issuedRecipientAddress = invoice.recipientSnapshot
-      ? optionalSnapshotString(invoice.recipientSnapshot, 'address')
-      : null;
-    let draftRecipientName: string | null = null;
-    let draftRecipientAddress: string | null = null;
-    if (
-      invoice.status === 'draft' &&
-      invoice.recipientType === 'payer' &&
-      invoice.payerArrangementId
-    ) {
-      const [arrangement] = await transaction
-        .select({
-          recipientName: payerArrangements.recipientName,
-          recipientAddress: payerArrangements.recipientAddress,
-        })
-        .from(payerArrangements)
-        .where(
-          and(
-            eq(payerArrangements.tenantId, invoice.tenantId),
-            eq(payerArrangements.id, invoice.payerArrangementId),
-          ),
-        )
-        .limit(1);
-      draftRecipientName = arrangement?.recipientName ?? null;
-      draftRecipientAddress = arrangement?.recipientAddress ?? null;
-    } else if (invoice.status === 'draft') {
-      const today = currentDate();
-      const [address] = await transaction
-        .select()
-        .from(clientAddresses)
-        .where(
-          and(
-            eq(clientAddresses.tenantId, invoice.tenantId),
-            eq(clientAddresses.clientId, invoice.clientId),
-            or(eq(clientAddresses.addressType, 'billing'), eq(clientAddresses.addressType, 'home')),
-            or(isNull(clientAddresses.validFrom), lte(clientAddresses.validFrom, today)),
-            or(isNull(clientAddresses.validUntil), gte(clientAddresses.validUntil, today)),
-          ),
-        )
-        .orderBy(desc(clientAddresses.addressType), desc(clientAddresses.isPrimary))
-        .limit(1);
-      draftRecipientName = clientName;
-      draftRecipientAddress = address ? formatPostalAddress(address) : null;
-    }
-    const lines =
-      suppliedLines ??
-      (await transaction
-        .select()
-        .from(invoiceLines)
-        .where(
-          and(eq(invoiceLines.tenantId, invoice.tenantId), eq(invoiceLines.invoiceId, invoice.id)),
-        )
-        .orderBy(asc(invoiceLines.serviceDate), asc(invoiceLines.id)));
-    const corrections = await transaction
-      .select()
-      .from(invoiceCorrections)
-      .where(
-        and(
-          eq(invoiceCorrections.tenantId, invoice.tenantId),
-          eq(invoiceCorrections.invoiceId, invoice.id),
-        ),
-      )
-      .orderBy(asc(invoiceCorrections.createdAt), asc(invoiceCorrections.id));
-    const paymentHistory = await transaction
-      .select({
-        allocationId: paymentAllocations.id,
-        paymentId: paymentAllocations.paymentId,
-        amountCents: paymentAllocations.amountCents,
-        allocatedAt: paymentAllocations.createdAt,
-        method: payments.method,
-        receivedAt: payments.receivedAt,
-        reference: payments.reference,
-        payerNameSnapshot: payments.payerNameSnapshot,
-        reversedAt: paymentReversals.reversedAt,
-        reversalReason: paymentReversals.reason,
-      })
-      .from(paymentAllocations)
-      .innerJoin(
-        payments,
-        and(
-          eq(payments.tenantId, paymentAllocations.tenantId),
-          eq(payments.id, paymentAllocations.paymentId),
-        ),
-      )
-      .leftJoin(
-        paymentReversals,
-        and(
-          eq(paymentReversals.tenantId, paymentAllocations.tenantId),
-          eq(paymentReversals.allocationId, paymentAllocations.id),
-        ),
-      )
-      .where(
-        and(
-          eq(paymentAllocations.tenantId, invoice.tenantId),
-          eq(paymentAllocations.invoiceId, invoice.id),
-        ),
-      )
-      .orderBy(asc(paymentAllocations.createdAt), asc(paymentAllocations.id));
-    const [document] = await transaction
-      .select()
-      .from(invoiceDocuments)
-      .where(
-        and(
-          eq(invoiceDocuments.tenantId, invoice.tenantId),
-          eq(invoiceDocuments.invoiceId, invoice.id),
-          isNull(invoiceDocuments.correctionId),
-        ),
-      )
-      .orderBy(desc(invoiceDocuments.documentVersion))
-      .limit(1);
-    const facts =
-      invoice.status === 'issued' ? await this.receivableFacts(transaction, invoice) : null;
-    const receivable =
-      facts && invoice.dueDate
-        ? deriveReceivableStatus({
-            invoiceCents: invoice.grandTotalCents,
-            correctionsCents: facts.correctionsCents,
-            paymentsCents: facts.paymentsCents,
-            dueDate: invoice.dueDate,
-            asOfDate: currentDate(),
-          })
-        : null;
-    let evidenceDiscrepancy = false;
-    if (invoice.status === 'issued' && lines.length > 0) {
-      const sourceRows = await transaction
-        .select({ performedServiceId: performedServices.id, visitId: performedServices.visitId })
-        .from(performedServices)
-        .where(
-          and(
-            eq(performedServices.tenantId, invoice.tenantId),
-            inArray(
-              performedServices.id,
-              lines.map((line) => line.performedServiceId),
-            ),
-          ),
-        );
-      const visitByService = new Map(
-        sourceRows.map((row) => [row.performedServiceId, row.visitId]),
-      );
-      const visitIds = [...new Set(sourceRows.map((row) => row.visitId))];
-      for (const visitId of visitIds) {
-        // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
-        const readiness = await this.evidence.getBillingReadiness(
-          transaction,
-          invoice.tenantId,
-          visitId,
-        );
-        const visitLines = lines.filter(
-          (line) => visitByService.get(line.performedServiceId) === visitId,
-        );
-        if (
-          !readiness.isCurrent ||
-          visitLines.some(
-            (line) =>
-              line.evidencePackageId !== readiness.evidencePackageId ||
-              line.evidenceSnapshotHash !== readiness.snapshotHash,
-          )
-        ) {
-          evidenceDiscrepancy = true;
-          break;
-        }
-      }
-    }
-    return {
-      id: invoice.id,
-      organizationId: invoice.organizationId,
-      facilityId: invoice.facilityId,
-      clientId: invoice.clientId,
-      clientName,
-      recipientName: issuedRecipientName ?? draftRecipientName,
-      recipientAddress: issuedRecipientAddress ?? draftRecipientAddress,
-      payerArrangementId: invoice.payerArrangementId,
-      recipientType: invoice.recipientType,
-      invoiceNumber: invoice.invoiceNumber,
-      issueDate: invoice.issueDate,
-      servicePeriodFrom: invoice.servicePeriodFrom,
-      servicePeriodUntil: invoice.servicePeriodUntil,
-      dueDate: invoice.dueDate,
-      currency: invoice.currency,
-      subtotalCents: invoice.subtotalCents,
-      taxTotalCents: invoice.taxTotalCents,
-      grandTotalCents: invoice.grandTotalCents,
-      status: invoice.status,
-      version: invoice.version,
-      issuerSnapshot: invoice.issuerSnapshot,
-      recipientSnapshot: invoice.recipientSnapshot,
-      lines,
-      corrections,
-      paymentHistory,
-      pdfStatus: document?.status ?? null,
-      receivableStatus: receivable?.status ?? null,
-      paidCents: facts?.paymentsCents ?? 0,
-      outstandingCents: receivable?.outstandingCents ?? null,
-      evidenceDiscrepancy,
-    };
-  }
-
-  private async receivableFacts(
-    transaction: DatabaseTransaction,
-    invoice: typeof invoices.$inferSelect,
-  ): Promise<{ correctionsCents: number; paymentsCents: number; outstandingCents: number }> {
-    return (await receivableFactsByInvoice(transaction, [invoice])).get(invoice.id)!;
-  }
-
-  private async paymentUsage(
-    transaction: DatabaseTransaction,
-    tenantId: string,
-    paymentId: string,
-  ) {
-    const active = await transaction
-      .select({ amountCents: paymentAllocations.amountCents })
-      .from(paymentAllocations)
-      .leftJoin(
-        paymentReversals,
-        and(
-          eq(paymentReversals.tenantId, paymentAllocations.tenantId),
-          eq(paymentReversals.allocationId, paymentAllocations.id),
-        ),
-      )
-      .where(
-        and(
-          eq(paymentAllocations.tenantId, tenantId),
-          eq(paymentAllocations.paymentId, paymentId),
-          isNull(paymentReversals.id),
-        ),
-      );
-    return { allocatedCents: active.reduce((sum, row) => sum + row.amountCents, 0) };
-  }
-
-  private async paymentView(
-    transaction: DatabaseTransaction,
-    tenantId: string,
-    payment: typeof payments.$inferSelect,
-  ): Promise<BillingPaymentView> {
-    const usage = await this.paymentUsage(transaction, tenantId, payment.id);
-    const allocationHistory = await transaction
-      .select({
-        allocationId: paymentAllocations.id,
-        invoiceId: paymentAllocations.invoiceId,
-        invoiceNumber: invoices.invoiceNumber,
-        amountCents: paymentAllocations.amountCents,
-        allocatedAt: paymentAllocations.createdAt,
-        reversedAt: paymentReversals.reversedAt,
-        reversalReason: paymentReversals.reason,
-      })
-      .from(paymentAllocations)
-      .innerJoin(
-        invoices,
-        and(
-          eq(invoices.tenantId, paymentAllocations.tenantId),
-          eq(invoices.id, paymentAllocations.invoiceId),
-        ),
-      )
-      .leftJoin(
-        paymentReversals,
-        and(
-          eq(paymentReversals.tenantId, paymentAllocations.tenantId),
-          eq(paymentReversals.allocationId, paymentAllocations.id),
-        ),
-      )
-      .where(
-        and(
-          eq(paymentAllocations.tenantId, tenantId),
-          eq(paymentAllocations.paymentId, payment.id),
-        ),
-      )
-      .orderBy(asc(paymentAllocations.createdAt), asc(paymentAllocations.id));
-    return {
-      id: payment.id,
-      organizationId: payment.organizationId,
-      payerReference: payment.payerReference,
-      payerNameSnapshot: payment.payerNameSnapshot,
-      amountCents: payment.amountCents,
-      currency: payment.currency,
-      receivedAt: payment.receivedAt,
-      method: payment.method,
-      reference: payment.reference,
-      allocatedCents: usage.allocatedCents,
-      remainingCents: payment.amountCents - usage.allocatedCents,
-      allocationHistory,
-    };
   }
 
   private async recipientSnapshot(
@@ -4199,63 +3299,6 @@ export class BillingApplicationService {
       throw new InvalidPayerArrangementError();
     }
   }
-
-  private requireOrganization(
-    principal: AuthorizationPrincipal,
-    action: BillingPermission,
-    organizationId: string,
-  ): void {
-    assertCan(principal, {
-      action,
-      resource: { tenantId: principal.tenantId, organizationId },
-    });
-  }
-
-  private requireClient(
-    principal: AuthorizationPrincipal,
-    action: BillingPermission,
-    clientId: string,
-    organizationId: string,
-    facilityId?: string | null,
-  ): void {
-    assertCan(principal, {
-      action,
-      resource: {
-        tenantId: principal.tenantId,
-        clientId,
-        organizationId,
-        ...(facilityId ? { facilityId } : {}),
-      },
-    });
-  }
-
-  private auditRecord(
-    principal: AuthorizationPrincipal,
-    request: RequestContext,
-    context: AuditContext,
-    input: {
-      id: string;
-      action: string;
-      resourceType: string;
-      resourceId: string;
-      metadata: Record<string, unknown>;
-    },
-  ) {
-    return {
-      id: input.id,
-      tenantId: principal.tenantId,
-      actorId: principal.userId,
-      action: input.action,
-      resourceType: input.resourceType,
-      resourceId: input.resourceId,
-      timestamp: new Date(),
-      requestId: request.requestId,
-      correlationId: request.correlationId,
-      ...(context.ip ? { ip: context.ip } : {}),
-      ...(context.userAgent ? { userAgent: context.userAgent } : {}),
-      metadata: input.metadata,
-    };
-  }
 }
 
 interface CandidateServiceRow {
@@ -4280,11 +3323,6 @@ interface CandidateServiceRow {
   timezone: string;
   actualStart: Date;
   serviceDate: string;
-}
-
-function optionalText(value: string | null | undefined): string | null {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
 }
 
 function safeFilePart(value: string): string {
@@ -4361,110 +3399,10 @@ function validateExportRange(from: string, until: string): void {
   if (days > 366) throw new ExportFilterInvalidError();
 }
 
-function billingScopeConditions(
-  principal: AuthorizationPrincipal,
-  permission: 'billing.read' | 'billing.payments.read',
-): SQL | null {
-  const grants = principal.grants.filter((grant) => grant.permission === permission);
-  if (
-    grants.some((grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId)
-  ) {
-    return sql`true`;
-  }
-  const organizations = grants
-    .filter((grant) => grant.scopeType === 'organization')
-    .map((grant) => grant.scopeId);
-  const facilityScopeIds = grants
-    .filter((grant) => grant.scopeType === 'facility')
-    .map((grant) => grant.scopeId);
-  const clauses: SQL[] = [];
-  if (organizations.length) clauses.push(inArray(invoices.organizationId, organizations));
-  if (facilityScopeIds.length) clauses.push(inArray(invoices.facilityId, facilityScopeIds));
-  return or(...clauses) ?? null;
-}
-
-function billingPaymentScopeConditions(principal: AuthorizationPrincipal): SQL | null {
-  const grants = principal.grants.filter((grant) => grant.permission === 'billing.payments.read');
-  if (
-    grants.some((grant) => grant.scopeType === 'tenant' && grant.scopeId === principal.tenantId)
-  ) {
-    return sql`true`;
-  }
-  const organizations = grants
-    .filter((grant) => grant.scopeType === 'organization')
-    .map((grant) => grant.scopeId);
-  return organizations.length ? inArray(payments.organizationId, organizations) : null;
-}
-
-function currentDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function addDays(value: string, days: number): string {
   const date = new Date(`${value}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
-}
-
-async function receivableFactsByInvoice(
-  transaction: DatabaseTransaction,
-  invoicesToCheck: Array<Pick<typeof invoices.$inferSelect, 'id' | 'tenantId' | 'grandTotalCents'>>,
-) {
-  if (!invoicesToCheck.length) return new Map();
-  const tenantId = invoicesToCheck[0]!.tenantId;
-  const invoiceIds = invoicesToCheck.map((invoice) => invoice.id);
-  const corrections = await transaction
-    .select({
-      invoiceId: invoiceCorrections.invoiceId,
-      amountCents: sql<number>`coalesce(sum(${invoiceCorrections.amountCents}), 0)::int`,
-    })
-    .from(invoiceCorrections)
-    .where(
-      and(
-        eq(invoiceCorrections.tenantId, tenantId),
-        inArray(invoiceCorrections.invoiceId, invoiceIds),
-      ),
-    )
-    .groupBy(invoiceCorrections.invoiceId);
-  const paymentsForInvoices = await transaction
-    .select({
-      invoiceId: paymentAllocations.invoiceId,
-      amountCents: sql<number>`coalesce(sum(${paymentAllocations.amountCents}), 0)::int`,
-    })
-    .from(paymentAllocations)
-    .leftJoin(
-      paymentReversals,
-      and(
-        eq(paymentReversals.tenantId, paymentAllocations.tenantId),
-        eq(paymentReversals.allocationId, paymentAllocations.id),
-      ),
-    )
-    .where(
-      and(
-        eq(paymentAllocations.tenantId, tenantId),
-        inArray(paymentAllocations.invoiceId, invoiceIds),
-        isNull(paymentReversals.id),
-      ),
-    )
-    .groupBy(paymentAllocations.invoiceId);
-  const correctedCentsByInvoice = new Map(
-    corrections.map((row) => [row.invoiceId, row.amountCents]),
-  );
-  const paidCentsByInvoice = new Map(
-    paymentsForInvoices.map((row) => [row.invoiceId, row.amountCents]),
-  );
-  const result = new Map<
-    string,
-    { correctionsCents: number; paymentsCents: number; outstandingCents: number }
-  >();
-  for (const invoice of invoicesToCheck) {
-    const correctionsCents = correctedCentsByInvoice.get(invoice.id) ?? 0;
-    const paymentsCents = paidCentsByInvoice.get(invoice.id) ?? 0;
-    const outstandingCents = invoice.grandTotalCents - correctionsCents - paymentsCents;
-    if (outstandingCents < 0) throw new PaymentAllocationExceededError();
-    result.set(invoice.id, { correctionsCents, paymentsCents, outstandingCents });
-  }
-  return result;
 }
 
 export async function readOperationsReceivableDeadlines(
@@ -4552,4 +3490,270 @@ export function createBillingApplicationService(
     evidence,
     documents,
   );
+}
+
+/** Legacy invoice enrichment kept here until its foreign reads have owner APIs. */
+class LegacyBillingInvoiceData implements BillingInvoiceData {
+  constructor(
+    private readonly settlement: BillingSettlementQueries,
+    private readonly evidence: Pick<ServiceEvidenceApplicationService, 'getBillingReadiness'>,
+  ) {}
+
+  async invoiceView(
+    transaction: DatabaseTransaction,
+    _principal: AuthorizationPrincipal,
+    invoice: typeof invoices.$inferSelect,
+    suppliedLines?: Array<typeof invoiceLines.$inferSelect>,
+  ): Promise<BillingInvoiceView> {
+    const [client] = await transaction
+      .select({
+        firstName: clientRecords.firstName,
+        preferredName: clientRecords.preferredName,
+        lastName: clientRecords.lastName,
+      })
+      .from(clientRecords)
+      .where(
+        and(eq(clientRecords.tenantId, invoice.tenantId), eq(clientRecords.id, invoice.clientId)),
+      )
+      .limit(1);
+    const clientName = client
+      ? `${client.preferredName?.trim() || client.firstName} ${client.lastName}`
+      : invoice.clientId;
+    const issuedRecipientName = invoice.recipientSnapshot
+      ? optionalSnapshotString(invoice.recipientSnapshot, 'name')
+      : null;
+    const issuedRecipientAddress = invoice.recipientSnapshot
+      ? optionalSnapshotString(invoice.recipientSnapshot, 'address')
+      : null;
+    let draftRecipientName: string | null = null;
+    let draftRecipientAddress: string | null = null;
+    if (
+      invoice.status === 'draft' &&
+      invoice.recipientType === 'payer' &&
+      invoice.payerArrangementId
+    ) {
+      const [arrangement] = await transaction
+        .select({
+          recipientName: payerArrangements.recipientName,
+          recipientAddress: payerArrangements.recipientAddress,
+        })
+        .from(payerArrangements)
+        .where(
+          and(
+            eq(payerArrangements.tenantId, invoice.tenantId),
+            eq(payerArrangements.id, invoice.payerArrangementId),
+          ),
+        )
+        .limit(1);
+      draftRecipientName = arrangement?.recipientName ?? null;
+      draftRecipientAddress = arrangement?.recipientAddress ?? null;
+    } else if (invoice.status === 'draft') {
+      const today = currentDate();
+      const [address] = await transaction
+        .select()
+        .from(clientAddresses)
+        .where(
+          and(
+            eq(clientAddresses.tenantId, invoice.tenantId),
+            eq(clientAddresses.clientId, invoice.clientId),
+            or(eq(clientAddresses.addressType, 'billing'), eq(clientAddresses.addressType, 'home')),
+            or(isNull(clientAddresses.validFrom), lte(clientAddresses.validFrom, today)),
+            or(isNull(clientAddresses.validUntil), gte(clientAddresses.validUntil, today)),
+          ),
+        )
+        .orderBy(desc(clientAddresses.addressType), desc(clientAddresses.isPrimary))
+        .limit(1);
+      draftRecipientName = clientName;
+      draftRecipientAddress = address ? formatPostalAddress(address) : null;
+    }
+    const lines =
+      suppliedLines ??
+      (await transaction
+        .select()
+        .from(invoiceLines)
+        .where(
+          and(eq(invoiceLines.tenantId, invoice.tenantId), eq(invoiceLines.invoiceId, invoice.id)),
+        )
+        .orderBy(asc(invoiceLines.serviceDate), asc(invoiceLines.id)));
+    const corrections = await transaction
+      .select()
+      .from(invoiceCorrections)
+      .where(
+        and(
+          eq(invoiceCorrections.tenantId, invoice.tenantId),
+          eq(invoiceCorrections.invoiceId, invoice.id),
+        ),
+      )
+      .orderBy(asc(invoiceCorrections.createdAt), asc(invoiceCorrections.id));
+    const paymentHistory = await transaction
+      .select({
+        allocationId: paymentAllocations.id,
+        paymentId: paymentAllocations.paymentId,
+        amountCents: paymentAllocations.amountCents,
+        allocatedAt: paymentAllocations.createdAt,
+        method: payments.method,
+        receivedAt: payments.receivedAt,
+        reference: payments.reference,
+        payerNameSnapshot: payments.payerNameSnapshot,
+        reversedAt: paymentReversals.reversedAt,
+        reversalReason: paymentReversals.reason,
+      })
+      .from(paymentAllocations)
+      .innerJoin(
+        payments,
+        and(
+          eq(payments.tenantId, paymentAllocations.tenantId),
+          eq(payments.id, paymentAllocations.paymentId),
+        ),
+      )
+      .leftJoin(
+        paymentReversals,
+        and(
+          eq(paymentReversals.tenantId, paymentAllocations.tenantId),
+          eq(paymentReversals.allocationId, paymentAllocations.id),
+        ),
+      )
+      .where(
+        and(
+          eq(paymentAllocations.tenantId, invoice.tenantId),
+          eq(paymentAllocations.invoiceId, invoice.id),
+        ),
+      )
+      .orderBy(asc(paymentAllocations.createdAt), asc(paymentAllocations.id));
+    const [document] = await transaction
+      .select()
+      .from(invoiceDocuments)
+      .where(
+        and(
+          eq(invoiceDocuments.tenantId, invoice.tenantId),
+          eq(invoiceDocuments.invoiceId, invoice.id),
+          isNull(invoiceDocuments.correctionId),
+        ),
+      )
+      .orderBy(desc(invoiceDocuments.documentVersion))
+      .limit(1);
+    const facts =
+      invoice.status === 'issued'
+        ? await this.settlement.receivableFacts(transaction, invoice)
+        : null;
+    const receivable =
+      facts && invoice.dueDate
+        ? deriveReceivableStatus({
+            invoiceCents: invoice.grandTotalCents,
+            correctionsCents: facts.correctionsCents,
+            paymentsCents: facts.paymentsCents,
+            dueDate: invoice.dueDate,
+            asOfDate: currentDate(),
+          })
+        : null;
+    let evidenceDiscrepancy = false;
+    if (invoice.status === 'issued' && lines.length > 0) {
+      const sourceRows = await transaction
+        .select({ performedServiceId: performedServices.id, visitId: performedServices.visitId })
+        .from(performedServices)
+        .where(
+          and(
+            eq(performedServices.tenantId, invoice.tenantId),
+            inArray(
+              performedServices.id,
+              lines.map((line) => line.performedServiceId),
+            ),
+          ),
+        );
+      const visitByService = new Map(
+        sourceRows.map((row) => [row.performedServiceId, row.visitId]),
+      );
+      const visitIds = [...new Set(sourceRows.map((row) => row.visitId))];
+      for (const visitId of visitIds) {
+        // oxlint-disable-next-line no-await-in-loop -- Preserve sequential transaction and side-effect ordering.
+        const readiness = await this.evidence.getBillingReadiness(
+          transaction,
+          invoice.tenantId,
+          visitId,
+        );
+        const visitLines = lines.filter(
+          (line) => visitByService.get(line.performedServiceId) === visitId,
+        );
+        if (
+          !readiness.isCurrent ||
+          visitLines.some(
+            (line) =>
+              line.evidencePackageId !== readiness.evidencePackageId ||
+              line.evidenceSnapshotHash !== readiness.snapshotHash,
+          )
+        ) {
+          evidenceDiscrepancy = true;
+          break;
+        }
+      }
+    }
+    return {
+      id: invoice.id,
+      organizationId: invoice.organizationId,
+      facilityId: invoice.facilityId,
+      clientId: invoice.clientId,
+      clientName,
+      recipientName: issuedRecipientName ?? draftRecipientName,
+      recipientAddress: issuedRecipientAddress ?? draftRecipientAddress,
+      payerArrangementId: invoice.payerArrangementId,
+      recipientType: invoice.recipientType,
+      invoiceNumber: invoice.invoiceNumber,
+      issueDate: invoice.issueDate,
+      servicePeriodFrom: invoice.servicePeriodFrom,
+      servicePeriodUntil: invoice.servicePeriodUntil,
+      dueDate: invoice.dueDate,
+      currency: invoice.currency,
+      subtotalCents: invoice.subtotalCents,
+      taxTotalCents: invoice.taxTotalCents,
+      grandTotalCents: invoice.grandTotalCents,
+      status: invoice.status,
+      version: invoice.version,
+      issuerSnapshot: invoice.issuerSnapshot,
+      recipientSnapshot: invoice.recipientSnapshot,
+      lines,
+      corrections,
+      paymentHistory,
+      pdfStatus: document?.status ?? null,
+      receivableStatus: receivable?.status ?? null,
+      paidCents: facts?.paymentsCents ?? 0,
+      outstandingCents: receivable?.outstandingCents ?? null,
+      evidenceDiscrepancy,
+    };
+  }
+
+  async requireOrganizationExists(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    organizationId: string,
+  ) {
+    const [organization] = await transaction
+      .select({ id: organizationsTable.id })
+      .from(organizationsTable)
+      .where(
+        and(eq(organizationsTable.tenantId, tenantId), eq(organizationsTable.id, organizationId)),
+      )
+      .limit(1);
+    if (!organization) throw new BillingClientNotFoundError();
+  }
+  matchingClientCondition(
+    transaction: DatabaseTransaction,
+    tenantId: string,
+    pattern: string,
+  ): SQL {
+    const matchingClients = transaction
+      .select({ id: clientRecords.id })
+      .from(clientRecords)
+      .where(
+        and(
+          eq(clientRecords.tenantId, tenantId),
+          or(
+            ilike(clientRecords.firstName, pattern),
+            ilike(clientRecords.preferredName, pattern),
+            ilike(clientRecords.lastName, pattern),
+            sql`concat(coalesce(${clientRecords.preferredName}, ${clientRecords.firstName}), ' ', ${clientRecords.lastName}) ilike ${pattern}`,
+          ),
+        ),
+      );
+    return inArray(invoices.clientId, matchingClients);
+  }
 }

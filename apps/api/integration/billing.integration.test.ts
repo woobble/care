@@ -16,6 +16,7 @@ import {
   InvoiceIssuerIncompleteError,
   InvoiceNotFoundError,
   InvoiceRecipientInvalidError,
+  readOperationsReceivableDeadlines,
 } from '@care/billing';
 import { asUUID } from '@care/contracts';
 import { createDatabase, createUnitOfWork } from '@care/database';
@@ -32,7 +33,11 @@ describe('billing PostgreSQL integration', () => {
     const testDatabase = await startCareTestDatabase();
     const owner = new Client({ connectionString: testDatabase.migrationUrl });
     const appRole = new Client({ connectionString: testDatabase.appUrl });
-    const applicationDatabase = createDatabase(testDatabase.appUrl, databaseSchema);
+    const statementLog: string[] = [];
+    const applicationDatabase = createDatabase(testDatabase.appUrl, databaseSchema, {
+      slowQueryThresholdMs: 0,
+      onSlowQuery: ({ query }) => statementLog.push(query),
+    });
     const tenantId = uuidv7();
     const otherTenantId = uuidv7();
     const userId = uuidv7();
@@ -1172,6 +1177,430 @@ describe('billing PostgreSQL integration', () => {
       );
       expect(hiddenOtherTenantInvoice.rows).toHaveLength(0);
       await appRole.query('ROLLBACK');
+
+      const record = (amountCents: number, reference = 'SETTLEMENT-REGRESSION') =>
+        billing.recordPayment(
+          principal,
+          {
+            organizationId,
+            amountCents,
+            receivedAt: now.toISOString(),
+            method: 'bank_transfer',
+            reference,
+          },
+          request,
+          {},
+        );
+      const allocate = (
+        paymentId: string,
+        invoiceId: string,
+        amountCents: number,
+        claimId?: string,
+      ) =>
+        billing.allocatePayment(
+          principal,
+          { paymentId, invoiceId, amountCents, ...(claimId ? { claimId } : {}) },
+          request,
+          {},
+        );
+      const reverse = (id: string) =>
+        billing.reversePaymentAllocation(principal, id, 'Test allocation reversal', request, {});
+      const raceInvoice = concurrentlyIssued[1]!;
+      const secondRaceInvoice = concurrentlyIssued[0]!;
+      const issuedSnapshot = await owner.query(
+        'SELECT row_to_json(invoice) AS invoice FROM billing.invoices AS invoice WHERE id = $1',
+        [raceInvoice.id],
+      );
+      const paymentInput = {
+        organizationId,
+        amountCents: 1,
+        receivedAt: now.toISOString(),
+        method: 'cash' as const,
+      };
+      for (const amountCents of [0, -1, 1.5, Number.MAX_SAFE_INTEGER, 2_000_000_001]) {
+        // oxlint-disable-next-line no-await-in-loop -- Validate each rejected command independently.
+        await expect(
+          billing.recordPayment(principal, { ...paymentInput, amountCents }, request, {}),
+        ).rejects.toMatchObject({ code: 'PAYMENT_AMOUNT_INVALID' });
+      }
+      await expect(
+        billing.recordPayment({ ...principal, grants: [] }, paymentInput, request, {}),
+      ).rejects.toBeInstanceOf(AuthorizationDeniedError);
+      expect(await billing.listPayments({ ...principal, grants: [] })).toEqual([]);
+      expect(await billing.receivables({ ...principal, grants: [] })).toEqual([]);
+      await expect(billing.listPaymentsPage(principal, { pageSize: 101 })).rejects.toMatchObject({
+        code: 'INVALID_BILLING_PROFILE',
+      });
+      const maximumPayment = await record(2_000_000_000, 'MAXIMUM-PAYMENT');
+      expect(maximumPayment.remainingCents).toBe(2_000_000_000);
+      const duplicateRecords = await Promise.all([
+        record(100, 'REPEATED-RECORD'),
+        record(100, 'REPEATED-RECORD'),
+      ]);
+      expect(duplicateRecords[0]!.id).not.toBe(duplicateRecords[1]!.id);
+      const organizationReader: AuthorizationPrincipal = {
+        ...principal,
+        grants: [
+          {
+            permission: 'billing.payments.read',
+            scopeType: 'organization',
+            scopeId: organizationId,
+          },
+        ],
+      };
+      expect(
+        (await billing.listPaymentsPage(organizationReader, { q: 'MAXIMUM-PAYMENT' })).items.map(
+          (item) => item.id,
+        ),
+      ).toEqual([maximumPayment.id]);
+      const facilityReader: AuthorizationPrincipal = {
+        ...principal,
+        grants: [
+          { permission: 'billing.payments.read', scopeType: 'facility', scopeId: facilityId },
+        ],
+      };
+      expect(await billing.listPayments(facilityReader)).toEqual([]); // Existing payment reads require tenant/organization scope.
+      expect(
+        (
+          await billing.receivablesPage(facilityReader, {
+            clientId,
+            facilityId,
+            q: raceInvoice.invoiceNumber!,
+          })
+        ).items.map((item) => item.id),
+      ).toEqual([raceInvoice.id]);
+      const secondProviderId = uuidv7();
+      await owner.query(
+        'INSERT INTO organizations.organizations (id, tenant_id, name) VALUES ($1, $2, $3)',
+        [secondProviderId, tenantId, 'Second settlement provider'],
+      );
+      const secondProviderPayment = await billing.recordPayment(
+        principal,
+        { ...paymentInput, organizationId: secondProviderId },
+        request,
+        {},
+      );
+      await expect(allocate(secondProviderPayment.id, raceInvoice.id, 1)).rejects.toMatchObject({
+        code: 'PAYMENT_ALLOCATION_EXCEEDED',
+      });
+      const sharedPayment = await record(10_000);
+      const paymentRace = await Promise.allSettled([
+        allocate(sharedPayment.id, raceInvoice.id, 8_000),
+        allocate(sharedPayment.id, secondRaceInvoice.id, 8_000),
+      ]);
+      expect(paymentRace.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(paymentRace.filter((result) => result.status === 'rejected')).toHaveLength(1);
+      const paymentWinner = paymentRace.find((result) => result.status === 'fulfilled');
+      if (!paymentWinner || paymentWinner.status !== 'fulfilled')
+        throw new Error('Missing payment allocation winner');
+      await expect(allocate(sharedPayment.id, secondRaceInvoice.id, 2_001)).rejects.toMatchObject({
+        code: 'PAYMENT_ALLOCATION_EXCEEDED',
+      });
+      await reverse(paymentWinner.value.id);
+      const invoicePayments = await Promise.all([record(8_000), record(8_000)]);
+      const invoiceRace = await Promise.allSettled(
+        invoicePayments.map((item) => allocate(item.id, raceInvoice.id, 8_000)),
+      );
+      expect(invoiceRace.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      const invoiceWinner = invoiceRace.find((result) => result.status === 'fulfilled');
+      if (!invoiceWinner || invoiceWinner.status !== 'fulfilled')
+        throw new Error('Missing invoice allocation winner');
+      await expect(allocate(maximumPayment.id, raceInvoice.id, 2_001)).rejects.toMatchObject({
+        code: 'PAYMENT_ALLOCATION_EXCEEDED',
+      });
+      const restricted: AuthorizationPrincipal = {
+        ...principal,
+        grants: [
+          {
+            permission: 'billing.payments.manage',
+            scopeType: 'facility',
+            scopeId: otherFacilityId,
+          },
+        ],
+      };
+      await expect(
+        billing.allocatePayment(
+          restricted,
+          { paymentId: maximumPayment.id, invoiceId: raceInvoice.id, amountCents: 1 },
+          request,
+          {},
+        ),
+      ).rejects.toBeInstanceOf(AuthorizationDeniedError);
+      await expect(
+        billing.allocatePayment(
+          { ...principal, tenantId: otherTenantId },
+          { paymentId: maximumPayment.id, invoiceId: raceInvoice.id, amountCents: 1 },
+          request,
+          {},
+        ),
+      ).rejects.toMatchObject({ code: 'PAYMENT_AMOUNT_INVALID' });
+      expect((await billing.receivablesPage(principal, { clientId: otherClientId })).items).toEqual(
+        [],
+      );
+      const allocationSnapshot = await owner.query(
+        'SELECT row_to_json(allocation) AS allocation FROM billing.payment_allocations AS allocation WHERE id = $1',
+        [invoiceWinner.value.id],
+      );
+      const reversalRace = await Promise.allSettled([
+        reverse(invoiceWinner.value.id),
+        reverse(invoiceWinner.value.id),
+      ]);
+      expect(reversalRace.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(reversalRace.filter((result) => result.status === 'rejected')).toHaveLength(1);
+      await expect(reverse(invoiceWinner.value.id)).rejects.toMatchObject({
+        code: 'PAYMENT_REVERSAL_CONFLICT',
+      });
+      expect(
+        (
+          await owner.query(
+            'SELECT row_to_json(allocation) AS allocation FROM billing.payment_allocations AS allocation WHERE id = $1',
+            [invoiceWinner.value.id],
+          )
+        ).rows,
+      ).toEqual(allocationSnapshot.rows);
+      expect(
+        (
+          await owner.query(
+            'SELECT row_to_json(invoice) AS invoice FROM billing.invoices AS invoice WHERE id = $1',
+            [raceInvoice.id],
+          )
+        ).rows,
+      ).toEqual(issuedSnapshot.rows);
+      const repeatedAllocationPayment = await record(1_000);
+      const repeatedAllocations = await Promise.all([
+        allocate(repeatedAllocationPayment.id, raceInvoice.id, 250),
+        allocate(repeatedAllocationPayment.id, raceInvoice.id, 250),
+      ]);
+      expect(new Set(repeatedAllocations.map((item) => item.id)).size).toBe(2);
+      await Promise.all(repeatedAllocations.map((item) => reverse(item.id)));
+      const correctionRacePayment = await record(largeInvoice.grandTotalCents);
+      const correctionRace = await Promise.allSettled([
+        allocate(correctionRacePayment.id, largeInvoice.id, largeInvoice.grandTotalCents),
+        billing.correctInvoice(
+          principal,
+          largeInvoice.id,
+          {
+            reason: 'Concurrent correction',
+            lines: [
+              {
+                invoiceLineId: largeInvoice.lines[0]!.id,
+                amountCents: largeInvoice.grandTotalCents,
+              },
+            ],
+          },
+          request,
+          {},
+        ),
+      ]);
+      expect(correctionRace.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(correctionRace.filter((result) => result.status === 'rejected')).toHaveLength(1);
+      expect(await billing.getInvoice(principal, largeInvoice.id)).toMatchObject({
+        outstandingCents: 0,
+      });
+      const correctionRaceAllocation = correctionRace[0];
+      if (correctionRaceAllocation?.status === 'fulfilled')
+        await reverse(correctionRaceAllocation.value.id);
+      // Claim duplicate detection is tested while accepted capacity remains, independent of the general payment cap.
+      await reverse(claimPayment.id);
+      const eventOrder: string[] = [];
+      const observedBilling = createBillingApplicationService(
+        unitOfWork,
+        audit,
+        {
+          enqueue: async (transaction, event) => {
+            eventOrder.push(event.type);
+            await outbox.enqueue(transaction, event);
+          },
+        },
+        storage,
+        prices,
+        benefits,
+        evidence,
+      );
+      const partialClaim = await observedBilling.allocatePayment(
+        principal,
+        {
+          paymentId: claimPaymentRecord.id,
+          invoiceId: payerInvoice.id,
+          claimId: claim.claim.id,
+          amountCents: 1_000,
+        },
+        request,
+        {},
+      );
+      expect(eventOrder).toEqual(['payment.allocated', 'claim.payment_linked']);
+      await expect(
+        allocate(claimPaymentRecord.id, payerInvoice.id, 1, claim.claim.id),
+      ).rejects.toMatchObject({ code: 'CLAIM_PAYMENT_AMOUNT_EXCEEDED' });
+      await expect(
+        allocate(maximumPayment.id, payerInvoice.id, 1_001, claim.claim.id),
+      ).rejects.toMatchObject({ code: 'CLAIM_PAYMENT_AMOUNT_EXCEEDED' });
+      await expect(
+        allocate(maximumPayment.id, raceInvoice.id, 1, claim.claim.id),
+      ).rejects.toMatchObject({ code: 'CLAIM_PAYMENT_AMOUNT_EXCEEDED' });
+      expect(await claims.paymentSummary(principal, claim.claim.id)).toMatchObject({
+        acceptedCents: 2_000,
+        paidCents: 1_000,
+        unpaidCents: 1_000,
+      });
+      // Outbox failure occurs after financial and audit writes; all facts must roll back together.
+      const financialState = () =>
+        owner.query(
+          `SELECT
+        (SELECT count(*)::int FROM billing.payments WHERE tenant_id = $1) AS payments,
+        (SELECT count(*)::int FROM billing.payment_allocations WHERE tenant_id = $1) AS allocations,
+        (SELECT count(*)::int FROM billing.payment_reversals WHERE tenant_id = $1) AS reversals,
+        (SELECT count(*)::int FROM audit.audit_entries WHERE tenant_id = $1) AS audits,
+        (SELECT count(*)::int FROM platform.outbox_messages WHERE tenant_id = $1) AS events`,
+          [tenantId],
+        );
+      const failingBilling = createBillingApplicationService(
+        unitOfWork,
+        audit,
+        {
+          enqueue: async () => {
+            throw new Error('Injected settlement outbox failure');
+          },
+        },
+        storage,
+        prices,
+        benefits,
+        evidence,
+      );
+      const beforeFailure = (await financialState()).rows;
+      await expect(
+        failingBilling.recordPayment(principal, paymentInput, request, {}),
+      ).rejects.toThrow('Injected settlement outbox failure');
+      await expect(
+        failingBilling.allocatePayment(
+          principal,
+          { paymentId: maximumPayment.id, invoiceId: raceInvoice.id, amountCents: 1 },
+          request,
+          {},
+        ),
+      ).rejects.toThrow('Injected settlement outbox failure');
+      await expect(
+        failingBilling.reversePaymentAllocation(
+          principal,
+          partialClaim.id,
+          'Rollback reversal',
+          request,
+          {},
+        ),
+      ).rejects.toThrow('Injected settlement outbox failure');
+      const failClaimEventBilling = createBillingApplicationService(
+        unitOfWork,
+        audit,
+        {
+          enqueue: async (transaction, event) => {
+            if (event.type === 'claim.payment_linked')
+              throw new Error('Injected claim-link outbox failure');
+            await outbox.enqueue(transaction, event);
+          },
+        },
+        storage,
+        prices,
+        benefits,
+        evidence,
+      );
+      await expect(
+        failClaimEventBilling.allocatePayment(
+          principal,
+          {
+            paymentId: maximumPayment.id,
+            invoiceId: payerInvoice.id,
+            claimId: claim.claim.id,
+            amountCents: 1_000,
+          },
+          request,
+          {},
+        ),
+      ).rejects.toThrow('Injected claim-link outbox failure');
+      expect((await financialState()).rows).toEqual(beforeFailure);
+      // Receipt filtering keeps Europe/Berlin's DST midnight semantics.
+      const boundaryPayment = await billing.recordPayment(
+        principal,
+        { ...paymentInput, receivedAt: '2026-03-28T23:30:00Z', reference: 'BERLIN-DST-BOUNDARY' },
+        request,
+        {},
+      );
+      expect(
+        (
+          await billing.listPaymentsPage(principal, {
+            q: 'BERLIN-DST-BOUNDARY',
+            from: '2026-03-29',
+            until: '2026-03-29',
+          })
+        ).items.map((item) => item.id),
+      ).toEqual([boundaryPayment.id]);
+      expect(
+        (
+          await billing.listPaymentsPage(principal, {
+            q: 'BERLIN-DST-BOUNDARY',
+            from: '2026-03-28',
+            until: '2026-03-28',
+          })
+        ).total,
+      ).toBe(0);
+      const selectCount = () =>
+        statementLog.filter(
+          (query) => /^select /i.test(query.trim()) && !query.includes('set_config'),
+        ).length;
+      statementLog.length = 0;
+      await billing.listPaymentsPage(principal, { q: 'MAXIMUM-PAYMENT', pageSize: 1 });
+      expect(selectCount()).toBe(4); // Count + page + existing usage + history. No extraction-added queries.
+      statementLog.length = 0;
+      await billing.getInvoice(principal, raceInvoice.id);
+      const invoiceProjectionSelects = selectCount();
+      statementLog.length = 0;
+      const receivablePage = await billing.receivablesPage(principal, {
+        q: raceInvoice.invoiceNumber!,
+        pageSize: 1,
+      });
+      expect(receivablePage.items[0]!.id).toBe(raceInvoice.id);
+      expect(selectCount()).toBe(invoiceProjectionSelects + 1); // Count/page replace the single invoice lookup.
+      const exports = await billing.exportReceivables(principal, {
+        from: serviceDate,
+        until: serviceDate,
+      });
+      expect(exports.find((invoice) => invoice.id === raceInvoice.id)).toMatchObject({
+        outstandingCents: 10_000,
+        paidCents: 0,
+      });
+      const firstRawInvoice = (
+        await owner.query(
+          "SELECT id FROM billing.invoices WHERE tenant_id = $1 AND status = 'issued' AND due_date IS NOT NULL ORDER BY id LIMIT 1",
+          [tenantId],
+        )
+      ).rows[0]!.id;
+      const workerPage = await unitOfWork.transaction({ tenantId }, (transaction) =>
+        readOperationsReceivableDeadlines(transaction, tenantId, 1),
+      );
+      expect(workerPage).toMatchObject({ complete: false, nextCursor: firstRawInvoice });
+      // First issued invoice is fully corrected; raw scan completeness/cursor must still advance.
+      expect(workerPage.items).toEqual([]);
+      const workerAll = await unitOfWork.transaction({ tenantId }, (transaction) =>
+        readOperationsReceivableDeadlines(transaction, tenantId, 100),
+      );
+      const openReceivables = await billing.receivables(principal, { pageSize: 100 });
+      expect(workerAll.complete).toBe(true);
+      expect(workerAll.items.map((item) => item.id).sort()).toEqual(
+        openReceivables.map((item) => item.id).sort(),
+      );
+      const financialAudit = await owner.query(
+        `SELECT audit.action, outbox.event_type, outbox.event FROM audit.audit_entries AS audit
+        JOIN platform.outbox_messages AS outbox ON audit.id = outbox.id AND audit.tenant_id = outbox.tenant_id
+        WHERE audit.tenant_id = $1 AND audit.action IN ('payment.recorded', 'payment.allocated', 'payment.allocation_reversed', 'claim.payment_linked')`,
+        [tenantId],
+      );
+      expect(
+        financialAudit.rows.every(
+          (row) =>
+            row.action === row.event_type &&
+            row.event.actor.id === userId &&
+            row.event.correlationId === request.correlationId,
+        ),
+      ).toBe(true);
 
       const auditActions = await owner.query<{ action: string }>(
         'SELECT action FROM audit.audit_entries WHERE tenant_id = $1',
