@@ -6,7 +6,6 @@ import {
   AgreementVisitGenerationController,
   EmployeeAvailabilityController,
   SchedulingOperationsController,
-  SchedulingToursController,
   MyTodayTourController,
   MyPublishedToursController,
   SubstitutionsController,
@@ -16,6 +15,7 @@ import {
   EmployeeUnavailabilityController,
   VisitsController,
 } from '@app/api/presentation/http/scheduling.controller';
+import { SchedulingToursController } from '@app/api/presentation/http/scheduling-tours.controller';
 import {
   CalendarSubscriptionFeedController,
   CalendarSubscriptionRateLimiter,

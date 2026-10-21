@@ -85,3 +85,7 @@ Scheduling does not start or complete visits, record actual arrival/departure, a
 ## Internal application boundaries
 
 SchedulingApplicationService remains the public facade. Its seven Office tour operations delegate to the internal SchedulingToursApplicationService, which owns stop validation, routing previews/estimates and immutable publication orchestration. Both services use transaction-aware SchedulingPlanningGuards and SchedulingEventWriter; these collaborators never open transactions. Routing retains its read transaction, external provider call, and separate locked version recheck before persistence. Caregiver projections and visit-driven publication invalidation remain in the facade. See the [Goal 03 handoff](../architecture/goal-03-to-goal-04.md).
+
+## Office tour transport
+
+SchedulingToursController lives in apps/api/src/presentation/http/scheduling-tours.controller.ts and remains registered once in SchedulingModule. Its seven routes, guards, DTO identities, parsing order and public facade calls are unchanged. The existing UUID and audit-context functions are shared in scheduling-http.ts; other controller implementations remain intact. Tour schemas stay in scheduling.dto.ts to preserve their Swagger component identities and strict/coerced input differences. See the [Goal 06 handoff](../architecture/goal-06-to-goal-07.md).

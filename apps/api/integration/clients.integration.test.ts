@@ -1875,6 +1875,72 @@ describe('clients API', () => {
       });
       expect(createTour.status).toBe(201);
       const tour = (await createTour.json()) as { id: string; version: number; status: string };
+      const toursPath = baseUrl + '/api/v1/scheduling/tours';
+      const tourRange = new URLSearchParams({
+        employeeId: winningSubstitute.id,
+        from: firstVisitLocalTime.date,
+        until: new Date(Date.parse(firstVisitLocalTime.date + 'T00:00:00Z') + 86_400_000)
+          .toISOString()
+          .slice(0, 10),
+      });
+      const listTourResponse = await fetch(toursPath + '?' + tourRange, { headers });
+      expect(listTourResponse.status).toBe(200);
+      expect(await listTourResponse.json()).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: tour.id, stopCount: 1 })]),
+      );
+      const detailTourResponse = await fetch(toursPath + '/' + tour.id, { headers });
+      expect(detailTourResponse.status).toBe(200);
+      expect(await detailTourResponse.json()).toMatchObject({
+        id: tour.id,
+        stops: [expect.objectContaining({ visitId: firstGeneratedVisit.id })],
+        latestPublication: null,
+      });
+      const suggestionResponse = await fetch(toursPath + '/' + tour.id + '/suggest-order', {
+        method: 'POST',
+        headers,
+      });
+      expect(suggestionResponse.status).toBe(200);
+      expect(await suggestionResponse.json()).toMatchObject({
+        status: 'unavailable',
+        visitIds: [firstGeneratedVisit.id],
+        conflicts: [],
+      });
+      const unauthenticatedTour = await fetch(toursPath + '/' + tour.id);
+      expect(unauthenticatedTour.status).toBe(401);
+      const malformedTour = await fetch(toursPath + '/invalid-uuid', { headers });
+      expect(malformedTour.status).toBe(400);
+      expect((await malformedTour.json()) as object).toMatchObject({ code: 'BAD_REQUEST' });
+      const missingTourQuery = await fetch(toursPath, { headers });
+      expect(missingTourQuery.status).toBe(400);
+      const unknownTourQuery = await fetch(toursPath + '?' + tourRange + '&unknown=true', {
+        headers,
+      });
+      expect(unknownTourQuery.status).toBe(400);
+      const reversedTourQuery = new URLSearchParams({
+        employeeId: winningSubstitute.id,
+        from: firstVisitLocalTime.date,
+        until: firstVisitLocalTime.date,
+      });
+      const invalidTourDateRange = await fetch(toursPath + '?' + reversedTourQuery, { headers });
+      expect(invalidTourDateRange.status).toBe(400);
+      expect(await invalidTourDateRange.json()).toMatchObject({ code: 'SCHEDULING_TOUR_INVALID' });
+      const strictTourStopVersion = await fetch(toursPath + '/' + tour.id + '/stops', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          expectedVersion: String(tour.version),
+          stops: [{ visitId: firstGeneratedVisit.id }],
+        }),
+      });
+      expect(strictTourStopVersion.status).toBe(400);
+      const unknownTourBody = await fetch(toursPath + '/' + tour.id + '/publish', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ expectedVersion: tour.version, unknown: true }),
+      });
+      expect(unknownTourBody.status).toBe(400);
+      const wrongTourVerb = await fetch(toursPath + '/' + tour.id + '/suggest-order', { headers });
+      expect(wrongTourVerb.status).toBe(404);
       const deniedTourWrite = await fetch(`${baseUrl}/api/v1/scheduling/tours/${tour.id}/stops`, {
         method: 'PUT',
         headers: { ...headers, Authorization: `Bearer ${await issueToken(caregiverSubject)}` },
@@ -1905,7 +1971,7 @@ describe('clients API', () => {
         {
           method: 'POST',
           headers,
-          body: JSON.stringify({ expectedVersion: tour.version }),
+          body: JSON.stringify({ expectedVersion: String(tour.version) }),
         },
       );
       expect(estimateTour.status).toBe(200);
@@ -1996,6 +2062,15 @@ describe('clients API', () => {
       );
       expect(revisePublishedTour.status).toBe(200);
       const revisedTour = (await revisePublishedTour.json()) as { version: number };
+      const publicationDetail = await fetch(toursPath + '/' + tour.id, { headers });
+      expect(publicationDetail.status).toBe(200);
+      expect(await publicationDetail.json()).toMatchObject({
+        status: 'draft',
+        latestPublication: {
+          version: 1,
+          snapshot: [expect.objectContaining({ visitId: firstGeneratedVisit.id })],
+        },
+      });
       const secondPublication = await fetch(
         `${baseUrl}/api/v1/scheduling/tours/${tour.id}/publish`,
         {
