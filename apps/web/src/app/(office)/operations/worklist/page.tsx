@@ -17,7 +17,7 @@ import {
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { DataPagination } from '@app/web/components/data-pagination';
 import { FilterDisclosure } from '@app/web/components/filter-disclosure';
-import { PageHeader } from '@app/web/components/page-patterns';
+import { ErrorNotice, PageHeader } from '@app/web/components/page-patterns';
 import { errorMessageKey } from '@app/web/i18n/errors';
 import { formatDateTime } from '@app/web/i18n/format';
 import {
@@ -235,26 +235,14 @@ export default async function OperationsWorklistPage({
         }
       />
 
-      {query.error ? (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
-        >
-          {translate(errorMessageKey(query.error))}
-        </p>
-      ) : null}
+      {query.error ? <ErrorNotice>{translate(errorMessageKey(query.error))}</ErrorNotice> : null}
       {query.updated === 'completed' ? (
         <p role="status" className="rounded-md border border-success/40 bg-success-muted p-3">
           {t('taskQuickCompleted')}
         </p>
       ) : null}
       {queueResult.error || organizationLookup.failed ? (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
-        >
-          {t('loadFailed')}
-        </p>
+        <ErrorNotice>{t('loadFailed')}</ErrorNotice>
       ) : null}
       {queueData?.truncated ? (
         <p

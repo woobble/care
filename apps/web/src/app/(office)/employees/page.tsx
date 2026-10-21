@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { DataPagination } from '@app/web/components/data-pagination';
-import { PageHeader } from '@app/web/components/page-patterns';
+import { ErrorNotice, PageHeader } from '@app/web/components/page-patterns';
 import { ResourceReference } from '@app/web/components/resource-reference';
 import { statusLabelKey } from '@app/web/i18n/status';
 import {
@@ -124,22 +124,8 @@ export default async function EmployeesPage({
           </Button>
         }
       />
-      {query.error ? (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive"
-        >
-          {t('Errors.generic')}
-        </p>
-      ) : null}
-      {employeesResult.error ? (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive"
-        >
-          {t('Employees.loadFailed')}
-        </p>
-      ) : null}
+      {query.error ? <ErrorNotice>{t('Errors.generic')}</ErrorNotice> : null}
+      {employeesResult.error ? <ErrorNotice>{t('Employees.loadFailed')}</ErrorNotice> : null}
 
       <section
         aria-labelledby="employee-filter-title"
