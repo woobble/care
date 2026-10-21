@@ -37,12 +37,15 @@ type Scenario = {
   planning?: boolean;
   collapsed?: boolean;
   bundle?: string;
+  permissions?: string[];
+  props?: NavigationFixtureProps;
+  landing?: boolean;
 };
 async function mount(page: Page, scenario: Scenario) {
   const cookie = (await page.context().cookies()).find(
     (item) => item.name === 'care-office-sidebar',
   );
-  const permissions = [
+  const permissions = scenario.permissions ?? [
     'operations.read',
     'client.read',
     'employee.read',
@@ -50,20 +53,23 @@ async function mount(page: Page, scenario: Scenario) {
     'claims.read',
     ...(scenario.planning !== false ? ['schedule.read'] : []),
   ];
-  const props = JSON.parse(
-    execFileSync(
-      'bun',
-      [
-        resolve(import.meta.dirname, '../scripts/office-navigation.fixture.ts'),
-        JSON.stringify({
-          locale: scenario.locale,
-          permissions,
-          collapsed: cookie ? cookie.value !== 'expanded' : (scenario.collapsed ?? false),
-        }),
-      ],
-      { encoding: 'utf8' },
-    ),
-  ) as NavigationFixtureProps;
+  const props =
+    scenario.props ??
+    (JSON.parse(
+      execFileSync(
+        'bun',
+        [
+          resolve(import.meta.dirname, '../scripts/office-navigation.fixture.ts'),
+          JSON.stringify({
+            locale: scenario.locale,
+            permissions,
+            landing: scenario.landing ?? false,
+            collapsed: cookie ? cookie.value !== 'expanded' : (scenario.collapsed ?? false),
+          }),
+        ],
+        { encoding: 'utf8' },
+      ),
+    ) as NavigationFixtureProps);
   await page.route('http://navigation.test/**', (route) =>
     route.fulfill({
       contentType: 'text/html',
@@ -303,5 +309,198 @@ for (const locale of ['en', 'de'] as const) {
     await page.setViewportSize({ width: 1024, height: 844 });
     await expect(dialog).not.toBeVisible();
     await expect(page.locator('#office-page-context')).toBeFocused();
+  });
+}
+
+for (const locale of ['en', 'de'] as const) {
+  const labels = (locale === 'en' ? en : de).Navigation;
+  test(`settings-only Administration visibility, landing links and before/after evidence (${locale})`, async ({
+    page,
+  }, testInfo) => {
+    const folder =
+      process.env.ADMINISTRATION_SCREENSHOTS_DIR ?? testInfo.outputPath('administration');
+    await mkdir(folder, { recursive: true });
+    const cases = [
+      {
+        name: 'settings-1',
+        permissions: ['billing.settings.manage'],
+        hrefs: ['/billing/settings'],
+        visible: true,
+      },
+      {
+        name: 'settings-2',
+        permissions: ['claims.settings.manage'],
+        hrefs: ['/billing/claims/settings'],
+        visible: true,
+      },
+      {
+        name: 'settings-4',
+        permissions: ['operations.reminder_settings.manage'],
+        hrefs: ['/operations/reminder-settings'],
+        visible: true,
+      },
+      {
+        name: 'settings-7',
+        permissions: [
+          'billing.settings.manage',
+          'claims.settings.manage',
+          'operations.reminder_settings.manage',
+        ],
+        hrefs: ['/billing/settings', '/billing/claims/settings', '/operations/reminder-settings'],
+        visible: true,
+      },
+      { name: 'unrelated', permissions: ['client.read'], hrefs: [], visible: false },
+      { name: 'settings-0', permissions: [], hrefs: [], visible: false },
+      { name: 'audit.read', permissions: ['audit.read'], hrefs: [], visible: true },
+    ];
+    const surfaces = [
+      { name: 'expanded', width: 1440, collapsed: false, mobile: false },
+      { name: 'collapsed', width: 1440, collapsed: true, mobile: false },
+      { name: 'mobile', width: 390, collapsed: false, mobile: true },
+    ];
+    // oxlint-disable no-await-in-loop -- Capture ordered before/after views with the same browser and real drawer.
+    for (const permissionCase of cases)
+      for (const surface of surfaces) {
+        for (const phase of process.env.ADMINISTRATION_BASELINE_DIR
+          ? ['before', 'after']
+          : ['after']) {
+          await page.context().clearCookies();
+          await page.setViewportSize({ width: surface.width, height: 900 });
+          const props =
+            phase === 'before'
+              ? {
+                  ...(JSON.parse(
+                    await readFile(
+                      join(
+                        process.env.ADMINISTRATION_BASELINE_DIR!,
+                        `${locale}-${permissionCase.name}.json`,
+                      ),
+                      'utf8',
+                    ),
+                  ) as NavigationFixtureProps),
+                  initialCollapsed: surface.collapsed,
+                }
+              : undefined;
+          await mount(page, {
+            path: '/administration',
+            locale,
+            permissions: permissionCase.permissions,
+            collapsed: surface.collapsed,
+            landing: true,
+            ...(props ? { props } : {}),
+          });
+          const visible =
+            phase === 'before' ? permissionCase.name === 'audit.read' : permissionCase.visible;
+          const expectedContext = visible ? labels.administration : labels.overview;
+          await selected(page, visible ? '/administration' : undefined, expectedContext);
+          const sidebar = page.locator('#office-sidebar');
+          await expect(
+            sidebar.locator('a[data-sidebar="menu-button"][href="/administration"]'),
+          ).toHaveCount(visible ? 1 : 0);
+          if (visible) {
+            await expect(sidebar.getByText(labels.management, { exact: true })).toHaveCount(1);
+            if (surface.collapsed) {
+              await expect(
+                sidebar.locator('a[data-sidebar="menu-button"][href="/administration"]'),
+              ).toHaveAttribute('aria-label', labels.administration);
+              await expect(
+                sidebar.locator('a[data-sidebar="menu-button"][href="/administration"]'),
+              ).toHaveAttribute('title', labels.administration);
+            }
+          }
+          const entryPoints = page.locator('section[aria-labelledby="admin-entrypoints-title"]');
+          expect(
+            await entryPoints
+              .locator('a')
+              .evaluateAll((links) => links.map((link) => link.getAttribute('href'))),
+          ).toEqual(permissionCase.hrefs);
+          if (surface.mobile) {
+            await page.getByRole('button', { name: labels.openMenu }).click();
+            await expect(page.locator('#office-mobile-navigation')).toBeVisible();
+            await selected(page, visible ? '/administration' : undefined, expectedContext, true);
+            await expect(
+              page.locator(
+                '#office-mobile-navigation a[data-sidebar="menu-button"][href="/administration"]',
+              ),
+            ).toHaveCount(visible ? 1 : 0);
+          }
+          const violations = (await new AxeBuilder({ page }).analyze()).violations.map(
+            (violation) => violation.id,
+          );
+          expect(violations).toEqual([]);
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          ).toBe(true);
+          const name = `${locale}-${permissionCase.name}-${surface.name}-${phase}`;
+          await page.screenshot({ path: join(folder, `${name}.png`), animations: 'disabled' });
+          await writeFile(
+            join(folder, `${name}.json`),
+            JSON.stringify(
+              {
+                route: '/administration',
+                permissions: permissionCase.permissions,
+                width: surface.width,
+                collapsed: surface.collapsed,
+                administrationVisible: visible,
+                context: expectedContext,
+                landingHrefs: permissionCase.hrefs,
+                violations,
+              },
+              null,
+              2,
+            ),
+          );
+        }
+      }
+    // oxlint-enable no-await-in-loop
+  });
+
+  test(`settings-only Administration keyboard focus and mobile interaction stay intact (${locale})`, async ({
+    page,
+  }) => {
+    const scenario = {
+      path: '/administration',
+      locale,
+      permissions: ['billing.settings.manage'],
+      landing: true,
+    };
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mount(page, scenario);
+    const sidebar = page.locator('#office-sidebar');
+    await sidebar.getByRole('link', { name: labels.brand, exact: true }).focus();
+    await page.keyboard.press('Tab');
+    const administration = sidebar.locator('a[data-sidebar="menu-button"][href="/administration"]');
+    await expect(administration).toBeFocused();
+    expect(await administration.evaluate((link) => link.matches(':focus-visible'))).toBe(true);
+    await expect(administration).not.toHaveCSS('box-shadow', 'none');
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL('http://navigation.test/administration');
+    await selected(page, '/administration', labels.administration);
+    await page.setViewportSize({ width: 390, height: 844 });
+    const trigger = page.getByRole('button', { name: labels.openMenu });
+    await trigger.click();
+    const dialog = page.getByRole('dialog');
+    await expectFocusTrap(page, dialog);
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await page
+      .locator('#office-mobile-navigation a[data-sidebar="menu-button"][href="/administration"]')
+      .click();
+    await expect(dialog).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+    await selected(page, '/administration', labels.administration);
+    // Existing route ownership is deliberately unchanged outside /administration.
+    await expect(
+      page.locator(
+        'section[aria-labelledby="admin-entrypoints-title"] a[href="/billing/settings"]',
+      ),
+    ).toHaveAttribute('href', '/billing/settings');
+    // Landing HTML is server-rendered without Next hydration; exercise the existing
+    // pathname bridge rather than treating an ordinary anchor reload as Next routing.
+    await page.evaluate(() => window.navigationHarness.navigate('/billing/settings'));
+    await expect(page).toHaveURL('http://navigation.test/billing/settings');
+    await selected(page, undefined, labels.overview);
   });
 }

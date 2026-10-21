@@ -131,6 +131,9 @@ async function OfficeWorkspaceLayout({
     { permission: 'employee.read', href: '/administration/qualifications' },
     { permission: 'documents.templates.manage', href: '/administration/document-templates' },
     { permission: 'audit.read', href: '/administration/audit' },
+    { permission: 'billing.settings.manage', href: '/billing/settings' },
+    { permission: 'claims.settings.manage', href: '/billing/claims/settings' },
+    { permission: 'operations.reminder_settings.manage', href: '/operations/reminder-settings' },
   ];
   const canReadAdministration = administrationLinks.some(({ permission }) =>
     permissions.some((grant) => grant.permission === permission),

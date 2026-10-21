@@ -8,7 +8,7 @@ import { OfficeShell } from '../../src/components/office-shell';
 export type NavigationFixtureProps = Omit<
   Parameters<typeof OfficeShell>[0],
   'children' | 'signOut'
->;
+> & { landingHtml?: string };
 declare global {
   interface Window {
     navigationHarness: {
@@ -20,16 +20,23 @@ declare global {
 const root = createRoot(document.getElementById('root')!);
 window.navigationHarness = {
   render(props) {
+    const { landingHtml, ...shellProps } = props;
     root.render(
       <NextIntlClientProvider locale={props.locale} messages={props.locale === 'en' ? en : de}>
         <OfficeShell
-          {...props}
+          {...shellProps}
           signOut={
             <button type="button">{(props.locale === 'en' ? en : de).Navigation.signOut}</button>
           }
         >
-          <h1>Navigation fixture</h1>
-          <p>Synthetic route content.</p>
+          {landingHtml ? (
+            <div dangerouslySetInnerHTML={{ __html: landingHtml }} />
+          ) : (
+            <>
+              <h1>Navigation fixture</h1>
+              <p>Synthetic route content.</p>
+            </>
+          )}
         </OfficeShell>
       </NextIntlClientProvider>,
     );
