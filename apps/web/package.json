@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit --pretty false -p tsconfig.json",
     "test": "bun test src/i18n src/features scripts",
     "i18n:check": "bun run scripts/check-i18n.ts",
+    "test:forms": "playwright test --config=playwright.forms.config.ts",
     "test:e2e": "playwright test --config=playwright.config.ts"
   },
   "dependencies": {

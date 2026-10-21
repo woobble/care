@@ -29,7 +29,8 @@ const contactRoles = [
 
 // Keep the route action entry point compatible with Next's use-server export transform.
 export async function updateClientAction(formData: FormData): Promise<boolean | void> {
-  return updateClient(formData);
+  const result = await updateClient(formData);
+  if (result?.ok === false) return false;
 }
 
 export async function createClientAction(formData: FormData): Promise<boolean | void> {

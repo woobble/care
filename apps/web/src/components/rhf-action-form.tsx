@@ -7,6 +7,7 @@ import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import {
   createElement,
   useEffect,
+  useCallback,
   useId,
   useRef,
   useState,
@@ -24,6 +25,13 @@ import {
   type Resolver,
 } from 'react-hook-form';
 import { z } from 'zod';
+
+import {
+  isFormActionFailure,
+  safeFormActionErrorKey,
+  type FormActionFailure,
+  type FormActionErrorKey,
+} from '@app/web/lib/form-action-failure';
 
 import { Field, FieldDescription, FieldError, FieldLabel } from '@care/ui/components/field';
 import { Input } from '@care/ui/components/input';
@@ -190,10 +198,11 @@ function buildNativeSchema(
   });
 }
 
-function collectErrorMessages(value: unknown): string[] {
+function collectErrorMessages(value: unknown, omitServer = false): string[] {
   if (!value || typeof value !== 'object') return [];
+  if (omitServer && 'type' in value && value.type === 'server') return [];
   if ('message' in value && typeof value.message === 'string') return [value.message];
-  return Object.values(value).flatMap(collectErrorMessages);
+  return Object.values(value).flatMap((child) => collectErrorMessages(child, omitServer));
 }
 
 function hasFieldError(errors: unknown, fieldName: string): boolean {
@@ -208,29 +217,72 @@ function hasFieldError(errors: unknown, fieldName: string): boolean {
   return Boolean(current);
 }
 
-export function RHFActionForm({
+function focusInvalidControl(
+  form: HTMLFormElement,
+  isInvalid: (name: string) => boolean,
+  isCurrent: () => boolean = () => true,
+) {
+  const firstInvalidControl = Array.from(
+    form.querySelectorAll<NativeControl>('input[name], select[name], textarea[name]'),
+  ).find((control) => {
+    if (
+      !control.name ||
+      (control instanceof HTMLInputElement && control.type === 'hidden') ||
+      !isInvalid(control.name)
+    )
+      return false;
+    const style = window.getComputedStyle(control);
+    const rect = control.getBoundingClientRect();
+    return (
+      style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0
+    );
+  });
+  if (firstInvalidControl)
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (isCurrent() && firstInvalidControl.isConnected) firstInvalidControl.focus();
+      });
+    });
+}
+
+type ActionProps<Field extends string> =
+  | { structuredErrors?: false; action: ServerAction }
+  | {
+      structuredErrors: true;
+      action: (
+        data: FormData,
+      ) => void | FormActionFailure<Field> | Promise<void | FormActionFailure<Field>>;
+    };
+
+export function RHFActionForm<Field extends string = string>({
   action,
   beforeAction,
   onActionError,
   onChange,
   errorMessage,
+  structuredErrors = false,
   warnOnUnsavedChanges = false,
   refreshOnSuccess = false,
   children,
   ...props
-}: Omit<FormHTMLAttributes<HTMLFormElement>, 'action' | 'onSubmit' | 'onChange'> & {
-  action: ServerAction;
-  beforeAction?: (form: HTMLFormElement, data: FormData) => boolean | Promise<boolean>;
-  onActionError?: () => void;
-  onChange?: FormHTMLAttributes<HTMLFormElement>['onChange'];
-  errorMessage?: ReactNode;
-  warnOnUnsavedChanges?: boolean;
-  refreshOnSuccess?: boolean;
-  children: ReactNode;
-}) {
+}: Omit<FormHTMLAttributes<HTMLFormElement>, 'action' | 'onSubmit' | 'onChange'> &
+  ActionProps<Field> & {
+    beforeAction?: (form: HTMLFormElement, data: FormData) => boolean | Promise<boolean>;
+    onActionError?: () => void;
+    onChange?: FormHTMLAttributes<HTMLFormElement>['onChange'];
+    errorMessage?: ReactNode;
+    warnOnUnsavedChanges?: boolean;
+    refreshOnSuccess?: boolean;
+    children: ReactNode;
+  }) {
   const t = useTranslations('Common.formValidation');
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  const submissionVersion = useRef(0);
+  const [serverErrorFields, setServerErrorFields] = useState<
+    Array<{ name: string; label: string }>
+  >([]);
+  const [serverFormError, setServerFormError] = useState<FormActionErrorKey | null>(null);
   const [actionPending, startActionTransition] = useTransition();
   const [nativeSchema, setNativeSchema] = useState<z.ZodType>(permissiveFormSchema);
   const [actionFailure, setActionFailure] = useState<string | false | null>(null);
@@ -242,6 +294,10 @@ export function RHFActionForm({
   const errorSummaryId = useId();
   const validationErrors = methods.formState.errors;
   const { getValues, register, reset, setValue } = methods;
+  const serverErrorId = useCallback(
+    (name: string) => `${errorSummaryId}-server-${encodeURIComponent(name)}`,
+    [errorSummaryId],
+  );
   const nativeAction = action as (formData: FormData) => void | Promise<void>;
 
   useEffect(() => {
@@ -257,10 +313,18 @@ export function RHFActionForm({
       const describedBy = new Set(
         (control.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean),
       );
+      if (structuredErrors) {
+        describedBy.delete(serverErrorId(control.name));
+        describedBy.delete(errorSummaryId);
+      }
       if (hasFieldError(validationErrors, control.name)) {
         control.setAttribute('aria-invalid', 'true');
         control.setAttribute('data-rhf-validation-invalid', 'true');
-        describedBy.add(errorSummaryId);
+        describedBy.add(
+          structuredErrors && methods.getFieldState(control.name).error?.type === 'server'
+            ? serverErrorId(control.name)
+            : errorSummaryId,
+        );
       } else {
         if (control.getAttribute('data-rhf-validation-invalid') === 'true') {
           control.removeAttribute('aria-invalid');
@@ -275,7 +339,7 @@ export function RHFActionForm({
         control.removeAttribute('aria-describedby');
       }
     }
-  }, [errorSummaryId, validationErrors]);
+  }, [errorSummaryId, validationErrors, structuredErrors, methods, serverErrorId]);
 
   useEffect(() => {
     if (
@@ -382,19 +446,61 @@ export function RHFActionForm({
     };
   }, [getValues, register, reset, t]);
 
-  async function submit(data: FormData) {
+  function clearServerErrors(name?: string) {
+    for (const field of serverErrorFields) {
+      if (
+        (!name || name === field.name) &&
+        methods.getFieldState(field.name).error?.type === 'server'
+      )
+        methods.clearErrors(field.name);
+    }
+    setServerErrorFields((fields) => (name ? fields.filter((field) => field.name !== name) : []));
+    setServerFormError(null);
+  }
+
+  async function submit(data: FormData, version: number) {
     const form = formRef.current;
     if (!form) return;
     if (beforeAction && !(await beforeAction(form, data))) return;
+    if (structuredErrors && version !== submissionVersion.current) return;
     window.dispatchEvent(new Event('care:server-action-start'));
     startActionTransition(async () => {
       // Keep redirect signals inside the transition so Next can handle server-action navigation.
       try {
         const result = await action(data);
+        if (structuredErrors && version !== submissionVersion.current) return;
+        if (structuredErrors && isFormActionFailure(result)) {
+          const fields: Array<{ name: string; label: string }> = [];
+          for (const [name, keys] of Object.entries(result.fieldErrors ?? {})) {
+            const control = Array.from(
+              form.querySelectorAll<NativeControl>('input[name], select[name], textarea[name]'),
+            ).find((candidate) => candidate.name === name);
+            if (!control || !Array.isArray(keys) || !keys.length) continue;
+            const currentError = methods.getFieldState(name).error;
+            if (currentError && currentError.type !== 'server') continue;
+            methods.setError(name, {
+              type: 'server',
+              message: keys.map((key) => t(safeFormActionErrorKey(key))).join(' '),
+            });
+            fields.push({ name, label: control.labels?.[0]?.textContent?.trim() || name });
+          }
+          setServerErrorFields(fields);
+          setServerFormError(
+            result.formError || !fields.length ? safeFormActionErrorKey(result.formError) : null,
+          );
+          setActionFailure(null);
+          focusInvalidControl(
+            form,
+            (name) => fields.some((field) => field.name === name),
+            () => version === submissionVersion.current,
+          );
+          return;
+        }
         setActionFailure(result === false || typeof result === 'string' ? result : null);
         if (result !== false && refreshOnSuccess) router.refresh();
       } catch (error) {
         if (isRedirectError(error)) throw error;
+        if (structuredErrors && version !== submissionVersion.current) return;
         setActionFailure(onActionError ? null : t('actionFailed'));
         onActionError?.();
       }
@@ -406,6 +512,16 @@ export function RHFActionForm({
   function handleChange(event: React.ChangeEvent<HTMLFormElement>) {
     setActionFailure(null);
     const control = event.target;
+    if (structuredErrors) {
+      submissionVersion.current += 1;
+      clearServerErrors(
+        control instanceof HTMLInputElement ||
+          control instanceof HTMLSelectElement ||
+          control instanceof HTMLTextAreaElement
+          ? control.name
+          : undefined,
+      );
+    }
     if (
       !(
         control instanceof HTMLInputElement ||
@@ -450,43 +566,23 @@ export function RHFActionForm({
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    const version = ++submissionVersion.current;
+    if (structuredErrors) {
+      clearServerErrors();
+      setActionFailure(null);
+    }
     const submitter = (event.nativeEvent as SubmitEvent).submitter;
     const data =
       submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement
         ? new FormData(event.currentTarget, submitter)
         : new FormData(event.currentTarget);
     return methods.handleSubmit(
-      () => submit(data),
+      () => submit(data, version),
       (errors) => {
         const form = formRef.current;
         if (!form) return;
 
-        const firstInvalidControl = Array.from(
-          form.querySelectorAll<NativeControl>('input[name], select[name], textarea[name]'),
-        ).find((control) => {
-          if (
-            !control.name ||
-            (control instanceof HTMLInputElement && control.type === 'hidden') ||
-            !hasFieldError(errors, control.name)
-          ) {
-            return false;
-          }
-          const style = window.getComputedStyle(control);
-          const rect = control.getBoundingClientRect();
-          return (
-            style.display !== 'none' &&
-            style.visibility !== 'hidden' &&
-            rect.width > 0 &&
-            rect.height > 0
-          );
-        });
-        if (firstInvalidControl) {
-          window.requestAnimationFrame(() => {
-            window.requestAnimationFrame(() => {
-              if (firstInvalidControl.isConnected) firstInvalidControl.focus();
-            });
-          });
-        }
+        focusInvalidControl(form, (name) => hasFieldError(errors, name));
       },
     )(event);
   }
@@ -509,25 +605,44 @@ export function RHFActionForm({
             {t('saving')}
           </p>
         ) : null}
-        {actionFailure !== null ? (
+        {actionFailure !== null || serverFormError !== null ? (
           <div
             role="alert"
             className="rounded-md border border-destructive/30 bg-destructive/10 p-3"
           >
-            {errorMessage ??
-              (typeof actionFailure === 'string' ? actionFailure : t('actionFailed'))}
+            {serverFormError
+              ? t(serverFormError)
+              : (errorMessage ??
+                (typeof actionFailure === 'string' ? actionFailure : t('actionFailed')))}
           </div>
         ) : null}
-        {collectErrorMessages(methods.formState.errors).length ? (
+        {collectErrorMessages(methods.formState.errors, structuredErrors).length ? (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3">
             <FieldError
               id={errorSummaryId}
-              errors={collectErrorMessages(methods.formState.errors).map((message) => ({
-                message,
-              }))}
+              errors={collectErrorMessages(methods.formState.errors, structuredErrors).map(
+                (message) => ({
+                  message,
+                }),
+              )}
             />
           </div>
         ) : null}
+        {structuredErrors
+          ? serverErrorFields.map(({ name, label }) => {
+              const error = methods.getFieldState(name).error;
+              return error?.type === 'server' ? (
+                <div
+                  key={name}
+                  className="rounded-md border border-destructive/30 bg-destructive/10 p-3"
+                >
+                  <FieldError id={serverErrorId(name)}>
+                    {label}: {error.message}
+                  </FieldError>
+                </div>
+              ) : null;
+            })
+          : null}
       </form>
     </FormProvider>
   );

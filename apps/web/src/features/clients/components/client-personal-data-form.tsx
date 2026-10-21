@@ -18,6 +18,7 @@ export async function ClientPersonalDataForm({
       </summary>
       <RHFActionForm
         action={updateClientAction}
+        structuredErrors
         errorMessage={t('Clients.detail.saveFailed')}
         warnOnUnsavedChanges
         className="mt-4 grid gap-4"

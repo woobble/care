@@ -11,6 +11,7 @@
     "e2e/**/*.ts",
     "next.config.ts",
     "playwright.config.ts",
+    "playwright.forms.config.ts",
     ".next/types/**/*.ts"
   ]
 }

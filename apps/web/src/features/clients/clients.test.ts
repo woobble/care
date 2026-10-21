@@ -8,6 +8,7 @@ import en from '../../../messages/en.json';
 
 const events: unknown[] = [];
 let apiError = false;
+let apiErrorCode = 'INVALID_REQUEST';
 let authError = false;
 let locale: 'en' | 'de' = 'en';
 const allowed = new Set<string>();
@@ -34,7 +35,11 @@ mock.module('@app/web/lib/api', () => ({
       },
       PATCH: async (path: string, options: unknown) => {
         events.push(['patch', path, options]);
-        return { error: apiError ? { code: 'INVALID_REQUEST' } : undefined };
+        return {
+          error: apiError
+            ? { code: apiErrorCode, detail: 'private backend information' }
+            : undefined,
+        };
       },
       GET: async (path: string, options: unknown) => {
         events.push(['get', path, options]);
@@ -133,6 +138,7 @@ const client = {
 beforeEach(() => {
   events.length = 0;
   apiError = false;
+  apiErrorCode = 'INVALID_REQUEST';
   authError = false;
   locale = 'en';
   allowed.clear();
@@ -220,7 +226,7 @@ test('missing, empty, whitespace and file optional values retain existing null s
   }
 });
 
-test('invalid IDs redirect before API access; missing or blank names return false', async () => {
+test('invalid IDs redirect before API access; missing or blank names return typed field failures', async () => {
   for (const invalid of ['', 'invalid', '12345678-1234-0234-8234-123456789abc']) {
     await expect(updateClientAction(data({ id: invalid }))).rejects.toThrow(
       'NEXT_REDIRECT:/clients?error=INVALID_REQUEST',
@@ -230,17 +236,26 @@ test('invalid IDs redirect before API access; missing or blank names return fals
   events.length = 0;
   for (const field of ['firstName', 'lastName']) {
     for (const value of ['', '  '])
-      expect(await updateClientAction(data({ [field]: value }))).toBe(false);
+      expect(await updateClientAction(data({ [field]: value }))).toEqual({
+        ok: false,
+        fieldErrors: { [field]: ['required'] },
+      });
     const form = data();
     form.delete(field);
-    expect(await updateClientAction(form)).toBe(false);
+    expect(await updateClientAction(form)).toEqual({
+      ok: false,
+      fieldErrors: { [field]: ['required'] },
+    });
   }
   expect(events).toEqual([]);
 });
 
-test('API failures return false without revalidation; authentication redirects propagate', async () => {
+test('API failures return safe form errors without revalidation; authentication redirects propagate', async () => {
   apiError = true;
-  expect(await updateClientAction(data({ gender: 'unknown', salutation: 'unknown' }))).toBe(false);
+  expect(await updateClientAction(data({ gender: 'unknown', salutation: 'unknown' }))).toEqual({
+    ok: false,
+    formError: 'actionFailed',
+  });
   expect(events).toHaveLength(2);
   events.length = 0;
   authError = true;
@@ -254,6 +269,7 @@ test('personal data controls retain names, defaults, choices, labels and RHF beh
     const tree = elements(await ClientPersonalDataForm({ client }));
     const form = tree.find((node) => node.props.action === updateClientAction)!;
     expect(form.props.warnOnUnsavedChanges).toBe(true);
+    expect(form.props.structuredErrors).toBe(true);
     expect(form.props.errorMessage).toBe((language === 'en' ? en : de).Clients.detail.saveFailed);
     const fields = tree.filter((node) => node.type === TextField || node.type === SelectField);
     expect(fields.map((node) => node.props.name)).toEqual([
@@ -449,4 +465,47 @@ test('creation field helpers preserve autocomplete, constraints and the empty se
     SelectField({ id: 'gender', name: 'gender', label: 'Gender', children: null }),
   );
   expect(select.find((node) => node.props.name === 'gender')!.props.defaultValue).toBe('');
+});
+
+test('legacy wrapper converts field/API failures to false and never exposes structured results', async () => {
+  expect(await routeUpdateClientAction(data({ firstName: '' }))).toBe(false);
+  expect(events).toEqual([]);
+  apiError = true;
+  expect(await routeUpdateClientAction(data())).toBe(false);
+  expect(events).toHaveLength(2);
+  events.length = 0;
+  await expect(routeUpdateClientAction(data({ id: 'invalid' }))).rejects.toThrow(
+    'NEXT_REDIRECT:/clients?error=INVALID_REQUEST',
+  );
+});
+
+test('structured failures are serializable and reveal no backend details', async () => {
+  const fieldFailure = await updateClientAction(data({ firstName: '', lastName: '' }));
+  expect(JSON.parse(JSON.stringify(fieldFailure))).toEqual({
+    ok: false,
+    fieldErrors: { firstName: ['required'], lastName: ['required'] },
+  });
+  apiError = true;
+  const apiFailure = await updateClientAction(data());
+  expect(JSON.stringify(apiFailure)).toBe('{"ok":false,"formError":"actionFailed"}');
+});
+
+test('authorization and tenant rejections remain failures and never revalidate', async () => {
+  apiError = true;
+  for (const code of [
+    'INSUFFICIENT_PERMISSION',
+    'TENANT_MEMBERSHIP_REQUIRED',
+    'UNEXPECTED_BACKEND_ERROR',
+  ]) {
+    events.length = 0;
+    apiErrorCode = code;
+    expect(await updateClientAction(data({ tenantId: 'forged-tenant' }))).toEqual({
+      ok: false,
+      formError: 'actionFailed',
+    });
+    expect(events).toHaveLength(2);
+    expect(events[0]).toBe('authenticate');
+    const patch = events[1] as [string, string, { params: { header: unknown } }];
+    expect(patch[2].params.header).toEqual(tenant);
+  }
 });

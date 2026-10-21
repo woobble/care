@@ -4,38 +4,31 @@ import { redirect } from 'next/navigation';
 
 import { getApiClient, getTenantHeader } from '@app/web/lib/api';
 
-import {
-  readString,
-  readNullableText,
-  readNullableDate,
-  requireClientId,
-  readChoice,
-  clientPath,
-  refreshClient,
-} from '../lib/client-form-data';
+import { clientPath, refreshClient } from '../lib/client-form-data';
+import { parseClientUpdate, type ClientUpdateFailure } from '../lib/client-update.schema';
 
-export async function updateClientAction(formData: FormData): Promise<boolean | void> {
-  const id = requireClientId(formData);
-  const firstName = readString(formData, 'firstName');
-  const lastName = readString(formData, 'lastName');
-  if (!firstName || !lastName) return false;
+export async function updateClientAction(formData: FormData): Promise<ClientUpdateFailure | void> {
+  const parsed = parseClientUpdate(formData);
+  if (!parsed.success) {
+    // Invalid IDs keep the existing redirect, including precedence over name errors.
+    if (parsed.error.issues.some((issue) => issue.path[0] === 'id')) {
+      redirect('/clients?error=INVALID_REQUEST');
+    }
+    const fieldErrors: ClientUpdateFailure['fieldErrors'] = {};
+    for (const issue of parsed.error.issues) {
+      if (issue.path[0] === 'firstName' || issue.path[0] === 'lastName') {
+        fieldErrors[issue.path[0]] = ['required'];
+      }
+    }
+    return { ok: false, fieldErrors };
+  }
+  const { id, ...body } = parsed.data;
   const api = await getApiClient();
   const { error } = await api.PATCH('/api/v1/clients/{id}', {
     params: { path: { id }, header: await getTenantHeader() },
-    body: {
-      firstName,
-      lastName,
-      preferredName: readNullableText(formData, 'preferredName'),
-      dateOfBirth: readNullableDate(formData, 'dateOfBirth'),
-      dateOfDeath: readNullableDate(formData, 'dateOfDeath'),
-      gender: readChoice(formData, 'gender', ['female', 'male', 'diverse'] as const) ?? null,
-      salutation: readChoice(formData, 'salutation', ['mr', 'ms', 'mx', 'other'] as const) ?? null,
-      email: readNullableText(formData, 'email'),
-      phone: readNullableText(formData, 'phone'),
-      mobile: readNullableText(formData, 'mobile'),
-    },
+    body,
   });
-  if (error) return false;
+  if (error) return { ok: false, formError: 'actionFailed' };
   await refreshClient(id);
   redirect(clientPath(id, ''));
 }
