@@ -10,10 +10,11 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "typecheck": "tsc --noEmit --pretty false -p tsconfig.json",
-    "test": "bun test src/i18n src/features scripts",
+    "test": "bun test src/i18n src/features src/lib/office-navigation.test.ts scripts",
     "i18n:check": "bun run scripts/check-i18n.ts",
     "test:forms": "playwright test --config=playwright.forms.config.ts rhf-action-form.spec.ts",
     "test:presentation": "playwright test --config=playwright.forms.config.ts error-notices.spec.ts",
+    "test:navigation": "playwright test --config=playwright.forms.config.ts office-navigation.spec.ts",
     "test:e2e": "playwright test --config=playwright.config.ts"
   },
   "dependencies": {

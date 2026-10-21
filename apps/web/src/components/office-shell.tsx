@@ -30,6 +30,7 @@ import { AccountMenu } from '@app/web/components/account-menu';
 import { LanguageSwitcher } from '@app/web/components/language-switcher';
 import { NavigationProgress } from '@app/web/components/navigation-progress';
 import { ThemeSwitcher } from '@app/web/components/theme-switcher';
+import { getActiveOfficeNavigationItem } from '@app/web/lib/office-navigation';
 import type { Locale } from '@app/web/i18n/config';
 import { Button } from '@care/ui/components/button';
 import { Separator } from '@care/ui/components/separator';
@@ -99,12 +100,10 @@ export function OfficeShell({
   const [mobileNavigationLoaded, setMobileNavigationLoaded] = useState(false);
   const pageContextRef = useRef<HTMLSpanElement>(null);
   const mobileNavigationTriggerRef = useRef<HTMLButtonElement>(null);
-  const activeItem = useMemo(() => {
-    const links = groups.flatMap((group) => group.items);
-    return links
-      .filter((item) => isNavigationItemActive(item, pathname))
-      .sort((left, right) => right.href.length - left.href.length)[0];
-  }, [groups, pathname]);
+  const activeItem = useMemo(
+    () => getActiveOfficeNavigationItem(groups, pathname),
+    [groups, pathname],
+  );
   const tenantInitial = tenantName.trim().charAt(0).toUpperCase() || 'C';
 
   const updateCollapsed = useCallback((nextCollapsed: boolean) => {
@@ -506,10 +505,4 @@ function NavigationGroups({
       ))}
     </div>
   );
-}
-
-function isNavigationItemActive(item: { id: string; href: string }, pathname: string) {
-  if (item.id === 'overview') return pathname === '/operations';
-  if (item.id === 'operations' && pathname.startsWith('/operations/')) return true;
-  return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
