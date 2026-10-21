@@ -18,7 +18,8 @@ const scenario = JSON.parse(process.argv[2]!) as {
   permissions: string[];
   collapsed?: boolean;
   landing?: boolean;
-  settings?: 'claims' | 'reminders';
+  settings?: 'claims' | 'reminders' | 'billing';
+  populated?: boolean;
   query?: Record<string, string>;
   apiError?: boolean;
 };
@@ -70,22 +71,42 @@ mock.module('@app/web/lib/api', () => ({
         data:
           path === '/api/v1/me/tenants'
             ? [{ id: 'synthetic-tenant', name: 'Synthetic Office' }]
-            : path === '/api/v1/organizations/{id}'
-              ? { id, name: 'Synthetic organization' }
-              : path === '/api/v1/billing/payers'
-                ? {
-                    items: [{ id: 'synthetic-payer', name: 'Synthetic payer', status: 'active' }],
-                    page: 1,
-                    pageSize: 20,
-                    totalItems: 1,
-                  }
-                : path === '/api/v1/billing/payer-directory/profiles'
-                  ? []
-                  : path === '/api/v1/operations/reminder-settings'
-                    ? {
-                        organizations: [{ id, name: 'Synthetic organization', policies: [] }],
-                      }
-                    : { items: [], total: 0 },
+            : path === '/api/v1/billing/settings'
+              ? {
+                  items: scenario.populated
+                    ? [
+                        {
+                          organizationId: id,
+                          organizationName: 'Synthetic organization',
+                          legalName: 'Synthetic legal name',
+                          organizationAddress: 'Synthetic address',
+                          profile: {
+                            version: 3,
+                            taxNumber: 'synthetic-tax',
+                            paymentTermsDays: 14,
+                            taxTreatment: 'taxable',
+                            requiredInvoiceFormat: 'pdf',
+                          },
+                        },
+                      ]
+                    : [],
+                }
+              : path === '/api/v1/organizations/{id}'
+                ? { id, name: 'Synthetic organization' }
+                : path === '/api/v1/billing/payers'
+                  ? {
+                      items: [{ id: 'synthetic-payer', name: 'Synthetic payer', status: 'active' }],
+                      page: 1,
+                      pageSize: 20,
+                      totalItems: 1,
+                    }
+                  : path === '/api/v1/billing/payer-directory/profiles'
+                    ? []
+                    : path === '/api/v1/operations/reminder-settings'
+                      ? {
+                          organizations: [{ id, name: 'Synthetic organization', policies: [] }],
+                        }
+                      : { items: [], total: 0 },
       };
     },
   }),
@@ -126,13 +147,16 @@ if (scenario.landing) {
 }
 let settingsReport;
 if (scenario.settings) {
-  // Execute the real server page, then render its actual header/alerts. Async secondary
-  // navigation and interactive forms stay outside this focused presentation fixture.
-  const { PageHeader, ErrorNotice } = await import('../src/components/page-patterns');
+  // Render selected elements returned by the real server page. Inspect form trees
+  // without mounting their interactive components.
+  const { PageHeader, ErrorNotice, SuccessNotice } =
+    await import('../src/components/page-patterns');
   const { default: Page } =
     scenario.settings === 'claims'
       ? await import('../src/app/(office)/billing/claims/settings/page')
-      : await import('../src/app/(office)/operations/reminder-settings/page');
+      : scenario.settings === 'reminders'
+        ? await import('../src/app/(office)/operations/reminder-settings/page')
+        : await import('../src/app/(office)/billing/settings/page');
   calls.length = 0;
   const page = await Page({ searchParams: Promise.resolve(scenario.query ?? {}) });
   const elements: ReactElement<Record<string, unknown>>[] = [];
@@ -149,8 +173,74 @@ if (scenario.settings) {
     (element) => element.type === ErrorNotice || element.props.role === 'alert',
   );
   const headerHtml = header ? renderToStaticMarkup(header) : '';
+  const statusHtml = elements
+    .filter((element) => element.type === SuccessNotice)
+    .map((element) => renderToStaticMarkup(element))
+    .join('');
+  const note =
+    scenario.settings === 'billing'
+      ? elements.find(
+          (element) =>
+            element.type === 'p' &&
+            Children.toArray(element.props.children as ReactNode)[0] ===
+              (scenario.locale === 'en' ? en : de).Billing.organizationAddressNote,
+        )
+      : undefined;
+  const noteHtml = note ? renderToStaticMarkup(note) : '';
   const alertsHtml = alerts.map((alert) => renderToStaticMarkup(alert)).join('');
   landingHtml = headerHtml + alertsHtml;
+  let billingReport;
+  if (scenario.settings === 'billing') {
+    const { BillingNavigation } = await import('../src/app/(office)/billing/billing-nav');
+    const { RHFActionForm } = await import('../src/components/rhf-action-form');
+    const { saveBillingProfileAction } = await import('../src/app/(office)/billing/actions');
+    const forms = elements.filter((element) => element.type === RHFActionForm);
+    const organizationHtml = elements
+      .filter(
+        (element) =>
+          element.type === 'h2' ||
+          (element.type === 'p' &&
+            [
+              en.Billing.noOrganizations,
+              de.Billing.noOrganizations,
+              en.Billing.noSettingsPermission,
+              de.Billing.noSettingsPermission,
+            ].includes(element.props.children as string)),
+      )
+      .map((element) => renderToStaticMarkup(element))
+      .join('');
+    billingReport = {
+      noteHtml,
+      statusHtml,
+      organizationHtml,
+      forms: forms.map((form) => ({
+        saveAction: form.props.action === saveBillingProfileAction,
+        tree: JSON.parse(
+          JSON.stringify(form, (key, value) => {
+            if (key === '_owner' || key === '_store') return undefined;
+            return typeof value === 'function'
+              ? value.name
+              : typeof value === 'symbol'
+                ? String(value)
+                : value;
+          }),
+        ),
+      })),
+    };
+    landingHtml =
+      headerHtml +
+      renderToStaticMarkup(
+        await BillingNavigation({
+          permissions: scenario.permissions.map((permission) => ({ permission })) as Parameters<
+            typeof BillingNavigation
+          >[0]['permissions'],
+        }),
+      ) +
+      alertsHtml +
+      statusHtml +
+      noteHtml +
+      organizationHtml;
+  }
   settingsReport = {
     headerHtml,
     alertsHtml,
@@ -159,6 +249,7 @@ if (scenario.settings) {
     forms: elements.filter((element) => element.type === 'form').length,
     sections: elements.filter((element) => element.type === 'section').length,
     deniedHtml: header ? null : renderToStaticMarkup(page),
+    ...(billingReport ? { billing: billingReport } : {}),
   };
 }
 console.log(

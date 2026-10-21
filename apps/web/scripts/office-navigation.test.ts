@@ -209,19 +209,33 @@ type SettingsReport = {
   forms: number;
   sections: number;
   deniedHtml: string | null;
+  billing?: {
+    noteHtml: string;
+    statusHtml: string;
+    organizationHtml: string;
+    forms: Array<{ saveAction: boolean; tree: unknown }>;
+  };
 };
 async function settingsPage(
   locale: 'en' | 'de',
-  settingsPageKind: 'claims' | 'reminders',
+  settingsPageKind: 'claims' | 'reminders' | 'billing',
   permissions: string[],
   query: Record<string, string> = {},
   apiError = false,
+  populated = false,
 ) {
   const child = Bun.spawn(
     [
       Bun.which('bun')!,
       resolve(import.meta.dir, 'office-navigation.fixture.ts'),
-      JSON.stringify({ locale, settings: settingsPageKind, permissions, query, apiError }),
+      JSON.stringify({
+        locale,
+        settings: settingsPageKind,
+        permissions,
+        query,
+        apiError,
+        populated,
+      }),
     ],
     { stdout: 'pipe', stderr: 'pipe' },
   );
@@ -397,5 +411,118 @@ for (const locale of ['en', 'de'] as const) {
     );
     expect(failed.alertsHtml).toContain(messages.Operations.loadFailed);
     expect(failed.forms).toBe(1);
+  });
+}
+
+for (const locale of ['en', 'de'] as const) {
+  const messages = locale === 'en' ? en : de;
+  test(`actual Billing settings organization note uses organization read independently of billing management (${locale})`, async () => {
+    const cases = [
+      { permissions: ['billing.settings.manage', 'organization.read'], read: true, manage: true },
+      { permissions: ['billing.settings.manage'], read: false, manage: true },
+      { permissions: ['organization.read'], read: true, manage: false },
+      { permissions: [], read: false, manage: false },
+      { permissions: ['client.read'], read: false, manage: false },
+      {
+        permissions: [
+          'billing.settings.manage',
+          'organization.read',
+          'organization.read',
+          'billing.settings.manage',
+        ],
+        read: true,
+        manage: true,
+      },
+      {
+        permissions: ['client.read', 'organization.read', 'claims.read', 'billing.settings.manage'],
+        read: true,
+        manage: true,
+      },
+    ];
+    await Promise.all(
+      cases.map(async (scenario) => {
+        const results = await Promise.all([
+          settingsPage(locale, 'billing', scenario.permissions),
+          settingsPage(locale, 'billing', scenario.permissions, { updated: 'saved' }, false, true),
+          settingsPage(locale, 'billing', scenario.permissions, {}, true, true),
+          settingsPage(
+            locale,
+            'billing',
+            scenario.permissions,
+            { error: 'FORBIDDEN' },
+            false,
+            true,
+          ),
+        ]);
+        const expectedNote = `<p class="rounded-md border border-primary/20 bg-accent p-3 text-sm text-primary">${messages.Billing.organizationAddressNote} ${scenario.read ? `<a class="font-medium underline" href="/administration/organizations">${messages.Billing.manageOrganizations}</a>` : messages.Billing.manageOrganizations}</p>`;
+        for (const result of results) {
+          expect(result.billing!.noteHtml).toBe(expectedNote);
+          expect(result.calls).toEqual([
+            {
+              path: '/api/v1/billing/settings',
+              options: { params: { header: { 'X-Tenant-Id': 'synthetic-tenant' } } },
+            },
+          ]);
+          expect(result.employeeCalls).toEqual([]);
+          expect(result.headerHtml).toContain(messages.Billing.settings);
+          expect(result.billing!.noteHtml).not.toMatch(/tabindex|role=|<button/);
+          if (!scenario.read)
+            expect(result.billing!.noteHtml).not.toMatch(/<a|underline|font-medium|cursor/);
+        }
+        const [empty, populated, failed, queryError] = results;
+        expect(empty!.billing!.organizationHtml).toContain(messages.Billing.noOrganizations);
+        expect(empty!.billing!.forms).toEqual([]);
+        expect(empty!.sections).toBe(0);
+        expect(empty!.billing!.statusHtml).toBe('');
+        expect(populated!.billing!.organizationHtml).toContain('Synthetic organization');
+        expect(populated!.sections).toBe(1);
+        expect(populated!.billing!.forms).toHaveLength(scenario.manage ? 1 : 0);
+        expect(
+          populated!.billing!.organizationHtml.includes(messages.Billing.noSettingsPermission),
+        ).toBe(!scenario.manage);
+        if (scenario.manage) {
+          expect(populated!.billing!.forms[0]!.saveAction).toBe(true);
+          expect(populated!.billing!.forms[0]!.tree).toMatchObject({
+            props: {
+              children: expect.arrayContaining([
+                expect.objectContaining({
+                  type: 'input',
+                  props: { type: 'hidden', name: 'organizationId', value: organizationId },
+                }),
+                expect.objectContaining({
+                  type: 'input',
+                  props: { type: 'hidden', name: 'expectedVersion', value: 3 },
+                }),
+                expect.objectContaining({
+                  type: 'Field',
+                  props: expect.objectContaining({
+                    name: 'taxNumber',
+                    defaultValue: 'synthetic-tax',
+                  }),
+                }),
+              ]),
+            },
+          });
+        }
+        expect(populated!.billing!.statusHtml).toContain(messages.Billing.billingProfileSaved);
+        expect(populated!.billing!.statusHtml).toContain('role="status"');
+        expect(populated!.alertsHtml).toBe('');
+        expect(failed!.alertsHtml).toContain('role="alert"');
+        expect(failed!.billing!.organizationHtml).toContain(messages.Billing.noOrganizations);
+        expect(failed!.billing!.forms).toEqual([]);
+        expect(failed!.sections).toBe(0);
+        expect(queryError!.alertsHtml).toBe(failed!.alertsHtml);
+        expect(queryError!.billing!.forms).toEqual(populated!.billing!.forms);
+        const reordered = await settingsPage(
+          locale,
+          'billing',
+          [...scenario.permissions].reverse(),
+          { updated: 'saved' },
+          false,
+          true,
+        );
+        expect(reordered).toEqual(populated!);
+      }),
+    );
   });
 }

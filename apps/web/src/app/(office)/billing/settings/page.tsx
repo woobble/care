@@ -57,9 +57,13 @@ export default async function BillingSettingsPage({
       ) : null}
       <p className="rounded-md border border-primary/20 bg-accent p-3 text-sm text-primary">
         {t('organizationAddressNote')}{' '}
-        <Link className="font-medium underline" href="/administration/organizations">
-          {t('manageOrganizations')}
-        </Link>
+        {hasPermission(permissions, 'organization.read') ? (
+          <Link className="font-medium underline" href="/administration/organizations">
+            {t('manageOrganizations')}
+          </Link>
+        ) : (
+          t('manageOrganizations')
+        )}
       </p>
       {organizations.length ? (
         organizations.map((organization) => {

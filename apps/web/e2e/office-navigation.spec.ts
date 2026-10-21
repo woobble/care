@@ -680,3 +680,156 @@ for (const locale of ['en', 'de'] as const) {
     // oxlint-enable no-await-in-loop
   });
 }
+
+for (const locale of ['en', 'de'] as const) {
+  test(`Billing organization note preserves readers and removes only the unavailable link (${locale})`, async ({
+    page,
+  }, testInfo) => {
+    const messages = locale === 'en' ? en : de;
+    const folder = process.env.BILLING_NOTE_SCREENSHOTS_DIR ?? testInfo.outputPath('billing-note');
+    await mkdir(folder, { recursive: true });
+    const scenarios = [
+      { name: 'both', permissions: ['billing.settings.manage', 'organization.read'], read: true },
+      { name: 'manage', permissions: ['billing.settings.manage'], read: false },
+      { name: 'read', permissions: ['organization.read'], read: true },
+      { name: 'neither', permissions: [], read: false },
+    ];
+    // oxlint-disable no-await-in-loop -- Captures and keyboard checks share one browser page.
+    for (const scenario of scenarios) {
+      const after = JSON.parse(
+        execFileSync(
+          'bun',
+          [
+            resolve(import.meta.dirname, '../scripts/office-navigation.fixture.ts'),
+            JSON.stringify({
+              locale,
+              permissions: scenario.permissions,
+              settings: 'billing',
+              populated: true,
+              query: { updated: 'saved' },
+              collapsed: false,
+            }),
+          ],
+          { encoding: 'utf8' },
+        ),
+      ) as NavigationFixtureProps;
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 900 });
+        let compatibility: string[] | undefined;
+        for (const phase of process.env.BILLING_NOTE_BASELINE_DIR
+          ? ['before', 'after']
+          : ['after']) {
+          const props =
+            phase === 'after'
+              ? after
+              : (JSON.parse(
+                  await readFile(
+                    join(
+                      process.env.BILLING_NOTE_BASELINE_DIR!,
+                      `${locale}-billing-${scenario.name}.json`,
+                    ),
+                    'utf8',
+                  ),
+                ) as NavigationFixtureProps);
+          await page.context().clearCookies();
+          await page.unrouteAll();
+          await mount(page, { locale, path: '/billing/settings', props });
+          const content = page.getByRole('main');
+          const note = content
+            .locator('p')
+            .filter({ hasText: messages.Billing.organizationAddressNote });
+          await expect(note).toHaveCount(1);
+          await expect(note).toHaveText(
+            `${messages.Billing.organizationAddressNote} ${messages.Billing.manageOrganizations}`,
+          );
+          await expect(note).toHaveAttribute(
+            'class',
+            'rounded-md border border-primary/20 bg-accent p-3 text-sm text-primary',
+          );
+          const link = note.getByRole('link');
+          const linked = phase === 'before' || scenario.read;
+          await expect(link).toHaveCount(linked ? 1 : 0);
+          if (linked) {
+            await expect(link).toHaveAttribute('href', '/administration/organizations');
+            await expect(link).toHaveAttribute('class', 'font-medium underline');
+            await expect(link).toHaveAccessibleName(messages.Billing.manageOrganizations);
+          } else {
+            await expect(
+              note.locator('a,button,[role],[tabindex],.underline,.font-medium'),
+            ).toHaveCount(0);
+            expect(
+              await note.evaluate((element) => getComputedStyle(element).textDecorationLine),
+            ).toBe('none');
+          }
+          const controls = content.locator('nav,[role="status"],h2');
+          const current = await controls.evaluateAll((elements) =>
+            elements.map((element) => element.outerHTML),
+          );
+          if (compatibility) expect(current).toEqual(compatibility);
+          compatibility = current;
+          await expect(content.getByRole('status')).toHaveText(
+            messages.Billing.billingProfileSaved,
+          );
+          await expect(
+            content.getByRole('heading', { name: 'Synthetic organization' }),
+          ).toHaveCount(1);
+          const axe = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze();
+          expect(axe.violations).toEqual([]);
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          ).toBe(true);
+          await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+          await page.evaluate(() => document.fonts.ready);
+          const name = `${locale}-billing-${scenario.name}-${width}-${phase}`;
+          await page.screenshot({
+            path: join(folder, `${name}.png`),
+            fullPage: true,
+            animations: 'disabled',
+          });
+          await writeFile(
+            join(folder, `${name}.json`),
+            JSON.stringify(
+              {
+                locale,
+                scenario: scenario.name,
+                permissions: scenario.permissions,
+                width,
+                phase,
+                linked,
+                noteHtml: await note.evaluate((element) => element.outerHTML),
+                noteBounds: await note.boundingBox(),
+                compatibility: current,
+                violations: axe.violations,
+              },
+              null,
+              2,
+            ),
+          );
+          await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+          let reached = false;
+          for (let index = 0; index < 25; index++) {
+            await page.keyboard.press('Tab');
+            if (await note.evaluate((element) => element.contains(document.activeElement))) {
+              reached = true;
+              break;
+            }
+          }
+          expect(reached).toBe(linked);
+          if (linked)
+            expect(
+              await link.evaluate((element) => {
+                const style = getComputedStyle(element);
+                return (
+                  element.matches(':focus-visible') &&
+                  (style.outlineStyle !== 'none' || style.boxShadow !== 'none')
+                );
+              }),
+            ).toBe(true);
+        }
+      }
+    }
+    // oxlint-enable no-await-in-loop
+  });
+}
