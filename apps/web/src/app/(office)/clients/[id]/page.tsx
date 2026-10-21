@@ -1,3 +1,5 @@
+import { ClientPersonalDataForm } from '@app/web/features/clients/components/client-personal-data-form';
+import { TextField, SelectField } from '@app/web/features/clients/components/client-form-fields';
 import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -16,15 +18,14 @@ import {
   removeClientContactAction,
   saveClientRoutingLocationAction,
   saveClientSchedulingPreferencesAction,
-  updateClientAction,
   updateClientAddressAction,
   updateClientContactAction,
   updateClientInsuranceAction,
   updateFuturePflegegradAction,
 } from '@app/web/app/(office)/clients/actions';
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
-import { ClientProfileSectionNav } from '@app/web/components/client-profile-section-nav';
-import { ClientProfileOverview } from '@app/web/components/client-profile-overview';
+import { ClientProfileSectionNav } from '@app/web/features/clients/components/client-profile-section-nav';
+import { ClientProfileOverview } from '@app/web/features/clients/components/client-profile-overview';
 import { DataPagination } from '@app/web/components/data-pagination';
 import { PageLoadingSkeleton } from '@app/web/components/page-loading-skeleton';
 import { PageHeader } from '@app/web/components/page-patterns';
@@ -49,7 +50,6 @@ import { redirectToValidPage } from '@app/web/lib/pagination';
 import type { components } from '@care/api-client';
 import { Button } from '@care/ui/components/button';
 import { Checkbox as ShadcnCheckbox } from '@care/ui/components/checkbox';
-import { Input } from '@care/ui/components/input';
 import { Label } from '@care/ui/components/label';
 import { NativeSelect } from '@care/ui/components/native-select';
 import { Skeleton } from '@care/ui/components/skeleton';
@@ -641,104 +641,7 @@ async function ClientDetailContent({
               />
             </dl>
 
-            {canUpdateClient ? (
-              <details className="rounded-lg border bg-card p-5">
-                <summary className="cursor-pointer font-semibold">
-                  {t('Clients.detail.editPersonalData')}
-                </summary>
-                <RHFActionForm
-                  action={updateClientAction}
-                  errorMessage={t('Clients.detail.saveFailed')}
-                  warnOnUnsavedChanges
-                  className="mt-4 grid gap-4"
-                >
-                  <input type="hidden" name="id" value={client.id} />
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <TextField
-                      id="edit-firstName"
-                      name="firstName"
-                      label={t('Clients.form.firstName')}
-                      defaultValue={client.firstName}
-                      required
-                    />
-                    <TextField
-                      id="edit-lastName"
-                      name="lastName"
-                      label={t('Clients.form.lastName')}
-                      defaultValue={client.lastName}
-                      required
-                    />
-                    <TextField
-                      id="edit-preferredName"
-                      name="preferredName"
-                      label={t('Clients.form.preferredName')}
-                      defaultValue={client.preferredName ?? ''}
-                    />
-                    <TextField
-                      id="edit-dateOfBirth"
-                      name="dateOfBirth"
-                      label={t('Clients.form.dateOfBirth')}
-                      type="date"
-                      defaultValue={client.dateOfBirth ?? ''}
-                    />
-                    <TextField
-                      id="edit-dateOfDeath"
-                      name="dateOfDeath"
-                      label={t('Clients.form.dateOfDeath')}
-                      type="date"
-                      defaultValue={client.dateOfDeath ?? ''}
-                    />
-                    <SelectField
-                      id="edit-gender"
-                      name="gender"
-                      label={t('Clients.form.gender')}
-                      value={client.gender ?? ''}
-                    >
-                      <option value="">{t('Clients.form.notSpecified')}</option>
-                      <option value="female">{t('Clients.form.female')}</option>
-                      <option value="male">{t('Clients.form.male')}</option>
-                      <option value="diverse">{t('Clients.form.diverse')}</option>
-                    </SelectField>
-                    <SelectField
-                      id="edit-salutation"
-                      name="salutation"
-                      label={t('Clients.form.salutation')}
-                      value={client.salutation ?? ''}
-                    >
-                      <option value="">{t('Clients.form.notSpecified')}</option>
-                      <option value="mr">{t('Clients.form.mr')}</option>
-                      <option value="ms">{t('Clients.form.ms')}</option>
-                      <option value="mx">{t('Clients.form.mx')}</option>
-                      <option value="other">{t('Clients.form.other')}</option>
-                    </SelectField>
-                    <TextField
-                      id="edit-email"
-                      name="email"
-                      label={t('Clients.form.email')}
-                      type="email"
-                      defaultValue={client.email ?? ''}
-                    />
-                    <TextField
-                      id="edit-phone"
-                      name="phone"
-                      label={t('Clients.form.phone')}
-                      type="tel"
-                      defaultValue={client.phone ?? ''}
-                    />
-                    <TextField
-                      id="edit-mobile"
-                      name="mobile"
-                      label={t('Clients.form.mobilePhone')}
-                      type="tel"
-                      defaultValue={client.mobile ?? ''}
-                    />
-                  </div>
-                  <Button type="submit" className="w-fit">
-                    {t('Clients.detail.savePersonalData')}
-                  </Button>
-                </RHFActionForm>
-              </details>
-            ) : null}
+            {canUpdateClient ? <ClientPersonalDataForm client={client} /> : null}
 
             <details
               className="rounded-lg border bg-card p-5"
@@ -2563,85 +2466,6 @@ async function InsuranceOptions() {
       <option value="private">{t('Clients.detail.insuranceTypes.private')}</option>
       <option value="other">{t('Clients.detail.insuranceTypes.other')}</option>
     </>
-  );
-}
-
-function TextField({
-  id,
-  name,
-  label,
-  type = 'text',
-  defaultValue,
-  required = false,
-  maxLength,
-  min,
-  max,
-  step,
-}: Readonly<{
-  id: string;
-  name: string;
-  label: string;
-  type?: string;
-  defaultValue?: string;
-  required?: boolean;
-  maxLength?: number;
-  min?: number | string;
-  max?: number | string;
-  step?: number | string;
-}>) {
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor={id}>
-        {label}
-        {required ? <span aria-hidden="true"> *</span> : null}
-      </Label>
-      <Input
-        id={id}
-        name={name}
-        type={type}
-        defaultValue={defaultValue}
-        required={required}
-        maxLength={maxLength}
-        min={min === undefined ? undefined : Number(min)}
-        max={max === undefined ? undefined : Number(max)}
-        step={step}
-      />
-    </div>
-  );
-}
-
-function SelectField({
-  id,
-  name,
-  label,
-  value,
-  required = false,
-  children,
-}: Readonly<{
-  id: string;
-  name: string;
-  label: string;
-  value: string;
-  required?: boolean;
-  children: React.ReactNode;
-}>) {
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor={id}>
-        {label}
-        {required ? <span aria-hidden="true"> *</span> : null}
-      </Label>
-      <NativeSelect
-        id={id}
-        name={name}
-        selectClassName="h-10 rounded-md border bg-card px-3"
-        defaultValue={value}
-        required={required}
-        className="w-full"
-      >
-        {children}
-      </NativeSelect>
-    </div>
   );
 }
 

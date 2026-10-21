@@ -3,6 +3,7 @@ import { join, relative } from 'node:path';
 
 const webRoot = join(import.meta.dir, '..');
 const appRoot = join(webRoot, 'src/app');
+const featureRoot = join(webRoot, 'src/features');
 const componentRoot = join(webRoot, 'src/components');
 const catalogRoot = join(import.meta.dir, '../messages');
 const pathFilter = process.argv[2];
@@ -100,8 +101,9 @@ async function scan(directory: string): Promise<void> {
 
 await scan(appRoot);
 await scan(componentRoot);
+await scan(featureRoot);
 if (findings.size) {
-  console.error('Possible hardcoded user-facing text remains in apps/web/src/app:');
+  console.error('Possible hardcoded user-facing text remains in apps/web/src:');
   for (const finding of [...findings].sort()) console.error(`  ${finding}`);
   process.exitCode = 1;
 }

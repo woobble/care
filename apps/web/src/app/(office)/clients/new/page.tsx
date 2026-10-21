@@ -6,11 +6,12 @@ import { createClientAction } from '@app/web/app/(office)/clients/actions';
 import { AsyncEntityCombobox } from '@app/web/components/async-entity-combobox';
 import { PageHeader } from '@app/web/components/page-patterns';
 import { RHFActionForm } from '@app/web/components/rhf-action-form';
+import {
+  TextField as Field,
+  SelectField,
+} from '@app/web/features/clients/components/client-form-fields';
 import { getApiClient, getPermissionGrants, hasPermission } from '@app/web/lib/api';
 import { Button } from '@care/ui/components/button';
-import { Input } from '@care/ui/components/input';
-import { Label } from '@care/ui/components/label';
-import { NativeSelect } from '@care/ui/components/native-select';
 
 export default async function NewClientPage({
   searchParams,
@@ -196,77 +197,6 @@ export default async function NewClientPage({
           </Button>
         </div>
       </RHFActionForm>
-    </div>
-  );
-}
-
-function Field({
-  id,
-  name,
-  label,
-  type = 'text',
-  autoComplete,
-  required = false,
-  maxLength,
-  defaultValue,
-}: Readonly<{
-  id: string;
-  name: string;
-  label: string;
-  type?: string;
-  autoComplete?: string;
-  required?: boolean;
-  maxLength?: number;
-  defaultValue?: string;
-}>) {
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor={id}>
-        {label}
-        {required ? <span aria-hidden="true"> *</span> : null}
-      </Label>
-      <Input
-        id={id}
-        name={name}
-        type={type}
-        autoComplete={autoComplete}
-        required={required}
-        maxLength={maxLength}
-        defaultValue={defaultValue}
-      />
-    </div>
-  );
-}
-
-function SelectField({
-  id,
-  name,
-  label,
-  required = false,
-  children,
-}: Readonly<{
-  id: string;
-  name: string;
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}>) {
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor={id}>
-        {label}
-        {required ? <span aria-hidden="true"> *</span> : null}
-      </Label>
-      <NativeSelect
-        id={id}
-        name={name}
-        selectClassName="h-10 rounded-md border bg-card px-3"
-        required={required}
-        defaultValue=""
-        className="w-full"
-      >
-        {children}
-      </NativeSelect>
     </div>
   );
 }
