@@ -1,5 +1,6 @@
 import { getTranslations } from 'next-intl/server';
-import Link from 'next/link';
+
+import { BillingNavigationLinks } from './billing-nav-links';
 
 import type { CurrentPermissionGrant } from '@app/web/lib/api';
 import { hasPermission } from '@app/web/lib/api';
@@ -48,17 +49,11 @@ export async function BillingNavigation({
       aria-label={t('navigation')}
       className="flex max-w-full min-w-0 flex-wrap gap-1 border-b border-border pb-3 text-sm"
     >
-      {links
-        .filter((link) => hasPermission(permissions, link.permission))
-        .map((link) => (
-          <Link
-            key={`${link.href}${link.hash ?? ''}`}
-            className="min-h-10 rounded-md px-3 py-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-            href={`${link.href}${link.hash ?? ''}`}
-          >
-            {link.label}
-          </Link>
-        ))}
+      <BillingNavigationLinks
+        links={links
+          .filter((link) => hasPermission(permissions, link.permission))
+          .map((link) => ({ href: `${link.href}${link.hash ?? ''}`, label: link.label }))}
+      />
     </nav>
   );
 }

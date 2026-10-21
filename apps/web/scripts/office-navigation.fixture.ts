@@ -18,6 +18,8 @@ const scenario = JSON.parse(process.argv[2]!) as {
   permissions: string[];
   collapsed?: boolean;
   landing?: boolean;
+  billingNavigation?: boolean;
+  pathname?: string;
   settings?: 'claims' | 'reminders' | 'billing';
   populated?: boolean;
   query?: Record<string, string>;
@@ -46,7 +48,7 @@ mock.module('next/navigation', () => ({
   useRouter: () => {
     throw new Error('Client forms are outside the fixture');
   },
-  usePathname: () => '/',
+  usePathname: () => scenario.pathname ?? '/',
   useSearchParams: () => new URLSearchParams(),
   redirect: () => {
     throw new Error('Unexpected fixture redirect');
@@ -63,7 +65,7 @@ mock.module('@app/web/lib/employee-lookup', () => ({
 mock.module('@app/web/lib/api', () => ({
   getApiClient: async () => ({
     GET: async (path: string, options: unknown) => {
-      if (scenario.settings) calls.push({ path, options });
+      if (scenario.settings || scenario.billingNavigation) calls.push({ path, options });
       if (scenario.settings && scenario.apiError && path !== '/api/v1/me/tenants')
         return { error: { code: 'FORBIDDEN' } };
       const id = '11111111-1111-4111-8111-111111111111';
@@ -252,10 +254,34 @@ if (scenario.settings) {
     ...(billingReport ? { billing: billingReport } : {}),
   };
 }
+let billingNavigation;
+if (scenario.billingNavigation) {
+  const { BillingNavigation } = await import('../src/app/(office)/billing/billing-nav');
+  calls.length = 0;
+  const navigation = await BillingNavigation({
+    permissions: scenario.permissions.map((permission) => ({ permission })) as Parameters<
+      typeof BillingNavigation
+    >[0]['permissions'],
+  });
+  const { BillingNavigationLinks } = await import('../src/app/(office)/billing/billing-nav-links');
+  const renderer = navigation.props.children;
+  const links = renderer.props.links;
+
+  billingNavigation = {
+    links,
+    label: navigation.props['aria-label'],
+    className: navigation.props.className,
+    html: renderToStaticMarkup(navigation),
+    calls,
+    clientPropsKeys: Object.keys(renderer.props),
+    clientTypeIsReal: renderer.type === BillingNavigationLinks,
+  };
+}
 console.log(
   JSON.stringify({
     ...props,
     ...(landingHtml ? { landingHtml } : {}),
     ...(settingsReport ? { settingsReport } : {}),
+    ...(billingNavigation ? { billingNavigation } : {}),
   }),
 );

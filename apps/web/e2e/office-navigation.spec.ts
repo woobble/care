@@ -1080,3 +1080,241 @@ for (const locale of ['en', 'de'] as const) {
     // oxlint-enable no-await-in-loop
   });
 }
+
+async function billingNavigationProps(locale: 'en' | 'de', permissions: string[]) {
+  return JSON.parse(
+    execFileSync(
+      'bun',
+      [
+        resolve(import.meta.dirname, '../scripts/office-navigation.fixture.ts'),
+        JSON.stringify({ locale, permissions, billingNavigation: true, collapsed: false }),
+      ],
+      { encoding: 'utf8' },
+    ),
+  ) as NavigationFixtureProps;
+}
+const billingGrants = [
+  'billing.read',
+  'billing.payments.read',
+  'claims.read',
+  'claims.settings.manage',
+  'billing.settings.manage',
+];
+for (const locale of ['en', 'de'] as const) {
+  const messages = (locale === 'en' ? en : de).Billing;
+  test(`real Billing client renderer before/after across routes, permissions and widths (${locale})`, async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(90_000);
+    const folder =
+      process.env.BILLING_NAV_SCREENSHOTS_DIR ?? testInfo.outputPath('billing-navigation');
+    await mkdir(folder, { recursive: true });
+    const scenarios = [
+      { name: 'overview', path: '/billing', current: '/billing', mask: 31 },
+      { name: 'worklist', path: '/billing#worklist', current: '/billing', mask: 31 },
+      {
+        name: 'invoice-detail',
+        path: '/billing/invoices/synthetic-id',
+        current: '/billing/invoices',
+        mask: 31,
+      },
+      {
+        name: 'receivables',
+        path: '/billing/receivables',
+        current: '/billing/receivables',
+        mask: 31,
+      },
+      { name: 'payments', path: '/billing/payments', current: '/billing/payments', mask: 31 },
+      { name: 'claims', path: '/billing/claims', current: '/billing/claims', mask: 31 },
+      {
+        name: 'claims-settings',
+        path: '/billing/claims/settings',
+        current: '/billing/claims/settings',
+        mask: 31,
+      },
+      {
+        name: 'billing-settings',
+        path: '/billing/settings',
+        current: '/billing/settings',
+        mask: 31,
+      },
+      {
+        name: 'hidden-child',
+        path: '/billing/claims/settings',
+        current: '/billing/claims',
+        mask: 4,
+      },
+      {
+        name: 'hidden-parent-child',
+        path: '/billing/claims/settings',
+        current: undefined,
+        mask: 1,
+      },
+      { name: 'unmatched', path: '/billing-other', current: undefined, mask: 31 },
+    ];
+    // oxlint-disable no-await-in-loop -- Compare original server HTML with the live renderer in one browser.
+    for (const scenario of scenarios) {
+      const props = await billingNavigationProps(
+        locale,
+        billingGrants.filter((_grant, index) => scenario.mask & (1 << index)),
+      );
+      for (const width of [1440, 390]) {
+        let beforeGeometry: unknown;
+        let primaryContext: string | null = null;
+        for (const phase of process.env.BILLING_NAV_BASELINE_DIR
+          ? ['before', 'after']
+          : ['after']) {
+          const navigation = props.billingNavigation!;
+          const old =
+            phase === 'before'
+              ? (JSON.parse(
+                  await readFile(
+                    join(process.env.BILLING_NAV_BASELINE_DIR!, `${locale}-${scenario.mask}.json`),
+                    'utf8',
+                  ),
+                ).billingNavigation as { html: string })
+              : undefined;
+          const phaseProps = {
+            ...props,
+            billingNavigation: { ...navigation, ...(old ? { beforeHtml: old.html } : {}) },
+          };
+          await page.context().clearCookies();
+          await page.unrouteAll();
+          await page.setViewportSize({ width, height: 900 });
+          await mount(page, { locale, path: scenario.path, props: phaseProps });
+          await page.evaluate(() => window.scrollTo(0, 0));
+          const nav = page.getByRole('navigation', { name: messages.navigation, exact: true });
+          const links = nav.getByRole('link');
+          expect(
+            await links.evaluateAll((elements) =>
+              elements.map((element) => ({
+                href: element.getAttribute('href'),
+                label: element.textContent,
+              })),
+            ),
+          ).toEqual(navigation.links);
+          const current = nav.locator('a[aria-current="page"]');
+          const expectedHref = phase === 'before' ? undefined : scenario.current;
+          await expect(current).toHaveCount(expectedHref ? 1 : 0);
+          if (expectedHref) {
+            await expect(current).toHaveAttribute('href', expectedHref);
+            await expect(current).toHaveAccessibleName(
+              navigation.links.find((link) => link.href === expectedHref)!.label,
+            );
+            expect(
+              await current.evaluate((element) => getComputedStyle(element).textDecorationLine),
+            ).toContain('underline');
+            expect(
+              await current.evaluate((element) => getComputedStyle(element).backgroundColor),
+            ).not.toBe('rgba(0, 0, 0, 0)');
+          }
+          const worklist = nav.locator('a[href="/billing#worklist"]');
+          if (await worklist.count()) await expect(worklist).not.toHaveAttribute('aria-current');
+          const context = await page.locator('#office-page-context').textContent();
+          if (phase === 'before') primaryContext = context;
+          else if (primaryContext) expect(context).toBe(primaryContext);
+          const geometry = await links.evaluateAll((elements) =>
+            elements.map((element) => {
+              const { x, y, width: linkWidth, height } = element.getBoundingClientRect();
+              return { x, y, width: linkWidth, height };
+            }),
+          );
+          expect(geometry.every((box) => box.height >= 40)).toBe(true);
+          if (phase === 'before') beforeGeometry = geometry;
+          else if (beforeGeometry) expect(geometry).toEqual(beforeGeometry);
+          const axe = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze();
+          expect(axe.violations).toEqual([]);
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          ).toBe(true);
+          await page.evaluate(() => document.fonts.ready);
+          const name = `${locale}-${scenario.name}-${width}-${phase}`;
+          await page.screenshot({ path: join(folder, `${name}.png`), animations: 'disabled' });
+          await writeFile(
+            join(folder, `${name}.json`),
+            JSON.stringify(
+              {
+                locale,
+                route: scenario.path,
+                width,
+                phase,
+                currentHref: expectedHref ?? null,
+                links: navigation.links,
+                geometry,
+                primaryContext: context,
+                navBounds: await nav.boundingBox(),
+                violations: axe.violations,
+              },
+              null,
+              2,
+            ),
+          );
+        }
+      }
+    }
+    // oxlint-enable no-await-in-loop
+  });
+
+  test(`Billing client updates pathname/visibility, keeps focus order and ordinary native hash navigation (${locale})`, async ({
+    page,
+  }) => {
+    const props = await billingNavigationProps(locale, billingGrants);
+    await page.setViewportSize({ width: 390, height: 900 });
+    await mount(page, { locale, path: '/billing', props });
+    const nav = page.getByRole('navigation', { name: messages.navigation, exact: true });
+    const links = nav.getByRole('link');
+    await links.first().focus();
+    await page.keyboard.press('Tab');
+    await expect(links.nth(1)).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(links.first()).toBeFocused();
+    expect(
+      await links.first().evaluate((element) => {
+        const style = getComputedStyle(element);
+        return (
+          element.matches(':focus-visible') &&
+          (style.outlineStyle !== 'none' || style.boxShadow !== 'none')
+        );
+      }),
+    ).toBe(true);
+    await expect(nav.locator('a[aria-current="page"]')).toHaveAttribute('href', '/billing');
+    // oxlint-disable no-await-in-loop -- Observe derived state after each pathname transition.
+    for (const [path, href] of [
+      ['/billing/invoices/id', '/billing/invoices'],
+      ['/billing/claims/id', '/billing/claims'],
+      ['/billing/claims/settings', '/billing/claims/settings'],
+      ['/billing/settings', '/billing/settings'],
+      ['/unmatched', undefined],
+      ['/billing/', '/billing'],
+      ['/billing?view=synthetic', '/billing'],
+    ]) {
+      await page.evaluate((route) => window.navigationHarness.navigate(route!), path);
+      const current = nav.locator('a[aria-current="page"]');
+      await expect(current).toHaveCount(href ? 1 : 0);
+      if (href) await expect(current).toHaveAttribute('href', href);
+    }
+    // oxlint-enable no-await-in-loop
+    await page.evaluate(() => window.navigationHarness.navigate('/billing/claims/settings'));
+    const parent = await billingNavigationProps(locale, ['claims.read']);
+    await page.evaluate((next) => window.navigationHarness.render(next), parent);
+    await expect(nav.getByRole('link')).toHaveCount(1);
+    await expect(nav.locator('a[aria-current="page"]')).toHaveAttribute('href', '/billing/claims');
+    const hidden = await billingNavigationProps(locale, ['billing.read']);
+    await page.evaluate((next) => window.navigationHarness.render(next), hidden);
+    await expect(nav.getByRole('link')).toHaveCount(3);
+    await expect(nav.locator('a[aria-current]')).toHaveCount(0);
+    const empty = await billingNavigationProps(locale, []);
+    await page.evaluate((next) => window.navigationHarness.render(next), empty);
+    await expect(nav.getByRole('link')).toHaveCount(0);
+    await page.evaluate((next) => window.navigationHarness.render(next), props);
+    await page.evaluate(() => window.navigationHarness.navigate('/billing'));
+    const worklist = nav.getByRole('link', { name: messages.billableServices, exact: true });
+    await worklist.click();
+    await expect(page).toHaveURL('http://navigation.test/billing#worklist');
+    await expect(page.getByRole('heading', { name: 'Synthetic worklist' })).toBeInViewport();
+    await expect(worklist).not.toHaveAttribute('aria-current');
+    await expect(nav.locator('a[aria-current="page"]')).toHaveAttribute('href', '/billing');
+  });
+}

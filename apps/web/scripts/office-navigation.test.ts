@@ -628,3 +628,87 @@ for (const locale of ['en', 'de'] as const) {
     }
   });
 }
+
+type BillingNavigationReport = {
+  links: Array<{ href: string; label: string }>;
+  label: string;
+  className: string;
+  html: string;
+  calls: unknown[];
+  clientPropsKeys: string[];
+  clientTypeIsReal: boolean;
+};
+async function billingNavigation(locale: 'en' | 'de', permissions: string[], pathname = '/') {
+  const child = Bun.spawn(
+    [
+      Bun.which('bun')!,
+      resolve(import.meta.dir, 'office-navigation.fixture.ts'),
+      JSON.stringify({ locale, permissions, billingNavigation: true, pathname }),
+    ],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+  const [code, output, errors] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  if (code !== 0) throw new Error(errors);
+  return (JSON.parse(output) as { billingNavigation: BillingNavigationReport }).billingNavigation;
+}
+for (const locale of ['en', 'de'] as const) {
+  const messages = (locale === 'en' ? en : de).Billing;
+  const definitions = [
+    { href: '/billing', label: messages.overview, permission: 'billing.read' },
+    { href: '/billing#worklist', label: messages.billableServices, permission: 'billing.read' },
+    { href: '/billing/invoices', label: messages.invoices, permission: 'billing.read' },
+    {
+      href: '/billing/receivables',
+      label: messages.receivables,
+      permission: 'billing.payments.read',
+    },
+    { href: '/billing/payments', label: messages.payments, permission: 'billing.payments.read' },
+    { href: '/billing/claims', label: messages.claims, permission: 'claims.read' },
+    {
+      href: '/billing/claims/settings',
+      label: messages.claimsSettings,
+      permission: 'claims.settings.manage',
+    },
+    { href: '/billing/settings', label: messages.settings, permission: 'billing.settings.manage' },
+  ];
+  test(`actual BillingNavigation keeps all server permission gates and serializes only localized links (${locale})`, async () => {
+    const gates = [...new Set(definitions.map((item) => item.permission))];
+    await Promise.all(
+      Array.from({ length: 32 }, async (_, mask) => {
+        const permissions = gates.filter((_gate, index) => mask & (1 << index));
+        const result = await billingNavigation(locale, permissions);
+        expect(result.links).toEqual(
+          definitions
+            .filter((item) => permissions.includes(item.permission))
+            .map(({ href, label }) => ({ href, label })),
+        );
+        expect(result.clientPropsKeys).toEqual(['links']);
+        expect(result.clientTypeIsReal).toBe(true);
+        expect(result.calls).toEqual([]);
+        expect(result.label).toBe(messages.navigation);
+        expect(result.className).toBe(
+          'flex max-w-full min-w-0 flex-wrap gap-1 border-b border-border pb-3 text-sm',
+        );
+        expect(result.html).not.toContain('aria-current');
+      }),
+    );
+    const all = gates;
+    const [normal, duplicate, reordered, unrelated] = await Promise.all([
+      billingNavigation(locale, all),
+      billingNavigation(locale, [...all, ...all]),
+      billingNavigation(locale, [...all].reverse()),
+      billingNavigation(locale, ['client.read']),
+    ]);
+    expect(duplicate).toEqual(normal);
+    expect(reordered).toEqual(normal);
+    expect(unrelated.links).toEqual([]);
+    const current = await billingNavigation(locale, all, '/billing/claims/settings');
+    expect((current.html.match(/aria-current="page"/g) ?? []).length).toBe(1);
+    expect(current.html).toMatch(/href="\/billing\/claims\/settings" aria-current="page"/);
+    expect(current.html).toContain('underline');
+  });
+}

@@ -33,7 +33,7 @@ const result = await Bun.build({
             path === 'pathname'
               ? `import {useSyncExternalStore} from ${reactImport}; const subscribe = (notify) => {window.addEventListener('popstate', notify);return () => window.removeEventListener('popstate', notify)}; export const usePathname = () => useSyncExternalStore(subscribe, () => window.location.pathname);`
               : path === 'link'
-                ? `import {createElement} from ${reactImport}; export default function Link({href,onClick,children,...props}) {return createElement('a',{...props,href,onClick:(event) => {onClick?.(event);if(!event.defaultPrevented){event.preventDefault();history.pushState({},'',href);window.dispatchEvent(new PopStateEvent('popstate'));}}},children)}`
+                ? `import {createElement} from ${reactImport}; export default function Link({href,onClick,children,...props}) {return createElement('a',{...props,href,onClick:(event) => {onClick?.(event);if(!event.defaultPrevented){if(href.includes('#'))return;event.preventDefault();history.pushState({},'',href);window.dispatchEvent(new PopStateEvent('popstate'));}}},children)}`
                 : `import {createElement} from ${reactImport}; export const AccountMenu = ({labels}) => createElement('button',{type:'button'},labels.account); export const LanguageSwitcher = () => null; export const ThemeSwitcher = () => null; export const NavigationProgress = () => null;`,
         }));
       },
