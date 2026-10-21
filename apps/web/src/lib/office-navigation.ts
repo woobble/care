@@ -6,10 +6,18 @@ export function getActiveOfficeNavigationItem<Item extends NavigationItem>(
   pathname: string,
 ): Item | undefined {
   const routePath = pathname.split(/[?#]/, 1)[0]!;
-  return groups
-    .flatMap((group) => group.items)
+  const visibleItems = groups.flatMap((group) => group.items);
+  const activeItem = visibleItems
     .filter((item) => isNavigationItemActive(item, routePath))
     .sort((left, right) => right.href.length - left.href.length)[0];
+  if (activeItem) return activeItem;
+  if (
+    /^\/(?:billing\/settings|billing\/claims\/settings|operations\/reminder-settings)\/?$/.test(
+      routePath,
+    )
+  )
+    return visibleItems.find((item) => item.id === 'administration');
+  return undefined;
 }
 
 function isNavigationItemActive(item: NavigationItem, pathname: string) {

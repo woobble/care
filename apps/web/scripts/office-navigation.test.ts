@@ -526,3 +526,105 @@ for (const locale of ['en', 'de'] as const) {
     );
   });
 }
+
+for (const locale of ['en', 'de'] as const) {
+  const labels = (locale === 'en' ? en : de).Navigation;
+  test(`actual Office layout supplies unchanged visible items for settings fallback and normal owners (${locale})`, async () => {
+    const routes = [
+      {
+        manage: 'billing.settings.manage',
+        read: 'billing.read',
+        path: '/billing/settings',
+        owner: 'billing',
+      },
+      {
+        manage: 'claims.settings.manage',
+        read: 'claims.read',
+        path: '/billing/claims/settings',
+        owner: 'claims',
+      },
+      {
+        manage: 'operations.reminder_settings.manage',
+        read: 'operations.read',
+        path: '/operations/reminder-settings',
+        owner: 'operations',
+      },
+    ];
+    await Promise.all(
+      routes.map(async (route) => {
+        const only = await layout(locale, [route.manage]);
+        expect(only.groups).toEqual([
+          {
+            id: 'management',
+            label: labels.management,
+            items: [
+              { id: 'administration', label: labels.administration, href: '/administration' },
+            ],
+          },
+        ]);
+        const original = structuredClone(only.groups);
+        const admin = only.groups[0]!.items[0]!;
+        for (const suffix of ['', '/', '?returnTo=%2Funrelated', '#settings'])
+          expect(getActiveOfficeNavigationItem(only.groups, route.path + suffix)).toBe(admin);
+        expect(only.groups).toEqual(original);
+        const allowed = await layout(locale, [route.manage, route.read]);
+        expect(allowed.groups.flatMap((group) => group.items).map((item) => item.id)).toEqual(
+          route.owner === 'operations'
+            ? ['overview', 'operations', 'administration']
+            : [route.owner, 'administration'],
+        );
+        expect(getActiveOfficeNavigationItem(allowed.groups, route.path)).toBe(
+          allowed.groups.flatMap((group) => group.items).find((item) => item.id === route.owner)!,
+        );
+        expect(await layout(locale, [route.manage, route.manage])).toEqual(only);
+        expect(await layout(locale, [route.read, route.manage])).toEqual(allowed);
+      }),
+    );
+    const parent = await layout(locale, ['billing.read', 'claims.settings.manage']);
+    expect(parent.groups.flatMap((group) => group.items).map((item) => item.id)).toEqual([
+      'billing',
+      'administration',
+    ]);
+    expect(getActiveOfficeNavigationItem(parent.groups, '/billing/claims/settings')).toBe(
+      parent.groups[0]!.items[0]!,
+    );
+    const mixedPermissions = [
+      'client.read',
+      ...routes.flatMap((route) => [route.manage, route.read]),
+    ];
+    const [mixed, reordered, repeated] = await Promise.all([
+      layout(locale, mixedPermissions),
+      layout(locale, [...mixedPermissions].reverse()),
+      layout(locale, [...mixedPermissions, ...mixedPermissions]),
+    ]);
+    expect(mixed.groups.map((group) => group.id)).toEqual([
+      'workspace',
+      'servicesFinance',
+      'management',
+    ]);
+    expect(mixed.groups.flatMap((group) => group.items).map((item) => item.id)).toEqual([
+      'overview',
+      'operations',
+      'clients',
+      'billing',
+      'claims',
+      'administration',
+    ]);
+    expect(reordered).toEqual(mixed);
+    expect(repeated).toEqual(mixed);
+    for (const route of routes)
+      expect(getActiveOfficeNavigationItem(mixed.groups, route.path)).toBe(
+        mixed.groups.flatMap((group) => group.items).find((item) => item.id === route.owner)!,
+      );
+    const unrelated = await layout(locale, ['client.read']);
+    const none = await layout(locale, []);
+    expect(unrelated.groups.flatMap((group) => group.items).map((item) => item.id)).toEqual([
+      'clients',
+    ]);
+    expect(none.groups).toEqual([]);
+    for (const route of routes) {
+      expect(getActiveOfficeNavigationItem(unrelated.groups, route.path)).toBeUndefined();
+      expect(getActiveOfficeNavigationItem(none.groups, route.path)).toBeUndefined();
+    }
+  });
+}

@@ -491,7 +491,7 @@ for (const locale of ['en', 'de'] as const) {
     await expect(dialog).not.toBeVisible();
     await expect(trigger).toBeFocused();
     await selected(page, '/administration', labels.administration);
-    // Existing route ownership is deliberately unchanged outside /administration.
+    // The settings path now falls back to the existing visible Administration item.
     await expect(
       page.locator(
         'section[aria-labelledby="admin-entrypoints-title"] a[href="/billing/settings"]',
@@ -501,7 +501,7 @@ for (const locale of ['en', 'de'] as const) {
     // pathname bridge rather than treating an ordinary anchor reload as Next routing.
     await page.evaluate(() => window.navigationHarness.navigate('/billing/settings'));
     await expect(page).toHaveURL('http://navigation.test/billing/settings');
-    await selected(page, undefined, labels.overview);
+    await selected(page, '/administration', labels.administration);
   });
 }
 
@@ -829,6 +829,253 @@ for (const locale of ['en', 'de'] as const) {
             ).toBe(true);
         }
       }
+    }
+    // oxlint-enable no-await-in-loop
+  });
+}
+
+for (const locale of ['en', 'de'] as const) {
+  const labels = (locale === 'en' ? en : de).Navigation;
+  test(`settings context fallback before/after across owners and navigation surfaces (${locale})`, async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(90_000);
+    const folder =
+      process.env.SETTINGS_CONTEXT_SCREENSHOTS_DIR ?? testInfo.outputPath('settings-context');
+    await mkdir(folder, { recursive: true });
+    const scenarios = [
+      {
+        name: 'billing-only',
+        path: '/billing/settings',
+        permissions: ['billing.settings.manage'],
+        href: '/administration',
+        label: labels.administration,
+        changed: true,
+      },
+      {
+        name: 'claims-only',
+        path: '/billing/claims/settings',
+        permissions: ['claims.settings.manage'],
+        href: '/administration',
+        label: labels.administration,
+        changed: true,
+      },
+      {
+        name: 'reminders-only',
+        path: '/operations/reminder-settings',
+        permissions: ['operations.reminder_settings.manage'],
+        href: '/administration',
+        label: labels.administration,
+        changed: true,
+      },
+      {
+        name: 'billing-read',
+        path: '/billing/settings',
+        permissions: ['billing.settings.manage', 'billing.read'],
+        href: '/billing',
+        label: labels.billing,
+      },
+      {
+        name: 'claims-read',
+        path: '/billing/claims/settings',
+        permissions: ['claims.settings.manage', 'claims.read'],
+        href: '/billing/claims',
+        label: labels.claims,
+      },
+      {
+        name: 'operations-read',
+        path: '/operations/reminder-settings',
+        permissions: ['operations.reminder_settings.manage', 'operations.read'],
+        href: '/operations/worklist',
+        label: labels.operations,
+      },
+      {
+        name: 'billing-parent',
+        path: '/billing/claims/settings',
+        permissions: ['claims.settings.manage', 'billing.read'],
+        href: '/billing',
+        label: labels.billing,
+      },
+      {
+        name: 'hidden-admin',
+        path: '/billing/settings',
+        permissions: ['client.read'],
+        href: undefined,
+        label: labels.overview,
+      },
+      {
+        name: 'unrelated-route',
+        path: '/unmatched',
+        permissions: ['billing.settings.manage'],
+        href: undefined,
+        label: labels.overview,
+      },
+    ];
+    const surfaces = [
+      { name: 'expanded', width: 1440, collapsed: false, mobile: false },
+      { name: 'collapsed', width: 1440, collapsed: true, mobile: false },
+      { name: 'mobile', width: 390, collapsed: false, mobile: true },
+    ];
+    // oxlint-disable no-await-in-loop -- Baseline/current screenshots share a page and real mobile drawer.
+    for (const scenario of scenarios) {
+      for (const surface of surfaces) {
+        const props = JSON.parse(
+          execFileSync(
+            'bun',
+            [
+              resolve(import.meta.dirname, '../scripts/office-navigation.fixture.ts'),
+              JSON.stringify({
+                locale,
+                permissions: scenario.permissions,
+                collapsed: surface.collapsed,
+              }),
+            ],
+            { encoding: 'utf8' },
+          ),
+        ) as NavigationFixtureProps;
+        for (const phase of process.env.SETTINGS_CONTEXT_BASELINE_BUNDLE
+          ? ['before', 'after']
+          : ['after']) {
+          await page.context().clearCookies();
+          await page.unrouteAll();
+          await page.setViewportSize({ width: surface.width, height: 900 });
+          await mount(page, {
+            locale,
+            path: scenario.path,
+            props,
+            ...(phase === 'before'
+              ? { bundle: process.env.SETTINGS_CONTEXT_BASELINE_BUNDLE! }
+              : {}),
+          });
+          const changed = phase === 'before' && scenario.changed;
+          const href = changed ? undefined : scenario.href;
+          const context = changed ? labels.overview : scenario.label;
+          await selected(page, href, context);
+          const topbar = await page
+            .locator('#office-page-context')
+            .evaluate((element) => element.closest('header')!.getBoundingClientRect().toJSON());
+          if (surface.mobile) {
+            await page.getByRole('button', { name: labels.openMenu }).click();
+            await expect(page.locator('#office-mobile-navigation')).toBeVisible();
+            await selected(page, href, context, true);
+          }
+          const nav = page.locator(
+            surface.mobile ? '#office-mobile-navigation' : '#office-sidebar',
+          );
+          expect(
+            await nav
+              .locator('a[data-sidebar="menu-button"]')
+              .evaluateAll((links) => links.map((link) => link.getAttribute('href'))),
+          ).toEqual(props.groups.flatMap((group) => group.items.map((item) => item.href)));
+          await expect(
+            nav.locator('a[data-active="true"][data-sidebar="menu-button"]'),
+          ).toHaveCount(href ? 1 : 0);
+          if (!surface.mobile && surface.collapsed && href) {
+            const item = nav.locator(`a[data-sidebar="menu-button"][href="${href}"]`);
+            await expect(item).toHaveAttribute('aria-label', context);
+            await expect(item).toHaveAttribute('title', context);
+          }
+          const axe = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze();
+          expect(axe.violations).toEqual([]);
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          ).toBe(true);
+          await page.evaluate(() => document.fonts.ready);
+          const navigation = surface.mobile
+            ? await page.getByRole('dialog').boundingBox()
+            : await nav.boundingBox();
+          const name = `${locale}-${scenario.name}-${surface.name}-${phase}`;
+          await page.screenshot({ path: join(folder, `${name}.png`), animations: 'disabled' });
+          await writeFile(
+            join(folder, `${name}.json`),
+            JSON.stringify(
+              {
+                locale,
+                route: scenario.path,
+                permissions: scenario.permissions,
+                surface: surface.name,
+                phase,
+                selectedHref: href ?? null,
+                context,
+                regions: { topbar, navigation },
+                violations: axe.violations,
+              },
+              null,
+              2,
+            ),
+          );
+        }
+      }
+    }
+    // oxlint-enable no-await-in-loop
+  });
+
+  test(`settings fallback retains keyboard focus, collapse persistence and drawer interaction (${locale})`, async ({
+    page,
+  }) => {
+    const permissions = [
+      'billing.settings.manage',
+      'claims.settings.manage',
+      'operations.reminder_settings.manage',
+    ];
+    const paths = [
+      '/billing/settings',
+      '/billing/claims/settings',
+      '/operations/reminder-settings',
+    ];
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mount(page, { locale, path: paths[0]!, permissions });
+    const sidebar = page.locator('#office-sidebar');
+    const administration = sidebar.locator('a[data-sidebar="menu-button"][href="/administration"]');
+    // oxlint-disable no-await-in-loop -- Exercise state transitions on the same shell.
+    for (const path of paths) {
+      await page.evaluate((route) => window.navigationHarness.navigate(route), path);
+      await selected(page, '/administration', labels.administration);
+      await sidebar.getByRole('link', { name: labels.brand, exact: true }).focus();
+      await page.keyboard.press('Tab');
+      await expect(administration).toBeFocused();
+      expect(await administration.evaluate((element) => element.matches(':focus-visible'))).toBe(
+        true,
+      );
+      await expect(administration).not.toHaveCSS('box-shadow', 'none');
+      await page.keyboard.press('Control+b');
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+      await selected(page, '/administration', labels.administration);
+      await expect(administration).toHaveAttribute('aria-label', labels.administration);
+      await expect(administration).toHaveAttribute('title', labels.administration);
+      await page.keyboard.press('Control+b');
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
+    }
+    await page.keyboard.press('Control+b');
+    expect(
+      (await page.context().cookies()).find((cookie) => cookie.name === 'care-office-sidebar')
+        ?.value,
+    ).toBe('collapsed');
+    await page.reload();
+    await mount(page, { locale, path: paths[2]!, permissions });
+    await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+    await selected(page, '/administration', labels.administration);
+    await page.setViewportSize({ width: 390, height: 900 });
+    const trigger = page.getByRole('button', { name: labels.openMenu });
+    for (const path of paths) {
+      await page.evaluate((route) => window.navigationHarness.navigate(route), path);
+      await selected(page, '/administration', labels.administration);
+      await trigger.click();
+      const dialog = page.getByRole('dialog');
+      await selected(page, '/administration', labels.administration, true);
+      await expectFocusTrap(page, dialog);
+      await page.keyboard.press('Escape');
+      await expect(dialog).not.toBeVisible();
+      await expect(trigger).toBeFocused();
+      await trigger.click();
+      await page
+        .locator('#office-mobile-navigation a[data-sidebar="menu-button"][href="/administration"]')
+        .click();
+      await expect(dialog).not.toBeVisible();
+      await expect(trigger).toBeFocused();
+      await selected(page, '/administration', labels.administration);
     }
     // oxlint-enable no-await-in-loop
   });
