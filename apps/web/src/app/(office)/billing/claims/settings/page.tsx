@@ -150,7 +150,15 @@ export default async function ClaimsSettingsPage({
   return (
     <div className="mx-auto grid max-w-6xl gap-6">
       <PageHeader
-        eyebrow={<Link href="/billing/claims">{t('claims')}</Link>}
+        eyebrow={
+          canRead ? (
+            <Link href="/billing/claims">{t('claims')}</Link>
+          ) : canManage ? (
+            <Link href="/administration">{translate('Navigation.administration')}</Link>
+          ) : (
+            t('claims')
+          )
+        }
         title={t('claimsSettings')}
         description={t('claimsSettingsDescription')}
       />

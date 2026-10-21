@@ -504,3 +504,179 @@ for (const locale of ['en', 'de'] as const) {
     await selected(page, undefined, labels.overview);
   });
 }
+
+for (const locale of ['en', 'de'] as const) {
+  test(`actual settings headers preserve controls and permission-aware return links on desktop/mobile (${locale})`, async ({
+    page,
+  }, testInfo) => {
+    const messages = locale === 'en' ? en : de;
+    const folder = process.env.SETTINGS_SCREENSHOTS_DIR ?? testInfo.outputPath('settings');
+    await mkdir(folder, { recursive: true });
+    const scenarios = [
+      {
+        name: 'claims-both',
+        settings: 'claims',
+        permissions: ['claims.read', 'claims.settings.manage'],
+        href: '/billing/claims',
+        label: messages.Billing.claims,
+      },
+      {
+        name: 'claims-manage',
+        settings: 'claims',
+        permissions: ['claims.settings.manage'],
+        href: '/administration',
+        label: messages.Navigation.administration,
+      },
+      {
+        name: 'claims-neither',
+        settings: 'claims',
+        permissions: [],
+        href: null,
+        label: messages.Billing.claims,
+      },
+      {
+        name: 'reminders-both',
+        settings: 'reminders',
+        permissions: ['operations.read', 'operations.reminder_settings.manage'],
+        href: '/operations',
+        label: messages.Operations.dashboardTitle,
+      },
+      {
+        name: 'reminders-manage',
+        settings: 'reminders',
+        permissions: ['operations.reminder_settings.manage'],
+        href: '/administration',
+        label: messages.Navigation.administration,
+      },
+      {
+        name: 'reminders-denied',
+        settings: 'reminders',
+        permissions: ['operations.read'],
+        href: null,
+        label: messages.Operations.noAccess,
+      },
+    ];
+    // oxlint-disable no-await-in-loop -- Before/after captures and Tab interactions share one browser page.
+    for (const scenario of scenarios) {
+      const after = JSON.parse(
+        execFileSync(
+          'bun',
+          [
+            resolve(import.meta.dirname, '../scripts/office-navigation.fixture.ts'),
+            JSON.stringify({
+              locale,
+              permissions: scenario.permissions,
+              settings: scenario.settings,
+              collapsed: false,
+            }),
+          ],
+          { encoding: 'utf8' },
+        ),
+      ) as NavigationFixtureProps;
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 900 });
+        const phases = process.env.SETTINGS_BASELINE_DIR ? ['before', 'after'] : ['after'];
+        for (const phase of phases) {
+          const props =
+            phase === 'after'
+              ? after
+              : (JSON.parse(
+                  await readFile(
+                    join(process.env.SETTINGS_BASELINE_DIR!, `${locale}-${scenario.name}.json`),
+                    'utf8',
+                  ),
+                ) as NavigationFixtureProps);
+          await page.context().clearCookies();
+          await page.unrouteAll();
+          await mount(page, {
+            locale,
+            path:
+              scenario.settings === 'claims'
+                ? '/billing/claims/settings'
+                : '/operations/reminder-settings',
+            props,
+          });
+          const content = page.getByRole('main');
+          const header = content.locator('header');
+          const denied = scenario.name === 'reminders-denied';
+          const oldHref = scenario.settings === 'claims' ? '/billing/claims' : '/operations';
+          const oldLabel =
+            scenario.settings === 'claims'
+              ? messages.Billing.claims
+              : messages.Operations.dashboardTitle;
+          const href = phase === 'before' && !denied ? oldHref : scenario.href;
+          const label = phase === 'before' && !denied ? oldLabel : scenario.label;
+          await expect(header).toHaveCount(denied ? 0 : 1);
+          const link = header.getByRole('link');
+          await expect(link).toHaveCount(href ? 1 : 0);
+          if (href) {
+            await expect(link).toHaveAttribute('href', href);
+            await expect(link).toHaveAccessibleName(label);
+            // Tab from the start to prove native keyboard reachability in the real shell.
+            await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+            let reached = false;
+            for (let index = 0; index < 25; index++) {
+              await page.keyboard.press('Tab');
+              if (await link.evaluate((element) => element === document.activeElement)) {
+                reached = true;
+                break;
+              }
+            }
+            expect(reached).toBe(true);
+            expect(
+              await link.evaluate((element) => {
+                const style = getComputedStyle(element);
+                return (
+                  element.matches(':focus-visible') &&
+                  (style.outlineStyle !== 'none' || style.boxShadow !== 'none')
+                );
+              }),
+            ).toBe(true);
+            if (scenario.settings === 'reminders')
+              await expect(link).toHaveAttribute('data-variant', 'secondary');
+          } else {
+            await expect(header.locator('a,button,[tabindex],[role="link"]')).toHaveCount(0);
+            if (denied)
+              await expect(content.getByRole('alert')).toHaveText(messages.Operations.noAccess);
+            else await expect(header.locator('p').first()).toHaveText(messages.Billing.claims);
+          }
+          const axe = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze();
+          expect(axe.violations).toEqual([]);
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          ).toBe(true);
+          await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+          const name = `${locale}-${scenario.name}-${width}-${phase}`;
+          await page.evaluate(() => document.fonts.ready);
+          await page.screenshot({
+            path: join(folder, `${name}.png`),
+            fullPage: true,
+            animations: 'disabled',
+          });
+          await writeFile(
+            join(folder, `${name}.json`),
+            JSON.stringify(
+              {
+                locale,
+                scenario: scenario.name,
+                width,
+                phase,
+                href,
+                label,
+                violations: axe.violations,
+                headerHtml: (await header.count())
+                  ? await header.evaluate((element) => element.outerHTML)
+                  : null,
+              },
+              null,
+              2,
+            ),
+          );
+        }
+      }
+    }
+    // oxlint-enable no-await-in-loop
+  });
+}

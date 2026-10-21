@@ -88,7 +88,15 @@ export default async function ReminderSettingsPage({
         description={t('reminderSettingsDescription')}
         actions={
           <Button asChild variant="secondary">
-            <Link href="/operations">{t('dashboardTitle')}</Link>
+            <Link
+              href={
+                hasPermission(permissions, 'operations.read') ? '/operations' : '/administration'
+              }
+            >
+              {hasPermission(permissions, 'operations.read')
+                ? t('dashboardTitle')
+                : translate('Navigation.administration')}
+            </Link>
           </Button>
         }
       />

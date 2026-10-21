@@ -199,3 +199,203 @@ for (const locale of ['en', 'de'] as const) {
     ).toEqual([admin]);
   });
 }
+
+// The fixture executes the real settings pages and renders their real PageHeader.
+type SettingsReport = {
+  headerHtml: string;
+  alertsHtml: string;
+  calls: Array<{ path: string; options: unknown }>;
+  employeeCalls: string[][];
+  forms: number;
+  sections: number;
+  deniedHtml: string | null;
+};
+async function settingsPage(
+  locale: 'en' | 'de',
+  settingsPageKind: 'claims' | 'reminders',
+  permissions: string[],
+  query: Record<string, string> = {},
+  apiError = false,
+) {
+  const child = Bun.spawn(
+    [
+      Bun.which('bun')!,
+      resolve(import.meta.dir, 'office-navigation.fixture.ts'),
+      JSON.stringify({ locale, settings: settingsPageKind, permissions, query, apiError }),
+    ],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+  const [code, output, errors] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  if (code !== 0) throw new Error(errors);
+  return (JSON.parse(output) as { settingsReport: SettingsReport }).settingsReport;
+}
+const organizationId = '11111111-1111-4111-8111-111111111111';
+for (const locale of ['en', 'de'] as const) {
+  const messages = locale === 'en' ? en : de;
+  test(`actual Claims settings header, alerts and data gates across permission combinations (${locale})`, async () => {
+    const cases = [
+      {
+        grants: ['claims.read', 'claims.settings.manage'],
+        href: '/billing/claims',
+        label: messages.Billing.claims,
+        read: true,
+        manage: true,
+      },
+      {
+        grants: ['claims.read'],
+        href: '/billing/claims',
+        label: messages.Billing.claims,
+        read: true,
+        manage: false,
+      },
+      {
+        grants: ['claims.settings.manage'],
+        href: '/administration',
+        label: messages.Navigation.administration,
+        read: false,
+        manage: true,
+      },
+      { grants: [], href: null, label: messages.Billing.claims, read: false, manage: false },
+      {
+        grants: ['client.read'],
+        href: null,
+        label: messages.Billing.claims,
+        read: false,
+        manage: false,
+      },
+    ];
+    await Promise.all(
+      cases.map(async (scenario) => {
+        const result = await settingsPage(locale, 'claims', scenario.grants, { organizationId });
+        expect([...result.headerHtml.matchAll(/href="([^"]+)"/g)].map((match) => match[1])).toEqual(
+          scenario.href ? [scenario.href] : [],
+        );
+        expect(result.headerHtml).toContain(
+          scenario.href ? `>${scenario.label}</a>` : `>${scenario.label}</p>`,
+        );
+        expect(result.headerHtml).not.toMatch(/tabindex|role=|<button/);
+        expect(result.alertsHtml.includes(messages.Billing.noClaimsPermission)).toBe(
+          !scenario.read,
+        );
+        expect(result.alertsHtml.includes(messages.Billing.noClaimsSettingsPermission)).toBe(
+          !scenario.manage,
+        );
+        expect((result.alertsHtml.match(/role="alert"/g) ?? []).length).toBe(
+          Number(!scenario.read) + Number(!scenario.manage),
+        );
+        expect(result.calls.map((call) => call.path)).toEqual(
+          scenario.read
+            ? [
+                '/api/v1/organizations/{id}',
+                '/api/v1/billing/payers',
+                '/api/v1/billing/payer-directory/profiles',
+              ]
+            : [],
+        );
+        for (const call of result.calls)
+          expect(call.options).toMatchObject({
+            params: { header: { 'X-Tenant-Id': 'synthetic-tenant' } },
+          });
+        expect(result.sections).toBe(scenario.read ? 1 : 0);
+        expect(result.forms).toBe(scenario.read ? 2 : 1);
+        const repeated = await settingsPage(
+          locale,
+          'claims',
+          [...scenario.grants].reverse().concat(scenario.grants),
+          { organizationId },
+        );
+        expect(repeated).toEqual(result);
+        const empty = await settingsPage(locale, 'claims', scenario.grants);
+        expect(empty.calls).toEqual([]);
+        expect(empty.sections).toBe(0);
+      }),
+    );
+    const failed = await settingsPage(
+      locale,
+      'claims',
+      ['claims.read', 'claims.settings.manage'],
+      { organizationId },
+      true,
+    );
+    expect(failed.calls.map((call) => call.path)).toEqual(['/api/v1/organizations/{id}']);
+    expect(failed.sections).toBe(0);
+    expect(failed.alertsHtml).toContain('role="alert"');
+  });
+
+  test(`actual Reminder settings header and unchanged early denial/data access (${locale})`, async () => {
+    await Promise.all(
+      [
+        ['operations.read', 'operations.reminder_settings.manage'],
+        ['operations.reminder_settings.manage'],
+        ['operations.read'],
+        [],
+        ['client.read'],
+      ].map(async (permissionSet) => {
+        const result = await settingsPage(locale, 'reminders', permissionSet, { organizationId });
+        const allowed = permissionSet.includes('operations.reminder_settings.manage');
+        if (allowed) {
+          const href = permissionSet.includes('operations.read')
+            ? '/operations'
+            : '/administration';
+          const label = permissionSet.includes('operations.read')
+            ? messages.Operations.dashboardTitle
+            : messages.Navigation.administration;
+          expect(
+            [...result.headerHtml.matchAll(/href="([^"]+)"/g)].map((match) => match[1]),
+          ).toEqual([href]);
+          expect(result.headerHtml).toContain(`>${label}</a>`);
+          expect(result.headerHtml).toContain('data-variant="secondary"');
+          expect(result.headerHtml).not.toContain('<button');
+          expect(result.calls).toEqual([
+            {
+              path: '/api/v1/operations/reminder-settings',
+              options: {
+                params: {
+                  query: { organizationId },
+                  header: { 'X-Tenant-Id': 'synthetic-tenant' },
+                },
+              },
+            },
+          ]);
+          expect(result.employeeCalls).toEqual([[]]);
+          expect(result.forms).toBe(1);
+          expect(result.deniedHtml).toBeNull();
+        } else {
+          expect(result.deniedHtml).toBe(
+            `<p role="alert" class="rounded-md border bg-card p-5">${messages.Operations.noAccess}</p>`,
+          );
+          expect(result.headerHtml).toBe('');
+          expect(result.calls).toEqual([]);
+          expect(result.employeeCalls).toEqual([]);
+          expect(result.forms).toBe(0);
+          expect(result.sections).toBe(0);
+        }
+        expect(
+          await settingsPage(
+            locale,
+            'reminders',
+            [...permissionSet].reverse().concat(permissionSet),
+            {
+              organizationId,
+            },
+          ),
+        ).toEqual(result);
+        const empty = await settingsPage(locale, 'reminders', permissionSet);
+        expect(empty.calls).toEqual([]);
+      }),
+    );
+    const failed = await settingsPage(
+      locale,
+      'reminders',
+      ['operations.reminder_settings.manage'],
+      { organizationId },
+      true,
+    );
+    expect(failed.alertsHtml).toContain(messages.Operations.loadFailed);
+    expect(failed.forms).toBe(1);
+  });
+}

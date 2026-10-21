@@ -1,6 +1,13 @@
 import { mock } from 'bun:test';
 import { createTranslator } from 'next-intl';
-import { createElement, type ComponentProps, type ReactElement } from 'react';
+import {
+  Children,
+  createElement,
+  isValidElement,
+  type ComponentProps,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import de from '../messages/de.json';
@@ -11,10 +18,13 @@ const scenario = JSON.parse(process.argv[2]!) as {
   permissions: string[];
   collapsed?: boolean;
   landing?: boolean;
+  settings?: 'claims' | 'reminders';
+  query?: Record<string, string>;
+  apiError?: boolean;
 };
 mock.module('next-intl/server', () => ({
   getLocale: async () => scenario.locale,
-  getTranslations: async (namespace = 'Navigation') =>
+  getTranslations: async (namespace?: string) =>
     createTranslator({
       locale: scenario.locale,
       messages: scenario.locale === 'en' ? en : de,
@@ -32,18 +42,52 @@ mock.module('next/headers', () => ({
   }),
 }));
 mock.module('next/navigation', () => ({
+  useRouter: () => {
+    throw new Error('Client forms are outside the fixture');
+  },
+  usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
   redirect: () => {
     throw new Error('Unexpected fixture redirect');
   },
 }));
+const calls: Array<{ path: string; options: unknown }> = [];
+const employeeCalls: string[][] = [];
+mock.module('@app/web/lib/employee-lookup', () => ({
+  getEmployeesByIds: async (ids: string[]) => {
+    employeeCalls.push(ids);
+    return { items: [], failed: false };
+  },
+}));
 mock.module('@app/web/lib/api', () => ({
   getApiClient: async () => ({
-    GET: async (path: string) => ({
-      data:
-        path === '/api/v1/me/tenants'
-          ? [{ id: 'synthetic-tenant', name: 'Synthetic Office' }]
-          : { items: [], total: 0 },
-    }),
+    GET: async (path: string, options: unknown) => {
+      if (scenario.settings) calls.push({ path, options });
+      if (scenario.settings && scenario.apiError && path !== '/api/v1/me/tenants')
+        return { error: { code: 'FORBIDDEN' } };
+      const id = '11111111-1111-4111-8111-111111111111';
+      return {
+        data:
+          path === '/api/v1/me/tenants'
+            ? [{ id: 'synthetic-tenant', name: 'Synthetic Office' }]
+            : path === '/api/v1/organizations/{id}'
+              ? { id, name: 'Synthetic organization' }
+              : path === '/api/v1/billing/payers'
+                ? {
+                    items: [{ id: 'synthetic-payer', name: 'Synthetic payer', status: 'active' }],
+                    page: 1,
+                    pageSize: 20,
+                    totalItems: 1,
+                  }
+                : path === '/api/v1/billing/payer-directory/profiles'
+                  ? []
+                  : path === '/api/v1/operations/reminder-settings'
+                    ? {
+                        organizations: [{ id, name: 'Synthetic organization', policies: [] }],
+                      }
+                    : { items: [], total: 0 },
+      };
+    },
   }),
   getTenantHeader: async () => ({ 'X-Tenant-Id': 'synthetic-tenant' }),
   getAuthSession: async () => ({
@@ -80,4 +124,47 @@ if (scenario.landing) {
     await AdministrationLayout({ children: await AdministrationPage() }),
   );
 }
-console.log(JSON.stringify({ ...props, ...(landingHtml ? { landingHtml } : {}) }));
+let settingsReport;
+if (scenario.settings) {
+  // Execute the real server page, then render its actual header/alerts. Async secondary
+  // navigation and interactive forms stay outside this focused presentation fixture.
+  const { PageHeader, ErrorNotice } = await import('../src/components/page-patterns');
+  const { default: Page } =
+    scenario.settings === 'claims'
+      ? await import('../src/app/(office)/billing/claims/settings/page')
+      : await import('../src/app/(office)/operations/reminder-settings/page');
+  calls.length = 0;
+  const page = await Page({ searchParams: Promise.resolve(scenario.query ?? {}) });
+  const elements: ReactElement<Record<string, unknown>>[] = [];
+  function visit(node: ReactNode) {
+    Children.forEach(node, (child) => {
+      if (!isValidElement<Record<string, unknown>>(child)) return;
+      elements.push(child);
+      visit(child.props.children as ReactNode);
+    });
+  }
+  visit(page);
+  const header = elements.find((element) => element.type === PageHeader);
+  const alerts = elements.filter(
+    (element) => element.type === ErrorNotice || element.props.role === 'alert',
+  );
+  const headerHtml = header ? renderToStaticMarkup(header) : '';
+  const alertsHtml = alerts.map((alert) => renderToStaticMarkup(alert)).join('');
+  landingHtml = headerHtml + alertsHtml;
+  settingsReport = {
+    headerHtml,
+    alertsHtml,
+    calls,
+    employeeCalls,
+    forms: elements.filter((element) => element.type === 'form').length,
+    sections: elements.filter((element) => element.type === 'section').length,
+    deniedHtml: header ? null : renderToStaticMarkup(page),
+  };
+}
+console.log(
+  JSON.stringify({
+    ...props,
+    ...(landingHtml ? { landingHtml } : {}),
+    ...(settingsReport ? { settingsReport } : {}),
+  }),
+);
