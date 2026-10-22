@@ -19,7 +19,12 @@ if (existsSync(envFile)) loadEnvFile(envFile);
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL ?? process.env.WEB_ORIGIN ?? 'http://localhost:3000';
 const useExistingServers = process.env.PLAYWRIGHT_USE_EXISTING_SERVERS === 'true';
-const apiPort = useExistingServers ? undefined : await findAvailablePort();
+// Workers reload this config. Reuse the parent's live API port instead of allocating an unused one.
+const apiPort = useExistingServers
+  ? undefined
+  : process.env.TEST_WORKER_INDEX === undefined
+    ? await findAvailablePort()
+    : Number(new URL(process.env.API_INTERNAL_URL!).port);
 const apiURL = apiPort
   ? `http://localhost:${apiPort}`
   : (process.env.API_INTERNAL_URL ?? 'http://localhost:3001');
