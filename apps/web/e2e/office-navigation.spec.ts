@@ -2158,3 +2158,311 @@ for (const locale of ['en', 'de'] as const) {
     // oxlint-enable no-await-in-loop
   });
 }
+
+async function newCommunicationProps(
+  locale: 'en' | 'de',
+  permissions: string[],
+  query: Record<string, string> = {},
+) {
+  return JSON.parse(
+    execFileSync(
+      'bun',
+      [
+        resolve(import.meta.dirname, '../scripts/office-navigation.fixture.ts'),
+        JSON.stringify({ locale, permissions, query, newCommunication: true, collapsed: false }),
+      ],
+      { encoding: 'utf8' },
+    ),
+  ) as NavigationFixtureProps;
+}
+for (const locale of ['en', 'de'] as const) {
+  const messages = locale === 'en' ? en : de;
+  test(`actual New Communication return controls before/after preserve geometry and permissions (${locale})`, async ({
+    page,
+  }, testInfo) => {
+    const folder =
+      process.env.NEW_COMMUNICATION_SCREENSHOTS_DIR ?? testInfo.outputPath('new-communication');
+    await mkdir(folder, { recursive: true });
+    const scenarios = [
+      {
+        name: 'read',
+        permissions: ['communications.create', 'client.read', 'communications.read'],
+        read: true,
+        baseline: 'read',
+      },
+      {
+        name: 'create',
+        permissions: ['communications.create', 'client.read'],
+        read: false,
+        baseline: 'create',
+      },
+      {
+        name: 'mixed-read',
+        permissions: [
+          'communications.create',
+          'client.read',
+          'communications.read',
+          'facility.read',
+          'employee.read',
+          'client.read',
+        ],
+        read: true,
+        baseline: 'mixed-read',
+      },
+      {
+        name: 'create-duplicate',
+        permissions: [
+          'communications.create',
+          'client.read',
+          'communications.create',
+          'client.read',
+        ],
+        read: false,
+        baseline: 'create',
+      },
+      {
+        name: 'read-reordered',
+        permissions: ['communications.read', 'communications.create', 'client.read'],
+        read: true,
+        baseline: 'reordered-read',
+      },
+    ];
+    // oxlint-disable no-await-in-loop -- Ordered captures share the same real shell and native chooser.
+    for (const scenario of scenarios) {
+      const props = await newCommunicationProps(locale, scenario.permissions);
+      for (const width of [1440, 390]) {
+        let beforeGeometry: unknown;
+        let beforeOverflow: number | undefined;
+        for (const phase of process.env.NEW_COMMUNICATION_BASELINE_DIR
+          ? ['before', 'after']
+          : ['after']) {
+          const presentation =
+            phase === 'before'
+              ? JSON.parse(
+                  await readFile(
+                    join(
+                      process.env.NEW_COMMUNICATION_BASELINE_DIR!,
+                      `${locale}-${scenario.baseline}-empty.json`,
+                    ),
+                    'utf8',
+                  ),
+                ).newCommunication
+              : props.newCommunication;
+          await page.context().clearCookies();
+          await page.unrouteAll();
+          await page.setViewportSize({ width, height: 900 });
+          await mount(page, {
+            locale,
+            path: '/communications/new',
+            props: { ...props, newCommunication: presentation },
+          });
+          const main = page.getByRole('main');
+          const header = main.locator('header');
+          const form = main.locator('form');
+          const cancel = form.getByRole('link', {
+            name: messages.Common.actions.cancel,
+            exact: true,
+          });
+          const hasEyebrowLink = phase === 'before' || scenario.read;
+          await expect(header.getByRole('link')).toHaveCount(hasEyebrowLink ? 1 : 0);
+          if (hasEyebrowLink) {
+            await expect(header.getByRole('link')).toHaveAttribute('href', '/communications');
+            await expect(header.getByRole('link')).toHaveAccessibleName(
+              messages.Communications.globalTitle,
+            );
+          } else {
+            await expect(header.locator('p').first()).toHaveText(
+              messages.Communications.globalTitle,
+            );
+            await expect(header.locator('a,button,[role],[tabindex]')).toHaveCount(0);
+          }
+          await expect(header.getByRole('heading', { level: 1 })).toHaveText(
+            messages.Communications.createFromWorklist,
+          );
+          const href = phase === 'before' || scenario.read ? '/communications' : '/';
+          await expect(cancel).toHaveAttribute('href', href);
+          await expect(cancel).toHaveAttribute('data-variant', 'secondary');
+          await expect(cancel).not.toHaveAttribute('type', 'submit');
+          await expect(form).toHaveAttribute('method', 'get');
+          await expect(form.locator('input[name=continue]')).toHaveValue('1');
+          await expect(form.getByRole('combobox')).toHaveAttribute('aria-required', 'true');
+          await expect(header.locator('p').last()).toHaveText(
+            messages.Communications.chooseClientDescription,
+          );
+          await expect(
+            form.getByRole('button', {
+              name: messages.Communications.continueToRecord,
+              exact: true,
+            }),
+          ).toHaveAttribute('type', 'submit');
+          await expect(form.getByRole('link')).toHaveCount(1);
+          await expect(form.locator('button[type="submit"]')).toHaveCount(1);
+          const geometry = {
+            header: await header.boundingBox(),
+            form: await form.boundingBox(),
+            cancel: await cancel.boundingBox(),
+          };
+          expect(geometry.cancel!.height).toBeGreaterThanOrEqual(40);
+          expect(geometry.cancel!.width).toBeGreaterThanOrEqual(40);
+          if (phase === 'before') beforeGeometry = geometry;
+          else if (beforeGeometry) expect(geometry).toEqual(beforeGeometry);
+          const axe = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze();
+          expect(axe.violations).toEqual([]);
+          const overflow = await page.evaluate(() =>
+            Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
+          );
+          if (phase === 'before') beforeOverflow = overflow;
+          else if (beforeOverflow !== undefined) expect(overflow).toBe(beforeOverflow);
+          expect(overflow).toBe(0);
+          await page.evaluate(() => document.fonts.ready);
+          const name = `${locale}-${scenario.name}-${width}-${phase}`;
+          await page.screenshot({ path: join(folder, `${name}.png`), animations: 'disabled' });
+          await writeFile(
+            join(folder, `${name}.json`),
+            JSON.stringify(
+              {
+                locale,
+                permissions: scenario.permissions,
+                width,
+                phase,
+                href,
+                hasEyebrowLink,
+                geometry,
+                overflow,
+                violations: axe.violations,
+              },
+              null,
+              2,
+            ),
+          );
+          // Keyboard checks occur after capture so focus paint does not affect comparisons.
+          const input = form.getByRole('combobox', {
+            name: messages.Common.fields.client,
+            exact: true,
+          });
+          await input.focus();
+          await page.keyboard.press('Tab');
+          await expect(
+            form.getByRole('button', {
+              name: messages.Communications.continueToRecord,
+              exact: true,
+            }),
+          ).toBeFocused();
+          await page.keyboard.press('Tab');
+          await expect(cancel).toBeFocused();
+          expect(
+            await cancel.evaluate((element) => {
+              const style = getComputedStyle(element);
+              return (
+                element.matches(':focus-visible') &&
+                (style.outlineStyle !== 'none' || style.boxShadow !== 'none')
+              );
+            }),
+          ).toBe(true);
+          if (hasEyebrowLink) {
+            await header.getByRole('link').focus();
+            await page.keyboard.press('Tab');
+            await expect(input).toBeFocused();
+          }
+          expect(await page.evaluate(() => window.navigationHarness.communicationSubmissions)).toBe(
+            0,
+          );
+        }
+      }
+    }
+    // oxlint-enable no-await-in-loop
+  });
+
+  test(`native New Communication chooser preserves Cancel and GET continuation without confirmation (${locale})`, async ({
+    page,
+  }) => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    const dialogErrors: string[] = [];
+    page.on('dialog', (dialog) => {
+      dialogErrors.push(dialog.message());
+      void dialog.dismiss();
+    });
+    // oxlint-disable no-await-in-loop -- Observe Cancel and native FormData in each read state.
+    for (const permissions of [
+      ['communications.create', 'client.read', 'communications.read'],
+      ['communications.create', 'client.read'],
+    ]) {
+      const props = await newCommunicationProps(locale, permissions);
+      const href = permissions.includes('communications.read') ? '/communications' : '/';
+      await page.context().clearCookies();
+      await page
+        .context()
+        .addCookies([
+          { name: 'care-tenant', value: 'synthetic-tenant', url: 'http://navigation.test' },
+        ]);
+      await page.unrouteAll();
+      await mount(page, { locale, path: '/communications/new', props });
+      let requests = 0;
+      const countRequest = (request: import('@playwright/test').Request) => {
+        if (new URL(request.url()).pathname.startsWith('/api/')) requests++;
+      };
+      page.on('request', countRequest);
+      const cancel = page
+        .getByRole('main')
+        .getByRole('link', { name: messages.Common.actions.cancel, exact: true });
+      await cancel.click();
+      await expect(page).toHaveURL(`http://navigation.test${href}`);
+      expect(requests).toBe(0);
+      expect(await page.evaluate(() => window.navigationHarness.communicationSubmissions)).toBe(0);
+      await page.unrouteAll();
+      await mount(page, { locale, path: '/communications/new', props });
+      await page.route('http://navigation.test/api/entity-search?**', (route) =>
+        route.fulfill({
+          json: { items: [{ id, label: 'Synthetic client' }], page: 1, hasMore: false },
+        }),
+      );
+      await page
+        .getByRole('main')
+        .getByRole('combobox', { name: messages.Common.fields.client, exact: true })
+        .click();
+      await page.locator('[cmdk-input]').fill('Sy');
+      await page.getByRole('option', { name: 'Synthetic client', exact: true }).click();
+      await expect(page.getByRole('main').locator('input[name=clientId]')).toHaveValue(id);
+      expect(requests).toBe(1);
+      await cancel.focus();
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(`http://navigation.test${href}`);
+      expect(requests).toBe(1);
+      expect(
+        await page.evaluate(() => ({
+          submissions: window.navigationHarness.communicationSubmissions,
+          payloads: window.navigationHarness.communicationPayloads,
+          refreshes: window.navigationHarness.newClientRefreshes,
+        })),
+      ).toEqual({ submissions: 0, payloads: [], refreshes: 0 });
+      expect((await page.context().cookies()).find((c) => c.name === 'care-tenant')?.value).toBe(
+        'synthetic-tenant',
+      );
+      expect(dialogErrors).toEqual([]);
+      // Native form configuration and the real chooser remain mounted for a GET.
+      await page.unrouteAll();
+      const missing = await newCommunicationProps(locale, permissions, { continue: '1' });
+      await mount(page, { locale, path: '/communications/new?continue=1', props: missing });
+      await expect(page.getByRole('main').getByRole('alert')).toHaveText(
+        messages.Communications.selectClientRequired,
+      );
+      await expect(page.getByRole('main').locator('form')).toHaveAttribute('method', 'get');
+      await page
+        .getByRole('main')
+        .getByRole('button', { name: messages.Communications.continueToRecord, exact: true })
+        .click();
+      await expect(page).toHaveURL(
+        'http://navigation.test/communications/new?continue=1&clientId=',
+      );
+      expect(await page.evaluate(() => window.navigationHarness.communicationPayloads)).toEqual([
+        { continue: '1', clientId: '' },
+      ]);
+      // This routing bridge observes FormData; actual server continuation is tested separately.
+      expect(dialogErrors).toEqual([]);
+      page.off('request', countRequest);
+    }
+    // oxlint-enable no-await-in-loop
+  });
+}

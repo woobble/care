@@ -1194,3 +1194,322 @@ for (const locale of ['en', 'de'] as const) {
     expect(normalizedForms.size).toBe(8);
   });
 }
+
+type NewCommunicationReport = {
+  deniedHtml?: string | null;
+  redirects: string[];
+  calls: Array<{ path: string; options: unknown }>;
+  permissionChecks: string[];
+  resourceChecks: unknown[];
+  formCount: number;
+  headerCount?: number;
+  cancelCount: number;
+  selectorCount: number;
+  submitCount?: number;
+  headerHtml?: string;
+  cancelHtml?: string;
+  actionsHtml?: string;
+  cancelHref?: string;
+  cancelLabel?: string;
+  cancelProps?: { asChild: boolean; variant: string };
+  rootClassName?: string;
+  formMethod?: string;
+  formClassName?: string;
+  hiddenInputs?: unknown[];
+  selectorProps?: unknown;
+  noticeHtml?: string;
+  formTree?: unknown;
+};
+async function newCommunicationPage(
+  locale: 'en' | 'de',
+  permissions: string[],
+  query: Record<string, string> = {},
+  selectedClient?: 'error' | 'missing' | 'denied' | 'allowed' | 'facilityless',
+) {
+  const child = Bun.spawn(
+    [
+      Bun.which('bun')!,
+      resolve(import.meta.dir, 'office-navigation.fixture.ts'),
+      JSON.stringify({ locale, permissions, query, selectedClient, newCommunication: true }),
+    ],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+  const [code, output, errors] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  if (code !== 0) throw new Error(errors);
+  return (JSON.parse(output) as { newCommunication: NewCommunicationReport }).newCommunication;
+}
+function communicationFormWithoutReturnHref(tree: unknown) {
+  const source = JSON.stringify(tree);
+  expect((source.match(/"href":"(?:\/communications|\/)"/g) ?? []).length).toBe(1);
+  return JSON.parse(source.replace(/"href":"(?:\/communications|\/)"/, '"href":"RETURN"'));
+}
+for (const locale of ['en', 'de'] as const) {
+  const messages = locale === 'en' ? en : de;
+  test(`actual NewCommunicationPage preserves prerequisites and native GET chooser (${locale})`, async () => {
+    const base = ['communications.create', 'client.read'];
+    const cases = [
+      [...base, 'communications.read'],
+      base,
+      ['communications.read', 'client.read'],
+      ['communications.create', 'communications.read'],
+      ['communications.create'],
+      ['client.read'],
+      ['communications.read'],
+      [],
+      ['billing.read'],
+      [...base, 'communications.read', 'facility.read', 'employee.read'],
+      [...base, 'facility.read', 'employee.read'],
+      [...base, 'communications.read', ...base, 'communications.read'],
+      [...base, ...base],
+      ['communications.read', 'client.read', 'communications.create'],
+      [...base].reverse(),
+    ];
+    const reports = await Promise.all(cases.map((p) => newCommunicationPage(locale, p)));
+    let originalForm: unknown;
+    // oxlint-disable no-await-in-loop -- Verify query and ordering behavior against each actual result.
+    for (const [index, permissions] of cases.entries()) {
+      const result = reports[index]!;
+      expect(result.calls).toEqual([]);
+      expect(result.resourceChecks).toEqual([]);
+      expect(result.redirects).toEqual([]);
+      if (!permissions.includes('communications.create') || !permissions.includes('client.read')) {
+        const expected = {
+          deniedHtml: `<p role="alert" class="rounded-md border bg-card p-5">${messages.Communications.noAccess}</p>`,
+          redirects: [],
+          calls: [],
+          resourceChecks: [],
+          permissionChecks: permissions.includes('communications.create')
+            ? ['communications.create', 'client.read']
+            : ['communications.create'],
+          formCount: 0,
+          headerCount: 0,
+          cancelCount: 0,
+          selectorCount: 0,
+        };
+        expect(result).toEqual(expected);
+        expect(
+          await newCommunicationPage(
+            locale,
+            permissions,
+            { continue: '1', clientId: '11111111-1111-4111-8111-111111111111' },
+            'allowed',
+          ),
+        ).toEqual(expected);
+        continue;
+      }
+      const read = permissions.includes('communications.read');
+      expect(result.deniedHtml).toBeNull();
+      expect(result.permissionChecks).toEqual([
+        'communications.create',
+        'client.read',
+        'communications.read',
+        'communications.read',
+      ]);
+      expect(result.headerHtml).toContain(
+        read
+          ? `<a href="/communications">${messages.Communications.globalTitle}</a>`
+          : `>${messages.Communications.globalTitle}</p>`,
+      );
+      expect((result.headerHtml!.match(/<a /g) ?? []).length).toBe(read ? 1 : 0);
+      expect(result.headerHtml).not.toMatch(/role=|tabindex|<button/);
+      expect(result.headerHtml).toContain(messages.Communications.createFromWorklist);
+      expect(result.headerHtml).toContain(messages.Communications.chooseClientDescription);
+      expect(result.cancelHref).toBe(read ? '/communications' : '/');
+      expect(result.cancelLabel).toBe(messages.Common.actions.cancel);
+      expect(result.cancelProps).toEqual({ asChild: true, variant: 'secondary' });
+      expect(result.cancelHtml).toContain('data-variant="secondary"');
+      expect(result.cancelHtml).not.toContain('<button');
+      expect(result.actionsHtml).toContain(messages.Communications.continueToRecord);
+      expect(result.formCount).toBe(1);
+      expect(result.submitCount).toBe(1);
+      expect(result.cancelCount).toBe(1);
+      expect(result.selectorCount).toBe(1);
+      expect(result.formMethod).toBe('get');
+      expect(result.rootClassName).toBe('mx-auto grid w-full max-w-3xl gap-6');
+      expect(result.formClassName).toBe('grid gap-4 rounded-lg border bg-card p-5');
+      expect(result.hiddenInputs).toEqual([{ type: 'hidden', name: 'continue', value: '1' }]);
+      expect(result.selectorProps).toEqual({
+        name: 'clientId',
+        entity: 'clients',
+        label: messages.Common.fields.client,
+        placeholder: messages.Communications.selectClient,
+        required: true,
+        minQueryLength: 2,
+      });
+      expect(result.noticeHtml).toBe('');
+      const normalized = communicationFormWithoutReturnHref(result.formTree);
+      if (originalForm) expect(normalized).toEqual(originalForm);
+      else originalForm = normalized;
+      const [reordered, missing] = await Promise.all([
+        newCommunicationPage(locale, [...permissions].reverse()),
+        newCommunicationPage(locale, permissions, { continue: '1' }),
+      ]);
+      expect(reordered).toEqual(result);
+      expect(missing.noticeHtml).toBe(
+        `<p role="alert" class="text-sm text-destructive">${messages.Communications.selectClientRequired}</p>`,
+      );
+      expect(missing.calls).toEqual([]);
+      expect(missing.resourceChecks).toEqual([]);
+      expect(missing.selectorProps).toEqual(result.selectorProps);
+      expect(missing.hiddenInputs).toEqual(result.hiddenInputs);
+    }
+    // oxlint-enable no-await-in-loop
+  });
+  test(`actual NewCommunicationPage retains UUID, tenant/resource checks and exact continuation (${locale})`, async () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    const cases: Array<{
+      query: Record<string, string>;
+      client?: 'error' | 'missing' | 'denied' | 'allowed' | 'facilityless';
+      get: boolean;
+      scoped: boolean;
+      redirect: boolean;
+      notice: boolean;
+    }> = [
+      { query: {}, get: false, scoped: false, redirect: false, notice: false },
+      { query: { continue: '1' }, get: false, scoped: false, redirect: false, notice: true },
+      {
+        query: { continue: '1', clientId: 'invalid' },
+        get: false,
+        scoped: false,
+        redirect: false,
+        notice: true,
+      },
+      { query: { clientId: 'invalid' }, get: false, scoped: false, redirect: false, notice: false },
+      {
+        query: { continue: '1', clientId: id },
+        client: 'error',
+        get: true,
+        scoped: false,
+        redirect: false,
+        notice: false,
+      },
+      {
+        query: { continue: '1', clientId: id },
+        client: 'missing',
+        get: true,
+        scoped: false,
+        redirect: false,
+        notice: false,
+      },
+      {
+        query: { continue: '1', clientId: id },
+        client: 'denied',
+        get: true,
+        scoped: true,
+        redirect: false,
+        notice: false,
+      },
+      {
+        query: { continue: '1', clientId: id },
+        client: 'allowed',
+        get: true,
+        scoped: true,
+        redirect: true,
+        notice: false,
+      },
+      {
+        query: { continue: '1', clientId: id },
+        client: 'facilityless',
+        get: true,
+        scoped: true,
+        redirect: true,
+        notice: false,
+      },
+      {
+        query: { clientId: id },
+        client: 'allowed',
+        get: true,
+        scoped: true,
+        redirect: true,
+        notice: false,
+      },
+    ];
+    // oxlint-disable no-await-in-loop -- Compare each scope boundary with/without return-read capability.
+    for (const read of [false, true]) {
+      const permissions = [
+        'communications.create',
+        'client.read',
+        ...(read ? ['communications.read'] : []),
+      ];
+      const reports = await Promise.all(
+        cases.map((c) => newCommunicationPage(locale, permissions, c.query, c.client)),
+      );
+      for (const [index, c] of cases.entries()) {
+        const result = reports[index]!;
+        expect(result.calls).toEqual(
+          c.get
+            ? [
+                {
+                  path: '/api/v1/clients/{id}',
+                  options: {
+                    params: { path: { id }, header: { 'X-Tenant-Id': 'synthetic-tenant' } },
+                  },
+                },
+              ]
+            : [],
+        );
+        expect(result.resourceChecks).toEqual(
+          c.scoped
+            ? [
+                {
+                  grants: permissions.map((permission) => ({ permission })),
+                  permission: 'communications.create',
+                  tenantId: 'synthetic-tenant',
+                  organizationId: 'synthetic-organization',
+                  facilityId: c.client === 'facilityless' ? null : 'synthetic-facility',
+                },
+              ]
+            : [],
+        );
+        expect(result.redirects).toEqual(
+          c.redirect ? [`/clients/${id}/communications#new-interaction`] : [],
+        );
+        expect(result.permissionChecks).toEqual([
+          'communications.create',
+          'client.read',
+          ...(c.redirect ? [] : ['communications.read', 'communications.read']),
+        ]);
+        expect(result.formCount).toBe(c.redirect ? 0 : 1);
+        expect(result.selectorCount).toBe(c.redirect ? 0 : 1);
+        expect(result.cancelCount).toBe(c.redirect ? 0 : 1);
+        if (!c.redirect)
+          expect(result.noticeHtml).toBe(
+            c.notice
+              ? `<p role="alert" class="text-sm text-destructive">${messages.Communications.selectClientRequired}</p>`
+              : '',
+          );
+      }
+      const invalid = [
+        '00000000-0000-0000-0000-000000000000',
+        '11111111-1111-9111-8111-111111111111',
+        '11111111-1111-4111-7111-111111111111',
+        ` ${id}`,
+        `${id}suffix`,
+      ];
+      const rejected = await Promise.all(
+        invalid.map((clientId) =>
+          newCommunicationPage(locale, permissions, { clientId, continue: '1' }, 'allowed'),
+        ),
+      );
+      for (const report of rejected) {
+        expect(report.calls).toEqual([]);
+        expect(report.resourceChecks).toEqual([]);
+        expect(report.redirects).toEqual([]);
+        expect(report.noticeHtml).toContain(messages.Communications.selectClientRequired);
+      }
+      const upper = 'AAAAAAAA-AAAA-8AAA-BAAA-AAAAAAAAAAAA';
+      const accepted = await newCommunicationPage(
+        locale,
+        permissions,
+        { clientId: upper },
+        'allowed',
+      );
+      expect(accepted.redirects).toEqual([`/clients/${upper}/communications#new-interaction`]);
+    }
+    // oxlint-enable no-await-in-loop
+  });
+}

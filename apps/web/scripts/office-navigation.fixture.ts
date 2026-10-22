@@ -23,6 +23,9 @@ const scenario = JSON.parse(process.argv[2]!) as {
   newClient?: boolean;
   newAdmission?: boolean;
   admissionList?: boolean;
+  newCommunication?: boolean;
+  communicationList?: boolean;
+  selectedClient?: 'error' | 'missing' | 'denied' | 'allowed' | 'facilityless';
   pathname?: string;
   settings?: 'claims' | 'reminders' | 'billing';
   populated?: boolean;
@@ -56,7 +59,7 @@ mock.module('next/navigation', () => ({
   usePathname: () => scenario.pathname ?? '/',
   useSearchParams: () => new URLSearchParams(),
   redirect: (destination: string) => {
-    if (scenario.newClient || scenario.newAdmission) {
+    if (scenario.newClient || scenario.newAdmission || scenario.newCommunication) {
       fixtureRedirects.push(destination);
       throw new Error('New Client fixture redirect');
     }
@@ -65,6 +68,8 @@ mock.module('next/navigation', () => ({
 }));
 const calls: Array<{ path: string; options: unknown }> = [];
 const employeeCalls: string[][] = [];
+const communicationPermissionChecks: string[] = [];
+const communicationResourceChecks: unknown[] = [];
 mock.module('@app/web/lib/employee-lookup', () => ({
   getEmployeesByIds: async (ids: string[]) => {
     employeeCalls.push(ids);
@@ -80,11 +85,25 @@ mock.module('@app/web/lib/api', () => ({
         scenario.administrationNavigation ||
         scenario.newClient ||
         scenario.newAdmission ||
-        scenario.admissionList
+        scenario.admissionList ||
+        scenario.newCommunication ||
+        scenario.communicationList
       )
         calls.push({ path, options });
       if (scenario.settings && scenario.apiError && path !== '/api/v1/me/tenants')
         return { error: { code: 'FORBIDDEN' } };
+      if (scenario.newCommunication && path === '/api/v1/clients/{id}') {
+        if (scenario.selectedClient === 'error') return { error: { code: 'FORBIDDEN' } };
+        if (scenario.selectedClient === 'missing') return { data: undefined };
+        return {
+          data: {
+            id: (options as { params: { path: { id: string } } }).params.path.id,
+            organizationId: 'synthetic-organization',
+            primaryFacilityId:
+              scenario.selectedClient === 'facilityless' ? null : 'synthetic-facility',
+          },
+        };
+      }
       const id = '11111111-1111-4111-8111-111111111111';
       return {
         data:
@@ -134,8 +153,21 @@ mock.module('@app/web/lib/api', () => ({
     user: { name: 'Synthetic user', email: 'synthetic@example.test' },
   }),
   getPermissionGrants: async () => scenario.permissions.map((permission) => ({ permission })),
-  hasPermission: (grants: Array<{ permission: string }>, permission: string) =>
-    grants.some((grant) => grant.permission === permission),
+  hasClientPermission: (
+    grants: Array<{ permission: string }>,
+    permission: string,
+    tenantId: string,
+    organizationId: string | null,
+    facilityId: string | null,
+  ) => {
+    if (!scenario.newCommunication) throw new Error('Unexpected client resource check');
+    communicationResourceChecks.push({ grants, permission, tenantId, organizationId, facilityId });
+    return scenario.selectedClient === 'allowed' || scenario.selectedClient === 'facilityless';
+  },
+  hasPermission: (grants: Array<{ permission: string }>, permission: string) => {
+    if (scenario.newCommunication) communicationPermissionChecks.push(permission);
+    return grants.some((grant) => grant.permission === permission);
+  },
 }));
 mock.module('next/link', () => ({
   default: ({ children, ...props }: ComponentProps<'a'>) => createElement('a', props, children),
@@ -478,6 +510,108 @@ if (scenario.admissionList) {
   );
 }
 
+let newCommunication;
+if (scenario.newCommunication) {
+  const { default: NewCommunicationPage } =
+    await import('../src/app/(office)/communications/new/page');
+  const { PageHeader } = await import('../src/components/page-patterns');
+  const { AsyncEntityCombobox } = await import('../src/components/async-entity-combobox');
+  const { Button } = await import('@care/ui/components/button');
+  calls.length = 0;
+  fixtureRedirects.length = 0;
+  communicationPermissionChecks.length = 0;
+  communicationResourceChecks.length = 0;
+  try {
+    const page = await NewCommunicationPage({
+      searchParams: Promise.resolve(scenario.query ?? {}),
+    });
+    const elements: ReactElement<Record<string, unknown>>[] = [];
+    function visitCommunication(node: ReactNode) {
+      Children.forEach(node, (element) => {
+        if (!isValidElement<Record<string, unknown>>(element)) return;
+        elements.push(element);
+        visitCommunication(element.props.children as ReactNode);
+      });
+    }
+    visitCommunication(page);
+    const header = elements.find((element) => element.type === PageHeader);
+    const form = elements.find((element) => element.type === 'form');
+    const selector = elements.find((element) => element.type === AsyncEntityCombobox);
+    const cancel = elements.find((element) => element.type === Button && element.props.asChild);
+    if (!header) {
+      newCommunication = {
+        deniedHtml: renderToStaticMarkup(page),
+        redirects: [...fixtureRedirects],
+        calls,
+        permissionChecks: [...communicationPermissionChecks],
+        resourceChecks: [...communicationResourceChecks],
+        formCount: form ? 1 : 0,
+        headerCount: 0,
+        cancelCount: cancel ? 1 : 0,
+        selectorCount: selector ? 1 : 0,
+      };
+    } else {
+      const cancelLink = cancel!.props.children as ReactElement<{ href: string; children: string }>;
+      const actions = Children.toArray(form!.props.children as ReactNode).at(-1) as ReactElement;
+      newCommunication = {
+        deniedHtml: null,
+        redirects: [...fixtureRedirects],
+        calls,
+        permissionChecks: [...communicationPermissionChecks],
+        resourceChecks: [...communicationResourceChecks],
+        headerHtml: renderToStaticMarkup(header),
+        cancelHtml: renderToStaticMarkup(cancel!),
+        actionsHtml: renderToStaticMarkup(actions),
+        cancelHref: cancelLink.props.href,
+        cancelLabel: cancelLink.props.children,
+        cancelProps: { asChild: cancel!.props.asChild, variant: cancel!.props.variant },
+        rootClassName: page.props.className,
+        formMethod: form!.props.method,
+        formClassName: form!.props.className,
+        hiddenInputs: elements.filter((e) => e.type === 'input').map((e) => e.props),
+        selectorProps: selector!.props,
+        noticeHtml: elements
+          .filter((e) => e.props.role === 'alert')
+          .map((e) => renderToStaticMarkup(e))
+          .join(''),
+        formTree: JSON.parse(
+          JSON.stringify(form, (key, value) => {
+            if (key === '_owner' || key === '_store') return undefined;
+            return typeof value === 'function'
+              ? value.name
+              : typeof value === 'symbol'
+                ? String(value)
+                : value;
+          }),
+        ),
+        formCount: elements.filter((e) => e.type === 'form').length,
+        selectorCount: elements.filter((e) => e.type === AsyncEntityCombobox).length,
+        cancelCount: elements.filter((e) => e.type === Button && e.props.asChild).length,
+        submitCount: elements.filter((e) => e.type === Button && e.props.type === 'submit').length,
+      };
+    }
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== 'New Client fixture redirect') throw error;
+    newCommunication = {
+      redirects: [...fixtureRedirects],
+      calls,
+      permissionChecks: [...communicationPermissionChecks],
+      resourceChecks: [...communicationResourceChecks],
+      formCount: 0,
+      headerCount: 0,
+      cancelCount: 0,
+      selectorCount: 0,
+    };
+  }
+}
+let communicationListDeniedHtml;
+if (scenario.communicationList) {
+  const { default: CommunicationsPage } = await import('../src/app/(office)/communications/page');
+  communicationListDeniedHtml = renderToStaticMarkup(
+    await CommunicationsPage({ searchParams: Promise.resolve({}) }),
+  );
+}
+
 console.log(
   JSON.stringify({
     ...props,
@@ -487,6 +621,8 @@ console.log(
     ...(administrationNavigation ? { administrationNavigation } : {}),
     ...(newClient ? { newClient } : {}),
     ...(newAdmission ? { newAdmission } : {}),
+    ...(newCommunication ? { newCommunication } : {}),
+    ...(communicationListDeniedHtml ? { communicationListDeniedHtml } : {}),
     ...(admissionListDeniedHtml ? { admissionListDeniedHtml } : {}),
   }),
 );

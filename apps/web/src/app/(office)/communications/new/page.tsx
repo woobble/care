@@ -56,7 +56,13 @@ export default async function NewCommunicationPage({
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-6">
       <PageHeader
-        eyebrow={<Link href="/communications">{t('globalTitle')}</Link>}
+        eyebrow={
+          hasPermission(grants, 'communications.read') ? (
+            <Link href="/communications">{t('globalTitle')}</Link>
+          ) : (
+            t('globalTitle')
+          )
+        }
         title={t('createFromWorklist')}
         description={t('chooseClientDescription')}
       />
@@ -78,7 +84,9 @@ export default async function NewCommunicationPage({
         <div className="flex flex-wrap gap-2">
           <Button type="submit">{t('continueToRecord')}</Button>
           <Button asChild variant="secondary">
-            <Link href="/communications">{common('Common.actions.cancel')}</Link>
+            <Link href={hasPermission(grants, 'communications.read') ? '/communications' : '/'}>
+              {common('Common.actions.cancel')}
+            </Link>
           </Button>
         </div>
       </form>
