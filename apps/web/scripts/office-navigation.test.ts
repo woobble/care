@@ -881,3 +881,137 @@ for (const locale of ['en', 'de'] as const) {
     expect(selected.html).toMatch(/href="\/administration\/users" aria-current="page"/);
   });
 }
+
+type NewClientReport = {
+  redirect: string | null;
+  headerHtml?: string;
+  actionsHtml?: string;
+  cancelHtml?: string;
+  cancelHref?: string;
+  cancelLabel?: string;
+  cancelProps?: { asChild: boolean; variant: string };
+  errorHtml?: string;
+  rootClassName?: string;
+  formClassName?: string;
+  errorMessage?: string;
+  warnOnUnsavedChanges?: boolean;
+  createActionMatches?: boolean;
+  formTree?: unknown;
+  firstNameProps?: {
+    id: string;
+    name: string;
+    required: boolean;
+    label: string;
+    autoComplete: string;
+  };
+  formCount: number;
+  submitCount?: number;
+  calls: unknown[];
+};
+async function newClientPage(
+  locale: 'en' | 'de',
+  permissions: string[],
+  query: Record<string, string> = {},
+) {
+  const child = Bun.spawn(
+    [
+      Bun.which('bun')!,
+      resolve(import.meta.dir, 'office-navigation.fixture.ts'),
+      JSON.stringify({ locale, permissions, newClient: true, query }),
+    ],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+  const [code, output, errors] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  if (code !== 0) throw new Error(errors);
+  return (JSON.parse(output) as { newClient: NewClientReport }).newClient;
+}
+for (const locale of ['en', 'de'] as const) {
+  const messages = locale === 'en' ? en : de;
+  test(`actual NewClientPage keeps create guard and chooses only readable return destinations (${locale})`, async () => {
+    const cases = [
+      { permissions: ['client.create', 'client.read'], create: true, read: true },
+      { permissions: ['client.create'], create: true, read: false },
+      { permissions: ['client.read'], create: false, read: true },
+      { permissions: [], create: false, read: false },
+      { permissions: ['organization.read'], create: false, read: false },
+      { permissions: ['client.create', 'employee.read', 'client.read'], create: true, read: true },
+      { permissions: ['client.create', 'employee.read'], create: true, read: false },
+      {
+        permissions: ['client.read', 'client.create', 'client.read', 'client.create'],
+        create: true,
+        read: true,
+      },
+    ];
+    await Promise.all(
+      cases.map(async (scenario) => {
+        const result = await newClientPage(locale, scenario.permissions);
+        expect(result.calls).toEqual([]);
+        if (!scenario.create) {
+          expect(result).toEqual({
+            redirect: '/clients?error=INSUFFICIENT_PERMISSION',
+            calls: [],
+            formCount: 0,
+          });
+          return;
+        }
+        expect(result.redirect).toBeNull();
+        expect(result.headerHtml).toContain(
+          scenario.read
+            ? `<a href="/clients">${messages.Clients.title}</a>`
+            : `>${messages.Clients.title}</p>`,
+        );
+        expect((result.headerHtml!.match(/<a /g) ?? []).length).toBe(scenario.read ? 1 : 0);
+        expect(result.headerHtml).not.toMatch(/role=|tabindex|<button/);
+        expect(result.headerHtml).toContain(messages.Clients.create);
+        expect(result.headerHtml).toContain(messages.Clients.newDescription);
+        expect(result.cancelHref).toBe(scenario.read ? '/clients' : '/');
+        expect(result.cancelLabel).toBe(messages.Common.actions.cancel);
+        expect(result.cancelProps).toEqual({ asChild: true, variant: 'secondary' });
+        expect(result.cancelHtml).toContain('data-variant="secondary"');
+        expect(result.cancelHtml).not.toContain('<button');
+        expect(result.submitCount).toBe(1);
+        expect(result.formCount).toBe(1);
+        expect(result.warnOnUnsavedChanges).toBe(true);
+        expect(result.createActionMatches).toBe(true);
+        expect(result.errorMessage).toBe(messages.Clients.saveFailed);
+        expect(result.errorHtml).toBe('');
+        expect(result.rootClassName).toBe('mx-auto grid max-w-3xl gap-6');
+        expect(result.formClassName).toBe('grid gap-6 rounded-lg border bg-card p-5 shadow-sm');
+        expect(result.firstNameProps).toEqual({
+          id: 'firstName',
+          name: 'firstName',
+          label: messages.Clients.form.firstName,
+          autoComplete: 'given-name',
+          required: true,
+        });
+        expect(result.formTree).toMatchObject({
+          props: { action: 'createClientAction', warnOnUnsavedChanges: true },
+        });
+        const serialized = JSON.stringify(result.formTree);
+        for (const name of [
+          'lastName',
+          'organizationId',
+          'primaryFacilityId',
+          'email',
+          'phone',
+          'mobile',
+          'addressCountryCode',
+        ])
+          expect(serialized).toContain(`"name":"${name}"`);
+        expect(serialized).toContain('"defaultValue":"DE"');
+        const [error, reordered] = await Promise.all([
+          newClientPage(locale, scenario.permissions, { error: 'CLIENT_INVALID_INPUT' }),
+          newClientPage(locale, [...scenario.permissions].reverse()),
+        ]);
+        expect(error.errorHtml).toContain(messages.Clients.saveFailed);
+        expect(error.errorHtml).toContain('role="alert"');
+        expect(error.formTree).toEqual(result.formTree);
+        expect(reordered).toEqual(result);
+      }),
+    );
+  });
+}

@@ -25,7 +25,13 @@ export default async function NewClientPage({
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
       <PageHeader
-        eyebrow={<Link href="/clients">{t('Clients.title')}</Link>}
+        eyebrow={
+          hasPermission(permissions, 'client.read') ? (
+            <Link href="/clients">{t('Clients.title')}</Link>
+          ) : (
+            t('Clients.title')
+          )
+        }
         title={t('Clients.create')}
         description={t('Clients.newDescription')}
       />
@@ -193,7 +199,9 @@ export default async function NewClientPage({
         <div className="flex flex-wrap gap-3">
           <Button type="submit">{t('Clients.create')}</Button>
           <Button asChild variant="secondary">
-            <Link href="/clients">{t('Common.actions.cancel')}</Link>
+            <Link href={hasPermission(permissions, 'client.read') ? '/clients' : '/'}>
+              {t('Common.actions.cancel')}
+            </Link>
           </Button>
         </div>
       </RHFActionForm>

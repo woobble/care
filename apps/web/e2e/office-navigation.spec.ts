@@ -1652,3 +1652,230 @@ for (const locale of ['en', 'de'] as const) {
     await expect(nav).toHaveCount(0);
   });
 }
+
+async function newClientProps(locale: 'en' | 'de', permissions: string[]) {
+  return JSON.parse(
+    execFileSync(
+      'bun',
+      [
+        resolve(import.meta.dirname, '../scripts/office-navigation.fixture.ts'),
+        JSON.stringify({ locale, permissions, newClient: true, collapsed: false }),
+      ],
+      { encoding: 'utf8' },
+    ),
+  ) as NavigationFixtureProps;
+}
+for (const locale of ['en', 'de'] as const) {
+  const messages = locale === 'en' ? en : de;
+  test(`actual New Client return controls before/after preserve geometry and permissions (${locale})`, async ({
+    page,
+  }, testInfo) => {
+    const folder = process.env.NEW_CLIENT_SCREENSHOTS_DIR ?? testInfo.outputPath('new-client');
+    await mkdir(folder, { recursive: true });
+    const scenarios = [
+      { name: 'read', permissions: ['client.create', 'client.read'], read: true, baseline: 'read' },
+      { name: 'create', permissions: ['client.create'], read: false, baseline: 'create' },
+      {
+        name: 'create-duplicate',
+        permissions: ['client.create', 'client.create'],
+        read: false,
+        baseline: 'create',
+      },
+      {
+        name: 'read-reordered',
+        permissions: ['client.read', 'client.create'],
+        read: true,
+        baseline: 'reordered',
+      },
+    ];
+    // oxlint-disable no-await-in-loop -- Ordered captures share the same real shell and RHF projection.
+    for (const scenario of scenarios) {
+      const props = await newClientProps(locale, scenario.permissions);
+      for (const width of [1440, 390]) {
+        let beforeGeometry: unknown;
+        for (const phase of process.env.NEW_CLIENT_BASELINE_DIR ? ['before', 'after'] : ['after']) {
+          const presentation =
+            phase === 'before'
+              ? JSON.parse(
+                  await readFile(
+                    join(
+                      process.env.NEW_CLIENT_BASELINE_DIR!,
+                      `${locale}-${scenario.baseline}.json`,
+                    ),
+                    'utf8',
+                  ),
+                ).newClient
+              : props.newClient;
+          await page.context().clearCookies();
+          await page.unrouteAll();
+          await page.setViewportSize({ width, height: 900 });
+          await mount(page, {
+            locale,
+            path: '/clients/new',
+            props: { ...props, newClient: presentation },
+          });
+          const main = page.getByRole('main');
+          const header = main.locator('header');
+          const form = main.locator('form');
+          const cancel = form.getByRole('link', {
+            name: messages.Common.actions.cancel,
+            exact: true,
+          });
+          const hasEyebrowLink = phase === 'before' || scenario.read;
+          await expect(header.getByRole('link')).toHaveCount(hasEyebrowLink ? 1 : 0);
+          if (hasEyebrowLink) {
+            await expect(header.getByRole('link')).toHaveAttribute('href', '/clients');
+            await expect(header.getByRole('link')).toHaveAccessibleName(messages.Clients.title);
+          } else {
+            await expect(header.locator('p').first()).toHaveText(messages.Clients.title);
+            await expect(header.locator('a,button,[role],[tabindex]')).toHaveCount(0);
+          }
+          await expect(header.getByRole('heading', { level: 1 })).toHaveText(
+            messages.Clients.create,
+          );
+          await expect(header.locator('p').last()).toHaveText(messages.Clients.newDescription);
+          const href = phase === 'before' || scenario.read ? '/clients' : '/';
+          await expect(cancel).toHaveAttribute('href', href);
+          await expect(cancel).toHaveAttribute('data-variant', 'secondary');
+          await expect(cancel).not.toHaveAttribute('type', 'submit');
+          await expect(
+            form.getByRole('button', { name: messages.Clients.create, exact: true }),
+          ).toHaveAttribute('type', 'submit');
+          await expect(form.getByRole('link')).toHaveCount(1);
+          await expect(form.locator('button[type="submit"]')).toHaveCount(1);
+          const geometry = {
+            header: await header.boundingBox(),
+            form: await form.boundingBox(),
+            cancel: await cancel.boundingBox(),
+          };
+          if (phase === 'before') beforeGeometry = geometry;
+          else if (beforeGeometry) expect(geometry).toEqual(beforeGeometry);
+          const axe = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze();
+          expect(axe.violations).toEqual([]);
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          ).toBe(true);
+          await page.evaluate(() => document.fonts.ready);
+          const name = `${locale}-${scenario.name}-${width}-${phase}`;
+          await page.screenshot({ path: join(folder, `${name}.png`), animations: 'disabled' });
+          await writeFile(
+            join(folder, `${name}.json`),
+            JSON.stringify(
+              {
+                locale,
+                permissions: scenario.permissions,
+                width,
+                phase,
+                href,
+                hasEyebrowLink,
+                geometry,
+                violations: axe.violations,
+              },
+              null,
+              2,
+            ),
+          );
+          // Keyboard checks occur after capture so focus paint does not affect comparisons.
+          const input = form.locator('#firstName');
+          await input.focus();
+          await page.keyboard.press('Tab');
+          await expect(
+            form.getByRole('button', { name: messages.Clients.create, exact: true }),
+          ).toBeFocused();
+          await page.keyboard.press('Tab');
+          await expect(cancel).toBeFocused();
+          expect(
+            await cancel.evaluate((element) => {
+              const style = getComputedStyle(element);
+              return (
+                element.matches(':focus-visible') &&
+                (style.outlineStyle !== 'none' || style.boxShadow !== 'none')
+              );
+            }),
+          ).toBe(true);
+          if (hasEyebrowLink) {
+            await header.getByRole('link').focus();
+            await page.keyboard.press('Tab');
+            await expect(input).toBeFocused();
+          }
+          expect(await page.evaluate(() => window.navigationHarness.newClientSubmissions)).toBe(0);
+        }
+      }
+    }
+    // oxlint-enable no-await-in-loop
+  });
+
+  test(`real RHF guards both New Client Cancel destinations without submitting or changing tenant (${locale})`, async ({
+    page,
+  }) => {
+    // oxlint-disable no-await-in-loop -- Observe clean, rejected and accepted navigation on one form at a time.
+    for (const permissions of [['client.create', 'client.read'], ['client.create']]) {
+      const props = await newClientProps(locale, permissions);
+      const href = permissions.includes('client.read') ? '/clients' : '/';
+      await page.context().clearCookies();
+      await page
+        .context()
+        .addCookies([
+          { name: 'care-tenant', value: 'synthetic-tenant', url: 'http://navigation.test' },
+        ]);
+      await page.unrouteAll();
+      await mount(page, { locale, path: '/clients/new', props });
+      const cancel = page
+        .getByRole('main')
+        .getByRole('link', { name: messages.Common.actions.cancel, exact: true });
+      const unexpectedDialog = (dialog: import('@playwright/test').Dialog) => {
+        void dialog.dismiss();
+        throw new Error('Clean Cancel unexpectedly requested confirmation');
+      };
+      page.on('dialog', unexpectedDialog);
+      await cancel.click();
+      await expect(page).toHaveURL(`http://navigation.test${href}`);
+      page.off('dialog', unexpectedDialog);
+      expect(await page.evaluate(() => window.navigationHarness.newClientSubmissions)).toBe(0);
+      await page.unrouteAll();
+      await mount(page, { locale, path: '/clients/new', props });
+      const field = page.locator('#firstName');
+      await field.fill('Synthetic unsaved draft');
+      const rejectedDialog = page.waitForEvent('dialog');
+      const rejectedClick = cancel.click();
+      const rejection = await rejectedDialog;
+      expect(rejection.type()).toBe('confirm');
+      expect(rejection.message()).toBe(messages.Common.formValidation.unsavedChanges);
+      await rejection.dismiss();
+      await rejectedClick;
+      await expect(page).toHaveURL('http://navigation.test/clients/new');
+      await expect(field).toHaveValue('Synthetic unsaved draft');
+      expect(await page.evaluate(() => window.navigationHarness.newClientSubmissions)).toBe(0);
+      const acceptedDialog = page.waitForEvent('dialog');
+      await cancel.focus();
+      const acceptedClick = page.keyboard.press('Enter');
+      const acceptance = await acceptedDialog;
+      expect(acceptance.type()).toBe('confirm');
+      expect(acceptance.message()).toBe(messages.Common.formValidation.unsavedChanges);
+      await acceptance.accept();
+      await acceptedClick;
+      await expect(page).toHaveURL(`http://navigation.test${href}`);
+      await expect(page.getByRole('main').locator('form')).toHaveCount(0);
+      expect(
+        await page.evaluate(() => ({
+          submissions: window.navigationHarness.newClientSubmissions,
+          refreshes: window.navigationHarness.newClientRefreshes,
+        })),
+      ).toEqual({ submissions: 0, refreshes: 0 });
+      expect(
+        (await page.context().cookies()).find((cookie) => cookie.name === 'care-tenant')?.value,
+      ).toBe('synthetic-tenant');
+    }
+    for (const permissions of [['client.read'], [], ['organization.read']]) {
+      const denied = await newClientProps(locale, permissions);
+      expect(denied.newClient).toEqual({
+        redirect: '/clients?error=INSUFFICIENT_PERMISSION',
+        calls: [],
+        formCount: 0,
+      });
+    }
+    // oxlint-enable no-await-in-loop
+  });
+}

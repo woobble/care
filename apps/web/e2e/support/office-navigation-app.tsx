@@ -6,6 +6,8 @@ import de from '../../messages/de.json' with { type: 'json' };
 import en from '../../messages/en.json' with { type: 'json' };
 import { AdministrationNavigationLinks } from '../../src/app/(office)/administration/administration-nav-links';
 import { BillingNavigationLinks } from '../../src/app/(office)/billing/billing-nav-links';
+import { RHFActionForm } from '../../src/components/rhf-action-form';
+import { TextField } from '../../src/features/clients/components/client-form-fields';
 import { OfficeShell } from '../../src/components/office-shell';
 
 export type NavigationFixtureProps = Omit<
@@ -13,6 +15,17 @@ export type NavigationFixtureProps = Omit<
   'children' | 'signOut'
 > & {
   landingHtml?: string;
+  newClient?: {
+    redirect: string | null;
+    headerHtml?: string;
+    actionsHtml?: string;
+    errorHtml?: string;
+    rootClassName?: string;
+    formClassName?: string;
+    errorMessage?: string;
+    warnOnUnsavedChanges?: boolean;
+    firstNameProps?: Parameters<typeof TextField>[0];
+  };
   administrationNavigation?: {
     groups: Parameters<typeof AdministrationNavigationLinks>[0]['groups'];
     label: string;
@@ -32,14 +45,19 @@ declare global {
   interface Window {
     navigationHarness: {
       render: (props: NavigationFixtureProps) => void;
+      newClientSubmissions: number;
+      newClientRefreshes: number;
       navigate: (path: string) => void;
     };
   }
 }
 const root = createRoot(document.getElementById('root')!);
 window.navigationHarness = {
+  newClientSubmissions: 0,
+  newClientRefreshes: 0,
   render(props) {
-    const { landingHtml, billingNavigation, administrationNavigation, ...shellProps } = props;
+    const { landingHtml, billingNavigation, administrationNavigation, newClient, ...shellProps } =
+      props;
     root.render(
       <NextIntlClientProvider locale={props.locale} messages={props.locale === 'en' ? en : de}>
         <OfficeShell
@@ -48,7 +66,9 @@ window.navigationHarness = {
             <button type="button">{(props.locale === 'en' ? en : de).Navigation.signOut}</button>
           }
         >
-          {administrationNavigation ? (
+          {newClient ? (
+            <NewClientPreview presentation={newClient} />
+          ) : administrationNavigation ? (
             <AdministrationNavigationPreview navigation={administrationNavigation} />
           ) : billingNavigation ? (
             <div className="grid gap-6">
@@ -112,6 +132,56 @@ function AdministrationNavigationPreview({
           <h2 id="invitations-title">Synthetic invitations</h2>
         </>
       ) : null}
+    </div>
+  );
+}
+
+function NewClientPreview({
+  presentation,
+}: {
+  presentation: NonNullable<NavigationFixtureProps['newClient']>;
+}) {
+  const pathname = usePathname();
+  if (presentation.redirect || !presentation.headerHtml || !presentation.firstNameProps)
+    return null;
+  if (pathname !== '/clients/new') return <h1>Return destination fixture</h1>;
+  return (
+    <div
+      className={presentation.rootClassName}
+      onClick={(event) => {
+        const target = event.target instanceof Element ? event.target.closest('a[href]') : null;
+        if (
+          !target ||
+          event.defaultPrevented ||
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        )
+          return;
+        // Document capture runs the real RHF guard first; this is only the Next routing boundary.
+        event.preventDefault();
+        window.navigationHarness.navigate(target.getAttribute('href')!);
+      }}
+    >
+      <div dangerouslySetInnerHTML={{ __html: presentation.headerHtml }} />
+      {presentation.errorHtml ? (
+        <div dangerouslySetInnerHTML={{ __html: presentation.errorHtml }} />
+      ) : null}
+      <RHFActionForm
+        action={async () => {
+          window.navigationHarness.newClientSubmissions++;
+        }}
+        warnOnUnsavedChanges={presentation.warnOnUnsavedChanges ?? false}
+        {...(presentation.errorMessage !== undefined
+          ? { errorMessage: presentation.errorMessage }
+          : {})}
+        className={presentation.formClassName ?? ''}
+      >
+        <TextField {...presentation.firstNameProps} />
+        <div dangerouslySetInnerHTML={{ __html: presentation.actionsHtml! }} />
+      </RHFActionForm>
     </div>
   );
 }

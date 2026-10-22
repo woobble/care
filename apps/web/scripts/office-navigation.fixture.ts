@@ -20,6 +20,7 @@ const scenario = JSON.parse(process.argv[2]!) as {
   landing?: boolean;
   billingNavigation?: boolean;
   administrationNavigation?: boolean;
+  newClient?: boolean;
   pathname?: string;
   settings?: 'claims' | 'reminders' | 'billing';
   populated?: boolean;
@@ -45,13 +46,18 @@ mock.module('next/headers', () => ({
           : undefined,
   }),
 }));
+const fixtureRedirects: string[] = [];
 mock.module('next/navigation', () => ({
   useRouter: () => {
     throw new Error('Client forms are outside the fixture');
   },
   usePathname: () => scenario.pathname ?? '/',
   useSearchParams: () => new URLSearchParams(),
-  redirect: () => {
+  redirect: (destination: string) => {
+    if (scenario.newClient) {
+      fixtureRedirects.push(destination);
+      throw new Error('New Client fixture redirect');
+    }
     throw new Error('Unexpected fixture redirect');
   },
 }));
@@ -66,7 +72,12 @@ mock.module('@app/web/lib/employee-lookup', () => ({
 mock.module('@app/web/lib/api', () => ({
   getApiClient: async () => ({
     GET: async (path: string, options: unknown) => {
-      if (scenario.settings || scenario.billingNavigation || scenario.administrationNavigation)
+      if (
+        scenario.settings ||
+        scenario.billingNavigation ||
+        scenario.administrationNavigation ||
+        scenario.newClient
+      )
         calls.push({ path, options });
       if (scenario.settings && scenario.apiError && path !== '/api/v1/me/tenants')
         return { error: { code: 'FORBIDDEN' } };
@@ -305,6 +316,73 @@ if (scenario.administrationNavigation) {
     clientTypeIsReal: renderer.type === AdministrationNavigationLinks,
   };
 }
+let newClient;
+if (scenario.newClient) {
+  const { default: NewClientPage } = await import('../src/app/(office)/clients/new/page');
+  const { PageHeader } = await import('../src/components/page-patterns');
+  const { RHFActionForm } = await import('../src/components/rhf-action-form');
+  const { createClientAction } = await import('../src/app/(office)/clients/actions');
+  const { Button } = await import('@care/ui/components/button');
+  calls.length = 0;
+  fixtureRedirects.length = 0;
+  try {
+    const page = await NewClientPage({ searchParams: Promise.resolve(scenario.query ?? {}) });
+    const elements: ReactElement<Record<string, unknown>>[] = [];
+    function visitClient(node: ReactNode) {
+      Children.forEach(node, (element) => {
+        if (!isValidElement<Record<string, unknown>>(element)) return;
+        elements.push(element);
+        visitClient(element.props.children as ReactNode);
+      });
+    }
+    visitClient(page);
+    const header = elements.find((element) => element.type === PageHeader)!;
+    const form = elements.find((element) => element.type === RHFActionForm)!;
+    const cancel = elements.find(
+      (element) => element.type === Button && element.props.asChild === true,
+    )!;
+    const cancelLink = cancel.props.children as ReactElement<{ href: string; children: string }>;
+    const actions = Children.toArray(form.props.children as ReactNode).at(-1) as ReactElement;
+    const firstName = elements.find((element) => element.props.name === 'firstName')!;
+    newClient = {
+      redirect: null,
+      headerHtml: renderToStaticMarkup(header),
+      cancelHtml: renderToStaticMarkup(cancel),
+      actionsHtml: renderToStaticMarkup(actions),
+      cancelHref: cancelLink.props.href,
+      cancelLabel: cancelLink.props.children,
+      cancelProps: { asChild: cancel.props.asChild, variant: cancel.props.variant },
+      errorHtml: elements
+        .filter((element) => element.props.role === 'alert')
+        .map((element) => renderToStaticMarkup(element))
+        .join(''),
+      rootClassName: page.props.className,
+      formClassName: form.props.className,
+      errorMessage: form.props.errorMessage,
+      warnOnUnsavedChanges: form.props.warnOnUnsavedChanges,
+      createActionMatches: form.props.action === createClientAction,
+      firstNameProps: firstName.props,
+      formTree: JSON.parse(
+        JSON.stringify(form, (key, value) => {
+          if (key === '_owner' || key === '_store') return undefined;
+          return typeof value === 'function'
+            ? value.name
+            : typeof value === 'symbol'
+              ? String(value)
+              : value;
+        }),
+      ),
+      formCount: elements.filter((element) => element.type === RHFActionForm).length,
+      submitCount: elements.filter(
+        (element) => element.type === Button && element.props.type === 'submit',
+      ).length,
+      calls,
+    };
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== 'New Client fixture redirect') throw error;
+    newClient = { redirect: fixtureRedirects[0], calls, formCount: 0 };
+  }
+}
 console.log(
   JSON.stringify({
     ...props,
@@ -312,5 +390,6 @@ console.log(
     ...(settingsReport ? { settingsReport } : {}),
     ...(billingNavigation ? { billingNavigation } : {}),
     ...(administrationNavigation ? { administrationNavigation } : {}),
+    ...(newClient ? { newClient } : {}),
   }),
 );
