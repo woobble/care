@@ -1,6 +1,7 @@
 import { NextIntlClientProvider } from 'next-intl';
 import { usePathname } from 'next/navigation';
 import { createRoot } from 'react-dom/client';
+import { createElement, type ReactNode } from 'react';
 
 import de from '../../messages/de.json' with { type: 'json' };
 import en from '../../messages/en.json' with { type: 'json' };
@@ -25,6 +26,17 @@ export type NavigationFixtureProps = Omit<
     errorMessage?: string;
     warnOnUnsavedChanges?: boolean;
     firstNameProps?: Parameters<typeof TextField>[0];
+  };
+  newAdmission?: {
+    deniedHtml: string | null;
+    headerHtml?: string;
+    actionsHtml?: string;
+    errorHtml?: string;
+    rootClassName?: string;
+    formClassName?: string;
+    warnOnUnsavedChanges?: boolean;
+    firstNameHtml?: string;
+    firstNameTree?: NativeFieldTree;
   };
   administrationNavigation?: {
     groups: Parameters<typeof AdministrationNavigationLinks>[0]['groups'];
@@ -56,8 +68,14 @@ window.navigationHarness = {
   newClientSubmissions: 0,
   newClientRefreshes: 0,
   render(props) {
-    const { landingHtml, billingNavigation, administrationNavigation, newClient, ...shellProps } =
-      props;
+    const {
+      landingHtml,
+      billingNavigation,
+      administrationNavigation,
+      newClient,
+      newAdmission,
+      ...shellProps
+    } = props;
     root.render(
       <NextIntlClientProvider locale={props.locale} messages={props.locale === 'en' ? en : de}>
         <OfficeShell
@@ -66,7 +84,9 @@ window.navigationHarness = {
             <button type="button">{(props.locale === 'en' ? en : de).Navigation.signOut}</button>
           }
         >
-          {newClient ? (
+          {newAdmission ? (
+            <NewAdmissionPreview presentation={newAdmission} />
+          ) : newClient ? (
             <NewClientPreview presentation={newClient} />
           ) : administrationNavigation ? (
             <AdministrationNavigationPreview navigation={administrationNavigation} />
@@ -183,5 +203,72 @@ function NewClientPreview({
         <div dangerouslySetInnerHTML={{ __html: presentation.actionsHtml! }} />
       </RHFActionForm>
     </div>
+  );
+}
+
+function NewAdmissionPreview({
+  presentation,
+}: {
+  presentation: NonNullable<NavigationFixtureProps['newAdmission']>;
+}) {
+  const pathname = usePathname();
+  if (presentation.deniedHtml || !presentation.headerHtml || !presentation.firstNameTree)
+    return null;
+  if (pathname !== '/admissions/new') return <h1>Return destination fixture</h1>;
+  return (
+    <div
+      className={presentation.rootClassName}
+      onClick={(event) => {
+        const target = event.target instanceof Element ? event.target.closest('a[href]') : null;
+        if (
+          !target ||
+          event.defaultPrevented ||
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        )
+          return;
+        // Document capture runs the real RHF guard first; this is only the Next routing boundary.
+        event.preventDefault();
+        window.navigationHarness.navigate(target.getAttribute('href')!);
+      }}
+    >
+      <div dangerouslySetInnerHTML={{ __html: presentation.headerHtml }} />
+      {presentation.errorHtml ? (
+        <div dangerouslySetInnerHTML={{ __html: presentation.errorHtml }} />
+      ) : null}
+      <RHFActionForm
+        action={async () => {
+          window.navigationHarness.newClientSubmissions++;
+        }}
+        warnOnUnsavedChanges={presentation.warnOnUnsavedChanges ?? false}
+        className={presentation.formClassName ?? ''}
+      >
+        {renderNativeField(presentation.firstNameTree)}
+        <div dangerouslySetInnerHTML={{ __html: presentation.actionsHtml! }} />
+      </RHFActionForm>
+    </div>
+  );
+}
+
+// Recreate only the real Field helper's returned native tree, so React owns the
+// input and its change events reach the real RHF form. No form/permission logic.
+type NativeFieldTree =
+  | string
+  | {
+      type: 'label' | 'input';
+      props: Record<string, unknown> & { children?: NativeFieldTree | NativeFieldTree[] };
+    };
+function renderNativeField(tree: NativeFieldTree): ReactNode {
+  if (typeof tree === 'string') return tree;
+  const { children, ...props } = tree.props;
+  return createElement(
+    tree.type,
+    props,
+    ...(children === undefined
+      ? []
+      : (Array.isArray(children) ? children : [children]).map(renderNativeField)),
   );
 }

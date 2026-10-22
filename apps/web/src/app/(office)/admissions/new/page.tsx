@@ -30,7 +30,16 @@ export default async function NewAdmissionPage({
   }
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
-      <PageHeader eyebrow={<Link href="/admissions">{t('title')}</Link>} title={t('createTitle')} />
+      <PageHeader
+        eyebrow={
+          hasPermission(permissions, 'onboarding.read') ? (
+            <Link href="/admissions">{t('title')}</Link>
+          ) : (
+            t('title')
+          )
+        }
+        title={t('createTitle')}
+      />
       {query.error ? (
         <p
           role="alert"
@@ -156,7 +165,9 @@ export default async function NewAdmissionPage({
         <div className="flex gap-2">
           <Button type="submit">{t('newCase')}</Button>
           <Button asChild variant="secondary">
-            <Link href="/admissions">{translate('Common.actions.cancel')}</Link>
+            <Link href={hasPermission(permissions, 'onboarding.read') ? '/admissions' : '/'}>
+              {translate('Common.actions.cancel')}
+            </Link>
           </Button>
         </div>
       </RHFActionForm>

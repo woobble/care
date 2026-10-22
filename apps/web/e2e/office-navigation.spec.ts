@@ -1879,3 +1879,282 @@ for (const locale of ['en', 'de'] as const) {
     // oxlint-enable no-await-in-loop
   });
 }
+
+async function newAdmissionProps(locale: 'en' | 'de', permissions: string[]) {
+  return JSON.parse(
+    execFileSync(
+      'bun',
+      [
+        resolve(import.meta.dirname, '../scripts/office-navigation.fixture.ts'),
+        JSON.stringify({ locale, permissions, newAdmission: true, collapsed: false }),
+      ],
+      { encoding: 'utf8' },
+    ),
+  ) as NavigationFixtureProps;
+}
+for (const locale of ['en', 'de'] as const) {
+  const messages = locale === 'en' ? en : de;
+  test(`actual New Admission return controls before/after preserve geometry and permissions (${locale})`, async ({
+    page,
+  }, testInfo) => {
+    const folder =
+      process.env.NEW_ADMISSION_SCREENSHOTS_DIR ?? testInfo.outputPath('new-admission');
+    await mkdir(folder, { recursive: true });
+    const scenarios = [
+      {
+        name: 'read',
+        permissions: ['onboarding.create', 'organization.read', 'onboarding.read'],
+        read: true,
+        baseline: 'read',
+      },
+      {
+        name: 'create',
+        permissions: ['onboarding.create', 'organization.read'],
+        read: false,
+        baseline: 'create',
+      },
+      {
+        name: 'mixed-read',
+        permissions: [
+          'onboarding.create',
+          'organization.read',
+          'onboarding.read',
+          'facility.read',
+          'employee.read',
+          'client.read',
+        ],
+        read: true,
+        baseline: 'mixed-read',
+      },
+      {
+        name: 'create-duplicate',
+        permissions: [
+          'onboarding.create',
+          'organization.read',
+          'onboarding.create',
+          'organization.read',
+        ],
+        read: false,
+        baseline: 'create',
+      },
+      {
+        name: 'read-reordered',
+        permissions: ['onboarding.read', 'onboarding.create', 'organization.read'],
+        read: true,
+        baseline: 'reordered-read',
+      },
+    ];
+    // oxlint-disable no-await-in-loop -- Ordered captures share the same real shell and RHF projection.
+    for (const scenario of scenarios) {
+      const props = await newAdmissionProps(locale, scenario.permissions);
+      for (const width of [1440, 390]) {
+        let beforeGeometry: unknown;
+        let beforeOverflow: number | undefined;
+        for (const phase of process.env.NEW_ADMISSION_BASELINE_DIR
+          ? ['before', 'after']
+          : ['after']) {
+          const presentation =
+            phase === 'before'
+              ? JSON.parse(
+                  await readFile(
+                    join(
+                      process.env.NEW_ADMISSION_BASELINE_DIR!,
+                      `${locale}-${scenario.baseline}.json`,
+                    ),
+                    'utf8',
+                  ),
+                ).newAdmission
+              : props.newAdmission;
+          await page.context().clearCookies();
+          await page.unrouteAll();
+          await page.setViewportSize({ width, height: 900 });
+          await mount(page, {
+            locale,
+            path: '/admissions/new',
+            props: { ...props, newAdmission: presentation },
+          });
+          const main = page.getByRole('main');
+          const header = main.locator('header');
+          const form = main.locator('form');
+          const cancel = form.getByRole('link', {
+            name: messages.Common.actions.cancel,
+            exact: true,
+          });
+          const hasEyebrowLink = phase === 'before' || scenario.read;
+          await expect(header.getByRole('link')).toHaveCount(hasEyebrowLink ? 1 : 0);
+          if (hasEyebrowLink) {
+            await expect(header.getByRole('link')).toHaveAttribute('href', '/admissions');
+            await expect(header.getByRole('link')).toHaveAccessibleName(messages.Onboarding.title);
+          } else {
+            await expect(header.locator('p').first()).toHaveText(messages.Onboarding.title);
+            await expect(header.locator('a,button,[role],[tabindex]')).toHaveCount(0);
+          }
+          await expect(header.getByRole('heading', { level: 1 })).toHaveText(
+            messages.Onboarding.createTitle,
+          );
+          const href = phase === 'before' || scenario.read ? '/admissions' : '/';
+          await expect(cancel).toHaveAttribute('href', href);
+          await expect(cancel).toHaveAttribute('data-variant', 'secondary');
+          await expect(cancel).not.toHaveAttribute('type', 'submit');
+          await expect(
+            form.getByRole('button', { name: messages.Onboarding.newCase, exact: true }),
+          ).toHaveAttribute('type', 'submit');
+          await expect(form.getByRole('link')).toHaveCount(1);
+          await expect(form.locator('button[type="submit"]')).toHaveCount(1);
+          const geometry = {
+            header: await header.boundingBox(),
+            form: await form.boundingBox(),
+            cancel: await cancel.boundingBox(),
+          };
+          if (phase === 'before') beforeGeometry = geometry;
+          else if (beforeGeometry) expect(geometry).toEqual(beforeGeometry);
+          const axe = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze();
+          expect(axe.violations).toEqual([]);
+          const overflow = await page.evaluate(() =>
+            Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
+          );
+          if (phase === 'before') beforeOverflow = overflow;
+          else if (beforeOverflow !== undefined) expect(overflow).toBe(beforeOverflow);
+          // The unchanged German action labels already exceed the mobile row.
+          // Preserve the baseline and forbid any new overflow from return controls.
+          if (locale !== 'de' || width !== 390) expect(overflow).toBe(0);
+          await page.evaluate(() => document.fonts.ready);
+          const name = `${locale}-${scenario.name}-${width}-${phase}`;
+          await page.screenshot({ path: join(folder, `${name}.png`), animations: 'disabled' });
+          await writeFile(
+            join(folder, `${name}.json`),
+            JSON.stringify(
+              {
+                locale,
+                permissions: scenario.permissions,
+                width,
+                phase,
+                href,
+                hasEyebrowLink,
+                geometry,
+                overflow,
+                violations: axe.violations,
+              },
+              null,
+              2,
+            ),
+          );
+          // Keyboard checks occur after capture so focus paint does not affect comparisons.
+          const input = form.locator('input[name=firstName]');
+          await input.focus();
+          await page.keyboard.press('Tab');
+          await expect(
+            form.getByRole('button', { name: messages.Onboarding.newCase, exact: true }),
+          ).toBeFocused();
+          await page.keyboard.press('Tab');
+          await expect(cancel).toBeFocused();
+          expect(
+            await cancel.evaluate((element) => {
+              const style = getComputedStyle(element);
+              return (
+                element.matches(':focus-visible') &&
+                (style.outlineStyle !== 'none' || style.boxShadow !== 'none')
+              );
+            }),
+          ).toBe(true);
+          if (hasEyebrowLink) {
+            await header.getByRole('link').focus();
+            await page.keyboard.press('Tab');
+            await expect(input).toBeFocused();
+          }
+          expect(await page.evaluate(() => window.navigationHarness.newClientSubmissions)).toBe(0);
+        }
+      }
+    }
+    // oxlint-enable no-await-in-loop
+  });
+
+  test(`real RHF guards both New Admission Cancel destinations without submitting or changing tenant (${locale})`, async ({
+    page,
+  }) => {
+    // oxlint-disable no-await-in-loop -- Observe clean, rejected and accepted navigation on one form at a time.
+    for (const permissions of [
+      ['onboarding.create', 'organization.read', 'onboarding.read'],
+      ['onboarding.create', 'organization.read'],
+    ]) {
+      const props = await newAdmissionProps(locale, permissions);
+      const href = permissions.includes('onboarding.read') ? '/admissions' : '/';
+      await page.context().clearCookies();
+      await page
+        .context()
+        .addCookies([
+          { name: 'care-tenant', value: 'synthetic-tenant', url: 'http://navigation.test' },
+        ]);
+      await page.unrouteAll();
+      await mount(page, { locale, path: '/admissions/new', props });
+      const cancel = page
+        .getByRole('main')
+        .getByRole('link', { name: messages.Common.actions.cancel, exact: true });
+      const unexpectedDialog = (dialog: import('@playwright/test').Dialog) => {
+        void dialog.dismiss();
+        throw new Error('Clean Cancel unexpectedly requested confirmation');
+      };
+      page.on('dialog', unexpectedDialog);
+      await cancel.click();
+      await expect(page).toHaveURL(`http://navigation.test${href}`);
+      page.off('dialog', unexpectedDialog);
+      expect(await page.evaluate(() => window.navigationHarness.newClientSubmissions)).toBe(0);
+      await page.unrouteAll();
+      await mount(page, { locale, path: '/admissions/new', props });
+      const field = page.locator('input[name=firstName]');
+      await field.fill('Synthetic unsaved draft');
+      const rejectedDialog = page.waitForEvent('dialog');
+      const rejectedClick = cancel.click();
+      const rejection = await rejectedDialog;
+      expect(rejection.type()).toBe('confirm');
+      expect(rejection.message()).toBe(messages.Common.formValidation.unsavedChanges);
+      await rejection.dismiss();
+      await rejectedClick;
+      await expect(page).toHaveURL('http://navigation.test/admissions/new');
+      await expect(field).toHaveValue('Synthetic unsaved draft');
+      expect(await page.evaluate(() => window.navigationHarness.newClientSubmissions)).toBe(0);
+      const acceptedDialog = page.waitForEvent('dialog');
+      await cancel.focus();
+      const acceptedClick = page.keyboard.press('Enter');
+      const acceptance = await acceptedDialog;
+      expect(acceptance.type()).toBe('confirm');
+      expect(acceptance.message()).toBe(messages.Common.formValidation.unsavedChanges);
+      await acceptance.accept();
+      await acceptedClick;
+      await expect(page).toHaveURL(`http://navigation.test${href}`);
+      await expect(page.getByRole('main').locator('form')).toHaveCount(0);
+      expect(
+        await page.evaluate(() => ({
+          submissions: window.navigationHarness.newClientSubmissions,
+          refreshes: window.navigationHarness.newClientRefreshes,
+        })),
+      ).toEqual({ submissions: 0, refreshes: 0 });
+      expect(
+        (await page.context().cookies()).find((cookie) => cookie.name === 'care-tenant')?.value,
+      ).toBe('synthetic-tenant');
+    }
+    for (const permissions of [
+      ['onboarding.read', 'organization.read'],
+      ['onboarding.create', 'onboarding.read'],
+      ['onboarding.create'],
+      ['organization.read'],
+      ['onboarding.read'],
+      [],
+      ['billing.read'],
+    ]) {
+      const denied = await newAdmissionProps(locale, permissions);
+      expect(denied.newAdmission).toEqual({
+        deniedHtml: `<p role="alert" class="rounded-md border bg-card p-5">${messages.Onboarding.noAccess}</p>`,
+        redirects: [],
+        calls: [],
+        formCount: 0,
+        headerCount: 0,
+        cancelCount: 0,
+        actionExposed: false,
+      });
+    }
+    // oxlint-enable no-await-in-loop
+  });
+}

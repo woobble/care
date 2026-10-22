@@ -1015,3 +1015,182 @@ for (const locale of ['en', 'de'] as const) {
     );
   });
 }
+
+type NewAdmissionReport = Omit<NewClientReport, 'redirect' | 'firstNameProps'> & {
+  deniedHtml: string | null;
+  redirects: string[];
+  headerCount?: number;
+  cancelCount?: number;
+  actionExposed?: boolean;
+  firstNameHtml?: string;
+  firstNameProps?: { name: string; label: string; required: boolean };
+};
+async function newAdmissionPage(
+  locale: 'en' | 'de',
+  permissions: string[],
+  query: Record<string, string> = {},
+) {
+  const child = Bun.spawn(
+    [
+      Bun.which('bun')!,
+      resolve(import.meta.dir, 'office-navigation.fixture.ts'),
+      JSON.stringify({ locale, permissions, newAdmission: true, query }),
+    ],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+  const [code, output, errors] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  if (code !== 0) throw new Error(errors);
+  return (JSON.parse(output) as { newAdmission: NewAdmissionReport }).newAdmission;
+}
+function admissionFormWithoutReturnHref(tree: unknown) {
+  const source = JSON.stringify(tree);
+  expect((source.match(/"href":"(?:\/admissions|\/)"/g) ?? []).length).toBe(1);
+  return JSON.parse(source.replace(/"href":"(?:\/admissions|\/)"/, '"href":"RETURN"'));
+}
+for (const locale of ['en', 'de'] as const) {
+  const messages = locale === 'en' ? en : de;
+  test(`actual NewAdmissionPage preserves both prerequisites, selectors and form while choosing return controls (${locale})`, async () => {
+    const prerequisites = ['onboarding.create', 'organization.read'];
+    const cases = [
+      [...prerequisites, 'onboarding.read'],
+      prerequisites,
+      ['onboarding.read', 'organization.read'],
+      ['onboarding.create', 'onboarding.read'],
+      ['onboarding.create'],
+      ['organization.read'],
+      ['onboarding.read'],
+      [],
+      ['billing.read'],
+      [...prerequisites, 'onboarding.read', 'facility.read', 'employee.read', 'client.read'],
+      [...prerequisites, 'facility.read', 'employee.read', 'client.read'],
+      [...prerequisites, 'onboarding.read', ...prerequisites, 'onboarding.read'],
+      [...prerequisites, ...prerequisites],
+      ['onboarding.read', 'organization.read', 'onboarding.create'],
+      [...prerequisites].reverse(),
+    ];
+    for (let mask = 0; mask < 8; mask++) {
+      const selectors = ['facility.read', 'employee.read', 'client.read'].filter(
+        (_, i) => mask & (1 << i),
+      );
+      cases.push(
+        [...prerequisites, ...selectors],
+        [...prerequisites, ...selectors, 'onboarding.read'],
+      );
+    }
+    const results = await Promise.all(
+      cases.map((permissions) => newAdmissionPage(locale, permissions)),
+    );
+    const normalizedForms = new Map<string, unknown>();
+    // oxlint-disable no-await-in-loop -- Each scenario checks its own error and reordered rendering.
+    for (const [index, permissions] of cases.entries()) {
+      const result = results[index]!;
+      expect(result.calls).toEqual([]);
+      expect(result.redirects).toEqual([]);
+      if (
+        !permissions.includes('onboarding.create') ||
+        !permissions.includes('organization.read')
+      ) {
+        expect(result).toEqual({
+          deniedHtml: `<p role="alert" class="rounded-md border bg-card p-5">${messages.Onboarding.noAccess}</p>`,
+          redirects: [],
+          calls: [],
+          formCount: 0,
+          headerCount: 0,
+          cancelCount: 0,
+          actionExposed: false,
+        });
+        continue;
+      }
+      const read = permissions.includes('onboarding.read');
+      expect(result.deniedHtml).toBeNull();
+      expect(result.headerHtml).toContain(
+        read
+          ? `<a href="/admissions">${messages.Onboarding.title}</a>`
+          : `>${messages.Onboarding.title}</p>`,
+      );
+      expect((result.headerHtml!.match(/<a /g) ?? []).length).toBe(read ? 1 : 0);
+      expect(result.headerHtml).not.toMatch(/role=|tabindex|<button/);
+      expect(result.headerHtml).toContain(messages.Onboarding.createTitle);
+      expect(result.cancelHref).toBe(read ? '/admissions' : '/');
+      expect(result.cancelLabel).toBe(messages.Common.actions.cancel);
+      expect(result.cancelProps).toEqual({ asChild: true, variant: 'secondary' });
+      expect(result.cancelHtml).toContain('data-variant="secondary"');
+      expect(result.cancelHtml).not.toContain('<button');
+      expect((result.actionsHtml!.match(/<a /g) ?? []).length).toBe(1);
+      expect(result.actionsHtml).toContain(messages.Onboarding.newCase);
+      expect(result.submitCount).toBe(1);
+      expect(result.formCount).toBe(1);
+      expect(result.warnOnUnsavedChanges).toBe(true);
+      expect(result.createActionMatches).toBe(true);
+      expect(result.errorMessage).toBeUndefined();
+      expect(result.errorHtml).toBe('');
+      expect(result.rootClassName).toBe('mx-auto grid max-w-3xl gap-6');
+      expect(result.formClassName).toBe('grid gap-6 rounded-lg border bg-card p-5');
+      expect(result.firstNameProps).toEqual({
+        name: 'firstName',
+        label: messages.Onboarding.firstName,
+        required: true,
+      });
+      expect(result.firstNameHtml).toContain('maxLength="254"');
+      expect(result.formTree).toMatchObject({
+        props: { action: 'createAdmissionCaseAction', warnOnUnsavedChanges: true },
+      });
+      const serialized = JSON.stringify(result.formTree);
+      for (const name of [
+        'firstName',
+        'lastName',
+        'contactMethod',
+        'requesterName',
+        'requesterRelationship',
+        'contactEmail',
+        'contactPhone',
+        'requestedServices',
+        'preferredStartDate',
+        'serviceLocation',
+        'organizationId',
+        'inquirySource',
+        'initialNotes',
+        'nextFollowUpAt',
+        'timezone',
+        'fundingPlan',
+        'fundingPlanDetails',
+      ])
+        expect(serialized).toContain(`"name":"${name}"`);
+      for (const [permission, name, entity] of [
+        ['facility.read', 'facilityId', 'facilities'],
+        ['employee.read', 'ownerEmployeeId', 'employees'],
+        ['client.read', 'clientId', 'clients'],
+      ]) {
+        expect(serialized.includes(`"name":"${name}"`)).toBe(permissions.includes(permission!));
+        expect(serialized.includes(`"entity":"${entity}"`)).toBe(permissions.includes(permission!));
+      }
+      expect(serialized).toContain('"name":"organizationId","label":');
+      expect(serialized).toContain('"entity":"organizations","required":true');
+      expect(serialized).toContain('"name":"timezone","value":"Europe/Berlin"');
+      expect((serialized.match(/"type":"fieldset"/g) ?? []).length).toBe(5);
+      expect((serialized.match(/"type":"details"/g) ?? []).length).toBe(1);
+      const key = ['facility.read', 'employee.read', 'client.read']
+        .map((p) => permissions.includes(p))
+        .join(',');
+      const normalized = admissionFormWithoutReturnHref(result.formTree);
+      if (normalizedForms.has(key)) expect(normalized).toEqual(normalizedForms.get(key));
+      else normalizedForms.set(key, normalized);
+      const [error, reordered] = await Promise.all([
+        newAdmissionPage(locale, permissions, { error: 'ONBOARDING_INVALID_INPUT' }),
+        newAdmissionPage(locale, [...permissions].reverse()),
+      ]);
+      expect(error.errorHtml).toContain('role="alert"');
+      expect(error.errorHtml).not.toBe('');
+      expect(error.formTree).toEqual(result.formTree);
+      expect(error.calls).toEqual(result.calls);
+      expect(error.headerHtml).toBe(result.headerHtml);
+      expect(reordered).toEqual(result);
+    }
+    // oxlint-enable no-await-in-loop
+    expect(normalizedForms.size).toBe(8);
+  });
+}
